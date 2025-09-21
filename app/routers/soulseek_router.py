@@ -16,7 +16,7 @@ async def search_tracks(
 ) -> dict:
     try:
         tracks = await client.search(query, timeout=timeout)
-        return {"results": [track.to_dict() for track in tracks], "count": len(tracks)}
+        return {"results": [track.__dict__ for track in tracks], "count": len(tracks)}
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("Search failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
