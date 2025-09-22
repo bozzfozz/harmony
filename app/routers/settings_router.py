@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -11,6 +12,18 @@ from app.dependencies import get_db
 from app.models import Setting, SettingHistory
 from app.schemas import SettingsHistoryResponse, SettingsPayload, SettingsResponse
 
+CONFIGURATION_KEYS: Final[tuple[str, ...]] = (
+    "SPOTIFY_CLIENT_ID",
+    "SPOTIFY_CLIENT_SECRET",
+    "SPOTIFY_REDIRECT_URI",
+    "PLEX_BASE_URL",
+    "PLEX_TOKEN",
+    "PLEX_LIBRARY",
+    "SLSKD_URL",
+    "SLSKD_API_KEY",
+)
+
+
 router = APIRouter()
 
 
@@ -18,6 +31,8 @@ router = APIRouter()
 def get_settings(session: Session = Depends(get_db)) -> SettingsResponse:
     settings = session.execute(select(Setting)).scalars().all()
     settings_dict = {setting.key: setting.value for setting in settings}
+    for key in CONFIGURATION_KEYS:
+        settings_dict.setdefault(key, None)
     updated_at = max((setting.updated_at or setting.created_at for setting in settings), default=datetime.utcnow())
     return SettingsResponse(settings=settings_dict, updated_at=updated_at)
 

@@ -3,6 +3,7 @@
 Alle nennenswerten Änderungen dieses Projekts werden in dieser Datei dokumentiert.
 
 ## v1.4.0 – Spotify API Vollintegration
+- Konfiguration für Spotify, Plex und slskd kann jetzt in der Datenbank persistiert und über die Settings-API gepflegt werden.
 - Vollständige Spotify-Integration inkl. Playlist-Sync, Audio-Features, Recommendations und Benutzerbibliothek.
 - Erweiterter Spotify-Router mit neuen Endpunkten für Playlists (Add/Remove/Reorder), Profil, Top-Tracks/-Artists.
 - PlaylistSyncWorker synchronisiert persistierte Playlists regelmäßig in die Datenbank.

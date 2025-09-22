@@ -83,6 +83,8 @@ Requests die Test-Suite (`pytest`) unter Python 3.11 aus.
 | `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
 | `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
 
+> **Hinweis:** Spotify-, Plex- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
+
 ## API-Endpoints
 
 Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](docs/api.md). Die wichtigsten Gruppen im Überblick:
