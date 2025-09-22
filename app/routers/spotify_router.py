@@ -104,7 +104,9 @@ def create_playlist(data: PlaylistCreate, db: Session = Depends(get_db)):
         )
 
         logger.info(
-            "Playlist '%s' created with %d songs", stored_playlist.name, len(data.tracks)
+            "Playlist '%s' mit %d Songs erstellt",
+            stored_playlist.name,
+            len(data.tracks),
         )
         return _playlist_to_schema(stored_playlist)
     except Exception as exc:  # pragma: no cover - defensive
