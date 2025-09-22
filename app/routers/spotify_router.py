@@ -1,10 +1,10 @@
 """Spotify API endpoints exposed by the Harmony backend."""
 
+from dataclasses import asdict
 from collections.abc import Sequence
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.spotify_client import SpotifyClient
@@ -42,15 +42,14 @@ class SongOut(BaseModel):
     duration: int | None
     source: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PlaylistCreate(BaseModel):
     """Payload schema for creating playlists including their tracks."""
 
     name: str
-    tracks: List[SongCreate]
+    tracks: list[SongCreate]
 
 
 class PlaylistOut(BaseModel):
@@ -58,10 +57,9 @@ class PlaylistOut(BaseModel):
 
     id: int
     name: str
-    songs: List[SongOut]
+    songs: list[SongOut]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +71,7 @@ def _playlist_to_schema(playlist: Playlist) -> PlaylistOut:
     return PlaylistOut(
         id=playlist.id,
         name=playlist.name,
-        songs=[SongOut.from_orm(item.song) for item in playlist.items],
+        songs=[SongOut.model_validate(item.song) for item in playlist.items],
     )
 
 
@@ -124,13 +122,13 @@ async def get_playlists_metadata() -> dict:
 
     try:
         playlists = client.get_user_playlists_metadata_only()
-        return {"playlists": [playlist.__dict__ for playlist in playlists]}
+        return {"playlists": [asdict(playlist) for playlist in playlists]}
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("Playlist fetch failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/playlists/persisted", response_model=List[PlaylistOut])
+@router.get("/playlists/persisted", response_model=list[PlaylistOut])
 def list_persisted_playlists(db: Session = Depends(get_db)):
     """Return all stored playlists with their songs."""
 
@@ -142,7 +140,7 @@ def list_persisted_playlists(db: Session = Depends(get_db)):
     return [_playlist_to_schema(pl) for pl in playlists]
 
 
-@router.get("/songs", response_model=List[SongOut])
+@router.get("/songs", response_model=list[SongOut])
 def list_songs(db: Session = Depends(get_db)):
     """Return all songs imported from Spotify."""
 
@@ -152,7 +150,7 @@ def list_songs(db: Session = Depends(get_db)):
         .order_by(Song.id)
         .all()
     )
-    return [SongOut.from_orm(song) for song in songs]
+    return [SongOut.model_validate(song) for song in songs]
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +164,7 @@ async def search_tracks(query: str = Query(...)) -> dict:
 
     try:
         results = client.search_tracks(query)
-        return {"tracks": [track.__dict__ for track in results]}
+        return {"tracks": [asdict(track) for track in results]}
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("Spotify search failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
