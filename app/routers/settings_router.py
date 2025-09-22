@@ -1,75 +1,38 @@
+"""Settings management endpoints."""
 from __future__ import annotations
 
-import json
-import os
-from typing import Any, Dict
+from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.utils.logging_config import get_logger
+from app.dependencies import get_db
+from app.models import Setting
+from app.schemas import SettingsPayload, SettingsResponse
 
-logger = get_logger("settings_router")
 router = APIRouter()
 
-CONFIG_FILE = "config/config.json"
+
+@router.get("", response_model=SettingsResponse)
+def get_settings(session: Session = Depends(get_db)) -> SettingsResponse:
+    settings = session.execute(select(Setting)).scalars().all()
+    settings_dict = {setting.key: setting.value for setting in settings}
+    updated_at = max((setting.updated_at or setting.created_at for setting in settings), default=datetime.utcnow())
+    return SettingsResponse(settings=settings_dict, updated_at=updated_at)
 
 
-class SettingsUpdate(BaseModel):
-    key: str
-    value: Any
-
-
-def load_config() -> Dict[str, Any]:
-    """Load configuration from file."""
-    try:
-        if not os.path.exists(CONFIG_FILE):
-            logger.warning("Config file not found, creating default")
-            return {}
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Failed to load config: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to load config") from exc
-
-
-def save_config(config: Dict[str, Any]) -> None:
-    """Save configuration to file."""
-    try:
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=4)
-        logger.info("Configuration saved successfully")
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Failed to save config: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to save config") from exc
-
-
-@router.get("/config")
-def get_settings() -> Dict[str, Any]:
-    """Return the current configuration."""
-    config = load_config()
-    logger.info("System configuration retrieved")
-    return {"status": "success", "config": config}
-
-
-@router.post("/config")
-def update_settings(update: SettingsUpdate) -> Dict[str, Any]:
-    """Update a specific config key/value."""
-    config = load_config()
-    config[update.key] = update.value
-    save_config(config)
-    logger.info("Updated config: %s = %s", update.key, update.value)
-    return {"status": "success", "updated": {update.key: update.value}}
-
-
-@router.delete("/config/{key}")
-def delete_setting(key: str) -> Dict[str, Any]:
-    """Delete a config key from the configuration."""
-    config = load_config()
-    if key not in config:
-        raise HTTPException(status_code=404, detail=f"Config key '{key}' not found")
-    removed_value = config.pop(key)
-    save_config(config)
-    logger.info("Deleted config key: %s", key)
-    return {"status": "success", "removed": {key: removed_value}}
+@router.post("", response_model=SettingsResponse)
+def update_setting(payload: SettingsPayload, session: Session = Depends(get_db)) -> SettingsResponse:
+    if not payload.key:
+        raise HTTPException(status_code=400, detail="Key must not be empty")
+    setting = session.execute(select(Setting).where(Setting.key == payload.key)).scalar_one_or_none()
+    now = datetime.utcnow()
+    if setting is None:
+        setting = Setting(key=payload.key, value=payload.value, updated_at=now)
+        session.add(setting)
+    else:
+        setting.value = payload.value
+        setting.updated_at = now
+    session.commit()
+    return get_settings(session)

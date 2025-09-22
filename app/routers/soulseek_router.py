@@ -1,58 +1,67 @@
-from dataclasses import asdict
-from typing import Any, Dict, List
+"""Soulseek API endpoints."""
+from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.soulseek_client import SoulseekClient, TrackResult
-from app.utils.logging_config import get_logger
+from app.core.soulseek_client import SoulseekClient, SoulseekClientError
+from app.dependencies import get_soulseek_client
+from app.schemas import (
+    SoulseekCancelResponse,
+    SoulseekDownloadRequest,
+    SoulseekDownloadStatus,
+    SoulseekSearchRequest,
+    StatusResponse,
+)
 
-
-logger = get_logger("soulseek_router")
 router = APIRouter()
-client = SoulseekClient()
 
 
-def _serialise_tracks(tracks: List[TrackResult]) -> List[Dict[str, Any]]:
-    """Convert dataclass track results into dictionaries for the API response."""
-
-    return [asdict(track) for track in tracks]
-
-
-async def _search_tracks_internal(query: str, timeout: int) -> Dict[str, Any]:
+@router.get("/status", response_model=StatusResponse)
+async def soulseek_status(client: SoulseekClient = Depends(get_soulseek_client)) -> StatusResponse:
     try:
-        tracks = await client.search(query, timeout=timeout)
-        serialised = _serialise_tracks(tracks)
-        return {"results": serialised, "count": len(serialised)}
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.error("Search failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        await client.get_download_status()
+    except Exception:
+        return StatusResponse(status="disconnected")
+    return StatusResponse(status="connected")
 
 
-@router.get("/search")
-async def search_tracks(
-    query: str = Query(..., description="Track or artist to search"),
-    timeout: int = Query(30, ge=5, le=60, description="Search timeout in seconds"),
-) -> Dict[str, Any]:
-    return await _search_tracks_internal(query, timeout)
-
-
-@router.get("/search/tracks")
-async def search_tracks_explicit(
-    query: str = Query(..., description="Track or artist to search"),
-    timeout: int = Query(30, ge=5, le=60, description="Search timeout in seconds"),
-) -> Dict[str, Any]:
-    return await _search_tracks_internal(query, timeout)
+@router.post("/search")
+async def soulseek_search(
+    payload: SoulseekSearchRequest,
+    client: SoulseekClient = Depends(get_soulseek_client),
+):
+    return await client.search(payload.query)
 
 
 @router.post("/download")
-async def download(username: str, filename: str, size: int = 0) -> dict:
+async def soulseek_download(
+    payload: SoulseekDownloadRequest,
+    client: SoulseekClient = Depends(get_soulseek_client),
+):
     try:
-        started = await client.download(username, filename, size)
-        if not started:
-            raise HTTPException(status_code=502, detail="Failed to schedule download")
-        return {"status": "started", "filename": filename}
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.error("Download failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return await client.download(payload.model_dump())
+    except (ValueError, SoulseekClientError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/downloads", response_model=SoulseekDownloadStatus)
+async def soulseek_downloads(client: SoulseekClient = Depends(get_soulseek_client)) -> SoulseekDownloadStatus:
+    response = await client.get_download_status()
+    downloads = response.get("downloads") if isinstance(response, dict) else None
+    if isinstance(downloads, list):
+        return SoulseekDownloadStatus(downloads=downloads)
+    if isinstance(response, list):
+        return SoulseekDownloadStatus(downloads=response)
+    return SoulseekDownloadStatus(downloads=[response] if response else [])
+
+
+@router.delete("/download/{download_id}", response_model=SoulseekCancelResponse)
+async def soulseek_cancel(
+    download_id: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> SoulseekCancelResponse:
+    try:
+        await client.cancel_download(download_id)
+    except SoulseekClientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return SoulseekCancelResponse(cancelled=True)
