@@ -1,166 +1,109 @@
 # Harmony Backend
 
-Harmony ist ein FastAPI-Backend, das Spotify, Plex und den Soulseek-Daemon (slskd) integriert und eine Matching-Engine für Musikbibliotheken bereitstellt. Die Anwendung verwendet SQLite als Datenbank, SQLAlchemy als ORM und bietet optionale Hintergrund-Worker für Synchronisations-, Matching- und Scan-Aufgaben.
+Harmony ist ein FastAPI-Backend, das Spotify, Plex, Soulseek (slskd), Beets sowie eine eigene Matching-Engine und Hintergrund-Worker
+zu einem gemeinsamen Musik-Hub kombiniert. Die Anwendung bündelt Bibliotheken, Downloads und Metadaten, synchronisiert sie zyklisch
+und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients bereit.
 
 ## Features
 
-- Modularer Aufbau mit Core-Clients und Routern
-- OAuth-basierter Spotify-Client mit Rate-Limiting und Retry-Logik
-- Spotify Web API Abdeckung für Audio Features, Playlists, Recommendations und User Library
-- Plex-Client zur Abfrage der Musikbibliothek
-- Asynchroner Soulseek-Client (slskd) mit Rate-Limiting
-- Persistente Soulseek-Downloads mit Fortschritts- und Statusverfolgung
-- Matching-Engine für Spotify→Plex sowie Spotify→Soulseek
-- SQLite-Datenbank mit automatischer Initialisierung
-- Hintergrund-Worker für Sync-, Matching-, Scan- und Spotify-Playlist-Prozesse
-- Pytest-Test-Suite mit gemockten externen Diensten
-- Docker- und Docker-Compose-Konfiguration
-- GitHub Actions Workflow für Build & Tests
+- **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
+- **Async Plex-Client** mit Zugriff auf Bibliotheken, Sessions, PlayQueues, Live-TV und Echtzeit-Benachrichtigungen.
+- **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
+- **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
+- **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Plex/Soulseek inklusive Persistierung.
+- **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
+- **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
+- **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
-## Beets CLI Integration
+## Architekturüberblick
 
-Harmony bindet die [Beets](https://beets.io/)-CLI über einen synchronen Client ein.
-Der `BeetsClient` ruft intern Befehle wie `beet import`, `beet update`,
-`beet ls`, `beet stats` und `beet version` auf, um die lokale Musikbibliothek zu
-verwalten. Damit die Integration funktioniert, muss das Kommando `beet`
-installiert und im `PATH` der Anwendung verfügbar sein.
+Harmony folgt einer klar getrennten Schichten-Architektur:
 
-## Neu in v1.4.0
+- **Core**: Enthält API-Clients (`spotify_client.py`, `plex_client.py`, `soulseek_client.py`, `beets_client.py`) und die Matching-Engine.
+- **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Plex, Soulseek, Matching, Settings, Beets).
+- **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads, Plex-Statistiken und Matching-Jobs.
+- **Datenbank-Layer**: `app/db.py`, SQLAlchemy-Modelle und -Schemas verwalten persistente Zustände.
 
-- Spotify-Router unterstützt Audio Features, Benutzerbibliothek, Empfehlungen und Playlist-Management.
-- Neue API-Endpunkte für User-Profile, Top-Tracks/-Artists sowie Playlist-Operationen (Add/Remove/Reorder).
+Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architecture.md`](docs/architecture.md).
 
-## Neu in v1.3.0
+## Setup-Anleitung
 
-- Spotify-Playlist-Sync-Worker aktualisiert persistierte Playlists alle 15 Minuten.
-- `/spotify/playlists` liefert Track-Anzahl und Änderungszeitpunkt aus der Datenbank.
+### Voraussetzungen
 
-## Neu in v1.2.0
+- Python 3.11
+- SQLite (im Lieferumfang enthalten)
+- Optional: Docker und Docker Compose
 
-- Soulseek-Downloads werden automatisch in der Datenbank angelegt und mit Status-/Fortschritt gepflegt.
-- Hintergrund-Sync-Worker pollt den Soulseek-Client und synchronisiert Downloadzustände.
-- API-Endpunkte liefern Fortschrittsabfragen aus der Datenbank und erlauben Abbrüche einzelner Downloads.
-
-## Neu in v1.1.0
-
-- Konsistente JSON-Antworten für alle Plex- und Soulseek-Endpunkte inklusive klarer Fehlercodes.
-- Verbesserte Fehler- und Logging-Strategie bei fehlgeschlagenen Datenbank- oder API-Zugriffen.
-- Stabilere Hintergrund-Worker dank transaktionalem Session-Handling über `session_scope()`.
-
-## Installation
+### Lokales Setup
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-## Konfiguration
-
-Die Anwendung liest Konfigurationen aus Umgebungsvariablen:
-
-| Variable               | Beschreibung                                  |
-|------------------------|-----------------------------------------------|
-| `SPOTIFY_CLIENT_ID`    | Spotify OAuth Client ID                        |
-| `SPOTIFY_CLIENT_SECRET`| Spotify OAuth Client Secret                    |
-| `SPOTIFY_REDIRECT_URI` | Spotify Redirect URI                           |
-| `SPOTIFY_SCOPE`        | Optionaler Scope (Standard siehe Code)         |
-| `PLEX_BASE_URL`        | Basis-URL des Plex Servers                     |
-| `PLEX_TOKEN`           | Plex Auth Token                                |
-| `PLEX_LIBRARY`         | Name der Musikbibliothek in Plex               |
-| `SLSKD_URL`            | Basis-URL von slskd                            |
-| `SLSKD_API_KEY`        | Optionaler API-Key für slskd                   |
-| `DATABASE_URL`         | SQLAlchemy URL (Standard: `sqlite:///./harmony.db`) |
-| `HARMONY_LOG_LEVEL`    | Logging-Level (`INFO`, `ERROR`, …)             |
-| `HARMONY_DISABLE_WORKERS` | `1`, um Worker im Testbetrieb zu deaktivieren |
-
-## Lokaler Start
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-## Tests
+Konfiguriere erforderliche Umgebungsvariablen (siehe Tabelle unten), bevor du den Server startest.
+
+### Docker
+
+```bash
+docker build -t harmony-backend .
+docker run --env-file .env -p 8000:8000 harmony-backend
+```
+
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Das Dev-Override (`docker-compose.override.yml`) aktiviert Hot-Reloading und Debug-Logging.
+
+### GitHub Actions
+
+Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull
+Requests die Test-Suite (`pytest`) unter Python 3.11 aus.
+
+## Konfiguration
+
+| Variable | Beschreibung |
+| --- | --- |
+| `SPOTIFY_CLIENT_ID` | Spotify OAuth Client ID |
+| `SPOTIFY_CLIENT_SECRET` | Spotify OAuth Client Secret |
+| `SPOTIFY_REDIRECT_URI` | Redirect URI für den OAuth-Flow |
+| `SPOTIFY_SCOPE` | Optionaler Scope für Spotify Berechtigungen |
+| `PLEX_BASE_URL` | Basis-URL des Plex-Servers |
+| `PLEX_TOKEN` | Plex Auth Token |
+| `PLEX_LIBRARY` | Name der Plex-Musikbibliothek |
+| `SLSKD_URL` | Basis-URL des Soulseek-Daemons |
+| `SLSKD_API_KEY` | API-Key für slskd (falls gesetzt) |
+| `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
+| `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
+| `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
+
+## API-Endpoints
+
+Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](docs/api.md). Die wichtigsten Gruppen im Überblick:
+
+- **Spotify** (`/spotify`): Status, Suche, Track-Details, Audio-Features, Benutzerbibliothek, Playlists, Empfehlungen.
+- **Plex** (`/plex`): Status & Statistiken, Bibliotheken, PlayQueues, Playlists, Timeline, Bewertungen, Benachrichtigungen.
+- **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos.
+- **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.
+- **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
+- **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.
+
+## Tests & CI
 
 ```bash
 pytest
 ```
 
-## Docker
-
-```bash
-docker build -t harmony-backend .
-docker compose up
-```
-
-## Endpunkte
-
-Die wichtigsten API-Endpunkte sind:
-
-- `GET /spotify/status`
-- `GET /spotify/search/tracks?query=...`
-- `GET /spotify/search/artists?query=...`
-- `GET /spotify/search/albums?query=...`
-- `GET /spotify/audio-features/{track_id}`
-- `GET /spotify/audio-features?ids=...`
-- `GET /spotify/playlists`
-- `GET /spotify/playlists/{playlist_id}/tracks`
-- `POST /spotify/playlists/{playlist_id}/tracks`
-- `DELETE /spotify/playlists/{playlist_id}/tracks`
-- `PUT /spotify/playlists/{playlist_id}/reorder`
-- `GET /spotify/track/{track_id}`
-- `GET /spotify/me`
-- `GET /spotify/me/tracks`
-- `PUT /spotify/me/tracks`
-- `DELETE /spotify/me/tracks`
-- `GET /spotify/me/top/tracks`
-- `GET /spotify/me/top/artists`
-- `GET /spotify/recommendations`
-- `GET /plex/status`
-- `GET /plex/library/sections`
-- `GET /plex/library/sections/{section_id}/all`
-- `GET /plex/library/metadata/{item_id}`
-- `GET /plex/status/sessions`
-- `GET /plex/status/sessions/history/all`
-- `GET`/`POST /plex/timeline`
-- `POST /plex/scrobble`
-- `POST /plex/unscrobble`
-- `GET`/`POST`/`PUT`/`DELETE /plex/playlists`
-- `POST /plex/playQueues`
-- `GET /plex/playQueues/{playqueue_id}`
-- `POST /plex/rate`
-- `POST /plex/tags/{item_id}`
-- `GET /plex/notifications`
-- `GET /plex/devices`
-- `GET /plex/dvr`
-- `GET /plex/livetv`
-- `GET /soulseek/status`
-- `POST /soulseek/search`
-- `POST /soulseek/download`
-- `GET /soulseek/downloads`
-- `GET /soulseek/download/{id}`
-- `GET /soulseek/downloads/all`
-- `DELETE /soulseek/download/{id}`
-- `DELETE /soulseek/downloads/completed`
-- `GET /soulseek/download/{id}/queue`
-- `POST /soulseek/enqueue`
-- `GET /soulseek/uploads`
-- `GET /soulseek/upload/{id}`
-- `GET /soulseek/uploads/all`
-- `DELETE /soulseek/upload/{id}`
-- `DELETE /soulseek/uploads/completed`
-- `GET /soulseek/user/{username}/address`
-- `GET /soulseek/user/{username}/browse`
-- `GET /soulseek/user/{username}/browsing_status`
-- `GET /soulseek/user/{username}/directory?path=...`
-- `GET /soulseek/user/{username}/info`
-- `GET /soulseek/user/{username}/status`
-- `POST /matching/spotify-to-plex`
-- `POST /matching/spotify-to-soulseek`
-- `GET /settings`
-- `POST /settings`
+Die Tests mocken externe Dienste und können lokal wie auch via GitHub Actions ausgeführt werden. Für deterministische
+Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
 
 ## Lizenz
 
-MIT
+Das Projekt steht derzeit ohne explizite Lizenzdatei zur Verfügung. Ohne eine veröffentlichte Lizenz gelten sämtliche Rechte
+als vorbehalten.
