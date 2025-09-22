@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,11 @@ from app.schemas import (
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def _translate_error(message: str, exc: SoulseekClientError) -> HTTPException:
+    logger.error("%s: %s", message, exc)
+    return HTTPException(status_code=502, detail=message)
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -154,8 +159,7 @@ async def soulseek_cancel(
     try:
         await client.cancel_download(str(download_id))
     except SoulseekClientError as exc:
-        logger.error("Failed to cancel Soulseek download %s: %s", download_id, exc)
-        raise HTTPException(status_code=502, detail="Failed to cancel download") from exc
+        raise _translate_error("Failed to cancel download", exc)
 
     download.state = "failed"
     if download.progress < 0:
@@ -166,3 +170,172 @@ async def soulseek_cancel(
     session.commit()
 
     return SoulseekCancelResponse(cancelled=True)
+
+
+@router.get("/download/{download_id}")
+async def soulseek_download_detail(
+    download_id: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.get_download(download_id)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch download", exc) from exc
+
+
+@router.get("/downloads/all")
+async def soulseek_all_downloads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+    try:
+        downloads = await client.get_all_downloads()
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch downloads", exc) from exc
+    return {"downloads": downloads}
+
+
+@router.delete("/downloads/completed")
+async def soulseek_remove_completed_downloads(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.remove_completed_downloads()
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to remove completed downloads", exc) from exc
+
+
+@router.get("/download/{download_id}/queue")
+async def soulseek_download_queue(
+    download_id: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.get_queue_position(download_id)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch queue position", exc) from exc
+
+
+@router.post("/enqueue")
+async def soulseek_enqueue(
+    payload: SoulseekDownloadRequest,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.enqueue(payload.username, payload.files)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to enqueue downloads", exc) from exc
+
+
+@router.delete("/upload/{upload_id}")
+async def soulseek_cancel_upload(
+    upload_id: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.cancel_upload(upload_id)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to cancel upload", exc) from exc
+
+
+@router.get("/upload/{upload_id}")
+async def soulseek_upload_detail(
+    upload_id: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.get_upload(upload_id)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch upload", exc) from exc
+
+
+@router.get("/uploads")
+async def soulseek_uploads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+    try:
+        uploads = await client.get_uploads()
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch uploads", exc) from exc
+    return {"uploads": uploads}
+
+
+@router.get("/uploads/all")
+async def soulseek_all_uploads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+    try:
+        uploads = await client.get_all_uploads()
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch all uploads", exc) from exc
+    return {"uploads": uploads}
+
+
+@router.delete("/uploads/completed")
+async def soulseek_remove_completed_uploads(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.remove_completed_uploads()
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to remove completed uploads", exc) from exc
+
+
+@router.get("/user/{username}/address")
+async def soulseek_user_address(
+    username: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_address(username)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch user address", exc) from exc
+
+
+@router.get("/user/{username}/browse")
+async def soulseek_user_browse(
+    username: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_browse(username)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to browse user", exc) from exc
+
+
+@router.get("/user/{username}/browsing_status")
+async def soulseek_user_browsing_status(
+    username: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_browsing_status(username)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch user browsing status", exc) from exc
+
+
+@router.get("/user/{username}/directory")
+async def soulseek_user_directory(
+    username: str,
+    path: str = Query(..., description="Directory path to browse"),
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_directory(username, path)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch user directory", exc) from exc
+
+
+@router.get("/user/{username}/info")
+async def soulseek_user_info(
+    username: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_info(username)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch user info", exc) from exc
+
+
+@router.get("/user/{username}/status")
+async def soulseek_user_status(
+    username: str,
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
+    try:
+        return await client.user_status(username)
+    except SoulseekClientError as exc:
+        raise _translate_error("Failed to fetch user status", exc) from exc

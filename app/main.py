@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 
+import inspect
+
 from fastapi import FastAPI
 
 from app.dependencies import (
@@ -17,7 +19,7 @@ from app.logging import configure_logging, get_logger
 from app.routers import matching_router, plex_router, settings_router, soulseek_router, spotify_router
 from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
 
-app = FastAPI(title="Harmony Backend", version="1.3.0")
+app = FastAPI(title="Harmony Backend", version="1.4.0")
 logger = get_logger(__name__)
 
 app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
@@ -65,6 +67,15 @@ async def shutdown_event() -> None:
         await worker.stop()
     if worker := getattr(app.state, "playlist_worker", None):
         await worker.stop()
+    try:
+        plex_client = get_plex_client()
+    except ValueError:
+        plex_client = None
+    close_fn = getattr(plex_client, "close", None)
+    if callable(close_fn):
+        result = close_fn()
+        if inspect.isawaitable(result):
+            await result
     logger.info("Harmony application stopped")
 
 

@@ -74,3 +74,100 @@ def test_soulseek_download_cancellation(client: SimpleTestClient) -> None:
     response = client.delete("/soulseek/download/1")
     assert response.status_code == 200
     assert response.json()["cancelled"] is True
+
+
+def test_soulseek_download_management_endpoints(client: SimpleTestClient) -> None:
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "song.mp3", "size": 123}],
+    }
+    response = client.post("/soulseek/download", json=payload)
+    assert response.status_code == 200
+    download_id = response.json()["detail"]["downloads"][0]["id"]
+
+    stub = client.app.state.soulseek_stub
+    stub.queue_positions[download_id] = {"position": 3}
+    stub.set_status(download_id, state="completed", progress=100.0)
+
+    detail = client.get(f"/soulseek/download/{download_id}")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == download_id
+
+    queue = client.get(f"/soulseek/download/{download_id}/queue")
+    assert queue.status_code == 200
+    assert queue.json()["position"] == 3
+
+    all_downloads = client.get("/soulseek/downloads/all")
+    assert all_downloads.status_code == 200
+    downloads = all_downloads.json()["downloads"]
+    assert any(item["id"] == download_id for item in downloads)
+
+    removed = client.delete("/soulseek/downloads/completed")
+    assert removed.status_code == 200
+    assert removed.json()["removed"] >= 1
+
+    queue_after = client.get(f"/soulseek/download/{download_id}/queue")
+    assert queue_after.status_code == 200
+
+
+def test_soulseek_enqueue_endpoint(client: SimpleTestClient) -> None:
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "other.mp3", "size": 321}],
+    }
+    response = client.post("/soulseek/enqueue", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "enqueued"
+    assert body["job"]["files"][0]["filename"] == "other.mp3"
+
+
+def test_soulseek_upload_endpoints(client: SimpleTestClient) -> None:
+    stub = client.app.state.soulseek_stub
+    uploads = client.get("/soulseek/uploads")
+    assert uploads.status_code == 200
+    assert len(uploads.json()["uploads"]) == 1
+
+    all_uploads = client.get("/soulseek/uploads/all")
+    assert all_uploads.status_code == 200
+    assert len(all_uploads.json()["uploads"]) == 2
+
+    detail = client.get("/soulseek/upload/up-1")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == "up-1"
+
+    cancel = client.delete("/soulseek/upload/up-1")
+    assert cancel.status_code == 200
+    assert cancel.json()["cancelled"] == "up-1"
+
+    removed = client.delete("/soulseek/uploads/completed")
+    assert removed.status_code == 200
+    assert removed.json()["removed"] >= 1
+
+    assert stub.uploads["up-1"]["state"] == "cancelled"
+
+
+def test_soulseek_user_endpoints(client: SimpleTestClient) -> None:
+    address = client.get("/soulseek/user/tester/address")
+    assert address.status_code == 200
+    assert address.json()["host"] == "127.0.0.1"
+
+    browse = client.get("/soulseek/user/tester/browse")
+    assert browse.status_code == 200
+    assert browse.json()["files"] == ["song.mp3"]
+
+    status = client.get("/soulseek/user/tester/browsing_status")
+    assert status.status_code == 200
+    assert status.json()["state"] == "idle"
+
+    directory = client.get("/soulseek/user/tester/directory", params={"path": "/music"})
+    assert directory.status_code == 200
+    assert directory.json()["path"] == "/music"
+
+    info = client.get("/soulseek/user/tester/info")
+    assert info.status_code == 200
+    assert info.json()["username"] == "tester"
+
+    user_status = client.get("/soulseek/user/tester/status")
+    assert user_status.status_code == 200
+    assert user_status.json()["online"] is True
