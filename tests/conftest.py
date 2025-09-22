@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import pytest
+from app.db import init_db, reset_engine_for_tests
 from app.dependencies import (
     get_matching_engine as dependency_matching_engine,
     get_plex_client as dependency_plex_client,
@@ -139,9 +140,11 @@ class StubSoulseekClient:
 def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    reset_engine_for_tests()
     db_path = Path("test.db")
     if db_path.exists():
         db_path.unlink()
+    init_db()
     yield
 
 
