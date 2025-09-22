@@ -117,8 +117,21 @@ def create_playlist(data: PlaylistCreate, db: Session = Depends(get_db)):
         ) from exc
 
 
-@router.get("/playlists", response_model=List[PlaylistOut])
-def list_playlists(db: Session = Depends(get_db)):
+@router.get("/playlists")
+@router.get("/playlists/metadata")
+async def get_playlists_metadata() -> dict:
+    """Return static playlist metadata from the in-memory Spotify client."""
+
+    try:
+        playlists = client.get_user_playlists_metadata_only()
+        return {"playlists": [playlist.__dict__ for playlist in playlists]}
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Playlist fetch failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/playlists/persisted", response_model=List[PlaylistOut])
+def list_persisted_playlists(db: Session = Depends(get_db)):
     """Return all stored playlists with their songs."""
 
     playlists: Sequence[Playlist] = (
@@ -145,18 +158,6 @@ def list_songs(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Spotify client passthrough endpoints used by the prototype UI
 # ---------------------------------------------------------------------------
-
-
-@router.get("/playlists/metadata")
-async def get_playlists_metadata() -> dict:
-    """Return static playlist metadata from the in-memory Spotify client."""
-
-    try:
-        playlists = client.get_user_playlists_metadata_only()
-        return {"playlists": [playlist.__dict__ for playlist in playlists]}
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.error("Playlist fetch failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/search")
