@@ -14,6 +14,13 @@ class APIRouter:
     def __init__(self) -> None:
         self.routes: List[Tuple[str, str, Callable[..., Any]]] = []
 
+    def delete(self, path: str, **_kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            self.routes.append(("DELETE", path, func))
+            return func
+
+        return decorator
+
     def post(self, path: str, **_kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             self.routes.append(("POST", path, func))
