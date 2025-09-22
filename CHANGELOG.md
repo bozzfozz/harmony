@@ -10,9 +10,9 @@
 - Soulseek-API liefert Fortschrittsinformationen aus der Datenbank und unterstützt Abbrüche mit Status `failed`.
 
 ## v1.1.0
-- Vereinheitlichte JSON-Schemata für Plex- und Soulseek-Router inklusive robuster Fehlerbehandlung.
-- Persistenz-Layer der Hintergrund-Worker nutzt nun `session_scope()` für atomare Transaktionen.
-- Matching-Endpoints loggen Fehler und rollen bei Persistenzproblemen zuverlässig zurück.
+- Dockerfile: Standardstartbefehl für Production (`uvicorn app.main:app`)
+- docker-compose.yml: verschlankt, keine Command-Definition mehr
+- docker-compose.override.yml: Dev-Setup mit `--reload` und Debug-Loglevel
 
 ## v1.0.0
 - Initiale Version des Harmony-Backends mit FastAPI, SQLite und vollständiger Testabdeckung.
