@@ -1,68 +1,62 @@
-from fastapi import APIRouter, HTTPException
+"""API endpoints for managing synchronisation jobs."""
 
-from app.orchestrator.sync_worker import SyncWorker
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.db import get_db
 from app.utils.logging_config import get_logger
+from backend.app.models.sync_job import SyncJob
+from backend.app.workers.sync_worker import SyncWorker
 
 logger = get_logger("sync_router")
 
-router = APIRouter()
+router = APIRouter(prefix="/sync", tags=["Sync"])
 
 worker = SyncWorker()
 
 
-@router.post("/track/{spotify_track_id}")
-async def sync_track(spotify_track_id: str):
-    """Trigger the end-to-end sync for a single Spotify track."""
+def _serialize_job(job: SyncJob) -> dict[str, Any]:
+    return {
+        "id": job.id,
+        "spotify_id": job.spotify_id,
+        "status": job.status,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+        "error_message": job.error_message,
+    }
+
+
+@router.post("/start/{spotify_id}")
+async def start_sync_job(spotify_id: str) -> dict[str, Any]:
+    """Create a new synchronisation job and launch the worker."""
 
     try:
-        result = await worker.sync_track(spotify_track_id)
-        return {"status": "ok", "data": result}
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Sync-Fehler: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Sync error: {exc}") from exc
+        job_id = await worker.start_sync(spotify_id)
+    except Exception as exc:  # pragma: no cover - defensive safety net
+        logger.error("Failed to start sync for %s: %s", spotify_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to start sync job") from exc
+
+    return {"job_id": job_id, "status": "pending"}
 
 
-@router.post("/playlist/{spotify_playlist_id}")
-async def sync_playlist(spotify_playlist_id: str):
-    """Trigger the sync for every track in a Spotify playlist."""
+@router.get("/status/{job_id}")
+def get_sync_status(job_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Return the current status for a sync job."""
 
-    try:
-        playlist_tracks = worker.spotify.get_playlist_tracks(spotify_playlist_id)
-        if not playlist_tracks:
-            raise HTTPException(status_code=404, detail="Keine Tracks in Playlist gefunden")
+    job = db.get(SyncJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Sync job not found")
 
-        results = []
-        for track in playlist_tracks:
-            try:
-                track_result = await worker.sync_track(track.id)
-                results.append({"track": track.title, "status": "success", "data": track_result})
-            except Exception as exc:  # pragma: no cover - continue processing other tracks
-                logger.error("Fehler bei Track %s: %s", track.title, exc)
-                results.append({"track": track.title, "status": "failed", "error": str(exc)})
-
-        return {"status": "ok", "playlist": spotify_playlist_id, "results": results}
-
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Playlist-Sync Fehler: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Playlist sync error: {exc}") from exc
+    return _serialize_job(job)
 
 
-@router.get("/status")
-async def sync_status():
-    """Return the availability of the orchestration dependencies."""
+@router.get("/all")
+def list_sync_jobs(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Return a list of all synchronisation jobs."""
 
-    try:
-        status = {
-            "spotify": worker.spotify.is_authenticated(),
-            "soulseek": worker.soulseek.is_configured(),
-            "plex": worker.plex.is_connected(),
-            "beets": worker.beets.is_available(),
-        }
-        return {"status": "ok", "services": status}
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Status-Abfrage Fehler: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Status error: {exc}") from exc
+    jobs = db.query(SyncJob).order_by(SyncJob.created_at.desc()).all()
+    return {"jobs": [_serialize_job(job) for job in jobs]}

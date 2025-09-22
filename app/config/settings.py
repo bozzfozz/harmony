@@ -80,6 +80,66 @@ class ConfigManager:
 
             return dict(self._cache[cache_key])
 
+    def get_plex_config(self) -> Dict[str, str]:
+        """Return Plex connection details merged from environment and config file."""
+
+        with self._lock:
+            cache_key = "plex"
+            if cache_key not in self._cache:
+                config: Dict[str, str] = {}
+
+                file_config = self._load_config_section("plex")
+                if isinstance(file_config, dict):
+                    for key in ("base_url", "token", "library"):
+                        value = file_config.get(key)
+                        if isinstance(value, str) and value:
+                            config[key] = value
+
+                overrides = {
+                    "base_url": os.getenv("PLEX_BASE_URL") or os.getenv("PLEX_URL"),
+                    "token": os.getenv("PLEX_TOKEN"),
+                    "library": os.getenv("PLEX_LIBRARY"),
+                }
+
+                for key, value in overrides.items():
+                    if isinstance(value, str) and value:
+                        config[key] = value
+
+                self._cache[cache_key] = config
+
+            return dict(self._cache[cache_key])
+
+
+    def get_spotify_config(self) -> Dict[str, str]:
+        """Return Spotify OAuth configuration from environment and config file."""
+
+        with self._lock:
+            cache_key = "spotify"
+            if cache_key not in self._cache:
+                config: Dict[str, str] = {}
+
+                file_config = self._load_config_section("spotify")
+                if isinstance(file_config, dict):
+                    for key in ("client_id", "client_secret", "redirect_uri", "scope"):
+                        value = file_config.get(key)
+                        if isinstance(value, str) and value:
+                            config[key] = value
+
+                overrides = {
+                    "client_id": os.getenv("SPOTIFY_CLIENT_ID"),
+                    "client_secret": os.getenv("SPOTIFY_CLIENT_SECRET"),
+                    "redirect_uri": os.getenv("SPOTIFY_REDIRECT_URI"),
+                    "scope": os.getenv("SPOTIFY_SCOPE"),
+                }
+
+                for key, value in overrides.items():
+                    if isinstance(value, str) and value:
+                        config[key] = value
+
+                self._cache[cache_key] = config
+
+            return dict(self._cache[cache_key])
+
 
 config_manager = ConfigManager()
 
