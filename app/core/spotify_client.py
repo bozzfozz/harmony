@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 
 @dataclass
@@ -137,12 +137,31 @@ class SpotifyClient:
             Playlist(id="p1", name="Favorites", track_count=15),
             Playlist(id="p2", name="Chill", track_count=24),
         ]
+        self._playlist_tracks: Dict[str, List[str]] = {
+            "p1": ["1", "2"],
+            "p2": ["3"],
+        }
 
     def is_authenticated(self) -> bool:
         return self._authenticated
 
     def get_user_playlists_metadata_only(self) -> List[Playlist]:
         return list(self._playlists)
+
+    def get_track(self, track_id: str) -> Optional[Track]:
+        """Return a track by id if present."""
+
+        track = self._track_index.get(track_id)
+        if track is None:
+            return None
+        return Track(
+            id=track.id,
+            title=track.title,
+            artist=track.artist,
+            album=track.album,
+            duration_ms=track.duration_ms,
+            album_id=track.album_id,
+        )
 
     def search_tracks(self, query: str) -> List[Track]:
         normalized = query.lower()
@@ -184,3 +203,20 @@ class SpotifyClient:
         if album is None:
             return None
         return album.copy()
+
+    def get_playlist_tracks(self, playlist_id: str) -> List[Track]:
+        """Return tracks for the playlist if available."""
+
+        track_ids = self._playlist_tracks.get(playlist_id, [])
+        return [
+            Track(
+                id=self._track_index[track_id].id,
+                title=self._track_index[track_id].title,
+                artist=self._track_index[track_id].artist,
+                album=self._track_index[track_id].album,
+                duration_ms=self._track_index[track_id].duration_ms,
+                album_id=self._track_index[track_id].album_id,
+            )
+            for track_id in track_ids
+            if track_id in self._track_index
+        ]

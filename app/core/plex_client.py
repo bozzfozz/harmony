@@ -28,6 +28,7 @@ class PlexClient:
     def __init__(self) -> None:
         self._connected = True
         self._libraries: List[str] = ["Music"]
+        self._refresh_count = 0
         self._tracks: List[PlexTrackInfo] = [
             PlexTrackInfo(
                 title="Song One",
@@ -96,3 +97,9 @@ class PlexClient:
             for album in self._albums
             if normalized in album.title.lower() or normalized in album.artist.lower()
         ]
+
+    def refresh_library(self) -> bool:
+        """Simulate a Plex library refresh."""
+
+        self._refresh_count += 1
+        return True

@@ -109,3 +109,8 @@ class SoulseekClient:
         resp = await self._make_request("POST", f"transfers/downloads/{username}", json=payload)
         return resp is not None
 
+    def is_configured(self) -> bool:
+        """Return whether the client has a base URL configured."""
+
+        return bool(self.base_url)
+
