@@ -1,7 +1,8 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.utils.logging_config import get_logger
 
@@ -9,7 +10,17 @@ logger = get_logger("db")
 
 DATABASE_URL = "sqlite:///./harmony.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine_kwargs: dict[str, object] = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+    # Für In-Memory-SQLite muss ein StaticPool verwendet werden, damit alle
+    # Sessions dieselbe Verbindung nutzen und Daten/Tables geteilt werden.
+    if DATABASE_URL in {"sqlite://", "sqlite:///:memory:"}:
+        engine_kwargs["poolclass"] = StaticPool
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -21,7 +32,7 @@ def init_db() -> None:
     logger.info("Database initialized")
 
 
-def get_db() -> Generator:
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
