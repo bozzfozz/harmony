@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config import SpotifyConfig
 from app.logging import get_logger
@@ -107,3 +107,66 @@ class SpotifyClient:
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         return self._execute(self._client.track, track_id)
+
+    def get_audio_features(self, track_id: str) -> Dict[str, Any]:
+        features = self._execute(self._client.audio_features, [track_id]) or []
+        return features[0] if features else {}
+
+    def get_multiple_audio_features(self, track_ids: List[str]) -> Dict[str, Any]:
+        features = self._execute(self._client.audio_features, track_ids)
+        return {"audio_features": features or []}
+
+    def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
+        return self._execute(self._client.playlist_items, playlist_id, limit=limit)
+
+    def add_tracks_to_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
+        return self._execute(self._client.playlist_add_items, playlist_id, track_uris)
+
+    def remove_tracks_from_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
+        return self._execute(
+            self._client.playlist_remove_all_occurrences_of_items, playlist_id, track_uris
+        )
+
+    def reorder_playlist_items(
+        self, playlist_id: str, range_start: int, insert_before: int
+    ) -> Dict[str, Any]:
+        return self._execute(
+            self._client.playlist_reorder_items,
+            playlist_id,
+            range_start=range_start,
+            insert_before=insert_before,
+        )
+
+    def get_saved_tracks(self, limit: int = 20) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_saved_tracks, limit=limit)
+
+    def save_tracks(self, track_ids: List[str]) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_saved_tracks_add, track_ids)
+
+    def remove_saved_tracks(self, track_ids: List[str]) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_saved_tracks_delete, track_ids)
+
+    def get_current_user(self) -> Dict[str, Any]:
+        return self._execute(self._client.current_user)
+
+    def get_top_tracks(self, limit: int = 20) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_top_tracks, limit=limit)
+
+    def get_top_artists(self, limit: int = 20) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_top_artists, limit=limit)
+
+    def get_recommendations(
+        self,
+        seed_tracks: Optional[List[str]] = None,
+        seed_artists: Optional[List[str]] = None,
+        seed_genres: Optional[List[str]] = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"limit": limit}
+        if seed_tracks:
+            params["seed_tracks"] = seed_tracks
+        if seed_artists:
+            params["seed_artists"] = seed_artists
+        if seed_genres:
+            params["seed_genres"] = seed_genres
+        return self._execute(self._client.recommendations, **params)

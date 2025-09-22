@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -34,6 +34,29 @@ class PlaylistResponse(BaseModel):
 
 class TrackDetailResponse(BaseModel):
     track: Dict[str, Any]
+
+
+class AudioFeaturesResponse(BaseModel):
+    audio_features: Union[Dict[str, Any], List[Dict[str, Any]]]
+
+
+class PlaylistItemsResponse(BaseModel):
+    items: List[Dict[str, Any]]
+    total: int
+
+
+class SavedTracksResponse(BaseModel):
+    items: List[Dict[str, Any]]
+    total: int
+
+
+class UserProfileResponse(BaseModel):
+    profile: Dict[str, Any]
+
+
+class RecommendationsResponse(BaseModel):
+    tracks: List[Dict[str, Any]]
+    seeds: List[Dict[str, Any]]
 
 
 class SoulseekSearchRequest(BaseModel):

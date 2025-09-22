@@ -3,7 +3,9 @@
 # v1.x.x
 - Vollständige slskd API-Integration (Transfers & Users).
 
-# v1.4.0
+## v1.4.0
+- Erweiterter Spotify-Client unterstützt Audio Features, Empfehlungen, Benutzerbibliothek und Playlisten-Management.
+- FastAPI-Router ergänzt neue Endpunkte für `/spotify/me`, Top-Tracks/-Artists, Audio Features und Playlist-Operationen.
 - Vollständige Plex-Integration auf Basis der offiziellen API (aiohttp, async).
 - Neue API-Endpunkte für Bibliotheken, Status, Playback, Playlists, Playqueues und Bewertungen.
 - Unterstützung für Echtzeit-Benachrichtigungen, Geräte- & Live-TV-Übersichten sowie Tag-Synchronisierung.
