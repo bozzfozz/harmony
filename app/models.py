@@ -10,4 +10,6 @@ class Song(Base):
     title = Column(String, index=True)
     artist = Column(String, index=True)
     album = Column(String, index=True)
+    duration = Column(Integer, nullable=True)
+    source = Column(String, index=True, default="unknown")
     path = Column(String)
