@@ -1,5 +1,13 @@
 # Changelog
 
+# v1.x.x
+- Vollständige slskd API-Integration (Transfers & Users).
+
+# v1.4.0
+- Vollständige Plex-Integration auf Basis der offiziellen API (aiohttp, async).
+- Neue API-Endpunkte für Bibliotheken, Status, Playback, Playlists, Playqueues und Bewertungen.
+- Unterstützung für Echtzeit-Benachrichtigungen, Geräte- & Live-TV-Übersichten sowie Tag-Synchronisierung.
+
 ## v1.3.0
 - Spotify-Playlists werden alle 15 Minuten synchronisiert und in der Datenbank gespeichert.
 - Neuer API-Endpunkt `/spotify/playlists` liefert die persistierten Playlists inklusive Track-Anzahl.

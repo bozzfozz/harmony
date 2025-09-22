@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict
 
@@ -53,40 +54,156 @@ class StubSpotifyClient:
 
 class StubPlexClient:
     def __init__(self) -> None:
-        self.artists = [
-            {"id": "1", "name": "Tester"},
-            {"id": "2", "name": "Another Tester"},
-        ]
-        self.albums_by_artist = {
-            "1": [{"id": "10", "title": "Album", "year": 2020}],
-            "2": [
-                {"id": "20", "title": "Another Album", "year": 2019},
-            ],
+        self.libraries = {
+            "MediaContainer": {
+                "Directory": [
+                    {"key": "1", "type": "artist", "title": "Music"},
+                ]
+            }
         }
-        self.tracks_by_album = {
-            "10": [{"id": "100", "title": "Test Song", "duration": 200000}],
-            "20": [
-                {"id": "200", "title": "Second Song", "duration": 210000},
-                {"id": "201", "title": "Third Song", "duration": 185000},
-            ],
+        self.library_items = {
+            ("1", "10"): {
+                "MediaContainer": {"totalSize": 2, "Metadata": [{"ratingKey": "a"}, {"ratingKey": "b"}]}
+            },
+            ("1", "9"): {
+                "MediaContainer": {"totalSize": 3, "Metadata": [{"ratingKey": "a"}]}
+            },
+            ("1", "8"): {
+                "MediaContainer": {"totalSize": 5, "Metadata": [{"ratingKey": "t"}]}
+            },
         }
+        self.metadata = {"100": {"title": "Test Item", "year": 2020}}
+        self.sessions = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Session"}]}}
+        self.session_history = {"MediaContainer": {"size": 1, "Metadata": [{"title": "History"}]}}
+        self.playlists = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Playlist"}]}}
+        self.created_playlists: list[dict[str, Any]] = []
+        self.playqueues: Dict[str, Any] = {}
+        self.timeline_updates: list[dict[str, Any]] = []
+        self.scrobbles: list[dict[str, Any]] = []
+        self.unscrobbles: list[dict[str, Any]] = []
+        self.ratings: list[dict[str, Any]] = []
+        self.tags: Dict[str, Dict[str, list[str]]] = {}
+        self.devices = {"MediaContainer": {"Device": [{"name": "Player"}]}}
+        self.dvr = {"MediaContainer": {"Directory": [{"name": "DVR"}]}}
+        self.livetv = {"MediaContainer": {"Directory": [{"name": "Channel"}]}}
 
-    def is_connected(self) -> bool:
-        return True
+    async def get_sessions(self) -> Dict[str, Any]:
+        return self.sessions
 
-    def get_all_artists(self) -> list:
-        return self.artists
+    async def get_library_statistics(self) -> Dict[str, int]:
+        return {"artists": 2, "albums": 3, "tracks": 5}
 
-    def get_albums_by_artist(self, artist_id: str) -> list:
-        return self.albums_by_artist.get(artist_id, [])
+    async def get_libraries(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return self.libraries
 
-    def get_tracks_by_album(self, album_id: str) -> list:
-        return self.tracks_by_album.get(album_id, [])
+    async def get_library_items(self, section_id: str, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        type_value = (params or {}).get("type", "")
+        return self.library_items.get((section_id, type_value), {"MediaContainer": {"Metadata": []}})
+
+    async def get_metadata(self, item_id: str) -> Dict[str, Any]:
+        return self.metadata[item_id]
+
+    async def get_session_history(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return self.session_history
+
+    async def get_timeline(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {"timeline": params or {}}
+
+    async def update_timeline(self, data: Dict[str, Any]) -> str:
+        self.timeline_updates.append(data)
+        return "ok"
+
+    async def scrobble(self, data: Dict[str, Any]) -> str:
+        self.scrobbles.append(data)
+        return "ok"
+
+    async def unscrobble(self, data: Dict[str, Any]) -> str:
+        self.unscrobbles.append(data)
+        return "ok"
+
+    async def get_playlists(self) -> Dict[str, Any]:
+        return self.playlists
+
+    async def create_playlist(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        self.created_playlists.append(payload)
+        return {"status": "created", "payload": payload}
+
+    async def update_playlist(self, playlist_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {"status": "updated", "id": playlist_id, "payload": payload}
+
+    async def delete_playlist(self, playlist_id: str) -> Dict[str, Any]:
+        return {"status": "deleted", "id": playlist_id}
+
+    async def create_playqueue(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        identifier = str(len(self.playqueues) + 1)
+        self.playqueues[identifier] = payload
+        return {"playQueueID": identifier, "payload": payload}
+
+    async def get_playqueue(self, playqueue_id: str) -> Dict[str, Any]:
+        return self.playqueues.get(playqueue_id, {})
+
+    async def rate_item(self, item_id: str, rating: int) -> str:
+        self.ratings.append({"key": item_id, "rating": rating})
+        return "ok"
+
+    async def sync_tags(self, item_id: str, tags: Dict[str, list[str]]) -> Dict[str, Any]:
+        self.tags[item_id] = tags
+        return {"status": "tags-updated", "id": item_id, "tags": tags}
+
+    async def get_devices(self) -> Dict[str, Any]:
+        return self.devices
+
+    async def get_dvr(self) -> Dict[str, Any]:
+        return self.dvr
+
+    async def get_live_tv(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return self.livetv
+
+    @asynccontextmanager
+    async def listen_notifications(self):  # pragma: no cover - exercised via tests
+        class _Message:
+            def __init__(self) -> None:
+                self.type = type("Type", (), {"name": "TEXT"})
+                self.data = "event"
+
+        class _Websocket:
+            def __init__(self) -> None:
+                self._sent = False
+
+            def exception(self):
+                return None
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self._sent:
+                    raise StopAsyncIteration
+                self._sent = True
+                return _Message()
+
+        yield _Websocket()
 
 
 class StubSoulseekClient:
     def __init__(self) -> None:
         self.downloads: Dict[int, Dict[str, Any]] = {}
+        self.queue_positions: Dict[int, Dict[str, Any]] = {}
+        self.uploads: Dict[str, Dict[str, Any]] = {
+            "up-1": {"id": "up-1", "filename": "upload.flac", "state": "uploading", "progress": 40.0},
+            "up-2": {"id": "up-2", "filename": "done.flac", "state": "completed", "progress": 100.0},
+        }
+        self.enqueued: list[Dict[str, Any]] = []
+        self.user_records: Dict[str, Dict[str, Any]] = {
+            "tester": {
+                "address": {"host": "127.0.0.1", "port": 2234},
+                "browse": {"files": ["song.mp3"]},
+                "browsing-status": {"state": "idle"},
+                "directory": {"path": "", "files": []},
+                "info": {"username": "tester", "slots": 3},
+                "status": {"online": True},
+            }
+        }
 
     async def get_download_status(self) -> Dict[str, Any]:
         return {"downloads": list(self.downloads.values())}
@@ -113,6 +230,76 @@ class StubSoulseekClient:
         if identifier in self.downloads:
             self.downloads[identifier]["state"] = "failed"
         return {"cancelled": download_id}
+
+    async def get_download(self, download_id: str) -> Dict[str, Any]:
+        identifier = int(download_id)
+        return self.downloads.get(identifier, {"id": identifier, "state": "unknown"})
+
+    async def get_all_downloads(self) -> list[Dict[str, Any]]:
+        return list(self.downloads.values())
+
+    async def remove_completed_downloads(self) -> Dict[str, Any]:
+        before = len(self.downloads)
+        self.downloads = {k: v for k, v in self.downloads.items() if v.get("state") != "completed"}
+        removed = before - len(self.downloads)
+        return {"removed": removed}
+
+    async def get_queue_position(self, download_id: str) -> Dict[str, Any]:
+        identifier = int(download_id)
+        return self.queue_positions.get(identifier, {"position": None})
+
+    async def enqueue(self, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+        job = {"username": username, "files": files}
+        self.enqueued.append(job)
+        return {"status": "enqueued", "job": job}
+
+    async def cancel_upload(self, upload_id: str) -> Dict[str, Any]:
+        upload = self.uploads.get(upload_id)
+        if upload:
+            upload["state"] = "cancelled"
+        return {"cancelled": upload_id}
+
+    async def get_upload(self, upload_id: str) -> Dict[str, Any]:
+        return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
+
+    async def get_uploads(self) -> list[Dict[str, Any]]:
+        return [upload for upload in self.uploads.values() if upload.get("state") != "completed"]
+
+    async def get_all_uploads(self) -> list[Dict[str, Any]]:
+        return list(self.uploads.values())
+
+    async def remove_completed_uploads(self) -> Dict[str, Any]:
+        before = len(self.uploads)
+        self.uploads = {k: v for k, v in self.uploads.items() if v.get("state") != "completed"}
+        removed = before - len(self.uploads)
+        return {"removed": removed}
+
+    async def user_address(self, username: str) -> Dict[str, Any]:
+        record = self.user_records.get(username, {})
+        return record.get("address", {"host": None, "port": None})
+
+    async def user_browse(self, username: str) -> Dict[str, Any]:
+        record = self.user_records.get(username, {})
+        return record.get("browse", {"files": []})
+
+    async def user_browsing_status(self, username: str) -> Dict[str, Any]:
+        record = self.user_records.get(username, {})
+        return record.get("browsing-status", {"state": "unknown"})
+
+    async def user_directory(self, username: str, path: str) -> Dict[str, Any]:
+        record = self.user_records.setdefault(username, {})
+        directory = record.get("directory", {"path": path, "files": []})
+        directory = dict(directory)
+        directory["path"] = path
+        return directory
+
+    async def user_info(self, username: str) -> Dict[str, Any]:
+        record = self.user_records.get(username, {})
+        return record.get("info", {"username": username})
+
+    async def user_status(self, username: str) -> Dict[str, Any]:
+        record = self.user_records.get(username, {})
+        return record.get("status", {"online": False})
 
     def set_status(
         self,

@@ -44,40 +44,14 @@ class ScanWorker:
 
     async def _perform_scan(self) -> None:
         try:
-            artists = self._client.get_all_artists()
+            stats = await self._client.get_library_statistics()
         except Exception as exc:  # pragma: no cover
             logger.error("Failed to scan Plex library: %s", exc)
             return
 
-        artist_count = len(artists)
-        album_count = 0
-        track_count = 0
-
-        for artist in artists:
-            artist_id = artist.get("id")
-            if not artist_id:
-                continue
-            try:
-                albums = self._client.get_albums_by_artist(str(artist_id))
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning(
-                    "Failed to fetch albums for Plex artist %s: %s", artist_id, exc
-                )
-                continue
-            album_count += len(albums)
-
-            for album in albums:
-                album_id = album.get("id")
-                if not album_id:
-                    continue
-                try:
-                    tracks = self._client.get_tracks_by_album(str(album_id))
-                except Exception as exc:  # pragma: no cover - defensive logging
-                    logger.warning(
-                        "Failed to fetch tracks for Plex album %s: %s", album_id, exc
-                    )
-                    continue
-                track_count += len(tracks)
+        artist_count = stats.get("artists", 0)
+        album_count = stats.get("albums", 0)
+        track_count = stats.get("tracks", 0)
 
         now = datetime.utcnow()
         with session_scope() as session:

@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -109,3 +109,74 @@ class SoulseekClient:
 
     async def cancel_download(self, download_id: str) -> Dict[str, Any]:
         return await self._request("DELETE", f"transfers/downloads/{download_id}")
+
+    async def get_download(self, download_id: str) -> Dict[str, Any]:
+        return await self._request("GET", f"transfers/downloads/{download_id}")
+
+    async def get_all_downloads(self) -> List[Dict[str, Any]]:
+        result = await self._request("GET", "transfers/downloads/all")
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "downloads" in result:
+            payload = result["downloads"]
+            return payload if isinstance(payload, list) else [payload]
+        return [result]
+
+    async def remove_completed_downloads(self) -> Dict[str, Any]:
+        return await self._request("DELETE", "transfers/downloads/completed")
+
+    async def get_queue_position(self, download_id: str) -> Dict[str, Any]:
+        return await self._request("GET", f"transfers/downloads/{download_id}/queue")
+
+    async def enqueue(self, username: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not username:
+            raise ValueError("username is required for enqueue requests")
+        if not isinstance(files, list) or not files:
+            raise ValueError("files must be a non-empty list")
+        payload = {"username": username, "files": files}
+        return await self._request("POST", "transfers/enqueue", json=payload)
+
+    async def cancel_upload(self, upload_id: str) -> Dict[str, Any]:
+        return await self._request("DELETE", f"transfers/uploads/{upload_id}")
+
+    async def get_upload(self, upload_id: str) -> Dict[str, Any]:
+        return await self._request("GET", f"transfers/uploads/{upload_id}")
+
+    async def get_uploads(self) -> List[Dict[str, Any]]:
+        result = await self._request("GET", "transfers/uploads")
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "uploads" in result:
+            payload = result["uploads"]
+            return payload if isinstance(payload, list) else [payload]
+        return [result]
+
+    async def get_all_uploads(self) -> List[Dict[str, Any]]:
+        result = await self._request("GET", "transfers/uploads/all")
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "uploads" in result:
+            payload = result["uploads"]
+            return payload if isinstance(payload, list) else [payload]
+        return [result]
+
+    async def remove_completed_uploads(self) -> Dict[str, Any]:
+        return await self._request("DELETE", "transfers/uploads/completed")
+
+    async def user_address(self, username: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/address")
+
+    async def user_browse(self, username: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/browse")
+
+    async def user_browsing_status(self, username: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/browsing-status")
+
+    async def user_directory(self, username: str, path: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/directory", params={"path": path})
+
+    async def user_info(self, username: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/info")
+
+    async def user_status(self, username: str) -> Dict[str, Any]:
+        return await self._request("GET", f"users/{username}/status")
