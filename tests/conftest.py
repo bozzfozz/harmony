@@ -32,6 +32,14 @@ class StubSpotifyClient:
         self.playlists = [
             {"id": "playlist-1", "name": "My Playlist", "tracks": {"total": 1}},
         ]
+        self.audio_features: Dict[str, Dict[str, Any]] = {
+            "track-1": {"id": "track-1", "danceability": 0.5},
+        }
+        self.playlist_items: Dict[str, Dict[str, Any]] = {
+            "playlist-1": {"items": [{"track": self.tracks["track-1"]}], "total": 1}
+        }
+        self.saved_track_ids: set[str] = set()
+        self.recommendation_payload: Dict[str, Any] = {"tracks": [], "seeds": []}
 
     def is_authenticated(self) -> bool:
         return True
@@ -50,6 +58,81 @@ class StubSpotifyClient:
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         return self.tracks.get(track_id, {"id": track_id, "name": "Unknown"})
+
+    def get_audio_features(self, track_id: str) -> Dict[str, Any]:
+        return self.audio_features.get(track_id, {})
+
+    def get_multiple_audio_features(self, track_ids: list[str]) -> Dict[str, Any]:
+        return {
+            "audio_features": [self.audio_features.get(track_id, {"id": track_id}) for track_id in track_ids]
+        }
+
+    def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
+        return self.playlist_items.get(playlist_id, {"items": [], "total": 0})
+
+    def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        for uri in track_uris:
+            playlist["items"].append({"track": {"uri": uri}})
+        playlist["total"] = len(playlist["items"])
+        return {"snapshot_id": "mock"}
+
+    def remove_tracks_from_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        playlist["items"] = [
+            item for item in playlist["items"] if item.get("track", {}).get("uri") not in set(track_uris)
+        ]
+        playlist["total"] = len(playlist["items"])
+        return {"snapshot_id": "mock"}
+
+    def reorder_playlist_items(
+        self, playlist_id: str, range_start: int, insert_before: int
+    ) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        items = playlist["items"]
+        if 0 <= range_start < len(items):
+            track = items.pop(range_start)
+            insert_index = max(0, min(insert_before, len(items)))
+            items.insert(insert_index, track)
+        playlist["items"] = items
+        return {"snapshot_id": "reordered"}
+
+    def get_saved_tracks(self, limit: int = 20) -> Dict[str, Any]:
+        saved_items = [
+            {"track": self.tracks.get(track_id, {"id": track_id})}
+            for track_id in list(self.saved_track_ids)[:limit]
+        ]
+        return {"items": saved_items, "total": len(self.saved_track_ids)}
+
+    def save_tracks(self, track_ids: list[str]) -> Dict[str, Any]:
+        self.saved_track_ids.update(track_ids)
+        return {"saved": sorted(self.saved_track_ids)}
+
+    def remove_saved_tracks(self, track_ids: list[str]) -> Dict[str, Any]:
+        for track_id in track_ids:
+            self.saved_track_ids.discard(track_id)
+        return {"saved": sorted(self.saved_track_ids)}
+
+    def get_current_user(self) -> Dict[str, Any]:
+        return {"id": "user-1", "display_name": "Harmony Tester"}
+
+    def get_top_tracks(self, limit: int = 20) -> Dict[str, Any]:
+        return {"items": list(self.tracks.values())[:limit]}
+
+    def get_top_artists(self, limit: int = 20) -> Dict[str, Any]:
+        return {"items": [{"id": "artist-1", "name": "Tester"}]}
+
+    def get_recommendations(
+        self,
+        seed_tracks: list[str] | None = None,
+        seed_artists: list[str] | None = None,
+        seed_genres: list[str] | None = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        payload = dict(self.recommendation_payload)
+        payload.setdefault("tracks", [])
+        payload.setdefault("seeds", [])
+        return payload
 
 
 class StubPlexClient:

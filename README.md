@@ -6,6 +6,7 @@ Harmony ist ein FastAPI-Backend, das Spotify, Plex und den Soulseek-Daemon (slsk
 
 - Modularer Aufbau mit Core-Clients und Routern
 - OAuth-basierter Spotify-Client mit Rate-Limiting und Retry-Logik
+- Spotify Web API Abdeckung für Audio Features, Playlists, Recommendations und User Library
 - Plex-Client zur Abfrage der Musikbibliothek
 - Asynchroner Soulseek-Client (slskd) mit Rate-Limiting
 - Persistente Soulseek-Downloads mit Fortschritts- und Statusverfolgung
@@ -23,6 +24,11 @@ Der `BeetsClient` ruft intern Befehle wie `beet import`, `beet update`,
 `beet ls`, `beet stats` und `beet version` auf, um die lokale Musikbibliothek zu
 verwalten. Damit die Integration funktioniert, muss das Kommando `beet`
 installiert und im `PATH` der Anwendung verfügbar sein.
+
+## Neu in v1.4.0
+
+- Spotify-Router unterstützt Audio Features, Benutzerbibliothek, Empfehlungen und Playlist-Management.
+- Neue API-Endpunkte für User-Profile, Top-Tracks/-Artists sowie Playlist-Operationen (Add/Remove/Reorder).
 
 ## Neu in v1.3.0
 
@@ -96,8 +102,21 @@ Die wichtigsten API-Endpunkte sind:
 - `GET /spotify/search/tracks?query=...`
 - `GET /spotify/search/artists?query=...`
 - `GET /spotify/search/albums?query=...`
+- `GET /spotify/audio-features/{track_id}`
+- `GET /spotify/audio-features?ids=...`
 - `GET /spotify/playlists`
+- `GET /spotify/playlists/{playlist_id}/tracks`
+- `POST /spotify/playlists/{playlist_id}/tracks`
+- `DELETE /spotify/playlists/{playlist_id}/tracks`
+- `PUT /spotify/playlists/{playlist_id}/reorder`
 - `GET /spotify/track/{track_id}`
+- `GET /spotify/me`
+- `GET /spotify/me/tracks`
+- `PUT /spotify/me/tracks`
+- `DELETE /spotify/me/tracks`
+- `GET /spotify/me/top/tracks`
+- `GET /spotify/me/top/artists`
+- `GET /spotify/recommendations`
 - `GET /plex/status`
 - `GET /plex/library/sections`
 - `GET /plex/library/sections/{section_id}/all`
