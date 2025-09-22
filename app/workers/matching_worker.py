@@ -4,10 +4,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict
 
-from sqlalchemy.orm import Session
-
 from app.core.matching_engine import MusicMatchingEngine
-from app.db import SessionLocal
+from app.db import session_scope
 from app.logging import get_logger
 from app.models import Match
 
@@ -76,8 +74,7 @@ class MatchingWorker:
         best_match: Dict[str, Any] | None,
         confidence: float,
     ) -> None:
-        session: Session = SessionLocal()
-        try:
+        with session_scope() as session:
             match = Match(
                 source=job_type,
                 spotify_track_id=str(spotify_track.get("id")),
@@ -85,6 +82,3 @@ class MatchingWorker:
                 confidence=confidence,
             )
             session.add(match)
-            session.commit()
-        finally:
-            session.close()

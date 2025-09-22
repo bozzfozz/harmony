@@ -66,3 +66,86 @@ class MusicMatchingEngine:
         artist_score = self._ratio(artist, soulseek_entry.get("username"))
         bitrate_score = 1.0 if soulseek_entry.get("bitrate", 0) >= 256 else 0.5
         return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)
+
+    def _extract_album_artist(self, album: Dict[str, str]) -> Optional[str]:
+        artists = album.get("artists")
+        if isinstance(artists, list) and artists:
+            primary_artist = artists[0]
+            if isinstance(primary_artist, dict):
+                return primary_artist.get("name")
+            return str(primary_artist)
+        return album.get("artist") or album.get("grandparentTitle")
+
+    def _album_track_count(self, album: Dict[str, str]) -> Optional[int]:
+        for key in ("total_tracks", "trackCount", "leafCount", "childCount", "track_count"):
+            value = album.get(key)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+        tracks = album.get("tracks")
+        if isinstance(tracks, dict):
+            items = tracks.get("items")
+            if isinstance(items, list):
+                return len(items)
+        if isinstance(tracks, list):
+            return len(tracks)
+        return None
+
+    def _album_year(self, album: Dict[str, str]) -> Optional[int]:
+        for key in ("year", "release_year"):
+            value = album.get(key)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+        release_date = album.get("release_date")
+        if isinstance(release_date, str) and release_date:
+            if len(release_date) >= 4 and release_date[:4].isdigit():
+                return int(release_date[:4])
+        originally_available_at = album.get("originallyAvailableAt")
+        if isinstance(originally_available_at, str) and originally_available_at:
+            if originally_available_at[:4].isdigit():
+                return int(originally_available_at[:4])
+        return None
+
+    def calculate_album_confidence(
+        self, spotify_album: Dict[str, str], plex_album: Dict[str, str]
+    ) -> float:
+        """Calculate similarity score between Spotify and Plex albums."""
+
+        name_score = self._ratio(spotify_album.get("name"), plex_album.get("title"))
+        spotify_artist = self._extract_album_artist(spotify_album)
+        plex_artist = self._extract_album_artist(plex_album) or plex_album.get("parentTitle")
+        artist_score = self._ratio(spotify_artist, plex_artist)
+
+        spotify_tracks = self._album_track_count(spotify_album)
+        plex_tracks = self._album_track_count(plex_album)
+        track_count_score = 0.0
+        if spotify_tracks and plex_tracks:
+            diff = abs(spotify_tracks - plex_tracks)
+            max_count = max(spotify_tracks, plex_tracks)
+            track_count_score = 1.0 - min(diff / max_count, 1)
+
+        spotify_year = self._album_year(spotify_album)
+        plex_year = self._album_year(plex_album)
+        year_score = 0.0
+        if spotify_year and plex_year:
+            year_score = 1.0 if spotify_year == plex_year else 0.0
+
+        score = (name_score * 0.4) + (artist_score * 0.4) + (track_count_score * 0.1) + (year_score * 0.1)
+        return round(score, 4)
+
+    def find_best_album_match(
+        self, spotify_album: Dict[str, str], plex_albums: Iterable[Dict[str, str]]
+    ) -> Tuple[Optional[Dict[str, str]], float]:
+        """Find the highest scoring Plex album for the given Spotify album."""
+
+        best_match: Optional[Dict[str, str]] = None
+        best_score = 0.0
+        for candidate in plex_albums:
+            score = self.calculate_album_confidence(spotify_album, candidate)
+            if score > best_score:
+                best_score = score
+                best_match = candidate
+        return best_match, best_score

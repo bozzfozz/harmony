@@ -2,10 +2,17 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from app.core.spotify_client import SpotifyClient
-from app.dependencies import get_spotify_client
-from app.schemas import PlaylistResponse, SpotifySearchResponse, StatusResponse, TrackDetailResponse
+from app.dependencies import get_db, get_spotify_client
+from app.models import Playlist
+from app.schemas import (
+    PlaylistResponse,
+    SpotifySearchResponse,
+    StatusResponse,
+    TrackDetailResponse,
+)
 
 router = APIRouter()
 
@@ -47,10 +54,9 @@ def search_albums(
 
 
 @router.get("/playlists", response_model=PlaylistResponse)
-def list_playlists(client: SpotifyClient = Depends(get_spotify_client)) -> PlaylistResponse:
-    response = client.get_user_playlists()
-    items = response.get("items", [])
-    return PlaylistResponse(playlists=items)
+def list_playlists(db: Session = Depends(get_db)) -> PlaylistResponse:
+    playlists = db.query(Playlist).order_by(Playlist.updated_at.desc()).all()
+    return PlaylistResponse(playlists=playlists)
 
 
 @router.get("/track/{track_id}", response_model=TrackDetailResponse)

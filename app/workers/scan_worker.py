@@ -5,10 +5,9 @@ import asyncio
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.core.plex_client import PlexClient
-from app.db import SessionLocal
+from app.db import session_scope
 from app.logging import get_logger
 from app.models import Setting
 
@@ -49,19 +48,66 @@ class ScanWorker:
         except Exception as exc:  # pragma: no cover
             logger.error("Failed to scan Plex library: %s", exc)
             return
+
         artist_count = len(artists)
-        session: Session = SessionLocal()
-        try:
-            setting = session.execute(
-                select(Setting).where(Setting.key == "plex_artist_count")
-            ).scalar_one_or_none()
-            now = datetime.utcnow()
-            if setting is None:
-                setting = Setting(key="plex_artist_count", value=str(artist_count), created_at=now, updated_at=now)
-                session.add(setting)
-            else:
-                setting.value = str(artist_count)
-                setting.updated_at = now
-            session.commit()
-        finally:
-            session.close()
+        album_count = 0
+        track_count = 0
+
+        for artist in artists:
+            artist_id = artist.get("id")
+            if not artist_id:
+                continue
+            try:
+                albums = self._client.get_albums_by_artist(str(artist_id))
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to fetch albums for Plex artist %s: %s", artist_id, exc
+                )
+                continue
+            album_count += len(albums)
+
+            for album in albums:
+                album_id = album.get("id")
+                if not album_id:
+                    continue
+                try:
+                    tracks = self._client.get_tracks_by_album(str(album_id))
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Failed to fetch tracks for Plex album %s: %s", album_id, exc
+                    )
+                    continue
+                track_count += len(tracks)
+
+        now = datetime.utcnow()
+        with session_scope() as session:
+            self._upsert_setting(session, "plex_artist_count", str(artist_count), now)
+            self._upsert_setting(session, "plex_album_count", str(album_count), now)
+            self._upsert_setting(session, "plex_track_count", str(track_count), now)
+            self._upsert_setting(
+                session, "plex_last_scan", now.isoformat(timespec="seconds"), now
+            )
+        logger.info(
+            "Plex scan complete: %d artists, %d albums, %d tracks",
+            artist_count,
+            album_count,
+            track_count,
+        )
+
+    @staticmethod
+    def _upsert_setting(session, key: str, value: str, timestamp: datetime) -> None:
+        setting = session.execute(
+            select(Setting).where(Setting.key == key)
+        ).scalar_one_or_none()
+        if setting is None:
+            session.add(
+                Setting(
+                    key=key,
+                    value=value,
+                    created_at=timestamp,
+                    updated_at=timestamp,
+                )
+            )
+        else:
+            setting.value = value
+            setting.updated_at = timestamp

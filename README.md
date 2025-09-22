@@ -8,12 +8,30 @@ Harmony ist ein FastAPI-Backend, das Spotify, Plex und den Soulseek-Daemon (slsk
 - OAuth-basierter Spotify-Client mit Rate-Limiting und Retry-Logik
 - Plex-Client zur Abfrage der Musikbibliothek
 - Asynchroner Soulseek-Client (slskd) mit Rate-Limiting
+- Persistente Soulseek-Downloads mit Fortschritts- und Statusverfolgung
 - Matching-Engine für Spotify→Plex sowie Spotify→Soulseek
 - SQLite-Datenbank mit automatischer Initialisierung
-- Hintergrund-Worker für Sync-, Matching- und Scan-Prozesse
+- Hintergrund-Worker für Sync-, Matching-, Scan- und Spotify-Playlist-Prozesse
 - Pytest-Test-Suite mit gemockten externen Diensten
 - Docker- und Docker-Compose-Konfiguration
 - GitHub Actions Workflow für Build & Tests
+
+## Neu in v1.3.0
+
+- Spotify-Playlist-Sync-Worker aktualisiert persistierte Playlists alle 15 Minuten.
+- `/spotify/playlists` liefert Track-Anzahl und Änderungszeitpunkt aus der Datenbank.
+
+## Neu in v1.2.0
+
+- Soulseek-Downloads werden automatisch in der Datenbank angelegt und mit Status-/Fortschritt gepflegt.
+- Hintergrund-Sync-Worker pollt den Soulseek-Client und synchronisiert Downloadzustände.
+- API-Endpunkte liefern Fortschrittsabfragen aus der Datenbank und erlauben Abbrüche einzelner Downloads.
+
+## Neu in v1.1.0
+
+- Konsistente JSON-Antworten für alle Plex- und Soulseek-Endpunkte inklusive klarer Fehlercodes.
+- Verbesserte Fehler- und Logging-Strategie bei fehlgeschlagenen Datenbank- oder API-Zugriffen.
+- Stabilere Hintergrund-Worker dank transaktionalem Session-Handling über `session_scope()`.
 
 ## Installation
 

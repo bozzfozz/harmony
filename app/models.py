@@ -16,14 +16,34 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class Playlist(Base):
+    __tablename__ = "playlists"
+
+    id = Column(String(128), primary_key=True)
+    name = Column(String(512), nullable=False)
+    track_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class Download(Base):
     __tablename__ = "downloads"
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(1024), nullable=False)
-    state = Column(String(50), nullable=False, default="pending")
+    state = Column(String(50), nullable=False, default="queued")
     progress = Column(Float, nullable=False, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
 
 
 class Match(Base):
@@ -45,3 +65,13 @@ class Setting(Base):
     value = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SettingHistory(Base):
+    __tablename__ = "settings_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(255), nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
