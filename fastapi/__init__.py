@@ -11,8 +11,10 @@ class HTTPException(Exception):
 
 
 class APIRouter:
-    def __init__(self) -> None:
+    def __init__(self, *, prefix: str | None = None, tags: List[str] | None = None) -> None:
         self.routes: List[Tuple[str, str, Callable[..., Any]]] = []
+        self.prefix = prefix or ""
+        self.tags = tags or []
 
     def delete(self, path: str, **_kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -40,6 +42,10 @@ def Query(default: Any = None, **_kwargs: Any) -> Any:  # pragma: no cover - sim
     return default
 
 
+def Depends(dependency: Callable[..., Any]) -> Callable[..., Any]:  # pragma: no cover - simple helper
+    return dependency
+
+
 class FastAPI:
     def __init__(self) -> None:
         self.routers: List[APIRouter] = []
@@ -62,6 +68,7 @@ class FastAPI:
 
 __all__ = [
     "APIRouter",
+    "Depends",
     "FastAPI",
     "HTTPException",
     "Query",

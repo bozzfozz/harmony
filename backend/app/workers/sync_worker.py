@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -6,10 +8,12 @@ from typing import Iterable
 from fastapi import HTTPException
 
 from app.core.beets_client import BeetsClient
+from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient, TrackResult
 from app.core.spotify_client import SpotifyClient, Track
-from app.core.plex_client import PlexClient
+from app.db import SessionLocal
 from app.utils.logging_config import get_logger
+from backend.app.models.sync_job import SyncJob
 
 logger = get_logger("sync_worker")
 
@@ -22,6 +26,54 @@ class SyncWorker:
         self.soulseek = SoulseekClient()
         self.plex = PlexClient()
         self.beets = BeetsClient()
+        self._tasks: dict[int, asyncio.Task[None]] = {}
+
+    async def start_sync(self, spotify_track_id: str) -> int:
+        """Persist a new sync job and execute it asynchronously."""
+
+        job_id = self._create_job(spotify_track_id)
+        task = asyncio.create_task(self._run_job(job_id, spotify_track_id))
+        self._tasks[job_id] = task
+        task.add_done_callback(lambda _: self._tasks.pop(job_id, None))
+        return job_id
+
+    def _create_job(self, spotify_track_id: str) -> int:
+        with SessionLocal() as session:
+            job = SyncJob(spotify_id=spotify_track_id, status="pending")
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+
+        logger.info("Sync job %s created with status pending", job.id)
+        return int(job.id)
+
+    async def _run_job(self, job_id: int, spotify_track_id: str) -> None:
+        try:
+            self._set_job_status(job_id, "in_progress")
+            await self.sync_track(spotify_track_id)
+        except Exception as exc:  # pragma: no cover - defensive safety net
+            message = getattr(exc, "detail", str(exc))
+            self._set_job_status(job_id, "failed", str(message))
+        else:
+            self._set_job_status(job_id, "completed")
+
+    def _set_job_status(self, job_id: int, status: str, error_message: str | None = None) -> None:
+        with SessionLocal() as session:
+            job = session.get(SyncJob, job_id)
+            if job is None:
+                logger.error("Sync job %s not found for status update", job_id)
+                return
+
+            job.status = status
+            job.error_message = error_message
+            session.add(job)
+            session.commit()
+
+        log_message = f"Sync job {job_id} status -> {status}"
+        if status == "failed":
+            logger.error("%s: %s", log_message, error_message)
+        else:
+            logger.info(log_message)
 
     async def sync_track(self, spotify_track_id: str) -> dict[str, object]:
         """Download a Spotify track via Soulseek and import it into Beets.

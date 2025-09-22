@@ -7,6 +7,7 @@ from app.routers import (
     settings_router,
     soulseek_router,
     spotify_router,
+    sync_router,
 )
 from app.utils.logging_config import get_logger
 from app.db import init_db
@@ -22,6 +23,7 @@ app.include_router(matching_router.router, prefix="/matching", tags=["Matching"]
 app.include_router(settings_router.router, prefix="/settings", tags=["Settings"])
 app.include_router(spotify_router.router, prefix="/spotify", tags=["Spotify"])
 app.include_router(plex_router.router, prefix="/plex", tags=["Plex"])
+app.include_router(sync_router.router)
 
 
 @app.on_event("startup")
