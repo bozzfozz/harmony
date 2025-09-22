@@ -10,6 +10,7 @@
 - Soulseek-API liefert Fortschrittsinformationen aus der Datenbank und unterstützt Abbrüche mit Status `failed`.
 
 ## v1.1.0
+- Beets-Integration: CLI-Anbindung zum Importieren, Aktualisieren und Abfragen der Bibliothek.
 - Dockerfile: Standardstartbefehl für Production (`uvicorn app.main:app`)
 - docker-compose.yml: verschlankt, keine Command-Definition mehr
 - docker-compose.override.yml: Dev-Setup mit `--reload` und Debug-Loglevel

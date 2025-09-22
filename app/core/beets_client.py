@@ -1,57 +1,213 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
+from typing import Mapping, Sequence
+import os
+import shlex
+import subprocess
+import re
 
 from app.utils.logging_config import get_logger
+
+
+class BeetsClientError(RuntimeError):
+    """Raised when execution of a beets command fails."""
+
 
 logger = get_logger("beets_client")
 
 
 class BeetsClient:
-    """Lightweight placeholder client mirroring the behaviour of the beets CLI.
+    """Thin wrapper around the :mod:`beets` CLI."""
 
-    The production service shells out to the ``beet`` command to import files
-    into the library.  Within the tests we merely need to keep track of the
-    provided path so that higher level orchestration code can respond with a
-    sensible value.  The implementation intentionally avoids touching the file
-    system – hidden tests exercise only the control flow, not the real beets
-    integration.
-    """
+    def __init__(
+        self,
+        env: Mapping[str, str] | None = None,
+        timeout: float = 60.0,
+    ) -> None:
+        self._env = {**os.environ, **env} if env else None
+        self._timeout = timeout
 
-    def __init__(self) -> None:
-        self._last_import: Path | None = None
+    def _run(self, args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        """Execute *args* with the ``beet`` CLI and return the process result."""
 
-    def import_file(self, file_path: Union[str, Path]) -> str:
-        """Pretend to import *file_path* into the beets library.
+        command = " ".join(args)
+        logger.info("Executing beets command: %s", command)
 
-        Parameters
-        ----------
-        file_path:
-            Path-like object pointing to the downloaded track.
+        try:
+            run_kwargs = dict(capture_output=True, text=True, check=True)
+            if self._env is not None:
+                run_kwargs["env"] = self._env
+            result = subprocess.run(list(args), timeout=self._timeout, **run_kwargs)
+        except subprocess.TimeoutExpired as exc:
+            logger.error("Beets command timed out: %s", command)
+            raise BeetsClientError("Command timed out") from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            if stderr:
+                logger.error("Beets command failed (%s): %s", command, stderr)
+            else:
+                logger.error("Beets command failed (%s)", command)
+            raise BeetsClientError(stderr or f"Command '{command}' failed") from exc
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Unexpected error while executing '%s'", command)
+            raise BeetsClientError(f"Unexpected error running '{command}'") from exc
 
-        Returns
-        -------
-        str
-            The normalised path that would be stored in the library.
-        """
+        stdout = (result.stdout or "").strip()
+        if stdout:
+            logger.info("Beets command output: %s", stdout)
 
-        path = Path(file_path)
-        if not path.name:
-            raise ValueError("Expected a file path pointing to a track")
+        return result
 
-        normalised = path.resolve() if path.is_absolute() else path
-        self._last_import = normalised
-        logger.info("Recorded beets import for %s", normalised)
-        return str(normalised)
+    def import_file(
+        self, path: str | Path, quiet: bool = True, autotag: bool = True
+    ) -> str:
+        """Import *path* into the beets library using ``beet import``."""
 
-    @property
-    def last_import(self) -> Path | None:
-        """Return the most recently imported path."""
+        args: list[str] = ["beet", "import"]
+        if quiet:
+            args.append("-q")
+        if not autotag:
+            args.append("-A")
+        args.append(str(path))
 
-        return self._last_import
+        result = self._run(args)
+        return (result.stdout or "").strip()
+
+    def update(self, path: str | Path | None = None) -> str:
+        """Run ``beet update`` optionally scoped to *path*."""
+
+        args: list[str] = ["beet", "update"]
+        if path is not None:
+            args.append(str(path))
+
+        result = self._run(args)
+        return (result.stdout or "").strip()
+
+    def list_albums(self) -> list[str]:
+        """Return a list of album names from ``beet ls -a``."""
+
+        result = self._run(["beet", "ls", "-a"])
+        stdout = result.stdout or ""
+        albums = [line for line in stdout.splitlines() if line.strip()]
+        logger.debug("Parsed albums: %s", albums)
+        return albums
+
+    def list_tracks(self) -> list[str]:
+        """Return a list of track titles from ``beet ls -f '$title'``."""
+
+        result = self._run(["beet", "ls", "-f", "$title"])
+        stdout = result.stdout or ""
+        tracks = [line for line in stdout.splitlines() if line.strip()]
+        logger.debug("Parsed tracks: %s", tracks)
+        return tracks
+
+    def stats(self) -> dict[str, str]:
+        """Return parsed key/value pairs from ``beet stats``."""
+
+        result = self._run(["beet", "stats"])
+        stdout = result.stdout or ""
+        stats: dict[str, str] = {}
+        for line in stdout.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if key:
+                stats[key] = value
+        logger.debug("Parsed stats: %s", stats)
+        return stats
 
     def is_available(self) -> bool:
-        """Indicate whether the beets integration is ready."""
+        """Return ``True`` when the ``beet`` CLI is reachable."""
 
+        try:
+            self._run(["beet", "version"])
+        except BeetsClientError:
+            return False
         return True
+
+    def remove(self, query: str, force: bool = False) -> dict[str, object]:
+        """Remove items matching *query* using ``beet remove``."""
+
+        query_args = self._parse_query(query)
+        args: list[str] = ["beet", "remove"]
+        if force:
+            args.append("-f")
+        args.extend(query_args)
+
+        result = self._run(args)
+        parsed = self._parse_count_output(result.stdout, "Removed", "removed")
+        logger.debug("Parsed remove output: %s", parsed)
+        return parsed
+
+    def move(self, query: str | None = None) -> dict[str, object]:
+        """Move items in the library using ``beet move`` with an optional query."""
+
+        args: list[str] = ["beet", "move"]
+        if query:
+            args.extend(self._parse_query(query))
+
+        result = self._run(args)
+        parsed = self._parse_count_output(result.stdout, "Moved", "moved")
+        logger.debug("Parsed move output: %s", parsed)
+        return parsed
+
+    def write(self, query: str | None = None) -> dict[str, object]:
+        """Write tags for items using ``beet write`` with an optional query."""
+
+        args: list[str] = ["beet", "write"]
+        if query:
+            args.extend(self._parse_query(query))
+
+        result = self._run(args)
+        parsed = self._parse_count_output(result.stdout, "Wrote", "written")
+        logger.debug("Parsed write output: %s", parsed)
+        return parsed
+
+    def fields(self) -> list[str]:
+        """Return the list of available fields from ``beet fields``."""
+
+        result = self._run(["beet", "fields"])
+        stdout = result.stdout or ""
+        fields = [line for line in stdout.splitlines() if line.strip()]
+        logger.debug("Parsed fields: %s", fields)
+        return fields
+
+    def query(
+        self, query: str, fmt: str = "$artist - $album - $title"
+    ) -> list[str]:
+        """Return formatted items for *query* via ``beet ls``."""
+
+        query_args = self._parse_query(query)
+        args: list[str] = ["beet", "ls", "-f", fmt]
+        args.extend(query_args)
+
+        result = self._run(args)
+        stdout = result.stdout or ""
+        results = [line for line in stdout.splitlines() if line.strip()]
+        logger.debug("Parsed query results: %s", results)
+        return results
+
+    @staticmethod
+    def _parse_query(query: str) -> list[str]:
+        if not query or not query.strip():
+            raise BeetsClientError("Query must not be empty")
+        try:
+            parts = shlex.split(query)
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise BeetsClientError(f"Invalid query syntax: {exc}") from exc
+        return parts
+
+    @staticmethod
+    def _parse_count_output(
+        stdout: str | None, verb: str, key: str
+    ) -> dict[str, object]:
+        output = (stdout or "").strip()
+        pattern = rf"{verb} (\d+) items"
+        match = re.search(pattern, output)
+        if match:
+            count = int(match.group(1))
+            return {"success": True, key: count}
+        return {"success": True, "output": output}

@@ -16,6 +16,14 @@ Harmony ist ein FastAPI-Backend, das Spotify, Plex und den Soulseek-Daemon (slsk
 - Docker- und Docker-Compose-Konfiguration
 - GitHub Actions Workflow für Build & Tests
 
+## Beets CLI Integration
+
+Harmony bindet die [Beets](https://beets.io/)-CLI über einen synchronen Client ein.
+Der `BeetsClient` ruft intern Befehle wie `beet import`, `beet update`,
+`beet ls`, `beet stats` und `beet version` auf, um die lokale Musikbibliothek zu
+verwalten. Damit die Integration funktioniert, muss das Kommando `beet`
+installiert und im `PATH` der Anwendung verfügbar sein.
+
 ## Neu in v1.3.0
 
 - Spotify-Playlist-Sync-Worker aktualisiert persistierte Playlists alle 15 Minuten.
