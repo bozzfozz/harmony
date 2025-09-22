@@ -1,37 +1,66 @@
+"""Entry point for the Harmony FastAPI application."""
+from __future__ import annotations
+
+import os
+
 from fastapi import FastAPI
 
-from app.routers import (
-    beets_router,
-    matching_router,
-    plex_router,
-    settings_router,
-    soulseek_router,
-    spotify_router,
-    sync_router,
+from app.dependencies import (
+    get_app_config,
+    get_matching_engine,
+    get_plex_client,
+    get_soulseek_client,
 )
-from app.utils.logging_config import get_logger
 from app.db import init_db
-
-logger = get_logger("main")
+from app.logging import configure_logging, get_logger
+from app.routers import matching_router, plex_router, settings_router, soulseek_router, spotify_router
+from app.workers import MatchingWorker, ScanWorker, SyncWorker
 
 app = FastAPI(title="Harmony Backend", version="1.0.0")
+logger = get_logger(__name__)
 
-# Routers
-app.include_router(soulseek_router.router, prefix="/soulseek", tags=["Soulseek"])
-app.include_router(beets_router.router, prefix="/beets", tags=["Beets"])
-app.include_router(matching_router.router, prefix="/matching", tags=["Matching"])
-app.include_router(settings_router.router, prefix="/settings", tags=["Settings"])
-app.include_router(spotify_router.router, prefix="/spotify", tags=["Spotify"])
-app.include_router(plex_router.router, prefix="/plex", tags=["Plex"])
-app.include_router(sync_router.router)
+app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
+app.include_router(plex_router, prefix="/plex", tags=["Plex"])
+app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
+app.include_router(matching_router, prefix="/matching", tags=["Matching"])
+app.include_router(settings_router, prefix="/settings", tags=["Settings"])
 
 
 @app.on_event("startup")
-def startup() -> None:
+async def startup_event() -> None:
+    config = get_app_config()
+    configure_logging(config.logging.level)
     init_db()
-    logger.info("Application started successfully")
+    logger.info("Database initialised")
+
+    if os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}:
+        soulseek_client = get_soulseek_client()
+        matching_engine = get_matching_engine()
+        plex_client = get_plex_client()
+
+        app.state.sync_worker = SyncWorker(soulseek_client)
+        await app.state.sync_worker.start()
+
+        app.state.matching_worker = MatchingWorker(matching_engine)
+        await app.state.matching_worker.start()
+
+        app.state.scan_worker = ScanWorker(plex_client)
+        await app.state.scan_worker.start()
+
+    logger.info("Harmony application started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    if worker := getattr(app.state, "sync_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "matching_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "scan_worker", None):
+        await worker.stop()
+    logger.info("Harmony application stopped")
 
 
 @app.get("/")
 async def root() -> dict[str, str]:
-    return {"status": "ok", "message": "Harmony backend running"}
+    return {"status": "ok", "version": app.version}

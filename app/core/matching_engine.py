@@ -1,88 +1,68 @@
+"""Music matching logic used by Harmony."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+import unicodedata
 from difflib import SequenceMatcher
 from typing import Dict, Iterable, Optional, Tuple
 
-from app.core.plex_client import PlexTrackInfo
-from app.core.spotify_client import Album, Track
-
-
-MATCH_THRESHOLD = 0.7
-ALBUM_MATCH_THRESHOLD = 0.6
-
-
-@dataclass
-class MatchResult:
-    plex_track: Optional[PlexTrackInfo]
-    confidence: float
-    match_type: str
-    is_match: bool
-
 
 class MusicMatchingEngine:
-    """Naive matching engine comparing Spotify and Plex tracks."""
+    """Provides fuzzy matching utilities across Spotify, Plex and Soulseek."""
 
-    def _score_track(self, spotify_track: Track, plex_track: PlexTrackInfo) -> float:
-        title_ratio = SequenceMatcher(None, spotify_track.title.lower(), plex_track.title.lower()).ratio()
-        artist_ratio = SequenceMatcher(None, spotify_track.artist.lower(), plex_track.artist.lower()).ratio()
-        album_ratio = SequenceMatcher(None, (spotify_track.album or "").lower(), (plex_track.album or "").lower()).ratio()
-        return (title_ratio * 0.5) + (artist_ratio * 0.4) + (album_ratio * 0.1)
+    def _normalize(self, value: Optional[str]) -> str:
+        if not value:
+            return ""
+        normalized = unicodedata.normalize("NFKD", value)
+        normalized = normalized.encode("ascii", "ignore").decode("ascii")
+        normalized = re.sub(r"[^a-z0-9]+", " ", normalized.lower())
+        return normalized.strip()
 
-    def _match_type(self, spotify_track: Track, plex_track: Optional[PlexTrackInfo], score: float) -> str:
-        if plex_track is None:
-            return "no_match"
+    def _ratio(self, a: Optional[str], b: Optional[str]) -> float:
+        na, nb = self._normalize(a), self._normalize(b)
+        if not na or not nb:
+            return 0.0
+        return SequenceMatcher(None, na, nb).ratio()
 
-        if (
-            spotify_track.title.lower() == plex_track.title.lower()
-            and spotify_track.artist.lower() == plex_track.artist.lower()
-        ):
-            return "exact"
+    def calculate_match_confidence(self, spotify_track: Dict[str, str], plex_track: Dict[str, str]) -> float:
+        title_score = self._ratio(spotify_track.get("name"), plex_track.get("title"))
+        artist_score = self._ratio(
+            (spotify_track.get("artists") or [{}])[0].get("name") if isinstance(spotify_track.get("artists"), list) else spotify_track.get("artist"),
+            plex_track.get("artist") or plex_track.get("grandparentTitle"),
+        )
+        album_score = self._ratio(
+            (spotify_track.get("album") or {}).get("name") if isinstance(spotify_track.get("album"), dict) else spotify_track.get("album"),
+            plex_track.get("album") or plex_track.get("parentTitle"),
+        )
+        duration_spotify = spotify_track.get("duration_ms")
+        duration_plex = plex_track.get("duration")
+        duration_score = 0.0
+        if duration_spotify and duration_plex:
+            duration_score = 1.0 - min(abs(duration_spotify - duration_plex) / max(duration_spotify, duration_plex), 1)
 
-        if spotify_track.artist.lower() == plex_track.artist.lower():
-            if spotify_track.album and plex_track.album and spotify_track.album.lower() == plex_track.album.lower():
-                return "artist_album"
-            return "artist"
+        return round((title_score * 0.5) + (artist_score * 0.3) + (album_score * 0.15) + (duration_score * 0.05), 4)
 
-        if spotify_track.album and plex_track.album and spotify_track.album.lower() == plex_track.album.lower():
-            return "album"
-
-        return "fuzzy" if score >= MATCH_THRESHOLD else "low_confidence"
-
-    def find_best_match(self, spotify_track: Track, plex_candidates: Iterable[PlexTrackInfo]) -> MatchResult:
-        best_track: Optional[PlexTrackInfo] = None
+    def find_best_match(
+        self, spotify_track: Dict[str, str], plex_candidates: Iterable[Dict[str, str]]
+    ) -> Tuple[Optional[Dict[str, str]], float]:
+        best_match: Optional[Dict[str, str]] = None
         best_score = 0.0
         for candidate in plex_candidates:
-            current_score = self._score_track(spotify_track, candidate)
-            if current_score > best_score:
-                best_score = current_score
-                best_track = candidate
+            score = self.calculate_match_confidence(spotify_track, candidate)
+            if score > best_score:
+                best_score = score
+                best_match = candidate
+        return best_match, best_score
 
-        match_type = self._match_type(spotify_track, best_track, best_score)
-        return MatchResult(
-            plex_track=best_track,
-            confidence=best_score,
-            match_type=match_type,
-            is_match=best_track is not None and best_score >= MATCH_THRESHOLD,
+    def calculate_slskd_match_confidence(
+        self, spotify_track: Dict[str, str], soulseek_entry: Dict[str, str]
+    ) -> float:
+        title_score = self._ratio(spotify_track.get("name"), soulseek_entry.get("filename"))
+        artist = (
+            (spotify_track.get("artists") or [{}])[0].get("name")
+            if isinstance(spotify_track.get("artists"), list)
+            else spotify_track.get("artist")
         )
-
-    def _score_album(self, spotify_album: Album, plex_album: Dict[str, object]) -> float:
-        title_ratio = SequenceMatcher(None, spotify_album.title.lower(), str(plex_album.get("title", "")).lower()).ratio()
-        artist_ratio = SequenceMatcher(None, spotify_album.artist.lower(), str(plex_album.get("artist", "")).lower()).ratio()
-        return (title_ratio * 0.6) + (artist_ratio * 0.4)
-
-    def find_best_album_match(
-        self, spotify_album: Album, plex_albums: Iterable[Dict[str, object]]
-    ) -> Tuple[Optional[Dict[str, object]], float]:
-        best_album: Optional[Dict[str, object]] = None
-        best_score = 0.0
-        for candidate in plex_albums:
-            current_score = self._score_album(spotify_album, candidate)
-            if current_score > best_score:
-                best_score = current_score
-                best_album = candidate
-
-        if best_score < ALBUM_MATCH_THRESHOLD:
-            return None, best_score
-
-        return best_album, best_score
+        artist_score = self._ratio(artist, soulseek_entry.get("username"))
+        bitrate_score = 1.0 if soulseek_entry.get("bitrate", 0) >= 256 else 0.5
+        return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)

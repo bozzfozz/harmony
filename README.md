@@ -1,21 +1,91 @@
 # Harmony Backend
 
-Prototype FastAPI backend that connects placeholder integrations for Spotify, Plex, Soulseek (`slskd`), and Beets. It exposes REST endpoints for searching Spotify and Soulseek, triggering Beets imports, querying Plex artists, and matching Spotify tracks to Plex library candidates.
+Harmony ist ein FastAPI-Backend, das Spotify, Plex und den Soulseek-Daemon (slskd) integriert und eine Matching-Engine für Musikbibliotheken bereitstellt. Die Anwendung verwendet SQLite als Datenbank, SQLAlchemy als ORM und bietet optionale Hintergrund-Worker für Synchronisations-, Matching- und Scan-Aufgaben.
 
-## Development
+## Features
+
+- Modularer Aufbau mit Core-Clients und Routern
+- OAuth-basierter Spotify-Client mit Rate-Limiting und Retry-Logik
+- Plex-Client zur Abfrage der Musikbibliothek
+- Asynchroner Soulseek-Client (slskd) mit Rate-Limiting
+- Matching-Engine für Spotify→Plex sowie Spotify→Soulseek
+- SQLite-Datenbank mit automatischer Initialisierung
+- Hintergrund-Worker für Sync-, Matching- und Scan-Prozesse
+- Pytest-Test-Suite mit gemockten externen Diensten
+- Docker- und Docker-Compose-Konfiguration
+- GitHub Actions Workflow für Build & Tests
+
+## Installation
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+## Konfiguration
+
+Die Anwendung liest Konfigurationen aus Umgebungsvariablen:
+
+| Variable               | Beschreibung                                  |
+|------------------------|-----------------------------------------------|
+| `SPOTIFY_CLIENT_ID`    | Spotify OAuth Client ID                        |
+| `SPOTIFY_CLIENT_SECRET`| Spotify OAuth Client Secret                    |
+| `SPOTIFY_REDIRECT_URI` | Spotify Redirect URI                           |
+| `SPOTIFY_SCOPE`        | Optionaler Scope (Standard siehe Code)         |
+| `PLEX_BASE_URL`        | Basis-URL des Plex Servers                     |
+| `PLEX_TOKEN`           | Plex Auth Token                                |
+| `PLEX_LIBRARY`         | Name der Musikbibliothek in Plex               |
+| `SLSKD_URL`            | Basis-URL von slskd                            |
+| `SLSKD_API_KEY`        | Optionaler API-Key für slskd                   |
+| `DATABASE_URL`         | SQLAlchemy URL (Standard: `sqlite:///./harmony.db`) |
+| `HARMONY_LOG_LEVEL`    | Logging-Level (`INFO`, `ERROR`, …)             |
+| `HARMONY_DISABLE_WORKERS` | `1`, um Worker im Testbetrieb zu deaktivieren |
+
+## Lokaler Start
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## Soulseek configuration
+## Tests
 
-The Soulseek client reads connection details from either environment variables or an optional JSON configuration file. The following values are supported:
+```bash
+pytest
+```
 
-| Environment variable      | JSON key          | Description                               |
-|---------------------------|-------------------|-------------------------------------------|
-| `SLSKD_URL`               | `slskd_url`       | Base URL of the running slskd instance.   |
-| `SLSKD_API_KEY`           | `api_key`         | API key used to authenticate with slskd.  |
-| `SLSKD_DOWNLOAD_PATH`     | `download_path`   | Directory where downloads are written.    |
+## Docker
 
-By default the service looks for a `config.json` file (configurable through `HARMONY_CONFIG`). Soulseek-related settings can be provided under a `"soulseek"` object and will be merged with the values coming from the environment.
+```bash
+docker build -t harmony-backend .
+docker compose up
+```
+
+## Endpunkte
+
+Die wichtigsten API-Endpunkte sind:
+
+- `GET /spotify/status`
+- `GET /spotify/search/tracks?query=...`
+- `GET /spotify/search/artists?query=...`
+- `GET /spotify/search/albums?query=...`
+- `GET /spotify/playlists`
+- `GET /spotify/track/{track_id}`
+- `GET /plex/status`
+- `GET /plex/artists`
+- `GET /plex/artist/{artist_id}/albums`
+- `GET /plex/album/{album_id}/tracks`
+- `GET /soulseek/status`
+- `POST /soulseek/search`
+- `POST /soulseek/download`
+- `GET /soulseek/downloads`
+- `DELETE /soulseek/download/{id}`
+- `POST /matching/spotify-to-plex`
+- `POST /matching/spotify-to-soulseek`
+- `GET /settings`
+- `POST /settings`
+
+## Lizenz
+
+MIT

@@ -1,105 +1,78 @@
+"""Plex client integration for Harmony."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional
+
+from app.config import PlexConfig
+from app.logging import get_logger
+
+try:  # pragma: no cover - we mock Plex in tests
+    from plexapi.server import PlexServer
+except Exception:  # pragma: no cover
+    PlexServer = None  # type: ignore
 
 
-@dataclass
-class PlexTrackInfo:
-    title: str
-    artist: str
-    album: str
-    rating_key: str
-    duration: int | None = None
-    year: int | None = None
-
-
-@dataclass
-class PlexAlbumInfo:
-    title: str
-    artist: str
-    year: int | None
-    track_count: int
+logger = get_logger(__name__)
 
 
 class PlexClient:
-    """Simplified Plex client using in-memory data."""
+    """Wrapper around :class:`plexapi.server.PlexServer`."""
 
-    def __init__(self) -> None:
-        self._connected = True
-        self._libraries: List[str] = ["Music"]
-        self._refresh_count = 0
-        self._tracks: List[PlexTrackInfo] = [
-            PlexTrackInfo(
-                title="Song One",
-                artist="Artist A",
-                album="Album X",
-                rating_key="t1",
-                duration=210,
-                year=2020,
-            ),
-            PlexTrackInfo(
-                title="Song Two",
-                artist="Artist B",
-                album="Album Y",
-                rating_key="t2",
-                duration=198,
-                year=2019,
-            ),
-            PlexTrackInfo(
-                title="Unrelated",
-                artist="Different",
-                album="Other",
-                rating_key="t3",
-                duration=250,
-                year=None,
-            ),
-        ]
+    def __init__(self, config: PlexConfig, server: Optional[PlexServer] = None) -> None:
+        self._config = config
+        if server is not None:
+            self._server = server
+        else:
+            if PlexServer is None:
+                raise RuntimeError("plexapi is required for PlexClient but is not installed")
+            if not (config.base_url and config.token):
+                raise ValueError("Plex configuration is incomplete")
+            self._server = PlexServer(config.base_url, config.token)
 
-        album_map: Dict[Tuple[str, str], PlexAlbumInfo] = {}
-        for track in self._tracks:
-            key = (track.album, track.artist)
-            album = album_map.get(key)
-            if album is None:
-                album_map[key] = PlexAlbumInfo(
-                    title=track.album,
-                    artist=track.artist,
-                    year=track.year,
-                    track_count=1,
-                )
-            else:
-                album.track_count += 1
-                if album.year is None and track.year is not None:
-                    album.year = track.year
-        self._albums: List[PlexAlbumInfo] = list(album_map.values())
+    def _get_music_section(self):  # pragma: no cover - exercised via mocks
+        library = self._server.library
+        if self._config.library_name:
+            return library.section(self._config.library_name)
+        for section in library.sections():
+            if getattr(section, "type", None) == "artist":
+                return section
+        raise RuntimeError("No music library found in Plex server")
 
     def is_connected(self) -> bool:
-        return self._connected
-
-    def list_libraries(self) -> List[str]:
-        return list(self._libraries)
-
-    def get_all_artists(self) -> List[str]:
-        return sorted({track.artist for track in self._tracks})
-
-    def search_tracks(self, query: str) -> List[PlexTrackInfo]:
-        normalized = query.lower()
-        return [
-            track
-            for track in self._tracks
-            if normalized in track.title.lower() or normalized in track.artist.lower()
-        ]
-
-    def search_albums(self, query: str) -> List[PlexAlbumInfo]:
-        normalized = query.lower()
-        return [
-            album
-            for album in self._albums
-            if normalized in album.title.lower() or normalized in album.artist.lower()
-        ]
-
-    def refresh_library(self) -> bool:
-        """Simulate a Plex library refresh."""
-
-        self._refresh_count += 1
+        try:
+            self._get_music_section()
+        except Exception as exc:
+            logger.error("Unable to connect to Plex", exc_info=exc)
+            return False
         return True
+
+    def get_all_artists(self) -> List[Dict[str, Any]]:
+        section = self._get_music_section()
+        artists = section.search(libtype="artist")
+        return [
+            {"id": str(artist.ratingKey), "name": artist.title}
+            for artist in artists
+        ]
+
+    def get_albums_by_artist(self, artist_id: str) -> List[Dict[str, Any]]:
+        section = self._get_music_section()
+        artist = section.fetchItem(int(artist_id))
+        albums = artist.albums()
+        return [
+            {"id": str(album.ratingKey), "title": album.title, "year": getattr(album, "year", None)}
+            for album in albums
+        ]
+
+    def get_tracks_by_album(self, album_id: str) -> List[Dict[str, Any]]:
+        section = self._get_music_section()
+        album = section.fetchItem(int(album_id))
+        tracks = album.tracks()
+        return [
+            {
+                "id": str(track.ratingKey),
+                "title": track.title,
+                "duration": getattr(track, "duration", None),
+                "index": getattr(track, "index", None),
+            }
+            for track in tracks
+        ]

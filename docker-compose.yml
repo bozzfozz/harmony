@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    container_name: harmony-backend
+    environment:
+      - DATABASE_URL=sqlite:///./harmony.db
+      - HARMONY_LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
