@@ -7,6 +7,7 @@ import SoulseekPage from './pages/SoulseekPage';
 import MatchingPage from './pages/MatchingPage';
 import SettingsPage from './pages/SettingsPage';
 import BeetsPage from './pages/BeetsPage';
+import DownloadsPage from './pages/DownloadsPage';
 import { ThemeProvider } from './components/theme-provider';
 import ToastProvider from './components/ToastProvider';
 
@@ -20,6 +21,7 @@ const App = () => (
           <Route path="/spotify" element={<SpotifyPage />} />
           <Route path="/plex" element={<PlexPage />} />
           <Route path="/soulseek" element={<SoulseekPage />} />
+          <Route path="/downloads" element={<DownloadsPage />} />
           <Route path="/beets" element={<BeetsPage />} />
           <Route path="/matching" element={<MatchingPage />} />
           <Route path="/settings" element={<SettingsPage />} />

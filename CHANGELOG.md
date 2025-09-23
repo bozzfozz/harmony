@@ -11,3 +11,5 @@
 - Zusätzliche Tests und Dokumentation für Sync- und Search-APIs.
 - Download-Management über `/api/download` mit Persistenz, Worker-Anbindung und Unit-Tests.
 - Aktivitätsfeed `/api/activity` mit In-Memory-Verwaltung, Integrationspunkten und Tests.
+- Frontend-Downloads-Seite mit Formular zum Starten neuer Transfers, Polling-Tabelle und Fehler-Handling.
+- Dashboard-Widget für den Aktivitätsfeed inklusive automatischem Polling und Toast-Benachrichtigungen.

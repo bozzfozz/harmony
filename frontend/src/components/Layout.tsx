@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleDot,
   Disc,
+  Download,
   ListMusic,
   Menu,
   Moon,
@@ -29,6 +30,7 @@ const navItems = [
   { to: '/spotify', label: 'Spotify', icon: Music },
   { to: '/plex', label: 'Plex', icon: Disc },
   { to: '/soulseek', label: 'Soulseek', icon: Radio },
+  { to: '/downloads', label: 'Downloads', icon: Download },
   { to: '/beets', label: 'Beets', icon: ListMusic },
   { to: '/matching', label: 'Matching', icon: ChevronRight },
   { to: '/settings', label: 'Settings', icon: Settings }
