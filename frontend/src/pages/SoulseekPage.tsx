@@ -4,8 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '../components/ui/table';
+import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
-import { fetchSoulseekOverview } from '../lib/api';
+import { fetchSoulseekDownloads, fetchSoulseekStatus } from '../lib/api';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 
 const formatDateTime = (value: string) => {
@@ -23,16 +32,35 @@ const formatDateTime = (value: string) => {
 };
 
 const settingsFields = [
-  { key: 'soulseek.username', label: 'Username', placeholder: 'Soulseek username' },
-  { key: 'soulseek.password', label: 'Password', placeholder: 'Secret password' },
-  { key: 'soulseek.downloadPath', label: 'Download path', placeholder: '/downloads/music' }
+  { key: 'SLSKD_URL', label: 'Daemon URL', placeholder: 'http://localhost:5030' },
+  { key: 'SLSKD_API_KEY', label: 'API key', placeholder: 'Optional API key' }
 ] as const;
 
 const SoulseekPage = () => {
-  const overviewQuery = useQuery({
-    queryKey: ['soulseek-overview'],
-    queryFn: fetchSoulseekOverview,
-    refetchInterval: 60000
+  const { toast } = useToast();
+
+  const statusQuery = useQuery({
+    queryKey: ['soulseek-status'],
+    queryFn: fetchSoulseekStatus,
+    refetchInterval: 45000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Soulseek status',
+        description: 'Soulseek daemon did not respond.',
+        variant: 'destructive'
+      })
+  });
+
+  const downloadsQuery = useQuery({
+    queryKey: ['soulseek-downloads'],
+    queryFn: fetchSoulseekDownloads,
+    refetchInterval: 30000,
+    onError: () =>
+      toast({
+        title: 'Failed to load downloads',
+        description: 'Queued downloads could not be retrieved.',
+        variant: 'destructive'
+      })
   });
 
   const { form, onSubmit, handleReset, isSaving, isLoading } = useServiceSettingsForm({
@@ -42,12 +70,8 @@ const SoulseekPage = () => {
     errorTitle: 'Failed to save Soulseek settings'
   });
 
-  const overview = overviewQuery.data ?? {
-    downloads: 0,
-    uploads: 0,
-    queue: 0,
-    lastSync: ''
-  };
+  const downloads = downloadsQuery.data ?? [];
+  const status = statusQuery.data?.status ?? 'unknown';
 
   return (
     <Tabs defaultValue="overview">
@@ -56,37 +80,71 @@ const SoulseekPage = () => {
         <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
-        <Card>
-          <CardHeader>
-            <CardTitle>Soulseek activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {overviewQuery.isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Downloads</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.downloads}</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Connection status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {statusQuery.isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Uploads</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.uploads}</p>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="font-medium capitalize">{status}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    The Soulseek daemon is queried directly via the backend.
+                  </p>
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Queue</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.queue}</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Recent downloads</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {downloadsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Last sync</p>
-                  <p className="mt-2 text-base font-semibold">{formatDateTime(overview.lastSync)}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Filename</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Updated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {downloads.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                          No downloads have been queued yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      downloads.map((download) => (
+                        <TableRow key={download.id}>
+                          <TableCell className="font-medium">{download.filename}</TableCell>
+                          <TableCell className="capitalize">{download.state}</TableCell>
+                          <TableCell>{download.progress.toFixed(1)}%</TableCell>
+                          <TableCell>{formatDateTime(download.updated_at)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </TabsContent>
       <TabsContent value="settings">
         <Card>

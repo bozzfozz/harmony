@@ -1,38 +1,54 @@
+import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '../components/ui/table';
+import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
-import { fetchPlexOverview } from '../lib/api';
+import { fetchPlexLibraries, fetchPlexStatus } from '../lib/api';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 
-const formatDateTime = (value: string) => {
-  if (!value) {
-    return 'Never';
-  }
-  try {
-    return new Intl.DateTimeFormat('en', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(value));
-  } catch (error) {
-    return value;
-  }
-};
-
 const settingsFields = [
-  { key: 'plex.baseUrl', label: 'Base URL', placeholder: 'https://plex.example.com' },
-  { key: 'plex.token', label: 'Access token', placeholder: 'Plex token' },
-  { key: 'plex.library', label: 'Library name', placeholder: 'Music' }
+  { key: 'PLEX_BASE_URL', label: 'Base URL', placeholder: 'https://plex.example.com' },
+  { key: 'PLEX_TOKEN', label: 'Access token', placeholder: 'Plex token' },
+  { key: 'PLEX_LIBRARY', label: 'Library name', placeholder: 'Music' }
 ] as const;
 
 const PlexPage = () => {
-  const overviewQuery = useQuery({
-    queryKey: ['plex-overview'],
-    queryFn: fetchPlexOverview,
-    refetchInterval: 60000
+  const { toast } = useToast();
+
+  const statusQuery = useQuery({
+    queryKey: ['plex-status'],
+    queryFn: fetchPlexStatus,
+    refetchInterval: 45000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Plex status',
+        description: 'Could not connect to the Plex backend.',
+        variant: 'destructive'
+      })
+  });
+
+  const librariesQuery = useQuery({
+    queryKey: ['plex-libraries'],
+    queryFn: fetchPlexLibraries,
+    refetchInterval: 60000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Plex libraries',
+        description: 'Library sections could not be fetched.',
+        variant: 'destructive'
+      })
   });
 
   const { form, onSubmit, handleReset, isSaving, isLoading } = useServiceSettingsForm({
@@ -42,12 +58,40 @@ const PlexPage = () => {
     errorTitle: 'Failed to save Plex settings'
   });
 
-  const overview = overviewQuery.data ?? {
-    libraries: 0,
-    users: 0,
-    sessions: 0,
-    lastSync: ''
-  };
+  const sessionCount = useMemo(() => {
+    const sessions = statusQuery.data?.sessions;
+    if (Array.isArray(sessions)) {
+      return sessions.length;
+    }
+    if (sessions && typeof sessions === 'object') {
+      return Object.keys(sessions).length;
+    }
+    return 0;
+  }, [statusQuery.data?.sessions]);
+
+  const libraryStats = useMemo(() => {
+    const entries = Object.entries((statusQuery.data?.library ?? {}) as Record<string, unknown>);
+    if (entries.length === 0) {
+      return [] as Array<[string, unknown]>;
+    }
+    return entries;
+  }, [statusQuery.data?.library]);
+
+  const libraries = useMemo(() => {
+    const raw = librariesQuery.data as Record<string, unknown> | undefined;
+    if (!raw) {
+      return [] as Array<Record<string, unknown>>;
+    }
+    const container = (raw.MediaContainer ?? raw) as Record<string, unknown>;
+    const directories = container.Directory ?? container.directories;
+    if (Array.isArray(directories)) {
+      return directories as Array<Record<string, unknown>>;
+    }
+    if (directories) {
+      return [directories as Record<string, unknown>];
+    }
+    return [] as Array<Record<string, unknown>>;
+  }, [librariesQuery.data]);
 
   return (
     <Tabs defaultValue="overview">
@@ -56,37 +100,89 @@ const PlexPage = () => {
         <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
-        <Card>
-          <CardHeader>
-            <CardTitle>Plex server</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {overviewQuery.isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Libraries</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.libraries}</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Connection status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {statusQuery.isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Active users</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.users}</p>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="font-medium capitalize">
+                      {statusQuery.data?.status ?? 'unknown'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Sessions</span>
+                    <span className="font-medium">{sessionCount}</span>
+                  </div>
+                  {libraryStats.length > 0 ? (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p className="font-semibold text-foreground">Library statistics</p>
+                      {libraryStats.map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <span className="capitalize">{key.replace(/_/g, ' ')}</span>
+                          <span className="font-medium text-foreground">{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      No statistics returned by the Plex server.
+                    </p>
+                  )}
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Active sessions</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.sessions}</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Libraries</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {librariesQuery.isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Last sync</p>
-                  <p className="mt-2 text-base font-semibold">{formatDateTime(overview.lastSync)}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Agent</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {libraries.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                          No library sections reported yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      libraries.map((library) => (
+                        <TableRow key={String(library.key ?? library.uuid ?? library.title)}>
+                          <TableCell className="font-medium">
+                            {String(library.title ?? 'Unknown')}
+                          </TableCell>
+                          <TableCell>{String(library.type ?? '—')}</TableCell>
+                          <TableCell>{String(library.agent ?? '—')}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </TabsContent>
       <TabsContent value="settings">
         <Card>

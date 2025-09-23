@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Card,
@@ -5,100 +6,123 @@ import {
   CardHeader,
   CardTitle
 } from '../components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '../components/ui/table';
-import { Progress } from '../components/ui/progress';
 import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
 import {
-  fetchJobs,
-  fetchMatchingStats,
-  fetchServices,
-  fetchSoulseekOverview,
-  fetchSpotifyOverview,
-  fetchSystemOverview
+  fetchBeetsStats,
+  fetchPlexLibraries,
+  fetchPlexStatus,
+  fetchSoulseekDownloads,
+  fetchSoulseekStatus,
+  fetchSpotifyPlaylists,
+  fetchSpotifyStatus
 } from '../lib/api';
-
-const formatDateTime = (value: string) => {
-  if (!value) {
-    return 'Never';
-  }
-  try {
-    return new Intl.DateTimeFormat('en', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(value));
-  } catch (error) {
-    return value;
-  }
-};
-
-const statusStyles: Record<string, string> = {
-  running: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200',
-  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200',
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
-  error: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200',
-  stopped: 'bg-slate-200 text-slate-700 dark:bg-slate-900 dark:text-slate-200',
-  paused: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-200'
-};
 
 const Dashboard = () => {
   const { toast } = useToast();
 
-  const systemOverviewQuery = useQuery({
-    queryKey: ['system-overview'],
-    queryFn: fetchSystemOverview,
-    refetchInterval: 30000,
+  const spotifyStatusQuery = useQuery({
+    queryKey: ['spotify-status'],
+    queryFn: fetchSpotifyStatus,
+    refetchInterval: 45000,
     onError: () =>
       toast({
-        title: 'Failed to load system overview',
-        description: 'Please check the backend connection.',
+        title: 'Failed to load Spotify status',
+        description: 'Check the Spotify credentials.',
         variant: 'destructive'
       })
   });
 
-  const servicesQuery = useQuery({
-    queryKey: ['services'],
-    queryFn: fetchServices,
+  const spotifyPlaylistsQuery = useQuery({
+    queryKey: ['spotify-dashboard-playlists'],
+    queryFn: fetchSpotifyPlaylists,
+    refetchInterval: 60000
+  });
+
+  const plexStatusQuery = useQuery({
+    queryKey: ['plex-status'],
+    queryFn: fetchPlexStatus,
+    refetchInterval: 45000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Plex status',
+        description: 'The Plex server may be offline.',
+        variant: 'destructive'
+      })
+  });
+
+  const plexLibrariesQuery = useQuery({
+    queryKey: ['plex-dashboard-libraries'],
+    queryFn: fetchPlexLibraries,
+    refetchInterval: 120000
+  });
+
+  const soulseekStatusQuery = useQuery({
+    queryKey: ['soulseek-status'],
+    queryFn: fetchSoulseekStatus,
+    refetchInterval: 45000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Soulseek status',
+        description: 'The Soulseek daemon did not respond.',
+        variant: 'destructive'
+      })
+  });
+
+  const soulseekDownloadsQuery = useQuery({
+    queryKey: ['soulseek-dashboard-downloads'],
+    queryFn: fetchSoulseekDownloads,
     refetchInterval: 30000
   });
 
-  const jobsQuery = useQuery({
-    queryKey: ['jobs'],
-    queryFn: fetchJobs,
-    refetchInterval: 45000
-  });
-
-  const spotifyQuery = useQuery({
-    queryKey: ['spotify-overview'],
-    queryFn: fetchSpotifyOverview,
-    refetchInterval: 60000
-  });
-
-  const soulseekQuery = useQuery({
-    queryKey: ['soulseek-overview'],
-    queryFn: fetchSoulseekOverview,
-    refetchInterval: 60000
-  });
-
-  const matchingStatsQuery = useQuery({
-    queryKey: ['matching-stats'],
-    queryFn: fetchMatchingStats,
-    refetchInterval: 60000
+  const beetsStatsQuery = useQuery({
+    queryKey: ['beets-stats'],
+    queryFn: fetchBeetsStats,
+    refetchInterval: 60000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Beets statistics',
+        description: 'The Beets integration may be unreachable.',
+        variant: 'destructive'
+      })
   });
 
   const isLoading =
-    systemOverviewQuery.isLoading &&
-    servicesQuery.isLoading &&
-    jobsQuery.isLoading &&
-    spotifyQuery.isLoading &&
-    soulseekQuery.isLoading;
+    spotifyStatusQuery.isLoading &&
+    plexStatusQuery.isLoading &&
+    soulseekStatusQuery.isLoading &&
+    beetsStatsQuery.isLoading;
+
+  const spotifyPlaylistsCount = spotifyPlaylistsQuery.data?.length ?? 0;
+  const plexSessionCount = useMemo(() => {
+    const sessions = plexStatusQuery.data?.sessions;
+    if (Array.isArray(sessions)) {
+      return sessions.length;
+    }
+    if (sessions && typeof sessions === 'object') {
+      return Object.keys(sessions).length;
+    }
+    return 0;
+  }, [plexStatusQuery.data?.sessions]);
+
+  const plexLibraryCount = useMemo(() => {
+    const raw = plexLibrariesQuery.data as Record<string, unknown> | undefined;
+    if (!raw) {
+      return 0;
+    }
+    const container = (raw.MediaContainer ?? raw) as Record<string, unknown>;
+    const directories = container.Directory ?? container.directories;
+    if (Array.isArray(directories)) {
+      return directories.length;
+    }
+    if (directories) {
+      return 1;
+    }
+    return 0;
+  }, [plexLibrariesQuery.data]);
+
+  const soulseekDownloads = soulseekDownloadsQuery.data ?? [];
+  const beetsStats = beetsStatsQuery.data?.stats ?? {};
 
   if (isLoading) {
     return (
@@ -108,225 +132,112 @@ const Dashboard = () => {
     );
   }
 
-  const systemOverview = systemOverviewQuery.data ?? {
-    cpuUsage: 0,
-    memoryUsage: 0,
-    storageUsage: 0,
-    runningServices: 0
-  };
-  const services = servicesQuery.data ?? [];
-  const jobs = jobsQuery.data ?? [];
-  const spotify = spotifyQuery.data ?? {
-    playlists: 0,
-    artists: 0,
-    tracks: 0,
-    lastSync: ''
-  };
-  const soulseek = soulseekQuery.data ?? {
-    downloads: 0,
-    uploads: 0,
-    queue: 0,
-    lastSync: ''
-  };
-  const matchingStats = matchingStatsQuery.data ?? {
-    pending: 0,
-    processed: 0,
-    conflicts: 0,
-    lastRun: ''
-  };
-
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle>CPU usage</CardTitle>
+            <CardTitle>Spotify</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{systemOverview.cpuUsage}%</div>
-            <Progress value={systemOverview.cpuUsage} className="mt-3" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Memory usage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{systemOverview.memoryUsage}%</div>
-            <Progress value={systemOverview.memoryUsage} className="mt-3" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Storage usage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{systemOverview.storageUsage}%</div>
-            <Progress value={systemOverview.storageUsage} className="mt-3" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Running services</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{systemOverview.runningServices}</div>
-            <p className="mt-1 text-sm text-muted-foreground">Services online</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Spotify overview</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Status</span>
+              <span className="font-medium capitalize">
+                {spotifyStatusQuery.data?.status ?? 'unknown'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
               <span>Playlists</span>
-              <span className="font-medium">{spotify.playlists}</span>
+              <span className="font-medium">{spotifyPlaylistsCount}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Artists</span>
-              <span className="font-medium">{spotify.artists}</span>
+            <div className="flex items-center justify-between">
+              <span>Tracks synced</span>
+              <span className="font-medium">{spotifyStatusQuery.data?.track_count ?? '—'}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Tracks</span>
-              <span className="font-medium">{spotify.tracks}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Last sync: {formatDateTime(spotify.lastSync)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Soulseek overview</CardTitle>
+            <CardTitle>Plex</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span>Downloads</span>
-              <span className="font-medium">{soulseek.downloads}</span>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Status</span>
+              <span className="font-medium capitalize">
+                {plexStatusQuery.data?.status ?? 'unknown'}
+              </span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Uploads</span>
-              <span className="font-medium">{soulseek.uploads}</span>
+            <div className="flex items-center justify-between">
+              <span>Sessions</span>
+              <span className="font-medium">{plexSessionCount}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span>Queue size</span>
-              <span className="font-medium">{soulseek.queue}</span>
+            <div className="flex items-center justify-between">
+              <span>Libraries</span>
+              <span className="font-medium">{plexLibraryCount}</span>
             </div>
-            <p className="text-xs text-muted-foreground">Last sync: {formatDateTime(soulseek.lastSync)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Soulseek</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Status</span>
+              <span className="font-medium capitalize">
+                {soulseekStatusQuery.data?.status ?? 'unknown'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Queued downloads</span>
+              <span className="font-medium">{soulseekDownloads.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Active items</span>
+              <span className="font-medium">
+                {
+                  soulseekDownloads.filter((download) => download.state !== 'finished').length
+                }
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Beets</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {Object.keys(beetsStats).length === 0 ? (
+              <p className="text-muted-foreground">No statistics available yet.</p>
+            ) : (
+              Object.entries(beetsStats)
+                .slice(0, 3)
+                .map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="capitalize">{key.replace(/_/g, ' ')}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Matching jobs</CardTitle>
+          <CardTitle>Matching</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Pending</p>
-            <p className="text-lg font-semibold">{matchingStats.pending}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Processed</p>
-            <p className="text-lg font-semibold">{matchingStats.processed}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Conflicts</p>
-            <p className="text-lg font-semibold">{matchingStats.conflicts}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Last run</p>
-            <p className="text-lg font-semibold">{formatDateTime(matchingStats.lastRun)}</p>
-          </div>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            Matching results are generated on demand. Use the matching page to test Spotify to Plex
+            or Spotify to Soulseek matching scenarios.
+          </p>
+          <p className="text-muted-foreground">
+            Each successful match is stored by the backend and can be reviewed through your
+            database tooling.
+          </p>
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Services</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Uptime</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {services.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                      No services reported yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  services.map((service) => (
-                    <TableRow key={service.name}>
-                      <TableCell className="font-medium">{service.name}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            statusStyles[service.status] ?? 'bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {service.status}
-                        </span>
-                      </TableCell>
-                      <TableCell>{service.uptime}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Background jobs</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {jobs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
-                      No jobs have run yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  jobs.map((job) => (
-                    <TableRow key={job.id}>
-                      <TableCell className="font-medium">{job.name}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            statusStyles[job.status] ?? 'bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {job.status}
-                        </span>
-                      </TableCell>
-                      <TableCell>{formatDateTime(job.updatedAt)}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 };
