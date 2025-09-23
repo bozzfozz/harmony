@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
- main
 import App from './App';
 import './styles/index.css';
+import { QueryClient, QueryClientProvider } from './lib/query';
 
 const queryClient = new QueryClient();
 

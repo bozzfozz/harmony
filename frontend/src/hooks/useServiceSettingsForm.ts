@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useForm, UseFormReturn } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '../lib/query';
-import { fetchSettings, updateSetting } from '../lib/api';
+import { fetchSettings, updateSettings } from '../lib/api';
 import { useToast } from './useToast';
 
 export interface SettingsFieldDefinition {
@@ -70,13 +70,11 @@ const useServiceSettingsForm = ({
       if (updates.length === 0) {
         return;
       }
-      await Promise.all(
-        updates.map(([key, value]) =>
-          updateSetting({
-            key,
-            value: value.trim() === '' ? null : value
-          })
-        )
+      await updateSettings(
+        updates.map(([key, value]) => ({
+          key,
+          value: value.trim() === '' ? null : value
+        }))
       );
     },
     onSuccess: () => {
