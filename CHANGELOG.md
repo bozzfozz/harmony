@@ -15,36 +15,19 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 ### Removed
 - Noch keine Einträge.
 
-<!--
-Template für neue Releases:
-
-## [X.Y.Z] - YYYY-MM-DD
+## [0.5.0] - 2025-09-23
 ### Added
--
+- Systemstatus-API `GET /status` und Monitoring-Endpunkt `GET /api/system/stats` mit psutil-basierten Kennzahlen.
+- Metadaten-API `GET/POST /api/metadata/*` inklusive `MetadataUpdateWorker` für orchestrierte Aktualisierungen.
+- Synchronisations- und Suchschnittstellen `POST /api/sync` und `GET /api/search` für plattformübergreifende Abgleiche.
+- Downloadmanagement über `POST /api/download` mit persistenter Queue und Worker-Anbindung.
+- Aktivitätsfeed `GET /api/activity` mit In-Memory-Queue zur Laufzeitüberwachung.
+- Frontend-Ansicht für Downloads zum Starten und Überwachen neuer Transfers.
+- Dashboard-Widget für den Aktivitätsfeed mit automatischem Polling und Toast-Benachrichtigungen.
 
 ### Changed
--
-
-### Fixed
--
-
-### Removed
--
--->
-
-## [1.5.0] - 2025-09-23
-### Added
-- Systemstatus- und Monitoring-Endpunkte (`/status`, `/api/system/stats`) mit psutil-basierten Kennzahlen.
-- Metadaten-Routen (`/api/metadata/*`) samt `MetadataUpdateWorker` für orchestrierte Aktualisierungen.
-- Sync- und Such-APIs (`/api/sync`, `/api/search`) für plattformübergreifende Abgleiche.
-- Downloadverwaltung über `/api/download` inklusive Persistenz und Worker-Anbindung.
-- Aktivitätsfeed-Endpunkt (`/api/activity`) mit In-Memory-Queue für laufende Jobs.
-- Frontend-Downloads-Ansicht zum Starten und Überwachen neuer Transfers.
-- Dashboard-Widget für den Aktivitätsfeed mit automatischem Polling und Toast-Hinweisen.
-
-### Changed
-- Dokumentation und Tests für System-, Metadaten-, Sync- und Search-Endpunkte erweitert.
-- Shutdown-Handling der Metadaten-Worker verbessert.
+- Dokumentation und Tests der System-, Metadaten-, Sync- und Search-Endpunkte erweitert.
+- Shutdown-Handling des `MetadataUpdateWorker` zur Stabilisierung der Warteschlangen verbessert.
 
 ### Fixed
 - Noch keine Einträge.
@@ -52,28 +35,28 @@ Template für neue Releases:
 ### Removed
 - Noch keine Einträge.
 
-## [1.4.0] - 2025-05-10
+## [0.4.0] - 2025-05-10
 ### Added
-- React-basierte Harmony Web UI mit Dashboard, Service-Tabs und Dark-/Light-Mode.
-- Einheitliche REST-Endpunkte für Spotify, Plex, Soulseek, Matching, Settings und Beets.
-- Async Worker für Spotify-Playlist-Sync, Soulseek-Downloads und Plex-Statistiken.
-- Docker- und GitHub-Actions-Setups für reproduzierbare Builds und Tests.
+- React-basierte Harmony Web UI mit Dashboard, Service-Tabs sowie Dark-/Light-Mode.
+- Konsolidierte REST-APIs für Spotify, Plex, Soulseek, Matching, Settings und Beets.
+- Asynchrone Worker für Spotify-Playlist-Sync, Soulseek-Downloads und Plex-Statistiken.
+- Docker-Setup und GitHub-Actions-Pipelines für reproduzierbare Builds und Tests.
 
 ### Changed
-- Datenbank-Schemata zur Unterstützung der Matching-Engine konsolidiert.
-- README und Architektur-Dokumentation zur neuen Web UI aktualisiert.
+- Datenbankschemata zur Unterstützung der Matching-Engine konsolidiert.
+- README und Architektur-Dokumentation auf die neue Web UI abgestimmt.
 
 ### Fixed
-- Stabilität der Soulseek-Warteschlangen durch robustere Fehlerbehandlung verbessert.
+- Robustere Fehlerbehandlung für Soulseek-Warteschlangen zur Stabilisierung der Queue.
 
 ### Removed
 - Noch keine Einträge.
 
-## [1.0.0] - 2024-01-15
+## [0.1.0] - 2024-01-15
 ### Added
-- Initiales FastAPI-Backend mit Spotify-, Plex-, Soulseek- und Beets-Integrationen.
+- FastAPI-Backend mit Integrationen für Spotify, Plex, Soulseek und Beets.
 - SQLAlchemy-Modelle für Playlists, Downloads, Matches und Settings.
-- Grundlegende Hintergrund-Worker für Synchronisation und Matching.
+- Hintergrund-Worker für Synchronisation und Matching.
 - Basis-Dokumentation für Setup, Konfiguration und API-Endpunkte.
 
 ### Changed
