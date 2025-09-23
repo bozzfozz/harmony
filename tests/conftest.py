@@ -20,6 +20,7 @@ from app.dependencies import (
     get_spotify_client as dependency_spotify_client,
 )
 from app.main import app
+from app.utils.activity import activity_manager
 from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
 from tests.simple_client import SimpleTestClient
 
@@ -416,6 +417,13 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         db_path.unlink()
     init_db()
     yield
+
+
+@pytest.fixture(autouse=True)
+def reset_activity_manager() -> None:
+    activity_manager.clear()
+    yield
+    activity_manager.clear()
 
 
 @pytest.fixture

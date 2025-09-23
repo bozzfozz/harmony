@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app import dependencies
 from app.logging import get_logger
+from app.utils.activity import record_activity
 from app.workers import PlaylistSyncWorker, ScanWorker
 
 router = APIRouter(prefix="/api", tags=["Sync"])
@@ -47,6 +48,12 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     response: Dict[str, Any] = {"message": "Sync triggered", "results": results}
     if errors:
         response["errors"] = errors
+
+    status_label = "completed" if not errors else "partial"
+    details: Dict[str, Any] = {"results": results}
+    if errors:
+        details["errors"] = errors
+    record_activity("sync", status_label, details=details)
     return response
 
 
@@ -96,6 +103,15 @@ async def global_search(request: Request, payload: Dict[str, Any]) -> dict[str, 
     response: Dict[str, Any] = {"query": query, "results": results}
     if errors:
         response["errors"] = errors
+
+    search_details: Dict[str, Any] = {
+        "query": query,
+        "sources": sorted(requested_sources),
+    }
+    if errors:
+        search_details["errors"] = errors
+    status_label = "completed" if not errors else "partial"
+    record_activity("search", status_label, details=search_details)
     return response
 
 
