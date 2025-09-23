@@ -1,0 +1,33 @@
+<svg width="1400" height="900" viewBox="0 0 1400 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="900" rx="48" fill="#0f172a"/>
+  <rect x="40" y="60" width="220" height="780" rx="32" fill="#111827" stroke="#1e293b" stroke-width="2"/>
+  <text x="80" y="120" fill="#60a5fa" font-family="Inter, sans-serif" font-size="32" font-weight="600">Harmony</text>
+  <rect x="280" y="60" width="1080" height="120" rx="32" fill="#111827" stroke="#1e293b" stroke-width="2"/>
+  <text x="320" y="120" fill="#e2e8f0" font-family="Inter, sans-serif" font-size="28" font-weight="600">Dashboard · Harmony UI Preview</text>
+  <rect x="1120" y="92" width="160" height="56" rx="16" fill="#60a5fa" fill-opacity="0.85"/>
+  <text x="1150" y="130" fill="#0f172a" font-family="Inter, sans-serif" font-size="20" font-weight="600">Refresh</text>
+  <g fill="#111827" stroke="#1e293b" stroke-width="2">
+    <rect x="280" y="200" width="320" height="160" rx="28"/>
+    <rect x="620" y="200" width="320" height="160" rx="28"/>
+    <rect x="960" y="200" width="320" height="160" rx="28"/>
+    <rect x="280" y="380" width="320" height="160" rx="28"/>
+    <rect x="620" y="380" width="320" height="160" rx="28"/>
+    <rect x="960" y="380" width="320" height="160" rx="28"/>
+  </g>
+  <g fill="#e2e8f0" font-family="Inter, sans-serif" font-size="22" font-weight="600">
+    <text x="304" y="252">System</text>
+    <text x="644" y="252">Spotify</text>
+    <text x="984" y="252">Soulseek</text>
+    <text x="304" y="432">Plex</text>
+    <text x="644" y="432">Matching</text>
+    <text x="984" y="432">Beets</text>
+  </g>
+  <g stroke="#1e293b" stroke-width="2">
+    <rect x="280" y="580" width="1080" height="260" rx="32" fill="#111827"/>
+    <line x1="320" y1="640" x2="1320" y2="640"/>
+    <line x1="320" y1="684" x2="1320" y2="684"/>
+    <line x1="320" y1="728" x2="1320" y2="728"/>
+    <line x1="320" y1="772" x2="1320" y2="772"/>
+  </g>
+  <text x="320" y="620" fill="#e2e8f0" font-family="Inter, sans-serif" font-size="22" font-weight="600">Jobs · Status · Progress · Updated</text>
+</svg>
