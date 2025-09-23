@@ -1,6 +1,6 @@
 import { ReactNode, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import * as Dialog from '@radix-ui/react-dialog';
+ main
 import {
   Bell,
   ChevronRight,
@@ -16,6 +16,7 @@ import {
   Disc,
   ListMusic
 } from 'lucide-react';
+ main
 import { cn } from '../lib/utils';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -23,7 +24,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
 import { useToast } from '../hooks/useToast';
-import { useQueryClient } from '@tanstack/react-query';
+ main
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: CircleDot },
@@ -44,6 +45,7 @@ const Layout = ({ children }: LayoutProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+ main
   const location = useLocation();
 
   const activeTitle = useMemo(() => {
@@ -61,6 +63,7 @@ const Layout = ({ children }: LayoutProps) => {
     toast({ title: 'Search submitted', description: `You searched for "${searchTerm}".` });
   };
 
+ main
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="hidden w-64 border-r bg-card/60 lg:block">
@@ -71,67 +74,13 @@ const Layout = ({ children }: LayoutProps) => {
           </Link>
         </div>
         <ScrollArea className="h-[calc(100vh-4rem)] px-2">
-          <nav className="space-y-1 px-4 pb-6">
-            {navItems.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted',
-                    isActive && 'bg-primary/10 text-primary'
-                  )
-                }
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+ main
         </ScrollArea>
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
           <div className="flex h-16 items-center gap-4 px-4">
-            <Dialog.Root>
-              <Dialog.Trigger asChild>
-                <Button variant="outline" size="icon" className="lg:hidden">
-                  <Menu className="h-4 w-4" />
-                  <span className="sr-only">Open navigation</span>
-                </Button>
-              </Dialog.Trigger>
-              <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
-                <Dialog.Content className="fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-lg">
-                  <div className="flex h-16 items-center px-6">
-                    <Link to="/dashboard" className="flex items-center gap-2 text-lg font-semibold">
-                      <CircleDot className="h-5 w-5 text-primary" />
-                      Harmony
-                    </Link>
-                  </div>
-                  <ScrollArea className="h-[calc(100vh-4rem)] px-4 pb-6">
-                    <nav className="space-y-1">
-                      {navItems.map(({ to, label, icon: Icon }) => (
-                        <Dialog.Close asChild key={to}>
-                          <NavLink
-                            to={to}
-                            className={({ isActive }) =>
-                              cn(
-                                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted',
-                                isActive && 'bg-primary/10 text-primary'
-                              )
-                            }
-                          >
-                            <Icon className="h-4 w-4" />
-                            {label}
-                          </NavLink>
-                        </Dialog.Close>
-                      ))}
-                    </nav>
-                  </ScrollArea>
-                </Dialog.Content>
-              </Dialog.Portal>
-            </Dialog.Root>
+ main
             <div className="flex flex-1 items-center gap-4">
               <div>
                 <h1 className="text-lg font-semibold">{activeTitle}</h1>
@@ -175,6 +124,7 @@ const Layout = ({ children }: LayoutProps) => {
         </header>
         <main className="flex-1 bg-muted/30 px-4 py-6 md:px-8">{children}</main>
       </div>
+ main
     </div>
   );
 };

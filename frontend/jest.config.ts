@@ -1,6 +1,4 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+ main
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   transform: {
@@ -11,7 +9,7 @@ const config: Config = {
   },
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
+ main
   },
   testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };
