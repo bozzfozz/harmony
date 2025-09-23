@@ -2,6 +2,34 @@
 
 Alle nennenswerten Änderungen dieses Projekts werden in dieser Datei dokumentiert.
 
+## v1.x.x – Service-Konfiguration über die UI
+- Einstellungen für Spotify, Plex und Soulseek sind jetzt direkt in der UI pflegbar.
+
+## v1.x.x – Harmony AppHeader
+- Neuer Harmony AppHeader im Frontend hinzugefügt.
+
+## v1.x.x – Frontend an neue Backend-APIs angepasst
+- Dashboard nutzt jetzt die tatsächlichen Status-Endpunkte von Spotify, Plex und Soulseek.
+- Plex-Ansicht zeigt Bibliothekssektionen und Sitzungen basierend auf den offiziellen Routern.
+- Matching-UI sendet valide Payloads an die neuen Matching-Routen und akzeptiert JSON-Eingaben.
+
+## v1.6.0 – Harmony Web UI
+- Vollständige Web-Oberfläche mit Spotify, Plex, Soulseek, Matching und Settings implementiert.
+- Globale Suche, Filter, Notifications und Theme-Steuerung über den AppHeader.
+- Realtime-Updates via SSE für Soulseek-Downloads und Plex-Scans integriert.
+- Services, Hooks und Tests für API-Aufrufe, Matching-Flows und Formularspeicherung hinzugefügt.
+
+## v1.5.0 – Frontend-Grundstruktur
+- Frontend-Grundstruktur mit Navbar, Sidebar, Routing und ersten Pages erstellt.
+- React + Vite Setup mit Tailwind, shadcn/ui und Radix UI eingerichtet.
+- Navigationslayout bestehend aus fixer Navbar, Sidebar und mobilem Drawer hinzugefügt.
+- Erste UI-Module (Cards, Tabellen, Formulare, Toasts) vorbereitet.
+
+## v0.3.0 – Theme-System
+- Theme-System (Light/Dark) integriert.
+- CSS-Variablen für Farben und Radii definiert und in Tailwind verfügbar gemacht.
+- Dark-Mode Toggle inklusive Persistenz eingebaut.
+
 ## v1.4.0 – Spotify API Vollintegration
 - Vollständige Spotify-Integration inkl. Playlist-Sync, Audio-Features, Recommendations und Benutzerbibliothek.
 - Erweiterter Spotify-Router mit neuen Endpunkten für Playlists (Add/Remove/Reorder), Profil, Top-Tracks/-Artists.
