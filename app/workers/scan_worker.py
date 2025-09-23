@@ -42,6 +42,11 @@ class ScanWorker:
             await asyncio.sleep(self._interval)
         logger.info("ScanWorker stopped")
 
+    async def run_once(self) -> None:
+        """Execute a single scan cycle on demand."""
+
+        await self._perform_scan()
+
     async def _perform_scan(self) -> None:
         try:
             stats = await self._client.get_library_statistics()
