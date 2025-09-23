@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app import dependencies
 from app.logging import get_logger
+from app.utils.activity import record_activity
 from app.workers import MatchingWorker, MetadataUpdateWorker, ScanWorker
 from app.workers.metadata_worker import MetadataUpdateRunningError
 
@@ -54,7 +55,9 @@ async def start_metadata_update(request: Request) -> dict[str, object]:
         state = await worker.start()
     except MetadataUpdateRunningError as exc:
         logger.warning("Metadata update already running")
+        record_activity("metadata", "already_running")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Metadata update already running") from exc
+    record_activity("metadata", "started", details={"state": state})
     return {"message": "Metadata update started", "state": state}
 
 
@@ -72,5 +75,6 @@ async def stop_metadata_update(request: Request) -> dict[str, object]:
 
     worker = _get_worker(request)
     state = await worker.stop()
+    record_activity("metadata", "stopped", details={"state": state})
     return {"message": "Stop signal issued", "state": state}
 

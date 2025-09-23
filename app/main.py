@@ -17,7 +17,9 @@ from app.dependencies import (
 from app.db import init_db
 from app.logging import configure_logging, get_logger
 from app.routers import (
+    activity_router,
     beets_router,
+    download_router,
     matching_router,
     metadata_router,
     plex_router,
@@ -47,6 +49,8 @@ app.include_router(beets_router, prefix="/beets", tags=["Beets"])
 app.include_router(metadata_router, tags=["Metadata"])
 app.include_router(sync_router, tags=["Sync"])
 app.include_router(system_router, tags=["System"])
+app.include_router(download_router)
+app.include_router(activity_router)
 
 
 @app.on_event("startup")

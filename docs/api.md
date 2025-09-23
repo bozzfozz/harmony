@@ -60,6 +60,8 @@ POST /api/metadata/update HTTP/1.1
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist- und Bibliotheksabgleich. |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
+| `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
+| `GET` | `/api/activity` | Liefert den In-Memory-Aktivitätsfeed (max. 50 Einträge). |
 
 **Beispiel:**
 
@@ -78,6 +80,51 @@ Content-Type: application/json
     "soulseek": {"results": ["Daft Punk"]}
   }
 }
+```
+
+**Download-Beispiel:**
+
+```http
+POST /api/download HTTP/1.1
+Content-Type: application/json
+
+{
+  "username": "dj_user",
+  "files": [{"filename": "Daft Punk - Harder.mp3"}]
+}
+```
+
+```json
+{
+  "status": "queued",
+  "download_id": 42,
+  "downloads": [
+    {"id": 42, "filename": "Daft Punk - Harder.mp3", "state": "queued", "progress": 0.0}
+  ]
+}
+```
+
+**Activity-Beispiel:**
+
+```http
+GET /api/activity HTTP/1.1
+```
+
+```json
+[
+  {
+    "timestamp": "2024-03-18T12:00:00Z",
+    "type": "download",
+    "status": "queued",
+    "details": {"download_ids": [42], "username": "dj_user"}
+  },
+  {
+    "timestamp": "2024-03-18T11:58:12Z",
+    "type": "search",
+    "status": "completed",
+    "details": {"query": "Daft Punk", "sources": ["plex", "soulseek", "spotify"]}
+  }
+]
 ```
 
 ## Spotify (`/spotify`)
