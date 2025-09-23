@@ -77,6 +77,10 @@ class ListTracksResponse(BaseModel):
     tracks: List[str]
 
 
+class StatsResponse(BaseModel):
+    stats: dict[str, str]
+
+
 class FieldsResponse(BaseModel):
     fields: List[str]
 
@@ -139,7 +143,7 @@ async def update_library(req: UpdateRequest) -> UpdateResponse:
     return UpdateResponse(success=True, message=output or "Library updated")
 
 
-@router.post(
+@router.delete(
     "/remove", response_model=RemoveResponse, response_model_exclude_none=True
 )
 async def remove_items(req: RemoveRequest) -> RemoveResponse:
@@ -185,12 +189,12 @@ async def list_tracks() -> ListTracksResponse:
     return ListTracksResponse(tracks=tracks)
 
 
-@router.get("/stats")
-async def library_stats() -> dict:
+@router.get("/stats", response_model=StatsResponse)
+async def library_stats() -> StatsResponse:
     """Return statistics about the Beets library."""
 
     stats = await _call_client(beets_client.stats)
-    return {"stats": stats}
+    return StatsResponse(stats=stats)
 
 
 @router.get("/fields", response_model=FieldsResponse)

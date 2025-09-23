@@ -8,6 +8,9 @@ Alle nennenswerten Änderungen dieses Projekts werden in dieser Datei dokumentie
 - Anbindung der UI an bestehende APIs (`/spotify`, `/plex`, `/soulseek`, `/matching`, `/settings`, `/beets`).
 - Jest + Testing Library für UI-Tests (Tabs, Settings-Formulare, Theme-Switch, Fehler-Handling).
 
+# v1.x.x – Unveröffentlicht
+- Beets-Router vollständig implementiert und in die Haupt-App integriert.
+
 ## v1.4.0 – Spotify API Vollintegration
 - Konfiguration für Spotify, Plex und slskd kann jetzt in der Datenbank persistiert und über die Settings-API gepflegt werden.
 - Vollständige Spotify-Integration inkl. Playlist-Sync, Audio-Features, Recommendations und Benutzerbibliothek.

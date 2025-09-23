@@ -135,6 +135,40 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
 - **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.
 
+### Beets-Integration
+
+Die Harmony-Instanz nutzt die [`beet` CLI](https://beets.io/) für alle Operationen rund um die lokale Musikbibliothek. Stelle
+ sicher, dass `beet` auf dem Host oder im Container installiert und über den `PATH` erreichbar ist, bevor du die Beets-Endpunk
+ te aufrufst.
+
+Beispiele für typische Aufrufe:
+
+```bash
+# Neuen Ordner importieren
+curl -X POST http://localhost:8000/beets/import \
+  -H 'Content-Type: application/json' \
+  -d '{"path": "/music/new", "quiet": true, "autotag": true}'
+
+# Bibliothek aktualisieren (optional mit Pfad)
+http POST http://localhost:8000/beets/update path=/music/library
+
+# Treffer suchen und formatiert ausgeben
+curl -X POST http://localhost:8000/beets/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "artist:Radiohead", "format": "$artist - $album - $title"}'
+
+# Einträge löschen (force löscht ohne Rückfrage)
+http DELETE http://localhost:8000/beets/remove query=='artist:Radiohead' force:=true
+```
+
+Weitere Endpunkte:
+
+- `GET /beets/albums` – listet alle Alben.
+- `GET /beets/tracks` – listet alle Titel.
+- `GET /beets/stats` – liefert Beets-Statistiken.
+- `GET /beets/fields` – zeigt verfügbare Metadatenfelder.
+- `POST /beets/move` & `POST /beets/write` – verschiebt Dateien bzw. schreibt Tags.
+
 ## Tests & CI
 
 ```bash

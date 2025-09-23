@@ -16,7 +16,14 @@ from app.dependencies import (
 )
 from app.db import init_db
 from app.logging import configure_logging, get_logger
-from app.routers import matching_router, plex_router, settings_router, soulseek_router, spotify_router
+from app.routers import (
+    beets_router,
+    matching_router,
+    plex_router,
+    settings_router,
+    soulseek_router,
+    spotify_router,
+)
 from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
 
 app = FastAPI(title="Harmony Backend", version="1.4.0")
@@ -27,6 +34,7 @@ app.include_router(plex_router, prefix="/plex", tags=["Plex"])
 app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
 app.include_router(matching_router, prefix="/matching", tags=["Matching"])
 app.include_router(settings_router, prefix="/settings", tags=["Settings"])
+app.include_router(beets_router, prefix="/beets", tags=["Beets"])
 
 
 @app.on_event("startup")
