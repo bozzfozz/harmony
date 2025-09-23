@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- CI priorisiert nun die Backend-Tests (`pytest`); Frontend-Tests werden aufgrund fehlenden npm-Registry-Zugriffs übersprungen.
+
 ### Added
 - Systemstatus-Endpunkte (`/status`, `/api/system/stats`) für das FastAPI-Backend inklusive Worker-Überblick und psutil-basierter Systemmetriken.
 - Dokumentation und Tests für die neuen System-Routen.

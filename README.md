@@ -40,9 +40,12 @@ Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Da
 ### Tests & Builds
 
 ```bash
-npm run test    # Jest + Testing Library
+npm run test    # Lokale Jest/Vitest-Tests (in CI deaktiviert)
 npm run build   # TypeScript + Vite Build
 ```
+
+> **Hinweis:** In der CI-Umgebung werden Frontend-Tests übersprungen, da dort kein Zugriff auf die npm-Registry besteht. Lokal
+> können die Tests weiterhin über Jest oder Vitest ausgeführt werden.
 
 ### Features der UI
 
@@ -103,7 +106,8 @@ Das Dev-Override (`docker-compose.override.yml`) aktiviert Hot-Reloading und Deb
 ### GitHub Actions
 
 Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull
-Requests die Test-Suite (`pytest`) unter Python 3.11 aus.
+Requests ausschließlich die Backend-Tests (`pytest`) unter Python 3.11 aus. Frontend-Tests werden aufgrund fehlenden npm-Regis
+try-Zugriffs im CI bewusst ausgelassen.
 
 ## Konfiguration
 
