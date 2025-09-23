@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">Harmony AppHeader Storybook Snapshot</title>
+  <desc id="desc">Schematische Darstellung des Harmony AppHeaders mit Logo, Suche, Filtern und Aktionen.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e0e7ff" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="320" fill="url(#bg)" rx="24"/>
+  <rect x="48" y="48" width="1104" height="224" rx="20" fill="url(#card)" opacity="0.92"/>
+  <circle cx="120" cy="160" r="44" fill="#4338ca" opacity="0.2"/>
+  <path d="M94 140c0-12 10-22 22-22h12c12 0 22 10 22 22v90c0 18 14 32 32 32h20c18 0 32-14 32-32s-14-32-32-32h-16" stroke="#4338ca" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <circle cx="122" cy="214" r="12" fill="#4338ca"/>
+  <circle cx="178" cy="214" r="12" fill="#4338ca"/>
+  <text x="210" y="172" fill="#1e293b" font-family="'Inter', sans-serif" font-size="40" font-weight="700">Harmony</text>
+  <rect x="360" y="128" width="280" height="48" rx="12" fill="#e2e8f0" />
+  <text x="380" y="159" fill="#475569" font-family="'Inter', sans-serif" font-size="20">Search tracks, artists...</text>
+  <g font-family="'Inter', sans-serif" font-size="18" font-weight="600" fill="#334155">
+    <rect x="660" y="132" width="96" height="40" rx="12" fill="#bbf7d0" />
+    <text x="688" y="157">Spotify</text>
+    <rect x="768" y="132" width="80" height="40" rx="12" fill="#fed7aa" />
+    <text x="786" y="157">Plex</text>
+    <rect x="856" y="132" width="104" height="40" rx="12" fill="#bfdbfe" />
+    <text x="882" y="157">Soulseek</text>
+  </g>
+  <g stroke="#4338ca" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.7">
+    <circle cx="992" cy="152" r="20"/>
+    <circle cx="1048" cy="152" r="20"/>
+    <circle cx="1104" cy="152" r="20"/>
+  </g>
+</svg>

@@ -1,0 +1,4664 @@
+// FILE: .eslintrc.cjs
+module.exports = {
+  root: true,
+  env: {
+    browser: true,
+    es2021: true
+  },
+  extends: [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:react/jsx-runtime",
+    "prettier"
+  ],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    ecmaVersion: "latest",
+    sourceType: "module"
+  },
+  plugins: ["react", "@typescript-eslint"],
+  settings: {
+    react: {
+      version: "detect"
+    }
+  },
+  ignorePatterns: ["dist", "node_modules"],
+  rules: {
+    "react/prop-types": "off"
+  }
+};
+
+// FILE: README.md
+# Harmony Frontend
+
+Die Harmony Web UI ist ein React/Vite-Projekt mit TailwindCSS, shadcn/ui und Radix UI. Die Oberfläche bindet Spotify, Plex und Soulseek an, stellt Matching-Funktionen bereit und erlaubt das Konfigurieren aller Zugangsdaten.
+
+## Installation & Entwicklung
+
+1. In das Frontend-Verzeichnis wechseln
+
+   ```bash
+   cd frontend
+   ```
+
+2. Abhängigkeiten installieren
+
+   ```bash
+   npm install
+   ```
+
+3. Entwicklungsserver starten
+
+   ```bash
+   npm run dev
+   ```
+
+   Der Server läuft auf [http://localhost:5173](http://localhost:5173). Über `VITE_API_BASE_URL` lässt sich bei Bedarf die Backend-URL anpassen (Standard: `http://localhost:8000`).
+
+4. Storybook für UI-Dokumentation
+
+   ```bash
+   npm run storybook
+   ```
+
+5. Tests ausführen (React Testing Library + Jest)
+
+   ```bash
+   npm test
+   ```
+
+## Architekturüberblick
+
+```
+frontend/
+├─ src/
+│  ├─ App.tsx                # Router + AppShell
+│  ├─ components/            # Layout, Header, Sidebar, UI-Elemente (shadcn/Radix)
+│  ├─ hooks/                 # Theme-, Search-, Realtime-Hooks
+│  ├─ pages/                 # Feature-Seiten (Dashboard, Spotify, Plex, Soulseek, Matching, Settings)
+│  ├─ services/              # Axios-Client + API-Abstraktionen
+│  ├─ stories/               # Storybook-Stories
+│  └─ __tests__/             # Jest + RTL Tests
+├─ index.html
+├─ tailwind.config.ts
+└─ vite.config.ts
+```
+
+Die UI nutzt ein globales `SearchProvider`, um die Header-Suche mit allen Seiten zu teilen. Service-Module kapseln REST- und SSE-Endpunkte (Axios + EventSource). Das Theme wird via `useTheme` Hook persistent in `localStorage` verwaltet.
+
+## Hauptseiten & Funktionen
+
+- **Dashboard** – Systeminformationen (Backend-Version, Datenbank- und Worker-Status, Uptime), Service-Statuskarten für Spotify/Plex/Soulseek/Beets sowie eine Jobs- und Download-Tabelle im Stil der Design-Referenz.
+- **Spotify** – Tabs für *Status & Playlists* sowie *Einstellungen*. Globale Suche filtert Playlists und Track-Tabellen, Statuskarten zeigen Verbindungs- und Sync-Informationen.
+- **Plex** – Tab-basierte Bibliotheksübersicht mit Artist-, Album- und Track-Tabellen sowie einer Settings-Ansicht für Base-URL, Token und Library.
+- **Soulseek** – Download- und Such-Tabellen inklusive Fortschrittsbalken, Abbruch-Buttons und separater Einstellungs-Tab für SLSKD-URL/API-Key.
+- **Beets** – Platzhalterseite für die kommende Beets-Integration (Navigation & Layout vorbereitet).
+- **Matching** – Startet Spotify→Plex und Spotify→Soulseek Abgleiche, zeigt Ergebnisse tabellarisch und triggert Toast-Notifications.
+- **Settings** – Globale Übersicht aller gespeicherten Zugangsdaten, eingebettet in das AppShell-Layout.
+
+## Konfiguration
+
+Die Seiten **Spotify**, **Plex** und **Soulseek** besitzen jeweils einen Einstellungen-Tab. Beim Öffnen werden die aktuellen Werte über `GET /settings` geladen, in den Formularfeldern angezeigt und lassen sich per `POST /settings` aktualisieren. Erfolgreiche Saves triggern einen ✅-Toast, Fehler blenden eine Warnung innerhalb des Formulars ein.
+
+## UI-Komponenten
+
+### AppHeader
+
+- Zentraler Header mit Logo, globaler Suche, Filter-Toggles (Spotify/Plex/Soulseek), Refresh, Notifications, What's-New und Theme Toggle.
+- Mobile Nutzer:innen öffnen die Navigation per Drawer-Trigger; Desktop zeigt die Sidebar permanent.
+- Storybook-Szenarien: Default, Filter aktiv, Loading, Dark Mode, What's New.
+
+![Harmony AppHeader Storybook](../docs/images/app-header-storybook.svg)
+
+### Weitere Elemente
+
+- **Layout & Sidebar** – Radix Drawer für Mobile, fixe Sidebar auf Desktop (inkl. zusätzlichem Beets-Menüpunkt entsprechend dem Referenzdesign).
+- **Toasts** – Globale Benachrichtigungen über Radix Toasts (`useToast`).
+- **Progress/Badges** – Tailwind-basierte Komponenten für Soulseek-Downloads und Spotify-Metadaten.
+
+## Tests
+
+- React Testing Library deckt AppHeader-Interaktionen, globale Theme-Umschaltung und den initialen Dashboard-Load ab.
+- Services werden in Tests gemockt, um API-Aufrufe zu verifizieren.
+
+Ausführung:
+
+```bash
+npm test
+```
+
+## Weitere Arbeiten
+
+- Zusätzliche Tabellen- und Filterlogik für große Datenmengen optimieren.
+- High-Contrast-Theme evaluieren.
+- Backend-Endpoints für Notifications erweitern.
+
+// FILE: index.html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harmony</title>
+  </head>
+  <body class="bg-slate-950 text-slate-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+// FILE: jest.config.ts
+import type { Config } from "jest";
+
+const config: Config = {
+  preset: "ts-jest/presets/default-esm",
+  testEnvironment: "jsdom",
+  roots: ["<rootDir>/src"],
+  moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
+  moduleNameMapper: {
+    "\\.(css|less|sass|scss)$": "identity-obj-proxy"
+  },
+  extensionsToTreatAsEsm: [".ts", ".tsx"],
+  globals: {
+    "ts-jest": {
+      useESM: true,
+      tsconfig: "<rootDir>/tsconfig.jest.json"
+    }
+  },
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
+  collectCoverageFrom: ["src/**/*.{ts,tsx}", "!src/vite-env.d.ts"]
+};
+
+export default config;
+
+// FILE: jest.setup.ts
+import "@testing-library/jest-dom";
+
+// FILE: package.json
+{
+  "name": "harmony-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-tooltip": "^1.0.7",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@radix-ui/react-switch": "^1.0.3",
+    "@radix-ui/react-table": "^1.0.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.473.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "tailwind-merge": "^2.3.0",
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "@storybook/react": "^8.1.11",
+    "@types/react": "^18.3.7",
+    "@types/react-dom": "^18.3.2",
+    "@vitejs/plugin-react": "^4.3.2",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^8.3.0",
+    "@typescript-eslint/parser": "^8.3.0",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.6.1",
+    "autoprefixer": "^10.4.19",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "postcss": "^8.4.39",
+    "postcss-import": "^15.1.0",
+    "tailwindcss": "^3.4.9",
+    "tailwindcss-animate": "^1.0.7",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.1"
+  }
+}
+
+// FILE: postcss.config.js
+module.exports = {
+  plugins: {
+    "postcss-import": { path: ["src", "."] },
+    tailwindcss: {},
+    autoprefixer: {}
+  }
+};
+
+// FILE: src/App.tsx
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import Layout from "./components/Layout";
+import DashboardPage from "./pages/DashboardPage";
+import SpotifyPage from "./pages/SpotifyPage";
+import PlexPage from "./pages/PlexPage";
+import SoulseekPage from "./pages/SoulseekPage";
+import BeetsPage from "./pages/BeetsPage";
+import Matching from "./pages/Matching";
+import Settings from "./pages/Settings";
+import { Toaster } from "./components/ui/toaster";
+import AppHeader, { ServiceFilters } from "./components/AppHeader";
+import { useToast } from "./components/ui/use-toast";
+import useTheme from "./hooks/useTheme";
+import { SearchProvider } from "./hooks/useGlobalSearch";
+
+const defaultFilters: ServiceFilters = {
+  spotify: true,
+  plex: true,
+  soulseek: true
+};
+
+const AppRoutes = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [filters, setFilters] = useState<ServiceFilters>(defaultFilters);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [hasNewFeatures, setHasNewFeatures] = useState(true);
+  const { theme, toggleTheme } = useTheme();
+  const [loading, setLoading] = useState(false);
+  const refreshTimerRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current !== undefined) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
+
+  const header = useMemo(
+    () => (
+      <AppHeader
+        loading={loading}
+        onRefresh={() => {
+          if (refreshTimerRef.current) {
+            window.clearTimeout(refreshTimerRef.current);
+          }
+          setLoading(true);
+          refreshTimerRef.current = window.setTimeout(() => {
+            setLoading(false);
+          }, 800);
+        }}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        filters={filters}
+        onFilterChange={setFilters}
+        isDarkMode={theme === "dark"}
+        onThemeToggle={toggleTheme}
+        onGoHome={() => navigate("/dashboard")}
+        onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+        onShowWhatsNew={() => {
+          toast({
+            title: "Harmony Update",
+            description: "Die neuesten Änderungen wurden geladen."
+          });
+          setHasNewFeatures(false);
+        }}
+        onShowNotifications={() => {
+          toast({
+            title: "Benachrichtigungen",
+            description: "Keine neuen Benachrichtigungen"
+          });
+        }}
+        hasNewFeatures={hasNewFeatures}
+      />
+    ),
+    [
+      filters,
+      hasNewFeatures,
+      loading,
+      navigate,
+      searchTerm,
+      setFilters,
+      setHasNewFeatures,
+      setIsSidebarOpen,
+      setSearchTerm,
+      theme,
+      toggleTheme,
+      toast
+    ]
+  );
+
+  return (
+    <>
+      <Toaster />
+      <SearchProvider value={{ term: searchTerm, setTerm: setSearchTerm }}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route
+            element={
+              <Layout
+                header={header}
+                isSidebarOpen={isSidebarOpen}
+                onSidebarOpenChange={setIsSidebarOpen}
+              />
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage filters={filters} />} />
+            <Route path="/spotify" element={<SpotifyPage filters={filters} />} />
+            <Route path="/plex" element={<PlexPage filters={filters} />} />
+            <Route path="/soulseek" element={<SoulseekPage filters={filters} />} />
+            <Route path="/beets" element={<BeetsPage />} />
+            <Route path="/matching" element={<Matching />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </SearchProvider>
+    </>
+  );
+};
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+// FILE: src/__tests__/App.test.tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import App from "../App";
+import spotifyService from "../services/spotify";
+import plexService from "../services/plex";
+import soulseekService from "../services/soulseek";
+import dashboardService from "../services/dashboard";
+import settingsService from "../services/settings";
+
+jest.mock("../services/spotify", () => {
+  const actual = jest.requireActual("../services/spotify");
+  return {
+    __esModule: true,
+    ...actual,
+    default: {
+      ...actual.default,
+      getStatus: jest.fn().mockResolvedValue({ connected: true, lastSync: "vor 1h" }),
+      searchTracks: jest.fn().mockResolvedValue([]),
+      getPlaylists: jest.fn().mockResolvedValue([])
+    }
+  };
+});
+
+jest.mock("../services/plex", () => {
+  const actual = jest.requireActual("../services/plex");
+  return {
+    __esModule: true,
+    ...actual,
+    default: {
+      ...actual.default,
+      getStatus: jest.fn().mockResolvedValue({ scanning: false, lastScan: "vor 1h" }),
+      getArtists: jest.fn().mockResolvedValue([]),
+      getAlbums: jest.fn().mockResolvedValue([]),
+      triggerScan: jest.fn().mockResolvedValue(undefined)
+    }
+  };
+});
+
+jest.mock("../services/soulseek", () => {
+  const actual = jest.requireActual("../services/soulseek");
+  return {
+    __esModule: true,
+    ...actual,
+    default: {
+      ...actual.default,
+      getDownloads: jest.fn().mockResolvedValue([]),
+      search: jest.fn().mockResolvedValue([]),
+      cancelDownload: jest.fn().mockResolvedValue(undefined)
+    }
+  };
+});
+
+jest.mock("../services/dashboard", () => {
+  return {
+    __esModule: true,
+    default: {
+      getOverview: jest.fn().mockResolvedValue({
+        system: {
+          backendVersion: "1.0.0",
+          databaseStatus: "online",
+          workerStatus: "idle",
+          uptime: "5h"
+        },
+        services: [],
+        jobs: []
+      })
+    },
+    defaultOverview: {
+      system: {
+        backendVersion: "unknown",
+        databaseStatus: "unknown",
+        workerStatus: "unknown",
+        uptime: "–"
+      },
+      services: [],
+      jobs: []
+    }
+  };
+});
+
+jest.mock("../services/settings", () => {
+  const actual = jest.requireActual("../services/settings");
+  return {
+    __esModule: true,
+    default: {
+      ...actual.default,
+      getSettings: jest.fn().mockResolvedValue(actual.defaultSettings),
+      saveSettings: jest.fn().mockResolvedValue(undefined)
+    },
+    defaultSettings: actual.defaultSettings
+  };
+});
+
+describe("App", () => {
+  beforeEach(() => {
+    window.matchMedia = window.matchMedia ||
+      (() => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined })) as unknown as typeof window.matchMedia;
+  });
+
+  it("renders the navbar and triggers service calls on load", async () => {
+    window.history.pushState({}, "", "/dashboard");
+
+    render(<App />);
+
+    expect(await screen.findByText(/harmony/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect((spotifyService.getStatus as jest.Mock)).toHaveBeenCalled();
+      expect((plexService.getStatus as jest.Mock)).toHaveBeenCalled();
+      expect((dashboardService.getOverview as jest.Mock)).toHaveBeenCalled();
+      expect((settingsService.getSettings as jest.Mock)).toHaveBeenCalled();
+    });
+  });
+});
+
+// FILE: src/__tests__/AppHeader.test.tsx
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
+
+import AppHeader, { ServiceFilters } from "../components/AppHeader";
+
+const renderHeader = (props?: Partial<ComponentProps<typeof AppHeader>>) => {
+  const defaultFilters: ServiceFilters = { spotify: true, plex: true, soulseek: true };
+  const onRefresh = jest.fn();
+  const onSearchChange = jest.fn();
+  const onFilterChange = jest.fn();
+  const onThemeToggle = jest.fn();
+  const onGoHome = jest.fn();
+  const onToggleSidebar = jest.fn();
+  const onShowNotifications = jest.fn();
+
+  render(
+    <AppHeader
+      loading={false}
+      onRefresh={onRefresh}
+      searchTerm=""
+      onSearchChange={onSearchChange}
+      filters={defaultFilters}
+      onFilterChange={onFilterChange}
+      isDarkMode={false}
+      onThemeToggle={onThemeToggle}
+      onGoHome={onGoHome}
+      onToggleSidebar={onToggleSidebar}
+      onShowNotifications={onShowNotifications}
+      {...props}
+    />
+  );
+
+  return {
+    onRefresh,
+    onSearchChange,
+    onFilterChange,
+    onThemeToggle,
+    onGoHome,
+    onToggleSidebar,
+    onShowNotifications
+  };
+};
+
+describe("AppHeader", () => {
+  it("renders the Harmony logo", () => {
+    renderHeader();
+
+    expect(screen.getByLabelText(/harmony logo/i)).toBeInTheDocument();
+    expect(screen.getByText(/harmony/i)).toBeInTheDocument();
+  });
+
+  it("debounces search input before triggering callback", async () => {
+    jest.useFakeTimers();
+    const { onSearchChange } = renderHeader();
+    const input = screen.getByRole("textbox", {
+      name: /search tracks, artists and albums/i
+    });
+
+    await userEvent.type(input, "Lo-fi beats");
+
+    expect(onSearchChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(350);
+    });
+
+    expect(onSearchChange).toHaveBeenCalledTimes(1);
+    expect(onSearchChange).toHaveBeenCalledWith("Lo-fi beats");
+
+    jest.useRealTimers();
+  });
+
+  it("toggles filters when clicking on filter buttons", async () => {
+    const { onFilterChange } = renderHeader();
+
+    const spotifyButton = screen.getByRole("button", { name: "Spotify" });
+    await userEvent.click(spotifyButton);
+
+    expect(onFilterChange).toHaveBeenCalledWith({
+      spotify: false,
+      plex: true,
+      soulseek: true
+    });
+  });
+
+  it("invokes refresh callback", async () => {
+    const { onRefresh } = renderHeader();
+
+    const refreshButton = screen.getByRole("button", { name: /refresh data/i });
+    await userEvent.click(refreshButton);
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes theme toggle callback", async () => {
+    const { onThemeToggle } = renderHeader();
+
+    const themeButton = screen.getByRole("button", { name: /switch to dark mode/i });
+    await userEvent.click(themeButton);
+
+    expect(onThemeToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens notifications", async () => {
+    const { onShowNotifications } = renderHeader();
+
+    const notificationsButton = screen.getByRole("button", { name: /benachrichtigungen anzeigen/i });
+    await userEvent.click(notificationsButton);
+
+    expect(onShowNotifications).toHaveBeenCalledTimes(1);
+  });
+});
+
+// FILE: src/__tests__/ServiceSettings.test.tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ReactNode } from "react";
+
+import { SearchProvider } from "../hooks/useGlobalSearch";
+import SpotifyPage from "../pages/SpotifyPage";
+import type { ServiceFilters } from "../components/AppHeader";
+import settingsService from "../services/settings";
+
+jest.mock("../services/settings", () => {
+  const actual = jest.requireActual("../services/settings");
+  return {
+    __esModule: true,
+    default: {
+      ...actual.default,
+      getSettings: jest.fn(),
+      saveSettings: jest.fn()
+    },
+    defaultSettings: actual.defaultSettings
+  };
+});
+
+jest.mock("../services/spotify", () => {
+  const actual = jest.requireActual("../services/spotify");
+  return {
+    __esModule: true,
+    default: {
+      ...actual.default,
+      getStatus: jest.fn().mockResolvedValue({ connected: true, lastSync: "vor 1h" }),
+      getPlaylists: jest.fn().mockResolvedValue([]),
+      searchTracks: jest.fn().mockResolvedValue([])
+    }
+  };
+});
+
+const filters: ServiceFilters = {
+  spotify: true,
+  plex: true,
+  soulseek: true
+};
+
+const renderWithProviders = (ui: ReactNode) =>
+  render(
+    <SearchProvider value={{ term: "", setTerm: () => undefined }}>
+      {ui}
+    </SearchProvider>
+  );
+
+describe("Service settings", () => {
+  beforeEach(() => {
+    (settingsService.getSettings as jest.Mock).mockResolvedValue({
+      spotifyClientId: "client",
+      spotifyClientSecret: "secret",
+      spotifyRedirectUri: "https://example.com",
+      plexBaseUrl: "https://plex.example.com",
+      plexToken: "token",
+      plexLibrary: "Music",
+      soulseekApiUrl: "https://sls.example.com",
+      soulseekApiKey: "key"
+    });
+    (settingsService.saveSettings as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("switches between overview and settings tabs", async () => {
+    renderWithProviders(<SpotifyPage filters={filters} />);
+
+    await waitFor(() => expect(settingsService.getSettings).toHaveBeenCalled());
+
+    expect(screen.getByRole("heading", { name: /spotify status/i })).toBeInTheDocument();
+
+    const settingsTab = screen.getByRole("tab", { name: /einstellungen/i });
+    await userEvent.click(settingsTab);
+
+    expect(screen.getByRole("heading", { name: /spotify einstellungen/i })).toBeInTheDocument();
+  });
+
+  it("renders settings returned from the api", async () => {
+    renderWithProviders(<SpotifyPage filters={filters} />);
+
+    const clientIdInput = await screen.findByLabelText(/client id/i);
+    expect(clientIdInput).toHaveValue("client");
+    expect(screen.getByLabelText(/client secret/i)).toHaveValue("secret");
+    expect(screen.getByLabelText(/redirect uri/i)).toHaveValue("https://example.com");
+  });
+
+  it("saves updated settings", async () => {
+    renderWithProviders(<SpotifyPage filters={filters} />);
+
+    const clientIdInput = await screen.findByLabelText(/client id/i);
+    await userEvent.clear(clientIdInput);
+    await userEvent.type(clientIdInput, "new-client");
+
+    await userEvent.click(screen.getByRole("button", { name: /einstellungen speichern/i }));
+
+    await waitFor(() => {
+      expect(settingsService.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ spotifyClientId: "new-client" })
+      );
+    });
+  });
+
+  it("shows an error when saving fails", async () => {
+    (settingsService.saveSettings as jest.Mock).mockRejectedValueOnce(new Error("fail"));
+    renderWithProviders(<SpotifyPage filters={filters} />);
+
+    const button = await screen.findByRole("button", { name: /einstellungen speichern/i });
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByText(/fehler beim speichern der einstellungen/i)).toBeInTheDocument();
+    });
+  });
+});
+
+// FILE: src/components/AppHeader.tsx
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Loader2, Search, X, Sun, Moon, Menu, Sparkles, Bell } from "lucide-react";
+
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import Logo from "./Logo";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "./ui/tooltip";
+
+type ServiceFilters = {
+  spotify: boolean;
+  plex: boolean;
+  soulseek: boolean;
+};
+
+interface AppHeaderProps {
+  loading: boolean;
+  onRefresh: () => void;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  filters: ServiceFilters;
+  onFilterChange: (filters: ServiceFilters) => void;
+  isDarkMode: boolean;
+  onThemeToggle: () => void;
+  onGoHome: () => void;
+  onToggleSidebar: () => void;
+  onShowWhatsNew?: () => void;
+  onShowNotifications?: () => void;
+  hasNewFeatures?: boolean;
+}
+
+const SEARCH_DEBOUNCE = 300;
+
+const AppHeader = ({
+  loading,
+  onRefresh,
+  searchTerm,
+  onSearchChange,
+  filters,
+  onFilterChange,
+  isDarkMode,
+  onThemeToggle,
+  onGoHome,
+  onToggleSidebar,
+  onShowWhatsNew,
+  onShowNotifications,
+  hasNewFeatures = false
+}: AppHeaderProps) => {
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
+  const [searching, setSearching] = useState(false);
+
+  const filterButtons = useMemo(
+    () => [
+      {
+        key: "spotify" as const,
+        label: "Spotify",
+        isActive: filters.spotify,
+        activeClass:
+          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+        onClick: () =>
+          onFilterChange({ ...filters, spotify: !filters.spotify }),
+        title: filters.spotify
+          ? "Disable Spotify filter"
+          : "Enable Spotify filter"
+      },
+      {
+        key: "plex" as const,
+        label: "Plex",
+        isActive: filters.plex,
+        activeClass:
+          "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+        onClick: () => onFilterChange({ ...filters, plex: !filters.plex }),
+        title: filters.plex ? "Disable Plex filter" : "Enable Plex filter"
+      },
+      {
+        key: "soulseek" as const,
+        label: "Soulseek",
+        isActive: filters.soulseek,
+        activeClass:
+          "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+        onClick: () =>
+          onFilterChange({ ...filters, soulseek: !filters.soulseek }),
+        title: filters.soulseek
+          ? "Disable Soulseek filter"
+          : "Enable Soulseek filter"
+      }
+    ],
+    [filters, onFilterChange]
+  );
+
+  const searchIcon = useMemo(
+    () =>
+      searching ? (
+        <Loader2 className="h-4 w-4 text-indigo-500 animate-spin" />
+      ) : (
+        <Search className="h-4 w-4 text-gray-400" />
+      ),
+    [searching]
+  );
+
+  const refreshIcon = useMemo(
+    () =>
+      loading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <RefreshCw className="h-5 w-5" />
+      ),
+    [loading]
+  );
+
+  useEffect(() => {
+    if (localSearchTerm !== searchTerm) {
+      setSearching(true);
+      const debounceTimer = window.setTimeout(() => {
+        onSearchChange(localSearchTerm);
+        setSearching(false);
+      }, SEARCH_DEBOUNCE);
+
+      return () => {
+        window.clearTimeout(debounceTimer);
+        setSearching(false);
+      };
+    }
+
+    return undefined;
+  }, [localSearchTerm, searchTerm, onSearchChange]);
+
+  useEffect(() => {
+    setLocalSearchTerm(searchTerm);
+  }, [searchTerm]);
+
+  const inputPadding = localSearchTerm ? "pr-12" : "pr-10";
+
+  return (
+    <TooltipProvider>
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white transition-colors dark:border-slate-800 dark:bg-slate-900">
+        <div className="min-h-16 relative flex flex-col items-center justify-between gap-4 px-4 py-2 sm:px-6 md:flex-row">
+          <div className="flex w-full items-center gap-4 md:w-auto">
+            <button
+              onClick={onToggleSidebar}
+              className="-ml-2 rounded-md p-2 text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-300 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900 md:hidden"
+              aria-label="Open navigation sidebar"
+              type="button"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <button
+              onClick={onGoHome}
+              className="group flex items-center gap-3 text-xl font-bold text-slate-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-slate-200 dark:focus-visible:ring-offset-slate-900"
+              type="button"
+            >
+              <Logo
+                className={`h-10 w-10 text-slate-600 transition-all duration-300 ease-in-out group-hover:rotate-[30deg] dark:text-slate-300 ${
+                  loading ? "animate-spin" : ""
+                }`}
+              />
+              <span className="tracking-tighter">Harmony</span>
+            </button>
+          </div>
+
+          <div className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-2 md:w-auto md:justify-end">
+            <div className="relative w-full md:w-auto">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                {searchIcon}
+              </div>
+              <Input
+                type="text"
+                placeholder="Search tracks, artists, albums..."
+                aria-label="Search tracks, artists and albums"
+                className={`w-full max-w-[36rem] rounded-lg border-gray-300 pl-10 text-sm focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0 dark:border-gray-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-offset-slate-900 ${inputPadding}`}
+                value={localSearchTerm}
+                onChange={(event) => setLocalSearchTerm(event.target.value)}
+              />
+              {localSearchTerm && (
+                <div className="absolute inset-y-0 right-0 flex items-center space-x-2 pr-3">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => {
+                          setLocalSearchTerm("");
+                          onSearchChange("");
+                        }}
+                        className="text-gray-400 transition hover:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-gray-500 dark:hover:text-gray-400 dark:focus-visible:ring-offset-slate-900"
+                        aria-label="Clear search input"
+                        type="button"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Clear search</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {filterButtons.map((filter) => (
+                <Tooltip key={filter.key}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={filter.onClick}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
+                        filter.isActive
+                          ? filter.activeClass
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                      }`}
+                      aria-pressed={filter.isActive}
+                      type="button"
+                    >
+                      {filter.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{filter.title}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="hover:bg-gray-100 dark:hover:bg-gray-800"
+                  aria-label="Refresh data"
+                  type="button"
+                >
+                  {refreshIcon}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {loading ? "Refreshing..." : "Refresh all data"}
+              </TooltipContent>
+            </Tooltip>
+
+            {onShowWhatsNew && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onShowWhatsNew}
+                    className={`relative hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                      hasNewFeatures
+                        ? "text-indigo-600 dark:text-indigo-400 animate-pulse"
+                        : ""
+                    }`}
+                    aria-label={
+                      hasNewFeatures
+                        ? "Open what's new panel"
+                        : "Show latest updates"
+                    }
+                    type="button"
+                  >
+                    <Sparkles className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {hasNewFeatures ? "See what's new!" : "What's new"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {onShowNotifications && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onShowNotifications}
+                    className="hover:bg-gray-100 dark:hover:bg-gray-800"
+                    aria-label="Benachrichtigungen anzeigen"
+                    type="button"
+                  >
+                    <Bell className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Benachrichtigungen</TooltipContent>
+              </Tooltip>
+            )}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onThemeToggle}
+                  className="hover:bg-gray-100 dark:hover:bg-gray-800"
+                  aria-label={
+                    isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+                  }
+                  type="button"
+                >
+                  {isDarkMode ? (
+                    <Sun className="h-5 w-5" />
+                  ) : (
+                    <Moon className="h-5 w-5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </header>
+    </TooltipProvider>
+  );
+};
+
+export type { AppHeaderProps, ServiceFilters };
+export default AppHeader;
+
+// FILE: src/components/DarkModeToggle.tsx
+import { useEffect, useState } from "react";
+import { MoonStar, Sun } from "lucide-react";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
+
+type Theme = "light" | "dark";
+
+const THEME_STORAGE_KEY = "theme";
+
+const getStoredTheme = (): Theme => {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === "dark" || stored === "light" ? stored : "light";
+};
+
+const applyTheme = (theme: Theme) => {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const root = document.documentElement;
+  root.classList.toggle("dark", theme === "dark");
+  root.style.setProperty("color-scheme", theme);
+};
+
+const DarkModeToggle = () => {
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "light" ? "dark" : "light"));
+  };
+
+  const isDark = theme === "dark";
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      aria-pressed={isDark}
+      aria-label={isDark ? "Dark Mode aktiv" : "Light Mode aktiv"}
+      className="relative text-navbar-foreground"
+    >
+      <Sun
+        className={cn(
+          "h-5 w-5 transition-all",
+          isDark ? "rotate-90 scale-0" : "rotate-0 scale-100"
+        )}
+      />
+      <MoonStar
+        className={cn(
+          "absolute h-5 w-5 transition-all",
+          isDark ? "rotate-0 scale-100" : "rotate-90 scale-0"
+        )}
+      />
+      <span className="sr-only">Farbschema wechseln</span>
+    </Button>
+  );
+};
+
+export default DarkModeToggle;
+
+// FILE: src/components/Layout.tsx
+import { ReactNode } from "react";
+import { Outlet } from "react-router-dom";
+import * as Dialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+
+import Sidebar from "./Sidebar";
+import { Button } from "./ui/button";
+
+interface LayoutProps {
+  header: ReactNode;
+  isSidebarOpen: boolean;
+  onSidebarOpenChange: (open: boolean) => void;
+}
+
+const Layout = ({ header, isSidebarOpen, onSidebarOpenChange }: LayoutProps) => {
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="sticky top-0 z-50">{header}</div>
+
+      <Dialog.Root open={isSidebarOpen} onOpenChange={onSidebarOpenChange}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
+          <Dialog.Content className="radix-side-drawer fixed inset-y-0 left-0 z-50 w-72 border-r border-border/60 bg-sidebar p-4 text-sidebar-foreground shadow-xl data-[state=open]:animate-drawer-in data-[state=closed]:animate-drawer-out">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Navigation</h2>
+              <Dialog.Close asChild>
+                <Button variant="ghost" size="icon">
+                  <X className="h-5 w-5" />
+                  <span className="sr-only">Close navigation</span>
+                </Button>
+              </Dialog.Close>
+            </div>
+            <Sidebar onNavigate={() => onSidebarOpenChange(false)} />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <div className="flex">
+        <aside className="fixed inset-y-0 left-0 hidden w-64 flex-shrink-0 border-r border-border/60 bg-sidebar/90 backdrop-blur md:block">
+          <Sidebar />
+        </aside>
+        <main className="flex-1 px-4 pb-8 pt-6 md:ml-64 md:px-10">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default Layout;
+
+// FILE: src/components/Logo.tsx
+import { memo } from "react";
+
+import { cn } from "../lib/utils";
+
+interface LogoProps {
+  className?: string;
+}
+
+const Logo = memo(({ className }: LogoProps) => (
+  <svg
+    role="img"
+    aria-label="Harmony logo"
+    viewBox="0 0 64 64"
+    className={cn("text-indigo-600", className)}
+  >
+    <defs>
+      <linearGradient id="harmonyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="currentColor" stopOpacity="0.9" />
+        <stop offset="100%" stopColor="currentColor" stopOpacity="0.6" />
+      </linearGradient>
+    </defs>
+    <circle cx="32" cy="32" r="30" fill="url(#harmonyGradient)" opacity="0.2" />
+    <path
+      d="M18 20c0-2.21 1.79-4 4-4h4c2.21 0 4 1.79 4 4v16.3c0 3.52 2.85 6.37 6.37 6.37h5.26c3.52 0 6.37-2.85 6.37-6.37 0-3.51-2.85-6.36-6.37-6.36h-3.26"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="26" cy="44" r="4" fill="currentColor" />
+    <circle cx="44" cy="44" r="4" fill="currentColor" />
+  </svg>
+));
+Logo.displayName = "Logo";
+
+export default Logo;
+
+// FILE: src/components/Navbar.tsx
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Menu, X } from "lucide-react";
+import Sidebar from "./Sidebar";
+import { Button } from "./ui/button";
+import DarkModeToggle from "./DarkModeToggle";
+
+const Navbar = () => {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-navbar/90 backdrop-blur">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 text-navbar-foreground md:px-8">
+        <div className="flex items-center gap-3">
+          <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
+            <Dialog.Trigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Open navigation</span>
+              </Button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-background/80 backdrop-blur-sm data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
+              <Dialog.Content className="radix-side-drawer fixed inset-y-0 left-0 z-50 w-72 border-r border-border/60 bg-sidebar p-4 text-sidebar-foreground shadow-xl data-[state=open]:animate-drawer-in data-[state=closed]:animate-drawer-out">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Navigation</h2>
+                  <Dialog.Close asChild>
+                    <Button variant="ghost" size="icon">
+                      <X className="h-5 w-5" />
+                      <span className="sr-only">Close navigation</span>
+                    </Button>
+                  </Dialog.Close>
+                </div>
+                <Sidebar onNavigate={() => setMobileOpen(false)} />
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+          <Link to="/dashboard" className="text-xl font-semibold tracking-tight">
+            Harmony
+          </Link>
+        </div>
+        <div className="flex items-center gap-3">
+          <DarkModeToggle />
+          <div className="hidden text-sm font-medium text-muted-foreground md:block">
+            Willkommen zurück, User
+          </div>
+          <Button variant="outline" className="border-border/80 text-navbar-foreground">
+            User Menü
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Navbar;
+
+// FILE: src/components/Sidebar.tsx
+import { NavLink } from "react-router-dom";
+import { LayoutDashboard, Music, Radio, Share2, Shuffle, Settings, Disc } from "lucide-react";
+import { cn } from "../lib/utils";
+
+const navItems = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/spotify", label: "Spotify", icon: Music },
+  { to: "/plex", label: "Plex", icon: Share2 },
+  { to: "/soulseek", label: "Soulseek", icon: Radio },
+  { to: "/beets", label: "Beets", icon: Disc },
+  { to: "/matching", label: "Matching", icon: Shuffle },
+  { to: "/settings", label: "Settings", icon: Settings }
+];
+
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+const Sidebar = ({ onNavigate }: SidebarProps) => {
+  return (
+    <nav className="flex h-full flex-col gap-1 bg-sidebar/50 p-4 text-sidebar-muted">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                isActive
+                  ? "bg-sidebar-accent/15 text-sidebar-accent-foreground"
+                  : "text-sidebar-muted hover:bg-sidebar-accent/10 hover:text-sidebar-foreground"
+              )
+            }
+            onClick={onNavigate}
+          >
+            <Icon className="h-4 w-4" />
+            {item.label}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+};
+
+export default Sidebar;
+export { navItems };
+
+// FILE: src/components/__tests__/DarkModeToggle.test.tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import DarkModeToggle from "../DarkModeToggle";
+
+describe("DarkModeToggle", () => {
+  beforeEach(() => {
+    document.documentElement.classList.remove("dark");
+    document.documentElement.style.removeProperty("color-scheme");
+    window.localStorage.clear();
+  });
+
+  it("renders the toggle button with light mode active by default", () => {
+    render(<DarkModeToggle />);
+
+    const button = screen.getByRole("button", { name: /light mode aktiv/i });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(document.documentElement.style.getPropertyValue("color-scheme")).toBe("light");
+  });
+
+  it("toggles the theme and persists the choice", async () => {
+    const user = userEvent.setup();
+    render(<DarkModeToggle />);
+
+    const button = screen.getByRole("button", { name: /light mode aktiv/i });
+    await user.click(button);
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.style.getPropertyValue("color-scheme")).toBe("dark");
+    expect(window.localStorage.getItem("theme")).toBe("dark");
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(button).toHaveAttribute("aria-label", "Dark Mode aktiv");
+  });
+
+  it("initialises with a stored dark theme", () => {
+    window.localStorage.setItem("theme", "dark");
+    render(<DarkModeToggle />);
+
+    const button = screen.getByRole("button", { name: /dark mode aktiv/i });
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.style.getPropertyValue("color-scheme")).toBe("dark");
+    expect(button).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+// FILE: src/components/ui/badge.tsx
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../lib/utils";
+
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-indigo-600 text-white hover:bg-indigo-700",
+        secondary: "border-transparent bg-muted text-muted-foreground",
+        outline: "text-foreground"
+      }
+    },
+    defaultVariants: {
+      variant: "default"
+    }
+  }
+);
+
+export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
+
+const Badge = ({ className, variant, ...props }: BadgeProps) => {
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+};
+
+Badge.displayName = "Badge";
+
+export { Badge, badgeVariants };
+
+// FILE: src/components/ui/button.tsx
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../lib/utils";
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "border border-border bg-transparent text-foreground hover:bg-muted/60",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "text-foreground hover:bg-muted/60",
+        link: "text-primary underline-offset-4 hover:underline"
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-5",
+        icon: "h-10 w-10"
+      }
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default"
+    }
+  }
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    );
+  }
+);
+Button.displayName = "Button";
+
+export { Button, buttonVariants };
+
+// FILE: src/components/ui/card.tsx
+import * as React from "react";
+import { cn } from "../../lib/utils";
+
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("rounded-lg border border-border/60 bg-card p-6 text-card-foreground shadow-sm", className)}
+      {...props}
+    />
+  )
+);
+Card.displayName = "Card";
+
+const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("mb-4 flex flex-col gap-1", className)} {...props} />
+  )
+);
+CardHeader.displayName = "CardHeader";
+
+const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
+  ({ className, ...props }, ref) => (
+    <h3 ref={ref} className={cn("text-lg font-semibold", className)} {...props} />
+  )
+);
+CardTitle.displayName = "CardTitle";
+
+const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <p ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  )
+);
+CardDescription.displayName = "CardDescription";
+
+const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  )
+);
+CardContent.displayName = "CardContent";
+
+export { Card, CardHeader, CardTitle, CardDescription, CardContent };
+
+// FILE: src/components/ui/input.tsx
+import * as React from "react";
+import { cn } from "../../lib/utils";
+
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    );
+  }
+);
+Input.displayName = "Input";
+
+export { Input };
+
+// FILE: src/components/ui/label.tsx
+import * as React from "react";
+import { cn } from "../../lib/utils";
+
+const Label = React.forwardRef<HTMLLabelElement, React.LabelHTMLAttributes<HTMLLabelElement>>(
+  ({ className, ...props }, ref) => (
+    <label
+      ref={ref}
+      className={cn("text-sm font-medium text-foreground", className)}
+      {...props}
+    />
+  )
+);
+Label.displayName = "Label";
+
+export { Label };
+
+// FILE: src/components/ui/switch.tsx
+import * as React from "react";
+import * as SwitchPrimitives from "@radix-ui/react-switch";
+import { cn } from "../../lib/utils";
+
+const Switch = React.forwardRef<
+  React.ElementRef<typeof SwitchPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
+>(({ className, ...props }, ref) => (
+  <SwitchPrimitives.Root
+    className={cn(
+      "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=checked]:bg-primary",
+      className
+    )}
+    {...props}
+    ref={ref}
+  >
+    <SwitchPrimitives.Thumb className="pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0" />
+  </SwitchPrimitives.Root>
+));
+Switch.displayName = SwitchPrimitives.Root.displayName;
+
+export { Switch };
+
+// FILE: src/components/ui/table.tsx
+import * as React from "react";
+import * as TablePrimitive from "@radix-ui/react-table";
+import { cn } from "../../lib/utils";
+
+const Table = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.Root
+    ref={ref}
+    className={cn("w-full caption-bottom overflow-hidden rounded-lg border border-border/60 bg-card text-sm text-card-foreground", className)}
+    {...props}
+  />
+));
+Table.displayName = "Table";
+
+const TableHeader = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.Header>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.Header>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.Header
+    ref={ref}
+    className={cn("bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground", className)}
+    {...props}
+  />
+));
+TableHeader.displayName = "TableHeader";
+
+const TableRow = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.Row>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.Row>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.Row
+    ref={ref}
+    className={cn(
+      "border-b border-border/40 transition hover:bg-muted/40 data-[state=selected]:bg-muted/40 last:border-0",
+      className
+    )}
+    {...props}
+  />
+));
+TableRow.displayName = "TableRow";
+
+const TableHead = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.ColumnHeaderCell>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.ColumnHeaderCell>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.ColumnHeaderCell
+    ref={ref}
+    className={cn("px-4 py-3 font-medium", className)}
+    {...props}
+  />
+));
+TableHead.displayName = "TableHead";
+
+const TableBody = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.Body>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.Body>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.Body ref={ref} className={cn("divide-y divide-border/40", className)} {...props} />
+));
+TableBody.displayName = "TableBody";
+
+const TableCell = React.forwardRef<
+  React.ElementRef<typeof TablePrimitive.Cell>,
+  React.ComponentPropsWithoutRef<typeof TablePrimitive.Cell>
+>(({ className, ...props }, ref) => (
+  <TablePrimitive.Cell ref={ref} className={cn("px-4 py-3", className)} {...props} />
+));
+TableCell.displayName = "TableCell";
+
+export { Table, TableHeader, TableRow, TableHead, TableBody, TableCell };
+
+// FILE: src/components/ui/tabs.tsx
+import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { cn } from "../../lib/utils";
+
+const Tabs = TabsPrimitive.Root;
+
+const TabsList = ({ className, ...props }: TabsPrimitive.TabsListProps) => (
+  <TabsPrimitive.List
+    className={cn(
+      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      className
+    )}
+    {...props}
+  />
+);
+
+TabsList.displayName = TabsPrimitive.List.displayName;
+
+const TabsTrigger = ({ className, ...props }: TabsPrimitive.TabsTriggerProps) => (
+  <TabsPrimitive.Trigger
+    className={cn(
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "disabled:pointer-events-none disabled:opacity-50",
+      "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+      className
+    )}
+    {...props}
+  />
+);
+
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
+
+const TabsContent = ({ className, ...props }: TabsPrimitive.TabsContentProps) => (
+  <TabsPrimitive.Content
+    className={cn(
+      "mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      className
+    )}
+    {...props}
+  />
+);
+
+TabsContent.displayName = TabsPrimitive.Content.displayName;
+
+export { Tabs, TabsList, TabsTrigger, TabsContent };
+
+// FILE: src/components/ui/toast.tsx
+import { cva, type VariantProps } from "class-variance-authority";
+import { X } from "lucide-react";
+import * as React from "react";
+import * as ToastPrimitives from "@radix-ui/react-toast";
+import { cn } from "../../lib/utils";
+
+const ToastProvider = ToastPrimitives.Provider;
+const ToastViewport = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Viewport>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Viewport
+    ref={ref}
+    className={cn(
+      "fixed top-20 right-4 z-[100] flex max-h-screen w-full max-w-sm flex-col gap-3 p-4 md:right-8",
+      className
+    )}
+    {...props}
+  />
+));
+ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
+
+const toastVariants = cva(
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-lg border border-border/60 bg-card/95 p-4 text-sm text-card-foreground shadow-lg transition-all backdrop-blur",
+  {
+    variants: {
+      variant: {
+        default: "",
+        destructive: "border-destructive/60 bg-destructive/15 text-destructive-foreground"
+      }
+    },
+    defaultVariants: {
+      variant: "default"
+    }
+  }
+);
+
+const Toast = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
+    VariantProps<typeof toastVariants>
+>(({ className, variant, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(
+        toastVariants({ variant }),
+        "data-[state=open]:animate-toast-show data-[state=closed]:animate-toast-hide",
+        className
+      )}
+      {...props}
+    />
+  );
+});
+Toast.displayName = ToastPrimitives.Root.displayName;
+
+const ToastTitle = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Title>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Title ref={ref} className={cn("text-sm font-semibold", className)} {...props} />
+));
+ToastTitle.displayName = ToastPrimitives.Title.displayName;
+
+const ToastDescription = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Description>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+));
+ToastDescription.displayName = ToastPrimitives.Description.displayName;
+
+const ToastClose = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Close>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Close
+    ref={ref}
+    className={cn(
+      "absolute top-3 right-3 rounded-md p-1 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground",
+      className
+    )}
+    toast-close=""
+    {...props}
+  >
+    <X className="h-4 w-4" />
+  </ToastPrimitives.Close>
+));
+ToastClose.displayName = ToastPrimitives.Close.displayName;
+
+const ToastAction = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Action>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Action ref={ref} className={cn("ml-auto", className)} {...props} />
+));
+ToastAction.displayName = ToastPrimitives.Action.displayName;
+
+export {
+  ToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
+  ToastAction
+};
+
+// FILE: src/components/ui/toaster.tsx
+import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "./toast";
+import { useToast } from "./use-toast";
+
+export function Toaster() {
+  const { toasts } = useToast();
+
+  return (
+    <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, ...props }) {
+        return (
+          <Toast key={id} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && <ToastDescription>{description}</ToastDescription>}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        );
+      })}
+      <ToastViewport />
+    </ToastProvider>
+  );
+}
+
+export { useToast };
+
+// FILE: src/components/ui/tooltip.tsx
+import * as React from "react";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+
+import { cn } from "../../lib/utils";
+
+const TooltipProvider = TooltipPrimitive.Provider;
+const Tooltip = TooltipPrimitive.Root;
+const TooltipTrigger = TooltipPrimitive.Trigger;
+const TooltipContent = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <TooltipPrimitive.Content
+    ref={ref}
+    sideOffset={sideOffset}
+    className={cn(
+      "z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
+      className
+    )}
+    {...props}
+  />
+));
+TooltipContent.displayName = TooltipPrimitive.Content.displayName;
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+
+// FILE: src/components/ui/use-toast.ts
+import * as React from "react";
+
+const TOAST_LIMIT = 1;
+const TOAST_REMOVE_DELAY = 1000;
+
+type ToasterToast = {
+  id: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: React.ReactNode;
+  duration?: number;
+  type?: "foreground" | "background";
+  open?: boolean;
+};
+
+type Toast = Omit<ToasterToast, "id">;
+
+type ToastAction =
+  | { type: "ADD_TOAST"; toast: ToasterToast }
+  | { type: "UPDATE_TOAST"; toast: Partial<ToasterToast> & { id: string } }
+  | { type: "DISMISS_TOAST"; toastId?: string }
+  | { type: "REMOVE_TOAST"; toastId?: string };
+
+let count = 0;
+
+function genId() {
+  count = (count + 1) % Number.MAX_SAFE_INTEGER;
+  return count.toString();
+}
+
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+const addToRemoveQueue = (toastId: string) => {
+  if (toastTimeouts.has(toastId)) {
+    return;
+  }
+
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId);
+    dispatch({ type: "REMOVE_TOAST", toastId });
+  }, TOAST_REMOVE_DELAY);
+
+  toastTimeouts.set(toastId, timeout);
+};
+
+const reducer = (state: ToasterToast[], action: ToastAction): ToasterToast[] => {
+  switch (action.type) {
+    case "ADD_TOAST":
+      return [action.toast, ...state].slice(0, TOAST_LIMIT);
+
+    case "UPDATE_TOAST":
+      return state.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t));
+
+    case "DISMISS_TOAST": {
+      const { toastId } = action;
+
+      if (toastId) {
+        addToRemoveQueue(toastId);
+      } else {
+        state.forEach((toast) => {
+          addToRemoveQueue(toast.id);
+        });
+      }
+
+      return state.map((toast) =>
+        toast.id === toastId || toastId === undefined
+          ? {
+              ...toast,
+              open: false
+            }
+          : toast
+      );
+    }
+
+    case "REMOVE_TOAST":
+      if (action.toastId === undefined) {
+        return [];
+      }
+      return state.filter((toast) => toast.id !== action.toastId);
+  }
+};
+
+const listeners: Array<(state: ToasterToast[]) => void> = [];
+
+let memoryState: ToasterToast[] = [];
+
+function dispatch(action: ToastAction) {
+  memoryState = reducer(memoryState, action);
+  listeners.forEach((listener) => listener(memoryState));
+}
+
+export function useToast() {
+  const [state, setState] = React.useState<ToasterToast[]>(memoryState);
+
+  React.useEffect(() => {
+    listeners.push(setState);
+    return () => {
+      const index = listeners.indexOf(setState);
+      if (index > -1) listeners.splice(index, 1);
+    };
+  }, []);
+
+  return {
+    toasts: state,
+    toast: ({ ...props }: Toast) => {
+      const id = genId();
+
+      const update = (props: ToasterToast) =>
+        dispatch({
+          type: "UPDATE_TOAST",
+          toast: { ...props, id }
+        });
+
+      const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
+
+      dispatch({
+        type: "ADD_TOAST",
+        toast: {
+          ...props,
+          id
+        }
+      });
+
+      return {
+        id,
+        dismiss,
+        update
+      };
+    },
+    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId })
+  };
+}
+
+export type { Toast };
+
+// FILE: src/hooks/useDebouncedValue.ts
+import { useEffect, useState } from "react";
+
+const useDebouncedValue = <T,>(value: T, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
+export default useDebouncedValue;
+
+// FILE: src/hooks/useEventSource.ts
+import { useEffect, useRef } from "react";
+
+type EventSourceHandler<T> = (data: T) => void;
+
+type Options = {
+  event?: string;
+  enabled?: boolean;
+};
+
+const useEventSource = <T,>(url: string, handler: EventSourceHandler<T>, options: Options = {}) => {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || options.enabled === false) {
+      return undefined;
+    }
+
+    const source = new EventSource(url, { withCredentials: false });
+    const listener = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data) as T;
+        handlerRef.current(payload);
+      } catch (error) {
+        console.error("Failed to parse event source payload", error);
+      }
+    };
+
+    if (options.event) {
+      source.addEventListener(options.event, listener);
+    } else {
+      source.onmessage = listener;
+    }
+
+    source.onerror = (error) => {
+      console.error("EventSource error", error);
+    };
+
+    return () => {
+      if (options.event) {
+        source.removeEventListener(options.event, listener);
+      }
+      source.close();
+    };
+  }, [url, options.enabled, options.event]);
+};
+
+export default useEventSource;
+
+// FILE: src/hooks/useGlobalSearch.tsx
+import { createContext, useContext } from "react";
+
+type SearchContextValue = {
+  term: string;
+  setTerm: (term: string) => void;
+};
+
+const SearchContext = createContext<SearchContextValue | undefined>(undefined);
+
+const SearchProvider = SearchContext.Provider;
+
+const useGlobalSearch = () => {
+  const context = useContext(SearchContext);
+  if (!context) {
+    throw new Error("useGlobalSearch must be used within a SearchProvider");
+  }
+  return context;
+};
+
+export { SearchContext, SearchProvider, useGlobalSearch };
+
+// FILE: src/hooks/useTheme.ts
+import { useCallback, useEffect, useState } from "react";
+
+type Theme = "light" | "dark";
+
+const STORAGE_KEY = "theme";
+
+const getPreferredTheme = (): Theme => {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
+  if (stored === "light" || stored === "dark") {
+    return stored;
+  }
+
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  return prefersDark ? "dark" : "light";
+};
+
+const applyTheme = (theme: Theme) => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const root = document.documentElement;
+  root.classList.toggle("dark", theme === "dark");
+  root.style.setProperty("color-scheme", theme);
+};
+
+const useTheme = () => {
+  const [theme, setTheme] = useState<Theme>(() => getPreferredTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, theme);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const listener = (event: MediaQueryListEvent) => {
+      setTheme(event.matches ? "dark" : "light");
+    };
+    mediaQuery.addEventListener("change", listener);
+    return () => mediaQuery.removeEventListener("change", listener);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => (current === "light" ? "dark" : "light"));
+  }, []);
+
+  return { theme, setTheme, toggleTheme };
+};
+
+export type { Theme };
+export default useTheme;
+
+// FILE: src/index.css
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+@import "tw-animate-css";
+
+/* Custom theme tokens */
+:root {
+  color-scheme: light;
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --muted: 217 16% 90%;
+  --muted-foreground: 215 16% 40%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 198 94% 94%;
+  --secondary: 217 16% 90%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 199 89% 48%;
+  --accent-foreground: 198 94% 94%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --sidebar-background: 222 47% 16%;
+  --sidebar-foreground: 213 31% 91%;
+  --sidebar-muted: 225 19% 70%;
+  --sidebar-accent: 199 89% 48%;
+  --sidebar-accent-foreground: 222 47% 12%;
+  --navbar-background: 210 40% 98%;
+  --navbar-foreground: 222 47% 11%;
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.375rem;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --muted: 217 16% 24%;
+  --muted-foreground: 215 16% 65%;
+  --card: 223 47% 16%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 14%;
+  --popover-foreground: 210 40% 98%;
+  --border: 215 27% 26%;
+  --input: 215 27% 26%;
+  --primary: 199 89% 70%;
+  --primary-foreground: 222 47% 12%;
+  --secondary: 217 16% 24%;
+  --secondary-foreground: 210 40% 98%;
+  --accent: 199 89% 70%;
+  --accent-foreground: 222 47% 12%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 98%;
+  --sidebar-background: 222 47% 8%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-muted: 222 14% 24%;
+  --sidebar-accent: 199 89% 70%;
+  --sidebar-accent-foreground: 222 47% 12%;
+  --navbar-background: 222 47% 10%;
+  --navbar-foreground: 210 40% 98%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .radix-side-drawer[data-state="open"] {
+    animation: drawer-in 0.3s ease-out forwards;
+  }
+
+  .radix-side-drawer[data-state="closed"] {
+    animation: drawer-out 0.2s ease-in forwards;
+  }
+}
+
+@layer utilities {
+  @keyframes drawer-in {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes drawer-out {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(-10%);
+      opacity: 0;
+    }
+  }
+}
+
+// FILE: src/lib/utils.ts
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+// FILE: src/main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// FILE: src/pages/BeetsPage.tsx
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+
+const BeetsPage = () => {
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Beets</h1>
+        <p className="text-sm text-muted-foreground">
+          Integration für Beets-Sammlungen. Weitere Funktionen folgen in einem späteren Update.
+        </p>
+      </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>In Arbeit</CardTitle>
+          <CardDescription>Die Beets-Verwaltung wird aktuell vorbereitet.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Sobald die API verfügbar ist, erscheinen hier Synchronisationsdetails und Import-Werkzeuge für Beets.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default BeetsPage;
+
+// FILE: src/pages/DashboardPage.tsx
+import { useEffect, useMemo, useState, type JSX } from "react";
+import { AlertTriangle, CheckCircle2, Loader2, Server, Clock } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import dashboardService, {
+  DashboardOverview,
+  HarmonyServiceStatus,
+  JobEntry,
+  defaultOverview
+} from "../services/dashboard";
+import type { ServiceFilters } from "../components/AppHeader";
+
+const statusClasses: Record<HarmonyServiceStatus["status"], string> = {
+  connected: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+  error: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
+  warning: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+};
+
+const statusIcons: Record<HarmonyServiceStatus["status"], JSX.Element> = {
+  connected: <CheckCircle2 className="h-4 w-4" />, 
+  error: <AlertTriangle className="h-4 w-4" />, 
+  warning: <AlertTriangle className="h-4 w-4" />
+};
+
+interface DashboardPageProps {
+  filters: ServiceFilters;
+}
+
+const DashboardPage = ({ filters }: DashboardPageProps) => {
+  const [overview, setOverview] = useState<DashboardOverview>(defaultOverview);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await dashboardService.getOverview();
+        if (active) {
+          setOverview(data);
+        }
+      } catch (err) {
+        if (active) {
+          console.error(err);
+          setError("Dashboarddaten konnten nicht geladen werden.");
+          setOverview(defaultOverview);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visibleServices = useMemo(() => {
+    const enabledKeys = new Set(
+      Object.entries(filters)
+        .filter(([, value]) => value)
+        .map(([key]) => key.toLowerCase())
+    );
+
+    return overview.services.filter((service) => {
+      if (!enabledKeys.size) return true;
+      const key = service.name.toLowerCase();
+      if (enabledKeys.has(key)) return true;
+      if (key === "beets") {
+        return true;
+      }
+      return enabledKeys.has("spotify") || enabledKeys.has("plex") || enabledKeys.has("soulseek");
+    });
+  }, [filters, overview.services]);
+
+  const visibleJobs = useMemo(() => {
+    const enabledKeys = new Set(
+      Object.entries(filters)
+        .filter(([, value]) => value)
+        .map(([key]) => key.toLowerCase())
+    );
+    if (!enabledKeys.size) {
+      return overview.jobs;
+    }
+    return overview.jobs.filter((job) => enabledKeys.has(job.service.toLowerCase()));
+  }, [filters, overview.jobs]);
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">
+          Überblick über Systemzustand, verbundene Dienste und laufende Jobs deiner Harmony-Installation.
+        </p>
+      </header>
+
+      {error && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex items-center gap-3 py-4 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            {error}
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          <TabsTrigger value="jobs">Jobs & Downloads</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          {loading ? (
+            <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-16 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Daten werden geladen …
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              <Card className="xl:col-span-1">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Server className="h-4 w-4" /> System Information
+                  </CardTitle>
+                  <CardDescription>
+                    Kennzahlen zum Backend und angeschlossenen Komponenten.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Backend Version</span>
+                    <span className="font-medium">{overview.system.backendVersion}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Database</span>
+                    <Badge variant="secondary">{overview.system.databaseStatus}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Worker</span>
+                    <Badge variant="secondary">{overview.system.workerStatus}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Uptime</span>
+                    <span className="font-medium">{overview.system.uptime}</span>
+                  </div>
+                  {overview.system.hostname && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Host</span>
+                      <span className="font-medium">{overview.system.hostname}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="xl:col-span-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CheckCircle2 className="h-4 w-4" /> Services
+                  </CardTitle>
+                  <CardDescription>
+                    Verbindungsstatus aller integrierten Musikdienste.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {visibleServices.length ? (
+                      visibleServices.map((service) => (
+                        <div
+                          key={service.name}
+                          className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-3"
+                        >
+                          <div>
+                            <p className="font-medium leading-none">{service.name}</p>
+                            {service.description && (
+                              <p className="mt-1 text-xs text-muted-foreground">{service.description}</p>
+                            )}
+                          </div>
+                          <Badge className={`flex items-center gap-1 ${statusClasses[service.status]}`}>
+                            {statusIcons[service.status]}
+                            <span className="capitalize">{service.status}</span>
+                          </Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="col-span-full rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+                        Keine Dienste für die aktuelle Filterauswahl sichtbar.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="jobs">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Clock className="h-4 w-4" /> Jobs & Downloads
+              </CardTitle>
+              <CardDescription>
+                Letzte Aktivitäten aus Spotify, Plex, Soulseek und Beets.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Daten werden geladen …
+                </div>
+              ) : visibleJobs.length ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[160px]">Job</TableHead>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[160px]">Fortschritt</TableHead>
+                        <TableHead className="text-right">Zuletzt aktualisiert</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleJobs.map((job: JobEntry) => (
+                        <TableRow key={job.id}>
+                          <TableCell className="font-medium">{job.name}</TableCell>
+                          <TableCell>{job.service}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {job.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all"
+                                  style={{ width: `${Math.min(100, Math.max(0, job.progress))}%` }}
+                                />
+                              </div>
+                              <span className="w-10 text-xs text-muted-foreground">{Math.round(job.progress)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">{job.updatedAt}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+                  Keine aktuellen Jobs vorhanden.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default DashboardPage;
+
+// FILE: src/pages/Matching.tsx
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useToast } from "../components/ui/use-toast";
+import matchingService, { MatchingSummary } from "../services/matching";
+
+const Matching = () => {
+  const { toast } = useToast();
+  const [spotifyToPlex, setSpotifyToPlex] = useState<MatchingSummary | null>(null);
+  const [spotifyToSoulseek, setSpotifyToSoulseek] = useState<MatchingSummary | null>(null);
+  const [loading, setLoading] = useState<"plex" | "soulseek" | null>(null);
+
+  const handleMatch = async (type: "plex" | "soulseek") => {
+    try {
+      setLoading(type);
+      if (type === "plex") {
+        const result = await matchingService.matchSpotifyToPlex();
+        setSpotifyToPlex(result);
+        toast({ title: "Matching gestartet", description: "Spotify ↔ Plex abgeglichen" });
+      } else {
+        const result = await matchingService.matchSpotifyToSoulseek();
+        setSpotifyToSoulseek(result);
+        toast({ title: "Matching gestartet", description: "Spotify ↔ Soulseek abgeglichen" });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Matching fehlgeschlagen",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold">Matching</h1>
+        <p className="text-sm text-muted-foreground">
+          Starte Abgleiche zwischen Spotify, Plex und Soulseek, um fehlende Inhalte schnell zu finden.
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Automatisierte Abgleiche</CardTitle>
+          <CardDescription>Starte Matching-Läufe und verfolge die Ergebnisse.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-border p-4">
+            <h3 className="text-lg font-semibold">Spotify → Plex</h3>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Vergleicht deine Spotify-Playlists mit der Plex-Bibliothek.
+            </p>
+            <Button onClick={() => void handleMatch("plex")} disabled={loading !== null}>
+              {loading === "plex" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Matching starten
+            </Button>
+            {spotifyToPlex && (
+              <div className="mt-4 space-y-1 text-sm">
+                <p className="font-medium">Ergebnis</p>
+                <p>Gefunden: {spotifyToPlex.matched}</p>
+                <p>Fehlend: {spotifyToPlex.missing}</p>
+                {spotifyToPlex.lastRun ? <p>Letzter Lauf: {new Date(spotifyToPlex.lastRun).toLocaleString()}</p> : null}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border p-4">
+            <h3 className="text-lg font-semibold">Spotify → Soulseek</h3>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Prüft, welche Tracks in Soulseek verfügbar sind.
+            </p>
+            <Button onClick={() => void handleMatch("soulseek")} disabled={loading !== null}>
+              {loading === "soulseek" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Matching starten
+            </Button>
+            {spotifyToSoulseek && (
+              <div className="mt-4 space-y-1 text-sm">
+                <p className="font-medium">Ergebnis</p>
+                <p>Gefunden: {spotifyToSoulseek.matched}</p>
+                <p>Fehlend: {spotifyToSoulseek.missing}</p>
+                {spotifyToSoulseek.lastRun ? (
+                  <p>Letzter Lauf: {new Date(spotifyToSoulseek.lastRun).toLocaleString()}</p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Letzte Ergebnisse</CardTitle>
+          <CardDescription>Zusammenfassung der letzten Matching-Läufe.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Job</TableHead>
+                <TableHead>Gefunden</TableHead>
+                <TableHead>Fehlend</TableHead>
+                <TableHead>Zuletzt</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Spotify → Plex</TableCell>
+                <TableCell>{spotifyToPlex?.matched ?? "—"}</TableCell>
+                <TableCell>{spotifyToPlex?.missing ?? "—"}</TableCell>
+                <TableCell>
+                  {spotifyToPlex?.lastRun ? new Date(spotifyToPlex.lastRun).toLocaleString() : "—"}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Spotify → Soulseek</TableCell>
+                <TableCell>{spotifyToSoulseek?.matched ?? "—"}</TableCell>
+                <TableCell>{spotifyToSoulseek?.missing ?? "—"}</TableCell>
+                <TableCell>
+                  {spotifyToSoulseek?.lastRun ? new Date(spotifyToSoulseek.lastRun).toLocaleString() : "—"}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default Matching;
+
+// FILE: src/pages/PlexPage.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Album, Disc3, Library, Loader2, Settings2 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { useToast } from "../components/ui/use-toast";
+import { useGlobalSearch } from "../hooks/useGlobalSearch";
+import plexService, { PlexAlbum, PlexArtist, PlexStatus, PlexTrack } from "../services/plex";
+import settingsService, { defaultSettings, type SettingsPayload } from "../services/settings";
+import type { ServiceFilters } from "../components/AppHeader";
+
+interface PlexPageProps {
+  filters: ServiceFilters;
+}
+
+const PlexPage = ({ filters }: PlexPageProps) => {
+  const { toast } = useToast();
+  const { term } = useGlobalSearch();
+  const [status, setStatus] = useState<PlexStatus | null>(null);
+  const [artists, setArtists] = useState<PlexArtist[]>([]);
+  const [albums, setAlbums] = useState<PlexAlbum[]>([]);
+  const [tracks, setTracks] = useState<PlexTrack[]>([]);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [settings, setSettings] = useState<SettingsPayload>(defaultSettings);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const loadOverview = useCallback(async () => {
+    if (!filters.plex) return;
+    try {
+      setOverviewLoading(true);
+      const [loadedStatus, loadedArtists, loadedAlbums, loadedTracks] = await Promise.all([
+        plexService.getStatus(),
+        plexService.getArtists(),
+        plexService.getAlbums(),
+        plexService.getTracks()
+      ]);
+      setStatus(loadedStatus);
+      setArtists(loadedArtists);
+      setAlbums(loadedAlbums);
+      setTracks(loadedTracks);
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Plex konnte nicht geladen werden",
+        description: "Bibliothek und Status stehen aktuell nicht zur Verfügung.",
+        variant: "destructive"
+      });
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [filters.plex, toast]);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async () => {
+      try {
+        setSettingsLoading(true);
+        const loaded = await settingsService.getSettings();
+        if (mounted) {
+          setSettings(loaded);
+        }
+      } catch (error) {
+        console.error(error);
+        if (mounted) {
+          setSettingsError("Einstellungen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (mounted) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredArtists = useMemo(() => {
+    if (!term) return artists;
+    return artists.filter((artist) => artist.name.toLowerCase().includes(term.toLowerCase()));
+  }, [artists, term]);
+
+  const filteredAlbums = useMemo(() => {
+    if (!term) return albums;
+    return albums.filter((album) => album.title.toLowerCase().includes(term.toLowerCase()));
+  }, [albums, term]);
+
+  const filteredTracks = useMemo(() => {
+    if (!term) return tracks;
+    return tracks.filter((track) => track.title.toLowerCase().includes(term.toLowerCase()));
+  }, [tracks, term]);
+
+  const handleSettingsChange = (key: keyof SettingsPayload, value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      setSettingsSaving(true);
+      setSettingsError(null);
+      await settingsService.saveSettings(settings);
+      toast({ title: "Einstellungen gespeichert", description: "Plex-Konfiguration aktualisiert." });
+    } catch (error) {
+      console.error(error);
+      setSettingsError("Fehler beim Speichern der Einstellungen.");
+      toast({
+        title: "Speichern fehlgeschlagen",
+        description: "Bitte versuche es erneut.",
+        variant: "destructive"
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  if (!filters.plex) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Plex ausgeblendet</CardTitle>
+          <CardDescription>Aktiviere den Plex-Filter im Header, um Inhalte zu sehen.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Plex</h1>
+        <p className="text-sm text-muted-foreground">
+          Überblick über Künstler, Alben und Tracks deiner Plex-Bibliothek sowie Zugangsdaten für den Server.
+        </p>
+      </header>
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Bibliothek</TabsTrigger>
+          <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Library className="h-4 w-4" /> Bibliotheksstatus
+              </CardTitle>
+              <CardDescription>
+                {status?.scanning ? "Scan läuft" : status?.lastScan ? `Letzter Scan: ${status.lastScan}` : "–"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/60 bg-card p-4">
+                <p className="text-xs uppercase text-muted-foreground">Artists</p>
+                <p className="mt-1 text-sm font-medium">{artists.length}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card p-4">
+                <p className="text-xs uppercase text-muted-foreground">Alben</p>
+                <p className="mt-1 text-sm font-medium">{albums.length}</p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card p-4">
+                <p className="text-xs uppercase text-muted-foreground">Tracks</p>
+                <p className="mt-1 text-sm font-medium">{tracks.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Album className="h-4 w-4" /> Artists & Alben
+              </CardTitle>
+              <CardDescription>Gefiltert nach „{term || "—"}“.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Bibliothek wird geladen …
+                </div>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Artists</h3>
+                    {filteredArtists.map((artist) => (
+                      <div key={artist.id} className="rounded-lg border border-border/60 bg-card p-4">
+                        <p className="font-medium leading-tight">{artist.name}</p>
+                        {artist.albumCount !== undefined && (
+                          <p className="text-xs text-muted-foreground">{artist.albumCount} Alben</p>
+                        )}
+                      </div>
+                    ))}
+                    {!filteredArtists.length && (
+                      <p className="text-xs text-muted-foreground">Keine Künstler mit diesem Filter.</p>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Alben</h3>
+                    <div className="overflow-hidden rounded-lg border border-border/60">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Album</TableHead>
+                            <TableHead>Artist</TableHead>
+                            <TableHead className="text-right">Jahr</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAlbums.map((album) => (
+                            <TableRow key={album.id}>
+                              <TableCell className="font-medium">{album.title}</TableCell>
+                              <TableCell>{album.artist}</TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {album.year ?? "–"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {!filteredAlbums.length && (
+                      <p className="text-xs text-muted-foreground">Keine Alben mit diesem Filter.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Disc3 className="h-4 w-4" /> Tracks
+              </CardTitle>
+              <CardDescription>Detailansicht der zuletzt synchronisierten Tracks.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Tracks werden geladen …
+                </div>
+              ) : filteredTracks.length ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Titel</TableHead>
+                        <TableHead>ID</TableHead>
+                        <TableHead className="text-right">Dauer</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTracks.slice(0, 20).map((track) => (
+                        <TableRow key={track.id}>
+                          <TableCell className="font-medium">{track.title}</TableCell>
+                          <TableCell>{track.id}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {track.duration ? `${Math.round(track.duration / 60)} min` : "–"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+                  Keine Tracks gefunden.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings2 className="h-4 w-4" /> Plex Einstellungen
+              </CardTitle>
+              <CardDescription>Basis-URL, Token und Bibliothek für deinen Plex-Server.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {settingsLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Einstellungen werden geladen …
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="plex-base-url">Base URL</Label>
+                    <Input
+                      id="plex-base-url"
+                      value={settings.plexBaseUrl}
+                      onChange={(event) => handleSettingsChange("plexBaseUrl", event.target.value)}
+                      placeholder="https://plex.example.com"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plex-token">Token</Label>
+                    <Input
+                      id="plex-token"
+                      value={settings.plexToken}
+                      onChange={(event) => handleSettingsChange("plexToken", event.target.value)}
+                      placeholder="PLEX_TOKEN"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plex-library">Library</Label>
+                    <Input
+                      id="plex-library"
+                      value={settings.plexLibrary}
+                      onChange={(event) => handleSettingsChange("plexLibrary", event.target.value)}
+                      placeholder="Music"
+                      required
+                    />
+                  </div>
+                  {settingsError && <p className="text-sm text-destructive">{settingsError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <Button type="submit" disabled={settingsSaving}>
+                      {settingsSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Einstellungen speichern
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default PlexPage;
+
+// FILE: src/pages/Settings.tsx
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { useToast } from "../components/ui/use-toast";
+import settingsService, { SettingsPayload } from "../services/settings";
+
+const initialState: SettingsPayload = {
+  spotifyClientId: "",
+  spotifyClientSecret: "",
+  spotifyRedirectUri: "",
+  plexBaseUrl: "",
+  plexToken: "",
+  plexLibrary: "",
+  soulseekApiUrl: "",
+  soulseekApiKey: ""
+};
+
+const Settings = () => {
+  const { toast } = useToast();
+  const [formState, setFormState] = useState<SettingsPayload>(initialState);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const data = await settingsService.getSettings();
+        setFormState((current) => ({ ...current, ...data }));
+      } catch (error) {
+        console.error(error);
+        toast({
+          title: "Einstellungen konnten nicht geladen werden",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchSettings();
+  }, [toast]);
+
+  const handleChange = (field: keyof SettingsPayload) => (event: ChangeEvent<HTMLInputElement>) => {
+    setFormState((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      setSaving(true);
+      await settingsService.saveSettings(formState);
+      toast({ title: "Einstellungen gespeichert" });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Speichern fehlgeschlagen",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold">Einstellungen</h1>
+        <p className="text-sm text-muted-foreground">
+          Verwalte API-Zugänge und Konfigurationswerte für alle Dienste.
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Verbindungen</CardTitle>
+          <CardDescription>Trage die Zugangsdaten für Spotify, Plex und Soulseek ein.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <fieldset className="space-y-4" disabled={loading}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="spotifyClientId">Spotify Client ID</Label>
+                  <Input
+                    id="spotifyClientId"
+                    value={formState.spotifyClientId}
+                    onChange={handleChange("spotifyClientId")}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="spotifyClientSecret">Spotify Client Secret</Label>
+                  <Input
+                    id="spotifyClientSecret"
+                    type="password"
+                    value={formState.spotifyClientSecret}
+                    onChange={handleChange("spotifyClientSecret")}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="spotifyRedirectUri">Spotify Redirect URI</Label>
+                  <Input
+                    id="spotifyRedirectUri"
+                    value={formState.spotifyRedirectUri}
+                    onChange={handleChange("spotifyRedirectUri")}
+                    placeholder="https://example.com/callback"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plexBaseUrl">Plex Base URL</Label>
+                  <Input
+                    id="plexBaseUrl"
+                    value={formState.plexBaseUrl}
+                    onChange={handleChange("plexBaseUrl")}
+                    placeholder="http://localhost:32400"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plexToken">Plex Token</Label>
+                  <Input
+                    id="plexToken"
+                    value={formState.plexToken}
+                    onChange={handleChange("plexToken")}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plexLibrary">Plex Library</Label>
+                  <Input
+                    id="plexLibrary"
+                    value={formState.plexLibrary}
+                    onChange={handleChange("plexLibrary")}
+                    placeholder="Music"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="soulseekApiUrl">Soulseek API URL</Label>
+                  <Input
+                    id="soulseekApiUrl"
+                    value={formState.soulseekApiUrl}
+                    onChange={handleChange("soulseekApiUrl")}
+                    placeholder="http://localhost:5030"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="soulseekApiKey">Soulseek API Key</Label>
+                  <Input
+                    id="soulseekApiKey"
+                    value={formState.soulseekApiKey}
+                    onChange={handleChange("soulseekApiKey")}
+                    required
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <div className="flex items-center justify-end">
+              <Button type="submit" disabled={saving || loading}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Speichern
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default Settings;
+
+// FILE: src/pages/SoulseekPage.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Download, Loader2, Search as SearchIcon, Settings2 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { useToast } from "../components/ui/use-toast";
+import useDebouncedValue from "../hooks/useDebouncedValue";
+import { useGlobalSearch } from "../hooks/useGlobalSearch";
+import soulseekService, { SoulseekDownload, SoulseekSearchResult } from "../services/soulseek";
+import settingsService, { defaultSettings, type SettingsPayload } from "../services/settings";
+import type { ServiceFilters } from "../components/AppHeader";
+
+interface SoulseekPageProps {
+  filters: ServiceFilters;
+}
+
+const SoulseekPage = ({ filters }: SoulseekPageProps) => {
+  const { toast } = useToast();
+  const { term } = useGlobalSearch();
+  const debouncedSearch = useDebouncedValue(term, 400);
+  const [downloads, setDownloads] = useState<SoulseekDownload[]>([]);
+  const [searchResults, setSearchResults] = useState<SoulseekSearchResult[]>([]);
+  const [loadingDownloads, setLoadingDownloads] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [settings, setSettings] = useState<SettingsPayload>(defaultSettings);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const loadDownloads = useCallback(async () => {
+    if (!filters.soulseek) return;
+    try {
+      setLoadingDownloads(true);
+      const data = await soulseekService.getDownloads();
+      setDownloads(data);
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Downloads konnten nicht geladen werden",
+        description: "Soulseek-Status steht aktuell nicht zur Verfügung.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingDownloads(false);
+    }
+  }, [filters.soulseek, toast]);
+
+  useEffect(() => {
+    void loadDownloads();
+  }, [loadDownloads]);
+
+  useEffect(() => {
+    let active = true;
+
+    const runSearch = async () => {
+      if (!filters.soulseek || !debouncedSearch) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        setSearchLoading(true);
+        const results = await soulseekService.search(debouncedSearch);
+        if (active) {
+          setSearchResults(results);
+          if (results.length) {
+            toast({
+              title: "Soulseek-Suche",
+              description: `${results.length} Ergebnisse gefunden.`,
+              duration: 2500
+            });
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        if (active) {
+          toast({
+            title: "Suche fehlgeschlagen",
+            description: "Bitte versuche es erneut.",
+            variant: "destructive"
+          });
+        }
+      } finally {
+        if (active) {
+          setSearchLoading(false);
+        }
+      }
+    };
+
+    void runSearch();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch, filters.soulseek, toast]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async () => {
+      try {
+        setSettingsLoading(true);
+        const loaded = await settingsService.getSettings();
+        if (mounted) {
+          setSettings(loaded);
+        }
+      } catch (error) {
+        console.error(error);
+        if (mounted) {
+          setSettingsError("Einstellungen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (mounted) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredDownloads = useMemo(() => {
+    if (!term) return downloads;
+    return downloads.filter((download) => download.filename.toLowerCase().includes(term.toLowerCase()));
+  }, [downloads, term]);
+
+  const handleSettingsChange = (key: keyof SettingsPayload, value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      setSettingsSaving(true);
+      setSettingsError(null);
+      await settingsService.saveSettings(settings);
+      toast({ title: "Einstellungen gespeichert", description: "Soulseek-Konfiguration aktualisiert." });
+    } catch (error) {
+      console.error(error);
+      setSettingsError("Fehler beim Speichern der Einstellungen.");
+      toast({
+        title: "Speichern fehlgeschlagen",
+        description: "Bitte versuche es erneut.",
+        variant: "destructive"
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleCancelDownload = async (downloadId: string) => {
+    try {
+      await soulseekService.cancelDownload(downloadId);
+      toast({ title: "Download abgebrochen", description: "Der Download wurde gestoppt." });
+      void loadDownloads();
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Abbruch fehlgeschlagen",
+        description: "Der Download konnte nicht gestoppt werden.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (!filters.soulseek) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Soulseek ausgeblendet</CardTitle>
+          <CardDescription>Aktiviere den Soulseek-Filter im Header, um Inhalte zu sehen.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Soulseek</h1>
+        <p className="text-sm text-muted-foreground">
+          Überwache aktive Downloads, starte neue Suchen und verwalte deine Soulseek-Integration.
+        </p>
+      </header>
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Downloads & Suche</TabsTrigger>
+          <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Download className="h-4 w-4" /> Aktuelle Downloads
+              </CardTitle>
+              <CardDescription>Gefiltert nach „{term || "—"}“.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingDownloads ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Downloads werden geladen …
+                </div>
+              ) : filteredDownloads.length ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Datei</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[160px]">Fortschritt</TableHead>
+                        <TableHead>Geschwindigkeit</TableHead>
+                        <TableHead className="text-right">Aktion</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDownloads.map((download) => (
+                        <TableRow key={download.id}>
+                          <TableCell className="font-medium">{download.filename}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {download.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all"
+                                  style={{ width: `${Math.min(100, Math.max(0, download.progress))}%` }}
+                                />
+                              </div>
+                              <span className="w-10 text-xs text-muted-foreground">{Math.round(download.progress)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {download.speed ? `${download.speed} kb/s` : "–"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {download.status === "downloading" || download.status === "queued" ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void handleCancelDownload(download.id)}
+                              >
+                                Abbrechen
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">–</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+                  Keine Downloads gefunden.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <SearchIcon className="h-4 w-4" /> Suchergebnisse
+              </CardTitle>
+              <CardDescription>Ergebnisse der globalen Suche in Soulseek.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {searchLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Suche läuft …
+                </div>
+              ) : searchResults.length ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Datei</TableHead>
+                        <TableHead>Benutzer</TableHead>
+                        <TableHead className="text-right">Größe</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {searchResults.slice(0, 25).map((result) => (
+                        <TableRow key={result.id}>
+                          <TableCell className="font-medium">{result.filename}</TableCell>
+                          <TableCell>{result.user}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {Math.round(result.size / (1024 * 1024))} MB
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="rounded-md border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+                  Keine Suchergebnisse vorhanden.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings2 className="h-4 w-4" /> Soulseek Einstellungen
+              </CardTitle>
+              <CardDescription>API-Endpunkt und Schlüssel für deinen Soulseek-Dienst.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {settingsLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Einstellungen werden geladen …
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="soulseek-url">SLSKD URL</Label>
+                    <Input
+                      id="soulseek-url"
+                      value={settings.soulseekApiUrl}
+                      onChange={(event) => handleSettingsChange("soulseekApiUrl", event.target.value)}
+                      placeholder="https://slsd.example.com"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="soulseek-api-key">API Key</Label>
+                    <Input
+                      id="soulseek-api-key"
+                      value={settings.soulseekApiKey}
+                      onChange={(event) => handleSettingsChange("soulseekApiKey", event.target.value)}
+                      placeholder="SLSKD_API_KEY"
+                      required
+                    />
+                  </div>
+                  {settingsError && <p className="text-sm text-destructive">{settingsError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <Button type="submit" disabled={settingsSaving}>
+                      {settingsSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Einstellungen speichern
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default SoulseekPage;
+
+// FILE: src/pages/SpotifyPage.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, ListMusic, Music, Settings2 } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { useToast } from "../components/ui/use-toast";
+import useDebouncedValue from "../hooks/useDebouncedValue";
+import { useGlobalSearch } from "../hooks/useGlobalSearch";
+import spotifyService, { SpotifyPlaylist, SpotifyStatus, SpotifyTrack } from "../services/spotify";
+import settingsService, { defaultSettings, type SettingsPayload } from "../services/settings";
+import type { ServiceFilters } from "../components/AppHeader";
+
+type SearchResults = {
+  tracks: SpotifyTrack[];
+};
+
+interface SpotifyPageProps {
+  filters: ServiceFilters;
+}
+
+const SpotifyPage = ({ filters }: SpotifyPageProps) => {
+  const { toast } = useToast();
+  const { term } = useGlobalSearch();
+  const debouncedSearch = useDebouncedValue(term, 400);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [status, setStatus] = useState<SpotifyStatus | null>(null);
+  const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResults>({ tracks: [] });
+  const [settings, setSettings] = useState<SettingsPayload>(defaultSettings);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const loadOverview = useCallback(async () => {
+    if (!filters.spotify) return;
+    try {
+      setOverviewLoading(true);
+      const [loadedStatus, loadedPlaylists] = await Promise.all([
+        spotifyService.getStatus(),
+        spotifyService.getPlaylists()
+      ]);
+      setStatus(loadedStatus);
+      setPlaylists(loadedPlaylists);
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Spotify konnte nicht geladen werden",
+        description: "Status und Playlists stehen aktuell nicht zur Verfügung.",
+        variant: "destructive"
+      });
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [filters.spotify, toast]);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  useEffect(() => {
+    let active = true;
+
+    const runSearch = async () => {
+      if (!filters.spotify || !debouncedSearch) {
+        setSearchResults({ tracks: [] });
+        return;
+      }
+      try {
+        setSearchLoading(true);
+        const tracks = await spotifyService.searchTracks(debouncedSearch);
+        if (active) {
+          setSearchResults({ tracks });
+          if (tracks.length) {
+            toast({
+              title: "Spotify-Suche",
+              description: `${tracks.length} Tracks gefunden.`,
+              duration: 2500
+            });
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        if (active) {
+          toast({
+            title: "Suche fehlgeschlagen",
+            description: "Die Spotify-Suche konnte nicht durchgeführt werden.",
+            variant: "destructive"
+          });
+        }
+      } finally {
+        if (active) {
+          setSearchLoading(false);
+        }
+      }
+    };
+
+    void runSearch();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch, filters.spotify, toast]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSettings = async () => {
+      try {
+        setSettingsLoading(true);
+        const loaded = await settingsService.getSettings();
+        if (mounted) {
+          setSettings(loaded);
+        }
+      } catch (error) {
+        console.error(error);
+        if (mounted) {
+          setSettingsError("Einstellungen konnten nicht geladen werden.");
+        }
+      } finally {
+        if (mounted) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredPlaylists = useMemo(() => {
+    if (!term) return playlists;
+    return playlists.filter((playlist) => playlist.name.toLowerCase().includes(term.toLowerCase()));
+  }, [playlists, term]);
+
+  const handleSettingsChange = (key: keyof SettingsPayload, value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      setSettingsSaving(true);
+      setSettingsError(null);
+      await settingsService.saveSettings(settings);
+      toast({ title: "Einstellungen gespeichert", description: "Spotify-Konfiguration aktualisiert." });
+    } catch (error) {
+      console.error(error);
+      setSettingsError("Fehler beim Speichern der Einstellungen.");
+      toast({
+        title: "Speichern fehlgeschlagen",
+        description: "Bitte versuche es erneut.",
+        variant: "destructive"
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  if (!filters.spotify) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Spotify ausgeblendet</CardTitle>
+          <CardDescription>Aktiviere den Spotify-Filter im Header, um Inhalte zu sehen.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Spotify</h1>
+        <p className="text-sm text-muted-foreground">
+          Suche nach Tracks und verwalte Playlists. Spotify-Credentials können direkt in Harmony gepflegt werden.
+        </p>
+      </header>
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Status & Playlists</TabsTrigger>
+          <TabsTrigger value="settings">Einstellungen</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Music className="h-4 w-4" /> Spotify Status
+              </CardTitle>
+              <CardDescription>Verbunden seit: {status?.lastSync ?? "–"}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-border/60 bg-card p-4">
+                <p className="text-xs uppercase text-muted-foreground">Verbindung</p>
+                <p className="mt-1 flex items-center gap-2 text-sm font-medium">
+                  <Badge variant={status?.connected ? "secondary" : "destructive"}>
+                    {status?.connected ? "Connected" : "Disconnected"}
+                  </Badge>
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-card p-4">
+                <p className="text-xs uppercase text-muted-foreground">Playlists</p>
+                <p className="mt-1 text-sm font-medium">{playlists.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ListMusic className="h-4 w-4" /> Playlists & Suche
+              </CardTitle>
+              <CardDescription>
+                Ergebnisse für „{debouncedSearch || term || "—"}". Die globale Suche filtert Playlists und Tracks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {overviewLoading ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Playlists werden geladen …
+                </div>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Playlists</h3>
+                    <div className="space-y-3">
+                      {filteredPlaylists.map((playlist) => (
+                        <div key={playlist.id} className="rounded-lg border border-border/60 bg-card p-4">
+                          <p className="font-medium leading-tight">{playlist.name}</p>
+                          <p className="text-xs text-muted-foreground">{playlist.trackCount} Tracks</p>
+                          {playlist.description && (
+                            <p className="mt-2 text-xs text-muted-foreground">{playlist.description}</p>
+                          )}
+                        </div>
+                      ))}
+                      {!filteredPlaylists.length && (
+                        <p className="text-xs text-muted-foreground">Keine Playlists mit diesem Filter.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tracks</h3>
+                    {searchLoading ? (
+                      <div className="flex items-center justify-center rounded-md border border-dashed border-border py-10 text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Suche läuft …
+                      </div>
+                    ) : searchResults.tracks.length ? (
+                      <div className="overflow-hidden rounded-lg border border-border/60">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Track</TableHead>
+                              <TableHead>Artist</TableHead>
+                              <TableHead>Album</TableHead>
+                              <TableHead className="text-right">Dauer</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {searchResults.tracks.map((track) => (
+                              <TableRow key={track.id}>
+                                <TableCell className="font-medium">{track.name}</TableCell>
+                                <TableCell>{track.artist}</TableCell>
+                                <TableCell>{track.album}</TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">
+                                  {Math.round(track.durationMs / 1000)}s
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <p className="rounded-md border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+                        Keine Tracks gefunden.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings2 className="h-4 w-4" /> Spotify Einstellungen
+              </CardTitle>
+              <CardDescription>API-Zugänge für Spotify. Daten werden nach dem Speichern direkt übernommen.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {settingsLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Einstellungen werden geladen …
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="spotify-client-id">Client ID</Label>
+                      <Input
+                        id="spotify-client-id"
+                        value={settings.spotifyClientId}
+                        onChange={(event) => handleSettingsChange("spotifyClientId", event.target.value)}
+                        placeholder="SPOTIFY_CLIENT_ID"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="spotify-client-secret">Client Secret</Label>
+                      <Input
+                        id="spotify-client-secret"
+                        value={settings.spotifyClientSecret}
+                        onChange={(event) => handleSettingsChange("spotifyClientSecret", event.target.value)}
+                        placeholder="SPOTIFY_CLIENT_SECRET"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="spotify-redirect-uri">Redirect URI</Label>
+                    <Input
+                      id="spotify-redirect-uri"
+                      value={settings.spotifyRedirectUri}
+                      onChange={(event) => handleSettingsChange("spotifyRedirectUri", event.target.value)}
+                      placeholder="https://example.com/callback"
+                      required
+                    />
+                  </div>
+                  {settingsError && <p className="text-sm text-destructive">{settingsError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <Button type="submit" disabled={settingsSaving}>
+                      {settingsSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Einstellungen speichern
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default SpotifyPage;
+
+// FILE: src/services/activity.ts
+import api from "./api";
+
+type ActivityItem = {
+  id: string;
+  event: string;
+  service: string;
+  timestamp: string;
+};
+
+const activityService = {
+  getRecentActivity: async (): Promise<ActivityItem[]> => {
+    const { data } = await api.get("/activity/recent");
+    return data.activities ?? data;
+  }
+};
+
+export type { ActivityItem };
+export default activityService;
+
+// FILE: src/services/api.ts
+import axios from "axios";
+
+const DEFAULT_BASE_URL = "http://localhost:8000";
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL,
+  timeout: 15000
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      error.message = error.response.data?.detail ?? error.message;
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+
+// FILE: src/services/dashboard.ts
+import api from "./api";
+
+type SystemInformation = {
+  backendVersion: string;
+  databaseStatus: string;
+  workerStatus: string;
+  uptime: string;
+  hostname?: string;
+};
+
+type HarmonyServiceStatus = {
+  name: string;
+  status: "connected" | "error" | "warning";
+  lastUpdated?: string;
+  description?: string;
+};
+
+type JobEntry = {
+  id: string;
+  name: string;
+  service: string;
+  status: "running" | "queued" | "completed" | "failed";
+  progress: number;
+  updatedAt: string;
+};
+
+type DashboardOverview = {
+  system: SystemInformation;
+  services: HarmonyServiceStatus[];
+  jobs: JobEntry[];
+};
+
+const defaultOverview: DashboardOverview = {
+  system: {
+    backendVersion: "unknown",
+    databaseStatus: "unknown",
+    workerStatus: "unknown",
+    uptime: "–"
+  },
+  services: [],
+  jobs: []
+};
+
+const dashboardService = {
+  getOverview: async (): Promise<DashboardOverview> => {
+    const { data } = await api.get("/dashboard");
+    const system = {
+      ...defaultOverview.system,
+      ...(data?.system ?? {})
+    } as SystemInformation;
+    const services = Array.isArray(data?.services)
+      ? (data.services as HarmonyServiceStatus[])
+      : defaultOverview.services;
+    const jobs = Array.isArray(data?.jobs)
+      ? (data.jobs as JobEntry[])
+      : defaultOverview.jobs;
+
+    return {
+      system,
+      services,
+      jobs
+    };
+  }
+};
+
+export type { DashboardOverview, HarmonyServiceStatus, JobEntry, SystemInformation };
+export { defaultOverview };
+export default dashboardService;
+
+// FILE: src/services/matching.ts
+import api from "./api";
+
+type MatchingSummary = {
+  matched: number;
+  missing: number;
+  lastRun?: string;
+};
+
+const matchingService = {
+  matchSpotifyToPlex: async (): Promise<MatchingSummary> => {
+    const { data } = await api.post("/matching/spotify-to-plex");
+    return data;
+  },
+  matchSpotifyToSoulseek: async (): Promise<MatchingSummary> => {
+    const { data } = await api.post("/matching/spotify-to-soulseek");
+    return data;
+  }
+};
+
+export type { MatchingSummary };
+export default matchingService;
+
+// FILE: src/services/plex.ts
+import api from "./api";
+
+type PlexArtist = {
+  id: string;
+  name: string;
+  albumCount?: number;
+};
+
+type PlexAlbum = {
+  id: string;
+  title: string;
+  artist: string;
+  year?: number;
+};
+
+type PlexTrack = {
+  id: string;
+  title: string;
+  duration?: number;
+};
+
+type PlexStatus = {
+  scanning: boolean;
+  lastScan?: string;
+};
+
+const plexService = {
+  getStatus: async (): Promise<PlexStatus> => {
+    const { data } = await api.get("/plex/status");
+    return data;
+  },
+  getArtists: async (): Promise<PlexArtist[]> => {
+    const { data } = await api.get("/plex/artists");
+    return data.artists ?? data;
+  },
+  getAlbums: async (artistId?: string): Promise<PlexAlbum[]> => {
+    const { data } = await api.get("/plex/albums", {
+      params: artistId ? { artistId } : undefined
+    });
+    return data.albums ?? data;
+  },
+  getAlbum: async (albumId: string): Promise<PlexAlbum & { tracks: PlexTrack[] }> => {
+    const { data } = await api.get(`/plex/albums/${albumId}`);
+    return data;
+  },
+  getTracks: async (albumId?: string): Promise<PlexTrack[]> => {
+    const { data } = await api.get("/plex/tracks", {
+      params: albumId ? { albumId } : undefined
+    });
+    return data.tracks ?? data;
+  },
+  triggerScan: async (): Promise<void> => {
+    await api.post("/plex/scan");
+  }
+};
+
+export type { PlexAlbum, PlexArtist, PlexStatus, PlexTrack };
+export default plexService;
+
+// FILE: src/services/settings.ts
+import api from "./api";
+
+type SettingsPayload = {
+  spotifyClientId: string;
+  spotifyClientSecret: string;
+  spotifyRedirectUri: string;
+  plexBaseUrl: string;
+  plexToken: string;
+  plexLibrary: string;
+  soulseekApiUrl: string;
+  soulseekApiKey: string;
+};
+
+const defaultSettings: SettingsPayload = {
+  spotifyClientId: "",
+  spotifyClientSecret: "",
+  spotifyRedirectUri: "",
+  plexBaseUrl: "",
+  plexToken: "",
+  plexLibrary: "",
+  soulseekApiUrl: "",
+  soulseekApiKey: ""
+};
+
+const mapResponseToSettings = (
+  data: Partial<SettingsPayload> & Record<string, unknown>
+): SettingsPayload => ({
+  spotifyClientId:
+    (data.spotifyClientId as string | undefined) ??
+    (data.SPOTIFY_CLIENT_ID as string | undefined) ??
+    defaultSettings.spotifyClientId,
+  spotifyClientSecret:
+    (data.spotifyClientSecret as string | undefined) ??
+    (data.SPOTIFY_CLIENT_SECRET as string | undefined) ??
+    defaultSettings.spotifyClientSecret,
+  spotifyRedirectUri:
+    (data.spotifyRedirectUri as string | undefined) ??
+    (data.SPOTIFY_REDIRECT_URI as string | undefined) ??
+    defaultSettings.spotifyRedirectUri,
+  plexBaseUrl:
+    (data.plexBaseUrl as string | undefined) ??
+    (data.PLEX_BASE_URL as string | undefined) ??
+    defaultSettings.plexBaseUrl,
+  plexToken:
+    (data.plexToken as string | undefined) ??
+    (data.PLEX_TOKEN as string | undefined) ??
+    defaultSettings.plexToken,
+  plexLibrary:
+    (data.plexLibrary as string | undefined) ??
+    (data.PLEX_LIBRARY as string | undefined) ??
+    defaultSettings.plexLibrary,
+  soulseekApiUrl:
+    (data.soulseekApiUrl as string | undefined) ??
+    (data.SLSKD_URL as string | undefined) ??
+    defaultSettings.soulseekApiUrl,
+  soulseekApiKey:
+    (data.soulseekApiKey as string | undefined) ??
+    (data.SLSKD_API_KEY as string | undefined) ??
+    defaultSettings.soulseekApiKey
+});
+
+const toRequestBody = (payload: SettingsPayload) => ({
+  ...payload,
+  SPOTIFY_CLIENT_ID: payload.spotifyClientId,
+  SPOTIFY_CLIENT_SECRET: payload.spotifyClientSecret,
+  SPOTIFY_REDIRECT_URI: payload.spotifyRedirectUri,
+  PLEX_BASE_URL: payload.plexBaseUrl,
+  PLEX_TOKEN: payload.plexToken,
+  PLEX_LIBRARY: payload.plexLibrary,
+  SLSKD_URL: payload.soulseekApiUrl,
+  SLSKD_API_KEY: payload.soulseekApiKey
+});
+
+const settingsService = {
+  getSettings: async (): Promise<SettingsPayload> => {
+    const { data } = await api.get("/settings");
+    return mapResponseToSettings(data ?? {});
+  },
+  saveSettings: async (payload: SettingsPayload) => {
+    const body = toRequestBody({ ...defaultSettings, ...payload });
+    const { data } = await api.post("/settings", body);
+    return data;
+  }
+};
+
+export type { SettingsPayload };
+export { defaultSettings };
+export default settingsService;
+
+// FILE: src/services/soulseek.ts
+import api from "./api";
+
+type SoulseekDownload = {
+  id: string;
+  filename: string;
+  progress: number;
+  status: "queued" | "downloading" | "completed" | "failed" | "cancelled";
+  speed?: number;
+};
+
+type SoulseekSearchResult = {
+  id: string;
+  filename: string;
+  size: number;
+  user: string;
+};
+
+const soulseekService = {
+  getStatus: async () => {
+    const { data } = await api.get("/soulseek/status");
+    return data;
+  },
+  search: async (query: string): Promise<SoulseekSearchResult[]> => {
+    if (!query) return [];
+    const { data } = await api.get("/soulseek/search", {
+      params: { query }
+    });
+    return data.results ?? data;
+  },
+  getDownloads: async (): Promise<SoulseekDownload[]> => {
+    const { data } = await api.get("/soulseek/downloads");
+    return data.downloads ?? data;
+  },
+  cancelDownload: async (downloadId: string) => {
+    await api.delete(`/soulseek/downloads/${downloadId}`);
+  }
+};
+
+export type { SoulseekDownload, SoulseekSearchResult };
+export default soulseekService;
+
+// FILE: src/services/spotify.ts
+import api from "./api";
+
+type SpotifyTrack = {
+  id: string;
+  name: string;
+  album: string;
+  artist: string;
+  durationMs: number;
+};
+
+type SpotifyPlaylist = {
+  id: string;
+  name: string;
+  description?: string;
+  trackCount: number;
+};
+
+type SpotifyPlaylistWithTracks = SpotifyPlaylist & {
+  tracks: SpotifyTrack[];
+};
+
+type SpotifyStatus = {
+  connected: boolean;
+  lastSync?: string;
+};
+
+const spotifyService = {
+  getStatus: async (): Promise<SpotifyStatus> => {
+    const { data } = await api.get("/spotify/status");
+    return data;
+  },
+  searchTracks: async (query: string): Promise<SpotifyTrack[]> => {
+    if (!query) return [];
+    const { data } = await api.get("/spotify/search", {
+      params: { query }
+    });
+    return data.tracks ?? data;
+  },
+  searchArtists: async (query: string) => {
+    if (!query) return [];
+    const { data } = await api.get("/spotify/search/artists", {
+      params: { query }
+    });
+    return data.artists ?? data;
+  },
+  searchAlbums: async (query: string) => {
+    if (!query) return [];
+    const { data } = await api.get("/spotify/search/albums", {
+      params: { query }
+    });
+    return data.albums ?? data;
+  },
+  getPlaylists: async (): Promise<SpotifyPlaylist[]> => {
+    const { data } = await api.get("/spotify/playlists");
+    return data.playlists ?? data;
+  },
+  getPlaylist: async (playlistId: string): Promise<SpotifyPlaylistWithTracks> => {
+    const { data } = await api.get(`/spotify/playlists/${playlistId}`);
+    return data;
+  },
+  getTrack: async (trackId: string): Promise<SpotifyTrack> => {
+    const { data } = await api.get(`/spotify/tracks/${trackId}`);
+    return data;
+  }
+};
+
+export type { SpotifyPlaylist, SpotifyPlaylistWithTracks, SpotifyStatus, SpotifyTrack };
+export default spotifyService;
+
+// FILE: src/stories/AppHeader.stories.tsx
+import type { Meta, StoryObj } from "@storybook/react";
+import { useEffect, useState } from "react";
+
+import AppHeader, { ServiceFilters } from "../components/AppHeader";
+
+const meta: Meta<typeof AppHeader> = {
+  title: "Components/AppHeader",
+  component: AppHeader,
+  parameters: {
+    layout: "fullscreen"
+  },
+  args: {
+    loading: false,
+    searchTerm: "",
+    filters: {
+      spotify: true,
+      plex: true,
+      soulseek: true
+    } satisfies ServiceFilters,
+    isDarkMode: false,
+    hasNewFeatures: false
+  }
+};
+
+export default meta;
+
+type Story = StoryObj<typeof AppHeader>;
+
+const StoryWrapper = (props: Story["args"]) => {
+  const [filters, setFilters] = useState<ServiceFilters>(
+    props?.filters ?? { spotify: true, plex: true, soulseek: true }
+  );
+  const [searchTerm, setSearchTerm] = useState(props?.searchTerm ?? "");
+
+  useEffect(() => {
+    if (props?.isDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+
+    return () => {
+      document.documentElement.classList.remove("dark");
+    };
+  }, [props?.isDarkMode]);
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <AppHeader
+        loading={props?.loading ?? false}
+        onRefresh={() => console.log("refresh")}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        filters={filters}
+        onFilterChange={setFilters}
+        isDarkMode={props?.isDarkMode ?? false}
+        onThemeToggle={() => console.log("theme toggle")}
+        onGoHome={() => console.log("go home")}
+        onToggleSidebar={() => console.log("toggle sidebar")}
+        onShowWhatsNew={props?.onShowWhatsNew}
+        onShowNotifications={() => console.log("notifications")}
+        hasNewFeatures={props?.hasNewFeatures}
+      />
+    </div>
+  );
+};
+
+export const Default: Story = {
+  render: (args) => <StoryWrapper {...args} />
+};
+
+export const SpotifyFilterActive: Story = {
+  render: (args) => (
+    <StoryWrapper
+      {...args}
+      filters={{ spotify: true, plex: false, soulseek: false }}
+    />
+  )
+};
+
+export const Loading: Story = {
+  render: (args) => <StoryWrapper {...args} loading />
+};
+
+export const DarkMode: Story = {
+  render: (args) => <StoryWrapper {...args} isDarkMode />
+};
+
+export const WhatsNew: Story = {
+  render: (args) => (
+    <StoryWrapper
+      {...args}
+      hasNewFeatures
+      onShowWhatsNew={() => console.log("show what's new")}
+    />
+  )
+};
+
+// FILE: src/vite-env.d.ts
+/// <reference types="vite/client" />
+
+// FILE: tailwind.config.ts
+import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
+
+const config: Config = {
+  darkMode: ["class"],
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(var(--border) / <alpha-value>)",
+        input: "hsl(var(--input) / <alpha-value>)",
+        ring: "hsl(var(--primary) / <alpha-value>)",
+        background: "hsl(var(--background) / <alpha-value>)",
+        foreground: "hsl(var(--foreground) / <alpha-value>)",
+        muted: {
+          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
+          foreground: "hsl(var(--muted-foreground) / <alpha-value>)"
+        },
+        card: {
+          DEFAULT: "hsl(var(--card) / <alpha-value>)",
+          foreground: "hsl(var(--card-foreground) / <alpha-value>)"
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover) / <alpha-value>)",
+          foreground: "hsl(var(--popover-foreground) / <alpha-value>)"
+        },
+        primary: {
+          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
+          foreground: "hsl(var(--primary-foreground) / <alpha-value>)"
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
+          foreground: "hsl(var(--secondary-foreground) / <alpha-value>)"
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent) / <alpha-value>)",
+          foreground: "hsl(var(--accent-foreground) / <alpha-value>)"
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
+          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)"
+        },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
+          foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
+          muted: "hsl(var(--sidebar-muted) / <alpha-value>)",
+          accent: "hsl(var(--sidebar-accent) / <alpha-value>)",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground) / <alpha-value>)"
+        },
+        navbar: {
+          DEFAULT: "hsl(var(--navbar-background) / <alpha-value>)",
+          foreground: "hsl(var(--navbar-foreground) / <alpha-value>)"
+        }
+      },
+      borderRadius: {
+        lg: "var(--radius-lg)",
+        md: "var(--radius-md)",
+        sm: "var(--radius-sm)"
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" }
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" }
+        },
+        "toast-show": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0px)" }
+        },
+        "toast-hide": {
+          from: { opacity: "1", transform: "translateY(0px)" },
+          to: { opacity: "0", transform: "translateY(10px)" }
+        },
+        "drawer-in": {
+          from: { transform: "translateX(-100%)", opacity: "0" },
+          to: { transform: "translateX(0)", opacity: "1" }
+        },
+        "drawer-out": {
+          from: { transform: "translateX(0)", opacity: "1" },
+          to: { transform: "translateX(-10%)", opacity: "0" }
+        }
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+        "toast-show": "toast-show 0.2s ease-out",
+        "toast-hide": "toast-hide 0.2s ease-in",
+        "drawer-in": "drawer-in 0.3s ease-out forwards",
+        "drawer-out": "drawer-out 0.2s ease-in forwards"
+      }
+    }
+  },
+  plugins: [animate]
+};
+
+export default config;
+
+// FILE: tsconfig.jest.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "jest", "node"],
+    "isolatedModules": false
+  },
+  "include": ["jest.setup.ts", "src"]
+}
+
+// FILE: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+
+// FILE: tsconfig.node.json
+{
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "baseUrl": "./src"
+  },
+  "include": ["vite.config.ts"]
+}
+
+// FILE: tw-animate-css.css
+@layer utilities {
+  .animate-drawer-in {
+    animation: drawer-in 0.3s ease-out forwards;
+  }
+
+  .animate-drawer-out {
+    animation: drawer-out 0.2s ease-in forwards;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+
+  .animate-fade-out {
+    animation: fade-out 0.2s ease-in both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+// FILE: vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    host: true
+  }
+});
+

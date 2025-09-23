@@ -5,4 +5,10 @@
 - ✅ Matching-Engine integrieren
 - ✅ Tests mit Pytest erstellen
 - ✅ Docker- und CI-Konfiguration hinzufügen
-- ⬜️ Erweiterte Frontend-Integration
+- ✅ Erweiterte Frontend-Integration
+
+## Theme Follow-ups
+
+- [ ] Mehr Farbvarianten für Charts validieren
+- [ ] High-Contrast Mode überlegen
+- [ ] Animationsdauer anpassen
