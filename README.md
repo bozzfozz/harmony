@@ -6,6 +6,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 ## Features
 
+- **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Async Plex-Client** mit Zugriff auf Bibliotheken, Sessions, PlayQueues, Live-TV und Echtzeit-Benachrichtigungen.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
@@ -14,6 +15,44 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
+
+## Harmony Web UI
+
+Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](frontend/). Sie orientiert sich am Porttracker-Layout mit Sidebar, Header, Karten, Tabellen und Tabs. Das UI nutzt Tailwind CSS, shadcn/ui (Radix UI Komponenten) und React Query für Live-Daten aus den bestehenden APIs.
+
+![Harmony Dashboard](docs/harmony-ui.svg)
+
+### Voraussetzungen
+
+- Node.js ≥ 20
+- pnpm oder npm (Beispiele verwenden npm)
+
+### Installation & Entwicklung
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariable `VITE_API_BASE_URL` angebunden werden (z. B. `http://localhost:8000`).
+
+### Tests & Builds
+
+```bash
+npm run test    # Jest + Testing Library
+npm run build   # TypeScript + Vite Build
+```
+
+### Features der UI
+
+- Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
+- Detailseiten für Spotify, Plex, Soulseek und Beets inkl. Tabs für Übersicht und Einstellungen.
+- Matching-Ansicht mit Fortschrittsanzeigen.
+- Settings-Bereich mit Formularen für sämtliche Integrationen.
+- Dark-/Light-Mode Switch (Radix Switch) und globale Toast-Benachrichtigungen.
+
+Alle REST-Aufrufe nutzen die bestehenden Endpunkte (`/spotify`, `/plex`, `/soulseek`, `/matching`, `/settings`, `/beets`) und werden alle 30 Sekunden automatisch aktualisiert.
 
 ## Architekturüberblick
 
@@ -83,7 +122,7 @@ Requests die Test-Suite (`pytest`) unter Python 3.11 aus.
 | `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
 | `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
 
-> **Hinweis:** Spotify-, Plex- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
+> **Hinweis:** Spotify-, Plex- und slskd-Zugangsdaten können entweder direkt in der Harmony Web UI (Tabs „Einstellungen“) oder per `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
 
 ## API-Endpoints
 

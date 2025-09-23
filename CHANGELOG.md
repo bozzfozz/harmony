@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen dieses Projekts werden in dieser Datei dokumentiert.
 
+## v1.x.x – Harmony UI basierend auf Porttracker-Design
+- Harmony-UI implementiert: Dashboard + Service-Seiten (Spotify, Plex, Soulseek) mit Settings-Tabs.
+- Dark-/Light-Mode via Radix Switch, Toast-Benachrichtigungen und automatische Datenaktualisierung im 30 s-Takt.
+- Anbindung der UI an bestehende APIs (`/spotify`, `/plex`, `/soulseek`, `/matching`, `/settings`, `/beets`).
+- Jest + Testing Library für UI-Tests (Navigation, Einstellungen, Suche, Fehler-Handling).
+
 ## v1.4.0 – Spotify API Vollintegration
 - Konfiguration für Spotify, Plex und slskd kann jetzt in der Datenbank persistiert und über die Settings-API gepflegt werden.
 - Vollständige Spotify-Integration inkl. Playlist-Sync, Audio-Features, Recommendations und Benutzerbibliothek.
