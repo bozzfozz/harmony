@@ -6,6 +6,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 ## Features
 
+- **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Async Plex-Client** mit Zugriff auf Bibliotheken, Sessions, PlayQueues, Live-TV und Echtzeit-Benachrichtigungen.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
@@ -14,6 +15,44 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
+
+## Harmony Web UI
+
+Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](frontend/). Sie orientiert sich am Porttracker-Layout mit Sidebar, Header, Karten, Tabellen und Tabs. Das UI nutzt Tailwind CSS, shadcn/ui (Radix UI Komponenten) und React Query für Live-Daten aus den bestehenden APIs.
+
+![Harmony Dashboard](docs/harmony-ui.svg)
+
+### Voraussetzungen
+
+- Node.js ≥ 20
+- pnpm oder npm (Beispiele verwenden npm)
+
+### Installation & Entwicklung
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariable `VITE_API_BASE_URL` angebunden werden (z. B. `http://localhost:8000`).
+
+### Tests & Builds
+
+```bash
+npm run test    # Jest + Testing Library
+npm run build   # TypeScript + Vite Build
+```
+
+### Features der UI
+
+- Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
+- Detailseiten für Spotify, Plex, Soulseek und Beets inkl. Tabs für Übersicht und Einstellungen.
+- Matching-Ansicht mit Fortschrittsanzeigen.
+- Settings-Bereich mit Formularen für sämtliche Integrationen.
+- Dark-/Light-Mode Switch (Radix Switch) und globale Toast-Benachrichtigungen.
+
+Alle REST-Aufrufe nutzen die bestehenden Endpunkte (`/spotify`, `/plex`, `/soulseek`, `/matching`, `/settings`, `/beets`) und werden alle 30 Sekunden automatisch aktualisiert.
 
 ## Architekturüberblick
 
@@ -95,6 +134,40 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
 - **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.
+
+### Beets-Integration
+
+Die Harmony-Instanz nutzt die [`beet` CLI](https://beets.io/) für alle Operationen rund um die lokale Musikbibliothek. Stelle
+ sicher, dass `beet` auf dem Host oder im Container installiert und über den `PATH` erreichbar ist, bevor du die Beets-Endpunk
+ te aufrufst.
+
+Beispiele für typische Aufrufe:
+
+```bash
+# Neuen Ordner importieren
+curl -X POST http://localhost:8000/beets/import \
+  -H 'Content-Type: application/json' \
+  -d '{"path": "/music/new", "quiet": true, "autotag": true}'
+
+# Bibliothek aktualisieren (optional mit Pfad)
+http POST http://localhost:8000/beets/update path=/music/library
+
+# Treffer suchen und formatiert ausgeben
+curl -X POST http://localhost:8000/beets/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "artist:Radiohead", "format": "$artist - $album - $title"}'
+
+# Einträge löschen (force löscht ohne Rückfrage)
+http DELETE http://localhost:8000/beets/remove query=='artist:Radiohead' force:=true
+```
+
+Weitere Endpunkte:
+
+- `GET /beets/albums` – listet alle Alben.
+- `GET /beets/tracks` – listet alle Titel.
+- `GET /beets/stats` – liefert Beets-Statistiken.
+- `GET /beets/fields` – zeigt verfügbare Metadatenfelder.
+- `POST /beets/move` & `POST /beets/write` – verschiebt Dateien bzw. schreibt Tags.
 
 ## Tests & CI
 

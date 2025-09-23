@@ -1,4 +1,4 @@
-const config = {
+ main
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   transform: {
@@ -9,7 +9,7 @@ const config = {
   },
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': '<rootDir>/tests/style-mock.js'
+ main
   },
   testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };

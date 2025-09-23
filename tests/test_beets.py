@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from importlib import import_module
 from pathlib import Path
 from typing import Sequence
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +12,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.beets_client import BeetsClient, BeetsClientError
-from app.routers import beets_router
+
+beets_router = import_module("app.routers.beets_router")
 
 
 @pytest.fixture()
@@ -529,12 +531,103 @@ class TestRouterImport:
         assert call_args.kwargs == {"quiet": False, "autotag": False}
 
 
+class TestRouterUpdate:
+    @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
+    def test_update_with_path(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
+        mock_pool.return_value = "Library updated"
+
+        response = api_client.post("/beets/update", json={"path": "library"})
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True, "message": "Library updated"}
+        mock_pool.assert_awaited_once()
+        call_args = mock_pool.await_args
+        method = call_args.args[0]
+        assert method.__self__ is beets_router.beets_client
+        assert method.__name__ == "update"
+        assert call_args.args[1:] == ("library",)
+        assert call_args.kwargs == {}
+
+    @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
+    def test_update_without_path(
+        self, mock_pool: AsyncMock, api_client: TestClient
+    ) -> None:
+        mock_pool.return_value = ""
+
+        response = api_client.post("/beets/update", json={})
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True, "message": "Library updated"}
+        mock_pool.assert_awaited_once()
+        call_args = mock_pool.await_args
+        method = call_args.args[0]
+        assert method.__self__ is beets_router.beets_client
+        assert method.__name__ == "update"
+        assert call_args.args[1:] == (None,)
+        assert call_args.kwargs == {}
+
+
+class TestRouterAlbums:
+    @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
+    def test_albums(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
+        mock_pool.return_value = ["Album One", "Album Two"]
+
+        response = api_client.get("/beets/albums")
+
+        assert response.status_code == 200
+        assert response.json() == {"albums": ["Album One", "Album Two"]}
+        mock_pool.assert_awaited_once()
+        call_args = mock_pool.await_args
+        method = call_args.args[0]
+        assert method.__self__ is beets_router.beets_client
+        assert method.__name__ == "list_albums"
+        assert call_args.args[1:] == ()
+        assert call_args.kwargs == {}
+
+
+class TestRouterTracks:
+    @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
+    def test_tracks(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
+        mock_pool.return_value = ["Song A", "Song B"]
+
+        response = api_client.get("/beets/tracks")
+
+        assert response.status_code == 200
+        assert response.json() == {"tracks": ["Song A", "Song B"]}
+        mock_pool.assert_awaited_once()
+        call_args = mock_pool.await_args
+        method = call_args.args[0]
+        assert method.__self__ is beets_router.beets_client
+        assert method.__name__ == "list_tracks"
+        assert call_args.args[1:] == ()
+        assert call_args.kwargs == {}
+
+
+class TestRouterStats:
+    @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
+    def test_stats(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
+        mock_pool.return_value = {"tracks": "10", "albums": "5"}
+
+        response = api_client.get("/beets/stats")
+
+        assert response.status_code == 200
+        assert response.json() == {"stats": {"tracks": "10", "albums": "5"}}
+        mock_pool.assert_awaited_once()
+        call_args = mock_pool.await_args
+        method = call_args.args[0]
+        assert method.__self__ is beets_router.beets_client
+        assert method.__name__ == "stats"
+        assert call_args.args[1:] == ()
+        assert call_args.kwargs == {}
+
+
 class TestRouterRemove:
     @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
     def test_remove(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
         mock_pool.return_value = {"success": True, "removed": 5}
 
-        response = api_client.post(
+        response = api_client.request(
+            "DELETE",
             "/beets/remove",
             json={"query": "artist:Metallica year:1986", "force": True},
         )
@@ -553,7 +646,8 @@ class TestRouterRemove:
     def test_remove_invalid_query(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
         mock_pool.side_effect = BeetsClientError("Invalid query syntax: missing quote")
 
-        response = api_client.post(
+        response = api_client.request(
+            "DELETE",
             "/beets/remove",
             json={"query": "artist:'Bad", "force": False},
         )
@@ -562,7 +656,7 @@ class TestRouterRemove:
         assert response.json()["detail"] == "Invalid query syntax"
 
     def test_remove_empty_query(self, api_client: TestClient) -> None:
-        response = api_client.post("/beets/remove", json={"query": ""})
+        response = api_client.request("DELETE", "/beets/remove", json={"query": ""})
 
         assert response.status_code == 400
         assert response.json()["detail"] == "Query must not be empty"

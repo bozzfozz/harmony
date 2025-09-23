@@ -11,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+ main
     "axios": "^1.6.8",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -22,9 +23,6 @@
     "tailwind-merge": "^2.2.1"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.3.3"
+ main
   }
 }
