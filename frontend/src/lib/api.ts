@@ -105,6 +105,24 @@ export interface BeetsStatsResponse {
   stats: Record<string, string>;
 }
 
+export interface DownloadEntry {
+  id: number | string;
+  filename: string;
+  status: string;
+  progress: number;
+}
+
+export interface StartDownloadPayload {
+  track_id: string;
+}
+
+export interface ActivityItem {
+  timestamp: string;
+  type: string;
+  status: string;
+  details?: Record<string, unknown>;
+}
+
 export const fetchSettings = async (): Promise<SettingsResponse> => {
   const { data } = await api.get<SettingsResponse>('/settings');
   return data;
@@ -189,4 +207,35 @@ export const runBeetsImport = async (payload: BeetsImportRequest): Promise<Beets
 export const fetchBeetsStats = async (): Promise<BeetsStatsResponse> => {
   const { data } = await api.get<BeetsStatsResponse>('/beets/stats');
   return data;
+};
+
+export const fetchActiveDownloads = async (): Promise<DownloadEntry[]> => {
+  const { data } = await api.get('/api/download');
+  if (Array.isArray(data)) {
+    return data as DownloadEntry[];
+  }
+  if (Array.isArray((data as { downloads?: DownloadEntry[] }).downloads)) {
+    return (data as { downloads: DownloadEntry[] }).downloads;
+  }
+  return [];
+};
+
+export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
+  const { data } = await api.post('/api/download', payload);
+  if (Array.isArray((data as { downloads?: DownloadEntry[] }).downloads)) {
+    const [first] = (data as { downloads: DownloadEntry[] }).downloads;
+    return first;
+  }
+  return data as DownloadEntry;
+};
+
+export const fetchActivityFeed = async (): Promise<ActivityItem[]> => {
+  const { data } = await api.get('/api/activity');
+  if (Array.isArray(data)) {
+    return data as ActivityItem[];
+  }
+  if (Array.isArray((data as { items?: ActivityItem[] }).items)) {
+    return (data as { items: ActivityItem[] }).items;
+  }
+  return [];
 };

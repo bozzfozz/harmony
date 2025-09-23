@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle
 } from '../components/ui/card';
+import ActivityFeed from '../components/ActivityFeed';
 import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
 import {
@@ -222,6 +223,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      <ActivityFeed />
 
       <Card>
         <CardHeader>

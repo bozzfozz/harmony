@@ -127,6 +127,16 @@ GET /api/activity HTTP/1.1
 ]
 ```
 
+### Frontend-Oberfläche
+
+![Downloads-Verwaltung](downloads-page.svg)
+
+Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status und Fortschrittsbalken an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden.
+
+![Activity-Feed-Widget](activity-feed-widget.svg)
+
+Auf dem Dashboard ergänzt das Activity-Feed-Widget die bestehenden Statuskacheln. Es pollt den `/api/activity`-Endpunkt alle zehn Sekunden, visualisiert die letzten Aktionen mit Zeitstempel, Typ und Status-Badge und informiert per Toast, falls der Feed leer bleibt oder das Backend nicht erreichbar ist. Dadurch behalten Operatorinnen laufende Sync-, Such- und Download-Aktivitäten im Blick, ohne das Backend manuell abfragen zu müssen.
+
 ## Spotify (`/spotify`)
 
 | Methode | Pfad | Beschreibung |
