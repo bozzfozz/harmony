@@ -19,12 +19,21 @@ from app.logging import configure_logging, get_logger
 from app.routers import (
     beets_router,
     matching_router,
+    metadata_router,
     plex_router,
     settings_router,
+    sync_router,
+    system_router,
     soulseek_router,
     spotify_router,
 )
-from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
+from app.workers import (
+    MatchingWorker,
+    MetadataUpdateWorker,
+    PlaylistSyncWorker,
+    ScanWorker,
+    SyncWorker,
+)
 
 app = FastAPI(title="Harmony Backend", version="1.4.0")
 logger = get_logger(__name__)
@@ -35,6 +44,9 @@ app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
 app.include_router(matching_router, prefix="/matching", tags=["Matching"])
 app.include_router(settings_router, prefix="/settings", tags=["Settings"])
 app.include_router(beets_router, prefix="/beets", tags=["Beets"])
+app.include_router(metadata_router, tags=["Metadata"])
+app.include_router(sync_router, tags=["Sync"])
+app.include_router(system_router, tags=["System"])
 
 
 @app.on_event("startup")
@@ -62,6 +74,11 @@ async def startup_event() -> None:
         app.state.playlist_worker = PlaylistSyncWorker(spotify_client)
         await app.state.playlist_worker.start()
 
+        app.state.metadata_worker = MetadataUpdateWorker(
+            app.state.scan_worker,
+            app.state.matching_worker,
+        )
+
     logger.info("Harmony application started")
 
 
@@ -74,6 +91,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "scan_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "playlist_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "metadata_worker", None):
         await worker.stop()
     try:
         plex_client = get_plex_client()

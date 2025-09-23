@@ -3,6 +3,83 @@
 Die folgenden Tabellen geben einen Überblick über die wichtigsten REST-Endpunkte des Harmony-Backends. Beispiel-Requests orientieren
 sich an den in `app/routers` definierten Routen. Alle Antworten sind JSON-codiert.
 
+## System
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `GET` | `/status` | Liefert allgemeinen Backend-Status inklusive Worker-Informationen. |
+| `GET` | `/api/system/stats` | Systemkennzahlen (CPU, RAM, Speicher, Netzwerk) über `psutil`. |
+
+**Beispiel:**
+
+```http
+GET /status HTTP/1.1
+```
+
+```json
+{
+  "status": "ok",
+  "version": "1.4.0",
+  "uptime_seconds": 12.5,
+  "workers": {
+    "soulseek_sync": {"state": "idle", "queue_size": 0},
+    "matching": {"state": "running"}
+  }
+}
+```
+
+## Metadata (`/api/metadata`)
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `POST` | `/api/metadata/update` | Startet den Metadaten-Refresh-Worker. |
+| `GET` | `/api/metadata/status` | Aktueller Status inkl. Phase, Timestamps und Matching-Queue. |
+| `POST` | `/api/metadata/stop` | Fordert einen Abbruch des laufenden Jobs an. |
+
+**Beispiel:**
+
+```http
+POST /api/metadata/update HTTP/1.1
+```
+
+```json
+{
+  "message": "Metadata update started",
+  "state": {
+    "status": "running",
+    "phase": "Preparing",
+    "processed": 0,
+    "matching_queue": 0
+  }
+}
+```
+
+## Sync & Suche (`/api`)
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `POST` | `/api/sync` | Startet einen manuellen Playlist- und Bibliotheksabgleich. |
+| `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
+
+**Beispiel:**
+
+```http
+POST /api/search HTTP/1.1
+Content-Type: application/json
+
+{"query": "Daft Punk"}
+```
+
+```json
+{
+  "query": "Daft Punk",
+  "results": {
+    "spotify": {"tracks": [...], "artists": [...], "albums": [...]},
+    "soulseek": {"results": ["Daft Punk"]}
+  }
+}
+```
+
 ## Spotify (`/spotify`)
 
 | Methode | Pfad | Beschreibung |
