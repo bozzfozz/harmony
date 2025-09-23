@@ -1,5 +1,4 @@
-import userEvent from '@testing-library/user-event';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, userEvent } from '../src/testing/dom-testing';
 import App from '../src/App';
 import { renderWithProviders } from '../src/test-utils';
 

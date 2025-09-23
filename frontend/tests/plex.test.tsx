@@ -1,9 +1,7 @@
-import userEvent from '@testing-library/user-event';
-import { rest } from 'msw';
-import { screen } from '@testing-library/react';
+import { screen, userEvent } from '../src/testing/dom-testing';
 import PlexPage from '../src/pages/PlexPage';
 import { renderWithProviders } from '../src/test-utils';
-import { server } from './server';
+import { rest, server } from './server';
 
 describe('PlexPage', () => {
   it('shows status, sessions and saves settings', async () => {
@@ -26,7 +24,7 @@ describe('PlexPage', () => {
   });
 
   it('shows error toast when plex status fails', async () => {
-    server.use(rest.get('http://localhost/plex/status', (_req, res, ctx) => res(ctx.status(500))));
+    server.use(rest.get('http://localhost/plex/status', () => ({ status: 500 })));
 
     renderWithProviders(<PlexPage />);
     await screen.findByText('❌ Fehler beim Laden');

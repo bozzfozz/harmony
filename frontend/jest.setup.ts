@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import './src/testing/jest-matchers';
 import { server, resetSettings } from './tests/server';
 
 beforeAll(() => {

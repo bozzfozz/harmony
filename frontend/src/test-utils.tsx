@@ -1,37 +1,27 @@
 import { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RenderOptions, render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from './lib/query';
+import { render } from './testing/dom-testing';
 import { ThemeProvider } from './components/theme-provider';
 import { ToastContext, ToastMessage } from './hooks/useToast';
 
-interface ExtendedRenderOptions extends RenderOptions {
+interface ExtendedRenderOptions {
   toastFn?: (message: ToastMessage) => void;
   routerEntries?: string[];
 }
 
-const createWrapper = (toastFn: (message: ToastMessage) => void, routerEntries: string[]) => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false }
-    }
-  });
-
-  return ({ children }: { children: ReactNode }) => (
+export const renderWithProviders = (
+  ui: ReactNode,
+  { toastFn = () => undefined, routerEntries = ['/'] }: ExtendedRenderOptions = {}
+) => {
+  const queryClient = new QueryClient();
+  return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastContext.Provider value={{ toast: toastFn }}>
-          <MemoryRouter initialEntries={routerEntries}>{children}</MemoryRouter>
+          <MemoryRouter initialEntries={routerEntries}>{ui}</MemoryRouter>
         </ToastContext.Provider>
       </ThemeProvider>
     </QueryClientProvider>
   );
-};
-
-export const renderWithProviders = (
-  ui: ReactNode,
-  { toastFn = () => undefined, routerEntries = ['/'], ...renderOptions }: ExtendedRenderOptions = {}
-) => {
-  const Wrapper = createWrapper(toastFn, routerEntries);
-  return render(<>{ui}</>, { wrapper: Wrapper, ...renderOptions });
 };

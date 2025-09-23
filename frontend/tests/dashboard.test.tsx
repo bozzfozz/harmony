@@ -1,8 +1,7 @@
-import { rest } from 'msw';
-import { screen, within } from '@testing-library/react';
+import { screen, within } from '../src/testing/dom-testing';
 import Dashboard from '../src/pages/Dashboard';
 import { renderWithProviders } from '../src/test-utils';
-import { server } from './server';
+import { rest, server } from './server';
 
 describe('Dashboard', () => {
   it('renders system information and downloads', async () => {
@@ -20,7 +19,7 @@ describe('Dashboard', () => {
 
   it('shows an error toast when a request fails', async () => {
     server.use(
-      rest.get('http://localhost/spotify/status', (_req, res, ctx) => res(ctx.status(500)))
+      rest.get('http://localhost/spotify/status', () => ({ status: 500 }))
     );
 
     renderWithProviders(<Dashboard />);

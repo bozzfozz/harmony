@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '../lib/query';
 import { Loader2 } from 'lucide-react';
 import { fetchSettings, updateSetting } from '../lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';

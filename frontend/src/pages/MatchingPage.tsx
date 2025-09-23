@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '../lib/query';
 import { Loader2 } from 'lucide-react';
 import { fetchSoulseekDownloads, SoulseekDownloadEntry } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';

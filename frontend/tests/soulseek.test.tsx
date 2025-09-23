@@ -1,9 +1,7 @@
-import userEvent from '@testing-library/user-event';
-import { rest } from 'msw';
-import { screen } from '@testing-library/react';
+import { screen, userEvent } from '../src/testing/dom-testing';
 import SoulseekPage from '../src/pages/SoulseekPage';
 import { renderWithProviders } from '../src/test-utils';
-import { server } from './server';
+import { rest, server } from './server';
 
 describe('SoulseekPage', () => {
   it('shows downloads, performs search and saves settings', async () => {
@@ -28,7 +26,7 @@ describe('SoulseekPage', () => {
   });
 
   it('shows toast when downloads fail', async () => {
-    server.use(rest.get('http://localhost/soulseek/downloads', (_req, res, ctx) => res(ctx.status(500))));
+    server.use(rest.get('http://localhost/soulseek/downloads', () => ({ status: 500 })));
 
     renderWithProviders(<SoulseekPage />);
     await screen.findByText('❌ Fehler beim Laden');

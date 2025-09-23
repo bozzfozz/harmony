@@ -1,9 +1,7 @@
-import userEvent from '@testing-library/user-event';
-import { rest } from 'msw';
-import { screen } from '@testing-library/react';
+import { screen, userEvent } from '../src/testing/dom-testing';
 import SpotifyPage from '../src/pages/SpotifyPage';
 import { renderWithProviders } from '../src/test-utils';
-import { server } from './server';
+import { rest, server } from './server';
 
 describe('SpotifyPage', () => {
   it('shows playlists, performs search and saves settings', async () => {
@@ -29,7 +27,7 @@ describe('SpotifyPage', () => {
 
   it('shows toast when playlist loading fails', async () => {
     server.use(
-      rest.get('http://localhost/spotify/playlists', (_req, res, ctx) => res(ctx.status(500)))
+      rest.get('http://localhost/spotify/playlists', () => ({ status: 500 }))
     );
 
     renderWithProviders(<SpotifyPage />);

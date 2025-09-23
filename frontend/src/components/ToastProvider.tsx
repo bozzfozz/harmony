@@ -1,5 +1,5 @@
-import { ReactNode, useCallback, useState } from 'react';
-import * as ToastPrimitive from '@radix-ui/react-toast';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ToastContext, ToastMessage } from '../hooks/useToast';
 import { cn } from '../lib/utils';
 
@@ -13,40 +13,48 @@ const ToastProvider = ({ children }: ToastProviderProps) => {
 
   const toast = useCallback((message: ToastMessage) => {
     setToastState(message);
-    setOpen(false);
-    const trigger = () => setOpen(true);
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(trigger);
-    } else {
-      setTimeout(trigger, 0);
-    }
+    setOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setOpen(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  const toastContent = useMemo(() => {
+    if (!open || !toastState) {
+      return null;
+    }
+
+    const containerClass = cn(
+      'pointer-events-auto flex w-[320px] flex-col gap-1 rounded-lg border bg-background p-4 shadow-lg',
+      toastState.variant === 'destructive' && 'border-destructive bg-destructive/10 text-destructive-foreground'
+    );
+
+    return (
+      <div className={containerClass} role="status">
+        {toastState.title ? (
+          <p className="text-sm font-semibold">{toastState.title}</p>
+        ) : null}
+        {toastState.description ? (
+          <p className="text-xs text-muted-foreground">{toastState.description}</p>
+        ) : null}
+      </div>
+    );
+  }, [open, toastState]);
 
   return (
     <ToastContext.Provider value={{ toast }}>
-      <ToastPrimitive.Provider swipeDirection="right">
-        {children}
-        <ToastPrimitive.Root
-          open={open}
-          onOpenChange={setOpen}
-          className={cn(
-            'pointer-events-auto flex w-[320px] flex-col gap-1 rounded-lg border bg-background p-4 shadow-lg',
-            toastState?.variant === 'destructive' && 'border-destructive text-destructive-foreground'
-          )}
-        >
-          {toastState?.title ? (
-            <ToastPrimitive.Title className="text-sm font-semibold">
-              {toastState.title}
-            </ToastPrimitive.Title>
-          ) : null}
-          {toastState?.description ? (
-            <ToastPrimitive.Description className="text-xs text-muted-foreground">
-              {toastState.description}
-            </ToastPrimitive.Description>
-          ) : null}
-        </ToastPrimitive.Root>
-        <ToastPrimitive.Viewport className="fixed bottom-4 right-4 z-[100] flex max-h-screen w-full flex-col gap-2 p-4 sm:max-w-[420px]" />
-      </ToastPrimitive.Provider>
+      {children}
+      {createPortal(
+        <div className="fixed bottom-4 right-4 z-[100] flex max-h-screen w-full flex-col gap-2 p-4 sm:max-w-[420px]">
+          {toastContent}
+        </div>,
+        document.body
+      )}
     </ToastContext.Provider>
   );
 };
