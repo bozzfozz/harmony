@@ -71,14 +71,19 @@ const DashboardPage = ({ filters }: DashboardPageProps) => {
         .map(([key]) => key.toLowerCase())
     );
 
+    const filterableKeys = new Set(
+      Object.keys(filters).map((filterKey) => filterKey.toLowerCase())
+    );
+
     return overview.services.filter((service) => {
       if (!enabledKeys.size) return true;
       const key = service.name.toLowerCase();
-      if (enabledKeys.has(key)) return true;
-      if (key === "beets") {
-        return true;
+
+      if (filterableKeys.has(key)) {
+        return enabledKeys.has(key);
       }
-      return enabledKeys.has("spotify") || enabledKeys.has("plex") || enabledKeys.has("soulseek");
+
+      return false;
     });
   }, [filters, overview.services]);
 
