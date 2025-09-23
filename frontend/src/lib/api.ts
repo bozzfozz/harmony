@@ -6,7 +6,8 @@ export const api = axios.create({
 });
 
 export interface SettingsResponse {
-  settings: Record<string, string>;
+  settings: Record<string, string | null>;
+  updated_at: string;
 }
 
 export interface UpdateSettingPayload {
@@ -14,67 +15,94 @@ export interface UpdateSettingPayload {
   value: string | null;
 }
 
-export interface SystemOverviewResponse {
-  cpuUsage: number;
-  memoryUsage: number;
-  storageUsage: number;
-  runningServices: number;
+export interface StatusResponse {
+  status: string;
+  artist_count?: number;
+  album_count?: number;
+  track_count?: number;
+  last_scan?: string;
 }
 
-export interface ServiceSummary {
-  name: string;
-  status: 'running' | 'stopped' | 'paused';
-  uptime: string;
-}
-
-export interface JobSummary {
+export interface SpotifyPlaylist {
   id: string;
   name: string;
-  status: 'pending' | 'running' | 'success' | 'error';
-  updatedAt: string;
+  track_count: number;
+  updated_at: string;
 }
 
-export interface SpotifyOverviewResponse {
-  playlists: number;
-  artists: number;
-  tracks: number;
-  lastSync: string;
+export interface SpotifyPlaylistsResponse {
+  playlists: SpotifyPlaylist[];
 }
 
-export interface PlexOverviewResponse {
-  libraries: number;
-  users: number;
-  sessions: number;
-  lastSync: string;
+export interface SpotifyArtistSummary {
+  name?: string;
 }
 
-export interface SoulseekOverviewResponse {
-  downloads: number;
-  uploads: number;
-  queue: number;
-  lastSync: string;
+export interface SpotifyAlbumSummary {
+  name?: string;
 }
 
-export interface BeetsOverviewResponse {
-  albums: number;
-  artists: number;
-  tracks: number;
-  lastSync: string;
+export interface SpotifyTrackSummary {
+  id?: string;
+  name?: string;
+  artists?: SpotifyArtistSummary[];
+  album?: SpotifyAlbumSummary;
+  duration_ms?: number;
 }
 
-export interface MatchingStatsResponse {
-  pending: number;
-  processed: number;
-  conflicts: number;
-  lastRun: string;
+export interface SpotifySearchResponse {
+  items: SpotifyTrackSummary[];
 }
 
-export interface MatchingHistoryEntry {
-  id: string;
-  source: string;
-  matched: number;
-  unmatched: number;
-  createdAt: string;
+export interface PlexStatusResponse {
+  status: string;
+  sessions?: unknown[];
+  library?: Record<string, unknown>;
+}
+
+export type PlexLibrariesResponse = Record<string, unknown>;
+
+export interface SoulseekDownloadEntry {
+  id: number;
+  filename: string;
+  state: string;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SoulseekDownloadsResponse {
+  downloads: SoulseekDownloadEntry[];
+}
+
+export interface MatchingRequestPayload {
+  spotify_track: Record<string, unknown>;
+  candidates: Record<string, unknown>[];
+}
+
+export interface AlbumMatchingRequestPayload {
+  spotify_album: Record<string, unknown>;
+  candidates: Record<string, unknown>[];
+}
+
+export interface MatchingResponsePayload {
+  best_match: Record<string, unknown> | null;
+  confidence: number;
+}
+
+export interface BeetsImportRequest {
+  path: string;
+  quiet?: boolean;
+  autotag?: boolean;
+}
+
+export interface BeetsImportResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface BeetsStatsResponse {
+  stats: Record<string, string>;
 }
 
 export const fetchSettings = async (): Promise<SettingsResponse> => {
@@ -82,55 +110,83 @@ export const fetchSettings = async (): Promise<SettingsResponse> => {
   return data;
 };
 
-export const updateSettings = async (settings: UpdateSettingPayload[]): Promise<void> => {
-  await api.put('/settings', { settings });
-};
-
 export const updateSetting = async (setting: UpdateSettingPayload): Promise<void> => {
-  await updateSettings([setting]);
+  await api.post('/settings', setting);
 };
 
-export const fetchSystemOverview = async (): Promise<SystemOverviewResponse> => {
-  const { data } = await api.get<SystemOverviewResponse>('/system/overview');
+export const updateSettings = async (settings: UpdateSettingPayload[]): Promise<void> => {
+  for (const setting of settings) {
+    await updateSetting(setting);
+  }
+};
+
+export const fetchSpotifyStatus = async (): Promise<StatusResponse> => {
+  const { data } = await api.get<StatusResponse>('/spotify/status');
   return data;
 };
 
-export const fetchServices = async (): Promise<ServiceSummary[]> => {
-  const { data } = await api.get<ServiceSummary[]>('/system/services');
+export const fetchSpotifyPlaylists = async (): Promise<SpotifyPlaylist[]> => {
+  const { data } = await api.get<SpotifyPlaylistsResponse>('/spotify/playlists');
+  return data.playlists;
+};
+
+export const searchSpotifyTracks = async (query: string): Promise<SpotifyTrackSummary[]> => {
+  const { data } = await api.get<SpotifySearchResponse>('/spotify/search/tracks', {
+    params: { query }
+  });
+  return data.items;
+};
+
+export const fetchPlexStatus = async (): Promise<PlexStatusResponse> => {
+  const { data } = await api.get<PlexStatusResponse>('/plex/status');
   return data;
 };
 
-export const fetchJobs = async (): Promise<JobSummary[]> => {
-  const { data } = await api.get<JobSummary[]>('/system/jobs');
+export const fetchPlexLibraries = async (): Promise<PlexLibrariesResponse> => {
+  const { data } = await api.get<PlexLibrariesResponse>('/plex/library/sections');
   return data;
 };
 
-export const fetchSpotifyOverview = async (): Promise<SpotifyOverviewResponse> => {
-  const { data } = await api.get<SpotifyOverviewResponse>('/spotify/overview');
+export const fetchSoulseekStatus = async (): Promise<StatusResponse> => {
+  const { data } = await api.get<StatusResponse>('/soulseek/status');
   return data;
 };
 
-export const fetchPlexOverview = async (): Promise<PlexOverviewResponse> => {
-  const { data } = await api.get<PlexOverviewResponse>('/plex/overview');
+export const fetchSoulseekDownloads = async (): Promise<SoulseekDownloadEntry[]> => {
+  const { data } = await api.get<SoulseekDownloadsResponse>('/soulseek/downloads');
+  return data.downloads;
+};
+
+export const runSpotifyToPlexMatch = async (
+  payload: MatchingRequestPayload
+): Promise<MatchingResponsePayload> => {
+  const { data } = await api.post<MatchingResponsePayload>('/matching/spotify-to-plex', payload);
   return data;
 };
 
-export const fetchSoulseekOverview = async (): Promise<SoulseekOverviewResponse> => {
-  const { data } = await api.get<SoulseekOverviewResponse>('/soulseek/overview');
+export const runSpotifyToSoulseekMatch = async (
+  payload: MatchingRequestPayload
+): Promise<MatchingResponsePayload> => {
+  const { data } = await api.post<MatchingResponsePayload>('/matching/spotify-to-soulseek', payload);
   return data;
 };
 
-export const fetchBeetsOverview = async (): Promise<BeetsOverviewResponse> => {
-  const { data } = await api.get<BeetsOverviewResponse>('/beets/overview');
+export const runSpotifyToPlexAlbumMatch = async (
+  payload: AlbumMatchingRequestPayload
+): Promise<MatchingResponsePayload> => {
+  const { data } = await api.post<MatchingResponsePayload>(
+    '/matching/spotify-to-plex-album',
+    payload
+  );
   return data;
 };
 
-export const fetchMatchingStats = async (): Promise<MatchingStatsResponse> => {
-  const { data } = await api.get<MatchingStatsResponse>('/matching/stats');
+export const runBeetsImport = async (payload: BeetsImportRequest): Promise<BeetsImportResponse> => {
+  const { data } = await api.post<BeetsImportResponse>('/beets/import', payload);
   return data;
 };
 
-export const fetchMatchingHistory = async (): Promise<MatchingHistoryEntry[]> => {
-  const { data } = await api.get<MatchingHistoryEntry[]>('/matching/history');
+export const fetchBeetsStats = async (): Promise<BeetsStatsResponse> => {
+  const { data } = await api.get<BeetsStatsResponse>('/beets/stats');
   return data;
 };

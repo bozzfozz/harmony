@@ -1,123 +1,168 @@
-import { Loader2 } from 'lucide-react';
+import { FormEvent, useMemo, useState } from 'react';
+import { Loader2, RefreshCcw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
-import { useQuery } from '../lib/query';
-import { fetchBeetsOverview } from '../lib/api';
-import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
-
-const formatDateTime = (value: string) => {
-  if (!value) {
-    return 'Never';
-  }
-  try {
-    return new Intl.DateTimeFormat('en', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(value));
-  } catch (error) {
-    return value;
-  }
-};
-
-const settingsFields = [
-  { key: 'beets.host', label: 'Host', placeholder: 'localhost' },
-  { key: 'beets.port', label: 'Port', placeholder: '8337' },
-  { key: 'beets.apiKey', label: 'API key', placeholder: 'Optional API key' }
-] as const;
+import { Switch } from '../components/ui/switch';
+import { useToast } from '../hooks/useToast';
+import { useMutation, useQuery, useQueryClient } from '../lib/query';
+import { fetchBeetsStats, runBeetsImport } from '../lib/api';
 
 const BeetsPage = () => {
-  const overviewQuery = useQuery({
-    queryKey: ['beets-overview'],
-    queryFn: fetchBeetsOverview,
-    refetchInterval: 60000
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [importPath, setImportPath] = useState('');
+  const [quiet, setQuiet] = useState(true);
+  const [autotag, setAutotag] = useState(true);
+
+  const statsQuery = useQuery({
+    queryKey: ['beets-stats'],
+    queryFn: fetchBeetsStats,
+    refetchInterval: 60000,
+    onError: () =>
+      toast({
+        title: 'Failed to load Beets statistics',
+        description: 'Make sure the Beets integration is configured correctly.',
+        variant: 'destructive'
+      })
   });
 
-  const { form, onSubmit, handleReset, isSaving, isLoading } = useServiceSettingsForm({
-    fields: settingsFields,
-    loadErrorDescription: 'Beets settings could not be loaded.',
-    successTitle: 'Beets settings saved',
-    errorTitle: 'Failed to save Beets settings'
+  const importMutation = useMutation({
+    mutationFn: runBeetsImport,
+    onSuccess: (data, payload) => {
+      toast({ title: 'Import started', description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['beets-stats'] });
+      setImportPath('');
+    },
+    onError: () =>
+      toast({
+        title: 'Import failed',
+        description: 'Beets could not start the import job.',
+        variant: 'destructive'
+      })
   });
 
-  const overview = overviewQuery.data ?? {
-    albums: 0,
-    artists: 0,
-    tracks: 0,
-    lastSync: ''
+  const statsEntries = useMemo(() => {
+    const stats = statsQuery.data?.stats ?? {};
+    return Object.entries(stats);
+  }, [statsQuery.data?.stats]);
+
+  const handleImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = importPath.trim();
+    if (!trimmed) {
+      toast({
+        title: 'Path required',
+        description: 'Please provide the path to the music you want to import.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    await importMutation.mutate({ path: trimmed, quiet, autotag });
   };
 
   return (
     <Tabs defaultValue="overview">
       <TabsList>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="settings">Settings</TabsTrigger>
+        <TabsTrigger value="overview">Library</TabsTrigger>
+        <TabsTrigger value="import">Import</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
         <Card>
           <CardHeader>
-            <CardTitle>Beets library</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>Beets statistics</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => statsQuery.refetch()}
+                disabled={statsQuery.isLoading}
+                className="inline-flex items-center gap-1"
+              >
+                <RefreshCcw className="h-4 w-4" /> Refresh
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {overviewQuery.isLoading ? (
+            {statsQuery.isLoading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Albums</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.albums}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Artists</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.artists}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Tracks</p>
-                  <p className="mt-2 text-2xl font-semibold">{overview.tracks}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4">
-                  <p className="text-sm text-muted-foreground">Last import</p>
-                  <p className="mt-2 text-base font-semibold">{formatDateTime(overview.lastSync)}</p>
-                </div>
+              <div className="space-y-3">
+                {statsEntries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No statistics available from the Beets server yet.
+                  </p>
+                ) : (
+                  statsEntries.map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between text-sm">
+                      <span className="capitalize text-muted-foreground">{key.replace(/_/g, ' ')}</span>
+                      <span className="font-semibold">{value}</span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="settings">
+      <TabsContent value="import">
         <Card>
           <CardHeader>
-            <CardTitle>Beets connection</CardTitle>
+            <CardTitle>Import music</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <form onSubmit={handleImport} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="beets-path">Path to import</Label>
+                <Input
+                  id="beets-path"
+                  placeholder="/music/new"
+                  value={importPath}
+                  onChange={(event) => setImportPath(event.target.value)}
+                />
               </div>
-            ) : (
-              <form onSubmit={onSubmit} className="space-y-6">
-                <div className="grid gap-4">
-                  {settingsFields.map(({ key, label, placeholder }) => (
-                    <div key={key} className="space-y-2">
-                      <Label htmlFor={key}>{label}</Label>
-                      <Input id={key} placeholder={placeholder} {...form.register(key)} />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button type="submit" disabled={isSaving}>
-                    {isSaving ? 'Saving…' : 'Save changes'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleReset} disabled={isSaving}>
-                    Reset
-                  </Button>
-                </div>
-              </form>
-            )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex items-center justify-between gap-4 rounded-md border p-3">
+                  <span className="text-sm">Quiet mode</span>
+                  <Switch checked={quiet} onCheckedChange={(value) => setQuiet(Boolean(value))} />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-md border p-3">
+                  <span className="text-sm">Autotag</span>
+                  <Switch
+                    checked={autotag}
+                    onCheckedChange={(value) => setAutotag(Boolean(value))}
+                  />
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="submit" disabled={importMutation.isPending}>
+                  {importMutation.isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Starting import…
+                    </span>
+                  ) : (
+                    'Start import'
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setImportPath('');
+                    setQuiet(true);
+                    setAutotag(true);
+                  }}
+                  disabled={importMutation.isPending}
+                >
+                  Reset
+                </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
       </TabsContent>
