@@ -226,7 +226,7 @@ const waitFor = async (callback: () => void, options: WaitForOptions = {}) => {
   }
 };
 
-const findBy = async <T>(getter: () => T) => {
+const findBy = async <T,>(getter: () => T) => {
   let result: T | undefined;
   await waitFor(() => {
     result = getter();
