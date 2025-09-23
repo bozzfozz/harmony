@@ -13,5 +13,4 @@
 
 ## Dokumentation
 - README um Neuerungen in v1.2.0 ergänzt.
-- CHANGELOG auf Version 1.2.0 aktualisiert.
-- Dokumentation und Changelog beschreiben den Soulseek-Download-Fortschritt.
+- Dokumentation beschreibt den Soulseek-Download-Fortschritt.
