@@ -4,6 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Added cancel and retry endpoints for downloads including worker cancellation support.
 - Added limit/offset support to GET /api/downloads.
 - Added DownloadWidget to Dashboard.
 - Added GET endpoints for downloads.

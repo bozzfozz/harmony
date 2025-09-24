@@ -63,6 +63,8 @@ POST /api/metadata/update HTTP/1.1
 | `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset` und optional `?all=true`. |
 | `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
+| `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
+| `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
 | `GET` | `/api/activity` | Liefert den In-Memory-Aktivitätsfeed (max. 50 Einträge). |
 
 **Beispiel:**
@@ -195,6 +197,21 @@ GET /api/download/42 HTTP/1.1
 }
 ```
 
+**Download-Abbruch:**
+
+```http
+DELETE /api/download/42 HTTP/1.1
+```
+
+```json
+{
+  "status": "cancelled",
+  "download_id": 42
+}
+```
+
+Der Activity Feed erhält einen Eintrag `download_cancelled` inklusive `download_id` und `filename`. Der SyncWorker setzt ein internes Cancel-Flag, stoppt laufende Jobs und informiert die Soulseek-API.
+
 **Download-Start:**
 
 ```http
@@ -223,6 +240,21 @@ Content-Type: application/json
   ]
 }
 ```
+
+**Download-Retry:**
+
+```http
+POST /api/download/42/retry HTTP/1.1
+```
+
+```json
+{
+  "status": "queued",
+  "download_id": 87
+}
+```
+
+Der Endpunkt akzeptiert nur Downloads im Status `failed` oder `cancelled`. Es wird ein neuer Eintrag mit eigener ID erzeugt, die ursprünglichen Datei-Parameter werden wiederverwendet und erneut an den SyncWorker übergeben. Der Activity Feed erhält einen Eintrag `download_retried` mit `original_download_id` und `retry_download_id`.
 
 ## Download-Widget im Dashboard
 

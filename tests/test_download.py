@@ -178,3 +178,104 @@ def test_get_download_detail_returns_404_for_unknown_id(client) -> None:
     assert response.status_code == 404
 
     assert activity_manager.list() == []
+
+
+def test_cancel_download_sets_state_and_activity(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "song.mp3", "size": 512},
+        ],
+    }
+
+    start_response = client.post("/api/download", json=payload)
+    assert start_response.status_code == 202
+    original_id = start_response.json()["download_id"]
+
+    response = client.delete(f"/api/download/{original_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "cancelled"
+    assert body["download_id"] == original_id
+
+    with session_scope() as session:
+        download = session.get(Download, original_id)
+        assert download is not None
+        assert download.state == "cancelled"
+
+    entries = activity_manager.list()
+    assert entries[0]["status"] == "download_cancelled"
+    assert entries[0]["details"]["download_id"] == original_id
+
+
+def test_retry_download_creates_new_entry(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "song.mp3", "size": 512},
+        ],
+    }
+
+    start_response = client.post("/api/download", json=payload)
+    assert start_response.status_code == 202
+    original_id = start_response.json()["download_id"]
+
+    cancel_response = client.delete(f"/api/download/{original_id}")
+    assert cancel_response.status_code == 200
+
+    response = client.post(f"/api/download/{original_id}/retry")
+    assert response.status_code == 202
+
+    body = response.json()
+    retry_id = body["download_id"]
+    assert retry_id != original_id
+
+    with session_scope() as session:
+        retry_download = session.get(Download, retry_id)
+        assert retry_download is not None
+        assert retry_download.state == "queued"
+        assert retry_download.username == "tester"
+        assert retry_download.request_payload["download_id"] == retry_id
+
+    stub = client.app.state.soulseek_stub
+    assert retry_id in stub.downloads
+
+    entries = activity_manager.list()
+    assert entries[0]["status"] == "download_retried"
+    assert entries[0]["details"]["retry_download_id"] == retry_id
+
+
+def test_cancel_download_rejects_invalid_state(client) -> None:
+    with session_scope() as session:
+        session.query(Download).delete()
+        completed = Download(filename="done.mp3", state="completed", progress=1.0)
+        session.add(completed)
+        session.commit()
+        download_id = completed.id
+
+    response = client.delete(f"/api/download/{download_id}")
+    assert response.status_code == 409
+
+
+def test_retry_download_rejects_invalid_state(client) -> None:
+    with session_scope() as session:
+        session.query(Download).delete()
+        queued = Download(filename="pending.mp3", state="queued", progress=0.0)
+        session.add(queued)
+        session.commit()
+        download_id = queued.id
+
+    response = client.post(f"/api/download/{download_id}/retry")
+    assert response.status_code == 409
+
+
+def test_retry_download_requires_payload(client) -> None:
+    with session_scope() as session:
+        session.query(Download).delete()
+        failed = Download(filename="broken.mp3", state="failed", progress=0.0)
+        session.add(failed)
+        session.commit()
+        download_id = failed.id
+
+    response = client.post(f"/api/download/{download_id}/retry")
+    assert response.status_code == 400
