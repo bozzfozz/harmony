@@ -115,6 +115,27 @@ GET /api/downloads HTTP/1.1
 }
 ```
 
+**Limitierte Übersicht (z. B. für Widgets):**
+
+```http
+GET /api/downloads?limit=5 HTTP/1.1
+```
+
+```json
+{
+  "downloads": [
+    {
+      "id": 7,
+      "filename": "Daft Punk - One More Time.mp3",
+      "status": "running",
+      "progress": 65.0,
+      "created_at": "2024-03-18T12:06:00Z",
+      "updated_at": "2024-03-18T12:06:10Z"
+    }
+  ]
+}
+```
+
 **Alle Downloads inklusive abgeschlossener/fehlgeschlagener Transfers:**
 
 ```http

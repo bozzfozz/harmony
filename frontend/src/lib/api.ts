@@ -326,6 +326,32 @@ const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): Downloa
   };
 };
 
+const requestDownloads = async (
+  params?: Record<string, number | boolean>
+): Promise<DownloadEntry[]> => {
+  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
+    params: params && Object.keys(params).length > 0 ? params : undefined
+  });
+  return extractDownloadEntries(data).map(mapDownloadEntry);
+};
+
+export const fetchDownloads = async (
+  limit = 5,
+  offset = 0,
+  all = false
+): Promise<DownloadEntry[]> => {
+  const params: Record<string, number | boolean> = {
+    limit,
+    offset
+  };
+
+  if (all) {
+    params.all = true;
+  }
+
+  return requestDownloads(params);
+};
+
 export const fetchActiveDownloads = async (
   options: FetchDownloadsOptions = {}
 ): Promise<DownloadEntry[]> => {
@@ -342,10 +368,7 @@ export const fetchActiveDownloads = async (
     params.offset = offset;
   }
 
-  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
-    params: Object.keys(params).length > 0 ? params : undefined
-  });
-  return extractDownloadEntries(data).map(mapDownloadEntry);
+  return requestDownloads(params);
 };
 
 export const fetchDownloadById = async (id: string): Promise<DownloadEntry> => {
