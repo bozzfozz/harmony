@@ -6,7 +6,13 @@ import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../hooks/useToast';
-import { fetchActiveDownloads, startDownload, DownloadEntry } from '../lib/api';
+import {
+  cancelDownload,
+  fetchActiveDownloads,
+  retryDownload,
+  startDownload,
+  DownloadEntry
+} from '../lib/api';
 import { useMutation, useQuery } from '../lib/query';
 import { mapProgressToPercent } from '../lib/utils';
 
@@ -51,6 +57,46 @@ const DownloadsPage = () => {
       toast({
         title: 'Download fehlgeschlagen',
         description: 'Bitte Eingabe prüfen und erneut versuchen.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const cancelDownloadMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; filename: string }) => cancelDownload(id),
+    onSuccess: (_, { filename }) => {
+      toast({
+        title: 'Download abgebrochen',
+        description: filename ? `"${filename}" wurde gestoppt.` : 'Download wurde abgebrochen.'
+      });
+      void refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Abbruch fehlgeschlagen',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const retryDownloadMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; filename: string }) => retryDownload(id),
+    onSuccess: (entry, { filename }) => {
+      toast({
+        title: 'Download neu gestartet',
+        description: entry?.filename
+          ? `"${entry.filename}" wurde erneut zur Warteschlange hinzugefügt.`
+          : filename
+            ? `"${filename}" wurde erneut gestartet.`
+            : 'Download wurde erneut gestartet.'
+      });
+      void refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Neu-Start fehlgeschlagen',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'
       });
     }
@@ -145,6 +191,7 @@ const DownloadsPage = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Fortschritt</TableHead>
                     <TableHead>Angelegt</TableHead>
+                    <TableHead>Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -153,6 +200,9 @@ const DownloadsPage = () => {
                     const createdAtLabel = download.created_at
                       ? dateFormatter.format(new Date(download.created_at))
                       : 'Unbekannt';
+                    const statusLower = (download.status ?? '').toLowerCase();
+                    const showCancel = statusLower === 'running' || statusLower === 'queued';
+                    const showRetry = statusLower === 'failed' || statusLower === 'cancelled';
                     return (
                       <TableRow key={download.id}>
                         <TableCell className="text-sm text-muted-foreground">{download.id}</TableCell>
@@ -165,6 +215,43 @@ const DownloadsPage = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{createdAtLabel}</TableCell>
+                        <TableCell className="space-x-2 whitespace-nowrap">
+                          {showCancel ? (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                cancelDownloadMutation.mutate({
+                                  id: String(download.id),
+                                  filename: download.filename
+                                })
+                              }
+                              disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                            >
+                              Abbrechen
+                            </Button>
+                          ) : null}
+                          {showRetry ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                retryDownloadMutation.mutate({
+                                  id: String(download.id),
+                                  filename: download.filename
+                                })
+                              }
+                              disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                            >
+                              Neu starten
+                            </Button>
+                          ) : null}
+                          {!showCancel && !showRetry ? (
+                            <span className="text-xs text-muted-foreground">Keine Aktion</span>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     );
                   })}

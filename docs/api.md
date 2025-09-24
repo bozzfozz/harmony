@@ -264,12 +264,12 @@ Das Dashboard zeigt aktive Downloads in einem kompakten Widget an. Die Komponent
 
 ```
 Aktive Downloads
-┌──────────────────────────────┬──────────┬─────────────┐
-│ Dateiname                    │ Status   │ Fortschritt │
-├──────────────────────────────┼──────────┼─────────────┤
-│ Track One.mp3                │ Running  │ 45 %        │
-│ Track Two.mp3                │ Queued   │ 10 %        │
-└──────────────────────────────┴──────────┴─────────────┘
+┌──────────────────────────────┬──────────┬─────────────┬──────────────┐
+│ Dateiname                    │ Status   │ Fortschritt │ Aktionen     │
+├──────────────────────────────┼──────────┼─────────────┼──────────────┤
+│ Track One.mp3                │ Running  │ 45 %        │ [Abbrechen]  │
+│ Track Two.mp3                │ Failed   │ 0 %         │ [Neu starten]│
+└──────────────────────────────┴──────────┴─────────────┴──────────────┘
 Alle anzeigen → /downloads
 ```
 
@@ -300,7 +300,7 @@ GET /api/activity HTTP/1.1
 
 ![Downloads-Verwaltung](downloads-page.svg)
 
-Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status, Fortschrittsbalken und Erstellungszeitpunkt an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen ("Keine Downloads aktiv") sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden.
+Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status, Fortschrittsbalken und Erstellungszeitpunkt an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen ("Keine Downloads aktiv") sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden. Zusätzlich stehen pro Zeile Buttons zum sofortigen Abbrechen laufender Jobs sowie zum erneuten Start fehlgeschlagener oder abgebrochener Transfers bereit.
 
 ![Activity-Feed-Widget](activity-feed-widget.svg)
 
