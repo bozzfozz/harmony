@@ -146,6 +146,10 @@ Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Do
 
 Auf dem Dashboard ergänzt das Activity-Feed-Widget die bestehenden Statuskacheln. Es pollt den `/api/activity`-Endpunkt alle zehn Sekunden, sortiert die Einträge nach dem neuesten Zeitstempel und visualisiert die letzten Aktionen mit lokalisierten Typen sowie farbcodierten Status-Badges. Für leere Feeds oder Fehlerfälle erscheinen Toast-Benachrichtigungen, sodass Operatorinnen laufende Sync-, Such- und Download-Aktivitäten ohne manuelle API-Abfragen im Blick behalten.
 
+### Artists-Verwaltung
+
+Die Artists-Seite im Frontend nutzt die Spotify-Endpunkte `GET /spotify/artists/followed` und `GET /spotify/artist/{artist_id}/releases`, um eine sortierbare Liste der gefolgten Artists inklusive Coverbildern anzuzeigen. In der Detailspalte lassen sich die verfügbaren Releases mit Jahr, Typ und Track-Anzahl inspizieren. Über einen Toggle "Für Sync aktivieren" kann pro Release gesteuert werden, ob der AutoSync-Worker ihn berücksichtigen soll. Änderungen werden gesammelt über `POST /settings/artist-preferences` gespeichert. Lade- und Fehlerzustände werden mit Spinnern, leeren States ("Keine Artists gefunden", "Keine Releases verfügbar") sowie Toasts visualisiert.
+
 ## Spotify (`/spotify`)
 
 | Methode | Pfad | Beschreibung |

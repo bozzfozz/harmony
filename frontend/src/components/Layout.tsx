@@ -14,7 +14,8 @@ import {
   RefreshCcw,
   Search,
   Settings,
-  Sun
+  Sun,
+  Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Input } from './ui/input';
@@ -28,6 +29,7 @@ import { useQueryClient } from '../lib/query';
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: CircleDot },
   { to: '/spotify', label: 'Spotify', icon: Music },
+  { to: '/artists', label: 'Artists', icon: Users },
   { to: '/plex', label: 'Plex', icon: Disc },
   { to: '/soulseek', label: 'Soulseek', icon: Radio },
   { to: '/downloads', label: 'Downloads', icon: Download },

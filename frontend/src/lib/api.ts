@@ -34,12 +34,42 @@ export interface SpotifyPlaylistsResponse {
   playlists: SpotifyPlaylist[];
 }
 
+export interface SpotifyImage {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface SpotifyArtist {
+  id: string;
+  name: string;
+  images?: SpotifyImage[];
+  followers?: { total?: number };
+}
+
+export interface FollowedArtistsResponse {
+  artists: SpotifyArtist[];
+}
+
 export interface SpotifyArtistSummary {
   name?: string;
 }
 
 export interface SpotifyAlbumSummary {
   name?: string;
+}
+
+export interface SpotifyArtistRelease {
+  id: string;
+  name: string;
+  album_type?: string;
+  release_date?: string;
+  total_tracks?: number;
+}
+
+export interface ArtistReleasesResponse {
+  artist_id: string;
+  releases: SpotifyArtistRelease[];
 }
 
 export interface SpotifyTrackSummary {
@@ -117,6 +147,16 @@ export interface StartDownloadPayload {
   track_id: string;
 }
 
+export interface ArtistPreferenceEntry {
+  artist_id: string;
+  release_id: string;
+  selected: boolean;
+}
+
+export interface ArtistPreferencesResponse {
+  preferences: ArtistPreferenceEntry[];
+}
+
 export type ActivityType = 'sync' | 'search' | 'download' | 'metadata' | (string & {});
 
 export type ActivityStatus =
@@ -159,6 +199,18 @@ export const fetchSpotifyPlaylists = async (): Promise<SpotifyPlaylist[]> => {
   return data.playlists;
 };
 
+export const fetchFollowedArtists = async (): Promise<SpotifyArtist[]> => {
+  const { data } = await api.get<FollowedArtistsResponse>('/spotify/artists/followed');
+  return data.artists;
+};
+
+export const fetchArtistReleases = async (
+  artistId: string
+): Promise<SpotifyArtistRelease[]> => {
+  const { data } = await api.get<ArtistReleasesResponse>(`/spotify/artist/${artistId}/releases`);
+  return data.releases;
+};
+
 export const searchSpotifyTracks = async (query: string): Promise<SpotifyTrackSummary[]> => {
   const { data } = await api.get<SpotifySearchResponse>('/spotify/search/tracks', {
     params: { query }
@@ -186,6 +238,11 @@ export const fetchSoulseekDownloads = async (): Promise<SoulseekDownloadEntry[]>
   return data.downloads;
 };
 
+export const fetchArtistPreferences = async (): Promise<ArtistPreferenceEntry[]> => {
+  const { data } = await api.get<ArtistPreferencesResponse>('/settings/artist-preferences');
+  return data.preferences;
+};
+
 export const runSpotifyToPlexMatch = async (
   payload: MatchingRequestPayload
 ): Promise<MatchingResponsePayload> => {
@@ -198,6 +255,15 @@ export const runSpotifyToSoulseekMatch = async (
 ): Promise<MatchingResponsePayload> => {
   const { data } = await api.post<MatchingResponsePayload>('/matching/spotify-to-soulseek', payload);
   return data;
+};
+
+export const saveArtistPreferences = async (
+  preferences: ArtistPreferenceEntry[]
+): Promise<ArtistPreferenceEntry[]> => {
+  const { data } = await api.post<ArtistPreferencesResponse>('/settings/artist-preferences', {
+    preferences
+  });
+  return data.preferences;
 };
 
 export const runSpotifyToPlexAlbumMatch = async (
