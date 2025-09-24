@@ -25,6 +25,7 @@ const mapProgressToPercent = (value: number) => {
 const DownloadsPage = () => {
   const { toast } = useToast();
   const [trackId, setTrackId] = useState('');
+  const [showAllDownloads, setShowAllDownloads] = useState(false);
 
   const {
     data: downloads,
@@ -32,8 +33,8 @@ const DownloadsPage = () => {
     isError,
     refetch
   } = useQuery<DownloadEntry[]>({
-    queryKey: ['downloads'],
-    queryFn: fetchActiveDownloads,
+    queryKey: ['downloads', showAllDownloads ? 'all' : 'active'],
+    queryFn: () => fetchActiveDownloads(showAllDownloads),
     refetchInterval: 15000,
     onError: () =>
       toast({
@@ -116,11 +117,23 @@ const DownloadsPage = () => {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Aktive Downloads</CardTitle>
-          <CardDescription>
-            Übersicht der vom Backend gemeldeten Transfers.
-          </CardDescription>
+        <CardHeader className="space-y-2 sm:flex sm:items-center sm:justify-between sm:space-y-0">
+          <div>
+            <CardTitle>Aktive Downloads</CardTitle>
+            <CardDescription>
+              {showAllDownloads
+                ? 'Alle vom Backend gemeldeten Transfers inklusive abgeschlossener und fehlgeschlagener Einträge.'
+                : 'Übersicht der aktuell aktiven Transfers.'}
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAllDownloads((value) => !value)}
+            aria-pressed={showAllDownloads}
+          >
+            {showAllDownloads ? 'Nur aktive' : 'Alle anzeigen'}
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (
