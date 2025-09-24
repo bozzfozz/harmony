@@ -13,6 +13,8 @@ sich an den in `app/routers` definierten Routen. Alle Antworten sind JSON-codier
 | `GET` | `/api/health/soulseek` | Kontrolliert die Soulseek-Konfiguration (`SLSKD_URL`, optional `SLSKD_API_KEY`). |
 | `GET` | `/api/system/stats` | Systemkennzahlen (CPU, RAM, Speicher, Netzwerk) über `psutil`. |
 
+> **Hinweis:** Soulseek wird ausschließlich über `SLSKD_URL` konfiguriert (z. B. `http://localhost:5030`). Das Backend übernimmt vorhandene Einstellungen automatisch, erwartet für neue Deployments jedoch die URL-Variante.
+
 **Beispiel:**
 
 ```http
@@ -130,6 +132,8 @@ POST /api/metadata/update HTTP/1.1
 | `GET` | `/api/downloads/export` | Exportiert Downloads als JSON- oder CSV-Datei inkl. optionaler Filter (`status`, `from`, `to`). |
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 | `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
+
+> **Hinweis:** Die in diesem Dokument verwendeten Statusnamen für Activity-Events sind zentral in `app/utils/events.py` hinterlegt und werden von Routern, Workern und Tests gemeinsam genutzt.
 
 **Activity Feed / Activity History:**
 

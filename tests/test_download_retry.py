@@ -7,6 +7,11 @@ import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download
+from app.utils.events import (
+    DOWNLOAD_RETRY_COMPLETED,
+    DOWNLOAD_RETRY_FAILED,
+    DOWNLOAD_RETRY_SCHEDULED,
+)
 from app.utils.activity import activity_manager
 from app.workers.sync_worker import MAX_RETRY_ATTEMPTS, RETRY_BACKOFF, SyncWorker
 
@@ -65,8 +70,8 @@ async def test_retry_is_scheduled_and_completed(monkeypatch) -> None:
 
     entries = activity_manager.list()
     statuses = [entry["status"] for entry in entries]
-    assert "download_retry_scheduled" in statuses
-    assert "download_retry_completed" in statuses
+    assert DOWNLOAD_RETRY_SCHEDULED in statuses
+    assert DOWNLOAD_RETRY_COMPLETED in statuses
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
@@ -117,7 +122,7 @@ async def test_retry_fails_after_max_attempts(monkeypatch) -> None:
 
     entries = activity_manager.list()
     statuses = [entry["status"] for entry in entries]
-    assert "download_retry_failed" in statuses
+    assert DOWNLOAD_RETRY_FAILED in statuses
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)

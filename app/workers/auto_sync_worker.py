@@ -6,7 +6,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, Iterable, Iterator, List, MutableMapping, Sequence
+from typing import Any, Awaitable, Callable, Dict, Iterable, Iterator, List, MutableMapping, Sequence
 
 from sqlalchemy import delete, select
 
@@ -18,6 +18,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import AutoSyncSkippedTrack
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.events import AUTOSYNC_BLOCKED, WORKER_STOPPED
 from app.utils.service_health import collect_missing_credentials
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
@@ -97,6 +98,7 @@ class AutoSyncWorker:
         self._preferences_loader = preferences_loader
         self._skip_threshold = skip_threshold
         self._in_progress = False
+        self._retry_tasks: set[asyncio.Task[Any]] = set()
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -112,13 +114,43 @@ class AutoSyncWorker:
         self._running = False
         self._stop_event.set()
         if self._task is not None:
+            await self._cancel_retry_tasks()
             try:
                 await self._task
             finally:
                 self._task = None
+        await self._cancel_retry_tasks()
         write_setting("worker.autosync.last_stop", datetime.utcnow().isoformat())
-        mark_worker_status("autosync", "stopped")
+        mark_worker_status("autosync", WORKER_STOPPED)
         record_worker_stopped("autosync")
+
+    def _track_retry_task(self, task: asyncio.Task[Any]) -> asyncio.Task[Any]:
+        self._retry_tasks.add(task)
+        task.add_done_callback(self._retry_tasks.discard)
+        return task
+
+    def _create_tracked_task(self, awaitable: Awaitable[Any]) -> asyncio.Task[Any]:
+        return self._track_retry_task(asyncio.create_task(awaitable))
+
+    async def _cancel_retry_tasks(self) -> None:
+        pending = [task for task in list(self._retry_tasks) if not task.done()]
+        if not pending:
+            return
+
+        for task in pending:
+            task.cancel()
+
+        logger.info("Awaiting %d pending autosync retry task(s)", len(pending))
+        await asyncio.gather(*pending, return_exceptions=True)
+
+        remaining = [task for task in pending if not task.done()]
+        if remaining:
+            logger.warning(
+                "Autosync retry tasks still pending after cancellation: %d",
+                len(remaining),
+            )
+
+        self._retry_tasks.difference_update(pending)
 
     async def run_once(self, *, source: str = "manual") -> None:
         await self._execute_sync(source=source)
@@ -138,6 +170,7 @@ class AutoSyncWorker:
             raise
         finally:
             self._running = False
+            await self._cancel_retry_tasks()
             logger.info("AutoSyncWorker stopped")
 
     async def _execute_sync(self, *, source: str) -> None:
@@ -159,7 +192,7 @@ class AutoSyncWorker:
                     mark_worker_status("autosync", "blocked")
                     record_activity(
                         "autosync",
-                        "autosync_blocked",
+                        AUTOSYNC_BLOCKED,
                         details={
                             "trigger": source,
                             "missing": missing_payload,
@@ -787,8 +820,11 @@ class AutoSyncWorker:
             try:
                 result = func(*args)
                 if asyncio.iscoroutine(result):
-                    return await result
+                    task = self._create_tracked_task(result)
+                    return await task
                 return result
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:  # pragma: no cover - defensive logging
                 last_error = exc
                 if attempt >= attempts:
@@ -800,7 +836,8 @@ class AutoSyncWorker:
                     attempts,
                     exc,
                 )
-                await asyncio.sleep(delay * attempt)
+                sleep_task = self._create_tracked_task(asyncio.sleep(delay * attempt))
+                await sleep_task
         assert last_error is not None
         raise last_error
 

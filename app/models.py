@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text
 
 # JSON is optional depending on database backend; fall back to Text if unavailable
 try:  # pragma: no cover - fallback handling
@@ -42,12 +42,12 @@ class Download(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(1024), nullable=False)
-    state = Column(String(50), nullable=False, default="queued")
+    state = Column(String(50), nullable=False, default="queued", index=True)
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
     request_payload = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(
         DateTime,
         default=datetime.utcnow,
@@ -107,6 +107,14 @@ class SettingHistory(Base):
 
 class ActivityEvent(Base):
     __tablename__ = "activity_events"
+    __table_args__ = (
+        Index(
+            "ix_activity_events_type_status_timestamp",
+            "type",
+            "status",
+            "timestamp",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

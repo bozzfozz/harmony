@@ -26,6 +26,11 @@
 - [x] Worker-Health-Karten im Dashboard anzeigen und regelmäßig aktualisieren.
 - [x] Activity History Export (API + Frontend) bereitstellen.
 - [x] Credential-Health-Checks für Spotify/Plex/Soulseek (API, Dashboard, Settings) umsetzen.
+- [x] Soulseek-Konfiguration auf `SLSKD_URL` vereinheitlichen und Legacy-Settings automatisch übernehmen.
+- [x] Datenbankindizes für Downloads und Activity-Events ergänzen.
+- [x] Download-Router-Hilfsfunktionen in `app/utils/downloads.py` auslagern.
+- [x] Event-Status-Konstanten in `app/utils/events.py` zentralisieren.
+- [x] E2E-Smoke-Test für den Download-Flow ergänzen.
 - [ ] Streaming-Router für Audio-Features planen und implementieren (Frontend-Integration vorbereiten).
 - [ ] Frontend-Testlauf im CI wieder aktivieren, sobald npm-Registry-Zugriff verfügbar ist.
 - [ ] Prometheus-/StatsD-Exporter auf Basis der neuen `metrics.*` Settings anbinden.

@@ -12,6 +12,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import Match
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import (
     increment_counter,
     read_setting,
@@ -119,7 +120,7 @@ class MatchingWorker:
             self._job_store.requeue_incomplete()
             self._running.clear()
             write_setting("worker.matching.last_stop", datetime.utcnow().isoformat())
-            mark_worker_status("matching", "stopped")
+            mark_worker_status("matching", WORKER_STOPPED)
             record_worker_stopped("matching")
             logger.info("MatchingWorker stopped")
 

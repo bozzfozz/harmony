@@ -10,6 +10,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import Playlist
 from app.utils.activity import record_worker_started, record_worker_stopped
+from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
@@ -40,7 +41,7 @@ class PlaylistSyncWorker:
             except asyncio.CancelledError:  # pragma: no cover - cancellation lifecycle
                 pass
             self._task = None
-        mark_worker_status("playlist", "stopped")
+        mark_worker_status("playlist", WORKER_STOPPED)
         if was_running or self._task is not None:
             record_worker_stopped("playlist")
 

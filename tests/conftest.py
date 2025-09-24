@@ -454,14 +454,16 @@ class StubTransfersApi:
 
 
 @pytest.fixture(autouse=True)
-def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    db_dir = tmp_path_factory.mktemp("db")
+    db_path = db_dir / "test.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     reset_engine_for_tests()
     for suffix in ("", "-journal", "-wal", "-shm"):
-        db_path = Path(f"test.db{suffix}")
-        if db_path.exists():
-            db_path.unlink()
+        candidate = db_path.with_name(f"{db_path.name}{suffix}")
+        if candidate.exists():
+            candidate.unlink()
     init_db()
     write_setting("SPOTIFY_CLIENT_ID", "stub-client")
     write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
@@ -472,9 +474,9 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     yield
     reset_engine_for_tests()
     for suffix in ("", "-journal", "-wal", "-shm"):
-        db_path = Path(f"test.db{suffix}")
-        if db_path.exists():
-            db_path.unlink()
+        candidate = db_path.with_name(f"{db_path.name}{suffix}")
+        if candidate.exists():
+            candidate.unlink()
 
 
 @pytest.fixture(autouse=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Optional
+from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -51,6 +52,7 @@ class AppConfig:
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
+DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = (
     "user-library-read playlist-read-private playlist-read-collaborative"
 )
@@ -114,6 +116,19 @@ def _resolve_setting(
     return fallback
 
 
+def _legacy_slskd_url() -> Optional[str]:
+    host = (os.getenv("SLSKD_HOST") or "").strip()
+    port = (os.getenv("SLSKD_PORT") or "").strip()
+
+    if not host:
+        return None
+
+    if not port:
+        port = str(DEFAULT_SOULSEEK_PORT)
+
+    return f"http://{host}:{port}"
+
+
 def load_config() -> AppConfig:
     """Load application configuration prioritising database backed settings."""
 
@@ -129,7 +144,10 @@ def load_config() -> AppConfig:
         "SLSKD_URL",
         "SLSKD_API_KEY",
     ]
-    db_settings = _load_settings_from_db(config_keys, database_url=database_url)
+    db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
+    legacy_slskd_url = _legacy_slskd_url()
+    if legacy_slskd_url is not None:
+        db_settings.pop("SLSKD_URL", None)
 
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
@@ -169,7 +187,11 @@ def load_config() -> AppConfig:
         ),
     )
 
-    soulseek_base_env = os.getenv("SLSKD_URL") or DEFAULT_SOULSEEK_URL
+    soulseek_base_env = (
+        os.getenv("SLSKD_URL")
+        or legacy_slskd_url
+        or DEFAULT_SOULSEEK_URL
+    )
     soulseek = SoulseekConfig(
         base_url=_resolve_setting(
             "SLSKD_URL",
