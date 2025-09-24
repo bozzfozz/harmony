@@ -176,6 +176,23 @@ Content-Type: application/json
 }
 ```
 
+## Download-Widget im Dashboard
+
+Das Dashboard zeigt aktive Downloads in einem kompakten Widget an. Die Komponente nutzt `GET /api/downloads` und pollt den Endpunkt alle 15 Sekunden, um Fortschritte automatisch zu aktualisieren. Bei mehr als fünf aktiven Transfers blendet das Widget einen "Alle anzeigen" Button ein, der direkt zur vollständigen Downloads-Ansicht navigiert.
+
+**Beispielansicht:**
+
+```
+Aktive Downloads
+┌──────────────────────────────┬──────────┬─────────────┐
+│ Dateiname                    │ Status   │ Fortschritt │
+├──────────────────────────────┼──────────┼─────────────┤
+│ Track One.mp3                │ Running  │ 45 %        │
+│ Track Two.mp3                │ Queued   │ 10 %        │
+└──────────────────────────────┴──────────┴─────────────┘
+Alle anzeigen → /downloads
+```
+
 **Activity-Beispiel:**
 
 ```http

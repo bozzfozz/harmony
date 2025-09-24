@@ -4,6 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Added DownloadWidget to Dashboard.
 - Added GET endpoints for downloads.
 - Frontend-Downloads-Seite mit Start-Formular, Fortschrittsanzeige und Zeitstempeln.
 - Dokumentation des Endpunkts `GET /api/download` inkl. Response-Beispiel.
