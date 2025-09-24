@@ -376,6 +376,10 @@ export const fetchDownloadById = async (id: string): Promise<DownloadEntry> => {
   return mapDownloadEntry(data);
 };
 
+export const cancelDownload = async (id: string): Promise<void> => {
+  await api.delete(`/api/download/${id}`);
+};
+
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
   const { data } = await api.post('/api/download', payload);
   const downloads = extractDownloadEntries(data);
@@ -385,6 +389,21 @@ export const startDownload = async (payload: StartDownloadPayload): Promise<Down
       id: '',
       filename: '',
       status: 'unknown',
+      progress: 0
+    };
+  }
+  return mapDownloadEntry(first);
+};
+
+export const retryDownload = async (id: string): Promise<DownloadEntry> => {
+  const { data } = await api.post(`/api/download/${id}/retry`);
+  const downloads = extractDownloadEntries(data);
+  const first = downloads[0] ?? (data as SoulseekDownloadEntry | DownloadEntry | undefined);
+  if (!first) {
+    return {
+      id: id,
+      filename: '',
+      status: 'queued',
       progress: 0
     };
   }

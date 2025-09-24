@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { useToast } from '../hooks/useToast';
-import { fetchDownloads, DownloadEntry } from '../lib/api';
-import { useQuery } from '../lib/query';
+import { cancelDownload, fetchDownloads, retryDownload, DownloadEntry } from '../lib/api';
+import { useMutation, useQuery } from '../lib/query';
 import { mapProgressToPercent } from '../lib/utils';
 
 const formatStatus = (status: string | undefined) => {
@@ -29,7 +29,7 @@ const DownloadWidget = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const { data, isLoading, isError } = useQuery<DownloadEntry[]>({
+  const { data, isLoading, isError, refetch } = useQuery<DownloadEntry[]>({
     queryKey: ['downloads', 'active-widget'],
     queryFn: () => fetchDownloads(DISPLAY_LIMIT),
     refetchInterval: 15000,
@@ -39,6 +39,46 @@ const DownloadWidget = () => {
         description: 'Bitte versuchen Sie es später erneut.',
         variant: 'destructive'
       })
+  });
+
+  const cancelDownloadMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; filename: string }) => cancelDownload(id),
+    onSuccess: (_, { filename }) => {
+      toast({
+        title: 'Download abgebrochen',
+        description: filename ? `"${filename}" wurde gestoppt.` : 'Download wurde abgebrochen.'
+      });
+      void refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Abbruch fehlgeschlagen',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const retryDownloadMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; filename: string }) => retryDownload(id),
+    onSuccess: (entry, { filename }) => {
+      toast({
+        title: 'Download neu gestartet',
+        description: entry?.filename
+          ? `"${entry.filename}" wurde erneut zur Warteschlange hinzugefügt.`
+          : filename
+            ? `"${filename}" wurde erneut gestartet.`
+            : 'Download wurde erneut gestartet.'
+      });
+      void refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Neu-Start fehlgeschlagen',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    }
   });
 
   const entries = useMemo(() => (data ?? []).slice(0, DISPLAY_LIMIT), [data]);
@@ -73,11 +113,15 @@ const DownloadWidget = () => {
                   <TableHead>Dateiname</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Fortschritt</TableHead>
+                  <TableHead>Aktionen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.map((download) => {
                   const progressValue = mapProgressToPercent(download.progress);
+                  const statusLower = (download.status ?? '').toLowerCase();
+                  const showCancel = statusLower === 'running' || statusLower === 'queued';
+                  const showRetry = statusLower === 'failed' || statusLower === 'cancelled';
                   return (
                     <TableRow key={download.id}>
                       <TableCell className="text-sm font-medium">{download.filename}</TableCell>
@@ -89,6 +133,43 @@ const DownloadWidget = () => {
                           <Progress value={progressValue} aria-label={`Fortschritt ${progressValue}%`} />
                           <span className="text-xs text-muted-foreground">{progressValue}%</span>
                         </div>
+                      </TableCell>
+                      <TableCell className="space-x-2 whitespace-nowrap">
+                        {showCancel ? (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() =>
+                              cancelDownloadMutation.mutate({
+                                id: String(download.id),
+                                filename: download.filename
+                              })
+                            }
+                            disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                          >
+                            Abbrechen
+                          </Button>
+                        ) : null}
+                        {showRetry ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              retryDownloadMutation.mutate({
+                                id: String(download.id),
+                                filename: download.filename
+                              })
+                            }
+                            disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                          >
+                            Neu starten
+                          </Button>
+                        ) : null}
+                        {!showCancel && !showRetry ? (
+                          <span className="text-xs text-muted-foreground">Keine Aktion</span>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
