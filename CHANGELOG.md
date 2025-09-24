@@ -4,7 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
-- Added detailed Sync/Search events to Activity Feed.
+- Frontend: ActivityFeed widget shows detailed sync/search events.
 - Frontend: Added Worker Health cards to Dashboard.
 - Added worker health info (heartbeats + queue size) to `/status`.
 - Added automatic defaults for worker-related settings at startup.

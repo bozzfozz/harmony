@@ -119,6 +119,47 @@ Event-Felder:
 | `search_completed` | Trefferanzahl pro Quelle nach erfolgreicher Suche. | `{"query": "Boards of Canada", "matches": {"spotify": 9, "plex": 2}}` |
 | `search_failed` | Aufgetretene Fehler während der Suche. | `{"query": "Boards", "errors": [{"source": "plex", "message": "plex offline"}]}` |
 
+**Eventdetails im Activity Feed (Frontend-Beispiel):**
+
+```json
+[
+  {
+    "timestamp": "2025-03-18T12:15:00Z",
+    "type": "sync",
+    "status": "completed",
+    "details": {
+      "sources": ["spotify", "plex", "soulseek"],
+      "counters": {
+        "tracks_synced": 18,
+        "tracks_skipped": 4,
+        "errors": 1
+      },
+      "errors": [
+        {"source": "plex", "message": "plex offline"}
+      ]
+    }
+  },
+  {
+    "timestamp": "2025-03-18T12:10:00Z",
+    "type": "search",
+    "status": "partial",
+    "details": {
+      "query": "Boards of Canada",
+      "matches": {
+        "spotify": 12,
+        "plex": 3,
+        "soulseek": 5
+      },
+      "errors": [
+        {"source": "plex", "message": "plex search timeout"}
+      ]
+    }
+  }
+]
+```
+
+Das Dashboard zeigt für solche Events Quellen, Kennzahlen (z. B. `tracks_synced`) sowie Trefferzahlen pro Quelle direkt im ActivityFeed-Widget an. Fehlerlisten werden rot markiert und als Tooltip hinterlegt.
+
 **Beispiel:**
 
 ```http

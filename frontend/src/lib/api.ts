@@ -424,13 +424,49 @@ export const retryDownload = async (id: string): Promise<DownloadEntry> => {
   return mapDownloadEntry(first);
 };
 
+const parseActivityDetails = (value: unknown): Record<string, unknown> | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return undefined;
+    } catch (error) {
+      console.warn('Failed to parse activity details JSON', error);
+      return undefined;
+    }
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+const normalizeActivityItems = (items: unknown[]): ActivityItem[] =>
+  items
+    .filter((candidate): candidate is ActivityItem & { details?: unknown } => {
+      if (!candidate || typeof candidate !== 'object') {
+        return false;
+      }
+      const typed = candidate as Record<string, unknown>;
+      return typeof typed.timestamp === 'string' && typeof typed.type === 'string' && typeof typed.status === 'string';
+    })
+    .map((item) => {
+      const details = parseActivityDetails((item as { details?: unknown }).details);
+      return details ? { ...item, details } : { ...item, details: undefined };
+    });
+
 export const fetchActivityFeed = async (): Promise<ActivityItem[]> => {
   const { data } = await api.get('/api/activity');
   if (Array.isArray(data)) {
-    return data as ActivityItem[];
+    return normalizeActivityItems(data);
   }
-  if (Array.isArray((data as { items?: ActivityItem[] }).items)) {
-    return (data as { items: ActivityItem[] }).items;
+  if (Array.isArray((data as { items?: unknown[] }).items)) {
+    return normalizeActivityItems((data as { items: unknown[] }).items);
   }
   return [];
 };

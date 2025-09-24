@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ActivityFeed from '../components/ActivityFeed';
 import { renderWithProviders } from '../test-utils';
 import { fetchActivityFeed } from '../lib/api';
@@ -17,19 +18,42 @@ describe('ActivityFeed', () => {
     jest.clearAllMocks();
   });
 
-  it('renders activity rows', async () => {
+  it('renders activity entries with icons and status colours', async () => {
     mockedFetchActivityFeed.mockResolvedValue([
-      { timestamp: '2024-03-18T12:00:00Z', type: 'sync', status: 'completed' },
-      { timestamp: '2024-03-18T11:59:00Z', type: 'download', status: 'queued' }
+      {
+        timestamp: '2024-03-18T12:00:00Z',
+        type: 'sync',
+        status: 'completed',
+        details: { counters: { tracks_synced: 3 } }
+      },
+      {
+        timestamp: '2024-03-18T11:59:00Z',
+        type: 'search',
+        status: 'partial',
+        details: { query: 'Boards of Canada', matches: { spotify: 5, plex: 1 } }
+      },
+      { timestamp: '2024-03-18T11:58:00Z', type: 'download', status: 'failed' }
     ]);
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
-    expect(await screen.findByText('Synchronisierung')).toBeInTheDocument();
-    expect(screen.getByText('Download')).toBeInTheDocument();
+    const entries = await screen.findAllByTestId('activity-entry');
+    expect(entries).toHaveLength(3);
 
-    expect(screen.getByText('Abgeschlossen')).toHaveClass('bg-emerald-100');
-    expect(screen.getByText('Wartend')).toHaveClass('bg-amber-100');
+    const syncEntry = entries[0];
+    expect(within(syncEntry).getByText('Synchronisierung')).toBeInTheDocument();
+    expect(within(syncEntry).getByText('🔄')).toBeInTheDocument();
+    expect(within(syncEntry).getByText('Abgeschlossen')).toHaveClass('bg-emerald-100');
+
+    const searchEntry = entries[1];
+    expect(within(searchEntry).getByText('Suche')).toBeInTheDocument();
+    expect(within(searchEntry).getByText('🔍')).toBeInTheDocument();
+    expect(within(searchEntry).getByText('Teilweise')).toHaveClass('bg-amber-100');
+
+    const downloadEntry = entries[2];
+    expect(within(downloadEntry).getByText('Download')).toBeInTheDocument();
+    expect(within(downloadEntry).getByText('⬇')).toBeInTheDocument();
+    expect(within(downloadEntry).getByText('Fehlgeschlagen')).toHaveClass('bg-rose-100');
   });
 
   it('notifies when no activities are available', async () => {
@@ -50,5 +74,86 @@ describe('ActivityFeed', () => {
 
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(screen.getByText('Der Aktivitätsfeed ist derzeit nicht verfügbar.')).toBeInTheDocument();
+  });
+
+  it('renders sync details with counters and error tooltip', async () => {
+    const user = userEvent.setup();
+    mockedFetchActivityFeed.mockResolvedValue([
+      {
+        timestamp: '2024-03-18T12:00:00Z',
+        type: 'sync',
+        status: 'completed',
+        details: {
+          sources: ['spotify', 'plex'],
+          counters: { tracks_synced: 12, errors: 1 },
+          errors: [{ source: 'plex', message: 'plex offline' }]
+        }
+      }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const entry = await screen.findByTestId('activity-entry');
+    const summary = within(entry).getByText('Synchronisierung');
+    await user.click(summary.closest('summary') ?? summary);
+
+    await waitFor(() => expect(within(entry).getByText(/Quellen:/)).toBeInTheDocument());
+    expect(within(entry).getByText(/Spotify, Plex/)).toBeInTheDocument();
+    expect(within(entry).getByText(/Tracks Synced/)).toBeInTheDocument();
+    expect(within(entry).getByText(/Errors/)).toBeInTheDocument();
+
+    const errorBadge = within(entry).getByText(/Fehlerdetails/);
+    expect(errorBadge).toHaveAttribute('title', expect.stringContaining('Plex: plex offline'));
+  });
+
+  it('renders search details with query and per source matches', async () => {
+    const user = userEvent.setup();
+    mockedFetchActivityFeed.mockResolvedValue([
+      {
+        timestamp: '2024-03-18T12:01:00Z',
+        type: 'search',
+        status: 'completed',
+        details: {
+          query: 'Boards of Canada',
+          matches: { spotify: 4, plex: 1, soulseek: 2 }
+        }
+      }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const entry = await screen.findByTestId('activity-entry');
+    const summary = within(entry).getByText('Suche');
+    await user.click(summary.closest('summary') ?? summary);
+
+    await waitFor(() => expect(within(entry).getByText(/Suchanfrage:/)).toBeInTheDocument());
+    expect(within(entry).getByText('Boards of Canada')).toBeInTheDocument();
+    expect(within(entry).getByText(/Spotify/)).toBeInTheDocument();
+    expect(within(entry).getByText(/Plex/)).toBeInTheDocument();
+    expect(within(entry).getByText(/Soulseek/)).toBeInTheDocument();
+  });
+
+  it('toggles accordion visibility for details', async () => {
+    const user = userEvent.setup();
+    mockedFetchActivityFeed.mockResolvedValue([
+      {
+        timestamp: '2024-03-18T12:02:00Z',
+        type: 'search',
+        status: 'completed',
+        details: { query: 'Aphex Twin', matches: { spotify: 2 } }
+      }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const entry = await screen.findByTestId('activity-entry');
+    const summary = within(entry).getByText('Suche');
+    const detailsElement = entry.querySelector('details') ?? entry;
+
+    expect(detailsElement).not.toHaveAttribute('open');
+    await user.click(summary.closest('summary') ?? summary);
+    await waitFor(() => expect(detailsElement).toHaveAttribute('open'));
+    await user.click(summary.closest('summary') ?? summary);
+    await waitFor(() => expect(detailsElement).not.toHaveAttribute('open'));
   });
 });
