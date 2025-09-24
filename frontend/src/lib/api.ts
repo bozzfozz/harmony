@@ -117,10 +117,20 @@ export interface StartDownloadPayload {
   track_id: string;
 }
 
+export type ActivityType = 'sync' | 'search' | 'download' | 'metadata' | (string & {});
+
+export type ActivityStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | (string & {});
+
 export interface ActivityItem {
   timestamp: string;
-  type: string;
-  status: string;
+  type: ActivityType;
+  status: ActivityStatus;
   details?: Record<string, unknown>;
 }
 

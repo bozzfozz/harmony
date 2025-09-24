@@ -142,7 +142,7 @@ Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Do
 
 ![Activity-Feed-Widget](activity-feed-widget.svg)
 
-Auf dem Dashboard ergänzt das Activity-Feed-Widget die bestehenden Statuskacheln. Es pollt den `/api/activity`-Endpunkt alle zehn Sekunden, visualisiert die letzten Aktionen mit Zeitstempel, Typ und Status-Badge und informiert per Toast, falls der Feed leer bleibt oder das Backend nicht erreichbar ist. Dadurch behalten Operatorinnen laufende Sync-, Such- und Download-Aktivitäten im Blick, ohne das Backend manuell abfragen zu müssen.
+Auf dem Dashboard ergänzt das Activity-Feed-Widget die bestehenden Statuskacheln. Es pollt den `/api/activity`-Endpunkt alle zehn Sekunden, sortiert die Einträge nach dem neuesten Zeitstempel und visualisiert die letzten Aktionen mit lokalisierten Typen sowie farbcodierten Status-Badges. Für leere Feeds oder Fehlerfälle erscheinen Toast-Benachrichtigungen, sodass Operatorinnen laufende Sync-, Such- und Download-Aktivitäten ohne manuelle API-Abfragen im Blick behalten.
 
 ## Spotify (`/spotify`)
 

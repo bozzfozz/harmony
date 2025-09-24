@@ -8,7 +8,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Dokumentation des Endpunkts `GET /api/download` inkl. Response-Beispiel.
 
 ### Changed
-- Noch keine Einträge.
+- Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
 
 ### Fixed
 - Noch keine Einträge.
