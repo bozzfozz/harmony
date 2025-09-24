@@ -9,6 +9,7 @@ from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Playlist
+from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
@@ -26,9 +27,11 @@ class PlaylistSyncWorker:
     async def start(self) -> None:
         if self._task is None or self._task.done():
             self._running = True
+            record_worker_started("playlist")
             self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        was_running = self._running
         self._running = False
         if self._task is not None:
             self._task.cancel()
@@ -38,6 +41,8 @@ class PlaylistSyncWorker:
                 pass
             self._task = None
         mark_worker_status("playlist", "stopped")
+        if was_running or self._task is not None:
+            record_worker_stopped("playlist")
 
     async def _run(self) -> None:
         logger.info("PlaylistSyncWorker started")

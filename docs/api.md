@@ -119,6 +119,15 @@ Event-Felder:
 | `search_completed` | Trefferanzahl pro Quelle nach erfolgreicher Suche. | `{"query": "Boards of Canada", "matches": {"spotify": 9, "plex": 2}}` |
 | `search_failed` | Aufgetretene Fehler während der Suche. | `{"query": "Boards", "errors": [{"source": "plex", "message": "plex offline"}]}` |
 
+### Worker-Health-Events
+
+| Status | Beschreibung | Beispiel-Details |
+| --- | --- | --- |
+| `started` | Worker wurde erfolgreich gestartet. | `{"worker": "sync", "timestamp": "2025-03-18T12:05:00Z"}` |
+| `stopped` | Kontrollierter Shutdown eines Workers. | `{"worker": "scan", "timestamp": "2025-03-18T12:10:00Z", "reason": "shutdown"}` |
+| `stale` | Heartbeat-Schwelle überschritten, Worker gilt als veraltet. | `{"worker": "matching", "timestamp": "2025-03-18T12:12:00Z", "last_seen": "2025-03-18T12:09:45Z", "threshold_seconds": 60, "elapsed_seconds": 135.2}` |
+| `restarted` | Worker nach Stopp oder Störung neu gestartet. | `{"worker": "playlist", "timestamp": "2025-03-18T12:13:00Z", "previous_status": "stopped"}` |
+
 **Eventdetails im Activity Feed (Frontend-Beispiel):**
 
 ```json
@@ -158,7 +167,39 @@ Event-Felder:
 ]
 ```
 
-Das Dashboard zeigt für solche Events Quellen, Kennzahlen (z. B. `tracks_synced`) sowie Trefferzahlen pro Quelle direkt im ActivityFeed-Widget an. Fehlerlisten werden rot markiert und als Tooltip hinterlegt.
+**Worker-Events im Activity Feed:**
+
+```json
+[
+  {
+    "timestamp": "2025-03-18T12:15:00Z",
+    "type": "worker",
+    "status": "started",
+    "details": {
+      "worker": "sync",
+      "timestamp": "2025-03-18T12:15:00Z"
+    }
+  },
+  {
+    "timestamp": "2025-03-18T12:13:00Z",
+    "type": "worker",
+    "status": "stale",
+    "details": {
+      "worker": "matching",
+      "timestamp": "2025-03-18T12:13:00Z",
+      "last_seen": "2025-03-18T12:11:30Z",
+      "threshold_seconds": 60,
+      "elapsed_seconds": 90.5
+    }
+  }
+]
+```
+
+![Activity-Feed-Widget](activity-feed-widget.svg)
+
+Das Dashboard zeigt Worker-Events mit farbcodierten Status-Badges (grün = started, grau = stopped, gelb = stale, blau = restarted) und passenden Icons (▶️, ⏹, ⚠️, 🔄). Dadurch lassen sich Health-Änderungen der Worker sofort nachvollziehen.
+
+Neben diesen Health-Meldungen visualisiert das Dashboard weiterhin Quellen, Kennzahlen (z. B. `tracks_synced`) sowie Trefferzahlen pro Quelle direkt im ActivityFeed-Widget. Fehlerlisten werden rot markiert und als Tooltip hinterlegt.
 
 **Beispiel:**
 

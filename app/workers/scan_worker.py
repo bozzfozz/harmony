@@ -12,7 +12,7 @@ from app.core.plex_client import PlexClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Setting
-from app.utils.activity import record_activity
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
@@ -32,6 +32,7 @@ class ScanWorker:
 
     async def start(self) -> None:
         if self._task is None or self._task.done():
+            record_worker_started("scan")
             self._running.set()
             self._stop_event = asyncio.Event()
             self._task = asyncio.create_task(self._run())
@@ -60,6 +61,7 @@ class ScanWorker:
         finally:
             write_setting("worker.scan.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("scan", "stopped")
+            record_worker_stopped("scan")
             logger.info("ScanWorker stopped")
 
     async def run_once(self) -> None:

@@ -11,7 +11,7 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Match
-from app.utils.activity import record_activity
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.settings_store import (
     increment_counter,
     read_setting,
@@ -77,6 +77,7 @@ class MatchingWorker:
     async def start(self) -> None:
         if self._manager_task is not None and not self._manager_task.done():
             return
+        record_worker_started("matching")
         self._running.set()
         self._stop_event = asyncio.Event()
         self._manager_task = asyncio.create_task(self._run())
@@ -119,6 +120,7 @@ class MatchingWorker:
             self._running.clear()
             write_setting("worker.matching.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("matching", "stopped")
+            record_worker_stopped("matching")
             logger.info("MatchingWorker stopped")
 
     async def _worker_loop(self) -> None:

@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field, is_dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Deque, Dict, Iterable, List, MutableMapping, Optional
+from typing import Any, Deque, Dict, Iterable, List, MutableMapping, Optional, Literal
 
 from app.db import session_scope
 from app.models import ActivityEvent
+from app.utils.worker_health import read_worker_status
 
 
 @dataclass(frozen=True)
@@ -190,3 +191,93 @@ def record_activity(
         details=details,
     )
     return entry.as_dict()
+
+
+WorkerActivityStatus = Literal["started", "stopped", "stale", "restarted"]
+
+
+def _normalise_timestamp(value: datetime) -> datetime:
+    """Ensure timestamps stored in worker events are naive UTC values."""
+
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def record_worker_event(
+    worker: str,
+    status: WorkerActivityStatus,
+    *,
+    timestamp: Optional[datetime] = None,
+    details: Optional[MutableMapping[str, object]] = None,
+) -> Dict[str, object]:
+    """Persist a worker lifecycle/health event in the activity feed."""
+
+    event_time = _normalise_timestamp(timestamp or datetime.utcnow())
+    payload: Dict[str, object] = {"worker": worker}
+    if details:
+        payload.update(dict(details))
+    payload.setdefault("timestamp", event_time)
+    return record_activity("worker", status, timestamp=event_time, details=payload)
+
+
+def record_worker_started(
+    worker: str,
+    *,
+    timestamp: Optional[datetime] = None,
+) -> Dict[str, object]:
+    """Record a worker start or restart event depending on prior status."""
+
+    _, stored_status = read_worker_status(worker)
+    previous = (stored_status or "").lower()
+    status: WorkerActivityStatus = "restarted" if previous in {"stopped", "stale"} else "started"
+    extra: Dict[str, object] = {}
+    if status == "restarted" and previous:
+        extra["previous_status"] = previous
+    return record_worker_event(worker, status, timestamp=timestamp, details=extra)
+
+
+def record_worker_restarted(
+    worker: str,
+    *,
+    timestamp: Optional[datetime] = None,
+    reason: Optional[str] = None,
+) -> Dict[str, object]:
+    """Explicitly record a worker restart event with optional reason."""
+
+    extra: Dict[str, object] = {}
+    if reason:
+        extra["reason"] = reason
+    return record_worker_event(worker, "restarted", timestamp=timestamp, details=extra)
+
+
+def record_worker_stopped(
+    worker: str,
+    *,
+    timestamp: Optional[datetime] = None,
+    reason: Optional[str] = None,
+) -> Dict[str, object]:
+    """Record a worker shutdown event in the activity feed."""
+
+    extra: Dict[str, object] = {}
+    if reason:
+        extra["reason"] = reason
+    return record_worker_event(worker, "stopped", timestamp=timestamp, details=extra)
+
+
+def record_worker_stale(
+    worker: str,
+    *,
+    last_seen: Optional[str],
+    threshold_seconds: float,
+    elapsed_seconds: Optional[float] = None,
+    timestamp: Optional[datetime] = None,
+) -> Dict[str, object]:
+    """Record that a worker missed its heartbeat threshold."""
+
+    extra: Dict[str, object] = {"threshold_seconds": float(threshold_seconds)}
+    if last_seen:
+        extra["last_seen"] = last_seen
+    if elapsed_seconds is not None:
+        extra["elapsed_seconds"] = round(float(elapsed_seconds), 2)
+    return record_worker_event(worker, "stale", timestamp=timestamp, details=extra)

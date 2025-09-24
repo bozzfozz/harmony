@@ -10,7 +10,8 @@ const ACTIVITY_TYPE_LABELS = {
   sync: 'Synchronisierung',
   search: 'Suche',
   download: 'Download',
-  metadata: 'Metadaten'
+  metadata: 'Metadaten',
+  worker: 'Worker'
 } as const satisfies Record<string, string>;
 
 type KnownActivityType = keyof typeof ACTIVITY_TYPE_LABELS;
@@ -19,7 +20,8 @@ const ACTIVITY_TYPE_ICONS = {
   sync: '🔄',
   search: '🔍',
   download: '⬇',
-  metadata: '🗂'
+  metadata: '🗂',
+  worker: '🛠️'
 } as const satisfies Record<string, string>;
 
 const STATUS_STYLES = {
@@ -29,7 +31,11 @@ const STATUS_STYLES = {
   running: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
   queued: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
   failed: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
-  cancelled: 'bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-200'
+  cancelled: 'bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-200',
+  started: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  stopped: 'bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-200',
+  stale: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  restarted: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200'
 } as const satisfies Record<string, string>;
 
 const STATUS_LABELS = {
@@ -38,8 +44,24 @@ const STATUS_LABELS = {
   running: 'Laufend',
   queued: 'Wartend',
   failed: 'Fehlgeschlagen',
-  cancelled: 'Abgebrochen'
+  cancelled: 'Abgebrochen',
+  started: 'Gestartet',
+  stopped: 'Gestoppt',
+  stale: 'Veraltet',
+  restarted: 'Neu gestartet'
 } as const satisfies Record<string, string>;
+
+const WORKER_STATUS_ICONS = {
+  started: '▶️',
+  stopped: '⏹',
+  stale: '⚠️',
+  restarted: '🔄'
+} as const;
+
+type WorkerStatus = keyof typeof WORKER_STATUS_ICONS;
+
+const isWorkerStatus = (status: string): status is WorkerStatus =>
+  Object.prototype.hasOwnProperty.call(WORKER_STATUS_ICONS, status);
 
 type KnownStatus = keyof typeof STATUS_STYLES;
 
@@ -219,6 +241,80 @@ const renderActivityDetails = (item: ActivityItem): ReactNode => {
   if (!item.details) {
     return null;
   }
+
+  if (item.type === 'worker') {
+    const details = item.details as Record<string, unknown>;
+    const blocks: ReactNode[] = [];
+    const workerName = typeof details.worker === 'string' ? details.worker : undefined;
+    const previousStatus = typeof details.previous_status === 'string' ? details.previous_status : undefined;
+    const reason = typeof details.reason === 'string' ? details.reason : undefined;
+    const rawTimestamp = typeof details.timestamp === 'string' ? details.timestamp : item.timestamp;
+
+    if (workerName) {
+      blocks.push(
+        <p key="worker" className="text-sm">
+          <span className="font-medium text-foreground">Worker:</span>{' '}
+          <span className="text-muted-foreground">{prettify(workerName)}</span>
+        </p>
+      );
+    }
+
+    blocks.push(
+      <p key="event-time" className="text-sm">
+        <span className="font-medium text-foreground">Eventzeit:</span>{' '}
+        <span className="text-muted-foreground">{formatTimestamp(String(rawTimestamp))}</span>
+      </p>
+    );
+
+    if (previousStatus) {
+      blocks.push(
+        <p key="previous-status" className="text-sm">
+          <span className="font-medium text-foreground">Vorheriger Status:</span>{' '}
+          <span className="text-muted-foreground">{prettify(previousStatus)}</span>
+        </p>
+      );
+    }
+
+    if (reason) {
+      blocks.push(
+        <p key="reason" className="text-sm">
+          <span className="font-medium text-foreground">Hinweis:</span>{' '}
+          <span className="text-muted-foreground">{reason}</span>
+        </p>
+      );
+    }
+
+    if (item.status === 'stale') {
+      const lastSeen = typeof details.last_seen === 'string' ? details.last_seen : undefined;
+      const threshold = typeof details.threshold_seconds === 'number' ? details.threshold_seconds : undefined;
+      const elapsed = typeof details.elapsed_seconds === 'number' ? details.elapsed_seconds : undefined;
+      const parts: string[] = [];
+      if (lastSeen) {
+        parts.push(`Heartbeat: ${formatTimestamp(lastSeen)}`);
+      }
+      if (elapsed !== undefined) {
+        parts.push(`Δ ${Math.round(elapsed)}s`);
+      }
+      if (threshold !== undefined) {
+        parts.push(`Schwelle ${threshold}s`);
+      }
+      if (parts.length > 0) {
+        blocks.push(
+          <p key="stale-info" className="text-sm">
+            <span className="font-medium text-foreground">Überwachung:</span>{' '}
+            <span className="text-muted-foreground">{parts.join(' · ')}</span>
+          </p>
+        );
+      }
+    }
+
+    if (!blocks.length) {
+      return null;
+    }
+
+    return <div className="space-y-2">{blocks}</div>;
+  }
+
   const details = item.details;
   const blocks: ReactNode[] = [];
 
@@ -322,7 +418,22 @@ const renderStatusBadge = (status: ActivityStatus) => {
 };
 
 const renderActivitySummary = (item: ActivityItem) => {
-  const icon = ACTIVITY_TYPE_ICONS[item.type as keyof typeof ACTIVITY_TYPE_ICONS] ?? 'ℹ️';
+  const normalizedStatus = String(item.status).toLowerCase();
+  let icon: string = ACTIVITY_TYPE_ICONS[item.type as keyof typeof ACTIVITY_TYPE_ICONS] ?? 'ℹ️';
+  let title = getTypeLabel(item.type);
+
+  if (item.type === 'worker') {
+    const workerDetails = item.details as { worker?: unknown } | undefined;
+    const workerName =
+      workerDetails && typeof workerDetails.worker === 'string' ? workerDetails.worker : undefined;
+    if (isWorkerStatus(normalizedStatus)) {
+      icon = WORKER_STATUS_ICONS[normalizedStatus];
+    } else {
+      icon = '🛠️';
+    }
+    title = workerName ? `Worker ${prettify(workerName)}` : getTypeLabel(item.type);
+  }
+
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-center gap-3 text-left">
@@ -330,7 +441,7 @@ const renderActivitySummary = (item: ActivityItem) => {
           {icon}
         </span>
         <div className="space-y-1">
-          <p className="text-sm font-medium leading-none text-foreground">{getTypeLabel(item.type)}</p>
+          <p className="text-sm font-medium leading-none text-foreground">{title}</p>
           <p className="text-xs text-muted-foreground">{formatTimestamp(item.timestamp)}</p>
         </div>
       </div>

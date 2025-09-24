@@ -56,6 +56,69 @@ describe('ActivityFeed', () => {
     expect(within(downloadEntry).getByText('Fehlgeschlagen')).toHaveClass('bg-rose-100');
   });
 
+  it('renders worker events with dedicated icons, colours and details', async () => {
+    const user = userEvent.setup();
+    mockedFetchActivityFeed.mockResolvedValue([
+      {
+        timestamp: '2024-03-18T12:04:00Z',
+        type: 'worker',
+        status: 'started',
+        details: { worker: 'sync' }
+      },
+      {
+        timestamp: '2024-03-18T12:03:00Z',
+        type: 'worker',
+        status: 'stopped',
+        details: { worker: 'scan', timestamp: '2024-03-18T12:02:50Z', reason: 'shutdown' }
+      },
+      {
+        timestamp: '2024-03-18T12:02:00Z',
+        type: 'worker',
+        status: 'stale',
+        details: {
+          worker: 'matching',
+          last_seen: '2024-03-18T12:00:00Z',
+          threshold_seconds: 60,
+          elapsed_seconds: 120
+        }
+      },
+      {
+        timestamp: '2024-03-18T12:01:00Z',
+        type: 'worker',
+        status: 'restarted',
+        details: { worker: 'playlist', previous_status: 'stopped' }
+      }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const startedEntry = screen.getByText('Worker Sync').closest('[data-testid="activity-entry"]');
+    expect(startedEntry).not.toBeNull();
+    expect(within(startedEntry as HTMLElement).getByText('▶️')).toBeInTheDocument();
+    expect(within(startedEntry as HTMLElement).getByText('Gestartet')).toHaveClass('bg-emerald-100');
+
+    const stoppedEntry = screen.getByText('Worker Scan').closest('[data-testid="activity-entry"]');
+    expect(stoppedEntry).not.toBeNull();
+    expect(within(stoppedEntry as HTMLElement).getByText('⏹')).toBeInTheDocument();
+    expect(within(stoppedEntry as HTMLElement).getByText('Gestoppt')).toHaveClass('bg-slate-100');
+
+    const restartedEntry = screen.getByText('Worker Playlist').closest('[data-testid="activity-entry"]');
+    expect(restartedEntry).not.toBeNull();
+    expect(within(restartedEntry as HTMLElement).getByText('🔄')).toBeInTheDocument();
+    expect(within(restartedEntry as HTMLElement).getByText('Neu gestartet')).toHaveClass('bg-sky-100');
+
+    const staleEntry = screen.getByText('Worker Matching').closest('[data-testid="activity-entry"]');
+    expect(staleEntry).not.toBeNull();
+    expect(within(staleEntry as HTMLElement).getByText('⚠️')).toBeInTheDocument();
+    expect(within(staleEntry as HTMLElement).getByText('Veraltet')).toHaveClass('bg-amber-100');
+
+    const summary = within(staleEntry as HTMLElement).getByText('Worker Matching');
+    await user.click(summary.closest('summary') ?? summary);
+
+    await waitFor(() => expect(within(staleEntry as HTMLElement).getByText(/Überwachung:/)).toBeInTheDocument());
+    expect(within(staleEntry as HTMLElement).getByText(/Schwelle 60s/)).toBeInTheDocument();
+  });
+
   it('notifies when no activities are available', async () => {
     mockedFetchActivityFeed.mockResolvedValue([]);
 
