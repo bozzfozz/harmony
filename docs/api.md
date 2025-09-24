@@ -89,6 +89,7 @@ POST /api/metadata/update HTTP/1.1
 | `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
 | `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
+| `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
 
 **Activity Feed / Activity History:**
 
@@ -229,6 +230,60 @@ Das Dashboard zeigt Worker-Events mit farbcodierten Status-Badges (grün = s
 ```
 
 Die dedizierte Seite nutzt dieselben Events aus `/api/activity`, zeigt jedoch die vollständige History mit Paging, Dropdown-Filtern und JSON-Details in einer Tabelle an.
+
+### Activity History Export (`/api/activity/export`)
+
+Der Export-Endpunkt verwendet dieselbe Filterlogik wie `/api/activity`, verzichtet jedoch standardmäßig auf ein Limit und liefert die Ergebnisse vollständig zurück.
+
+Unterstützte Query-Parameter:
+
+- `format` (`json` | `csv`, Standard `json`)
+- `type` (optional, filtert nach Event-Typ)
+- `status` (optional, filtert nach Status)
+- `from` / `to` (optional, Zeitbereich im ISO-8601-Format)
+- `limit` (optional, begrenzt die Anzahl exportierter Zeilen)
+
+**JSON-Beispiel:**
+
+```http
+GET /api/activity/export?format=json&type=sync&status=completed HTTP/1.1
+```
+
+```json
+[
+  {
+    "timestamp": "2025-03-18T12:15:00Z",
+    "type": "sync",
+    "status": "completed",
+    "details": {"runs": 2}
+  }
+]
+```
+
+**CSV-Beispiel:**
+
+```http
+GET /api/activity/export?format=csv HTTP/1.1
+```
+
+```csv
+id,timestamp,type,status,details
+17,2025-03-18T12:15:00Z,sync,completed,"{""runs"":2}"
+16,2025-03-18T12:10:00Z,download,failed,"{""id"":42}"
+```
+
+- `Content-Type: application/json` bei `format=json`
+- `Content-Type: text/csv` bei `format=csv`
+- CSV-Felder enthalten `details` als JSON-String.
+
+**Frontend-Export (Activity History Seite):**
+
+```text
+Filter: Typ = Download | Status = Failed
+[ Export JSON ]   [ Export CSV ]
+
+→ erzeugt Dateien im Format activity_history_YYYY-MM-DD.json bzw. .csv
+```
 
 Neben diesen Health-Meldungen visualisiert das Dashboard weiterhin Quellen, Kennzahlen (z. B. `tracks_synced`) sowie Trefferzahlen pro Quelle direkt im ActivityFeed-Widget. Fehlerlisten werden rot markiert und als Tooltip hinterlegt.
 

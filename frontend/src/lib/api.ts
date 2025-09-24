@@ -519,3 +519,36 @@ export const fetchActivityHistory = async (
 
   return { items, total_count: totalCount };
 };
+
+export interface ActivityHistoryFilters {
+  type?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+}
+
+export const exportActivityHistory = async (
+  format: 'csv' | 'json',
+  filters: ActivityHistoryFilters = {}
+): Promise<Blob> => {
+  const params: Record<string, string> = { format };
+
+  if (filters.type) {
+    params.type = filters.type;
+  }
+  if (filters.status) {
+    params.status = filters.status;
+  }
+  if (filters.from) {
+    params.from = filters.from;
+  }
+  if (filters.to) {
+    params.to = filters.to;
+  }
+
+  const response = await api.get('/api/activity/export', {
+    params,
+    responseType: 'blob'
+  });
+  return response.data;
+};

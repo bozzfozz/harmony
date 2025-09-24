@@ -4,6 +4,8 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Added Activity History export (CSV/JSON).
+- Frontend: Added export for Activity History.
 - Added worker health events (started/stopped/stale/restarted) to the Activity Feed.
 - Frontend: ActivityFeed widget shows worker health indicators with icons and colours.
 - Frontend: ActivityFeed widget shows detailed sync/search events.

@@ -168,6 +168,11 @@ class ActivityManager:
             self._entries.clear()
             self._cache_initialized = True
 
+    def serialise_event(self, event: ActivityEvent) -> Dict[str, object]:
+        """Return the API representation for a stored activity event."""
+
+        return self._entry_from_event(event).as_dict()
+
 
 def _serialise_details(details: Optional[MutableMapping[str, object]] | None) -> MutableMapping[str, object]:
     """Normalise detail payloads so they can be stored as JSON."""
