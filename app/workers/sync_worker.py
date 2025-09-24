@@ -26,6 +26,10 @@ MAX_RETRY_ATTEMPTS = 3
 RETRY_BACKOFF = (5, 15, 30)
 
 
+class DownloadJobError(RuntimeError):
+    """Raised when a download job failed but retries have been scheduled."""
+
+
 class SyncWorker:
     def __init__(
         self,
@@ -238,6 +242,10 @@ class SyncWorker:
         self._job_store.mark_running(job.id)
         try:
             await self._process_job(job.payload)
+        except DownloadJobError as exc:
+            self._job_store.mark_failed(job.id, str(exc))
+            logger.debug("Download job %s marked as failed after scheduling retry", job.id)
+            return
         except Exception as exc:
             self._job_store.mark_failed(job.id, str(exc))
             raise
@@ -276,7 +284,7 @@ class SyncWorker:
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to queue Soulseek download: %s", exc)
             await self._handle_download_failure(job, filtered_files, exc)
-            raise
+            raise DownloadJobError(str(exc)) from exc
         else:
             await self._handle_retry_success(filtered_files)
 
@@ -347,25 +355,65 @@ class SyncWorker:
             )
 
         if retry_batches:
-            for delay, batch in retry_batches.items():
-                priority = max(
-                    (self._extract_file_priority(item) for item in batch),
-                    default=0,
-                )
-                retry_job = {
-                    "username": job.get("username"),
-                    "files": batch,
-                    "priority": priority,
-                }
-                download_ids = [
-                    int(item.get("download_id"))
-                    for item in batch
-                    if item.get("download_id") is not None
-                ]
-                task = asyncio.create_task(
-                    self._delayed_enqueue(retry_job, delay, download_ids)
-                )
-                self._track_task(task)
+            items = sorted(retry_batches.items(), key=lambda entry: entry[0])
+            if not self.is_running():
+                for delay, batch in items:
+                    priority = max(
+                        (self._extract_file_priority(item) for item in batch),
+                        default=0,
+                    )
+                    retry_job = {
+                        "username": job.get("username"),
+                        "files": batch,
+                        "priority": priority,
+                    }
+                    try:
+                        if delay > 0:
+                            await asyncio.sleep(delay)
+                        await self.enqueue(retry_job)
+                    except Exception as exc:  # pragma: no cover - defensive
+                        logger.error(
+                            "Failed to enqueue retry job for %s: %s", batch, exc
+                        )
+                        for item in batch:
+                            identifier = item.get("download_id")
+                            if identifier is None:
+                                continue
+                            await self._mark_retry_failed(int(identifier))
+                        record_activity(
+                            "download",
+                            "download_retry_failed",
+                            details={
+                                "downloads": [
+                                    {
+                                        "download_id": item.get("download_id"),
+                                    }
+                                    for item in batch
+                                    if item.get("download_id") is not None
+                                ],
+                                "error": str(exc),
+                            },
+                        )
+            else:
+                for delay, batch in items:
+                    priority = max(
+                        (self._extract_file_priority(item) for item in batch),
+                        default=0,
+                    )
+                    retry_job = {
+                        "username": job.get("username"),
+                        "files": batch,
+                        "priority": priority,
+                    }
+                    download_ids = [
+                        int(item.get("download_id"))
+                        for item in batch
+                        if item.get("download_id") is not None
+                    ]
+                    task = asyncio.create_task(
+                        self._delayed_enqueue(retry_job, delay, download_ids)
+                    )
+                    self._track_task(task)
 
     async def _handle_retry_success(self, files: Iterable[Dict[str, Any]]) -> None:
         completed: List[Dict[str, Any]] = []
@@ -432,7 +480,7 @@ class SyncWorker:
     async def _mark_retry_failed(self, download_id: int) -> int:
         async with self._retry_lock:
             attempts = self._retry_attempts.pop(download_id, MAX_RETRY_ATTEMPTS)
-        attempts = max(attempts, MAX_RETRY_ATTEMPTS)
+        attempts = max(1, min(attempts, MAX_RETRY_ATTEMPTS))
         with session_scope() as session:
             download = session.get(Download, download_id)
             if download is None:
