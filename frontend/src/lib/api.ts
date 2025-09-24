@@ -15,12 +15,21 @@ export interface UpdateSettingPayload {
   value: string | null;
 }
 
+export type WorkerStatus = 'running' | 'stopped' | 'stale' | (string & {});
+
+export interface WorkerHealth {
+  last_seen?: string | null;
+  queue_size?: number | Record<string, number | string> | string | null;
+  status?: WorkerStatus;
+}
+
 export interface StatusResponse {
   status: string;
   artist_count?: number;
   album_count?: number;
   track_count?: number;
   last_scan?: string;
+  workers?: Record<string, WorkerHealth>;
 }
 
 export interface SpotifyPlaylist {
@@ -199,6 +208,11 @@ export const updateSettings = async (settings: UpdateSettingPayload[]): Promise<
 
 export const fetchSpotifyStatus = async (): Promise<StatusResponse> => {
   const { data } = await api.get<StatusResponse>('/spotify/status');
+  return data;
+};
+
+export const fetchSystemStatus = async (): Promise<StatusResponse> => {
+  const { data } = await api.get<StatusResponse>('/status');
   return data;
 };
 

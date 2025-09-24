@@ -18,6 +18,7 @@
 - [x] Cancel- und Retry-Endpunkte für Downloads via TransfersApi finalisieren.
 - [x] Settings erhalten automatische Default-Werte beim Startup.
 - [x] Worker-Health-Infos (Heartbeats + Queue-Längen) im `/status`-Endpoint ergänzen.
+- [x] Worker-Health-Karten im Dashboard anzeigen und regelmäßig aktualisieren.
 - [ ] Streaming-Router für Audio-Features planen und implementieren (Frontend-Integration vorbereiten).
 - [ ] Frontend-Testlauf im CI wieder aktivieren, sobald npm-Registry-Zugriff verfügbar ist.
 - [ ] Prometheus-/StatsD-Exporter auf Basis der neuen `metrics.*` Settings anbinden.
