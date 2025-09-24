@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Button } from '../components/ui/button';
 import Select from '../components/ui/select';
-import { ActivityHistoryResponse, fetchActivityHistory } from '../lib/api';
+import { ActivityHistoryResponse, exportActivityHistory, fetchActivityHistory } from '../lib/api';
 import { useQuery } from '../lib/query';
 import { useToast } from '../hooks/useToast';
 
@@ -31,6 +31,7 @@ const ActivityHistoryPage = () => {
   const [offset, setOffset] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'json' | 'csv' | null>(null);
 
   const queryFn = useCallback(
     () => fetchActivityHistory(PAGE_SIZE, offset, typeFilter ?? undefined, statusFilter ?? undefined),
@@ -90,6 +91,33 @@ const ActivityHistoryPage = () => {
     setStatusFilter(value === 'all' ? null : value);
   };
 
+  const handleExport = async (format: 'json' | 'csv') => {
+    setExportingFormat(format);
+    try {
+      const blob = await exportActivityHistory(format, {
+        type: typeFilter ?? undefined,
+        status: statusFilter ?? undefined
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const datePart = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `activity_history_${datePart}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: 'Export fehlgeschlagen',
+        description: 'Die Activity History konnte nicht exportiert werden.',
+        variant: 'destructive'
+      });
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -121,6 +149,36 @@ const ActivityHistoryPage = () => {
                 ))}
               </Select>
             </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Exportiert die aktuell gefilterte Activity History als Datei.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport('json')}
+                disabled={exportingFormat === 'json'}
+              >
+                {exportingFormat === 'json' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : null}
+                Export JSON
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport('csv')}
+                disabled={exportingFormat === 'csv'}
+              >
+                {exportingFormat === 'csv' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : null}
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-lg border">
