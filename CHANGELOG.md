@@ -11,6 +11,8 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Added worker health info (heartbeats + queue size) to `/status`.
 - Added automatic defaults for worker-related settings at startup.
 - Added persistent Activity Feed with flexible event types.
+- Added persistent Activity History with paging & filters.
+- Frontend: Added Activity History page with paging and filters.
 - Frontend: Cancel-/Retry-Buttons für Downloads (Downloads-Seite & Dashboard-Widget).
 - Added cancel and retry endpoints for downloads via slskd TransfersApi.
 - Added limit/offset support to GET /api/downloads.

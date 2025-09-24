@@ -11,6 +11,7 @@ import DownloadsPage from './pages/DownloadsPage';
 import { ThemeProvider } from './components/theme-provider';
 import ToastProvider from './components/ToastProvider';
 import ArtistsPage from './pages/ArtistsPage';
+import ActivityHistoryPage from './pages/ActivityHistoryPage';
 
 const App = () => (
   <ThemeProvider>
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/plex" element={<PlexPage />} />
           <Route path="/soulseek" element={<SoulseekPage />} />
           <Route path="/downloads" element={<DownloadsPage />} />
+          <Route path="/activity" element={<ActivityHistoryPage />} />
           <Route path="/beets" element={<BeetsPage />} />
           <Route path="/matching" element={<MatchingPage />} />
           <Route path="/settings" element={<SettingsPage />} />
