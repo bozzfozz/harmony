@@ -7,6 +7,7 @@ import inspect
 
 from fastapi import FastAPI
 
+from app.core.config import DEFAULT_SETTINGS
 from app.core.beets_client import BeetsClient
 from app.dependencies import (
     get_app_config,
@@ -31,6 +32,7 @@ from app.routers import (
     spotify_router,
 )
 from app.utils.activity import activity_manager
+from app.utils.settings_store import ensure_default_settings
 from app.workers import (
     AutoSyncWorker,
     MatchingWorker,
@@ -63,6 +65,7 @@ async def startup_event() -> None:
     config = get_app_config()
     configure_logging(config.logging.level)
     init_db()
+    ensure_default_settings(DEFAULT_SETTINGS)
     logger.info("Database initialised")
     activity_manager.refresh_cache()
 

@@ -505,6 +505,19 @@ Content-Type: application/json
 | `GET` | `/settings/artist-preferences` | Gibt die markierten Releases pro Artist zurück. |
 | `POST` | `/settings/artist-preferences` | Persistiert die Auswahl (`{"preferences": [{"artist_id": ..., "release_id": ..., "selected": true}]}`). |
 
+### Default-Werte
+
+- Beim Start der Anwendung werden fehlende Settings automatisch mit sinnvollen Defaults ergänzt.
+- `GET /settings` liefert immer den effektiven Wert pro Key zurück – gesetzte Werte überschreiben Defaults.
+- Die History (`/settings/history`) bleibt unverändert und listet nur echte Änderungen.
+
+| Setting | Default | Beschreibung |
+|---------|---------|--------------|
+| `sync_worker_concurrency` | `1` | Maximale Anzahl paralleler SyncWorker-Tasks (ENV: `SYNC_WORKER_CONCURRENCY`). |
+| `matching_worker_batch_size` | `10` | Anzahl an Matching-Jobs pro Batch (ENV: `MATCHING_WORKER_BATCH_SIZE`). |
+| `autosync_min_bitrate` | `192` | Mindest-Bitrate für Soulseek-Downloads (ENV: `AUTOSYNC_MIN_BITRATE`). |
+| `autosync_preferred_formats` | `mp3,flac` | Bevorzugte Dateiformate für AutoSync (ENV: `AUTOSYNC_PREFERRED_FORMATS`). |
+
 **Neue Worker-relevante Settings:**
 
 - `sync_worker_concurrency` – Anzahl paralleler SyncWorker-Tasks (ENV: `SYNC_WORKER_CONCURRENCY`).

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import get_db
 from app.models import ArtistPreference, Setting, SettingHistory
 from app.schemas import (
@@ -38,10 +39,12 @@ router = APIRouter()
 def get_settings(session: Session = Depends(get_db)) -> SettingsResponse:
     settings = session.execute(select(Setting)).scalars().all()
     settings_dict = {setting.key: setting.value for setting in settings}
+    effective_settings = dict(DEFAULT_SETTINGS)
+    effective_settings.update(settings_dict)
     for key in CONFIGURATION_KEYS:
-        settings_dict.setdefault(key, None)
+        effective_settings.setdefault(key, None)
     updated_at = max((setting.updated_at or setting.created_at for setting in settings), default=datetime.utcnow())
-    return SettingsResponse(settings=settings_dict, updated_at=updated_at)
+    return SettingsResponse(settings=effective_settings, updated_at=updated_at)
 
 
 @router.post("", response_model=SettingsResponse)

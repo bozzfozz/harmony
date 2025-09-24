@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Mapping, Optional
 
 from sqlalchemy import select
 
@@ -42,6 +42,28 @@ def read_setting(key: str) -> Optional[str]:
         if setting is None:
             return None
         return setting.value
+
+
+def ensure_default_settings(defaults: Mapping[str, str]) -> None:
+    """Insert missing settings using provided defaults."""
+
+    if not defaults:
+        return
+
+    now = datetime.utcnow()
+    with session_scope() as session:
+        existing_keys = set(session.execute(select(Setting.key)).scalars().all())
+        for key, value in defaults.items():
+            if key in existing_keys:
+                continue
+            session.add(
+                Setting(
+                    key=key,
+                    value=value,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
 
 
 def increment_counter(key: str, *, amount: int = 1) -> int:
