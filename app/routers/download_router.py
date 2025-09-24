@@ -10,11 +10,66 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.logging import get_logger
 from app.models import Download
-from app.schemas import SoulseekDownloadRequest
+from app.schemas import (
+    DownloadEntryResponse,
+    DownloadListResponse,
+    SoulseekDownloadRequest,
+)
 from app.utils.activity import record_activity
 
 router = APIRouter(prefix="/api", tags=["Download"])
 logger = get_logger(__name__)
+
+
+@router.get("/downloads", response_model=DownloadListResponse)
+def list_downloads(
+    all: bool = False,  # noqa: A002 - query parameter name mandated by API contract
+    session: Session = Depends(get_db),
+) -> DownloadListResponse:
+    """Return downloads, optionally including completed or failed entries."""
+
+    logger.info("Download list requested (all=%s)", all)
+    try:
+        query = session.query(Download)
+        if not all:
+            query = query.filter(Download.state.in_(("queued", "running")))
+        downloads = query.order_by(Download.created_at.desc()).all()
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive database failure handling
+        logger.exception("Failed to list downloads: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch downloads",
+        ) from exc
+
+    return DownloadListResponse(downloads=downloads)
+
+
+@router.get("/download/{download_id}", response_model=DownloadEntryResponse)
+def get_download(
+    download_id: int,
+    session: Session = Depends(get_db),
+) -> DownloadEntryResponse:
+    """Return the persisted state of a single download."""
+
+    logger.info("Download detail requested for id=%s", download_id)
+    try:
+        download = session.get(Download, download_id)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive database failure handling
+        logger.exception("Failed to load download %s: %s", download_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch download",
+        ) from exc
+
+    if download is None:
+        logger.warning("Download %s not found", download_id)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Download not found")
+
+    return DownloadEntryResponse.model_validate(download)
 
 
 @router.post("/download", status_code=status.HTTP_202_ACCEPTED)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, computed_field
 
 
 class StatusResponse(BaseModel):
@@ -104,6 +104,29 @@ class SoulseekDownloadEntry(BaseModel):
 
 class SoulseekDownloadStatus(BaseModel):
     downloads: List[SoulseekDownloadEntry]
+
+
+class DownloadEntryResponse(BaseModel):
+    """Download information returned to API consumers."""
+
+    id: int
+    filename: str
+    progress: float
+    created_at: datetime
+    updated_at: datetime
+    state: str = Field(exclude=True)
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field(return_type=str)
+    def status(self) -> str:
+        """Expose the persisted state under the public ``status`` attribute."""
+
+        return self.state
+
+
+class DownloadListResponse(BaseModel):
+    downloads: List[DownloadEntryResponse]
 
 
 class SoulseekCancelResponse(BaseModel):
