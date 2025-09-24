@@ -319,6 +319,14 @@ Content-Type: application/json
 | `GET` | `/settings/artist-preferences` | Gibt die markierten Releases pro Artist zurück. |
 | `POST` | `/settings/artist-preferences` | Persistiert die Auswahl (`{"preferences": [{"artist_id": ..., "release_id": ..., "selected": true}]}`). |
 
+**Neue Worker-relevante Settings:**
+
+- `sync_worker_concurrency` – Anzahl paralleler SyncWorker-Tasks (ENV: `SYNC_WORKER_CONCURRENCY`).
+- `matching_worker_batch_size` & `matching_confidence_threshold` – Batch-Größe und Confidence-Grenze für den MatchingWorker (ENV: `MATCHING_WORKER_BATCH_SIZE`, `MATCHING_CONFIDENCE_THRESHOLD`).
+- `scan_worker_interval_seconds` & `scan_worker_incremental` – Polling-Intervall und Inkrementalscan für den ScanWorker (ENV: `SCAN_WORKER_INTERVAL_SECONDS`, `SCAN_WORKER_INCREMENTAL`).
+- `autosync_min_bitrate` & `autosync_preferred_formats` – Qualitätsregeln für Soulseek-Downloads (ENV: `AUTOSYNC_MIN_BITRATE`, `AUTOSYNC_PREFERRED_FORMATS`).
+- `metrics.*` und `worker.*` – werden automatisch durch die Worker gepflegt (Herzschläge, Laufzeiten, Erfolgszähler). Sie dienen zur Auswertung durch Monitoring/Prometheus.
+
 ## Beets (`/beets`)
 
 | Methode | Pfad | Beschreibung |

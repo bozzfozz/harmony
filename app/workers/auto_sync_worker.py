@@ -2,17 +2,28 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Dict, Iterable, Iterator, List, MutableMapping, Sequence
+
+from sqlalchemy import delete, select
 
 from app.core.beets_client import BeetsClient
 from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.db import session_scope
 from app.logging import get_logger
+from app.models import AutoSyncSkippedTrack
 from app.utils.activity import record_activity
+from app.utils.settings_store import read_setting, write_setting
 
 logger = get_logger(__name__)
+
+DEFAULT_MIN_BITRATE = 192
+SKIP_THRESHOLD = 3
 
 
 @dataclass(frozen=True)
@@ -22,6 +33,7 @@ class TrackInfo:
     title: str
     artist: str
     spotify_id: str | None = None
+    priority: int = 0
 
     def key(self) -> tuple[str, str]:
         return (self.artist.strip().lower(), self.title.strip().lower())
@@ -30,6 +42,8 @@ class TrackInfo:
         payload: dict[str, str] = {"title": self.title, "artist": self.artist}
         if self.spotify_id:
             payload["spotify_id"] = self.spotify_id
+        if self.priority:
+            payload["priority"] = str(self.priority)
         return payload
 
     def __hash__(self) -> int:  # pragma: no cover - dataclass helper
@@ -39,6 +53,16 @@ class TrackInfo:
         if not isinstance(other, TrackInfo):
             return NotImplemented
         return self.key() == other.key()
+
+    def with_priority(self, priority: int) -> TrackInfo:
+        if priority == self.priority:
+            return self
+        return TrackInfo(
+            title=self.title,
+            artist=self.artist,
+            spotify_id=self.spotify_id,
+            priority=priority,
+        )
 
 
 class AutoSyncWorker:
@@ -55,6 +79,7 @@ class AutoSyncWorker:
         retry_attempts: int = 3,
         retry_delay: float = 1.5,
         preferences_loader: Callable[[], Dict[str, bool]] | None = None,
+        skip_threshold: int = SKIP_THRESHOLD,
     ) -> None:
         self._spotify = spotify_client
         self._plex = plex_client
@@ -68,6 +93,7 @@ class AutoSyncWorker:
         self._lock = asyncio.Lock()
         self._stop_event = asyncio.Event()
         self._preferences_loader = preferences_loader
+        self._skip_threshold = skip_threshold
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -86,6 +112,7 @@ class AutoSyncWorker:
                 await self._task
             finally:
                 self._task = None
+        write_setting("worker.autosync.last_stop", datetime.utcnow().isoformat())
 
     async def run_once(self, *, source: str = "manual") -> None:
         await self._execute_sync(source=source)
@@ -108,13 +135,18 @@ class AutoSyncWorker:
 
     async def _execute_sync(self, *, source: str) -> None:
         async with self._lock:
+            start_time = time.perf_counter()
+            status_flags = {"spotify": "ok", "plex": "ok", "soulseek": "ok"}
             record_activity("sync", "autosync_started", details={"source": source})
             logger.info("Auto sync started (source=%s)", source)
+            write_setting("worker.autosync.last_start", datetime.utcnow().isoformat())
+            self._record_heartbeat()
 
             try:
                 spotify_tracks = self._collect_spotify_tracks()
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.error("Failed to load Spotify data: %s", exc)
+                status_flags["spotify"] = "failed"
                 record_activity(
                     "sync",
                     "spotify_unavailable",
@@ -130,11 +162,13 @@ class AutoSyncWorker:
                 "spotify_loaded",
                 details={"source": source, "tracks": len(spotify_tracks)},
             )
+            self._record_heartbeat()
 
             try:
                 plex_tracks = await self._collect_plex_tracks()
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.error("Failed to inspect Plex library: %s", exc)
+                status_flags["plex"] = "failed"
                 record_activity(
                     "sync",
                     "plex_unavailable",
@@ -160,7 +194,12 @@ class AutoSyncWorker:
 
             if not missing_tracks:
                 logger.info("Auto sync completed without missing tracks (source=%s)", source)
+                write_setting("metrics.autosync.downloaded", "0")
+                write_setting("metrics.autosync.skipped", "0")
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                write_setting("metrics.autosync.duration_ms", str(duration_ms))
                 record_activity("sync", "completed", details={"source": source, "missing": 0})
+                self._record_heartbeat()
                 return
 
             record_activity(
@@ -169,7 +208,14 @@ class AutoSyncWorker:
                 details={"source": source, "count": len(missing_tracks)},
             )
 
-            downloaded, skipped = await self._download_missing_tracks(missing_tracks, source)
+            downloaded, skipped, failures = await self._download_missing_tracks(
+                missing_tracks, source
+            )
+
+            if failures:
+                status_flags["soulseek"] = "failed"
+            elif skipped:
+                status_flags["soulseek"] = "partial"
 
             if downloaded:
                 try:
@@ -183,7 +229,12 @@ class AutoSyncWorker:
                         details={"source": source, "error": str(exc)},
                     )
 
-            status = "completed" if not skipped else "partial"
+            status = "completed" if not skipped and not failures else "partial"
+            record_activity(
+                "sync",
+                "status_summary",
+                details={"source": source, "status": status_flags},
+            )
             record_activity(
                 "sync",
                 status,
@@ -191,17 +242,24 @@ class AutoSyncWorker:
                     "source": source,
                     "downloaded": len(downloaded),
                     "skipped": len(skipped),
+                    "failures": sorted(failures),
                 },
             )
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            write_setting("metrics.autosync.downloaded", str(len(downloaded)))
+            write_setting("metrics.autosync.skipped", str(len(skipped)))
+            write_setting("metrics.autosync.duration_ms", str(duration_ms))
+            self._record_heartbeat()
             logger.info(
-                "Auto sync finished (source=%s, downloaded=%d, skipped=%d)",
+                "Auto sync finished (source=%s, downloaded=%d, skipped=%d, failures=%s)",
                 source,
                 len(downloaded),
                 len(skipped),
+                ",".join(sorted(failures)) or "none",
             )
 
     def _collect_spotify_tracks(self) -> set[TrackInfo]:
-        tracks: set[TrackInfo] = set()
+        tracks: dict[tuple[str, str], TrackInfo] = {}
         preferences = self._load_release_preferences()
         allow_all = not preferences
         playlist_response = self._spotify.get_user_playlists()
@@ -220,20 +278,28 @@ class AutoSyncWorker:
                 track_payload = item.get("track") or item
                 if not self._is_release_selected(track_payload, preferences, allow_all):
                     continue
-                track_info = self._normalise_spotify_track(track_payload)
+                priority = self._calculate_track_priority(track_payload, base_priority=10)
+                track_info = self._normalise_spotify_track(track_payload, priority=priority)
                 if track_info:
-                    tracks.add(track_info)
+                    key = track_info.key()
+                    existing = tracks.get(key)
+                    if existing is None or track_info.priority > existing.priority:
+                        tracks[key] = track_info
 
         saved_tracks = self._spotify.get_saved_tracks()
         for item in self._iter_dicts(self._extract_collection(saved_tracks, "items")):
             track_payload = item.get("track") or item
             if not self._is_release_selected(track_payload, preferences, allow_all):
                 continue
-            track_info = self._normalise_spotify_track(track_payload)
+            priority = self._calculate_track_priority(track_payload, base_priority=20)
+            track_info = self._normalise_spotify_track(track_payload, priority=priority)
             if track_info:
-                tracks.add(track_info)
+                key = track_info.key()
+                existing = tracks.get(key)
+                if existing is None or track_info.priority > existing.priority:
+                    tracks[key] = track_info
 
-        return tracks
+        return set(tracks.values())
 
     async def _collect_plex_tracks(self) -> set[TrackInfo]:
         tracks: set[TrackInfo] = set()
@@ -280,14 +346,26 @@ class AutoSyncWorker:
 
     async def _download_missing_tracks(
         self, missing: Iterable[TrackInfo], source: str
-    ) -> tuple[list[tuple[TrackInfo, str]], list[TrackInfo]]:
+    ) -> tuple[list[tuple[TrackInfo, str]], list[TrackInfo], set[str]]:
         downloaded: list[tuple[TrackInfo, str]] = []
         skipped: list[TrackInfo] = []
+        failure_reasons: set[str] = set()
+        min_bitrate, preferred_formats = self._load_quality_rules()
         ordered: Sequence[TrackInfo] = sorted(
-            set(missing), key=lambda item: (item.artist.lower(), item.title.lower())
+            set(missing),
+            key=lambda item: (-item.priority, item.artist.lower(), item.title.lower()),
         )
 
         for track in ordered:
+            if self._should_skip_track(track):
+                record_activity(
+                    "sync",
+                    "soulseek_skipped",
+                    details={"source": source, "track": track.as_dict(), "reason": "permanent"},
+                )
+                skipped.append(track)
+                continue
+
             query = f"{track.artist} {track.title}".strip()
             try:
                 search_result = await self._retry(self._soulseek.search, query)
@@ -298,21 +376,37 @@ class AutoSyncWorker:
                     "soulseek_error",
                     details={"source": source, "track": track.as_dict(), "error": str(exc)},
                 )
+                failure_reasons.add("search")
+                self._record_failed_track(track, "search")
                 skipped.append(track)
                 continue
 
-            candidate = self._select_soulseek_candidate(search_result)
-            if candidate is None:
-                logger.info("No Soulseek results for %s", query)
-                record_activity(
-                    "sync",
-                    "soulseek_no_results",
-                    details={"source": source, "track": track.as_dict()},
-                )
+            username, file_info, rejection = self._select_soulseek_candidate(
+                search_result,
+                min_bitrate=min_bitrate,
+                preferred_formats=preferred_formats,
+            )
+            if not username or not file_info:
+                reason = "quality" if rejection == "quality" else "no_results"
+                failure_reasons.add(reason)
+                if reason == "quality":
+                    logger.info("Rejecting Soulseek candidates below %dkbps for %s", min_bitrate, query)
+                    record_activity(
+                        "sync",
+                        "soulseek_low_quality",
+                        details={"source": source, "track": track.as_dict(), "min_bitrate": min_bitrate},
+                    )
+                else:
+                    logger.info("No Soulseek results for %s", query)
+                    record_activity(
+                        "sync",
+                        "soulseek_no_results",
+                        details={"source": source, "track": track.as_dict()},
+                    )
+                self._record_failed_track(track, reason)
                 skipped.append(track)
                 continue
 
-            username, file_info = candidate
             try:
                 await self._retry(
                     self._soulseek.download,
@@ -325,6 +419,8 @@ class AutoSyncWorker:
                     "download_failed",
                     details={"source": source, "track": track.as_dict(), "error": str(exc)},
                 )
+                failure_reasons.add("download")
+                self._record_failed_track(track, "download")
                 skipped.append(track)
                 continue
 
@@ -346,6 +442,8 @@ class AutoSyncWorker:
                         "error": "missing_path",
                     },
                 )
+                failure_reasons.add("import")
+                self._record_failed_track(track, "missing_path")
                 skipped.append(track)
                 continue
 
@@ -358,6 +456,8 @@ class AutoSyncWorker:
                     "import_failed",
                     details={"source": source, "track": track.as_dict(), "error": str(exc)},
                 )
+                failure_reasons.add("import")
+                self._record_failed_track(track, "import")
                 skipped.append(track)
                 continue
 
@@ -366,9 +466,10 @@ class AutoSyncWorker:
                 "track_imported",
                 details={"source": source, "track": track.as_dict(), "path": path},
             )
+            self._clear_failed_track(track)
             downloaded.append((track, path))
 
-        return downloaded, skipped
+        return downloaded, skipped, failure_reasons
 
     async def _import_with_beets(self, path: str) -> str:
         return await asyncio.to_thread(self._beets.import_file, path, quiet=True)
@@ -389,6 +490,47 @@ class AutoSyncWorker:
                 continue
             normalised[str(release_id)] = bool(selected)
         return normalised
+
+    def _calculate_track_priority(self, payload: Any, *, base_priority: int = 0) -> int:
+        priority = base_priority
+        popularity = payload.get("popularity")
+        try:
+            popularity_score = int(popularity)
+        except (TypeError, ValueError):
+            popularity_score = 0
+        if popularity_score:
+            priority += min(10, popularity_score // 10)
+        if payload.get("is_local"):
+            priority += 1
+        return priority
+
+    def _load_quality_rules(self) -> tuple[int, set[str]]:
+        min_bitrate = self._resolve_int_setting(
+            "autosync_min_bitrate", "AUTOSYNC_MIN_BITRATE", DEFAULT_MIN_BITRATE
+        )
+        formats_setting = read_setting("autosync_preferred_formats")
+        if formats_setting is None:
+            formats_setting = os.getenv("AUTOSYNC_PREFERRED_FORMATS")
+        preferred_formats = {
+            fmt.strip().lower()
+            for fmt in (formats_setting.split(",") if formats_setting else [])
+            if fmt.strip()
+        }
+        return min_bitrate, preferred_formats
+
+    def _resolve_int_setting(self, setting_key: str, env_key: str, default: int) -> int:
+        value = read_setting(setting_key)
+        if value is None:
+            value = os.getenv(env_key)
+        if value:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                parsed = default
+            else:
+                if parsed > 0:
+                    return parsed
+        return default
 
     def _is_release_selected(
         self, payload: Any, preferences: Dict[str, bool], allow_all: bool
@@ -430,7 +572,7 @@ class AutoSyncWorker:
                 return str(value)
         return None
 
-    def _normalise_spotify_track(self, payload: Any) -> TrackInfo | None:
+    def _normalise_spotify_track(self, payload: Any, *, priority: int = 0) -> TrackInfo | None:
         if not isinstance(payload, MutableMapping):
             return None
         title = str(payload.get("name") or "").strip()
@@ -451,12 +593,26 @@ class AutoSyncWorker:
         if not artist_name:
             return None
         spotify_id = payload.get("id")
-        return TrackInfo(title=title, artist=artist_name, spotify_id=str(spotify_id) if spotify_id else None)
+        return TrackInfo(
+            title=title,
+            artist=artist_name,
+            spotify_id=str(spotify_id) if spotify_id else None,
+            priority=priority,
+        )
 
-    def _select_soulseek_candidate(self, payload: Any) -> tuple[str, dict[str, Any]] | None:
+    def _select_soulseek_candidate(
+        self,
+        payload: Any,
+        *,
+        min_bitrate: int,
+        preferred_formats: set[str],
+    ) -> tuple[str | None, dict[str, Any] | None, str | None]:
         candidates = self._extract_collection(payload, "results")
         if not candidates:
             candidates = self._extract_collection(payload, None)
+        preferred: list[tuple[str, dict[str, Any]]] = []
+        fallback: list[tuple[str, dict[str, Any]]] = []
+        rejected_for_quality = False
         for entry in self._iter_dicts(candidates):
             username = entry.get("username") or entry.get("user")
             files = entry.get("files") or entry.get("tracks") or entry.get("results")
@@ -465,9 +621,28 @@ class AutoSyncWorker:
             if not username or not isinstance(files, Iterable):
                 continue
             for file_info in files:
-                if isinstance(file_info, MutableMapping):
-                    return str(username), dict(file_info)
-        return None
+                if not isinstance(file_info, MutableMapping):
+                    continue
+                if not self._is_quality_match(file_info, min_bitrate):
+                    rejected_for_quality = True
+                    continue
+                candidate = (str(username), dict(file_info))
+                if preferred_formats and self._is_preferred_format(file_info, preferred_formats):
+                    preferred.append(candidate)
+                else:
+                    fallback.append(candidate)
+
+        selected: tuple[str, dict[str, Any]] | None = None
+        if preferred:
+            selected = max(preferred, key=lambda item: self._candidate_score(item[1]))
+        elif fallback:
+            selected = max(fallback, key=lambda item: self._candidate_score(item[1]))
+
+        if selected:
+            return selected[0], selected[1], None
+        if rejected_for_quality:
+            return None, None, "quality"
+        return None, None, None
 
     def _resolve_download_path(self, file_info: MutableMapping[str, Any]) -> str | None:
         for key in ("local_path", "localPath", "path", "filename"):
@@ -475,6 +650,45 @@ class AutoSyncWorker:
             if value:
                 return str(value)
         return None
+
+    def _is_quality_match(self, file_info: MutableMapping[str, Any], min_bitrate: int) -> bool:
+        value = file_info.get("bitrate")
+        if value is None:
+            return True
+        try:
+            bitrate = int(value)
+        except (TypeError, ValueError):
+            return True
+        return bitrate >= min_bitrate
+
+    def _is_preferred_format(
+        self, file_info: MutableMapping[str, Any], preferred_formats: set[str]
+    ) -> bool:
+        if not preferred_formats:
+            return False
+        format_name = self._extract_format(file_info)
+        return format_name in preferred_formats
+
+    def _extract_format(self, file_info: MutableMapping[str, Any]) -> str:
+        for key in ("format", "extension", "filetype"):
+            value = file_info.get(key)
+            if isinstance(value, str) and value:
+                return value.strip().lower()
+        filename = file_info.get("filename") or file_info.get("path")
+        if isinstance(filename, str) and "." in filename:
+            return os.path.splitext(filename)[1].replace(".", "").lower()
+        return ""
+
+    def _candidate_score(self, file_info: MutableMapping[str, Any]) -> tuple[int, int]:
+        try:
+            bitrate = int(file_info.get("bitrate", 0))
+        except (TypeError, ValueError):
+            bitrate = 0
+        try:
+            size = int(file_info.get("size", 0))
+        except (TypeError, ValueError):
+            size = 0
+        return bitrate, size
 
     async def _retry(self, func, *args, attempts: int | None = None, delay: float | None = None):
         attempts = attempts or self._retry_attempts
@@ -500,4 +714,52 @@ class AutoSyncWorker:
                 await asyncio.sleep(delay * attempt)
         assert last_error is not None
         raise last_error
+
+    def _track_identifier(self, track: TrackInfo) -> str:
+        if track.spotify_id:
+            return track.spotify_id
+        artist, title = track.key()
+        return f"{artist}::{title}"
+
+    def _should_skip_track(self, track: TrackInfo) -> bool:
+        identifier = self._track_identifier(track)
+        with session_scope() as session:
+            record = session.execute(
+                select(AutoSyncSkippedTrack).where(AutoSyncSkippedTrack.track_key == identifier)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            return record.failure_count >= self._skip_threshold
+
+    def _record_failed_track(self, track: TrackInfo, reason: str) -> None:
+        identifier = self._track_identifier(track)
+        now = datetime.utcnow()
+        with session_scope() as session:
+            record = session.execute(
+                select(AutoSyncSkippedTrack).where(AutoSyncSkippedTrack.track_key == identifier)
+            ).scalar_one_or_none()
+            if record is None:
+                session.add(
+                    AutoSyncSkippedTrack(
+                        track_key=identifier,
+                        spotify_id=track.spotify_id,
+                        failure_reason=reason,
+                        failure_count=1,
+                        last_attempt_at=now,
+                    )
+                )
+            else:
+                record.failure_reason = reason
+                record.failure_count += 1
+                record.last_attempt_at = now
+
+    def _clear_failed_track(self, track: TrackInfo) -> None:
+        identifier = self._track_identifier(track)
+        with session_scope() as session:
+            session.execute(
+                delete(AutoSyncSkippedTrack).where(AutoSyncSkippedTrack.track_key == identifier)
+            )
+
+    def _record_heartbeat(self) -> None:
+        write_setting("worker.autosync.last_seen", datetime.utcnow().isoformat())
 

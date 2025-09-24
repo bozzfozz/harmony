@@ -5,6 +5,12 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 
+# JSON is optional depending on database backend; fall back to Text if unavailable
+try:  # pragma: no cover - fallback handling
+    from sqlalchemy import JSON
+except ImportError:  # pragma: no cover - compatibility
+    JSON = Text  # type: ignore
+
 from app.db import Base
 
 
@@ -83,3 +89,33 @@ class ArtistPreference(Base):
     artist_id = Column(String(128), primary_key=True)
     release_id = Column(String(128), primary_key=True)
     selected = Column(Boolean, nullable=False, default=True)
+
+
+class WorkerJob(Base):
+    __tablename__ = "worker_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    worker = Column(String(64), index=True, nullable=False)
+    payload = Column(JSON, nullable=False)
+    state = Column(String(32), nullable=False, default="queued")
+    attempts = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text, nullable=True)
+    scheduled_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class AutoSyncSkippedTrack(Base):
+    __tablename__ = "auto_sync_skipped_tracks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    track_key = Column(String(512), unique=True, nullable=False)
+    spotify_id = Column(String(128), nullable=True)
+    failure_reason = Column(String(128), nullable=False, default="unknown")
+    failure_count = Column(Integer, nullable=False, default=0)
+    last_attempt_at = Column(DateTime, default=datetime.utcnow, nullable=False)
