@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
+from app.core.transfers_api import TransfersApiError
 from app.db import session_scope
 from app.models import Download
 from app.utils.activity import activity_manager
@@ -203,9 +204,42 @@ def test_cancel_download_sets_state_and_activity(client) -> None:
         assert download is not None
         assert download.state == "cancelled"
 
+    transfers_stub = client.app.state.transfers_stub
+    assert original_id in transfers_stub.cancelled
+
     entries = activity_manager.list()
     assert entries[0]["status"] == "download_cancelled"
     assert entries[0]["details"]["download_id"] == original_id
+
+
+def test_cancel_download_returns_502_when_transfers_unavailable(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "song.mp3", "size": 512},
+        ],
+    }
+
+    start_response = client.post("/api/download", json=payload)
+    assert start_response.status_code == 202
+    original_id = start_response.json()["download_id"]
+
+    transfers_stub = client.app.state.transfers_stub
+    transfers_stub.raise_cancel = TransfersApiError("offline")
+
+    response = client.delete(f"/api/download/{original_id}")
+    assert response.status_code == 502
+
+    with session_scope() as session:
+        download = session.get(Download, original_id)
+        assert download is not None
+        assert download.state == "queued"
+
+    entries = activity_manager.list()
+    assert entries
+    assert entries[0]["status"] == "queued"
+    assert original_id in entries[0]["details"]["download_ids"]
+    assert all(entry["status"] != "download_cancelled" for entry in entries)
 
 
 def test_retry_download_creates_new_entry(client) -> None:
@@ -237,12 +271,87 @@ def test_retry_download_creates_new_entry(client) -> None:
         assert retry_download.username == "tester"
         assert retry_download.request_payload["download_id"] == retry_id
 
-    stub = client.app.state.soulseek_stub
-    assert retry_id in stub.downloads
+    transfers_stub = client.app.state.transfers_stub
+    assert original_id in transfers_stub.cancelled
+    assert any(job["files"][0]["download_id"] == retry_id for job in transfers_stub.enqueued)
+
+    soulseek_stub = client.app.state.soulseek_stub
+    assert soulseek_stub.downloads[original_id]["state"] == "failed"
 
     entries = activity_manager.list()
     assert entries[0]["status"] == "download_retried"
     assert entries[0]["details"]["retry_download_id"] == retry_id
+
+
+def test_retry_download_returns_502_when_enqueue_fails(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "song.mp3", "size": 512},
+        ],
+    }
+
+    start_response = client.post("/api/download", json=payload)
+    assert start_response.status_code == 202
+    original_id = start_response.json()["download_id"]
+
+    cancel_response = client.delete(f"/api/download/{original_id}")
+    assert cancel_response.status_code == 200
+
+    transfers_stub = client.app.state.transfers_stub
+    transfers_stub.raise_enqueue = TransfersApiError("offline")
+
+    response = client.post(f"/api/download/{original_id}/retry")
+    assert response.status_code == 502
+
+    with session_scope() as session:
+        downloads = session.query(Download).all()
+        assert len(downloads) == 1
+        original = session.get(Download, original_id)
+        assert original is not None
+        assert original.state == "cancelled"
+
+    assert transfers_stub.enqueued == []
+
+    entries = activity_manager.list()
+    assert all(entry["status"] != "download_retried" for entry in entries)
+
+
+def test_retry_download_returns_502_when_cancel_fails(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "song.mp3", "size": 512},
+        ],
+    }
+
+    start_response = client.post("/api/download", json=payload)
+    assert start_response.status_code == 202
+    original_id = start_response.json()["download_id"]
+
+    with session_scope() as session:
+        download = session.get(Download, original_id)
+        assert download is not None
+        download.state = "failed"
+        session.commit()
+
+    transfers_stub = client.app.state.transfers_stub
+    transfers_stub.raise_cancel = TransfersApiError("offline")
+
+    response = client.post(f"/api/download/{original_id}/retry")
+    assert response.status_code == 502
+
+    with session_scope() as session:
+        downloads = session.query(Download).all()
+        assert len(downloads) == 1
+        original = session.get(Download, original_id)
+        assert original is not None
+        assert original.state == "failed"
+
+    assert transfers_stub.enqueued == []
+
+    entries = activity_manager.list()
+    assert all(entry["status"] != "download_retried" for entry in entries)
 
 
 def test_cancel_download_rejects_invalid_state(client) -> None:

@@ -210,7 +210,7 @@ DELETE /api/download/42 HTTP/1.1
 }
 ```
 
-Der Activity Feed erhält einen Eintrag `download_cancelled` inklusive `download_id` und `filename`. Der SyncWorker setzt ein internes Cancel-Flag, stoppt laufende Jobs und informiert die Soulseek-API.
+Harmony ruft bei jedem Abbruch die slskd-TransfersApi (`DELETE /transfers/downloads/{id}`) auf. Erst wenn der Daemon die Anfrage bestätigt, wird der Download in der Datenbank als `cancelled` markiert und der Activity Feed um einen Eintrag `download_cancelled` mit `download_id` und `filename` ergänzt. Sollte der Daemon nicht erreichbar sein, antwortet der Endpunkt mit `502 Bad Gateway` und der Status in der Datenbank bleibt unverändert.
 
 **Download-Start:**
 
@@ -254,7 +254,7 @@ POST /api/download/42/retry HTTP/1.1
 }
 ```
 
-Der Endpunkt akzeptiert nur Downloads im Status `failed` oder `cancelled`. Es wird ein neuer Eintrag mit eigener ID erzeugt, die ursprünglichen Datei-Parameter werden wiederverwendet und erneut an den SyncWorker übergeben. Der Activity Feed erhält einen Eintrag `download_retried` mit `original_download_id` und `retry_download_id`.
+Der Endpunkt akzeptiert nur Downloads im Status `failed` oder `cancelled`. Vor dem erneuten Start wird der ursprüngliche Job über `TransfersApi.cancel_download` beendet, anschließend werden `username`, `filename` und `filesize` erneut via `TransfersApi.enqueue` eingereiht. Dadurch entsteht ein neuer Download-Datensatz mit eigener ID, der Activity Feed erhält einen Eintrag `download_retried` mit `original_download_id`, `retry_download_id` und `filename`. Wenn slskd nicht erreichbar ist, wird der Vorgang mit `502 Bad Gateway` abgebrochen und kein neuer Datensatz erzeugt.
 
 ## Download-Widget im Dashboard
 

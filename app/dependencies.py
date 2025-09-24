@@ -11,6 +11,7 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.core.transfers_api import TransfersApi
 from app.db import get_session
 
 
@@ -32,6 +33,11 @@ def get_plex_client() -> PlexClient:
 @lru_cache()
 def get_soulseek_client() -> SoulseekClient:
     return SoulseekClient(get_app_config().soulseek)
+
+
+@lru_cache()
+def get_transfers_api() -> TransfersApi:
+    return TransfersApi(get_soulseek_client())
 
 
 @lru_cache()
