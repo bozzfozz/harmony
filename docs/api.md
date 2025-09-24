@@ -83,11 +83,13 @@ POST /api/metadata/update HTTP/1.1
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker. |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
-| `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset` und optional `?all=true`. |
+| `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset`, optional `?all=true` sowie Status-Filter `?status=queued|running|completed|failed|cancelled`. |
 | `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
+| `PATCH` | `/api/download/{id}/priority` | Setzt die Priorität eines Downloads (höhere Werte werden bevorzugt verarbeitet). |
 | `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
 | `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
+| `GET` | `/api/downloads/export` | Exportiert Downloads als JSON- oder CSV-Datei inkl. optionaler Filter (`status`, `from`, `to`). |
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 | `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
 
@@ -132,6 +134,14 @@ Event-Felder:
 | `search_started` | Start einer plattformübergreifenden Suche mit Quellen. | `{"query": "Boards of Canada", "sources": ["spotify", "plex"]}` |
 | `search_completed` | Trefferanzahl pro Quelle nach erfolgreicher Suche. | `{"query": "Boards of Canada", "matches": {"spotify": 9, "plex": 2}}` |
 | `search_failed` | Aufgetretene Fehler während der Suche. | `{"query": "Boards", "errors": [{"source": "plex", "message": "plex offline"}]}` |
+
+### Download-Retry-Events
+
+| Status | Beschreibung | Beispiel-Details |
+| --- | --- | --- |
+| `download_retry_scheduled` | Automatischer Wiederholungsversuch wurde geplant (inkl. Delay und Versuchszähler). | `{"downloads": [{"download_id": 87, "attempt": 1, "delay_seconds": 5}]}` |
+| `download_retry_completed` | Ein zuvor fehlgeschlagener Download wurde erfolgreich erneut eingereiht. | `{"downloads": [{"download_id": 87, "attempts": 2}]}` |
+| `download_retry_failed` | Nach allen Wiederholungen endgültig aufgegeben. Enthält Fehlermeldung. | `{"downloads": [{"download_id": 87, "attempts": 3}], "error": "timeout"}` |
 
 ### Worker-Health-Events
 
@@ -334,6 +344,8 @@ GET /api/downloads HTTP/1.1
       "filename": "Daft Punk - Harder.mp3",
       "status": "queued",
       "progress": 0.0,
+      "priority": 3,
+      "username": "harmony_user",
       "created_at": "2024-03-18T12:00:00Z",
       "updated_at": "2024-03-18T12:00:00Z"
     }
@@ -355,6 +367,8 @@ GET /api/downloads?limit=5 HTTP/1.1
       "filename": "Daft Punk - One More Time.mp3",
       "status": "running",
       "progress": 65.0,
+      "priority": 4,
+      "username": "club_mode",
       "created_at": "2024-03-18T12:06:00Z",
       "updated_at": "2024-03-18T12:06:10Z"
     }
@@ -376,6 +390,8 @@ GET /api/downloads?all=true HTTP/1.1
       "filename": "Daft Punk - Harder.mp3",
       "status": "completed",
       "progress": 100.0,
+      "priority": 1,
+      "username": "club_mode",
       "created_at": "2024-03-18T12:00:00Z",
       "updated_at": "2024-03-18T12:05:00Z"
     }
@@ -399,6 +415,29 @@ GET /api/downloads?limit=10&offset=10 HTTP/1.1
       "progress": 35.0,
       "created_at": "2024-03-18T12:04:00Z",
       "updated_at": "2024-03-18T12:04:10Z"
+    }
+  ]
+}
+```
+
+**Gefiltert nach Status `failed`:**
+
+```http
+GET /api/downloads?status=failed HTTP/1.1
+```
+
+```json
+{
+  "downloads": [
+    {
+      "id": 99,
+      "filename": "Massive Attack - Teardrop.mp3",
+      "status": "failed",
+      "progress": 0.0,
+      "priority": 2,
+      "username": "trip_hop",
+      "created_at": "2024-03-18T11:55:00Z",
+      "updated_at": "2024-03-18T12:01:14Z"
     }
   ]
 }
@@ -438,6 +477,32 @@ Harmony ruft bei jedem Abbruch die slskd-TransfersApi (`DELETE /transfers/downlo
 
 > **Frontend-Beispiel:** Auf der Downloads-Seite steht jetzt pro aktivem Job ein Button **Abbrechen** zur Verfügung. Nach dem Klick ruft das Frontend `DELETE /api/download/{id}` auf, zeigt ein Erfolgstoast an und lädt die Tabelle automatisch neu, sodass der Status in der UI unmittelbar auf „Cancelled“ springt (siehe aktualisierte Abbildung unten).
 
+Die Oberfläche bietet zusätzlich einen Status-Filter (`running`, `queued`, `completed`, `failed`, `cancelled`), eine Suche über Dateinamen und Usernames sowie eine Inline-Eingabe für Prioritäten. Über zwei Buttons lassen sich die aktuell gefilterten Downloads unmittelbar als JSON- oder CSV-Datei exportieren.
+
+**Priorität anpassen:**
+
+```http
+PATCH /api/download/42/priority HTTP/1.1
+Content-Type: application/json
+
+{ "priority": 8 }
+```
+
+```json
+{
+  "id": 42,
+  "filename": "Daft Punk - Harder.mp3",
+  "status": "queued",
+  "progress": 0.0,
+  "priority": 8,
+  "username": "club_mode",
+  "created_at": "2024-03-18T12:00:00Z",
+  "updated_at": "2024-03-18T12:07:00Z"
+}
+```
+
+Höhere Prioritäten werden vom SyncWorker bevorzugt verarbeitet. Werte größer als die Standardeinstellung `0` sorgen dafür, dass entsprechende Downloads früher in die Soulseek-Queue gelangen – ideal für favorisierte Spotify-Tracks oder manuell dringliche Jobs.
+
 **Download-Start:**
 
 ```http
@@ -460,12 +525,16 @@ Content-Type: application/json
       "filename": "Daft Punk - Harder.mp3",
       "status": "queued",
       "progress": 0.0,
+      "priority": 5,
+      "username": "dj_user",
       "created_at": "2024-03-18T12:00:00Z",
       "updated_at": "2024-03-18T12:00:00Z"
     }
   ]
 }
 ```
+
+Neue Downloads starten immer im Status `queued`. Über das Feld `request_payload` werden alle Metadaten persistiert, die slskd für den Transfer benötigt (Dateiname, Größe, Peer). Die Worker-Queue verarbeitet die Einträge FIFO und aktualisiert Status & Fortschritt über `SyncWorker.refresh_downloads()`. Spotify-Likes sowie manuell gesetzte Prioritäten sorgen dafür, dass wichtige Transfers mit höherer Priorität schneller eingeplant werden.
 
 **Download-Retry:**
 
@@ -484,6 +553,22 @@ Der Endpunkt akzeptiert nur Downloads im Status `failed` oder `cancelled`. Vor d
 
 > **Frontend-Beispiel:** Fehlgeschlagene oder abgebrochene Transfers besitzen den Button **Neu starten**. Nach `POST /api/download/{id}/retry` erscheint der neue Job (inkl. neuer ID) sofort wieder in der Übersicht und im Dashboard-Widget, damit Operatorinnen Retries ohne manuelle API-Aufrufe auslösen können.
 
+**Download-Export (CSV):**
+
+```http
+GET /api/downloads/export?format=csv HTTP/1.1
+```
+
+```text
+HTTP/1.1 200 OK
+Content-Type: text/csv
+
+id,filename,status,progress,username,created_at,updated_at
+42,"Daft Punk - Harder.mp3",completed,100.0,dj_user,2024-03-18T12:00:00Z,2024-03-18T12:05:00Z
+```
+
+Neben `format=csv` ist `format=json` verfügbar. Über die optionalen Parameter `status`, `from` und `to` lassen sich Export-Dateien gezielt einschränken (z. B. nur fehlgeschlagene Downloads der letzten 24 Stunden). Die Downloads-Seite bietet dafür zwei Buttons, die jeweils eine Datei `downloads_<Datum>.json` bzw. `.csv` erzeugen.
+
 ## Download-Widget im Dashboard
 
 Das Dashboard zeigt aktive Downloads in einem kompakten Widget an. Die Komponente nutzt `GET /api/downloads` und pollt den Endpunkt alle 15 Sekunden, um Fortschritte automatisch zu aktualisieren. Bei mehr als fünf aktiven Transfers blendet das Widget einen "Alle anzeigen" Button ein, der direkt zur vollständigen Downloads-Ansicht navigiert.
@@ -492,12 +577,12 @@ Das Dashboard zeigt aktive Downloads in einem kompakten Widget an. Die Komponent
 
 ```
 Aktive Downloads
-┌──────────────────────────────┬──────────┬─────────────┬──────────────┐
-│ Dateiname                    │ Status   │ Fortschritt │ Aktionen     │
-├──────────────────────────────┼──────────┼─────────────┼──────────────┤
-│ Track One.mp3                │ Running  │ 45 %        │ [Abbrechen]  │
-│ Track Two.mp3                │ Failed   │ 0 %         │ [Neu starten]│
-└──────────────────────────────┴──────────┴─────────────┴──────────────┘
+┌──────────────────────────────┬──────────┬────────────┬─────────────┬──────────────┐
+│ Dateiname                    │ Status   │ Priorität  │ Fortschritt │ Aktionen     │
+├──────────────────────────────┼──────────┼────────────┼─────────────┼──────────────┤
+│ Track One.mp3                │ Running  │ 4          │ 45 %        │ [Abbrechen]  │
+│ Track Two.mp3                │ Failed   │ 1          │ 0 %         │ [Neu starten]│
+└──────────────────────────────┴──────────┴────────────┴─────────────┴──────────────┘
 Alle anzeigen → /downloads
 ```
 

@@ -11,10 +11,11 @@ Alle workerrelevanten Settings werden beim Application-Startup automatisch mit D
 - **Arbeitsweise:**
   - Jobs werden in der Tabelle `worker_jobs` persistiert und beim Start wieder eingereiht. Angefangene Downloads überstehen dadurch Neustarts.
   - Mehrere Worker-Tasks ziehen parallel Jobs aus der Queue. Die Parallelität ist über Setting/ENV (`sync_worker_concurrency` bzw. `SYNC_WORKER_CONCURRENCY`) konfigurierbar.
+  - Die Queue ist priorisiert: höhere `Download.priority`-Werte werden zuerst abgearbeitet (automatisch vergeben für Spotify-Likes, manuell via API/UI anpassbar).
   - Ein separater Poll-Loop ruft `refresh_downloads()` auf. Läuft kein aktiver Download, wird das Polling-Intervall automatisch auf den Idle-Wert hochgesetzt.
   - Health-/Monitoring-Informationen landen in der Settings-Tabelle (`worker:sync:last_seen`, `worker:sync:status`, `metrics.sync.*`).
 - **Fehlerhandling:**
-  - Fehlschläge beim Download markieren die betroffenen DB-Einträge als `failed` und werden im Activity Feed dokumentiert.
+  - Fehlschläge werden automatisch mit Backoff (5 s → 15 s → 30 s) bis zu drei Mal erneut eingeplant. Erst nach dem letzten Versuch markiert der Worker den Download als `failed`.
   - Unerwartete Statuswerte oder Fortschritte werden korrigiert; Netzwerkfehler beim Status-Polling erzeugen Warnungen, der Worker bleibt aktiv.
 - **Activity Feed / Eventtypen:** Persistiert `download`-Events wie `queued`, `failed`, `download_cancelled` (inkl. Fehlergründen) sowie `sync_job_failed` aus dem Worker. Details enthalten Job-IDs oder beteiligte Nutzer:innen.
 

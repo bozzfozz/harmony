@@ -109,6 +109,8 @@ export interface SoulseekDownloadEntry {
   progress: number;
   created_at: string;
   updated_at: string;
+  priority?: number;
+  username?: string | null;
 }
 
 export interface SoulseekDownloadsResponse {
@@ -152,12 +154,21 @@ export interface DownloadEntry {
   progress: number;
   created_at?: string;
   updated_at?: string;
+  priority: number;
+  username?: string | null;
 }
 
 export interface FetchDownloadsOptions {
   includeAll?: boolean;
   limit?: number;
   offset?: number;
+  status?: string;
+}
+
+export interface DownloadExportFilters {
+  status?: string;
+  from?: string;
+  to?: string;
 }
 
 export interface StartDownloadPayload {
@@ -339,18 +350,33 @@ const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): Downloa
         ? entry.state
         : 'unknown';
 
+  const rawPriority = (entry as { priority?: unknown }).priority;
+  const priority =
+    typeof rawPriority === 'number'
+      ? rawPriority
+      : typeof rawPriority === 'string'
+        ? Number.parseInt(rawPriority, 10) || 0
+        : 0;
+
+  const username =
+    'username' in entry && typeof (entry as { username?: unknown }).username !== 'undefined'
+      ? ((entry as { username?: unknown }).username as string | null | undefined)
+      : undefined;
+
   return {
     id: entry.id,
     filename: entry.filename,
     status,
     progress: entry.progress ?? 0,
     created_at: 'created_at' in entry ? entry.created_at : undefined,
-    updated_at: 'updated_at' in entry ? entry.updated_at : undefined
+    updated_at: 'updated_at' in entry ? entry.updated_at : undefined,
+    priority,
+    username: username ?? undefined
   };
 };
 
 const requestDownloads = async (
-  params?: Record<string, number | boolean>
+  params?: Record<string, number | boolean | string>
 ): Promise<DownloadEntry[]> => {
   const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
     params: params && Object.keys(params).length > 0 ? params : undefined
@@ -359,27 +385,10 @@ const requestDownloads = async (
 };
 
 export const fetchDownloads = async (
-  limit = 5,
-  offset = 0,
-  all = false
-): Promise<DownloadEntry[]> => {
-  const params: Record<string, number | boolean> = {
-    limit,
-    offset
-  };
-
-  if (all) {
-    params.all = true;
-  }
-
-  return requestDownloads(params);
-};
-
-export const fetchActiveDownloads = async (
   options: FetchDownloadsOptions = {}
 ): Promise<DownloadEntry[]> => {
-  const { includeAll = false, limit, offset } = options;
-  const params: Record<string, number | boolean> = {};
+  const { includeAll = false, limit, offset, status } = options;
+  const params: Record<string, number | boolean | string> = {};
 
   if (includeAll) {
     params.all = true;
@@ -389,6 +398,9 @@ export const fetchActiveDownloads = async (
   }
   if (typeof offset === 'number') {
     params.offset = offset;
+  }
+  if (status) {
+    params.status = status;
   }
 
   return requestDownloads(params);
@@ -403,6 +415,17 @@ export const cancelDownload = async (id: string): Promise<void> => {
   await api.delete(`/api/download/${id}`);
 };
 
+export const updateDownloadPriority = async (
+  id: string,
+  priority: number
+): Promise<DownloadEntry> => {
+  const { data } = await api.patch<SoulseekDownloadEntry | DownloadEntry>(
+    `/api/download/${id}/priority`,
+    { priority }
+  );
+  return mapDownloadEntry(data);
+};
+
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
   const { data } = await api.post('/api/download', payload);
   const downloads = extractDownloadEntries(data);
@@ -412,7 +435,8 @@ export const startDownload = async (payload: StartDownloadPayload): Promise<Down
       id: '',
       filename: '',
       status: 'unknown',
-      progress: 0
+      progress: 0,
+      priority: 0
     };
   }
   return mapDownloadEntry(first);
@@ -427,7 +451,8 @@ export const retryDownload = async (id: string): Promise<DownloadEntry> => {
       id: id,
       filename: '',
       status: 'queued',
-      progress: 0
+      progress: 0,
+      priority: 0
     };
   }
   return mapDownloadEntry(first);
@@ -547,6 +572,29 @@ export const exportActivityHistory = async (
   }
 
   const response = await api.get('/api/activity/export', {
+    params,
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export const exportDownloads = async (
+  format: 'csv' | 'json',
+  filters: DownloadExportFilters = {}
+): Promise<Blob> => {
+  const params: Record<string, string> = { format };
+
+  if (filters.status) {
+    params.status = filters.status;
+  }
+  if (filters.from) {
+    params.from = filters.from;
+  }
+  if (filters.to) {
+    params.to = filters.to;
+  }
+
+  const response = await api.get('/api/downloads/export', {
     params,
     responseType: 'blob'
   });
