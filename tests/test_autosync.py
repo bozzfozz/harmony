@@ -10,11 +10,18 @@ from app.utils.activity import activity_manager
 from app.workers.auto_sync_worker import AutoSyncWorker, TrackInfo
 
 
-def _create_track(name: str, artist: str, spotify_id: str = "track-1") -> Dict[str, Any]:
+def _create_track(
+    name: str,
+    artist: str,
+    spotify_id: str = "track-1",
+    album_id: str | None = None,
+) -> Dict[str, Any]:
+    album_identifier = album_id or f"{spotify_id}-album"
     return {
         "name": name,
         "id": spotify_id,
         "artists": [{"name": artist}],
+        "album": {"id": album_identifier},
     }
 
 
@@ -27,6 +34,7 @@ def _build_worker(
     spotify_tracks: list[Dict[str, Any]],
     plex_tracks: list[TrackInfo],
     soulseek_results: Dict[str, Any] | None = None,
+    preferences: Dict[str, bool] | None = None,
 ) -> tuple[AutoSyncWorker, SimpleNamespace, SimpleNamespace, SimpleNamespace, MagicMock]:
     spotify_client = MagicMock()
     spotify_client.get_user_playlists.return_value = {
@@ -67,12 +75,15 @@ def _build_worker(
 
     beets_client = MagicMock()
 
+    preferences_loader = (lambda: dict(preferences)) if preferences is not None else None
+
     worker = AutoSyncWorker(
         spotify_client,
         plex_client,  # type: ignore[arg-type]
         soulseek_client,  # type: ignore[arg-type]
         beets_client,
         interval_seconds=0.1,
+        preferences_loader=preferences_loader,
     )
     return worker, spotify_client, plex_client, soulseek_client, beets_client
 

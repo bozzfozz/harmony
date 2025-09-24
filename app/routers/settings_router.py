@@ -5,12 +5,19 @@ from datetime import datetime
 from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
-from app.models import Setting, SettingHistory
-from app.schemas import SettingsHistoryResponse, SettingsPayload, SettingsResponse
+from app.models import ArtistPreference, Setting, SettingHistory
+from app.schemas import (
+    ArtistPreferenceEntry,
+    ArtistPreferencesPayload,
+    ArtistPreferencesResponse,
+    SettingsHistoryResponse,
+    SettingsPayload,
+    SettingsResponse,
+)
 
 CONFIGURATION_KEYS: Final[tuple[str, ...]] = (
     "SPOTIFY_CLIENT_ID",
@@ -72,3 +79,70 @@ def get_settings_history(session: Session = Depends(get_db)) -> SettingsHistoryR
         .all()
     )
     return SettingsHistoryResponse(history=history_entries)
+
+
+def _list_artist_preferences(session: Session) -> list[ArtistPreferenceEntry]:
+    entries = (
+        session.execute(
+            select(ArtistPreference).order_by(
+                ArtistPreference.artist_id, ArtistPreference.release_id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        ArtistPreferenceEntry(
+            artist_id=entry.artist_id,
+            release_id=entry.release_id,
+            selected=entry.selected,
+        )
+        for entry in entries
+    ]
+
+
+@router.get("/artist-preferences", response_model=ArtistPreferencesResponse)
+def get_artist_preferences(
+    session: Session = Depends(get_db),
+) -> ArtistPreferencesResponse:
+    preferences = _list_artist_preferences(session)
+    return ArtistPreferencesResponse(preferences=preferences)
+
+
+@router.post("/artist-preferences", response_model=ArtistPreferencesResponse)
+def save_artist_preferences(
+    payload: ArtistPreferencesPayload,
+    session: Session = Depends(get_db),
+) -> ArtistPreferencesResponse:
+    if not payload.preferences:
+        session.execute(delete(ArtistPreference))
+        session.commit()
+        return ArtistPreferencesResponse(preferences=[])
+
+    seen: set[tuple[str, str]] = set()
+    for preference in payload.preferences:
+        artist_id = preference.artist_id.strip()
+        release_id = preference.release_id.strip()
+        if not artist_id or not release_id:
+            raise HTTPException(status_code=400, detail="artist_id and release_id must not be empty")
+        key = (artist_id, release_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        record = session.get(
+            ArtistPreference,
+            {"artist_id": artist_id, "release_id": release_id},
+        )
+        if record is None:
+            record = ArtistPreference(
+                artist_id=artist_id,
+                release_id=release_id,
+                selected=preference.selected,
+            )
+            session.add(record)
+        else:
+            record.selected = preference.selected
+
+    session.commit()
+    preferences = _list_artist_preferences(session)
+    return ArtistPreferencesResponse(preferences=preferences)

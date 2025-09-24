@@ -15,7 +15,7 @@ from app.dependencies import (
     get_soulseek_client,
     get_spotify_client,
 )
-from app.db import init_db
+from app.db import init_db, session_scope
 from app.logging import configure_logging, get_logger
 from app.routers import (
     activity_router,
@@ -38,6 +38,8 @@ from app.workers import (
     ScanWorker,
     SyncWorker,
 )
+from app.models import ArtistPreference
+from sqlalchemy import select
 
 app = FastAPI(title="Harmony Backend", version="1.4.0")
 logger = get_logger(__name__)
@@ -86,11 +88,23 @@ async def startup_event() -> None:
         )
 
         beets_client = BeetsClient()
+        def _load_preferences() -> dict[str, bool]:
+            with session_scope() as session:
+                records = (
+                    session.execute(select(ArtistPreference)).scalars().all()
+                )
+                return {
+                    record.release_id: record.selected
+                    for record in records
+                    if record.release_id
+                }
+
         app.state.auto_sync_worker = AutoSyncWorker(
             spotify_client,
             plex_client,
             soulseek_client,
             beets_client,
+            preferences_loader=_load_preferences,
         )
         await app.state.auto_sync_worker.start()
 

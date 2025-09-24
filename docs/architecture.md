@@ -62,6 +62,13 @@ Beispiele:
 - `app/models.py` definiert SQLAlchemy-Modelle wie `Playlist`, `Download`, `Match`, `Setting`, `SettingHistory`.
 - `app/schemas.py` enthält die Pydantic-Modelle für Anfragen und Antworten.
 
+### Artist-Konfiguration
+
+- Die Tabelle `artist_preferences` speichert pro Spotify-Artist die gewählten Releases (`artist_id`, `release_id`, `selected`).
+- Der `settings_router` stellt `GET/POST /settings/artist-preferences` bereit, um diese Auswahl abzurufen bzw. zu persistieren.
+- Der `spotify_router` liefert mit `GET /spotify/artists/followed` und `GET /spotify/artist/{id}/releases` die Grundlage für die Konfiguration.
+- Der `AutoSyncWorker` lädt die markierten Releases beim Sync und filtert Spotify-Tracks, sodass nur gewünschte Veröffentlichungen gegen Plex abgeglichen werden.
+
 ### Hintergrund-Worker
 
 Während des Startup-Events (`app/main.py`) werden – sofern `HARMONY_DISABLE_WORKERS` nicht gesetzt ist – folgende Worker gestartet:

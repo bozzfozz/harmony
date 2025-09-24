@@ -170,3 +170,13 @@ class SpotifyClient:
         if seed_genres:
             params["seed_genres"] = seed_genres
         return self._execute(self._client.recommendations, **params)
+
+    def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
+        return self._execute(self._client.current_user_followed_artists, limit=limit)
+
+    def get_artist_releases(self, artist_id: str) -> Dict[str, Any]:
+        return self._execute(
+            self._client.artist_albums,
+            artist_id,
+            album_type="album,single,compilation",
+        )

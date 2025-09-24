@@ -151,6 +151,8 @@ Auf dem Dashboard ergänzt das Activity-Feed-Widget die bestehenden Statuskachel
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
 | `GET` | `/spotify/status` | Prüft, ob der Spotify-Client authentifiziert ist. |
+| `GET` | `/spotify/artists/followed` | Listet alle vom Benutzer gefolgten Artists. |
+| `GET` | `/spotify/artist/{artist_id}/releases` | Liefert Alben, Singles und Compilations eines Artists. |
 | `GET` | `/spotify/search/tracks?query=...` | Sucht nach Tracks (weitere Endpunkte für Artists/Albums identisch). |
 | `GET` | `/spotify/track/{track_id}` | Liefert Track-Details. |
 | `GET` | `/spotify/audio-features/{track_id}` | Einzelne Audio-Features. |
@@ -310,6 +312,8 @@ Content-Type: application/json
 | `GET` | `/settings` | Liefert alle Settings als Key-Value-Map inklusive `updated_at`. |
 | `POST` | `/settings` | Legt/aktualisiert einen Eintrag (`{"key": "plex_artist_count", "value": "123"}`). |
 | `GET` | `/settings/history` | Zeigt die letzten 50 Änderungen mit Zeitstempel. |
+| `GET` | `/settings/artist-preferences` | Gibt die markierten Releases pro Artist zurück. |
+| `POST` | `/settings/artist-preferences` | Persistiert die Auswahl (`{"preferences": [{"artist_id": ..., "release_id": ..., "selected": true}]}`). |
 
 ## Beets (`/beets`)
 

@@ -7,9 +7,11 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Frontend-Downloads-Seite mit Start-Formular, Fortschrittsanzeige und Zeitstempeln.
 - Dokumentation des Endpunkts `GET /api/download` inkl. Response-Beispiel.
 - AutoSyncWorker, der Spotify-Playlists und gespeicherte Tracks automatisch mit Plex abgleicht, fehlende Titel via Soulseek lädt und anschließend per Beets importiert (manuell triggerbar über `/api/sync`).
+- Artist-Konfiguration mit neuen Spotify- und Settings-Endpunkten sowie der Tabelle `artist_preferences`.
 
 ### Changed
 - Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
+- AutoSyncWorker filtert Spotify-Tracks anhand gespeicherter Artist-Präferenzen.
 
 ### Fixed
 - Noch keine Einträge.
