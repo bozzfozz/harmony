@@ -12,6 +12,7 @@
 - [x] AutoSyncWorker für Spotify↔Plex implementieren, Soulseek/Beets-Anbindung ergänzen und Dokumentation aktualisieren.
 - [x] Artist-Konfiguration für Spotify-Releases (API, DB, AutoSync) umsetzen.
 - [x] Artists-Frontend zum Aktivieren einzelner Releases inkl. Tests und Dokumentation ergänzen.
+- [x] Paging für `/api/downloads` mit Limit/Offset-Parametern ergänzen.
 - [ ] Streaming-Router für Audio-Features planen und implementieren (Frontend-Integration vorbereiten).
 - [ ] Frontend-Testlauf im CI wieder aktivieren, sobald npm-Registry-Zugriff verfügbar ist.
 - [ ] Prometheus-/StatsD-Exporter auf Basis der neuen `metrics.*` Settings anbinden.

@@ -23,13 +23,15 @@ const formatStatus = (status: string | undefined) => {
     .join(' ');
 };
 
+const DISPLAY_LIMIT = 5;
+
 const DownloadWidget = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const { data, isLoading, isError } = useQuery<DownloadEntry[]>({
     queryKey: ['downloads', 'active-widget'],
-    queryFn: () => fetchActiveDownloads(),
+    queryFn: () => fetchActiveDownloads({ limit: DISPLAY_LIMIT }),
     refetchInterval: 15000,
     onError: () =>
       toast({
@@ -39,8 +41,8 @@ const DownloadWidget = () => {
       })
   });
 
-  const entries = useMemo(() => (data ?? []).slice(0, 5), [data]);
-  const hasMore = (data?.length ?? 0) > 5;
+  const entries = useMemo(() => data ?? [], [data]);
+  const hasMore = (data?.length ?? 0) >= DISPLAY_LIMIT;
 
   const handleNavigate = () => {
     navigate('/downloads');
