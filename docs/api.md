@@ -109,6 +109,27 @@ GET /api/downloads HTTP/1.1
 }
 ```
 
+**Alle Downloads inklusive abgeschlossener/fehlgeschlagener Transfers:**
+
+```http
+GET /api/downloads?all=true HTTP/1.1
+```
+
+```json
+{
+  "downloads": [
+    {
+      "id": 42,
+      "filename": "Daft Punk - Harder.mp3",
+      "status": "completed",
+      "progress": 100.0,
+      "created_at": "2024-03-18T12:00:00Z",
+      "updated_at": "2024-03-18T12:05:00Z"
+    }
+  ]
+}
+```
+
 **Download-Details:**
 
 ```http

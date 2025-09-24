@@ -14,6 +14,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Quality-/Priorisierungsregeln für den AutoSyncWorker (`autosync_min_bitrate`, `autosync_preferred_formats`, Skip-State in `auto_sync_skipped_tracks`).
 
 ### Changed
+- Frontend: DownloadsPage nutzt jetzt `GET /api/downloads` für die Download-Übersicht.
 - Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
 - AutoSyncWorker filtert Spotify-Tracks anhand gespeicherter Artist-Präferenzen.
 - SyncWorker parallelisiert Downloads und passt das Polling adaptiv an inaktive Phasen an.

@@ -34,6 +34,7 @@ describe('DownloadsPage', () => {
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
     expect(await screen.findByText('Test File.mp3')).toBeInTheDocument();
+    expect(mockedFetchDownloads).toHaveBeenCalledWith(false);
     expect(screen.getByText('45%')).toBeInTheDocument();
     const expectedDateLabel = new Intl.DateTimeFormat(undefined, {
       dateStyle: 'short',
@@ -74,5 +75,45 @@ describe('DownloadsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Download starten' }));
 
     await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Download fehlgeschlagen' })));
+  });
+
+  it('toggles between active and all downloads', async () => {
+    mockedFetchDownloads.mockResolvedValueOnce([
+      {
+        id: 3,
+        filename: 'Running File.mp3',
+        status: 'running',
+        progress: 50,
+        created_at: '2024-02-01T10:00:00Z'
+      }
+    ]);
+    mockedFetchDownloads.mockResolvedValueOnce([
+      {
+        id: 3,
+        filename: 'Running File.mp3',
+        status: 'running',
+        progress: 50,
+        created_at: '2024-02-01T10:00:00Z'
+      },
+      {
+        id: 4,
+        filename: 'Completed File.mp3',
+        status: 'completed',
+        progress: 100,
+        created_at: '2024-02-01T09:00:00Z'
+      }
+    ]);
+
+    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+
+    expect(await screen.findByText('Running File.mp3')).toBeInTheDocument();
+    expect(mockedFetchDownloads).toHaveBeenCalledWith(false);
+
+    const toggleButton = screen.getByRole('button', { name: 'Alle anzeigen' });
+    await userEvent.click(toggleButton);
+
+    await waitFor(() => expect(mockedFetchDownloads).toHaveBeenLastCalledWith(true));
+    expect(await screen.findByText('Completed File.mp3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nur aktive' })).toBeInTheDocument();
   });
 });

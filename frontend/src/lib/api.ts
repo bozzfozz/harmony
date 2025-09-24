@@ -320,9 +320,17 @@ const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): Downloa
   };
 };
 
-export const fetchActiveDownloads = async (): Promise<DownloadEntry[]> => {
-  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads');
+export const fetchActiveDownloads = async (includeAll = false): Promise<DownloadEntry[]> => {
+  const params = includeAll ? { all: true } : undefined;
+  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
+    params
+  });
   return extractDownloadEntries(data).map(mapDownloadEntry);
+};
+
+export const fetchDownloadById = async (id: string): Promise<DownloadEntry> => {
+  const { data } = await api.get<SoulseekDownloadEntry | DownloadEntry>(`/api/download/${id}`);
+  return mapDownloadEntry(data);
 };
 
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
