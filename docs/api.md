@@ -60,7 +60,8 @@ POST /api/metadata/update HTTP/1.1
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker. |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
-| `GET` | `/api/download` | Listet aktive Downloads inklusive Status, Fortschritt und Zeitstempel. |
+| `GET` | `/api/downloads` | Listet aktive Downloads (`state=queued/running`), optional alle mit `?all=true`. |
+| `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
 | `GET` | `/api/activity` | Liefert den In-Memory-Aktivitätsfeed (max. 50 Einträge). |
 
@@ -87,6 +88,46 @@ Content-Type: application/json
 
 **Download-Beispiel:**
 
+**Download-Übersicht:**
+
+```http
+GET /api/downloads HTTP/1.1
+```
+
+```json
+{
+  "downloads": [
+    {
+      "id": 42,
+      "filename": "Daft Punk - Harder.mp3",
+      "status": "queued",
+      "progress": 0.0,
+      "created_at": "2024-03-18T12:00:00Z",
+      "updated_at": "2024-03-18T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Download-Details:**
+
+```http
+GET /api/download/42 HTTP/1.1
+```
+
+```json
+{
+  "id": 42,
+  "filename": "Daft Punk - Harder.mp3",
+  "status": "queued",
+  "progress": 0.0,
+  "created_at": "2024-03-18T12:00:00Z",
+  "updated_at": "2024-03-18T12:05:00Z"
+}
+```
+
+**Download-Start:**
+
 ```http
 POST /api/download HTTP/1.1
 Content-Type: application/json
@@ -105,9 +146,10 @@ Content-Type: application/json
     {
       "id": 42,
       "filename": "Daft Punk - Harder.mp3",
-      "state": "queued",
+      "status": "queued",
       "progress": 0.0,
-      "created_at": "2024-03-18T12:00:00Z"
+      "created_at": "2024-03-18T12:00:00Z",
+      "updated_at": "2024-03-18T12:00:00Z"
     }
   ]
 }

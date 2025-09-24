@@ -95,7 +95,8 @@ export type PlexLibrariesResponse = Record<string, unknown>;
 export interface SoulseekDownloadEntry {
   id: number;
   filename: string;
-  state: string;
+  state?: string;
+  status?: string;
   progress: number;
   created_at: string;
   updated_at: string;
@@ -141,6 +142,7 @@ export interface DownloadEntry {
   status: string;
   progress: number;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface StartDownloadPayload {
@@ -286,24 +288,56 @@ export const fetchBeetsStats = async (): Promise<BeetsStatsResponse> => {
   return data;
 };
 
-export const fetchActiveDownloads = async (): Promise<DownloadEntry[]> => {
-  const { data } = await api.get('/api/download');
-  if (Array.isArray(data)) {
-    return data as DownloadEntry[];
+const extractDownloadEntries = (payload: unknown): SoulseekDownloadEntry[] => {
+  if (Array.isArray(payload)) {
+    return payload as SoulseekDownloadEntry[];
   }
-  if (Array.isArray((data as { downloads?: DownloadEntry[] }).downloads)) {
-    return (data as { downloads: DownloadEntry[] }).downloads;
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { downloads?: SoulseekDownloadEntry[] }).downloads)
+  ) {
+    return (payload as { downloads: SoulseekDownloadEntry[] }).downloads;
   }
   return [];
 };
 
+const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): DownloadEntry => {
+  const status =
+    'status' in entry && typeof entry.status === 'string'
+      ? entry.status
+      : 'state' in entry && typeof entry.state === 'string'
+        ? entry.state
+        : 'unknown';
+
+  return {
+    id: entry.id,
+    filename: entry.filename,
+    status,
+    progress: entry.progress ?? 0,
+    created_at: 'created_at' in entry ? entry.created_at : undefined,
+    updated_at: 'updated_at' in entry ? entry.updated_at : undefined
+  };
+};
+
+export const fetchActiveDownloads = async (): Promise<DownloadEntry[]> => {
+  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads');
+  return extractDownloadEntries(data).map(mapDownloadEntry);
+};
+
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
   const { data } = await api.post('/api/download', payload);
-  if (Array.isArray((data as { downloads?: DownloadEntry[] }).downloads)) {
-    const [first] = (data as { downloads: DownloadEntry[] }).downloads;
-    return first;
+  const downloads = extractDownloadEntries(data);
+  const first = downloads[0] ?? (data as SoulseekDownloadEntry | DownloadEntry | undefined);
+  if (!first) {
+    return {
+      id: '',
+      filename: '',
+      status: 'unknown',
+      progress: 0
+    };
   }
-  return data as DownloadEntry;
+  return mapDownloadEntry(first);
 };
 
 export const fetchActivityFeed = async (): Promise<ActivityItem[]> => {

@@ -4,6 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Added GET endpoints for downloads.
 - Frontend-Downloads-Seite mit Start-Formular, Fortschrittsanzeige und Zeitstempeln.
 - Dokumentation des Endpunkts `GET /api/download` inkl. Response-Beispiel.
 - AutoSyncWorker, der Spotify-Playlists und gespeicherte Tracks automatisch mit Plex abgleicht, fehlende Titel via Soulseek lädt und anschließend per Beets importiert (manuell triggerbar über `/api/sync`).

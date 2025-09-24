@@ -1,5 +1,17 @@
+import { createRequire } from 'module';
 import type { Config } from 'tailwindcss';
-import animatePlugin from 'tailwindcss-animate';
+
+const require = createRequire(import.meta.url);
+
+const resolvedAnimatePlugin = (() => {
+  try {
+    const plugin = require('tailwindcss-animate');
+    return plugin?.default ?? plugin;
+  } catch (error) {
+    console.warn('tailwindcss-animate not available, skipping animation plugin.');
+    return undefined;
+  }
+})();
 
 const config: Config = {
   darkMode: ['class'],
@@ -60,7 +72,7 @@ const config: Config = {
       }
     }
   },
-  plugins: [animatePlugin]
+  plugins: resolvedAnimatePlugin ? [resolvedAnimatePlugin] : []
 };
 
 export default config;
