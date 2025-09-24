@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { isAxiosError } from 'axios';
 import { Loader2 } from 'lucide-react';
 import {
   Card,
@@ -6,12 +7,13 @@ import {
   CardHeader,
   CardTitle
 } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import ActivityFeed from '../components/ActivityFeed';
 import DownloadWidget from '../components/DownloadWidget';
 import ServiceStatusCard from '../components/ServiceStatusCard';
 import WorkerHealthCard from '../components/WorkerHealthCard';
 import { useToast } from '../hooks/useToast';
-import { useQuery } from '../lib/query';
+import { useMutation, useQuery } from '../lib/query';
 import {
   fetchBeetsStats,
   fetchPlexLibraries,
@@ -20,7 +22,8 @@ import {
   fetchSoulseekDownloads,
   fetchSoulseekStatus,
   fetchSpotifyPlaylists,
-  fetchSpotifyStatus
+  fetchSpotifyStatus,
+  triggerSync
 } from '../lib/api';
 
 const Dashboard = () => {
@@ -104,6 +107,33 @@ const Dashboard = () => {
       })
   });
 
+  const syncMutation = useMutation<void, void>({
+    mutationFn: async () => {
+      await triggerSync();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Sync gestartet',
+        description: 'Der manuelle Sync wurde ausgelöst.'
+      });
+    },
+    onError: (error) => {
+      if (isAxiosError(error) && error.response?.status === 503) {
+        toast({
+          title: 'Sync blockiert',
+          description: 'Bitte hinterlegen Sie Spotify-, Plex- und Soulseek-Zugangsdaten.',
+          variant: 'destructive'
+        });
+        return;
+      }
+      toast({
+        title: 'Sync fehlgeschlagen',
+        description: 'Bitte Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    }
+  });
+
   const isLoading =
     spotifyStatusQuery.isLoading &&
     plexStatusQuery.isLoading &&
@@ -154,10 +184,28 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <ServiceStatusCard
-        connections={connectionStatuses}
-        isLoading={systemStatusQuery.isLoading}
-      />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <ServiceStatusCard
+          connections={connectionStatuses}
+          isLoading={systemStatusQuery.isLoading}
+        />
+        <div className="flex justify-end lg:justify-start">
+          <Button
+            type="button"
+            onClick={() => void syncMutation.mutate(undefined)}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sync läuft…
+              </span>
+            ) : (
+              'Sync starten'
+            )}
+          </Button>
+        </div>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>

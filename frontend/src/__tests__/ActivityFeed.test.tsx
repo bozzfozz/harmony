@@ -56,6 +56,39 @@ describe('ActivityFeed', () => {
     expect(within(downloadEntry).getByText('Fehlgeschlagen')).toHaveClass('bg-rose-100');
   });
 
+  it('renders blocked events with red icon and label', async () => {
+    mockedFetchActivityFeed.mockResolvedValue([
+      { timestamp: '2024-03-18T12:10:00Z', type: 'sync', status: 'sync_blocked' },
+      { timestamp: '2024-03-18T12:09:00Z', type: 'download', status: 'download_blocked' },
+      {
+        timestamp: '2024-03-18T12:08:00Z',
+        type: 'autosync',
+        status: 'autosync_blocked',
+        details: { trigger: 'manual' }
+      }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const entries = await screen.findAllByTestId('activity-entry');
+    expect(entries).toHaveLength(3);
+
+    const syncEntry = entries[0];
+    expect(within(syncEntry).getByText('Synchronisierung')).toBeInTheDocument();
+    expect(within(syncEntry).getByText('⛔')).toBeInTheDocument();
+    expect(within(syncEntry).getByText('Blockiert')).toHaveClass('bg-rose-100');
+
+    const downloadEntry = entries[1];
+    expect(within(downloadEntry).getByText('Download')).toBeInTheDocument();
+    expect(within(downloadEntry).getByText('⛔')).toBeInTheDocument();
+    expect(within(downloadEntry).getByText('Blockiert')).toHaveClass('bg-rose-100');
+
+    const autosyncEntry = entries[2];
+    expect(within(autosyncEntry).getByText('AutoSync')).toBeInTheDocument();
+    expect(within(autosyncEntry).getByText('⛔')).toBeInTheDocument();
+    expect(within(autosyncEntry).getByText('Blockiert')).toHaveClass('bg-rose-100');
+  });
+
   it('renders worker events with dedicated icons, colours and details', async () => {
     const user = userEvent.setup();
     mockedFetchActivityFeed.mockResolvedValue([

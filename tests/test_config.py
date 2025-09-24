@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from sqlalchemy import delete, select
+
 from app.config import load_config
 from app.db import session_scope
 from app.models import Setting
@@ -10,7 +12,13 @@ from app.models import Setting
 def _insert_settings(entries: dict[str, str | None]) -> None:
     with session_scope() as session:
         for key, value in entries.items():
-            session.add(Setting(key=key, value=value))
+            setting = (
+                session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
+            )
+            if setting is None:
+                session.add(Setting(key=key, value=value))
+            else:
+                setting.value = value
 
 
 @pytest.mark.parametrize(
@@ -83,6 +91,16 @@ def test_configuration_falls_back_to_environment(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "env-client")
     monkeypatch.setenv("PLEX_BASE_URL", "http://env-plex")
     monkeypatch.setenv("SLSKD_URL", "http://env-slskd")
+
+    with session_scope() as session:
+        session.execute(
+            delete(Setting).where(
+                Setting.key.in_(
+                    ["SPOTIFY_CLIENT_ID", "PLEX_BASE_URL", "SLSKD_URL"]
+                )
+            )
+        )
+        session.commit()
 
     config = load_config()
 

@@ -22,6 +22,7 @@ from app.schemas import (
     SoulseekDownloadRequest,
 )
 from app.utils.activity import record_activity
+from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import PersistentJobQueue
 
 router = APIRouter(prefix="/api", tags=["Download"])
@@ -287,6 +288,20 @@ async def start_download(
     if not payload.files:
         logger.warning("Download request without files rejected")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files supplied")
+
+    missing_credentials = collect_missing_credentials(session, ("soulseek",))
+    if missing_credentials:
+        missing_payload = {service: list(values) for service, values in missing_credentials.items()}
+        logger.warning("Download blocked due to missing credentials: %s", missing_payload)
+        record_activity(
+            "download",
+            "download_blocked",
+            details={"missing": missing_payload, "username": payload.username},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"message": "Download blocked", "missing": missing_payload},
+        )
 
     worker = getattr(request.app.state, "sync_worker", None)
     enqueue = getattr(worker, "enqueue", None)
