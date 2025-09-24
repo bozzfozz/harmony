@@ -22,13 +22,25 @@ describe('DownloadsPage', () => {
 
   it('renders downloads table', async () => {
     mockedFetchDownloads.mockResolvedValue([
-      { id: 1, filename: 'Test File.mp3', status: 'running', progress: 45 }
+      {
+        id: 1,
+        filename: 'Test File.mp3',
+        status: 'running',
+        progress: 45,
+        created_at: '2024-01-01T12:00:00Z'
+      }
     ]);
 
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
     expect(await screen.findByText('Test File.mp3')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
+    const expectedDateLabel = new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(new Date('2024-01-01T12:00:00Z'));
+
+    await waitFor(() => expect(screen.getByText(expectedDateLabel)).toBeInTheDocument());
   });
 
   it('starts a download via the form', async () => {
@@ -37,7 +49,8 @@ describe('DownloadsPage', () => {
       id: 2,
       filename: 'Another File.mp3',
       status: 'queued',
-      progress: 0
+      progress: 0,
+      created_at: '2024-01-02T08:15:00Z'
     });
 
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });

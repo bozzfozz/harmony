@@ -4,7 +4,8 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
-- Noch keine Einträge.
+- Frontend-Downloads-Seite mit Start-Formular, Fortschrittsanzeige und Zeitstempeln.
+- Dokumentation des Endpunkts `GET /api/download` inkl. Response-Beispiel.
 
 ### Changed
 - Noch keine Einträge.
