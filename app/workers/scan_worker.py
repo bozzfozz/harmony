@@ -14,6 +14,7 @@ from app.logging import get_logger
 from app.models import Setting
 from app.utils.activity import record_activity
 from app.utils.settings_store import read_setting, write_setting
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,7 @@ class ScanWorker:
     async def _run(self) -> None:
         logger.info("ScanWorker started")
         write_setting("worker.scan.last_start", datetime.utcnow().isoformat())
+        record_worker_heartbeat("scan")
         try:
             while self._running.is_set():
                 self._interval = self._resolve_interval()
@@ -57,6 +59,7 @@ class ScanWorker:
                     continue
         finally:
             write_setting("worker.scan.last_stop", datetime.utcnow().isoformat())
+            mark_worker_status("scan", "stopped")
             logger.info("ScanWorker stopped")
 
     async def run_once(self) -> None:
@@ -174,4 +177,4 @@ class ScanWorker:
             setting.updated_at = timestamp
 
     def _record_heartbeat(self) -> None:
-        write_setting("worker.scan.last_seen", datetime.utcnow().isoformat())
+        record_worker_heartbeat("scan")

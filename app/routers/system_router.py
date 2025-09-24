@@ -1,12 +1,21 @@
 """System status endpoints exposed for the dashboard."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
 from app.logging import get_logger
+from app.db import session_scope
+from app.models import Download, WorkerJob
+from app.utils.worker_health import (
+    parse_timestamp,
+    read_worker_status,
+    resolve_status,
+)
+from sqlalchemy import func, select
 
 try:  # pragma: no cover - import guarded for environments without psutil
     import psutil  # type: ignore
@@ -18,55 +27,85 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _START_TIME = datetime.now(timezone.utc)
-_WORKER_LABELS = {
-    "sync_worker": "soulseek_sync",
-    "matching_worker": "matching",
-    "scan_worker": "plex_scan",
-    "playlist_worker": "playlist_sync",
+QueueValue = Any
+
+
+@dataclass(frozen=True)
+class WorkerDescriptor:
+    attr: str
+    queue_fetcher: Optional[Callable[[Request], QueueValue]] = None
+    queue_literal: Optional[QueueValue] = None
+
+
+def _sync_queue_size(_: Request) -> int:
+    with session_scope() as session:
+        result = session.execute(
+            select(func.count())
+            .select_from(Download)
+            .where(Download.state.in_(["queued", "downloading"]))
+        )
+        count = result.scalar_one_or_none()
+    return int(count or 0)
+
+
+def _matching_queue_size(_: Request) -> int:
+    with session_scope() as session:
+        result = session.execute(
+            select(func.count())
+            .select_from(WorkerJob)
+            .where(
+                WorkerJob.worker == "matching",
+                WorkerJob.state.in_(["queued", "running"]),
+            )
+        )
+        count = result.scalar_one_or_none()
+    return int(count or 0)
+
+
+def _autosync_queue_status(request: Request) -> Dict[str, int]:
+    worker = getattr(request.app.state, "auto_sync_worker", None)
+    running = bool(getattr(worker, "_running", False))
+    in_progress = bool(getattr(worker, "_in_progress", False))
+    return {
+        "scheduled": 1 if running else 0,
+        "running": 1 if in_progress else 0,
+    }
+
+
+_WORKERS: Dict[str, WorkerDescriptor] = {
+    "sync": WorkerDescriptor(attr="sync_worker", queue_fetcher=_sync_queue_size),
+    "matching": WorkerDescriptor(attr="matching_worker", queue_fetcher=_matching_queue_size),
+    "scan": WorkerDescriptor(attr="scan_worker", queue_literal="n/a"),
+    "playlist": WorkerDescriptor(attr="playlist_worker", queue_literal="n/a"),
+    "autosync": WorkerDescriptor(attr="auto_sync_worker", queue_fetcher=_autosync_queue_status),
 }
 
 
-def _worker_state(worker: Any) -> Dict[str, Any]:
-    """Return a descriptive status payload for a background worker."""
+def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -> Dict[str, Any]:
+    stored_last_seen, stored_status = read_worker_status(name)
+    last_seen_dt = parse_timestamp(stored_last_seen)
+    now = datetime.now(timezone.utc)
+    status = resolve_status(stored_status, last_seen_dt, now=now)
 
-    if worker is None:
-        return {"state": "unavailable"}
+    payload: Dict[str, Any] = {"status": status}
+    payload["last_seen"] = stored_last_seen
 
-    running: bool | None = None
-
-    is_running = getattr(worker, "is_running", None)
-    if callable(is_running):
+    queue_value: QueueValue | None = None
+    if descriptor.queue_fetcher is not None:
         try:
-            running = bool(is_running())
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning("Failed to inspect worker status: %s", exc)
-            running = None
+            queue_value = descriptor.queue_fetcher(request)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Failed to obtain queue size for worker %s: %s", name, exc)
+    elif descriptor.queue_literal is not None:
+        queue_value = descriptor.queue_literal
 
-    if running is None:
-        flag = getattr(worker, "_running", None)
-        if hasattr(flag, "is_set"):
-            try:
-                running = bool(flag.is_set())
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning("Failed to inspect worker flag: %s", exc)
-        elif isinstance(flag, bool):
-            running = flag
+    if queue_value is not None:
+        payload["queue_size"] = queue_value
 
-    queue_size = None
-    queue = getattr(worker, "queue", None)
-    if queue is not None and hasattr(queue, "qsize"):
-        try:
-            queue_size = int(queue.qsize())
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug("Unable to determine worker queue size: %s", exc)
+    worker_instance = getattr(request.app.state, descriptor.attr, None)
+    if worker_instance is None and stored_last_seen is None:
+        payload["status"] = "unavailable"
 
-    state = "running" if running else "idle"
-    if running is None:
-        state = "unknown"
-
-    payload: Dict[str, Any] = {"state": state}
-    if queue_size is not None:
-        payload["queue_size"] = queue_size
     return payload
 
 
@@ -77,8 +116,8 @@ async def get_status(request: Request) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     uptime_seconds = (now - _START_TIME).total_seconds()
     workers = {
-        label: _worker_state(getattr(request.app.state, attr, None))
-        for attr, label in _WORKER_LABELS.items()
+        name: _worker_payload(name, descriptor, request)
+        for name, descriptor in _WORKERS.items()
     }
 
     logger.debug("Reporting system status: uptime=%s seconds", uptime_seconds)

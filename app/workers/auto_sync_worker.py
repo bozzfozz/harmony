@@ -19,6 +19,7 @@ from app.logging import get_logger
 from app.models import AutoSyncSkippedTrack
 from app.utils.activity import record_activity
 from app.utils.settings_store import read_setting, write_setting
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
 
@@ -94,6 +95,7 @@ class AutoSyncWorker:
         self._stop_event = asyncio.Event()
         self._preferences_loader = preferences_loader
         self._skip_threshold = skip_threshold
+        self._in_progress = False
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -113,12 +115,14 @@ class AutoSyncWorker:
             finally:
                 self._task = None
         write_setting("worker.autosync.last_stop", datetime.utcnow().isoformat())
+        mark_worker_status("autosync", "stopped")
 
     async def run_once(self, *, source: str = "manual") -> None:
         await self._execute_sync(source=source)
 
     async def _run(self) -> None:
         logger.info("AutoSyncWorker started")
+        record_worker_heartbeat("autosync")
         try:
             while self._running:
                 await self._execute_sync(source="scheduled")
@@ -135,128 +139,133 @@ class AutoSyncWorker:
 
     async def _execute_sync(self, *, source: str) -> None:
         async with self._lock:
-            start_time = time.perf_counter()
-            status_flags = {"spotify": "ok", "plex": "ok", "soulseek": "ok"}
-            record_activity("sync", "autosync_started", details={"source": source})
-            logger.info("Auto sync started (source=%s)", source)
-            write_setting("worker.autosync.last_start", datetime.utcnow().isoformat())
-            self._record_heartbeat()
-
+            self._in_progress = True
             try:
-                spotify_tracks = self._collect_spotify_tracks()
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error("Failed to load Spotify data: %s", exc)
-                status_flags["spotify"] = "failed"
-                record_activity(
-                    "sync",
-                    "spotify_unavailable",
-                    details={"source": source, "error": str(exc)},
-                )
-                record_activity(
-                    "sync", "partial", details={"source": source, "reason": "spotify"}
-                )
-                return
-
-            record_activity(
-                "sync",
-                "spotify_loaded",
-                details={"source": source, "tracks": len(spotify_tracks)},
-            )
-            self._record_heartbeat()
-
-            try:
-                plex_tracks = await self._collect_plex_tracks()
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error("Failed to inspect Plex library: %s", exc)
-                status_flags["plex"] = "failed"
-                record_activity(
-                    "sync",
-                    "plex_unavailable",
-                    details={"source": source, "error": str(exc)},
-                )
-                record_activity(
-                    "sync", "partial", details={"source": source, "reason": "plex"}
-                )
-                return
-
-            record_activity(
-                "sync",
-                "plex_loaded",
-                details={"source": source, "tracks": len(plex_tracks)},
-            )
-
-            missing_tracks = spotify_tracks - plex_tracks
-            record_activity(
-                "sync",
-                "comparison_complete",
-                details={"source": source, "missing": len(missing_tracks)},
-            )
-
-            if not missing_tracks:
-                logger.info("Auto sync completed without missing tracks (source=%s)", source)
-                write_setting("metrics.autosync.downloaded", "0")
-                write_setting("metrics.autosync.skipped", "0")
-                duration_ms = int((time.perf_counter() - start_time) * 1000)
-                write_setting("metrics.autosync.duration_ms", str(duration_ms))
-                record_activity("sync", "completed", details={"source": source, "missing": 0})
+                start_time = time.perf_counter()
+                status_flags = {"spotify": "ok", "plex": "ok", "soulseek": "ok"}
+                record_activity("sync", "autosync_started", details={"source": source})
+                logger.info("Auto sync started (source=%s)", source)
+                write_setting("worker.autosync.last_start", datetime.utcnow().isoformat())
                 self._record_heartbeat()
-                return
-
-            record_activity(
-                "sync",
-                "downloads_requested",
-                details={"source": source, "count": len(missing_tracks)},
-            )
-
-            downloaded, skipped, failures = await self._download_missing_tracks(
-                missing_tracks, source
-            )
-
-            if failures:
-                status_flags["soulseek"] = "failed"
-            elif skipped:
-                status_flags["soulseek"] = "partial"
-
-            if downloaded:
+    
                 try:
-                    await self._retry(self._plex.get_library_statistics)
-                    record_activity("sync", "plex_updated", details={"source": source})
+                    spotify_tracks = self._collect_spotify_tracks()
                 except Exception as exc:  # pragma: no cover - defensive logging
-                    logger.error("Failed to refresh Plex statistics: %s", exc)
+                    logger.error("Failed to load Spotify data: %s", exc)
+                    status_flags["spotify"] = "failed"
                     record_activity(
                         "sync",
-                        "plex_update_failed",
+                        "spotify_unavailable",
                         details={"source": source, "error": str(exc)},
                     )
-
-            status = "completed" if not skipped and not failures else "partial"
-            record_activity(
-                "sync",
-                "status_summary",
-                details={"source": source, "status": status_flags},
-            )
-            record_activity(
-                "sync",
-                status,
-                details={
-                    "source": source,
-                    "downloaded": len(downloaded),
-                    "skipped": len(skipped),
-                    "failures": sorted(failures),
-                },
-            )
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            write_setting("metrics.autosync.downloaded", str(len(downloaded)))
-            write_setting("metrics.autosync.skipped", str(len(skipped)))
-            write_setting("metrics.autosync.duration_ms", str(duration_ms))
-            self._record_heartbeat()
-            logger.info(
-                "Auto sync finished (source=%s, downloaded=%d, skipped=%d, failures=%s)",
-                source,
-                len(downloaded),
-                len(skipped),
-                ",".join(sorted(failures)) or "none",
-            )
+                    record_activity(
+                        "sync", "partial", details={"source": source, "reason": "spotify"}
+                    )
+                    return
+    
+                record_activity(
+                    "sync",
+                    "spotify_loaded",
+                    details={"source": source, "tracks": len(spotify_tracks)},
+                )
+                self._record_heartbeat()
+    
+                try:
+                    plex_tracks = await self._collect_plex_tracks()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.error("Failed to inspect Plex library: %s", exc)
+                    status_flags["plex"] = "failed"
+                    record_activity(
+                        "sync",
+                        "plex_unavailable",
+                        details={"source": source, "error": str(exc)},
+                    )
+                    record_activity(
+                        "sync", "partial", details={"source": source, "reason": "plex"}
+                    )
+                    return
+    
+                record_activity(
+                    "sync",
+                    "plex_loaded",
+                    details={"source": source, "tracks": len(plex_tracks)},
+                )
+    
+                missing_tracks = spotify_tracks - plex_tracks
+                record_activity(
+                    "sync",
+                    "comparison_complete",
+                    details={"source": source, "missing": len(missing_tracks)},
+                )
+    
+                if not missing_tracks:
+                    logger.info("Auto sync completed without missing tracks (source=%s)", source)
+                    write_setting("metrics.autosync.downloaded", "0")
+                    write_setting("metrics.autosync.skipped", "0")
+                    duration_ms = int((time.perf_counter() - start_time) * 1000)
+                    write_setting("metrics.autosync.duration_ms", str(duration_ms))
+                    record_activity("sync", "completed", details={"source": source, "missing": 0})
+                    self._record_heartbeat()
+                    return
+    
+                record_activity(
+                    "sync",
+                    "downloads_requested",
+                    details={"source": source, "count": len(missing_tracks)},
+                )
+    
+                downloaded, skipped, failures = await self._download_missing_tracks(
+                    missing_tracks, source
+                )
+    
+                if failures:
+                    status_flags["soulseek"] = "failed"
+                elif skipped:
+                    status_flags["soulseek"] = "partial"
+    
+                if downloaded:
+                    try:
+                        await self._retry(self._plex.get_library_statistics)
+                        record_activity("sync", "plex_updated", details={"source": source})
+                    except Exception as exc:  # pragma: no cover - defensive logging
+                        logger.error("Failed to refresh Plex statistics: %s", exc)
+                        record_activity(
+                            "sync",
+                            "plex_update_failed",
+                            details={"source": source, "error": str(exc)},
+                        )
+    
+                status = "completed" if not skipped and not failures else "partial"
+                record_activity(
+                    "sync",
+                    "status_summary",
+                    details={"source": source, "status": status_flags},
+                )
+                record_activity(
+                    "sync",
+                    status,
+                    details={
+                        "source": source,
+                        "downloaded": len(downloaded),
+                        "skipped": len(skipped),
+                        "failures": sorted(failures),
+                    },
+                )
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                write_setting("metrics.autosync.downloaded", str(len(downloaded)))
+                write_setting("metrics.autosync.skipped", str(len(skipped)))
+                write_setting("metrics.autosync.duration_ms", str(duration_ms))
+                self._record_heartbeat()
+                logger.info(
+                    "Auto sync finished (source=%s, downloaded=%d, skipped=%d, failures=%s)",
+                    source,
+                    len(downloaded),
+                    len(skipped),
+                    ",".join(sorted(failures)) or "none",
+                )
+    
+            finally:
+                self._in_progress = False
 
     def _collect_spotify_tracks(self) -> set[TrackInfo]:
         tracks: dict[tuple[str, str], TrackInfo] = {}
@@ -761,5 +770,5 @@ class AutoSyncWorker:
             )
 
     def _record_heartbeat(self) -> None:
-        write_setting("worker.autosync.last_seen", datetime.utcnow().isoformat())
+        record_worker_heartbeat("autosync")
 

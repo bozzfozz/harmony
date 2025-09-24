@@ -17,6 +17,7 @@ from app.utils.settings_store import (
     read_setting,
     write_setting,
 )
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
@@ -101,6 +102,7 @@ class MatchingWorker:
     async def _run(self) -> None:
         logger.info("MatchingWorker started")
         write_setting("worker.matching.last_start", datetime.utcnow().isoformat())
+        record_worker_heartbeat("matching")
         pending = self._job_store.list_pending()
         for job in pending:
             await self._queue.put(job)
@@ -116,6 +118,7 @@ class MatchingWorker:
             self._job_store.requeue_incomplete()
             self._running.clear()
             write_setting("worker.matching.last_stop", datetime.utcnow().isoformat())
+            mark_worker_status("matching", "stopped")
             logger.info("MatchingWorker stopped")
 
     async def _worker_loop(self) -> None:
@@ -233,4 +236,4 @@ class MatchingWorker:
                 session.add(match)
 
     def _record_heartbeat(self) -> None:
-        write_setting("worker.matching.last_seen", datetime.utcnow().isoformat())
+        record_worker_heartbeat("matching")
