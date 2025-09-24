@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
@@ -16,7 +16,7 @@ from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
 
-ALLOWED_STATES = {"queued", "downloading", "completed", "failed"}
+ALLOWED_STATES = {"queued", "downloading", "completed", "failed", "cancelled"}
 
 DEFAULT_CONCURRENCY = 2
 DEFAULT_IDLE_POLL = 15.0
@@ -43,6 +43,8 @@ class SyncWorker:
         self._idle_poll_interval = idle_poll_interval or DEFAULT_IDLE_POLL
         self._current_poll_interval = base_poll_interval
         self._concurrency = max(1, concurrency or self._resolve_concurrency())
+        self._cancelled_downloads: Set[int] = set()
+        self._cancel_lock = asyncio.Lock()
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -89,6 +91,12 @@ class SyncWorker:
 
         await self._execute_job(record)
         await self.refresh_downloads()
+
+    async def request_cancel(self, download_id: int) -> None:
+        """Flag a download for cancellation."""
+
+        async with self._cancel_lock:
+            self._cancelled_downloads.add(int(download_id))
 
     async def _run(self) -> None:
         logger.info("SyncWorker started")
@@ -176,11 +184,29 @@ class SyncWorker:
             logger.warning("Invalid download job received: %s", job)
             return
 
+        filtered_files: List[Dict[str, Any]] = []
+        async with self._cancel_lock:
+            for file_info in files:
+                identifier = file_info.get("download_id") or file_info.get("id")
+                try:
+                    download_id = int(identifier)
+                except (TypeError, ValueError):
+                    download_id = 0
+                if download_id and download_id in self._cancelled_downloads:
+                    logger.info("Skipping cancelled download %s in job", download_id)
+                    self._cancelled_downloads.discard(download_id)
+                    continue
+                filtered_files.append(file_info)
+
+        if not filtered_files:
+            logger.debug("All downloads in job cancelled before processing")
+            return
+
         try:
-            await self._client.download({"username": username, "files": files})
+            await self._client.download({"username": username, "files": filtered_files})
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to queue Soulseek download: %s", exc)
-            self._mark_failed(files)
+            self._mark_failed(filtered_files)
             raise
 
     async def refresh_downloads(self) -> bool:
@@ -201,6 +227,10 @@ class SyncWorker:
             downloads = []
 
         active = False
+        async with self._cancel_lock:
+            pending_cancels = set(self._cancelled_downloads)
+
+        to_cancel: List[int] = []
         with session_scope() as session:
             for payload in downloads:
                 download_id = payload.get("download_id") or payload.get("id")
@@ -233,6 +263,13 @@ class SyncWorker:
                 elif state in {"queued", "downloading"}:
                     active = True
 
+                if int(download_id) in pending_cancels:
+                    if state in {"queued", "downloading"}:
+                        to_cancel.append(int(download_id))
+                    state = "cancelled"
+                    pending_cancels.discard(int(download_id))
+                    active = False
+
                 download.state = state
                 download.progress = progress
                 download.updated_at = datetime.utcnow()
@@ -242,6 +279,17 @@ class SyncWorker:
         else:
             write_setting("metrics.sync.active_downloads", "0")
         self._record_heartbeat()
+
+        if to_cancel:
+            for identifier in to_cancel:
+                try:
+                    await self._client.cancel_download(str(identifier))
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Failed to cancel download %s via client: %s", identifier, exc)
+            async with self._cancel_lock:
+                for identifier in to_cancel:
+                    self._cancelled_downloads.discard(identifier)
+
         return active
 
     def _mark_failed(self, files: Iterable[Dict[str, Any]]) -> None:

@@ -43,6 +43,8 @@ class Download(Base):
     filename = Column(String(1024), nullable=False)
     state = Column(String(50), nullable=False, default="queued")
     progress = Column(Float, nullable=False, default=0.0)
+    username = Column(String(255), nullable=True)
+    request_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
