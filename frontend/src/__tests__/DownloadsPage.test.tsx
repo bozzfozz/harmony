@@ -34,7 +34,8 @@ describe('DownloadsPage', () => {
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
     expect(await screen.findByText('Test File.mp3')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalledWith(false);
+    expect(mockedFetchDownloads).toHaveBeenCalled();
+    expect(mockedFetchDownloads.mock.calls[0][0]).toBeUndefined();
     expect(screen.getByText('45%')).toBeInTheDocument();
     const expectedDateLabel = new Intl.DateTimeFormat(undefined, {
       dateStyle: 'short',
@@ -107,12 +108,14 @@ describe('DownloadsPage', () => {
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
     expect(await screen.findByText('Running File.mp3')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalledWith(false);
+    expect(mockedFetchDownloads.mock.calls[0][0]).toBeUndefined();
 
     const toggleButton = screen.getByRole('button', { name: 'Alle anzeigen' });
     await userEvent.click(toggleButton);
 
-    await waitFor(() => expect(mockedFetchDownloads).toHaveBeenLastCalledWith(true));
+    await waitFor(() =>
+      expect(mockedFetchDownloads).toHaveBeenLastCalledWith({ includeAll: true })
+    );
     expect(await screen.findByText('Completed File.mp3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nur aktive' })).toBeInTheDocument();
   });

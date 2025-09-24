@@ -145,6 +145,12 @@ export interface DownloadEntry {
   updated_at?: string;
 }
 
+export interface FetchDownloadsOptions {
+  includeAll?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface StartDownloadPayload {
   track_id: string;
 }
@@ -320,10 +326,24 @@ const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): Downloa
   };
 };
 
-export const fetchActiveDownloads = async (includeAll = false): Promise<DownloadEntry[]> => {
-  const params = includeAll ? { all: true } : undefined;
+export const fetchActiveDownloads = async (
+  options: FetchDownloadsOptions = {}
+): Promise<DownloadEntry[]> => {
+  const { includeAll = false, limit, offset } = options;
+  const params: Record<string, number | boolean> = {};
+
+  if (includeAll) {
+    params.all = true;
+  }
+  if (typeof limit === 'number') {
+    params.limit = limit;
+  }
+  if (typeof offset === 'number') {
+    params.offset = offset;
+  }
+
   const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
-    params
+    params: Object.keys(params).length > 0 ? params : undefined
   });
   return extractDownloadEntries(data).map(mapDownloadEntry);
 };

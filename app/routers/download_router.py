@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
@@ -23,17 +23,21 @@ logger = get_logger(__name__)
 
 @router.get("/downloads", response_model=DownloadListResponse)
 def list_downloads(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     all: bool = False,  # noqa: A002 - query parameter name mandated by API contract
     session: Session = Depends(get_db),
 ) -> DownloadListResponse:
     """Return downloads, optionally including completed or failed entries."""
 
-    logger.info("Download list requested (all=%s)", all)
+    logger.info("Download list requested (all=%s, limit=%s, offset=%s)", all, limit, offset)
     try:
         query = session.query(Download)
         if not all:
             query = query.filter(Download.state.in_(("queued", "running")))
-        downloads = query.order_by(Download.created_at.desc()).all()
+        downloads = (
+            query.order_by(Download.created_at.desc()).offset(offset).limit(limit).all()
+        )
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling

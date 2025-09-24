@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, List
 
 from app.db import session_scope
 from app.models import Download
@@ -19,6 +19,26 @@ def create_download_samples() -> Dict[str, int]:
         session.flush()
 
         return {"queued": queued.id, "running": running.id, "completed": completed.id}
+
+
+def create_many_downloads(count: int) -> List[int]:
+    with session_scope() as session:
+        session.query(Download).delete()
+
+        ids: List[int] = []
+        for index in range(count):
+            download = Download(
+                filename=f"queued-{index}.mp3",
+                state="queued",
+                progress=float(index % 100) / 100,
+            )
+            session.add(download)
+            session.flush()
+            ids.append(download.id)
+
+        session.commit()
+
+        return ids
 
 
 def test_download_endpoint_returns_id_and_status(client) -> None:
@@ -97,6 +117,43 @@ def test_get_downloads_can_include_completed_entries(client) -> None:
     assert ids["completed"] in download_ids
 
     assert activity_manager.list() == []
+
+
+def test_get_downloads_uses_default_limit(client) -> None:
+    ids = create_many_downloads(30)
+
+    response = client.get("/api/downloads")
+    assert response.status_code == 200
+
+    downloads = response.json()["downloads"]
+
+    assert len(downloads) == 20
+
+    returned_ids = [entry["id"] for entry in downloads]
+    expected_ids = sorted(ids, reverse=True)[:20]
+    assert returned_ids == expected_ids
+
+    created_at_values = [entry["created_at"] for entry in downloads]
+    assert created_at_values == sorted(created_at_values, reverse=True)
+
+
+def test_get_downloads_supports_limit_and_offset(client) -> None:
+    ids = create_many_downloads(15)
+
+    response = client.get("/api/downloads", params={"limit": 5, "offset": 5})
+    assert response.status_code == 200
+
+    downloads = response.json()["downloads"]
+    assert len(downloads) == 5
+
+    returned_ids = [entry["id"] for entry in downloads]
+    expected_ids = sorted(ids, reverse=True)[5:10]
+    assert returned_ids == expected_ids
+
+
+def test_get_downloads_rejects_invalid_limit(client) -> None:
+    response = client.get("/api/downloads", params={"limit": -1})
+    assert response.status_code == 422
 
 
 def test_get_download_detail_returns_entry(client) -> None:

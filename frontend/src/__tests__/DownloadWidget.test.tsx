@@ -39,7 +39,7 @@ describe('DownloadWidget', () => {
     expect(await screen.findByText('Track One.mp3')).toBeInTheDocument();
     expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalled();
+    expect(mockedFetchDownloads).toHaveBeenCalledWith({ limit: 5 });
   });
 
   it('shows empty state when no downloads are active', async () => {
@@ -67,8 +67,7 @@ describe('DownloadWidget', () => {
       { id: 2, filename: 'B.mp3', status: 'running', progress: 40 },
       { id: 3, filename: 'C.mp3', status: 'running', progress: 20 },
       { id: 4, filename: 'D.mp3', status: 'running', progress: 10 },
-      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 },
-      { id: 6, filename: 'F.mp3', status: 'running', progress: 80 }
+      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 }
     ]);
 
     renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });

@@ -22,7 +22,10 @@ const DownloadsPage = () => {
     refetch
   } = useQuery<DownloadEntry[]>({
     queryKey: ['downloads', showAllDownloads ? 'all' : 'active'],
-    queryFn: () => fetchActiveDownloads(showAllDownloads),
+    queryFn: () =>
+      showAllDownloads
+        ? fetchActiveDownloads({ includeAll: true })
+        : fetchActiveDownloads(),
     refetchInterval: 15000,
     onError: () =>
       toast({
