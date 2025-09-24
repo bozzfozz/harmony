@@ -143,6 +143,17 @@ class PlexClient:
 
         return await self._get(f"/library/sections/{section_id}/all", params=params)
 
+    async def refresh_library_section(self, section_id: str, *, full: bool = False) -> None:
+        """Trigger a Plex library scan for the given section."""
+
+        params = {"force": int(bool(full))}
+        await self._request(
+            "GET",
+            f"/library/sections/{section_id}/refresh",
+            params=params,
+            expect_json=False,
+        )
+
     async def get_metadata(self, item_id: str) -> Any:
         return await self._get(f"/library/metadata/{item_id}")
 
