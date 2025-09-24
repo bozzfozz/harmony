@@ -1,9 +1,9 @@
 """Matching endpoints for Harmony."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
@@ -28,15 +28,36 @@ def _extract_target_id(candidate: Optional[Dict[str, Any]]) -> Optional[str]:
 
 
 def _persist_match(session: Session, match: Match) -> None:
-    """Persist a match, rolling back on failure."""
+    """Persist a single match, rolling back on failure."""
+
+    _persist_matches(session, [match])
+
+
+def _persist_matches(session: Session, matches: Iterable[Match]) -> None:
+    """Persist multiple matches within a single transaction."""
 
     try:
-        session.add(match)
-        session.commit()
+        persisted = False
+        for match in matches:
+            session.add(match)
+            persisted = True
+        if persisted:
+            session.commit()
     except Exception as exc:  # pragma: no cover - database failure is exceptional
         session.rollback()
-        logger.error("Failed to persist match %s: %s", match, exc)
+        logger.error("Failed to persist match result: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to store match result") from exc
+
+
+def _extract_album_tracks(album: Dict[str, Any]) -> List[Dict[str, Any]]:
+    tracks = album.get("tracks")
+    if isinstance(tracks, dict):
+        items = tracks.get("items")
+        if isinstance(items, list):
+            return [item for item in items if isinstance(item, dict)]
+    if isinstance(tracks, list):
+        return [item for item in tracks if isinstance(item, dict)]
+    return []
 
 
 @router.post("/spotify-to-plex", response_model=MatchingResponse)
@@ -87,9 +108,31 @@ def spotify_to_soulseek(
 
 @router.post("/spotify-to-plex-album", response_model=MatchingResponse)
 def spotify_to_plex_album(
-    payload: AlbumMatchingRequest, engine: MusicMatchingEngine = Depends(get_matching_engine)
+    payload: AlbumMatchingRequest,
+    engine: MusicMatchingEngine = Depends(get_matching_engine),
+    persist: bool = Query(False, description="Persist album matches for individual tracks"),
+    session: Session = Depends(get_db),
 ) -> MatchingResponse:
     """Return the best matching Plex album for the provided Spotify album."""
 
     best_match, confidence = engine.find_best_album_match(payload.spotify_album, payload.candidates)
+    if persist:
+        album_id = payload.spotify_album.get("id")
+        target_id = _extract_target_id(best_match)
+        matches = []
+        for track in _extract_album_tracks(payload.spotify_album):
+            track_id = track.get("id")
+            if track_id is None:
+                continue
+            matches.append(
+                Match(
+                    source="spotify-to-plex-album",
+                    spotify_track_id=str(track_id),
+                    target_id=target_id,
+                    context_id=str(album_id) if album_id is not None else None,
+                    confidence=confidence,
+                )
+            )
+        if matches:
+            _persist_matches(session, matches)
     return MatchingResponse(best_match=best_match, confidence=confidence)

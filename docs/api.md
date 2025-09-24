@@ -468,7 +468,11 @@ Content-Type: application/json
 | --- | --- | --- |
 | `POST` | `/matching/spotify-to-plex` | Matcht einen Spotify-Track gegen Plex-Kandidaten und speichert das Ergebnis. |
 | `POST` | `/matching/spotify-to-soulseek` | Bewertet Spotify vs. Soulseek-Kandidaten. |
-| `POST` | `/matching/spotify-to-plex-album` | Liefert das beste Album-Match. |
+| `POST` | `/matching/spotify-to-plex-album` | Liefert das beste Album-Match; optional mit `persist=true` zur Speicherung. |
+
+**Parameter:**
+
+- `persist` (Query, optional, Default `false`): Speichert pro Track des Spotify-Albums einen `Match`-Eintrag mit dem gefundenen Plex-Album als Ziel und der Spotify-Album-ID als Kontext.
 
 **Beispiel:**
 

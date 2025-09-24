@@ -61,6 +61,7 @@ class Match(Base):
     source = Column(String(50), nullable=False)
     spotify_track_id = Column(String(128), index=True, nullable=False)
     target_id = Column(String(128), nullable=True)
+    context_id = Column(String(128), nullable=True)
     confidence = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

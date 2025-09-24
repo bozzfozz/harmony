@@ -17,6 +17,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Artists-Seite im Frontend zur Verwaltung gefolgter Spotify-Artists und ihrer Releases inklusive Sync-Toggles.
 - Persistente Worker-Queues (`worker_jobs`) inkl. Health/Metric-Tracking (`worker.*`, `metrics.*`) für Sync-, Matching- und Scan-Worker.
 - Quality-/Priorisierungsregeln für den AutoSyncWorker (`autosync_min_bitrate`, `autosync_preferred_formats`, Skip-State in `auto_sync_skipped_tracks`).
+- Added optional persistence for album matching (`persist=true` on `/matching/spotify-to-plex-album`).
 
 ### Changed
 - Frontend: DownloadWidget uses limit param of /api/downloads.
