@@ -2,14 +2,14 @@ import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import DownloadWidget from '../components/DownloadWidget';
 import { renderWithProviders } from '../test-utils';
-import { fetchActiveDownloads } from '../lib/api';
+import { fetchDownloads } from '../lib/api';
 
 jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
-  fetchActiveDownloads: jest.fn()
+  fetchDownloads: jest.fn()
 }));
 
-const mockedFetchDownloads = fetchActiveDownloads as jest.MockedFunction<typeof fetchActiveDownloads>;
+const mockedFetchDownloads = fetchDownloads as jest.MockedFunction<typeof fetchDownloads>;
 
 const toastMock = jest.fn();
 
@@ -39,7 +39,7 @@ describe('DownloadWidget', () => {
     expect(await screen.findByText('Track One.mp3')).toBeInTheDocument();
     expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalledWith({ limit: 5 });
+    expect(mockedFetchDownloads).toHaveBeenCalledWith(5);
   });
 
   it('shows empty state when no downloads are active', async () => {
@@ -67,14 +67,33 @@ describe('DownloadWidget', () => {
       { id: 2, filename: 'B.mp3', status: 'running', progress: 40 },
       { id: 3, filename: 'C.mp3', status: 'running', progress: 20 },
       { id: 4, filename: 'D.mp3', status: 'running', progress: 10 },
-      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 }
+      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 },
+      { id: 6, filename: 'F.mp3', status: 'running', progress: 2 }
     ]);
 
     renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });
+
+    expect(await screen.findByText('A.mp3')).toBeInTheDocument();
+    expect(screen.queryByText('F.mp3')).not.toBeInTheDocument();
 
     const button = await screen.findByRole('button', { name: 'Alle anzeigen' });
     await userEvent.click(button);
 
     await waitFor(() => expect(window.location.pathname).toBe('/downloads'));
+  });
+
+  it('hides the show all button when five or fewer downloads are available', async () => {
+    mockedFetchDownloads.mockResolvedValue([
+      { id: 1, filename: 'A.mp3', status: 'running', progress: 60 },
+      { id: 2, filename: 'B.mp3', status: 'running', progress: 40 },
+      { id: 3, filename: 'C.mp3', status: 'running', progress: 20 },
+      { id: 4, filename: 'D.mp3', status: 'running', progress: 10 },
+      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 }
+    ]);
+
+    renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });
+
+    expect(await screen.findByText('A.mp3')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Alle anzeigen' })).not.toBeInTheDocument());
   });
 });

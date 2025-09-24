@@ -8,6 +8,7 @@
 - [x] Downloads-Frontend mit Tabelle und Start-Formular bereitstellen.
 - [x] GET-Endpunkte für Downloads (`/api/downloads`, `/api/download/{id}`) ergänzen.
 - [x] Dashboard-Widget für aktive Downloads ergänzen.
+- [x] Dashboard-DownloadWidget auf limitierte `/api/downloads`-Abfrage umstellen.
 - [x] Activity-Feed-Widget im Dashboard mit Polling, Sortierung und Status-Badges finalisieren.
 - [x] AutoSyncWorker für Spotify↔Plex implementieren, Soulseek/Beets-Anbindung ergänzen und Dokumentation aktualisieren.
 - [x] Artist-Konfiguration für Spotify-Releases (API, DB, AutoSync) umsetzen.
