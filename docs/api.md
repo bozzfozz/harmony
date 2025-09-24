@@ -35,6 +35,22 @@ GET /status HTTP/1.1
 - `last_seen`: UTC-Timestamp des letzten Heartbeats (`worker:<name>:last_seen`). Bei unbekanntem Zustand bleibt der Wert `null`.
 - `queue_size`: Anzahl offener Aufgaben. Für AutoSync wird zwischen geplanten (`scheduled`) und aktuell laufenden (`running`) Zyklen unterschieden. Worker ohne Queue liefern `"n/a"`.
 
+**Dashboard-Beispiel:**
+
+Im Dashboard erscheinen die Worker-Informationen als farbcodierte Karten. Jede Karte zeigt Name, Status, Queue-Größe und den letzten Heartbeat als relative Zeitangabe:
+
+```text
+┌──────────────────────────┐  ┌──────────────────────────┐
+│ Sync                     │  │ Autosync                 │
+│ ● Running (grün)         │  │ ● Stopped (rot)          │
+│ Queue: 3                 │  │ Queue: n/a               │
+│ Zuletzt gesehen: vor 30s │  │ Zuletzt gesehen: Keine   │
+│                          │  │ Daten                    │
+└──────────────────────────┘  └──────────────────────────┘
+```
+
+Die Karten aktualisieren sich alle 10 Sekunden automatisch über den `/status`-Endpoint.
+
 ## Metadata (`/api/metadata`)
 
 | Methode | Pfad | Beschreibung |

@@ -8,12 +8,14 @@ import {
 } from '../components/ui/card';
 import ActivityFeed from '../components/ActivityFeed';
 import DownloadWidget from '../components/DownloadWidget';
+import WorkerHealthCard from '../components/WorkerHealthCard';
 import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
 import {
   fetchBeetsStats,
   fetchPlexLibraries,
   fetchPlexStatus,
+  fetchSystemStatus,
   fetchSoulseekDownloads,
   fetchSoulseekStatus,
   fetchSpotifyPlaylists,
@@ -77,6 +79,18 @@ const Dashboard = () => {
     refetchInterval: 30000
   });
 
+  const systemStatusQuery = useQuery({
+    queryKey: ['system-status'],
+    queryFn: fetchSystemStatus,
+    refetchInterval: 10000,
+    onError: () =>
+      toast({
+        title: 'Failed to load worker status',
+        description: 'The system status endpoint did not respond.',
+        variant: 'destructive'
+      })
+  });
+
   const beetsStatsQuery = useQuery({
     queryKey: ['beets-stats'],
     queryFn: fetchBeetsStats,
@@ -133,6 +147,8 @@ const Dashboard = () => {
       </div>
     );
   }
+
+  const workerEntries = Object.entries(systemStatusQuery.data?.workers ?? {});
 
   return (
     <div className="space-y-6">
@@ -228,6 +244,36 @@ const Dashboard = () => {
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <ActivityFeed />
         <DownloadWidget />
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Worker Health</h2>
+          <p className="text-sm text-muted-foreground">
+            Heartbeats und Warteschlangen der aktiven Hintergrundprozesse.
+          </p>
+        </div>
+        {systemStatusQuery.isLoading ? (
+          <div className="flex items-center justify-center py-6 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" aria-label="Lade Worker-Status" />
+          </div>
+        ) : systemStatusQuery.isError ? (
+          <p className="text-sm text-destructive">Worker-Status konnten nicht geladen werden.</p>
+        ) : workerEntries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Keine Worker-Daten verfügbar.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {workerEntries.map(([name, worker]) => (
+              <WorkerHealthCard
+                key={name}
+                workerName={name}
+                lastSeen={worker.last_seen}
+                queueSize={worker.queue_size}
+                status={worker.status}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <Card>
