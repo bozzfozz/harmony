@@ -104,6 +104,21 @@ Event-Felder:
 - `status` (Status des Events, z. B. `completed`, `failed`, `queued`)
 - `details` (optional, JSON-Objekt mit Zusatzinformationen)
 
+### Detaillierte Sync-/Search-Events
+
+| Status | Beschreibung | Beispiel-Details |
+| --- | --- | --- |
+| `sync_started` | Beginn eines manuellen oder automatischen Sync-Laufs inkl. Quellen. | `{"mode": "manual", "sources": ["spotify", "plex", "soulseek"]}` |
+| `sync_completed` | Abschluss eines Sync-Laufs mit Zählerwerten. | `{"trigger": "scheduled", "sources": ["spotify", "plex", "soulseek", "beets"], "counters": {"tracks_synced": 12, "tracks_skipped": 2, "errors": 1}}` |
+| `sync_partial` | Teil-Erfolg bei Sync, enthält Fehlerliste (z. B. pro Quelle). | `{"trigger": "scheduled", "errors": [{"source": "plex", "message": "plex offline"}]}` |
+| `spotify_loaded` | Spotify-Daten für AutoSync geladen (Playlists/Saved Tracks). | `{"trigger": "scheduled", "playlists": 4, "tracks": 250, "saved_tracks": 40}` |
+| `plex_checked` | Plex-Bibliothek untersucht, Anzahl bekannter Tracks. | `{"trigger": "scheduled", "tracks": 230}` |
+| `downloads_requested` | Anzahl fehlender Titel, die Soulseek/Downloads benötigen. | `{"trigger": "scheduled", "count": 18}` |
+| `beets_imported` | Ergebnis der Beets-Imports inkl. Erfolgs-/Fehleranzahl. | `{"trigger": "scheduled", "imported": 10, "skipped": 3, "errors": ["quality"]}` |
+| `search_started` | Start einer plattformübergreifenden Suche mit Quellen. | `{"query": "Boards of Canada", "sources": ["spotify", "plex"]}` |
+| `search_completed` | Trefferanzahl pro Quelle nach erfolgreicher Suche. | `{"query": "Boards of Canada", "matches": {"spotify": 9, "plex": 2}}` |
+| `search_failed` | Aufgetretene Fehler während der Suche. | `{"query": "Boards", "errors": [{"source": "plex", "message": "plex offline"}]}` |
+
 **Beispiel:**
 
 ```http

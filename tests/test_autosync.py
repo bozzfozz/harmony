@@ -103,11 +103,12 @@ async def test_autosync_no_missing_tracks() -> None:
 
     statuses = [entry["status"] for entry in reversed(activity_manager.list())]
     assert statuses == [
-        "autosync_started",
+        "sync_started",
         "spotify_loaded",
-        "plex_loaded",
-        "comparison_complete",
-        "completed",
+        "plex_checked",
+        "downloads_requested",
+        "beets_imported",
+        "sync_completed",
     ]
 
 
@@ -139,10 +140,14 @@ async def test_autosync_triggers_download_and_import() -> None:
     beets_client.import_file.assert_called_once_with("/downloads/Song B.mp3", quiet=True)
     plex_client.get_library_statistics.assert_awaited()
 
-    statuses = [entry["status"] for entry in reversed(activity_manager.list())]
-    assert statuses[-1] == "partial" or statuses[-1] == "completed"
+    entries = activity_manager.list()
+    statuses = [entry["status"] for entry in reversed(entries)]
+    assert statuses[-1] == "sync_completed"
     assert "download_enqueued" in statuses
     assert "track_imported" in statuses
+    beets_event = next(entry for entry in entries if entry["status"] == "beets_imported")
+    assert beets_event["details"]["imported"] == 1
+    assert beets_event["details"]["skipped"] == 0
 
 
 @pytest.mark.asyncio
@@ -152,9 +157,13 @@ async def test_autosync_handles_service_errors() -> None:
 
     await worker.run_once(source="test")
 
-    statuses = [entry["status"] for entry in reversed(activity_manager.list())]
+    entries = activity_manager.list()
+    statuses = [entry["status"] for entry in reversed(entries)]
     assert "spotify_unavailable" in statuses
-    assert statuses[-1] == "partial"
+    assert "sync_partial" in statuses
+    assert statuses[-1] == "sync_completed"
+    completion = next(entry for entry in entries if entry["status"] == "sync_completed")
+    assert completion["details"]["counters"]["errors"] == 1
 
     activity_manager.clear()
 
@@ -166,9 +175,13 @@ async def test_autosync_handles_service_errors() -> None:
 
     await worker.run_once(source="test")
 
-    statuses = [entry["status"] for entry in reversed(activity_manager.list())]
+    entries = activity_manager.list()
+    statuses = [entry["status"] for entry in reversed(entries)]
     assert "plex_unavailable" in statuses
-    assert statuses[-1] == "partial"
+    assert "sync_partial" in statuses
+    assert statuses[-1] == "sync_completed"
+    completion = next(entry for entry in entries if entry["status"] == "sync_completed")
+    assert completion["details"]["counters"]["errors"] == 1
 
     activity_manager.clear()
 
@@ -180,9 +193,13 @@ async def test_autosync_handles_service_errors() -> None:
 
     await worker.run_once(source="test")
 
-    statuses = [entry["status"] for entry in reversed(activity_manager.list())]
+    entries = activity_manager.list()
+    statuses = [entry["status"] for entry in reversed(entries)]
     assert "soulseek_no_results" in statuses
-    assert statuses[-1] == "partial"
+    assert "sync_partial" in statuses
+    assert statuses[-1] == "sync_completed"
+    completion = next(entry for entry in entries if entry["status"] == "sync_completed")
+    assert completion["details"]["counters"]["errors"] >= 1
 
 
 @pytest.mark.asyncio
@@ -207,8 +224,9 @@ async def test_activity_feed_order() -> None:
 
     chronological = list(reversed(activity_manager.list()))
     statuses = [entry["status"] for entry in chronological]
-    assert statuses[0] == "autosync_started"
+    assert statuses[0] == "sync_started"
     assert statuses[1] == "spotify_loaded"
-    assert "plex_updated" in statuses or "plex_update_failed" in statuses
-    assert statuses[-1] in {"partial", "completed"}
+    assert "plex_checked" in statuses
+    assert "beets_imported" in statuses
+    assert statuses[-1] == "sync_completed"
 

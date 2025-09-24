@@ -23,6 +23,9 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     scan_worker = _get_scan_worker(request)
     auto_worker = _get_auto_sync_worker(request)
 
+    sources = ["spotify", "plex", "soulseek"]
+    record_activity("sync", "sync_started", details={"mode": "manual", "sources": sources})
+
     results: Dict[str, str] = {}
     errors: Dict[str, str] = {}
 
@@ -60,11 +63,37 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     if errors:
         response["errors"] = errors
 
-    status_label = "completed" if not errors else "partial"
-    details: Dict[str, Any] = {"results": results}
+    counters = {
+        "tracks_synced": 0,
+        "tracks_skipped": 0,
+        "errors": len(errors),
+    }
     if errors:
-        details["errors"] = errors
-    record_activity("sync", status_label, details=details)
+        error_list = [
+            {"source": key, "message": value}
+            for key, value in sorted(errors.items())
+        ]
+        record_activity(
+            "sync",
+            "sync_partial",
+            details={
+                "mode": "manual",
+                "sources": sources,
+                "results": results,
+                "errors": error_list,
+            },
+        )
+
+    record_activity(
+        "sync",
+        "sync_completed",
+        details={
+            "mode": "manual",
+            "sources": sources,
+            "results": results,
+            "counters": counters,
+        },
+    )
     return response
 
 
@@ -77,6 +106,12 @@ async def global_search(request: Request, payload: Dict[str, Any]) -> dict[str, 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Query is required")
 
     requested_sources = _normalise_sources(payload.get("sources"))
+    detail_sources = sorted(requested_sources)
+    record_activity(
+        "search",
+        "search_started",
+        details={"query": query, "sources": detail_sources},
+    )
     results: Dict[str, Any] = {}
     errors: Dict[str, str] = {}
 
@@ -115,14 +150,31 @@ async def global_search(request: Request, payload: Dict[str, Any]) -> dict[str, 
     if errors:
         response["errors"] = errors
 
-    search_details: Dict[str, Any] = {
-        "query": query,
-        "sources": sorted(requested_sources),
-    }
+    summary = _summarise_search_results(results)
+    record_activity(
+        "search",
+        "search_completed",
+        details={
+            "query": query,
+            "sources": detail_sources,
+            "matches": summary,
+        },
+    )
+
     if errors:
-        search_details["errors"] = errors
-    status_label = "completed" if not errors else "partial"
-    record_activity("search", status_label, details=search_details)
+        error_list = [
+            {"source": key, "message": value}
+            for key, value in sorted(errors.items())
+        ]
+        record_activity(
+            "search",
+            "search_failed",
+            details={
+                "query": query,
+                "sources": detail_sources,
+                "errors": error_list,
+            },
+        )
     return response
 
 
@@ -231,6 +283,43 @@ async def _search_plex(client, query: str) -> list[Dict[str, Any]]:
                 }
             )
     return matches
+
+
+def _summarise_search_results(results: Dict[str, Any]) -> Dict[str, int]:
+    summary: Dict[str, int] = {}
+    for source, payload in results.items():
+        summary[source] = _count_matches_for_source(source, payload)
+    return summary
+
+
+def _count_matches_for_source(source: str, payload: Any) -> int:
+    if payload is None:
+        return 0
+    if source == "spotify" and isinstance(payload, dict):
+        total = 0
+        for key in ("tracks", "artists", "albums"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                total += len(value)
+            elif isinstance(value, dict):
+                items = value.get("items")
+                if isinstance(items, list):
+                    total += len(items)
+        return total
+    if source == "plex":
+        if isinstance(payload, list):
+            return len(payload)
+        return 0
+    if source == "soulseek" and isinstance(payload, dict):
+        results_list = payload.get("results")
+        if isinstance(results_list, list):
+            return len(results_list)
+        return 0
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        return len(payload)
+    return 0
 
 
 def _ensure_plex_client():
