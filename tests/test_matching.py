@@ -1,7 +1,22 @@
 from __future__ import annotations
 
+from typing import Generator, List
+
+from app import db as app_db
 from app.core.matching_engine import MusicMatchingEngine
+from app.dependencies import get_db
+from app.main import app
+from app.models import Match
 from tests.simple_client import SimpleTestClient
+
+
+def _fetch_album_matches() -> List[Match]:
+    assert app_db.SessionLocal is not None
+    session = app_db.SessionLocal()
+    try:
+        return session.query(Match).filter(Match.source == "spotify-to-plex-album").all()
+    finally:
+        session.close()
 
 
 def test_match_confidence() -> None:
@@ -122,3 +137,97 @@ def test_matching_api_album(client: SimpleTestClient) -> None:
     data = response.json()
     assert data["best_match"]["ratingKey"] == "201"
     assert data["confidence"] > 0.8
+    assert _fetch_album_matches() == []
+
+
+def test_matching_api_album_with_persist(client: SimpleTestClient) -> None:
+    payload = {
+        "spotify_album": {
+            "id": "album-1",
+            "name": "Test Album",
+            "artists": [{"name": "Tester"}],
+            "total_tracks": 2,
+            "release_date": "2020-05-01",
+            "tracks": {
+                "items": [
+                    {"id": "track-a"},
+                    {"id": "track-b"},
+                ]
+            },
+        },
+        "candidates": [
+            {
+                "ratingKey": "201",
+                "title": "Test Album",
+                "grandparentTitle": "Tester",
+                "leafCount": 2,
+                "year": 2020,
+            }
+        ],
+    }
+    response = client.post(
+        "/matching/spotify-to-plex-album",
+        json=payload,
+        params={"persist": True},
+    )
+    assert response.status_code == 200
+    matches = _fetch_album_matches()
+    assert len(matches) == 2
+    assert {match.spotify_track_id for match in matches} == {"track-a", "track-b"}
+    assert all(match.source == "spotify-to-plex-album" for match in matches)
+    assert all(match.target_id == "201" for match in matches)
+    assert all(match.context_id == "album-1" for match in matches)
+
+
+def test_matching_api_album_persist_failure(client: SimpleTestClient) -> None:
+    class BrokenSession:
+        def add(self, _obj: Match) -> None:
+            pass
+
+        def commit(self) -> None:
+            raise RuntimeError("database unavailable")
+
+        def rollback(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    def broken_get_db() -> Generator[BrokenSession, None, None]:
+        session = BrokenSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = broken_get_db
+    payload = {
+        "spotify_album": {
+            "id": "album-2",
+            "name": "Another Album",
+            "artists": [{"name": "Tester"}],
+            "total_tracks": 1,
+            "release_date": "2020-05-01",
+            "tracks": {"items": [{"id": "track-c"}]},
+        },
+        "candidates": [
+            {
+                "ratingKey": "202",
+                "title": "Another Album",
+                "grandparentTitle": "Tester",
+                "leafCount": 1,
+                "year": 2020,
+            }
+        ],
+    }
+    try:
+        response = client.post(
+            "/matching/spotify-to-plex-album",
+            json=payload,
+            params={"persist": True},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 500
+    assert _fetch_album_matches() == []

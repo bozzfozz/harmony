@@ -55,9 +55,12 @@ class SimpleTestClient:
         path: str,
         json_body: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> SimpleResponse:
         payload = json_body if json_body is not None else json
-        return self._loop.run_until_complete(self._request("POST", path, json_body=payload))
+        return self._loop.run_until_complete(
+            self._request("POST", path, params=params, json_body=payload)
+        )
 
     def put(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
         return self._loop.run_until_complete(self._request("PUT", path, json_body=json))

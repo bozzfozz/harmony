@@ -24,6 +24,7 @@ Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufend
   - Jobs werden persistent in `worker_jobs` gespeichert. Beim Start lädt der Worker offene Jobs nach und verarbeitet sie in konfigurierbaren Batches (`matching_worker_batch_size`).
   - Jeder Kandidat wird gescored; alle Treffer oberhalb des Confidence-Thresholds (`matching_confidence_threshold`/`MATCHING_CONFIDENCE_THRESHOLD`) werden als `Match` gespeichert.
   - Nach jeder Charge entstehen Kennzahlen in der Settings-Tabelle (`metrics.matching.*`) sowie Activity-Einträge (`matching_batch`). Heartbeats stehen in `worker.matching.last_seen`.
+- **API-Integration:** Neben den Worker-Jobs kann das Album-Matching (`POST /matching/spotify-to-plex-album?persist=true`) die berechneten Treffer je Track direkt in der `matches`-Tabelle ablegen und dabei die Spotify-Album-ID als Kontext speichern.
 - **Fehlerhandling:**
   - Ungültige Jobs werden mit `invalid_payload` markiert. Laufzeitfehler erzeugen Activity-Logs und setzen den Jobstatus in der DB auf `failed`.
 - **Activity Feed / Eventtypen:** Nutzt den Typ `metadata` mit Statusmeldungen wie `matching_batch` (inkl. Batch-Größe, Treffer, Confidence) oder `matching_job_failed` bei Ausnahmen.
