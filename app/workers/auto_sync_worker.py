@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, List, MutableMapping, Sequence
+from typing import Any, Callable, Dict, Iterable, Iterator, List, MutableMapping, Sequence
 
 from app.core.beets_client import BeetsClient
 from app.core.plex_client import PlexClient
@@ -54,6 +54,7 @@ class AutoSyncWorker:
         interval_seconds: float = 86_400.0,
         retry_attempts: int = 3,
         retry_delay: float = 1.5,
+        preferences_loader: Callable[[], Dict[str, bool]] | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._plex = plex_client
@@ -66,6 +67,7 @@ class AutoSyncWorker:
         self._running = False
         self._lock = asyncio.Lock()
         self._stop_event = asyncio.Event()
+        self._preferences_loader = preferences_loader
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -200,6 +202,8 @@ class AutoSyncWorker:
 
     def _collect_spotify_tracks(self) -> set[TrackInfo]:
         tracks: set[TrackInfo] = set()
+        preferences = self._load_release_preferences()
+        allow_all = not preferences
         playlist_response = self._spotify.get_user_playlists()
         for playlist in self._iter_dicts(self._extract_collection(playlist_response, "items")):
             playlist_id = str(playlist.get("id") or "")
@@ -213,13 +217,19 @@ class AutoSyncWorker:
                 )
                 continue
             for item in self._iter_dicts(self._extract_collection(playlist_items, "items")):
-                track_info = self._normalise_spotify_track(item.get("track") or item)
+                track_payload = item.get("track") or item
+                if not self._is_release_selected(track_payload, preferences, allow_all):
+                    continue
+                track_info = self._normalise_spotify_track(track_payload)
                 if track_info:
                     tracks.add(track_info)
 
         saved_tracks = self._spotify.get_saved_tracks()
         for item in self._iter_dicts(self._extract_collection(saved_tracks, "items")):
-            track_info = self._normalise_spotify_track(item.get("track") or item)
+            track_payload = item.get("track") or item
+            if not self._is_release_selected(track_payload, preferences, allow_all):
+                continue
+            track_info = self._normalise_spotify_track(track_payload)
             if track_info:
                 tracks.add(track_info)
 
@@ -363,6 +373,33 @@ class AutoSyncWorker:
     async def _import_with_beets(self, path: str) -> str:
         return await asyncio.to_thread(self._beets.import_file, path, quiet=True)
 
+    def _load_release_preferences(self) -> Dict[str, bool]:
+        if self._preferences_loader is None:
+            return {}
+        try:
+            preferences = self._preferences_loader()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to load artist preferences: %s", exc)
+            return {}
+        if not isinstance(preferences, dict):
+            return {}
+        normalised: Dict[str, bool] = {}
+        for release_id, selected in preferences.items():
+            if not release_id:
+                continue
+            normalised[str(release_id)] = bool(selected)
+        return normalised
+
+    def _is_release_selected(
+        self, payload: Any, preferences: Dict[str, bool], allow_all: bool
+    ) -> bool:
+        if allow_all:
+            return True
+        release_id = self._extract_release_id(payload)
+        if release_id is None:
+            return True
+        return preferences.get(release_id, False)
+
     def _extract_collection(self, payload: Any, key: str | None = None) -> List[Any]:
         if isinstance(payload, list):
             return [item for item in payload if item is not None]
@@ -378,6 +415,20 @@ class AutoSyncWorker:
         for item in items:
             if isinstance(item, MutableMapping):
                 yield item
+
+    def _extract_release_id(self, payload: Any) -> str | None:
+        if not isinstance(payload, MutableMapping):
+            return None
+        album = payload.get("album")
+        if isinstance(album, MutableMapping):
+            release_id = album.get("id")
+            if release_id:
+                return str(release_id)
+        for key in ("album_id", "release_id", "albumId", "releaseId"):
+            value = payload.get(key)
+            if value:
+                return str(value)
+        return None
 
     def _normalise_spotify_track(self, payload: Any) -> TrackInfo | None:
         if not isinstance(payload, MutableMapping):

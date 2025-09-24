@@ -11,7 +11,9 @@ from app.core.spotify_client import SpotifyClient
 from app.dependencies import get_db, get_spotify_client
 from app.models import Playlist
 from app.schemas import (
+    ArtistReleasesResponse,
     AudioFeaturesResponse,
+    FollowedArtistsResponse,
     PlaylistItemsResponse,
     PlaylistResponse,
     RecommendationsResponse,
@@ -72,6 +74,35 @@ def search_albums(
     response = client.search_albums(query)
     items = response.get("albums", {}).get("items", [])
     return SpotifySearchResponse(items=items)
+
+
+@router.get("/artists/followed", response_model=FollowedArtistsResponse)
+def get_followed_artists(
+    client: SpotifyClient = Depends(get_spotify_client),
+) -> FollowedArtistsResponse:
+    response = client.get_followed_artists()
+    artists_section = response.get("artists") if isinstance(response, dict) else None
+    items = []
+    if isinstance(artists_section, dict):
+        raw_items = artists_section.get("items") or []
+        if isinstance(raw_items, list):
+            items = [item for item in raw_items if isinstance(item, dict)]
+    if not items and isinstance(response, dict):
+        raw_items = response.get("items") or []
+        if isinstance(raw_items, list):
+            items = [item for item in raw_items if isinstance(item, dict)]
+    return FollowedArtistsResponse(artists=items)
+
+
+@router.get("/artist/{artist_id}/releases", response_model=ArtistReleasesResponse)
+def get_artist_releases(
+    artist_id: str,
+    client: SpotifyClient = Depends(get_spotify_client),
+) -> ArtistReleasesResponse:
+    response = client.get_artist_releases(artist_id)
+    raw_items = response.get("items") if isinstance(response, dict) else []
+    releases = [item for item in raw_items or [] if isinstance(item, dict)]
+    return ArtistReleasesResponse(artist_id=artist_id, releases=releases)
 
 
 @router.get("/playlists", response_model=PlaylistResponse)

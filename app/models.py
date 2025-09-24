@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 
 from app.db import Base
 
@@ -75,3 +75,11 @@ class SettingHistory(Base):
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
     changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ArtistPreference(Base):
+    __tablename__ = "artist_preferences"
+
+    artist_id = Column(String(128), primary_key=True)
+    release_id = Column(String(128), primary_key=True)
+    selected = Column(Boolean, nullable=False, default=True)

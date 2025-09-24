@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import sys
 
@@ -41,6 +41,14 @@ class StubSpotifyClient:
         }
         self.saved_track_ids: set[str] = set()
         self.recommendation_payload: Dict[str, Any] = {"tracks": [], "seeds": []}
+        self.followed_artists: List[Dict[str, Any]] = [
+            {"id": "artist-1", "name": "Tester"}
+        ]
+        self.artist_releases: Dict[str, List[Dict[str, Any]]] = {
+            "artist-1": [
+                {"id": "release-1", "name": "Test Release", "album_group": "album"}
+            ]
+        }
 
     def is_authenticated(self) -> bool:
         return True
@@ -56,6 +64,18 @@ class StubSpotifyClient:
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
         return {"items": [dict(item) for item in self.playlists]}
+
+    def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
+        return {
+            "artists": {
+                "items": [dict(item) for item in self.followed_artists[:limit]]
+            }
+        }
+
+    def get_artist_releases(self, artist_id: str) -> Dict[str, Any]:
+        return {
+            "items": [dict(item) for item in self.artist_releases.get(artist_id, [])]
+        }
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         return self.tracks.get(track_id, {"id": track_id, "name": "Unknown"})

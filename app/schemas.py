@@ -19,6 +19,15 @@ class SpotifySearchResponse(BaseModel):
     items: List[Dict[str, Any]]
 
 
+class FollowedArtistsResponse(BaseModel):
+    artists: List[Dict[str, Any]]
+
+
+class ArtistReleasesResponse(BaseModel):
+    artist_id: str
+    releases: List[Dict[str, Any]]
+
+
 class PlaylistEntry(BaseModel):
     id: str
     name: str
@@ -137,3 +146,17 @@ class SettingsHistoryEntry(BaseModel):
 
 class SettingsHistoryResponse(BaseModel):
     history: List[SettingsHistoryEntry]
+
+
+class ArtistPreferenceEntry(BaseModel):
+    artist_id: str
+    release_id: str
+    selected: bool
+
+
+class ArtistPreferencesPayload(BaseModel):
+    preferences: List[ArtistPreferenceEntry] = Field(default_factory=list)
+
+
+class ArtistPreferencesResponse(BaseModel):
+    preferences: List[ArtistPreferenceEntry]
