@@ -7,6 +7,7 @@ import inspect
 
 from fastapi import FastAPI
 
+from app.core.beets_client import BeetsClient
 from app.dependencies import (
     get_app_config,
     get_matching_engine,
@@ -30,6 +31,7 @@ from app.routers import (
     spotify_router,
 )
 from app.workers import (
+    AutoSyncWorker,
     MatchingWorker,
     MetadataUpdateWorker,
     PlaylistSyncWorker,
@@ -83,11 +85,22 @@ async def startup_event() -> None:
             app.state.matching_worker,
         )
 
+        beets_client = BeetsClient()
+        app.state.auto_sync_worker = AutoSyncWorker(
+            spotify_client,
+            plex_client,
+            soulseek_client,
+            beets_client,
+        )
+        await app.state.auto_sync_worker.start()
+
     logger.info("Harmony application started")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
+    if worker := getattr(app.state, "auto_sync_worker", None):
+        await worker.stop()
     if worker := getattr(app.state, "sync_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "matching_worker", None):

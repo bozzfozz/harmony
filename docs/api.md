@@ -58,7 +58,7 @@ POST /api/metadata/update HTTP/1.1
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
-| `POST` | `/api/sync` | Startet einen manuellen Playlist- und Bibliotheksabgleich. |
+| `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker. |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
 | `GET` | `/api/download` | Listet aktive Downloads inklusive Status, Fortschritt und Zeitstempel. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
@@ -82,6 +82,8 @@ Content-Type: application/json
   }
 }
 ```
+
+> **Hinweis:** Ein `POST /api/sync` Durchlauf stößt zusätzlich den neuen AutoSyncWorker an. Dieser prüft Spotify-Playlists und gespeicherte Tracks, lädt fehlende Songs über Soulseek und importiert sie via Beets, bevor Plex-Statistiken aktualisiert werden. Alle Schritte erscheinen im Activity Feed.
 
 **Download-Beispiel:**
 
