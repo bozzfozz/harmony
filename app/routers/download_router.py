@@ -1,14 +1,14 @@
 """Download management endpoints for Harmony."""
 from __future__ import annotations
 
-import inspect
 from datetime import datetime
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
+from app.core.transfers_api import TransfersApi, TransfersApiError
+from app.dependencies import get_db, get_transfers_api
 from app.logging import get_logger
 from app.models import Download
 from app.schemas import (
@@ -20,12 +20,6 @@ from app.utils.activity import record_activity
 
 router = APIRouter(prefix="/api", tags=["Download"])
 logger = get_logger(__name__)
-
-
-async def _maybe_await(result: Any) -> Any:
-    if inspect.isawaitable(result):
-        return await result
-    return result
 
 
 @router.get("/downloads", response_model=DownloadListResponse)
@@ -180,8 +174,8 @@ async def start_download(
 @router.delete("/download/{download_id}")
 async def cancel_download(
     download_id: int,
-    request: Request,
     session: Session = Depends(get_db),
+    transfers: TransfersApi = Depends(get_transfers_api),
 ) -> Dict[str, Any]:
     """Cancel a queued or running download."""
 
@@ -212,6 +206,15 @@ async def cancel_download(
             detail="Download cannot be cancelled in its current state",
         )
 
+    try:
+        await transfers.cancel_download(download_id)
+    except TransfersApiError as exc:
+        logger.error("slskd cancellation failed for %s: %s", download_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to cancel download via slskd",
+        ) from exc
+
     download.state = "cancelled"
     download.updated_at = datetime.utcnow()
 
@@ -225,14 +228,6 @@ async def cancel_download(
             detail="Failed to cancel download",
         ) from exc
 
-    worker = getattr(request.app.state, "sync_worker", None)
-    cancel_func = getattr(worker, "request_cancel", None)
-    if cancel_func is not None:
-        try:
-            await _maybe_await(cancel_func(download_id))
-        except Exception as exc:  # pragma: no cover - defensive worker error handling
-            logger.warning("Failed to signal cancellation for download %s: %s", download_id, exc)
-
     record_activity(
         "download",
         "download_cancelled",
@@ -245,8 +240,8 @@ async def cancel_download(
 @router.post("/download/{download_id}/retry", status_code=status.HTTP_202_ACCEPTED)
 async def retry_download(
     download_id: int,
-    request: Request,
     session: Session = Depends(get_db),
+    transfers: TransfersApi = Depends(get_transfers_api),
 ) -> Dict[str, Any]:
     """Retry a failed or cancelled download by creating a new entry."""
 
@@ -285,9 +280,24 @@ async def retry_download(
         )
 
     payload_copy = dict(original.request_payload or {})
+    filename = payload_copy.get("filename") or original.filename
+    if not filename:
+        logger.error("Retry rejected for download %s due to missing filename", download_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Download cannot be retried because filename is unknown",
+        )
+
+    filesize = (
+        payload_copy.get("filesize")
+        or payload_copy.get("size")
+        or payload_copy.get("file_size")
+    )
+    if filesize is not None:
+        payload_copy.setdefault("filesize", filesize)
 
     new_download = Download(
-        filename=original.filename,
+        filename=filename,
         state="queued",
         progress=0.0,
         username=original.username,
@@ -296,8 +306,35 @@ async def retry_download(
     session.flush()
 
     payload_copy["download_id"] = new_download.id
-    payload_copy.setdefault("filename", new_download.filename)
+    payload_copy.setdefault("filename", filename)
     new_download.request_payload = payload_copy
+
+    try:
+        await transfers.cancel_download(download_id)
+    except TransfersApiError as exc:
+        session.rollback()
+        logger.error("slskd cancellation before retry failed for %s: %s", download_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to cancel existing download via slskd",
+        ) from exc
+
+    try:
+        await transfers.enqueue(username=original.username, files=[payload_copy])
+    except TransfersApiError as exc:
+        session.rollback()
+        logger.error("Failed to enqueue retry for download %s: %s", download_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to enqueue download via slskd",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - defensive unexpected failure
+        session.rollback()
+        logger.exception("Unexpected error while retrying download %s: %s", download_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retry download",
+        ) from exc
 
     try:
         session.commit()
@@ -309,47 +346,6 @@ async def retry_download(
             detail="Failed to retry download",
         ) from exc
 
-    worker = getattr(request.app.state, "sync_worker", None)
-    enqueue = getattr(worker, "enqueue", None)
-    if enqueue is None:
-        logger.error("Retry failed for %s: download worker unavailable", download_id)
-        record_activity(
-            "download",
-            "download_retried",
-            details={
-                "original_download_id": download_id,
-                "retry_download_id": new_download.id,
-                "status": "worker_unavailable",
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Download worker unavailable",
-        )
-
-    job = {"username": original.username, "files": [payload_copy]}
-    try:
-        await enqueue(job)
-    except Exception as exc:  # pragma: no cover - defensive worker error
-        logger.exception("Failed to enqueue retry for download %s: %s", download_id, exc)
-        now = datetime.utcnow()
-        new_download.state = "failed"
-        new_download.updated_at = now
-        session.commit()
-        record_activity(
-            "download",
-            "download_retried",
-            details={
-                "original_download_id": download_id,
-                "retry_download_id": new_download.id,
-                "status": "enqueue_error",
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to enqueue download",
-        ) from exc
-
     record_activity(
         "download",
         "download_retried",
@@ -357,6 +353,7 @@ async def retry_download(
             "original_download_id": download_id,
             "retry_download_id": new_download.id,
             "username": original.username,
+            "filename": filename,
         },
     )
 

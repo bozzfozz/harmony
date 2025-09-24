@@ -12,12 +12,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import pytest
+from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests
 from app.dependencies import (
     get_matching_engine as dependency_matching_engine,
     get_plex_client as dependency_plex_client,
     get_soulseek_client as dependency_soulseek_client,
     get_spotify_client as dependency_spotify_client,
+    get_transfers_api as dependency_transfers_api,
 )
 from app.main import app
 from app.utils.activity import activity_manager
@@ -427,6 +429,29 @@ class StubSoulseekClient:
             entry["state"] = state
 
 
+class StubTransfersApi:
+    def __init__(self, soulseek: StubSoulseekClient) -> None:
+        self._soulseek = soulseek
+        self.cancelled: list[int] = []
+        self.enqueued: list[Dict[str, Any]] = []
+        self.raise_cancel: TransfersApiError | None = None
+        self.raise_enqueue: TransfersApiError | None = None
+
+    async def cancel_download(self, download_id: int | str) -> Dict[str, Any]:
+        if self.raise_cancel is not None:
+            raise self.raise_cancel
+        identifier = int(download_id)
+        self.cancelled.append(identifier)
+        return await self._soulseek.cancel_download(str(identifier))
+
+    async def enqueue(self, *, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+        if self.raise_enqueue is not None:
+            raise self.raise_enqueue
+        job = {"username": username, "files": files}
+        self.enqueued.append(job)
+        return await self._soulseek.enqueue(username, files)
+
+
 @pytest.fixture(autouse=True)
 def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
@@ -451,6 +476,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     stub_spotify = StubSpotifyClient()
     stub_plex = StubPlexClient()
     stub_soulseek = StubSoulseekClient()
+    stub_transfers = StubTransfersApi(stub_soulseek)
     engine = dependency_matching_engine()
 
     async def noop_start(self) -> None:  # type: ignore[override]
@@ -474,14 +500,17 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     monkeypatch.setattr(deps, "get_spotify_client", lambda: stub_spotify)
     monkeypatch.setattr(deps, "get_plex_client", lambda: stub_plex)
     monkeypatch.setattr(deps, "get_soulseek_client", lambda: stub_soulseek)
+    monkeypatch.setattr(deps, "get_transfers_api", lambda: stub_transfers)
     monkeypatch.setattr(deps, "get_matching_engine", lambda: engine)
 
     app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
     app.dependency_overrides[dependency_plex_client] = lambda: stub_plex
     app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
+    app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
     app.dependency_overrides[dependency_matching_engine] = lambda: engine
 
     app.state.soulseek_stub = stub_soulseek
+    app.state.transfers_stub = stub_transfers
     app.state.plex_stub = stub_plex
     app.state.spotify_stub = stub_spotify
     app.state.sync_worker = SyncWorker(stub_soulseek)
