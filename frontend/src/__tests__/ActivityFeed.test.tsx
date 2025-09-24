@@ -25,9 +25,11 @@ describe('ActivityFeed', () => {
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
-    expect(await screen.findByText('sync')).toBeInTheDocument();
-    expect(screen.getByText('download')).toBeInTheDocument();
-    expect(screen.getByText('queued')).toBeInTheDocument();
+    expect(await screen.findByText('Synchronisierung')).toBeInTheDocument();
+    expect(screen.getByText('Download')).toBeInTheDocument();
+
+    expect(screen.getByText('Abgeschlossen')).toHaveClass('bg-emerald-100');
+    expect(screen.getByText('Wartend')).toHaveClass('bg-amber-100');
   });
 
   it('notifies when no activities are available', async () => {
