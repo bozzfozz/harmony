@@ -7,7 +7,10 @@ sich an den in `app/routers` definierten Routen. Alle Antworten sind JSON-codier
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
-| `GET` | `/status` | Liefert allgemeinen Backend-Status inklusive Worker-Informationen. |
+| `GET` | `/status` | Liefert allgemeinen Backend-Status inkl. Worker-Informationen und Credential-Status. |
+| `GET` | `/api/health/spotify` | Prüft, ob alle Spotify-Zugangsdaten in der Settings-Tabelle hinterlegt sind. |
+| `GET` | `/api/health/plex` | Validiert Plex-Basis-URL und Token in den Settings. |
+| `GET` | `/api/health/soulseek` | Kontrolliert die Soulseek-Konfiguration (`SLSKD_URL`, optional `SLSKD_API_KEY`). |
 | `GET` | `/api/system/stats` | Systemkennzahlen (CPU, RAM, Speicher, Netzwerk) über `psutil`. |
 
 **Beispiel:**
@@ -27,6 +30,11 @@ GET /status HTTP/1.1
     "scan": {"status": "stale", "last_seen": "2024-12-31T23:58:00+00:00", "queue_size": "n/a"},
     "playlist": {"status": "running", "last_seen": "2025-01-01T11:59:45+00:00", "queue_size": "n/a"},
     "autosync": {"status": "stopped", "last_seen": null, "queue_size": {"scheduled": 0, "running": 0}}
+  },
+  "connections": {
+    "spotify": "ok",
+    "plex": "fail",
+    "soulseek": "ok"
   }
 }
 ```
@@ -34,6 +42,25 @@ GET /status HTTP/1.1
 - `status`: Aggregierter Zustand des Workers. `running` signalisiert einen aktiven Heartbeat, `stopped` stammt aus einem kontrollierten Shutdown, `stale` bedeutet, dass länger als 60 s kein Heartbeat eingegangen ist.
 - `last_seen`: UTC-Timestamp des letzten Heartbeats (`worker:<name>:last_seen`). Bei unbekanntem Zustand bleibt der Wert `null`.
 - `queue_size`: Anzahl offener Aufgaben. Für AutoSync wird zwischen geplanten (`scheduled`) und aktuell laufenden (`running`) Zyklen unterschieden. Worker ohne Queue liefern `"n/a"`.
+- `connections`: Aggregierter Credential-Status der externen Dienste (`ok`/`fail`).
+
+**Credential Health-Beispiel:**
+
+```http
+GET /api/health/spotify HTTP/1.1
+```
+
+```json
+{
+  "service": "spotify",
+  "status": "fail",
+  "missing": ["SPOTIFY_CLIENT_SECRET"],
+  "optional_missing": []
+}
+```
+
+- `status = ok`: alle Pflichtfelder sind in der `settings`-Tabelle gefüllt.
+- `missing`: Liste der fehlenden Pflichtfelder. Optional fehlende Werte (`optional_missing`) verhindern keinen erfolgreichen Test, werden aber zur Orientierung mitgeliefert.
 
 **Dashboard-Beispiel:**
 
@@ -47,6 +74,17 @@ Im Dashboard erscheinen die Worker-Informationen als farbcodierte Karten. Jede K
 │ Zuletzt gesehen: vor 30s │  │ Zuletzt gesehen: Keine   │
 │                          │  │ Daten                    │
 └──────────────────────────┘  └──────────────────────────┘
+```
+
+Die neue **Service-Verbindungen**-Karte visualisiert die Credential-Checks mit Emoji-Indikatoren (✅ für erfolgreiche, ❌ für fehlgeschlagene Konfigurationen):
+
+```text
+┌──────────────────────────┐
+│ Service-Verbindungen     │
+│ Spotify      ✅ Verbunden │
+│ Plex         ❌ Fehler    │
+│ Soulseek     ✅ Verbunden │
+└──────────────────────────┘
 ```
 
 Die Karten aktualisieren sich alle 10 Sekunden automatisch über den `/status`-Endpoint.

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 
@@ -13,6 +13,14 @@ class StatusResponse(BaseModel):
     album_count: Optional[int] = None
     track_count: Optional[int] = None
     last_scan: Optional[datetime] = None
+    connections: Optional[Dict[str, str]] = None
+
+
+class ServiceHealthResponse(BaseModel):
+    service: str
+    status: Literal["ok", "fail"]
+    missing: List[str] = Field(default_factory=list)
+    optional_missing: List[str] = Field(default_factory=list)
 
 
 class SpotifySearchResponse(BaseModel):

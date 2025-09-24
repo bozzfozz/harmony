@@ -29,7 +29,15 @@ export interface StatusResponse {
   album_count?: number;
   track_count?: number;
   last_scan?: string;
+  connections?: Record<string, string>;
   workers?: Record<string, WorkerHealth>;
+}
+
+export interface ServiceHealthResponse {
+  service: string;
+  status: 'ok' | 'fail';
+  missing: string[];
+  optional_missing: string[];
 }
 
 export interface SpotifyPlaylist {
@@ -272,6 +280,21 @@ export const fetchPlexLibraries = async (): Promise<PlexLibrariesResponse> => {
 
 export const fetchSoulseekStatus = async (): Promise<StatusResponse> => {
   const { data } = await api.get<StatusResponse>('/soulseek/status');
+  return data;
+};
+
+export const checkSpotifyHealth = async (): Promise<ServiceHealthResponse> => {
+  const { data } = await api.get<ServiceHealthResponse>('/api/health/spotify');
+  return data;
+};
+
+export const checkPlexHealth = async (): Promise<ServiceHealthResponse> => {
+  const { data } = await api.get<ServiceHealthResponse>('/api/health/plex');
+  return data;
+};
+
+export const checkSoulseekHealth = async (): Promise<ServiceHealthResponse> => {
+  const { data } = await api.get<ServiceHealthResponse>('/api/health/soulseek');
   return data;
 };
 

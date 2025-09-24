@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
@@ -11,6 +12,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
+import { useToast } from '../hooks/useToast';
+import { checkPlexHealth, checkSoulseekHealth, checkSpotifyHealth } from '../lib/api';
 
 const spotifyFields = [
   { key: 'SPOTIFY_CLIENT_ID', label: 'Client ID', placeholder: 'Spotify client ID' },
@@ -29,7 +32,18 @@ const soulseekFields = [
   { key: 'SLSKD_API_KEY', label: 'API key', placeholder: 'Optional API key' }
 ] as const;
 
+const maskedKeys = new Set(['SPOTIFY_CLIENT_SECRET', 'PLEX_TOKEN', 'SLSKD_API_KEY']);
+
+const SERVICE_CHECKERS = {
+  spotify: { label: 'Spotify', action: checkSpotifyHealth },
+  plex: { label: 'Plex', action: checkPlexHealth },
+  soulseek: { label: 'Soulseek', action: checkSoulseekHealth }
+} as const;
+
+type ServiceKey = keyof typeof SERVICE_CHECKERS;
+
 const SettingsPage = () => {
+  const { toast } = useToast();
   const spotify = useServiceSettingsForm({
     fields: spotifyFields,
     loadErrorDescription: 'Spotify settings could not be loaded.',
@@ -50,6 +64,46 @@ const SettingsPage = () => {
     successTitle: 'Soulseek settings saved',
     errorTitle: 'Failed to save Soulseek settings'
   });
+
+  const [isTesting, setIsTesting] = useState<Record<ServiceKey, boolean>>({
+    spotify: false,
+    plex: false,
+    soulseek: false
+  });
+
+  const handleTestConnection = async (service: ServiceKey) => {
+    setIsTesting((previous) => ({ ...previous, [service]: true }));
+    const { label, action } = SERVICE_CHECKERS[service];
+    try {
+      const result = await action();
+      if (result.status === 'ok') {
+        const optionalHint =
+          result.optional_missing.length > 0
+            ? `Optional: ${result.optional_missing.join(', ')}`
+            : undefined;
+        toast({
+          title: `✅ ${label}-Verbindung erfolgreich`,
+          description: optionalHint
+        });
+      } else {
+        const missingKeys = result.missing.length > 0 ? result.missing.join(', ') : 'Unbekannte Einstellungen';
+        const optionalKeys = result.optional_missing.length > 0 ? ` Optional: ${result.optional_missing.join(', ')}` : '';
+        toast({
+          title: `❌ ${label}-Verbindung fehlgeschlagen`,
+          description: `Fehlende Werte: ${missingKeys}.${optionalKeys}`.trim(),
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: `❌ ${label}-Verbindung konnte nicht geprüft werden`,
+        description: 'Der Health-Endpoint ist derzeit nicht erreichbar.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsTesting((previous) => ({ ...previous, [service]: false }));
+    }
+  };
 
   return (
     <Tabs defaultValue="spotify">
@@ -75,7 +129,13 @@ const SettingsPage = () => {
                 {spotifyFields.map(({ key, label, placeholder }) => (
                   <div key={key} className="space-y-2">
                     <Label htmlFor={key}>{label}</Label>
-                    <Input id={key} placeholder={placeholder} {...spotify.form.register(key)} />
+                    <Input
+                      id={key}
+                      type={maskedKeys.has(key) ? 'password' : 'text'}
+                      autoComplete="off"
+                      placeholder={placeholder}
+                      {...spotify.form.register(key)}
+                    />
                   </div>
                 ))}
               </CardContent>
@@ -85,6 +145,14 @@ const SettingsPage = () => {
                 </Button>
                 <Button type="button" variant="outline" onClick={spotify.handleReset} disabled={spotify.isSaving}>
                   Reset
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handleTestConnection('spotify')}
+                  disabled={spotify.isSaving || isTesting.spotify}
+                >
+                  {isTesting.spotify ? 'Teste…' : 'Verbindung testen'}
                 </Button>
               </CardFooter>
             </form>
@@ -108,7 +176,13 @@ const SettingsPage = () => {
                 {plexFields.map(({ key, label, placeholder }) => (
                   <div key={key} className="space-y-2">
                     <Label htmlFor={key}>{label}</Label>
-                    <Input id={key} placeholder={placeholder} {...plex.form.register(key)} />
+                    <Input
+                      id={key}
+                      type={maskedKeys.has(key) ? 'password' : 'text'}
+                      autoComplete="off"
+                      placeholder={placeholder}
+                      {...plex.form.register(key)}
+                    />
                   </div>
                 ))}
               </CardContent>
@@ -123,6 +197,14 @@ const SettingsPage = () => {
                   disabled={plex.isSaving}
                 >
                   Reset
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handleTestConnection('plex')}
+                  disabled={plex.isSaving || isTesting.plex}
+                >
+                  {isTesting.plex ? 'Teste…' : 'Verbindung testen'}
                 </Button>
               </CardFooter>
             </form>
@@ -146,7 +228,13 @@ const SettingsPage = () => {
                 {soulseekFields.map(({ key, label, placeholder }) => (
                   <div key={key} className="space-y-2">
                     <Label htmlFor={key}>{label}</Label>
-                    <Input id={key} placeholder={placeholder} {...soulseek.form.register(key)} />
+                    <Input
+                      id={key}
+                      type={maskedKeys.has(key) ? 'password' : 'text'}
+                      autoComplete="off"
+                      placeholder={placeholder}
+                      {...soulseek.form.register(key)}
+                    />
                   </div>
                 ))}
               </CardContent>
@@ -161,6 +249,14 @@ const SettingsPage = () => {
                   disabled={soulseek.isSaving}
                 >
                   Reset
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => handleTestConnection('soulseek')}
+                  disabled={soulseek.isSaving || isTesting.soulseek}
+                >
+                  {isTesting.soulseek ? 'Teste…' : 'Verbindung testen'}
                 </Button>
               </CardFooter>
             </form>

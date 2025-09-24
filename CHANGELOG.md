@@ -14,6 +14,10 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Frontend: ActivityFeed widget shows worker health indicators with icons and colours.
 - Frontend: ActivityFeed widget shows detailed sync/search events.
 - Frontend: Added Worker Health cards to Dashboard.
+- Added health endpoints `/api/health/{spotify|plex|soulseek}` to validate stored credentials.
+- `/status` exposes aggregated connection status for Spotify, Plex and Soulseek.
+- Frontend: Service-Verbindungen-Karte auf dem Dashboard mit ✅/❌-Indikatoren.
+- Frontend: Settings-Seite mit Verbindungstest-Buttons für Spotify, Plex und Soulseek.
 - Added worker health info (heartbeats + queue size) to `/status`.
 - Added automatic defaults for worker-related settings at startup.
 - Added persistent Activity Feed with flexible event types.
@@ -40,6 +44,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
 - AutoSyncWorker filtert Spotify-Tracks anhand gespeicherter Artist-Präferenzen.
 - SyncWorker parallelisiert Downloads und passt das Polling adaptiv an inaktive Phasen an.
+- Settings-Formulare maskieren nun sensible Eingaben (Secrets/Tokens) und zeigen Health-Rückmeldungen an.
 - MatchingWorker verarbeitet Jobs in Batches, speichert mehrere Treffer oberhalb des Confidence-Thresholds und schreibt Kennzahlen.
 - ScanWorker liest Intervall-/Incremental-Settings, löst optionale Plex-Incremental-Scans aus und meldet wiederholte Fehler im Activity Feed.
 
