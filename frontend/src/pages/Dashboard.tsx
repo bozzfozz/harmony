@@ -8,6 +8,7 @@ import {
 } from '../components/ui/card';
 import ActivityFeed from '../components/ActivityFeed';
 import DownloadWidget from '../components/DownloadWidget';
+import ServiceStatusCard from '../components/ServiceStatusCard';
 import WorkerHealthCard from '../components/WorkerHealthCard';
 import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
@@ -139,6 +140,7 @@ const Dashboard = () => {
 
   const soulseekDownloads = soulseekDownloadsQuery.data ?? [];
   const beetsStats = beetsStatsQuery.data?.stats ?? {};
+  const connectionStatuses = systemStatusQuery.data?.connections;
 
   if (isLoading) {
     return (
@@ -152,6 +154,10 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
+      <ServiceStatusCard
+        connections={connectionStatuses}
+        isLoading={systemStatusQuery.isLoading}
+      />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>

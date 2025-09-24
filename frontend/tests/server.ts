@@ -47,9 +47,41 @@ export const resetSettings = () => {
   settingsState = { ...initialSettings };
 };
 
-const base = 'http://localhost';
+const baseUrls = ['http://localhost', 'http://localhost:8000'];
 
-const defaultHandlers: Handler[] = [
+const SERVICE_KEYS = {
+  spotify: {
+    required: ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'SPOTIFY_REDIRECT_URI'],
+    optional: []
+  },
+  plex: {
+    required: ['PLEX_BASE_URL', 'PLEX_TOKEN'],
+    optional: ['PLEX_LIBRARY']
+  },
+  soulseek: {
+    required: ['SLSKD_URL'],
+    optional: ['SLSKD_API_KEY']
+  }
+} as const;
+
+type ServiceName = keyof typeof SERVICE_KEYS;
+
+const isMissing = (value: unknown) =>
+  value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+
+const evaluateHealth = (service: ServiceName) => {
+  const { required, optional } = SERVICE_KEYS[service];
+  const missing = required.filter((key) => isMissing(settingsState[key]));
+  const optionalMissing = optional.filter((key) => isMissing(settingsState[key]));
+  return {
+    service,
+    status: missing.length === 0 ? 'ok' : 'fail',
+    missing,
+    optional_missing: optionalMissing
+  };
+};
+
+const createBaseHandlers = (base: string): Handler[] => [
   mockGet(`${base}/`, () => ({ json: { status: 'ok', version: '1.4.0' } })),
   mockGet(`${base}/settings`, () => ({
     json: { settings: settingsState, updated_at: new Date('2024-03-01T12:00:00Z').toISOString() }
@@ -141,8 +173,28 @@ const defaultHandlers: Handler[] = [
         ]
       }
     };
-  })
+  }),
+  mockGet(`${base}/api/health/spotify`, () => ({ json: evaluateHealth('spotify') })),
+  mockGet(`${base}/api/health/plex`, () => ({ json: evaluateHealth('plex') })),
+  mockGet(`${base}/api/health/soulseek`, () => ({ json: evaluateHealth('soulseek') })),
+  mockGet(`${base}/status`, () => ({
+    json: {
+      status: 'ok',
+      version: '1.4.0',
+      uptime_seconds: 12.5,
+      connections: {
+        spotify: evaluateHealth('spotify').status,
+        plex: evaluateHealth('plex').status,
+        soulseek: evaluateHealth('soulseek').status
+      },
+      workers: {
+        sync: { status: 'running', last_seen: '2024-03-01T11:59:30Z', queue_size: 2 }
+      }
+    }
+  }))
 ];
+
+const defaultHandlers: Handler[] = baseUrls.flatMap((base) => createBaseHandlers(base));
 
 const createServer = (handlers: Handler[]) => {
   let activeHandlers = [...handlers];

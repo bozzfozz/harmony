@@ -11,6 +11,7 @@ from app.logging import get_logger
 from app.db import session_scope
 from app.models import Download, WorkerJob
 from app.utils.activity import record_worker_stale
+from app.utils.service_health import evaluate_all_service_health
 from app.utils.worker_health import (
     STALE_TIMEOUT_SECONDS,
     mark_worker_status,
@@ -137,12 +138,17 @@ async def get_status(request: Request) -> Dict[str, Any]:
         for name, descriptor in _WORKERS.items()
     }
 
+    with session_scope() as session:
+        service_health = evaluate_all_service_health(session)
+        connections = {name: result.status for name, result in service_health.items()}
+
     logger.debug("Reporting system status: uptime=%s seconds", uptime_seconds)
     return {
         "status": "ok",
         "version": getattr(request.app, "version", "unknown"),
         "uptime_seconds": round(uptime_seconds, 2),
         "workers": workers,
+        "connections": connections,
     }
 
 

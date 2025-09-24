@@ -22,6 +22,7 @@ from app.routers import (
     activity_router,
     beets_router,
     download_router,
+    health_router,
     matching_router,
     metadata_router,
     plex_router,
@@ -58,6 +59,7 @@ app.include_router(sync_router, tags=["Sync"])
 app.include_router(system_router, tags=["System"])
 app.include_router(download_router)
 app.include_router(activity_router)
+app.include_router(health_router, prefix="/api/health", tags=["Health"])
 
 
 @app.on_event("startup")
