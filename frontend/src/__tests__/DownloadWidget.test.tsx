@@ -28,13 +28,15 @@ describe('DownloadWidget', () => {
         id: 1,
         filename: 'Track One.mp3',
         status: 'running',
-        progress: 45
+        progress: 45,
+        priority: 2
       },
       {
         id: 2,
         filename: 'Track Two.mp3',
         status: 'queued',
-        progress: 10
+        progress: 10,
+        priority: 1
       }
     ]);
 
@@ -43,7 +45,8 @@ describe('DownloadWidget', () => {
     expect(await screen.findByText('Track One.mp3')).toBeInTheDocument();
     expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalledWith(5);
+    expect(screen.getAllByText(/Priorität/)[0]).toHaveTextContent('Priorität: 2');
+    expect(mockedFetchDownloads).toHaveBeenCalledWith({ limit: 5 });
   });
 
   it('shows empty state when no downloads are active', async () => {
@@ -67,12 +70,12 @@ describe('DownloadWidget', () => {
 
   it('navigates to downloads page when clicking show all', async () => {
     mockedFetchDownloads.mockResolvedValue([
-      { id: 1, filename: 'A.mp3', status: 'running', progress: 60 },
-      { id: 2, filename: 'B.mp3', status: 'running', progress: 40 },
-      { id: 3, filename: 'C.mp3', status: 'running', progress: 20 },
-      { id: 4, filename: 'D.mp3', status: 'running', progress: 10 },
-      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 },
-      { id: 6, filename: 'F.mp3', status: 'running', progress: 2 }
+      { id: 1, filename: 'A.mp3', status: 'running', progress: 60, priority: 5 },
+      { id: 2, filename: 'B.mp3', status: 'running', progress: 40, priority: 4 },
+      { id: 3, filename: 'C.mp3', status: 'running', progress: 20, priority: 3 },
+      { id: 4, filename: 'D.mp3', status: 'running', progress: 10, priority: 2 },
+      { id: 5, filename: 'E.mp3', status: 'running', progress: 5, priority: 1 },
+      { id: 6, filename: 'F.mp3', status: 'running', progress: 2, priority: 1 }
     ]);
 
     renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });
@@ -88,11 +91,11 @@ describe('DownloadWidget', () => {
 
   it('hides the show all button when five or fewer downloads are available', async () => {
     mockedFetchDownloads.mockResolvedValue([
-      { id: 1, filename: 'A.mp3', status: 'running', progress: 60 },
-      { id: 2, filename: 'B.mp3', status: 'running', progress: 40 },
-      { id: 3, filename: 'C.mp3', status: 'running', progress: 20 },
-      { id: 4, filename: 'D.mp3', status: 'running', progress: 10 },
-      { id: 5, filename: 'E.mp3', status: 'running', progress: 5 }
+      { id: 1, filename: 'A.mp3', status: 'running', progress: 60, priority: 5 },
+      { id: 2, filename: 'B.mp3', status: 'running', progress: 40, priority: 4 },
+      { id: 3, filename: 'C.mp3', status: 'running', progress: 20, priority: 3 },
+      { id: 4, filename: 'D.mp3', status: 'running', progress: 10, priority: 2 },
+      { id: 5, filename: 'E.mp3', status: 'running', progress: 5, priority: 1 }
     ]);
 
     renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });
@@ -103,10 +106,22 @@ describe('DownloadWidget', () => {
 
   it('cancels an active download', async () => {
     mockedFetchDownloads.mockResolvedValueOnce([
-      { id: 1, filename: 'Cancelable Widget.mp3', status: 'running', progress: 40 }
+      {
+        id: 1,
+        filename: 'Cancelable Widget.mp3',
+        status: 'running',
+        progress: 40,
+        priority: 3
+      }
     ]);
     mockedFetchDownloads.mockResolvedValue([
-      { id: 1, filename: 'Cancelable Widget.mp3', status: 'cancelled', progress: 40 }
+      {
+        id: 1,
+        filename: 'Cancelable Widget.mp3',
+        status: 'cancelled',
+        progress: 40,
+        priority: 3
+      }
     ]);
     mockedCancelDownload.mockResolvedValue();
 
@@ -125,17 +140,30 @@ describe('DownloadWidget', () => {
 
   it('retries a failed download', async () => {
     mockedFetchDownloads.mockResolvedValueOnce([
-      { id: 2, filename: 'Retry Widget.mp3', status: 'failed', progress: 0 }
+      { id: 2, filename: 'Retry Widget.mp3', status: 'failed', progress: 0, priority: 0 }
     ]);
     mockedFetchDownloads.mockResolvedValue([
-      { id: 2, filename: 'Retry Widget.mp3', status: 'failed', progress: 0 },
-      { id: 3, filename: 'Retry Widget.mp3', status: 'queued', progress: 0 }
+      {
+        id: 2,
+        filename: 'Retry Widget.mp3',
+        status: 'failed',
+        progress: 0,
+        priority: 0
+      },
+      {
+        id: 3,
+        filename: 'Retry Widget.mp3',
+        status: 'queued',
+        progress: 0,
+        priority: 1
+      }
     ]);
     mockedRetryDownload.mockResolvedValue({
       id: 3,
       filename: 'Retry Widget.mp3',
       status: 'queued',
-      progress: 0
+      progress: 0,
+      priority: 1
     });
 
     renderWithProviders(<DownloadWidget />, { toastFn: toastMock, route: '/dashboard' });

@@ -4,6 +4,10 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Improved Download Flow (auto-retry, priority queueing, status filters).
+- Added download export endpoint (CSV/JSON) with filters.
+- Frontend: Enhanced DownloadsPage with filters, priority controls and export buttons.
+- Frontend: Download widget now shows priorities and only active transfers.
 - Added Activity History export (CSV/JSON).
 - Frontend: Added export for Activity History.
 - Added worker health events (started/stopped/stale/restarted) to the Activity Feed.
@@ -30,7 +34,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Added optional persistence for album matching (`persist=true` on `/matching/spotify-to-plex-album`).
 
 ### Changed
-- Frontend: DownloadWidget uses limit param of /api/downloads.
+- Download widgets filter out completed/cancelled items and expose priority labels.
 - Frontend: DownloadsPage nutzt jetzt `GET /api/downloads` für die Download-Übersicht.
 - Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
 - AutoSyncWorker filtert Spotify-Tracks anhand gespeicherter Artist-Präferenzen.

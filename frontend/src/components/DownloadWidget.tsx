@@ -31,7 +31,7 @@ const DownloadWidget = () => {
 
   const { data, isLoading, isError, refetch } = useQuery<DownloadEntry[]>({
     queryKey: ['downloads', 'active-widget'],
-    queryFn: () => fetchDownloads(DISPLAY_LIMIT),
+    queryFn: () => fetchDownloads({ limit: DISPLAY_LIMIT }),
     refetchInterval: 15000,
     onError: () =>
       toast({
@@ -81,7 +81,15 @@ const DownloadWidget = () => {
     }
   });
 
-  const entries = useMemo(() => (data ?? []).slice(0, DISPLAY_LIMIT), [data]);
+  const entries = useMemo(() => {
+    const downloads = data ?? [];
+    return downloads
+      .filter((download) => {
+        const status = (download.status ?? '').toLowerCase();
+        return status === 'running' || status === 'queued' || status === 'downloading';
+      })
+      .slice(0, DISPLAY_LIMIT);
+  }, [data]);
   const hasMore = (data?.length ?? 0) > DISPLAY_LIMIT;
 
   const handleNavigate = () => {
@@ -120,13 +128,21 @@ const DownloadWidget = () => {
                 {entries.map((download) => {
                   const progressValue = mapProgressToPercent(download.progress);
                   const statusLower = (download.status ?? '').toLowerCase();
-                  const showCancel = statusLower === 'running' || statusLower === 'queued';
+                  const showCancel =
+                    statusLower === 'running' ||
+                    statusLower === 'queued' ||
+                    statusLower === 'downloading';
                   const showRetry = statusLower === 'failed' || statusLower === 'cancelled';
                   return (
                     <TableRow key={download.id}>
                       <TableCell className="text-sm font-medium">{download.filename}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {formatStatus(download.status)}
+                        <div className="space-y-1">
+                          <span>{formatStatus(download.status)}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            Priorität: {download.priority ?? 0}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="w-48">
                         <div className="space-y-1">

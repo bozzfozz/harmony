@@ -98,6 +98,7 @@ class SoulseekDownloadEntry(BaseModel):
     progress: float
     created_at: datetime
     updated_at: datetime
+    priority: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,6 +115,8 @@ class DownloadEntryResponse(BaseModel):
     progress: float
     created_at: datetime
     updated_at: datetime
+    priority: int = 0
+    username: Optional[str] = None
     state: str = Field(exclude=True)
 
     model_config = ConfigDict(from_attributes=True)
@@ -131,6 +134,10 @@ class DownloadListResponse(BaseModel):
 
 class SoulseekCancelResponse(BaseModel):
     cancelled: bool
+
+
+class DownloadPriorityUpdate(BaseModel):
+    priority: int
 
 
 class MatchingRequest(BaseModel):

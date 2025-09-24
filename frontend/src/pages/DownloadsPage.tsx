@@ -1,25 +1,41 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Progress } from '../components/ui/progress';
+import { Select } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../hooks/useToast';
 import {
+  DownloadEntry,
   cancelDownload,
-  fetchActiveDownloads,
+  exportDownloads,
+  fetchDownloads,
   retryDownload,
   startDownload,
-  DownloadEntry
+  updateDownloadPriority
 } from '../lib/api';
 import { useMutation, useQuery } from '../lib/query';
 import { mapProgressToPercent } from '../lib/utils';
+
+const statusOptions = [
+  { value: 'all', label: 'Alle Status' },
+  { value: 'running', label: 'Laufend' },
+  { value: 'queued', label: 'Warteschlange' },
+  { value: 'completed', label: 'Abgeschlossen' },
+  { value: 'failed', label: 'Fehlgeschlagen' },
+  { value: 'cancelled', label: 'Abgebrochen' }
+];
 
 const DownloadsPage = () => {
   const { toast } = useToast();
   const [trackId, setTrackId] = useState('');
   const [showAllDownloads, setShowAllDownloads] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [priorityDrafts, setPriorityDrafts] = useState<Record<number, number>>({});
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
 
   const {
     data: downloads,
@@ -27,11 +43,12 @@ const DownloadsPage = () => {
     isError,
     refetch
   } = useQuery<DownloadEntry[]>({
-    queryKey: ['downloads', showAllDownloads ? 'all' : 'active'],
+    queryKey: ['downloads', showAllDownloads ? 'all' : 'active', statusFilter],
     queryFn: () =>
-      showAllDownloads
-        ? fetchActiveDownloads({ includeAll: true })
-        : fetchActiveDownloads(),
+      fetchDownloads({
+        includeAll: showAllDownloads,
+        status: statusFilter === 'all' ? undefined : statusFilter
+      }),
     refetchInterval: 15000,
     onError: () =>
       toast({
@@ -102,6 +119,30 @@ const DownloadsPage = () => {
     }
   });
 
+  const updatePriorityMutation = useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: number }) =>
+      updateDownloadPriority(id, priority),
+    onSuccess: (entry) => {
+      setPriorityDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[Number(entry.id)];
+        return next;
+      });
+      toast({
+        title: 'Priorität aktualisiert',
+        description: `Neue Priorität: ${entry.priority}`
+      });
+      void refetch();
+    },
+    onError: () => {
+      toast({
+        title: 'Priorität konnte nicht aktualisiert werden',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    }
+  });
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!trackId.trim()) {
@@ -115,12 +156,80 @@ const DownloadsPage = () => {
     void startDownloadMutation.mutate({ track_id: trackId.trim() });
   };
 
-  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }), []);
+  const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setStatusFilter(event.target.value);
+  };
 
-  const rows = useMemo(() => downloads ?? [], [downloads]);
+  const handlePriorityInputChange = (downloadId: number, value: number) => {
+    setPriorityDrafts((drafts) => ({ ...drafts, [downloadId]: value }));
+  };
+
+  const handlePrioritySubmit = (download: DownloadEntry) => {
+    const numericId = Number(download.id);
+    const draftValue = priorityDrafts[numericId];
+    const nextPriority = Number.isFinite(draftValue)
+      ? Math.round(draftValue)
+      : download.priority ?? 0;
+
+    if (nextPriority === (download.priority ?? 0)) {
+      return;
+    }
+
+    if (updatePriorityMutation.isPending) {
+      return;
+    }
+
+    updatePriorityMutation.mutate({ id: String(download.id), priority: nextPriority });
+  };
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    try {
+      setExportingFormat(format);
+      const blob = await exportDownloads(format, {
+        status: statusFilter === 'all' ? undefined : statusFilter
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateFragment = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `downloads_${dateFragment}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: `Export ${format.toUpperCase()} erstellt` });
+    } catch (error) {
+      toast({
+        title: 'Export fehlgeschlagen',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
+        variant: 'destructive'
+      });
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      }),
+    []
+  );
+
+  const filteredRows = useMemo(() => {
+    const list = downloads ?? [];
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return list;
+    }
+    return list.filter((download) => {
+      const filename = download.filename?.toLowerCase() ?? '';
+      const username = download.username?.toLowerCase() ?? '';
+      return filename.includes(query) || username.includes(query);
+    });
+  }, [downloads, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -154,23 +263,72 @@ const DownloadsPage = () => {
       </Card>
 
       <Card>
-        <CardHeader className="space-y-2 sm:flex sm:items-center sm:justify-between sm:space-y-0">
-          <div>
-            <CardTitle>Aktive Downloads</CardTitle>
-            <CardDescription>
-              {showAllDownloads
-                ? 'Alle vom Backend gemeldeten Transfers inklusive abgeschlossener und fehlgeschlagener Einträge.'
-                : 'Übersicht der aktuell aktiven Transfers.'}
-            </CardDescription>
+        <CardHeader className="space-y-4">
+          <div className="space-y-2 sm:flex sm:items-center sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle>Aktive Downloads</CardTitle>
+              <CardDescription>
+                {showAllDownloads
+                  ? 'Alle vom Backend gemeldeten Transfers inklusive abgeschlossener und fehlgeschlagener Einträge.'
+                  : 'Übersicht der aktuell aktiven Transfers.'}
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllDownloads((value) => !value)}
+              aria-pressed={showAllDownloads}
+            >
+              {showAllDownloads ? 'Nur aktive' : 'Alle anzeigen'}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAllDownloads((value) => !value)}
-            aria-pressed={showAllDownloads}
-          >
-            {showAllDownloads ? 'Nur aktive' : 'Alle anzeigen'}
-          </Button>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Status
+              <Select value={statusFilter} onChange={handleStatusChange} aria-label="Status filtern">
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium sm:col-span-2">
+              Suche
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Nach Dateiname oder Benutzer filtern"
+                aria-label="Downloads durchsuchen"
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('json')}
+              disabled={exportingFormat === 'json'}
+            >
+              {exportingFormat === 'json' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
+              Export JSON
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              disabled={exportingFormat === 'csv'}
+            >
+              {exportingFormat === 'csv' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              ) : null}
+              Export CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -179,8 +337,8 @@ const DownloadsPage = () => {
             </div>
           ) : isError ? (
             <p className="text-sm text-destructive">Downloads konnten nicht geladen werden.</p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Keine Downloads aktiv.</p>
+          ) : filteredRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Keine Downloads gefunden.</p>
           ) : (
             <div className="overflow-hidden rounded-lg border">
               <Table>
@@ -189,25 +347,61 @@ const DownloadsPage = () => {
                     <TableHead>ID</TableHead>
                     <TableHead>Dateiname</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Priorität</TableHead>
                     <TableHead>Fortschritt</TableHead>
                     <TableHead>Angelegt</TableHead>
                     <TableHead>Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((download) => {
+                  {filteredRows.map((download) => {
+                    const numericId = Number(download.id);
                     const progressValue = mapProgressToPercent(download.progress);
                     const createdAtLabel = download.created_at
                       ? dateFormatter.format(new Date(download.created_at))
                       : 'Unbekannt';
                     const statusLower = (download.status ?? '').toLowerCase();
-                    const showCancel = statusLower === 'running' || statusLower === 'queued';
+                    const showCancel = statusLower === 'running' || statusLower === 'queued' || statusLower === 'downloading';
                     const showRetry = statusLower === 'failed' || statusLower === 'cancelled';
+                    const draftPriority = priorityDrafts[numericId];
+                    const priorityValue = Number.isFinite(draftPriority)
+                      ? draftPriority
+                      : download.priority ?? 0;
+
                     return (
                       <TableRow key={download.id}>
                         <TableCell className="text-sm text-muted-foreground">{download.id}</TableCell>
-                        <TableCell className="text-sm font-medium">{download.filename}</TableCell>
-                        <TableCell className="capitalize">{download.status}</TableCell>
+                        <TableCell className="text-sm font-medium">
+                          <div className="space-y-1">
+                            <span>{download.filename}</span>
+                            {download.username ? (
+                              <span className="block text-xs text-muted-foreground">{download.username}</span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="capitalize">{download.status.replace(/[_-]+/g, ' ')}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              className="w-20"
+                              value={priorityValue}
+                              onChange={(event) =>
+                                handlePriorityInputChange(numericId, Number(event.target.value))
+                              }
+                              aria-label={`Priorität für ${download.filename}`}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrioritySubmit(download)}
+                              disabled={updatePriorityMutation.isPending}
+                            >
+                              Setzen
+                            </Button>
+                          </div>
+                        </TableCell>
                         <TableCell className="w-64">
                           <div className="space-y-2">
                             <Progress value={progressValue} aria-label={`Fortschritt ${progressValue}%`} />
@@ -227,7 +421,10 @@ const DownloadsPage = () => {
                                   filename: download.filename
                                 })
                               }
-                              disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                              disabled={
+                                cancelDownloadMutation.isPending ||
+                                retryDownloadMutation.isPending
+                              }
                             >
                               Abbrechen
                             </Button>
@@ -243,7 +440,10 @@ const DownloadsPage = () => {
                                   filename: download.filename
                                 })
                               }
-                              disabled={cancelDownloadMutation.isPending || retryDownloadMutation.isPending}
+                              disabled={
+                                cancelDownloadMutation.isPending ||
+                                retryDownloadMutation.isPending
+                              }
                             >
                               Neu starten
                             </Button>

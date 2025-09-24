@@ -11,12 +11,21 @@ from app.db import session_scope
 from app.models import WorkerJob
 
 
+def _extract_priority(payload: dict) -> int:
+    value = payload.get("priority", 0)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 @dataclass(slots=True)
 class QueuedJob:
     """In-memory representation of a worker job stored in the database."""
 
     id: int
     payload: dict
+    priority: int = 0
 
 
 class PersistentJobQueue:
@@ -30,7 +39,11 @@ class PersistentJobQueue:
             job = WorkerJob(worker=self._worker, payload=payload)
             session.add(job)
             session.flush()
-            return QueuedJob(id=job.id, payload=dict(payload))
+            return QueuedJob(
+                id=job.id,
+                payload=dict(payload),
+                priority=_extract_priority(payload),
+            )
 
     def enqueue_many(self, payloads: Iterable[dict]) -> List[QueuedJob]:
         jobs: List[QueuedJob] = []
@@ -44,7 +57,13 @@ class PersistentJobQueue:
                 )
                 session.add(job)
                 session.flush()
-                jobs.append(QueuedJob(id=job.id, payload=dict(payload)))
+                jobs.append(
+                    QueuedJob(
+                        id=job.id,
+                        payload=dict(payload),
+                        priority=_extract_priority(payload),
+                    )
+                )
         return jobs
 
     def list_pending(self) -> List[QueuedJob]:
@@ -65,7 +84,13 @@ class PersistentJobQueue:
             for job in jobs:
                 job.state = "queued"
                 job.updated_at = datetime.utcnow()
-                results.append(QueuedJob(id=job.id, payload=dict(job.payload)))
+                results.append(
+                    QueuedJob(
+                        id=job.id,
+                        payload=dict(job.payload),
+                        priority=_extract_priority(job.payload),
+                    )
+                )
             return results
 
     def mark_running(self, job_id: int) -> None:
