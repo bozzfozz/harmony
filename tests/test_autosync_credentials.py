@@ -3,6 +3,7 @@ from sqlalchemy import delete
 
 from app.db import session_scope
 from app.models import ActivityEvent, Setting
+from app.utils.events import AUTOSYNC_BLOCKED
 from app.workers.auto_sync_worker import AutoSyncWorker
 
 
@@ -49,6 +50,6 @@ async def test_autosync_worker_blocks_when_credentials_missing(client) -> None:
 
     assert event is not None
     assert event.type == "autosync"
-    assert event.status == "autosync_blocked"
+    assert event.status == AUTOSYNC_BLOCKED
     missing = event.details.get("missing", {}) if event.details else {}
     assert set(missing) == {"spotify", "plex", "soulseek"}

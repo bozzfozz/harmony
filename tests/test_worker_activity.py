@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
 from app.utils.activity import activity_manager, record_worker_started, record_worker_stopped
+from app.utils.events import (
+    WORKER_RESTARTED,
+    WORKER_STALE,
+    WORKER_STARTED,
+    WORKER_STOPPED,
+)
 from app.utils.settings_store import write_setting
 from app.utils.worker_health import (
     STALE_TIMEOUT_SECONDS,
@@ -20,7 +26,7 @@ def test_worker_start_records_activity(client) -> None:
     assert len(entries) == 1
     entry = entries[0]
     assert entry["type"] == "worker"
-    assert entry["status"] == "started"
+    assert entry["status"] == WORKER_STARTED
     assert entry["details"]["worker"] == "sync"
     assert "timestamp" in entry["details"]
 
@@ -32,7 +38,7 @@ def test_worker_stop_records_activity(client) -> None:
     assert len(entries) == 1
     entry = entries[0]
     assert entry["type"] == "worker"
-    assert entry["status"] == "stopped"
+    assert entry["status"] == WORKER_STOPPED
     assert entry["details"]["worker"] == "scan"
 
 
@@ -48,7 +54,7 @@ def test_worker_stale_event_emitted_on_health_check(client) -> None:
     assert len(entries) == 1
     entry = entries[0]
     details = entry["details"]
-    assert entry["status"] == "stale"
+    assert entry["status"] == WORKER_STALE
     assert details["worker"] == "matching"
     assert details["last_seen"] == _iso(past)
     assert details["threshold_seconds"] == float(STALE_TIMEOUT_SECONDS)
@@ -57,7 +63,7 @@ def test_worker_stale_event_emitted_on_health_check(client) -> None:
 
 def test_worker_restart_records_activity(client) -> None:
     record_worker_started("playlist")
-    mark_worker_status("playlist", "stopped")
+    mark_worker_status("playlist", WORKER_STOPPED)
 
     record_worker_started("playlist")
 
@@ -66,7 +72,7 @@ def test_worker_restart_records_activity(client) -> None:
     latest = entries[0]
     previous = entries[1]
 
-    assert previous["status"] == "started"
-    assert latest["status"] == "restarted"
+    assert previous["status"] == WORKER_STARTED
+    assert latest["status"] == WORKER_RESTARTED
     assert latest["details"]["worker"] == "playlist"
-    assert latest["details"].get("previous_status") == "stopped"
+    assert latest["details"].get("previous_status") == WORKER_STOPPED

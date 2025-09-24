@@ -107,3 +107,15 @@ def test_configuration_falls_back_to_environment(monkeypatch: pytest.MonkeyPatch
     assert config.spotify.client_id == "env-client"
     assert config.plex.base_url == "http://env-plex"
     assert config.soulseek.base_url == "http://env-slskd"
+
+
+def test_configuration_supports_legacy_slskd_host_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SLSKD_URL", raising=False)
+    monkeypatch.setenv("SLSKD_HOST", "slskd.local")
+    monkeypatch.setenv("SLSKD_PORT", "2235")
+
+    config = load_config()
+
+    assert config.soulseek.base_url == "http://slskd.local:2235"

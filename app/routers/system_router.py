@@ -11,6 +11,7 @@ from app.logging import get_logger
 from app.db import session_scope
 from app.models import Download, WorkerJob
 from app.utils.activity import record_worker_stale
+from app.utils.events import WORKER_STALE
 from app.utils.service_health import evaluate_all_service_health
 from app.utils.worker_health import (
     STALE_TIMEOUT_SECONDS,
@@ -92,7 +93,7 @@ def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -
     status = resolve_status(stored_status, last_seen_dt, now=now)
     stored_status_normalized = (stored_status or "").lower() if stored_status else ""
 
-    if status == "stale" and stored_status_normalized != "stale":
+    if status == WORKER_STALE and stored_status_normalized != WORKER_STALE:
         elapsed: Optional[float] = None
         if last_seen_dt is not None:
             elapsed = (now - last_seen_dt).total_seconds()
@@ -103,7 +104,7 @@ def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -
             elapsed_seconds=elapsed,
             timestamp=now.replace(tzinfo=None),
         )
-        mark_worker_status(name, "stale")
+        mark_worker_status(name, WORKER_STALE)
 
     payload: Dict[str, Any] = {"status": status}
     payload["last_seen"] = stored_last_seen

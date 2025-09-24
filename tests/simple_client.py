@@ -65,6 +65,9 @@ class SimpleTestClient:
     def put(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
         return self._loop.run_until_complete(self._request("PUT", path, json_body=json))
 
+    def patch(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
+        return self._loop.run_until_complete(self._request("PATCH", path, json_body=json))
+
     def delete(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
         return self._loop.run_until_complete(self._request("DELETE", path, json_body=json))
 

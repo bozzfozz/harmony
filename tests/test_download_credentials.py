@@ -2,6 +2,7 @@ from sqlalchemy import delete
 
 from app.db import session_scope
 from app.models import ActivityEvent, Download, Setting
+from app.utils.events import DOWNLOAD_BLOCKED
 
 
 def test_download_endpoint_blocks_without_soulseek_credentials(client) -> None:
@@ -31,4 +32,4 @@ def test_download_endpoint_blocks_without_soulseek_credentials(client) -> None:
 
     assert event is not None
     assert event.type == "download"
-    assert event.status == "download_blocked"
+    assert event.status == DOWNLOAD_BLOCKED

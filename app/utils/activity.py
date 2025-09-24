@@ -11,6 +11,12 @@ from sqlalchemy import func
 
 from app.db import session_scope
 from app.models import ActivityEvent
+from app.utils.events import (
+    WORKER_RESTARTED,
+    WORKER_STALE,
+    WORKER_STARTED,
+    WORKER_STOPPED,
+)
 from app.utils.worker_health import read_worker_status
 
 
@@ -221,7 +227,12 @@ def record_activity(
     return entry.as_dict()
 
 
-WorkerActivityStatus = Literal["started", "stopped", "stale", "restarted"]
+WorkerActivityStatus = Literal[
+    WORKER_STARTED,
+    WORKER_STOPPED,
+    WORKER_STALE,
+    WORKER_RESTARTED,
+]
 
 
 def _normalise_timestamp(value: datetime) -> datetime:
@@ -258,9 +269,11 @@ def record_worker_started(
 
     _, stored_status = read_worker_status(worker)
     previous = (stored_status or "").lower()
-    status: WorkerActivityStatus = "restarted" if previous in {"stopped", "stale"} else "started"
+    status: WorkerActivityStatus = (
+        WORKER_RESTARTED if previous in {WORKER_STOPPED, WORKER_STALE} else WORKER_STARTED
+    )
     extra: Dict[str, object] = {}
-    if status == "restarted" and previous:
+    if status == WORKER_RESTARTED and previous:
         extra["previous_status"] = previous
     return record_worker_event(worker, status, timestamp=timestamp, details=extra)
 
@@ -276,7 +289,7 @@ def record_worker_restarted(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(worker, "restarted", timestamp=timestamp, details=extra)
+    return record_worker_event(worker, WORKER_RESTARTED, timestamp=timestamp, details=extra)
 
 
 def record_worker_stopped(
@@ -290,7 +303,7 @@ def record_worker_stopped(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(worker, "stopped", timestamp=timestamp, details=extra)
+    return record_worker_event(worker, WORKER_STOPPED, timestamp=timestamp, details=extra)
 
 
 def record_worker_stale(
@@ -308,4 +321,4 @@ def record_worker_stale(
         extra["last_seen"] = last_seen
     if elapsed_seconds is not None:
         extra["elapsed_seconds"] = round(float(elapsed_seconds), 2)
-    return record_worker_event(worker, "stale", timestamp=timestamp, details=extra)
+    return record_worker_event(worker, WORKER_STALE, timestamp=timestamp, details=extra)

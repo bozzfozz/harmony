@@ -37,8 +37,14 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Persistente Worker-Queues (`worker_jobs`) inkl. Health/Metric-Tracking (`worker.*`, `metrics.*`) für Sync-, Matching- und Scan-Worker.
 - Quality-/Priorisierungsregeln für den AutoSyncWorker (`autosync_min_bitrate`, `autosync_preferred_formats`, Skip-State in `auto_sync_skipped_tracks`).
 - Added optional persistence for album matching (`persist=true` on `/matching/spotify-to-plex-album`).
+- Datenbankindizes für Downloads (Status, Erstellung) und Activity-Events (Typ, Status, Timestamp) zur Beschleunigung von Abfragen.
+- E2E-Smoke-Test verifiziert den vollständigen Download-Flow (API, Persistenz, Activity Feed) mit Worker-Stubs.
 
 ### Changed
+- Soulseek-Konfiguration vereinheitlicht: `SLSKD_URL` ist die maßgebliche Einstellung; Legacy-Varianten werden automatisch als URL übernommen.
+- Download-Router nutzt ausgelagerte Utility-Funktionen für Statusfilter, Prioritäten und CSV-Exporte, um Wartung und Tests zu vereinfachen.
+- Aktivitäts-Event-Status wurden in `app/utils/events.py` zentralisiert und in Routern, Workern sowie Tests referenziert.
+- SyncWorker- und AutoSyncWorker-Shutdowns brechen ausstehende Retry-Tasks kontrolliert ab und loggen verbleibende Pending-Jobs.
 - PATCH `/api/download/{id}/priority` synchronises worker job priorities and reschedules queued/retrying tasks.
 - Download widgets filter out completed/cancelled items and expose priority labels.
 - Frontend: DownloadsPage nutzt jetzt `GET /api/downloads` für die Download-Übersicht.

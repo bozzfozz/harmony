@@ -11,6 +11,12 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.events import (
+    DOWNLOAD_RETRY_COMPLETED,
+    DOWNLOAD_RETRY_FAILED,
+    DOWNLOAD_RETRY_SCHEDULED,
+    WORKER_STOPPED,
+)
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.persistence import PersistentJobQueue, QueuedJob
@@ -101,6 +107,26 @@ class SyncWorker:
         self._retry_tasks.add(task)
         task.add_done_callback(self._retry_tasks.discard)
 
+    async def _cancel_retry_tasks(self) -> None:
+        pending = [task for task in list(self._retry_tasks) if not task.done()]
+        if not pending:
+            return
+
+        for task in pending:
+            task.cancel()
+
+        logger.info("Awaiting %d pending retry task(s)", len(pending))
+        await asyncio.gather(*pending, return_exceptions=True)
+
+        remaining = [task for task in pending if not task.done()]
+        if remaining:
+            logger.warning(
+                "Retry tasks still pending after cancellation: %d",
+                len(remaining),
+            )
+
+        self._retry_tasks.difference_update(pending)
+
     async def start(self) -> None:
         if self._manager_task is not None and not self._manager_task.done():
             return
@@ -114,7 +140,11 @@ class SyncWorker:
             return
         self._stop_event.set()
         if self._manager_task is not None:
-            await self._manager_task
+            try:
+                await self._manager_task
+            finally:
+                self._manager_task = None
+        await self._cancel_retry_tasks()
 
     async def enqueue(self, job: Dict[str, Any]) -> None:
         """Submit a download job for processing."""
@@ -179,6 +209,7 @@ class SyncWorker:
         try:
             await self._stop_event.wait()
         finally:
+            self._running.clear()
             for _ in self._worker_tasks:
                 await self._put_job(None)
             await asyncio.gather(*self._worker_tasks, return_exceptions=True)
@@ -188,15 +219,10 @@ class SyncWorker:
                     await self._poll_task
                 except asyncio.CancelledError:  # pragma: no cover - lifecycle cleanup
                     pass
-            for task in list(self._retry_tasks):
-                task.cancel()
-            if self._retry_tasks:
-                await asyncio.gather(*self._retry_tasks, return_exceptions=True)
-                self._retry_tasks.clear()
+            await self._cancel_retry_tasks()
             self._job_store.requeue_incomplete()
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
-            self._running.clear()
-            mark_worker_status("sync", "stopped")
+            mark_worker_status("sync", WORKER_STOPPED)
             record_worker_stopped("sync")
             logger.info("SyncWorker stopped")
 
@@ -225,6 +251,8 @@ class SyncWorker:
         while self._running.is_set():
             try:
                 active_downloads = await self.refresh_downloads()
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("Download refresh failed: %s", exc)
                 active_downloads = False
@@ -337,7 +365,7 @@ class SyncWorker:
         if scheduled:
             record_activity(
                 "download",
-                "download_retry_scheduled",
+                DOWNLOAD_RETRY_SCHEDULED,
                 details={
                     "downloads": scheduled,
                     "username": job.get("username"),
@@ -346,7 +374,7 @@ class SyncWorker:
         if failures:
             record_activity(
                 "download",
-                "download_retry_failed",
+                DOWNLOAD_RETRY_FAILED,
                 details={
                     "downloads": failures,
                     "username": job.get("username"),
@@ -382,7 +410,7 @@ class SyncWorker:
                             await self._mark_retry_failed(int(identifier))
                         record_activity(
                             "download",
-                            "download_retry_failed",
+                            DOWNLOAD_RETRY_FAILED,
                             details={
                                 "downloads": [
                                     {
@@ -431,7 +459,7 @@ class SyncWorker:
         if completed:
             record_activity(
                 "download",
-                "download_retry_completed",
+                DOWNLOAD_RETRY_COMPLETED,
                 details={"downloads": completed},
             )
 
@@ -452,7 +480,7 @@ class SyncWorker:
                 await self._mark_retry_failed(download_id)
             record_activity(
                 "download",
-                "download_retry_failed",
+                DOWNLOAD_RETRY_FAILED,
                 details={
                     "downloads": [
                         {"download_id": identifier} for identifier in download_ids

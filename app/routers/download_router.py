@@ -1,11 +1,9 @@
 """Download management endpoints for Harmony."""
 from __future__ import annotations
 
-import csv
-import io
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, MutableMapping, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -22,37 +20,22 @@ from app.schemas import (
     SoulseekDownloadRequest,
 )
 from app.utils.activity import record_activity
+from app.utils.downloads import (
+    ACTIVE_STATES,
+    coerce_priority,
+    determine_priority,
+    render_downloads_csv,
+    resolve_status_filter,
+    serialise_download,
+)
+from app.utils.events import (
+    DOWNLOAD_BLOCKED,
+)
 from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import PersistentJobQueue
 
 router = APIRouter(prefix="/api", tags=["Download"])
 logger = get_logger(__name__)
-
-
-STATUS_FILTERS: Dict[str, set[str]] = {
-    "running": {"running", "downloading"},
-    "queued": {"queued"},
-    "completed": {"completed"},
-    "failed": {"failed"},
-    "cancelled": {"cancelled"},
-}
-
-ACTIVE_STATES = STATUS_FILTERS["running"] | STATUS_FILTERS["queued"]
-
-
-def _normalise_status(value: str) -> str:
-    return value.strip().lower()
-
-
-def _resolve_status_filter(value: str) -> set[str]:
-    normalised = _normalise_status(value)
-    states = STATUS_FILTERS.get(normalised)
-    if states is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Invalid status filter",
-        )
-    return states
 
 
 def _parse_iso8601(value: str) -> datetime:
@@ -81,7 +64,7 @@ def _build_download_query(
 ) -> Any:
     query = session.query(Download)
     if status_filter:
-        states = _resolve_status_filter(status_filter)
+        states = resolve_status_filter(status_filter)
         query = query.filter(Download.state.in_(tuple(states)))
     elif not include_all:
         query = query.filter(Download.state.in_(tuple(ACTIVE_STATES)))
@@ -92,75 +75,6 @@ def _build_download_query(
         query = query.filter(Download.created_at <= created_to)
 
     return query.order_by(Download.priority.desc(), Download.created_at.desc())
-
-
-def _coerce_int(value: Any) -> Optional[int]:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, float)):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value.strip())
-        except ValueError:
-            return None
-    return None
-
-
-def _is_truthy(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        normalised = value.strip().lower()
-        return normalised in {"1", "true", "yes", "y"}
-    return False
-
-
-def _determine_priority(file_info: MutableMapping[str, Any]) -> int:
-    explicit = _coerce_int(file_info.get("priority"))
-    if explicit is not None:
-        return explicit
-
-    favorite_keys = (
-        "is_favorite",
-        "favorite",
-        "liked",
-        "is_saved_track",
-        "spotify_saved",
-        "spotify_like",
-    )
-    if any(_is_truthy(file_info.get(key)) for key in favorite_keys):
-        return 10
-
-    source = str(file_info.get("source") or "").lower()
-    if source in {"spotify_likes", "spotify_saved", "favorites"}:
-        return 10
-
-    return 0
-
-
-def _serialise_download(download: Download) -> Dict[str, Any]:
-    response = DownloadEntryResponse.model_validate(download).model_dump()
-    response["username"] = download.username
-    response["priority"] = download.priority
-    created_at = download.created_at
-    updated_at = download.updated_at
-    response["created_at"] = created_at.isoformat() if created_at else None
-    response["updated_at"] = updated_at.isoformat() if updated_at else None
-    return response
-
-
-CSV_HEADERS = [
-    "id",
-    "filename",
-    "status",
-    "progress",
-    "username",
-    "created_at",
-    "updated_at",
-]
 
 
 @router.get("/downloads", response_model=DownloadListResponse)
@@ -295,7 +209,7 @@ async def start_download(
         logger.warning("Download blocked due to missing credentials: %s", missing_payload)
         record_activity(
             "download",
-            "download_blocked",
+            DOWNLOAD_BLOCKED,
             details={"missing": missing_payload, "username": payload.username},
         )
         raise HTTPException(
@@ -319,7 +233,7 @@ async def start_download(
         job_priorities: List[int] = []
         for file_info in payload.files:
             filename = str(file_info.get("filename") or file_info.get("name") or "unknown")
-            priority = _determine_priority(file_info)
+            priority = determine_priority(file_info)
             download = Download(
                 filename=filename,
                 state="queued",
@@ -498,7 +412,7 @@ def export_downloads(
             detail="Failed to export downloads",
         ) from exc
 
-    payload = [_serialise_download(item) for item in downloads]
+    payload = [serialise_download(item) for item in downloads]
 
     if fmt == "json":
         return Response(
@@ -506,21 +420,8 @@ def export_downloads(
             media_type="application/json",
         )
 
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=CSV_HEADERS)
-    writer.writeheader()
-    for item in payload:
-        writer.writerow({
-            "id": item.get("id"),
-            "filename": item.get("filename"),
-            "status": item.get("status"),
-            "progress": item.get("progress"),
-            "username": item.get("username"),
-            "created_at": item.get("created_at"),
-            "updated_at": item.get("updated_at"),
-        })
-
-    return Response(content=buffer.getvalue(), media_type="text/csv")
+    csv_content = render_downloads_csv(payload)
+    return Response(content=csv_content, media_type="text/csv")
 
 
 @router.post("/download/{download_id}/retry", status_code=status.HTTP_202_ACCEPTED)
@@ -582,7 +483,7 @@ async def retry_download(
     if filesize is not None:
         payload_copy.setdefault("filesize", filesize)
 
-    priority = _coerce_int(payload_copy.get("priority"))
+    priority = coerce_priority(payload_copy.get("priority"))
     if priority is None:
         priority = original.priority
 

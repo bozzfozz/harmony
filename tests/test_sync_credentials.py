@@ -2,6 +2,7 @@ from sqlalchemy import delete
 
 from app.db import session_scope
 from app.models import ActivityEvent, Setting
+from app.utils.events import SYNC_BLOCKED
 
 
 def test_manual_sync_blocks_without_credentials(client) -> None:
@@ -40,4 +41,4 @@ def test_manual_sync_blocks_without_credentials(client) -> None:
 
     assert event is not None
     assert event.type == "sync"
-    assert event.status == "sync_blocked"
+    assert event.status == SYNC_BLOCKED

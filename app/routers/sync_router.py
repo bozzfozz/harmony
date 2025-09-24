@@ -10,6 +10,7 @@ from app import dependencies
 from app.db import session_scope
 from app.logging import get_logger
 from app.utils.activity import record_activity
+from app.utils.events import SYNC_BLOCKED
 from app.utils.service_health import collect_missing_credentials
 from app.workers import AutoSyncWorker, PlaylistSyncWorker, ScanWorker
 
@@ -30,7 +31,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
         logger.warning("Manual sync blocked due to missing credentials: %s", missing_payload)
         record_activity(
             "sync",
-            "sync_blocked",
+            SYNC_BLOCKED,
             details={"missing": missing_payload},
         )
         raise HTTPException(
