@@ -18,8 +18,9 @@ def test_status_endpoint_reports_workers(client) -> None:
 
     workers = payload["workers"]
     assert isinstance(workers, dict)
-    assert "soulseek_sync" in workers
+    assert "sync" in workers
     assert "matching" in workers
+    assert "scan" in workers
 
 
 def test_system_stats_endpoint_uses_psutil(monkeypatch, client) -> None:

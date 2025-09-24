@@ -22,11 +22,18 @@ GET /status HTTP/1.1
   "version": "1.4.0",
   "uptime_seconds": 12.5,
   "workers": {
-    "soulseek_sync": {"state": "idle", "queue_size": 0},
-    "matching": {"state": "running"}
+    "sync": {"status": "running", "last_seen": "2025-01-01T12:00:00+00:00", "queue_size": 3},
+    "matching": {"status": "running", "last_seen": "2025-01-01T12:00:00+00:00", "queue_size": 0},
+    "scan": {"status": "stale", "last_seen": "2024-12-31T23:58:00+00:00", "queue_size": "n/a"},
+    "playlist": {"status": "running", "last_seen": "2025-01-01T11:59:45+00:00", "queue_size": "n/a"},
+    "autosync": {"status": "stopped", "last_seen": null, "queue_size": {"scheduled": 0, "running": 0}}
   }
 }
 ```
+
+- `status`: Aggregierter Zustand des Workers. `running` signalisiert einen aktiven Heartbeat, `stopped` stammt aus einem kontrollierten Shutdown, `stale` bedeutet, dass länger als 60 s kein Heartbeat eingegangen ist.
+- `last_seen`: UTC-Timestamp des letzten Heartbeats (`worker:<name>:last_seen`). Bei unbekanntem Zustand bleibt der Wert `null`.
+- `queue_size`: Anzahl offener Aufgaben. Für AutoSync wird zwischen geplanten (`scheduled`) und aktuell laufenden (`running`) Zyklen unterschieden. Worker ohne Queue liefern `"n/a"`.
 
 ## Metadata (`/api/metadata`)
 

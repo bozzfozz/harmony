@@ -9,6 +9,7 @@ from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Playlist
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
 
@@ -36,9 +37,11 @@ class PlaylistSyncWorker:
             except asyncio.CancelledError:  # pragma: no cover - cancellation lifecycle
                 pass
             self._task = None
+        mark_worker_status("playlist", "stopped")
 
     async def _run(self) -> None:
         logger.info("PlaylistSyncWorker started")
+        record_worker_heartbeat("playlist")
         try:
             while self._running:
                 await self.sync_once()
@@ -100,6 +103,7 @@ class PlaylistSyncWorker:
                 processed += 1
 
         logger.info("Synced %s playlists from Spotify", processed)
+        record_worker_heartbeat("playlist")
 
     @staticmethod
     def _extract_track_count(payload: dict[str, Any]) -> int:

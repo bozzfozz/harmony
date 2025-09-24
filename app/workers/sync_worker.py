@@ -12,6 +12,7 @@ from app.logging import get_logger
 from app.models import Download
 from app.utils.activity import record_activity
 from app.utils.settings_store import increment_counter, read_setting, write_setting
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
@@ -101,6 +102,7 @@ class SyncWorker:
     async def _run(self) -> None:
         logger.info("SyncWorker started")
         write_setting("worker.sync.last_start", datetime.utcnow().isoformat())
+        record_worker_heartbeat("sync")
         pending = self._job_store.list_pending()
         for job in pending:
             await self._queue.put(job)
@@ -126,6 +128,7 @@ class SyncWorker:
             self._job_store.requeue_incomplete()
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             self._running.clear()
+            mark_worker_status("sync", "stopped")
             logger.info("SyncWorker stopped")
 
     async def _worker_loop(self, index: int) -> None:
@@ -311,4 +314,4 @@ class SyncWorker:
                 download.updated_at = datetime.utcnow()
 
     def _record_heartbeat(self) -> None:
-        write_setting("worker.sync.last_seen", datetime.utcnow().isoformat())
+        record_worker_heartbeat("sync")
