@@ -351,6 +351,10 @@ export const fetchBeetsStats = async (): Promise<BeetsStatsResponse> => {
   return data;
 };
 
+export const triggerSync = async (): Promise<void> => {
+  await api.post('/api/sync');
+};
+
 const extractDownloadEntries = (payload: unknown): SoulseekDownloadEntry[] => {
   if (Array.isArray(payload)) {
     return payload as SoulseekDownloadEntry[];

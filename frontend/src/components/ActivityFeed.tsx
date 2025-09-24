@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 
 const ACTIVITY_TYPE_LABELS = {
   sync: 'Synchronisierung',
+  autosync: 'AutoSync',
   search: 'Suche',
   download: 'Download',
   metadata: 'Metadaten',
@@ -18,6 +19,7 @@ type KnownActivityType = keyof typeof ACTIVITY_TYPE_LABELS;
 
 const ACTIVITY_TYPE_ICONS = {
   sync: '🔄',
+  autosync: '🤖',
   search: '🔍',
   download: '⬇',
   metadata: '🗂',
@@ -88,6 +90,13 @@ const getTypeLabel = (type: ActivityType) =>
 
 const getStatusMeta = (status: ActivityStatus) => {
   const normalized = status.toLowerCase();
+  if (normalized.endsWith('_blocked')) {
+    const blockedStyle = STATUS_STYLES.failed;
+    return {
+      label: 'Blockiert',
+      className: blockedStyle,
+    };
+  }
   if (isKnownStatus(normalized)) {
     return {
       label: STATUS_LABELS[normalized],
@@ -421,6 +430,7 @@ const renderActivitySummary = (item: ActivityItem) => {
   const normalizedStatus = String(item.status).toLowerCase();
   let icon: string = ACTIVITY_TYPE_ICONS[item.type as keyof typeof ACTIVITY_TYPE_ICONS] ?? 'ℹ️';
   let title = getTypeLabel(item.type);
+  const isBlockedStatus = normalizedStatus.endsWith('_blocked');
 
   if (item.type === 'worker') {
     const workerDetails = item.details as { worker?: unknown } | undefined;
@@ -432,6 +442,8 @@ const renderActivitySummary = (item: ActivityItem) => {
       icon = '🛠️';
     }
     title = workerName ? `Worker ${prettify(workerName)}` : getTypeLabel(item.type);
+  } else if (isBlockedStatus) {
+    icon = '⛔';
   }
 
   return (

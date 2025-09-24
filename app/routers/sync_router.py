@@ -7,17 +7,36 @@ from typing import Any, Dict, Iterable
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app import dependencies
+from app.db import session_scope
 from app.logging import get_logger
 from app.utils.activity import record_activity
+from app.utils.service_health import collect_missing_credentials
 from app.workers import AutoSyncWorker, PlaylistSyncWorker, ScanWorker
 
 router = APIRouter(prefix="/api", tags=["Sync"])
 logger = get_logger(__name__)
 
 
+REQUIRED_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")
+
+
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     """Run playlist and library synchronisation tasks on demand."""
+
+    missing = _missing_credentials()
+    if missing:
+        missing_payload = {service: list(values) for service, values in missing.items()}
+        logger.warning("Manual sync blocked due to missing credentials: %s", missing_payload)
+        record_activity(
+            "sync",
+            "sync_blocked",
+            details={"missing": missing_payload},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"message": "Sync blocked", "missing": missing_payload},
+        )
 
     playlist_worker = _get_playlist_worker(request)
     scan_worker = _get_scan_worker(request)
@@ -346,4 +365,9 @@ def _normalise_sources(sources: Any) -> set[str]:
     if isinstance(sources, Iterable):
         return {str(item).lower() for item in sources}
     return {"spotify", "plex", "soulseek"}
+
+
+def _missing_credentials() -> dict[str, tuple[str, ...]]:
+    with session_scope() as session:
+        return collect_missing_credentials(session, REQUIRED_SERVICES)
 

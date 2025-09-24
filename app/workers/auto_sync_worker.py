@@ -18,6 +18,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import AutoSyncSkippedTrack
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.service_health import collect_missing_credentials
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
@@ -144,6 +145,27 @@ class AutoSyncWorker:
             self._in_progress = True
             try:
                 start_time = time.perf_counter()
+                missing_credentials = self._missing_credentials()
+                if missing_credentials:
+                    missing_payload = {
+                        service: list(values) for service, values in missing_credentials.items()
+                    }
+                    logger.warning(
+                        "Auto sync blocked due to missing credentials: %s",
+                        ", ".join(
+                            f"{service}={values}" for service, values in missing_payload.items()
+                        ),
+                    )
+                    mark_worker_status("autosync", "blocked")
+                    record_activity(
+                        "autosync",
+                        "autosync_blocked",
+                        details={
+                            "trigger": source,
+                            "missing": missing_payload,
+                        },
+                    )
+                    return
                 sync_sources = ["spotify", "plex", "soulseek", "beets"]
                 record_activity(
                     "sync",
@@ -313,9 +335,13 @@ class AutoSyncWorker:
                     len(skipped),
                     ",".join(sorted(failures)) or "none",
                 )
-    
+
             finally:
                 self._in_progress = False
+
+    def _missing_credentials(self) -> dict[str, tuple[str, ...]]:
+        with session_scope() as session:
+            return collect_missing_credentials(session, REQUIRED_CREDENTIAL_SERVICES)
 
     def _collect_spotify_tracks(self) -> tuple[set[TrackInfo], int, int]:
         tracks: dict[tuple[str, str], TrackInfo] = {}
@@ -825,4 +851,6 @@ class AutoSyncWorker:
 
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("autosync")
+
+REQUIRED_CREDENTIAL_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")
 

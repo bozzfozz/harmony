@@ -4,6 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- AutoSync-, Sync- und Download-Aufrufe prüfen jetzt Credentials und erzeugen bei fehlender Konfiguration `*_blocked`-Events (inkl. 503-Antworten und UI-Toasts).
 - Improved Download Flow (auto-retry, priority queueing, status filters).
 - Added download export endpoint (CSV/JSON) with filters.
 - Frontend: Enhanced DownloadsPage with filters, priority controls and export buttons.

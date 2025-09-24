@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import select
+
 from sqlalchemy.orm import Session
 
 from app.models import Setting
@@ -104,9 +105,23 @@ def evaluate_all_service_health(session: Session) -> Mapping[str, ServiceHealth]
     }
 
 
+def collect_missing_credentials(
+    session: Session, services: Iterable[str]
+) -> dict[str, tuple[str, ...]]:
+    """Return missing required credentials for the given services."""
+
+    missing: dict[str, tuple[str, ...]] = {}
+    for service in services:
+        health = evaluate_service_health(session, service)
+        if health.missing:
+            missing[service] = tuple(health.missing)
+    return missing
+
+
 __all__ = [
     "ServiceDefinition",
     "ServiceHealth",
     "evaluate_service_health",
     "evaluate_all_service_health",
+    "collect_missing_credentials",
 ]

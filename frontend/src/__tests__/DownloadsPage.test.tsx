@@ -143,4 +143,23 @@ describe('DownloadsPage', () => {
     revokeSpy.mockRestore();
     createElementSpy.mockRestore();
   });
+
+  it('shows a blocked toast when the backend rejects download requests with 503', async () => {
+    mockedFetchDownloads.mockResolvedValue([]);
+    mockedStartDownload.mockRejectedValue({ isAxiosError: true, response: { status: 503 } } as never);
+
+    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+
+    const input = await screen.findByLabelText('Track-ID');
+    await userEvent.type(input, 'Song.mp3');
+
+    const submitButton = screen.getByRole('button', { name: 'Download starten' });
+    await userEvent.click(submitButton);
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Download blockiert' })
+      )
+    );
+  });
 });

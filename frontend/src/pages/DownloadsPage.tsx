@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -70,7 +71,15 @@ const DownloadsPage = () => {
       setTrackId('');
       void refetch();
     },
-    onError: () => {
+    onError: (error) => {
+      if (isAxiosError(error) && error.response?.status === 503) {
+        toast({
+          title: 'Download blockiert',
+          description: 'Bitte konfigurieren Sie den Soulseek-Zugang.',
+          variant: 'destructive'
+        });
+        return;
+      }
       toast({
         title: 'Download fehlgeschlagen',
         description: 'Bitte Eingabe prüfen und erneut versuchen.',

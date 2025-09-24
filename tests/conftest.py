@@ -23,6 +23,7 @@ from app.dependencies import (
 )
 from app.main import app
 from app.utils.activity import activity_manager
+from app.utils.settings_store import write_setting
 from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
 from tests.simple_client import SimpleTestClient
 
@@ -457,11 +458,23 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     reset_engine_for_tests()
-    db_path = Path("test.db")
-    if db_path.exists():
-        db_path.unlink()
+    for suffix in ("", "-journal", "-wal", "-shm"):
+        db_path = Path(f"test.db{suffix}")
+        if db_path.exists():
+            db_path.unlink()
     init_db()
+    write_setting("SPOTIFY_CLIENT_ID", "stub-client")
+    write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
+    write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
+    write_setting("PLEX_BASE_URL", "http://plex.local")
+    write_setting("PLEX_TOKEN", "token")
+    write_setting("SLSKD_URL", "http://localhost:5030")
     yield
+    reset_engine_for_tests()
+    for suffix in ("", "-journal", "-wal", "-shm"):
+        db_path = Path(f"test.db{suffix}")
+        if db_path.exists():
+            db_path.unlink()
 
 
 @pytest.fixture(autouse=True)

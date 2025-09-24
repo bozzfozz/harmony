@@ -119,11 +119,11 @@ POST /api/metadata/update HTTP/1.1
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
-| `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker. |
+| `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker (liefert `503` + `sync_blocked`, wenn Zugangsdaten fehlen). |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
 | `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset`, optional `?all=true` sowie Status-Filter `?status=queued|running|completed|failed|cancelled`. |
 | `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
-| `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
+| `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker (liefert `503` + `download_blocked` ohne Soulseek-Credentials). |
 | `PATCH` | `/api/download/{id}/priority` | Setzt die Priorität eines Downloads (höhere Werte werden bevorzugt verarbeitet). |
 | `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
 | `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
@@ -165,6 +165,8 @@ Event-Felder:
 | `sync_started` | Beginn eines manuellen oder automatischen Sync-Laufs inkl. Quellen. | `{"mode": "manual", "sources": ["spotify", "plex", "soulseek"]}` |
 | `sync_completed` | Abschluss eines Sync-Laufs mit Zählerwerten. | `{"trigger": "scheduled", "sources": ["spotify", "plex", "soulseek", "beets"], "counters": {"tracks_synced": 12, "tracks_skipped": 2, "errors": 1}}` |
 | `sync_partial` | Teil-Erfolg bei Sync, enthält Fehlerliste (z. B. pro Quelle). | `{"trigger": "scheduled", "errors": [{"source": "plex", "message": "plex offline"}]}` |
+| `autosync_blocked` | AutoSync wurde aufgrund fehlender Spotify/Plex/Soulseek-Credentials übersprungen. | `{"missing": {"spotify": ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"], "plex": ["PLEX_BASE_URL"], "soulseek": ["SLSKD_URL"]}}` |
+| `sync_blocked` | Manueller Sync wurde blockiert, weil mindestens eine Quelle keine gültigen Credentials besitzt. | `{"missing": {"plex": ["PLEX_TOKEN"]}}` |
 | `spotify_loaded` | Spotify-Daten für AutoSync geladen (Playlists/Saved Tracks). | `{"trigger": "scheduled", "playlists": 4, "tracks": 250, "saved_tracks": 40}` |
 | `plex_checked` | Plex-Bibliothek untersucht, Anzahl bekannter Tracks. | `{"trigger": "scheduled", "tracks": 230}` |
 | `downloads_requested` | Anzahl fehlender Titel, die Soulseek/Downloads benötigen. | `{"trigger": "scheduled", "count": 18}` |
@@ -180,6 +182,7 @@ Event-Felder:
 | `download_retry_scheduled` | Automatischer Wiederholungsversuch wurde geplant (inkl. Delay und Versuchszähler). | `{"downloads": [{"download_id": 87, "attempt": 1, "delay_seconds": 5}]}` |
 | `download_retry_completed` | Ein zuvor fehlgeschlagener Download wurde erfolgreich erneut eingereiht. | `{"downloads": [{"download_id": 87, "attempts": 2}]}` |
 | `download_retry_failed` | Nach allen Wiederholungen endgültig aufgegeben. Enthält Fehlermeldung. | `{"downloads": [{"download_id": 87, "attempts": 3}], "error": "timeout"}` |
+| `download_blocked` | Download-Request abgewiesen, da Soulseek nicht konfiguriert ist. | `{"missing": {"soulseek": ["SLSKD_URL"]}}` |
 
 ### Worker-Health-Events
 
@@ -359,6 +362,28 @@ GET /api/activity?limit=2 HTTP/1.1
 ```
 
 > **Hinweis:** Ein `POST /api/sync` Durchlauf stößt zusätzlich den neuen AutoSyncWorker an. Dieser prüft Spotify-Playlists und gespeicherte Tracks, lädt fehlende Songs über Soulseek und importiert sie via Beets, bevor Plex-Statistiken aktualisiert werden. Alle Schritte erscheinen im Activity Feed.
+>
+> Fehlen Spotify-, Plex- oder Soulseek-Zugangsdaten, antwortet der Endpunkt mit `503 Service Unavailable` und signalisiert den Block über das Activity-Event `sync_blocked`:
+>
+> ```http
+> HTTP/1.1 503 Service Unavailable
+> Content-Type: application/json
+> ```
+>
+> ```json
+> {
+>   "detail": {
+>     "message": "Sync blocked",
+>     "missing": {
+>       "spotify": ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"],
+>       "plex": ["PLEX_BASE_URL", "PLEX_TOKEN"],
+>       "soulseek": ["SLSKD_URL"]
+>     }
+>   }
+> }
+> ```
+>
+> Das Dashboard zeigt in diesem Fall ein rotes Toast **„Sync blockiert“**, sodass Operator:innen sofort sehen, dass zuerst Credentials hinterlegt werden müssen.
 
 **Download-Beispiel:**
 
@@ -388,6 +413,24 @@ GET /api/downloads HTTP/1.1
       "updated_at": "2024-03-18T12:00:00Z"
     }
   ]
+}
+```
+
+> **Hinweis:** Ohne hinterlegte Soulseek-Credentials beantwortet `POST /api/download` die Anfrage mit `503 Service Unavailable` und liefert das Activity-Event `download_blocked`. Das Frontend blendet dazu ein Toast **„Download blockiert“** ein, damit klar ist, dass zuerst die Soulseek-Anbindung konfiguriert werden muss.
+
+```http
+HTTP/1.1 503 Service Unavailable
+Content-Type: application/json
+```
+
+```json
+{
+  "detail": {
+    "message": "Download blocked",
+    "missing": {
+      "soulseek": ["SLSKD_URL"]
+    }
+  }
 }
 ```
 
