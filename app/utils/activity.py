@@ -5,9 +5,10 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
-from typing import Deque, Dict, Iterable, List, Literal, MutableMapping, Optional
+from typing import Deque, Dict, Iterable, List, MutableMapping, Optional
 
-ActivityType = Literal["sync", "search", "download", "metadata"]
+from app.db import session_scope
+from app.models import ActivityEvent
 
 
 @dataclass(frozen=True)
@@ -15,7 +16,7 @@ class ActivityEntry:
     """Immutable record representing a single activity entry."""
 
     timestamp: datetime
-    type: ActivityType
+    type: str
     status: str
     details: MutableMapping[str, object] = field(default_factory=dict)
 
@@ -38,55 +39,117 @@ class ActivityManager:
     def __init__(self, max_entries: int = 50) -> None:
         if max_entries <= 0:
             raise ValueError("max_entries must be positive")
+        self._max_entries = max_entries
         self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
+        self._cache_initialized = False
+
+    def _entry_from_event(self, event: ActivityEvent) -> ActivityEntry:
+        details: MutableMapping[str, object] = dict(event.details or {})
+        return ActivityEntry(
+            timestamp=event.timestamp,
+            type=event.type,
+            status=event.status,
+            details=details,
+        )
+
+    def refresh_cache(self) -> None:
+        """Reload the in-memory cache from the database."""
+
+        with session_scope() as session:
+            events = (
+                session.query(ActivityEvent)
+                .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+                .limit(self._max_entries)
+                .all()
+            )
+
+        entries = deque(
+            (self._entry_from_event(event) for event in events),
+            maxlen=self._max_entries,
+        )
+
+        with self._lock:
+            self._entries.clear()
+            self._entries.extend(entries)
+            self._cache_initialized = True
+
+    def _ensure_cache(self) -> None:
+        if not self._cache_initialized:
+            self.refresh_cache()
 
     def record(
         self,
         *,
-        action_type: ActivityType,
+        action_type: str,
         status: str,
         timestamp: Optional[datetime] = None,
         details: Optional[MutableMapping[str, object]] = None,
     ) -> ActivityEntry:
-        """Append a new entry to the feed and return it."""
+        """Append a new entry to the feed, persist it and return it."""
 
         details_payload: MutableMapping[str, object] = dict(details or {})
-        entry = ActivityEntry(
-            timestamp=timestamp or datetime.utcnow(),
+        event = ActivityEvent(
             type=action_type,
             status=status,
-            details=details_payload,
+            details=details_payload or None,
         )
+        if timestamp is not None:
+            event.timestamp = timestamp
+
+        with session_scope() as session:
+            session.add(event)
+
+        entry = self._entry_from_event(event)
+
         with self._lock:
             self._entries.appendleft(entry)
+            self._cache_initialized = True
+
         return entry
 
     def list(self) -> List[Dict[str, object]]:
-        """Return a copy of the stored entries in newest-first order."""
+        """Return a copy of the cached entries in newest-first order."""
 
+        self._ensure_cache()
         with self._lock:
             return [entry.as_dict() for entry in self._entries]
 
+    def fetch(self, *, limit: int = 50, offset: int = 0) -> List[Dict[str, object]]:
+        """Return entries directly from the database with paging support."""
+
+        with session_scope() as session:
+            events = (
+                session.query(ActivityEvent)
+                .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+
+        return [self._entry_from_event(event).as_dict() for event in events]
+
     def extend(self, entries: Iterable[ActivityEntry]) -> None:
-        """Insert multiple entries, preserving their order."""
+        """Insert multiple entries into the cache, preserving their order."""
 
         with self._lock:
             for entry in reversed(list(entries)):
                 self._entries.appendleft(entry)
+            self._cache_initialized = True
 
     def clear(self) -> None:
-        """Remove all stored entries."""
+        """Remove all cached entries without touching persistent storage."""
 
         with self._lock:
             self._entries.clear()
+            self._cache_initialized = True
 
 
 activity_manager = ActivityManager()
 
 
 def record_activity(
-    action_type: ActivityType,
+    action_type: str,
     status: str,
     *,
     timestamp: Optional[datetime] = None,

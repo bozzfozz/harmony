@@ -30,6 +30,7 @@ from app.routers import (
     soulseek_router,
     spotify_router,
 )
+from app.utils.activity import activity_manager
 from app.workers import (
     AutoSyncWorker,
     MatchingWorker,
@@ -63,6 +64,7 @@ async def startup_event() -> None:
     configure_logging(config.logging.level)
     init_db()
     logger.info("Database initialised")
+    activity_manager.refresh_cache()
 
     if os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}:
         soulseek_client = get_soulseek_client()

@@ -65,25 +65,43 @@ POST /api/metadata/update HTTP/1.1
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
 | `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
 | `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
-| `GET` | `/api/activity` | Liefert den In-Memory-Aktivitätsfeed (max. 50 Einträge). |
+| `GET` | `/api/activity` | Liefert den persistenten Aktivitätsfeed (default 50 Einträge, mit `limit`/`offset`). |
+
+**Activity Feed:**
+
+Unterstützte Query-Parameter:
+
+- `limit` (Default `50`, Maximum `500`): Anzahl der zurückgegebenen Events.
+- `offset` (Default `0`): Startindex für Paging.
+
+Event-Felder:
+
+- `timestamp` (`ISO 8601`, UTC, persistent gespeichert)
+- `type` (freies Stringfeld, z. B. `sync`, `matching`, `autosync`)
+- `status` (Status des Events, z. B. `completed`, `failed`, `queued`)
+- `details` (optional, JSON-Objekt mit Zusatzinformationen)
 
 **Beispiel:**
 
 ```http
-POST /api/search HTTP/1.1
-Content-Type: application/json
-
-{"query": "Daft Punk"}
+GET /api/activity?limit=2 HTTP/1.1
 ```
 
 ```json
-{
-  "query": "Daft Punk",
-  "results": {
-    "spotify": {"tracks": [...], "artists": [...], "albums": [...]},
-    "soulseek": {"results": ["Daft Punk"]}
+[
+  {
+    "timestamp": "2025-03-18T12:05:00Z",
+    "type": "autosync",
+    "status": "started",
+    "details": {"source": "playlist"}
+  },
+  {
+    "timestamp": "2025-03-18T11:57:30Z",
+    "type": "matching",
+    "status": "batch_saved",
+    "details": {"count": 15}
   }
-}
+]
 ```
 
 > **Hinweis:** Ein `POST /api/sync` Durchlauf stößt zusätzlich den neuen AutoSyncWorker an. Dieser prüft Spotify-Playlists und gespeicherte Tracks, lädt fehlende Songs über Soulseek und importiert sie via Beets, bevor Plex-Statistiken aktualisiert werden. Alle Schritte erscheinen im Activity Feed.

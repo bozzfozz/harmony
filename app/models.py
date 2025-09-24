@@ -85,6 +85,16 @@ class SettingHistory(Base):
     changed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class ActivityEvent(Base):
+    __tablename__ = "activity_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    type = Column(String(128), nullable=False)
+    status = Column(String(128), nullable=False)
+    details = Column(JSON, nullable=True)
+
+
 class ArtistPreference(Base):
     __tablename__ = "artist_preferences"
 

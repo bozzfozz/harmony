@@ -14,6 +14,7 @@ Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufend
 - **Fehlerhandling:**
   - Fehlschläge beim Download markieren die betroffenen DB-Einträge als `failed` und werden im Activity Feed dokumentiert.
   - Unerwartete Statuswerte oder Fortschritte werden korrigiert; Netzwerkfehler beim Status-Polling erzeugen Warnungen, der Worker bleibt aktiv.
+- **Activity Feed / Eventtypen:** Persistiert `download`-Events wie `queued`, `failed`, `download_cancelled` (inkl. Fehlergründen) sowie `sync_job_failed` aus dem Worker. Details enthalten Job-IDs oder beteiligte Nutzer:innen.
 
 ## MatchingWorker
 
@@ -25,6 +26,7 @@ Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufend
   - Nach jeder Charge entstehen Kennzahlen in der Settings-Tabelle (`metrics.matching.*`) sowie Activity-Einträge (`matching_batch`). Heartbeats stehen in `worker.matching.last_seen`.
 - **Fehlerhandling:**
   - Ungültige Jobs werden mit `invalid_payload` markiert. Laufzeitfehler erzeugen Activity-Logs und setzen den Jobstatus in der DB auf `failed`.
+- **Activity Feed / Eventtypen:** Nutzt den Typ `metadata` mit Statusmeldungen wie `matching_batch` (inkl. Batch-Größe, Treffer, Confidence) oder `matching_job_failed` bei Ausnahmen.
 
 ## ScanWorker
 
@@ -36,6 +38,7 @@ Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufend
   - Ergebnisse werden als Settings aktualisiert (`plex_*`) und mit Metriken versehen (`metrics.scan.interval`, `metrics.scan.duration_ms`). Heartbeats sowie Start/Stop-Zeitpunkte landen ebenfalls in der Settings-Tabelle.
 - **Fehlerhandling:**
   - Wiederholte Scan-Fehler werden gezählt; nach drei Versuchen erzeugt der Worker einen Activity-Eintrag `scan_failed`. Netzwerkfehler verhindern keine späteren Läufe.
+- **Activity Feed / Eventtypen:** Meldet über den Typ `metadata` kritische Zustände (`scan_failed`) inklusive Fehlermeldung und Fehlerzähler.
 
 ## AutoSyncWorker
 
@@ -49,6 +52,7 @@ Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufend
 - **Fehlerhandling & Logging:**
   - Spotify/Plex-Ausfälle beenden den Lauf mit `status="partial"`; Soulseek-Probleme werden granular unterschieden (Suchfehler, Qualitätsfilter, Download-/Importfehler) und im Activity Feed protokolliert.
   - Erfolgreiche Downloads löschen den Skip-State, damit spätere Läufe nicht hängen bleiben.
+- **Activity Feed / Eventtypen:** Schreibt ausführliche `sync`-Events wie `autosync_started`, `spotify_loaded`, `downloads_requested`, `partial` oder `completed` samt Kontext (`source`, `count`, `missing`). Ergänzende Details dokumentieren Plex-Updates (`plex_updated`) und Soulseek-/Beets-Ergebnisse.
 
 ## Zusammenspiel der Worker
 
