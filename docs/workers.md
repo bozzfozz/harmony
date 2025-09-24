@@ -1,6 +1,6 @@
 # Hintergrund-Worker
 
-Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufende Aufgaben außerhalb des Request-Kontexts zu bearbeiten. Die Worker verwenden asynchrone Tasks (`asyncio`) und greifen über `session_scope()` auf die Datenbank zu.
+Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufende Aufgaben außerhalb des Request-Kontexts zu bearbeiten. Die Worker verwenden asynchrone Tasks (`asyncio`) und greifen über `session_scope()` auf die Datenbank zu. Sämtliche Worker schreiben ihre Status- und Fortschrittsmeldungen als persistente Events in die Tabelle `activity_events`, sodass die Activity History auch nach Neustarts vollständig nachvollzogen werden kann.
 
 Alle workerrelevanten Settings werden beim Application-Startup automatisch mit Default-Werten befüllt (`sync_worker_concurrency`, `matching_worker_batch_size`, `autosync_min_bitrate`, `autosync_preferred_formats`). Dadurch stehen sinnvolle Parameter bereit, selbst wenn noch keine manuelle Konfiguration stattgefunden hat.
 

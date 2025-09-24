@@ -10,7 +10,9 @@ def test_activity_endpoint_returns_latest_entries(client) -> None:
     response = client.get("/api/activity")
     assert response.status_code == 200
 
-    entries = response.json()
+    payload = response.json()
+    entries = payload["items"]
+    assert payload["total_count"] == 2
     assert isinstance(entries, list)
     assert len(entries) == 2
     assert entries[0]["type"] == "search"
@@ -25,7 +27,9 @@ def test_activity_endpoint_limits_to_fifty_entries(client) -> None:
     response = client.get("/api/activity")
     assert response.status_code == 200
 
-    entries = response.json()
+    payload = response.json()
+    entries = payload["items"]
+    assert payload["total_count"] == 60
     assert len(entries) == 50
     assert entries[0]["details"]["index"] == 59
     assert entries[-1]["details"]["index"] == 10

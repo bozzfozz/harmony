@@ -195,6 +195,11 @@ export interface ActivityItem {
   details?: Record<string, unknown>;
 }
 
+export interface ActivityHistoryResponse {
+  items: ActivityItem[];
+  total_count: number;
+}
+
 export const fetchSettings = async (): Promise<SettingsResponse> => {
   const { data } = await api.get<SettingsResponse>('/settings');
   return data;
@@ -473,4 +478,44 @@ export const fetchActivityFeed = async (): Promise<ActivityItem[]> => {
     return normalizeActivityItems((data as { items: unknown[] }).items);
   }
   return [];
+};
+
+export const fetchActivityHistory = async (
+  limit = 50,
+  offset = 0,
+  type?: string,
+  status?: string
+): Promise<ActivityHistoryResponse> => {
+  const params: Record<string, number | string> = {};
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
+  const safeOffset = Math.max(Math.floor(offset), 0);
+  if (safeLimit) {
+    params.limit = safeLimit;
+  }
+  if (safeOffset) {
+    params.offset = safeOffset;
+  }
+  if (type) {
+    params.type = type;
+  }
+  if (status) {
+    params.status = status;
+  }
+
+  const { data } = await api.get('/api/activity', { params });
+  if (Array.isArray(data)) {
+    const items = normalizeActivityItems(data);
+    return { items, total_count: data.length };
+  }
+
+  const parsed = data as { items?: unknown[]; total_count?: unknown };
+  const items = Array.isArray(parsed.items) ? normalizeActivityItems(parsed.items) : [];
+  const totalCount =
+    typeof parsed.total_count === 'number'
+      ? parsed.total_count
+      : Array.isArray(parsed.items)
+        ? parsed.items.length
+        : items.length;
+
+  return { items, total_count: totalCount };
 };

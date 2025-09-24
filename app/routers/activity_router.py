@@ -1,7 +1,7 @@
 """Expose the Harmony activity feed as an API endpoint."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
@@ -12,17 +12,31 @@ router = APIRouter(prefix="/api", tags=["Activity"])
 logger = get_logger(__name__)
 
 
-@router.get("/activity", response_model=list[dict[str, Any]])
+@router.get(
+    "/activity",
+    response_model=dict[str, Any],
+)
 def list_activity(
-    limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)
-) -> List[Dict[str, Any]]:
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    type_filter: str | None = Query(None, alias="type"),
+    status_filter: str | None = Query(None, alias="status"),
+) -> Dict[str, Any]:
     """Return the most recent activity entries from persistent storage."""
 
-    entries = activity_manager.fetch(limit=limit, offset=offset)
+    items, total_count = activity_manager.fetch(
+        limit=limit,
+        offset=offset,
+        type_filter=type_filter,
+        status_filter=status_filter,
+    )
     logger.debug(
-        "Returning %d activity entries (limit=%d, offset=%d)",
-        len(entries),
+        "Returning %d activity entries (limit=%d, offset=%d, type=%s, status=%s) of %d",
+        len(items),
         limit,
         offset,
+        type_filter,
+        status_filter,
+        total_count,
     )
-    return entries
+    return {"items": items, "total_count": total_count}
