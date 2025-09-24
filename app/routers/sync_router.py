@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from app import dependencies
 from app.logging import get_logger
 from app.utils.activity import record_activity
-from app.workers import PlaylistSyncWorker, ScanWorker
+from app.workers import AutoSyncWorker, PlaylistSyncWorker, ScanWorker
 
 router = APIRouter(prefix="/api", tags=["Sync"])
 logger = get_logger(__name__)
@@ -21,6 +21,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
 
     playlist_worker = _get_playlist_worker(request)
     scan_worker = _get_scan_worker(request)
+    auto_worker = _get_auto_sync_worker(request)
 
     results: Dict[str, str] = {}
     errors: Dict[str, str] = {}
@@ -44,6 +45,16 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
             errors["library_scan"] = str(exc)
     else:
         errors["library_scan"] = "Scan worker unavailable"
+
+    if auto_worker is not None:
+        try:
+            await auto_worker.run_once(source="manual")
+            results["auto_sync"] = "completed"
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.exception("Auto sync failed: %s", exc)
+            errors["auto_sync"] = str(exc)
+    else:
+        errors["auto_sync"] = "AutoSync worker unavailable"
 
     response: Dict[str, Any] = {"message": "Sync triggered", "results": results}
     if errors:
@@ -140,6 +151,29 @@ def _get_scan_worker(request: Request) -> ScanWorker | None:
         return None
     worker = ScanWorker(plex_client)
     request.app.state.scan_worker = worker
+    return worker
+
+
+def _get_auto_sync_worker(request: Request) -> AutoSyncWorker | None:
+    worker = getattr(request.app.state, "auto_sync_worker", None)
+    if isinstance(worker, AutoSyncWorker):
+        return worker
+    try:
+        spotify_client = dependencies.get_spotify_client()
+        plex_client = dependencies.get_plex_client()
+        soulseek_client = dependencies.get_soulseek_client()
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Unable to initialise clients for auto sync: %s", exc)
+        return None
+    try:
+        from app.core.beets_client import BeetsClient  # local import to avoid heavy startup
+
+        beets_client = BeetsClient()
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Unable to initialise Beets client for auto sync: %s", exc)
+        return None
+    worker = AutoSyncWorker(spotify_client, plex_client, soulseek_client, beets_client)
+    request.app.state.auto_sync_worker = worker
     return worker
 
 

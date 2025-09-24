@@ -45,6 +45,22 @@ bearbeiten. Die Worker verwenden asynchrone Tasks (`asyncio`) und greifen über 
   - Netzwerkfehler werden geloggt und führen zu keinem Update.
   - Der Worker toleriert `asyncio.CancelledError`, wenn er beim Shutdown gestoppt wird.
 
+## AutoSyncWorker
+
+- **Pfad:** `app/workers/auto_sync_worker.py`
+- **Aufgabe:** Vergleicht täglich alle Spotify-Playlists und gespeicherten Tracks mit der Plex-Bibliothek, lädt fehlende Songs über Soulseek und importiert sie via Beets.
+- **Arbeitsweise:**
+  - Läuft standardmäßig alle 24 Stunden automatisch nach dem FastAPI-Startup (deaktivierbar über `HARMONY_DISABLE_WORKERS`).
+  - Sammelt Spotify-Daten (`get_user_playlists`, `get_playlist_items`, `get_saved_tracks`) und führt einen Abgleich mit Plex-Track-Metadaten (`get_libraries`, `get_library_items`).
+  - Für fehlende Titel wird eine Soulseek-Suche ausgelöst, der erste Treffer heruntergeladen und anschließend per `beet import` in die Bibliothek übernommen.
+  - Nach erfolgreichen Imports wird `get_library_statistics()` aufgerufen, um Plex zu aktualisieren; alle Schritte landen im Activity Feed (`autosync_started`, `spotify_loaded`, `downloads_requested`, ...).
+- **Fehlerhandling & Logging:**
+  - Spotify/Plex-Ausfälle beenden den Lauf mit `status="partial"`, ohne den Worker zu stoppen; die Ursache wird geloggt und im Activity Feed dokumentiert.
+  - Soulseek-Suchen ohne Ergebnis werden als `soulseek_no_results` markiert; Download- oder Importfehler führen zu Retries (3 Versuche mit wachsender Wartezeit).
+  - Jeder Schritt schreibt über den Standard-Logger (`get_logger(__name__)`) und Aktivitäten werden chronologisch erfasst.
+- **Manuelles Triggern:**
+  - Über `POST /api/sync` lässt sich der Worker ad-hoc starten; das `source`-Flag in den Activity-Details unterscheidet geplante (`scheduled`) und manuelle Läufe (`manual`).
+
 ## Zusammenspiel der Worker
 
 - Alle Worker werden in `app/main.py` initialisiert, sofern `HARMONY_DISABLE_WORKERS` nicht auf `1` gesetzt ist.

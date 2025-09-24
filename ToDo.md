@@ -7,5 +7,6 @@
 - [x] Aktivitätsfeed `/api/activity` als In-Memory-Queue bereitstellen.
 - [x] Downloads-Frontend mit Tabelle und Start-Formular bereitstellen.
 - [x] Activity-Feed-Widget im Dashboard mit Polling, Sortierung und Status-Badges finalisieren.
+- [x] AutoSyncWorker für Spotify↔Plex implementieren, Soulseek/Beets-Anbindung ergänzen und Dokumentation aktualisieren.
 - [ ] Streaming-Router für Audio-Features planen und implementieren (Frontend-Integration vorbereiten).
 - [ ] Frontend-Testlauf im CI wieder aktivieren, sobald npm-Registry-Zugriff verfügbar ist.
