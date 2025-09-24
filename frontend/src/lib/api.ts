@@ -110,6 +110,7 @@ export interface DownloadEntry {
   filename: string;
   status: string;
   progress: number;
+  created_at?: string;
 }
 
 export interface StartDownloadPayload {

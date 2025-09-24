@@ -60,6 +60,7 @@ POST /api/metadata/update HTTP/1.1
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist- und Bibliotheksabgleich. |
 | `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
+| `GET` | `/api/download` | Listet aktive Downloads inklusive Status, Fortschritt und Zeitstempel. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
 | `GET` | `/api/activity` | Liefert den In-Memory-Aktivitätsfeed (max. 50 Einträge). |
 
@@ -99,7 +100,13 @@ Content-Type: application/json
   "status": "queued",
   "download_id": 42,
   "downloads": [
-    {"id": 42, "filename": "Daft Punk - Harder.mp3", "state": "queued", "progress": 0.0}
+    {
+      "id": 42,
+      "filename": "Daft Punk - Harder.mp3",
+      "state": "queued",
+      "progress": 0.0,
+      "created_at": "2024-03-18T12:00:00Z"
+    }
   ]
 }
 ```
@@ -131,7 +138,7 @@ GET /api/activity HTTP/1.1
 
 ![Downloads-Verwaltung](downloads-page.svg)
 
-Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status und Fortschrittsbalken an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden.
+Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status, Fortschrittsbalken und Erstellungszeitpunkt an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen ("Keine Downloads aktiv") sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden.
 
 ![Activity-Feed-Widget](activity-feed-widget.svg)
 

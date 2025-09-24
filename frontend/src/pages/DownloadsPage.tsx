@@ -69,13 +69,18 @@ const DownloadsPage = () => {
     if (!trackId.trim()) {
       toast({
         title: 'Track-ID erforderlich',
-        description: 'Bitte geben Sie eine Datei- oder Track-ID an.',
+        description: 'Bitte Track oder Dateiname eingeben.',
         variant: 'destructive'
       });
       return;
     }
     void startDownloadMutation.mutate({ track_id: trackId.trim() });
   };
+
+  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }), []);
 
   const rows = useMemo(() => downloads ?? [], [downloads]);
 
@@ -93,7 +98,7 @@ const DownloadsPage = () => {
             <Input
               value={trackId}
               onChange={(event) => setTrackId(event.target.value)}
-              placeholder="Datei- oder Track-ID eingeben"
+              placeholder="Track oder Dateiname eingeben"
               aria-label="Track-ID"
             />
             <Button type="submit" disabled={startDownloadMutation.isPending}>
@@ -125,7 +130,7 @@ const DownloadsPage = () => {
           ) : isError ? (
             <p className="text-sm text-destructive">Downloads konnten nicht geladen werden.</p>
           ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Keine aktiven Downloads vorhanden.</p>
+            <p className="text-sm text-muted-foreground">Keine Downloads aktiv.</p>
           ) : (
             <div className="overflow-hidden rounded-lg border">
               <Table>
@@ -135,11 +140,15 @@ const DownloadsPage = () => {
                     <TableHead>Dateiname</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Fortschritt</TableHead>
+                    <TableHead>Angelegt</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((download) => {
                     const progressValue = mapProgressToPercent(download.progress);
+                    const createdAtLabel = download.created_at
+                      ? dateFormatter.format(new Date(download.created_at))
+                      : 'Unbekannt';
                     return (
                       <TableRow key={download.id}>
                         <TableCell className="text-sm text-muted-foreground">{download.id}</TableCell>
@@ -151,6 +160,7 @@ const DownloadsPage = () => {
                             <span className="text-xs text-muted-foreground">{progressValue}%</span>
                           </div>
                         </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{createdAtLabel}</TableCell>
                       </TableRow>
                     );
                   })}
