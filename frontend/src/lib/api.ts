@@ -174,7 +174,7 @@ export interface ArtistPreferencesResponse {
   preferences: ArtistPreferenceEntry[];
 }
 
-export type ActivityType = 'sync' | 'search' | 'download' | 'metadata' | (string & {});
+export type ActivityType = 'sync' | 'search' | 'download' | 'metadata' | 'worker' | (string & {});
 
 export type ActivityStatus =
   | 'queued'
@@ -182,6 +182,10 @@ export type ActivityStatus =
   | 'completed'
   | 'failed'
   | 'cancelled'
+  | 'started'
+  | 'stopped'
+  | 'stale'
+  | 'restarted'
   | (string & {});
 
 export interface ActivityItem {

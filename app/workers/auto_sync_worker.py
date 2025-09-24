@@ -17,7 +17,7 @@ from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import AutoSyncSkippedTrack
-from app.utils.activity import record_activity
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
@@ -102,6 +102,7 @@ class AutoSyncWorker:
             return
         self._running = True
         self._stop_event = asyncio.Event()
+        record_worker_started("autosync")
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
@@ -116,6 +117,7 @@ class AutoSyncWorker:
                 self._task = None
         write_setting("worker.autosync.last_stop", datetime.utcnow().isoformat())
         mark_worker_status("autosync", "stopped")
+        record_worker_stopped("autosync")
 
     async def run_once(self, *, source: str = "manual") -> None:
         await self._execute_sync(source=source)

@@ -59,7 +59,7 @@ Alle workerrelevanten Settings werden beim Application-Startup automatisch mit D
 
 ## Zusammenspiel der Worker
 
-- **Heartbeats & Monitoring:** Jeder Worker aktualisiert `worker:<name>:last_seen` und `worker:<name>:status` sowie Start-/Stop-Timestamps. Ergänzende Kennzahlen (z. B. `metrics.sync.jobs_completed`, `metrics.matching.saved_total`, `metrics.autosync.duration_ms`) dienen als Einstiegspunkt für externe Monitoring-Lösungen.
+- **Heartbeats & Monitoring:** Jeder Worker aktualisiert `worker:<name>:last_seen` und `worker:<name>:status` sowie Start-/Stop-Timestamps. Zusätzlich entstehen Activity-Feed-Ereignisse vom Typ `worker` (`started`, `stopped`, `stale`, `restarted`). Der `/status`-Endpoint markiert Worker automatisch als `stale`, sobald der letzte Heartbeat länger als 60 Sekunden zurückliegt, und erzeugt dabei ein passendes Activity-Event. Ergänzende Kennzahlen (z. B. `metrics.sync.jobs_completed`, `metrics.matching.saved_total`, `metrics.autosync.duration_ms`) dienen als Einstiegspunkt für externe Monitoring-Lösungen.
 - **Queue-Transparenz:**
   - `SyncWorker`: Queue-Größe basiert auf Downloads mit Status `queued` oder `downloading`.
   - `MatchingWorker`: Zählt Jobs in `worker_jobs` mit Status `queued` oder `running`.

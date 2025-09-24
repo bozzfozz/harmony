@@ -10,7 +10,7 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
-from app.utils.activity import record_activity
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.persistence import PersistentJobQueue, QueuedJob
@@ -71,6 +71,7 @@ class SyncWorker:
     async def start(self) -> None:
         if self._manager_task is not None and not self._manager_task.done():
             return
+        record_worker_started("sync")
         self._running.set()
         self._stop_event = asyncio.Event()
         self._manager_task = asyncio.create_task(self._run())
@@ -129,6 +130,7 @@ class SyncWorker:
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             self._running.clear()
             mark_worker_status("sync", "stopped")
+            record_worker_stopped("sync")
             logger.info("SyncWorker stopped")
 
     async def _worker_loop(self, index: int) -> None:
