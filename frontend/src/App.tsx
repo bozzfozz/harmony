@@ -10,6 +10,7 @@ import BeetsPage from './pages/BeetsPage';
 import DownloadsPage from './pages/DownloadsPage';
 import { ThemeProvider } from './components/theme-provider';
 import ToastProvider from './components/ToastProvider';
+import ArtistsPage from './pages/ArtistsPage';
 
 const App = () => (
   <ThemeProvider>
@@ -19,6 +20,7 @@ const App = () => (
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/spotify" element={<SpotifyPage />} />
+          <Route path="/artists" element={<ArtistsPage />} />
           <Route path="/plex" element={<PlexPage />} />
           <Route path="/soulseek" element={<SoulseekPage />} />
           <Route path="/downloads" element={<DownloadsPage />} />
