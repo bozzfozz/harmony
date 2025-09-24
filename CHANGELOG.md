@@ -4,6 +4,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 
 ## [Unreleased]
 ### Added
+- Added automatic defaults for worker-related settings at startup.
 - Added persistent Activity Feed with flexible event types.
 - Frontend: Cancel-/Retry-Buttons für Downloads (Downloads-Seite & Dashboard-Widget).
 - Added cancel and retry endpoints for downloads via slskd TransfersApi.
