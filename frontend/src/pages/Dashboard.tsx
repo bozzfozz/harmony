@@ -7,6 +7,7 @@ import {
   CardTitle
 } from '../components/ui/card';
 import ActivityFeed from '../components/ActivityFeed';
+import DownloadWidget from '../components/DownloadWidget';
 import { useToast } from '../hooks/useToast';
 import { useQuery } from '../lib/query';
 import {
@@ -224,7 +225,10 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      <ActivityFeed />
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+        <ActivityFeed />
+        <DownloadWidget />
+      </div>
 
       <Card>
         <CardHeader>

@@ -8,19 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useToast } from '../hooks/useToast';
 import { fetchActiveDownloads, startDownload, DownloadEntry } from '../lib/api';
 import { useMutation, useQuery } from '../lib/query';
-
-const mapProgressToPercent = (value: number) => {
-  if (value < 0) {
-    return 0;
-  }
-  if (value <= 1) {
-    return Math.round(value * 100);
-  }
-  if (value <= 100) {
-    return Math.round(value);
-  }
-  return 100;
-};
+import { mapProgressToPercent } from '../lib/utils';
 
 const DownloadsPage = () => {
   const { toast } = useToast();
