@@ -12,6 +12,7 @@ Alle workerrelevanten Settings werden beim Application-Startup automatisch mit D
   - Jobs werden in der Tabelle `worker_jobs` persistiert und beim Start wieder eingereiht. Angefangene Downloads überstehen dadurch Neustarts.
   - Mehrere Worker-Tasks ziehen parallel Jobs aus der Queue. Die Parallelität ist über Setting/ENV (`sync_worker_concurrency` bzw. `SYNC_WORKER_CONCURRENCY`) konfigurierbar.
   - Die Queue ist priorisiert: höhere `Download.priority`-Werte werden zuerst abgearbeitet (automatisch vergeben für Spotify-Likes, manuell via API/UI anpassbar).
+  - Änderungen über `PATCH /api/download/{id}/priority` aktualisieren nun auch die persistierten Worker-Jobs. Befindet sich ein Job noch im Zustand `queued` oder `retrying`, wird er mit der neuen Priorität erneut eingereiht – inklusive geplanter Retries.
   - Ein separater Poll-Loop ruft `refresh_downloads()` auf. Läuft kein aktiver Download, wird das Polling-Intervall automatisch auf den Idle-Wert hochgesetzt.
   - Health-/Monitoring-Informationen landen in der Settings-Tabelle (`worker:sync:last_seen`, `worker:sync:status`, `metrics.sync.*`).
 - **Fehlerhandling:**
