@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 
@@ -53,6 +54,23 @@ class Download(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+    @property
+    def job_id(self) -> Optional[str]:
+        payload = self.request_payload or {}
+        job_identifier = payload.get("job_id")
+        if job_identifier is None:
+            return None
+        return str(job_identifier)
+
+    @job_id.setter
+    def job_id(self, value: Optional[str]) -> None:
+        payload = dict(self.request_payload or {})
+        if value is None:
+            payload.pop("job_id", None)
+        else:
+            payload["job_id"] = str(value)
+        self.request_payload = payload
 
 
 class Match(Base):

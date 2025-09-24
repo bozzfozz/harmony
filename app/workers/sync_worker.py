@@ -116,6 +116,31 @@ class SyncWorker:
         """Submit a download job for processing."""
 
         record = self._job_store.enqueue(job)
+        job_identifier = str(record.id)
+        files = job.get("files", [])
+        if files:
+            now = datetime.utcnow()
+            with session_scope() as session:
+                for file_info in files:
+                    identifier = file_info.get("download_id") or file_info.get("id")
+                    try:
+                        download_id = int(identifier)
+                    except (TypeError, ValueError):
+                        continue
+                    download = session.get(Download, download_id)
+                    if download is None:
+                        continue
+                    download.job_id = job_identifier
+                    payload = dict(download.request_payload or {})
+                    file_priority = self._extract_file_priority(file_info)
+                    if not file_priority:
+                        file_priority = self._coerce_priority(job.get("priority"))
+                    if not file_priority:
+                        file_priority = self._coerce_priority(download.priority)
+                    payload["priority"] = file_priority
+                    download.request_payload = payload
+                    download.updated_at = now
+
         if self.is_running():
             await self._put_job(record)
             return

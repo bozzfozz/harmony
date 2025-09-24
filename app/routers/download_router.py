@@ -22,6 +22,7 @@ from app.schemas import (
     SoulseekDownloadRequest,
 )
 from app.utils.activity import record_activity
+from app.workers.persistence import PersistentJobQueue
 
 router = APIRouter(prefix="/api", tags=["Download"])
 logger = get_logger(__name__)
@@ -247,16 +248,31 @@ def update_download_priority(
     if download is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Download not found")
 
-    download.priority = int(payload.priority)
+    new_priority = int(payload.priority)
+    download.priority = new_priority
     download.updated_at = datetime.utcnow()
+    payload_copy = dict(download.request_payload or {})
+    payload_copy["priority"] = new_priority
+    download.request_payload = payload_copy
     session.add(download)
     session.commit()
 
-    logger.debug(
+    logger.info(
         "Updated priority for download %s to %s",
         download_id,
-        download.priority,
+        new_priority,
     )
+
+    job_id = download.job_id
+    if job_id:
+        queue = PersistentJobQueue("sync")
+        if not queue.update_priority(job_id, new_priority):
+            logger.error(
+                "Failed to update worker job priority for download %s (job %s)",
+                download_id,
+                job_id,
+            )
+
     return DownloadEntryResponse.model_validate(download)
 
 

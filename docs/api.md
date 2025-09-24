@@ -503,6 +503,8 @@ Content-Type: application/json
 
 Höhere Prioritäten werden vom SyncWorker bevorzugt verarbeitet. Werte größer als die Standardeinstellung `0` sorgen dafür, dass entsprechende Downloads früher in die Soulseek-Queue gelangen – ideal für favorisierte Spotify-Tracks oder manuell dringliche Jobs.
 
+Der Endpunkt synchronisiert die neue Priorität zusätzlich mit allen zugehörigen Worker-Jobs (`worker_jobs`). Liegt der Job noch in der Queue (`queued` oder `retrying`), wird er mit der aktualisierten Priorität erneut eingereiht und beeinflusst damit sofort das Scheduling – inklusive eventuell geplanter Retries. So bleibt die Worker-Priorisierung konsistent mit den in der Datenbank gespeicherten Downloadwerten.
+
 **Download-Start:**
 
 ```http

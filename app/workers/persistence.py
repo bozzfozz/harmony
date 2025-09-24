@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.db import session_scope
 from app.models import WorkerJob
+from app.logging import get_logger
 
 
 def _extract_priority(payload: dict) -> int:
@@ -17,6 +18,9 @@ def _extract_priority(payload: dict) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -136,3 +140,60 @@ class PersistentJobQueue:
             for job in jobs:
                 job.state = "queued"
                 job.updated_at = now
+
+    def update_priority(self, job_id: str, priority: int) -> bool:
+        try:
+            identifier = int(job_id)
+        except (TypeError, ValueError):
+            logger.error(
+                "Invalid job id %s supplied for priority update on worker %s",
+                job_id,
+                self._worker,
+            )
+            return False
+
+        with session_scope() as session:
+            job = session.get(WorkerJob, identifier)
+            if job is None or job.worker != self._worker:
+                logger.error(
+                    "Worker job %s not found for worker %s during priority update",
+                    job_id,
+                    self._worker,
+                )
+                return False
+
+            if job.state not in {"queued", "retrying"}:
+                logger.error(
+                    "Cannot update priority for job %s in state %s", job_id, job.state
+                )
+                return False
+
+            payload = dict(job.payload or {})
+            payload["priority"] = int(priority)
+
+            files = payload.get("files")
+            if isinstance(files, list):
+                updated_files: List[dict] = []
+                for file_info in files:
+                    if isinstance(file_info, dict):
+                        updated = dict(file_info)
+                        updated["priority"] = int(priority)
+                        updated_files.append(updated)
+                    else:
+                        updated_files.append(file_info)
+                payload["files"] = updated_files
+
+            job.payload = payload
+            job_priority = _extract_priority(payload)
+            now = datetime.utcnow()
+            job.updated_at = now
+            job.scheduled_at = now
+            job.state = "queued"
+
+        logger.info(
+            "Updated priority for job %s on worker %s to %s",
+            job_id,
+            self._worker,
+            job_priority,
+        )
+        return True

@@ -34,6 +34,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Added optional persistence for album matching (`persist=true` on `/matching/spotify-to-plex-album`).
 
 ### Changed
+- PATCH `/api/download/{id}/priority` synchronises worker job priorities and reschedules queued/retrying tasks.
 - Download widgets filter out completed/cancelled items and expose priority labels.
 - Frontend: DownloadsPage nutzt jetzt `GET /api/downloads` für die Download-Übersicht.
 - Dashboard-Aktivitätsfeed mit lokalisierten Typen, sortierten Einträgen und farbcodierten Status-Badges verfeinert.
