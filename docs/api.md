@@ -212,6 +212,8 @@ DELETE /api/download/42 HTTP/1.1
 
 Harmony ruft bei jedem Abbruch die slskd-TransfersApi (`DELETE /transfers/downloads/{id}`) auf. Erst wenn der Daemon die Anfrage bestätigt, wird der Download in der Datenbank als `cancelled` markiert und der Activity Feed um einen Eintrag `download_cancelled` mit `download_id` und `filename` ergänzt. Sollte der Daemon nicht erreichbar sein, antwortet der Endpunkt mit `502 Bad Gateway` und der Status in der Datenbank bleibt unverändert.
 
+> **Frontend-Beispiel:** Auf der Downloads-Seite steht jetzt pro aktivem Job ein Button **Abbrechen** zur Verfügung. Nach dem Klick ruft das Frontend `DELETE /api/download/{id}` auf, zeigt ein Erfolgstoast an und lädt die Tabelle automatisch neu, sodass der Status in der UI unmittelbar auf „Cancelled“ springt (siehe aktualisierte Abbildung unten).
+
 **Download-Start:**
 
 ```http
@@ -255,6 +257,8 @@ POST /api/download/42/retry HTTP/1.1
 ```
 
 Der Endpunkt akzeptiert nur Downloads im Status `failed` oder `cancelled`. Vor dem erneuten Start wird der ursprüngliche Job über `TransfersApi.cancel_download` beendet, anschließend werden `username`, `filename` und `filesize` erneut via `TransfersApi.enqueue` eingereiht. Dadurch entsteht ein neuer Download-Datensatz mit eigener ID, der Activity Feed erhält einen Eintrag `download_retried` mit `original_download_id`, `retry_download_id` und `filename`. Wenn slskd nicht erreichbar ist, wird der Vorgang mit `502 Bad Gateway` abgebrochen und kein neuer Datensatz erzeugt.
+
+> **Frontend-Beispiel:** Fehlgeschlagene oder abgebrochene Transfers besitzen den Button **Neu starten**. Nach `POST /api/download/{id}/retry` erscheint der neue Job (inkl. neuer ID) sofort wieder in der Übersicht und im Dashboard-Widget, damit Operatorinnen Retries ohne manuelle API-Aufrufe auslösen können.
 
 ## Download-Widget im Dashboard
 
@@ -300,7 +304,7 @@ GET /api/activity HTTP/1.1
 
 ![Downloads-Verwaltung](downloads-page.svg)
 
-Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status, Fortschrittsbalken und Erstellungszeitpunkt an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen ("Keine Downloads aktiv") sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden. Zusätzlich stehen pro Zeile Buttons zum sofortigen Abbrechen laufender Jobs sowie zum erneuten Start fehlgeschlagener oder abgebrochener Transfers bereit.
+Die neue Downloads-Seite im Harmony-Frontend ermöglicht das Starten von Test-Downloads über eine beliebige Datei- oder Track-ID und zeigt aktive Transfers inklusive Status, Fortschrittsbalken und Erstellungszeitpunkt an. Über Tailwind- und shadcn/ui-Komponenten werden Ladezustände, Leerlaufmeldungen ("Keine Downloads aktiv") sowie Fehler-Toasts konsistent dargestellt. Jeder erfolgreich gestartete Download löst eine Bestätigungsmeldung aus, während fehlgeschlagene Anfragen klar hervorgehoben werden. Pro Zeile stehen nun deutlich sichtbare Buttons zum sofortigen Abbrechen laufender Jobs sowie zum erneuten Start fehlgeschlagener oder abgebrochener Transfers bereit – die UI bestätigt erfolgreiche Aktionen per Toast und aktualisiert die Tabelle automatisch.
 
 ![Activity-Feed-Widget](activity-feed-widget.svg)
 
