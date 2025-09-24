@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass, asdict
 from datetime import datetime
 from threading import Lock
-from typing import Deque, Dict, Iterable, List, MutableMapping, Optional
+from typing import Any, Deque, Dict, Iterable, List, MutableMapping, Optional
 
 from app.db import session_scope
 from app.models import ActivityEvent
@@ -88,7 +88,7 @@ class ActivityManager:
     ) -> ActivityEntry:
         """Append a new entry to the feed, persist it and return it."""
 
-        details_payload: MutableMapping[str, object] = dict(details or {})
+        details_payload: MutableMapping[str, object] = _serialise_details(details)
         event = ActivityEvent(
             type=action_type,
             status=status,
@@ -143,6 +143,32 @@ class ActivityManager:
         with self._lock:
             self._entries.clear()
             self._cache_initialized = True
+
+
+def _serialise_details(details: Optional[MutableMapping[str, object]] | None) -> MutableMapping[str, object]:
+    """Normalise detail payloads so they can be stored as JSON."""
+
+    def _convert(value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return {str(key): _convert(val) for key, val in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_convert(item) for item in value]
+        if isinstance(value, set):
+            return sorted(_convert(item) for item in value)
+        if isinstance(value, datetime):
+            return value.isoformat() + "Z"
+        if is_dataclass(value):
+            return _convert(asdict(value))
+        converter = getattr(value, "as_dict", None)
+        if callable(converter):
+            return _convert(converter())
+        return str(value)
+
+    if not details:
+        return {}
+    return {str(key): _convert(val) for key, val in details.items()}
 
 
 activity_manager = ActivityManager()

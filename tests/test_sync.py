@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.utils.activity import activity_manager
 from app.workers import PlaylistSyncWorker, ScanWorker
 
 
@@ -21,6 +22,29 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
     assert body["results"]["playlists"] == "completed"
     assert body["results"]["library_scan"] == "completed"
     assert calls == {"playlist": 1, "scan": 1}
+
+    entries = activity_manager.list()
+    manual_started = next(
+        (
+            entry
+            for entry in entries
+            if entry["status"] == "sync_started" and entry.get("details", {}).get("mode") == "manual"
+        ),
+        None,
+    )
+    assert manual_started is not None
+    manual_completed = next(
+        (
+            entry
+            for entry in entries
+            if entry["status"] == "sync_completed"
+            and entry.get("details", {}).get("mode") == "manual"
+        ),
+        None,
+    )
+    assert manual_completed is not None
+    counters = manual_completed["details"]["counters"]
+    assert counters == {"tracks_synced": 0, "tracks_skipped": 0, "errors": 0}
 
 
 def test_search_requires_query(client) -> None:

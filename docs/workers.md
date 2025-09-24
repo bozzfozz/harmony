@@ -55,7 +55,7 @@ Alle workerrelevanten Settings werden beim Application-Startup automatisch mit D
 - **Fehlerhandling & Logging:**
   - Spotify/Plex-Ausfälle beenden den Lauf mit `status="partial"`; Soulseek-Probleme werden granular unterschieden (Suchfehler, Qualitätsfilter, Download-/Importfehler) und im Activity Feed protokolliert.
   - Erfolgreiche Downloads löschen den Skip-State, damit spätere Läufe nicht hängen bleiben.
-- **Activity Feed / Eventtypen:** Schreibt ausführliche `sync`-Events wie `autosync_started`, `spotify_loaded`, `downloads_requested`, `partial` oder `completed` samt Kontext (`source`, `count`, `missing`). Ergänzende Details dokumentieren Plex-Updates (`plex_updated`) und Soulseek-/Beets-Ergebnisse.
+- **Activity Feed / Eventtypen:** Dokumentiert jeden Lauf mit `sync_started` → `sync_completed` (inkl. `counters` für synchronisierte/übersprungene Tracks). Zwischenstände kommen als `spotify_loaded`, `plex_checked`, `downloads_requested` und `beets_imported`. Bei Fehlern erscheint zusätzlich `sync_partial` mit Fehlerliste; Soulseek-/Plex-Sonderfälle werden weiterhin separat geloggt (`soulseek_no_results`, `plex_update_failed`, ...).
 
 ## Zusammenspiel der Worker
 
