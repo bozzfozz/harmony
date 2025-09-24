@@ -88,14 +88,27 @@ POST /api/metadata/update HTTP/1.1
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker. |
 | `DELETE` | `/api/download/{id}` | Bricht einen laufenden Download ab und markiert ihn als `cancelled`. |
 | `POST` | `/api/download/{id}/retry` | Startet einen neuen Transfer für fehlgeschlagene oder abgebrochene Downloads. |
-| `GET` | `/api/activity` | Liefert den persistenten Aktivitätsfeed (default 50 Einträge, mit `limit`/`offset`). |
+| `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 
-**Activity Feed:**
+**Activity Feed / Activity History:**
 
 Unterstützte Query-Parameter:
 
-- `limit` (Default `50`, Maximum `500`): Anzahl der zurückgegebenen Events.
+- `limit` (Default `50`, Maximum `200`): Anzahl der zurückgegebenen Events pro Seite.
 - `offset` (Default `0`): Startindex für Paging.
+- `type` (optional): Filtert nach Eventtyp (`sync`, `download`, `search`, `metadata`, `worker`).
+- `status` (optional): Filtert nach Statuswert (z. B. `ok`, `failed`, `partial`).
+
+Antwortstruktur:
+
+```json
+{
+  "items": [
+    {"timestamp": "2025-03-18T12:15:00Z", "type": "sync", "status": "completed", "details": {"runs": 2}}
+  ],
+  "total_count": 128
+}
+```
 
 Event-Felder:
 
@@ -198,6 +211,24 @@ Event-Felder:
 ![Activity-Feed-Widget](activity-feed-widget.svg)
 
 Das Dashboard zeigt Worker-Events mit farbcodierten Status-Badges (grün = started, grau = stopped, gelb = stale, blau = restarted) und passenden Icons (▶️, ⏹, ⚠️, 🔄). Dadurch lassen sich Health-Änderungen der Worker sofort nachvollziehen.
+
+**Activity-History-Seite (Frontend-Beispiel):**
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│ Activity History                                           │
+│ Typ: [Alle Typen v]  Status: [Alle Stati v]                │
+│ ---------------------------------------------------------- │
+│ Timestamp           │ Typ      │ Status   │ Details        │
+│ 18.03.2025 13:15:42 │ sync     │ completed│ {"runs": 2}    │
+│ 18.03.2025 13:14:10 │ download │ failed   │ {"id": 42}    │
+│ 18.03.2025 13:13:01 │ worker   │ started  │ {"worker":"sync"}
+│ ...                                                      │
+│ Seite 1 von 7  [Zurück] [Weiter]                          │
+└────────────────────────────────────────────────────────────┘
+```
+
+Die dedizierte Seite nutzt dieselben Events aus `/api/activity`, zeigt jedoch die vollständige History mit Paging, Dropdown-Filtern und JSON-Details in einer Tabelle an.
 
 Neben diesen Health-Meldungen visualisiert das Dashboard weiterhin Quellen, Kennzahlen (z. B. `tracks_synced`) sowie Trefferzahlen pro Quelle direkt im ActivityFeed-Widget. Fehlerlisten werden rot markiert und als Tooltip hinterlegt.
 

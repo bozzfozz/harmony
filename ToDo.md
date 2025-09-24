@@ -13,6 +13,8 @@
 - [x] Frontend: ActivityFeed-Widget zeigt detaillierte Sync- und Search-Events mit Quellen & Kennzahlen an.
 - [x] Worker-Health-Events im Activity Feed persistieren und dokumentieren.
 - [x] Frontend: ActivityFeed-Widget visualisiert Worker-Events mit Icons und Health-Farben.
+- [x] Persistente Activity History mit Paging- und Filter-Endpunkt bereitstellen.
+- [x] Frontend: Activity-History-Seite mit Tabelle, Paging und Filtern ergänzen.
 - [x] Cancel-/Retry-Buttons im Frontend (DownloadsPage & DownloadWidget) inkl. Tests & Dokumentation ergänzen.
 - [x] AutoSyncWorker für Spotify↔Plex implementieren, Soulseek/Beets-Anbindung ergänzen und Dokumentation aktualisieren.
 - [x] Artist-Konfiguration für Spotify-Releases (API, DB, AutoSync) umsetzen.

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Deque, Dict, Iterable, List, MutableMapping, Optional, Literal
 
+from sqlalchemy import func
+
 from app.db import session_scope
 from app.models import ActivityEvent
 from app.utils.worker_health import read_worker_status
@@ -116,19 +118,40 @@ class ActivityManager:
         with self._lock:
             return [entry.as_dict() for entry in self._entries]
 
-    def fetch(self, *, limit: int = 50, offset: int = 0) -> List[Dict[str, object]]:
-        """Return entries directly from the database with paging support."""
+    def fetch(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        type_filter: Optional[str] = None,
+        status_filter: Optional[str] = None,
+    ) -> tuple[List[Dict[str, object]], int]:
+        """Return entries directly from the database with paging/filter support."""
+
+        filters = []
+        if type_filter:
+            filters.append(ActivityEvent.type == type_filter)
+        if status_filter:
+            filters.append(ActivityEvent.status == status_filter)
 
         with session_scope() as session:
+            total = (
+                session.query(func.count(ActivityEvent.id))
+                .filter(*filters)
+                .scalar()
+            ) or 0
+
             events = (
                 session.query(ActivityEvent)
+                .filter(*filters)
                 .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
             )
 
-        return [self._entry_from_event(event).as_dict() for event in events]
+        entries = [self._entry_from_event(event).as_dict() for event in events]
+        return entries, int(total)
 
     def extend(self, entries: Iterable[ActivityEntry]) -> None:
         """Insert multiple entries into the cache, preserving their order."""

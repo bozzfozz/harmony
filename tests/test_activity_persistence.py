@@ -36,11 +36,13 @@ def test_activity_endpoint_supports_paging(client) -> None:
     response = client.get("/api/activity", params={"limit": 10, "offset": 5})
     assert response.status_code == 200
 
-    entries = response.json()
+    payload = response.json()
+    entries = payload["items"]
+    assert payload["total_count"] == 30
     assert len(entries) == 10
 
     returned_indices = [entry["details"]["index"] for entry in entries]
-    expected_indices = list(range(30 - 5 - 1, 30 - 5 - 10 - 1, -1))
+    expected_indices = list(range(29 - 5, 29 - 5 - 10, -1))
     assert returned_indices == expected_indices
 
 
@@ -50,7 +52,9 @@ def test_activity_accepts_flexible_types(client) -> None:
     response = client.get("/api/activity")
     assert response.status_code == 200
 
-    entries = response.json()
+    payload = response.json()
+    entries = payload["items"]
+    assert payload["total_count"] >= 1
     assert entries
     assert entries[0]["type"] == "autosync"
     assert entries[0]["details"]["source"] == "playlist"
