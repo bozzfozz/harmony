@@ -11,6 +11,11 @@
 - [x] Sammel-Retry für fehlgeschlagene Downloads auf der Downloads-Seite ergänzt.
 
 ## Offen
+- [ ] Smart-Search um Filter für Genre, Jahr und Qualitätsanforderungen erweitern und die zugehörigen Tests ergänzen.
+- [ ] Download-Workflow für vollständige Künstler-Diskografien inkl. Ordnerstruktur bzw. DB-Kategorisierung und Fortschrittsanzeige implementieren.
+- [ ] Metadaten-Pipeline aufbauen, die Genre/Komponist/Produzent/ISRC/Copyright sowohl in der Datenbank als auch in Dateien persistiert und mit Beets/Tagger integriert.
+- [ ] Unterstützung für hochauflösende Album-Cover im Spotify- und Soulseek-Flow hinzufügen.
+- [ ] Spotify-Alben-Synchronisierung inklusive `/spotify/albums`-Endpoint bereitstellen.
 - [ ] Integrationstests für globale API-Fehler (401/403/503) inklusive Redirect-Checks ergänzen.
 - [ ] `npm run test` auf reale Testausführung (Jest/Vitest) umstellen.
 - [ ] Accessibility-Audit der vier Kernseiten (Keyboard-Navigation, ARIA, Farbkontrast) durchführen.
