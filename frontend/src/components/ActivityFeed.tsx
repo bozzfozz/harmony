@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useToast } from '../hooks/useToast';
-import { fetchActivityFeed, ActivityItem, ActivityStatus, ActivityType } from '../lib/api';
+import { ApiError, getActivityFeed, ActivityItem, ActivityStatus, ActivityType } from '../lib/api';
 import { useQuery } from '../lib/query';
 import { cn } from '../lib/utils';
 
@@ -11,8 +11,14 @@ const ACTIVITY_TYPE_LABELS = {
   autosync: 'AutoSync',
   search: 'Suche',
   download: 'Download',
+  download_retry: 'Download-Wiederholung',
+  download_retry_scheduled: 'Download-Wiederholung geplant',
+  download_retry_failed: 'Download-Wiederholung fehlgeschlagen',
   metadata: 'Metadaten',
-  worker: 'Worker'
+  worker: 'Worker',
+  worker_started: 'Worker gestartet',
+  worker_stopped: 'Worker gestoppt',
+  worker_blocked: 'Worker blockiert'
 } as const satisfies Record<string, string>;
 
 type KnownActivityType = keyof typeof ACTIVITY_TYPE_LABELS;
@@ -22,8 +28,14 @@ const ACTIVITY_TYPE_ICONS = {
   autosync: '🤖',
   search: '🔍',
   download: '⬇',
+  download_retry: '🔁',
+  download_retry_scheduled: '⏱️',
+  download_retry_failed: '⛔',
   metadata: '🗂',
-  worker: '🛠️'
+  worker: '🛠️',
+  worker_started: '▶️',
+  worker_stopped: '⏹',
+  worker_blocked: '⚠️'
 } as const satisfies Record<string, string>;
 
 const STATUS_STYLES = {
@@ -85,8 +97,22 @@ const prettify = (value: string) => {
     .join(' ');
 };
 
-const getTypeLabel = (type: ActivityType) =>
-  isKnownActivityType(type) ? ACTIVITY_TYPE_LABELS[type] : prettify(type);
+const getTypeLabel = (type: ActivityType) => {
+  if (isKnownActivityType(type)) {
+    return ACTIVITY_TYPE_LABELS[type];
+  }
+  if (type.endsWith('_blocked')) {
+    const base = type.replace(/_blocked$/, '');
+    return `${prettify(base)} blockiert`;
+  }
+  if (type.startsWith('worker_')) {
+    return `Worker ${prettify(type.replace(/^worker_/, ''))}`;
+  }
+  if (type.startsWith('download_')) {
+    return `Download ${prettify(type.replace(/^download_/, ''))}`;
+  }
+  return prettify(type);
+};
 
 const getStatusMeta = (status: ActivityStatus) => {
   const normalized = status.toLowerCase();
@@ -468,14 +494,21 @@ const ActivityFeed = () => {
 
   const { data, isLoading, isError } = useQuery<ActivityItem[]>({
     queryKey: ['activity-feed'],
-    queryFn: fetchActivityFeed,
+    queryFn: getActivityFeed,
     refetchInterval: 10000,
-    onError: () =>
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Aktivitäten konnten nicht geladen werden',
         description: 'Bitte prüfen Sie die Backend-Verbindung.',
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   useEffect(() => {

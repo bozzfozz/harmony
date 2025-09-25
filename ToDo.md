@@ -1,36 +1,16 @@
 # ToDo
 
-- [x] Systemstatus- und Monitoring-Endpunkte in FastAPI übernehmen.
-- [x] Metadaten-Workflow für Dashboard-Portierung abschließen.
-- [x] Sync- und Suchfunktionen zwischen Spotify/Plex/Soulseek vereinheitlichen.
-- [x] Download-Management via `/api/downloads` und `/api/download` inkl. Worker-Integration fertigstellen.
-- [x] Aktivitätsfeed `/api/activity` mit Persistenz, Paging und flexiblen Eventtypen erweitern.
-- [x] Downloads-Frontend mit Tabelle und Start-Formular bereitstellen.
-- [x] GET-Endpunkte für Downloads (`/api/downloads`, `/api/download/{id}`) ergänzen.
-- [x] Dashboard-Widget für aktive Downloads ergänzen.
-- [x] Dashboard-DownloadWidget auf limitierte `/api/downloads`-Abfrage umstellen.
-- [x] Activity-Feed-Widget im Dashboard mit Polling, Sortierung und Status-Badges finalisieren.
-- [x] Frontend: ActivityFeed-Widget zeigt detaillierte Sync- und Search-Events mit Quellen & Kennzahlen an.
-- [x] Worker-Health-Events im Activity Feed persistieren und dokumentieren.
-- [x] Frontend: ActivityFeed-Widget visualisiert Worker-Events mit Icons und Health-Farben.
-- [x] Persistente Activity History mit Paging- und Filter-Endpunkt bereitstellen.
-- [x] Frontend: Activity-History-Seite mit Tabelle, Paging und Filtern ergänzen.
-- [x] Cancel-/Retry-Buttons im Frontend (DownloadsPage & DownloadWidget) inkl. Tests & Dokumentation ergänzen.
-- [x] AutoSyncWorker für Spotify↔Plex implementieren, Soulseek/Beets-Anbindung ergänzen und Dokumentation aktualisieren.
-- [x] Artist-Konfiguration für Spotify-Releases (API, DB, AutoSync) umsetzen.
-- [x] Artists-Frontend zum Aktivieren einzelner Releases inkl. Tests und Dokumentation ergänzen.
-- [x] Paging für `/api/downloads` mit Limit/Offset-Parametern ergänzen.
-- [x] Cancel- und Retry-Endpunkte für Downloads via TransfersApi finalisieren.
-- [x] Settings erhalten automatische Default-Werte beim Startup.
-- [x] Worker-Health-Infos (Heartbeats + Queue-Längen) im `/status`-Endpoint ergänzen.
-- [x] Worker-Health-Karten im Dashboard anzeigen und regelmäßig aktualisieren.
-- [x] Activity History Export (API + Frontend) bereitstellen.
-- [x] Credential-Health-Checks für Spotify/Plex/Soulseek (API, Dashboard, Settings) umsetzen.
-- [x] Soulseek-Konfiguration auf `SLSKD_URL` vereinheitlichen und Legacy-Settings automatisch übernehmen.
-- [x] Datenbankindizes für Downloads und Activity-Events ergänzen.
-- [x] Download-Router-Hilfsfunktionen in `app/utils/downloads.py` auslagern.
-- [x] Event-Status-Konstanten in `app/utils/events.py` zentralisieren.
-- [x] E2E-Smoke-Test für den Download-Flow ergänzen.
-- [ ] Streaming-Router für Audio-Features planen und implementieren (Frontend-Integration vorbereiten).
-- [ ] Frontend-Testlauf im CI wieder aktivieren, sobald npm-Registry-Zugriff verfügbar ist.
-- [ ] Prometheus-/StatsD-Exporter auf Basis der neuen `metrics.*` Settings anbinden.
+## Abgeschlossen
+- [x] Frontend auf vier Kernseiten (Dashboard, Downloads, Artists, Settings) konsolidiert.
+- [x] Zentralen API-Client mit globalem Fehler-Handling und Toast-Routing etabliert.
+- [x] Dashboard-Karten für Service-Status, Worker-Zustand und Activity Feed vereinheitlicht.
+- [x] Frontend-Tests für Dashboard, Downloads, Artists und Settings aktualisiert.
+- [x] Design-Guidelines dokumentiert und im UI angewendet.
+
+## Offen
+- [ ] Integrationstests für globale API-Fehler (401/403/503) inklusive Redirect-Checks ergänzen.
+- [ ] `npm run test` auf reale Testausführung (Jest/Vitest) umstellen.
+- [ ] Accessibility-Audit der vier Kernseiten (Keyboard-Navigation, ARIA, Farbkontrast) durchführen.
+- [ ] Automatisierte Screenshot-Generierung für `docs/screenshots/*.svg` aus dem Frontend einführen.
+- [ ] TypeScript-Typen aus dem OpenAPI-Schema generieren und in den API-Client integrieren.
+- [ ] Observability-Anbindung (Prometheus/StatsD) vorbereiten, um Worker- und Download-Kennzahlen zu erfassen.

@@ -1,21 +1,157 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-  timeout: 10000
+  timeout: 15000
 });
 
-export interface SettingsResponse {
-  settings: Record<string, string | null>;
-  updated_at: string;
+export interface ApiErrorContext {
+  error: ApiError;
 }
 
-export interface UpdateSettingPayload {
-  key: string;
-  value: string | null;
+type ApiErrorSubscriber = (context: ApiErrorContext) => void;
+
+const apiErrorSubscribers = new Set<ApiErrorSubscriber>();
+
+export class ApiError extends Error {
+  readonly status?: number;
+  readonly data?: unknown;
+  readonly originalError: unknown;
+  readonly url?: string;
+  readonly method?: string;
+  handled = false;
+
+  constructor({
+    message,
+    status,
+    data,
+    originalError,
+    url,
+    method
+  }: {
+    message: string;
+    status?: number;
+    data?: unknown;
+    originalError: unknown;
+    url?: string;
+    method?: string;
+  }) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+    this.originalError = originalError;
+    this.url = url;
+    this.method = method;
+  }
+
+  markHandled() {
+    this.handled = true;
+  }
 }
 
-export type WorkerStatus = 'running' | 'stopped' | 'stale' | (string & {});
+const extractErrorMessage = (error: AxiosError) => {
+  const responseData = error.response?.data;
+  if (typeof responseData === 'string' && responseData.trim().length > 0) {
+    return responseData;
+  }
+  if (responseData && typeof responseData === 'object') {
+    const record = responseData as Record<string, unknown>;
+    const knownKeys = ['message', 'detail', 'error'];
+    for (const key of knownKeys) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value;
+      }
+    }
+    if (Array.isArray(record.errors) && record.errors.length > 0) {
+      const first = record.errors[0];
+      if (typeof first === 'string') {
+        return first;
+      }
+      if (first && typeof first === 'object' && typeof (first as { message?: unknown }).message === 'string') {
+        return String((first as { message: unknown }).message);
+      }
+    }
+  }
+  if (typeof error.message === 'string' && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return 'Unbekannter Fehler';
+};
+
+const toApiError = (error: unknown, config?: AxiosRequestConfig): ApiError => {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (axios.isAxiosError(error)) {
+    const message = extractErrorMessage(error);
+    return new ApiError({
+      message,
+      status: error.response?.status,
+      data: error.response?.data,
+      originalError: error,
+      url: config?.url ?? error.config?.url,
+      method: (config?.method ?? error.config?.method)?.toUpperCase()
+    });
+  }
+
+  if (error instanceof Error) {
+    return new ApiError({
+      message: error.message,
+      originalError: error,
+      url: config?.url,
+      method: config?.method?.toUpperCase()
+    });
+  }
+
+  return new ApiError({
+    message: 'Unbekannter Fehler',
+    originalError: error,
+    url: config?.url,
+    method: config?.method?.toUpperCase()
+  });
+};
+
+const notifyApiError = (apiError: ApiError) => {
+  apiErrorSubscribers.forEach((subscriber) => {
+    subscriber({ error: apiError });
+  });
+};
+
+const redirectToSettings = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (window.location.pathname === '/settings') {
+    return;
+  }
+  window.location.href = '/settings';
+};
+
+const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
+  try {
+    const response = await api.request<T>(config);
+    return response.data;
+  } catch (error) {
+    const apiError = toApiError(error, config);
+    notifyApiError(apiError);
+    if (apiError.status === 401 || apiError.status === 403) {
+      redirectToSettings();
+    }
+    throw apiError;
+  }
+};
+
+export const subscribeToApiErrors = (subscriber: ApiErrorSubscriber) => {
+  apiErrorSubscribers.add(subscriber);
+  return () => {
+    apiErrorSubscribers.delete(subscriber);
+  };
+};
+
+export type ConnectionStatus = 'ok' | 'fail' | 'unknown' | (string & {});
 
 export interface WorkerHealth {
   last_seen?: string | null;
@@ -23,15 +159,56 @@ export interface WorkerHealth {
   status?: WorkerStatus;
 }
 
-export interface StatusResponse {
-  status: string;
-  artist_count?: number;
-  album_count?: number;
-  track_count?: number;
-  last_scan?: string;
-  connections?: Record<string, string>;
+export type WorkerStatus =
+  | 'running'
+  | 'stopped'
+  | 'stale'
+  | 'starting'
+  | 'blocked'
+  | 'errored'
+  | (string & {});
+
+export interface SystemStatusResponse {
+  status?: string;
+  connections?: Record<string, ConnectionStatus>;
   workers?: Record<string, WorkerHealth>;
 }
+
+export const getSystemStatus = async (): Promise<SystemStatusResponse> =>
+  request<SystemStatusResponse>({
+    method: 'GET',
+    url: '/status'
+  });
+
+export interface SettingsResponse {
+  settings: Record<string, string | null>;
+  updated_at?: string;
+}
+
+export const getSettings = async (): Promise<SettingsResponse> =>
+  request<SettingsResponse>({
+    method: 'GET',
+    url: '/settings'
+  });
+
+export interface UpdateSettingPayload {
+  key: string;
+  value: string | null;
+}
+
+export const updateSetting = async (payload: UpdateSettingPayload) =>
+  request<void>({
+    method: 'POST',
+    url: '/settings',
+    data: payload
+  });
+
+export const updateSettings = async (payload: UpdateSettingPayload[]) => {
+  for (const entry of payload) {
+    // eslint-disable-next-line no-await-in-loop
+    await updateSetting(entry);
+  }
+};
 
 export interface ServiceHealthResponse {
   service: string;
@@ -40,16 +217,36 @@ export interface ServiceHealthResponse {
   optional_missing: string[];
 }
 
-export interface SpotifyPlaylist {
-  id: string;
-  name: string;
-  track_count: number;
-  updated_at: string;
+export type ServiceIdentifier = 'spotify' | 'plex' | 'soulseek';
+
+export const testServiceConnection = async (service: ServiceIdentifier) =>
+  request<ServiceHealthResponse>({
+    method: 'GET',
+    url: `/api/health/${service}`
+  });
+
+export interface ArtistPreferenceEntry {
+  artist_id: string;
+  release_id: string;
+  selected: boolean;
 }
 
-export interface SpotifyPlaylistsResponse {
-  playlists: SpotifyPlaylist[];
+export interface ArtistPreferencesResponse {
+  preferences: ArtistPreferenceEntry[];
 }
+
+export const getArtistPreferences = async (): Promise<ArtistPreferenceEntry[]> =>
+  request<ArtistPreferencesResponse>({
+    method: 'GET',
+    url: '/settings/artist-preferences'
+  }).then((response) => response.preferences ?? []);
+
+export const saveArtistPreferences = async (preferences: ArtistPreferenceEntry[]) =>
+  request<ArtistPreferencesResponse>({
+    method: 'POST',
+    url: '/settings/artist-preferences',
+    data: { preferences }
+  }).then((response) => response.preferences ?? []);
 
 export interface SpotifyImage {
   url?: string;
@@ -68,13 +265,11 @@ export interface FollowedArtistsResponse {
   artists: SpotifyArtist[];
 }
 
-export interface SpotifyArtistSummary {
-  name?: string;
-}
-
-export interface SpotifyAlbumSummary {
-  name?: string;
-}
+export const getFollowedArtists = async (): Promise<SpotifyArtist[]> =>
+  request<FollowedArtistsResponse>({
+    method: 'GET',
+    url: '/spotify/artists/followed'
+  }).then((response) => response.artists ?? []);
 
 export interface SpotifyArtistRelease {
   id: string;
@@ -89,71 +284,11 @@ export interface ArtistReleasesResponse {
   releases: SpotifyArtistRelease[];
 }
 
-export interface SpotifyTrackSummary {
-  id?: string;
-  name?: string;
-  artists?: SpotifyArtistSummary[];
-  album?: SpotifyAlbumSummary;
-  duration_ms?: number;
-}
-
-export interface SpotifySearchResponse {
-  items: SpotifyTrackSummary[];
-}
-
-export interface PlexStatusResponse {
-  status: string;
-  sessions?: unknown[];
-  library?: Record<string, unknown>;
-}
-
-export type PlexLibrariesResponse = Record<string, unknown>;
-
-export interface SoulseekDownloadEntry {
-  id: number;
-  filename: string;
-  state?: string;
-  status?: string;
-  progress: number;
-  created_at: string;
-  updated_at: string;
-  priority?: number;
-  username?: string | null;
-}
-
-export interface SoulseekDownloadsResponse {
-  downloads: SoulseekDownloadEntry[];
-}
-
-export interface MatchingRequestPayload {
-  spotify_track: Record<string, unknown>;
-  candidates: Record<string, unknown>[];
-}
-
-export interface AlbumMatchingRequestPayload {
-  spotify_album: Record<string, unknown>;
-  candidates: Record<string, unknown>[];
-}
-
-export interface MatchingResponsePayload {
-  best_match: Record<string, unknown> | null;
-  confidence: number;
-}
-
-export interface BeetsImportRequest {
-  path: string;
-  quiet?: boolean;
-  autotag?: boolean;
-}
-
-export interface BeetsImportResponse {
-  success: boolean;
-  message: string;
-}
-
-export interface BeetsStatsResponse {
-  stats: Record<string, string>;
-}
+export const getArtistReleases = async (artistId: string): Promise<SpotifyArtistRelease[]> =>
+  request<ArtistReleasesResponse>({
+    method: 'GET',
+    url: `/spotify/artist/${artistId}/releases`
+  }).then((response) => response.releases ?? []);
 
 export interface DownloadEntry {
   id: number | string;
@@ -173,38 +308,166 @@ export interface FetchDownloadsOptions {
   status?: string;
 }
 
+const extractDownloadArray = (value: unknown): DownloadEntry[] => {
+  if (Array.isArray(value)) {
+    return value as DownloadEntry[];
+  }
+  if (value && typeof value === 'object' && Array.isArray((value as { downloads?: unknown[] }).downloads)) {
+    return (value as { downloads: DownloadEntry[] }).downloads;
+  }
+  return [];
+};
+
+const normalizeDownloadEntry = (entry: DownloadEntry | (DownloadEntry & { state?: string })): DownloadEntry => {
+  const status = (entry.status ?? (entry as { state?: string }).state ?? 'unknown').toString();
+  const priorityValue = (entry as { priority?: unknown }).priority;
+  const priority =
+    typeof priorityValue === 'number'
+      ? priorityValue
+      : typeof priorityValue === 'string'
+        ? Number.parseInt(priorityValue, 10) || 0
+        : 0;
+
+  return {
+    id: entry.id,
+    filename: entry.filename ?? '',
+    status,
+    progress: entry.progress ?? 0,
+    created_at: entry.created_at,
+    updated_at: entry.updated_at,
+    priority,
+    username: entry.username ?? null
+  };
+};
+
+export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise<DownloadEntry[]> => {
+  const params: Record<string, string | number | boolean> = {};
+  if (options.includeAll) {
+    params.all = true;
+  }
+  if (typeof options.limit === 'number') {
+    params.limit = options.limit;
+  }
+  if (typeof options.offset === 'number') {
+    params.offset = options.offset;
+  }
+  if (options.status) {
+    params.status = options.status;
+  }
+
+  const payload = await request<unknown>({
+    method: 'GET',
+    url: '/api/downloads',
+    params: Object.keys(params).length > 0 ? params : undefined
+  });
+  return extractDownloadArray(payload).map(normalizeDownloadEntry);
+};
+
+export const cancelDownload = async (id: string | number) =>
+  request<void>({
+    method: 'DELETE',
+    url: `/api/download/${id}`
+  });
+
+export const retryDownload = async (id: string | number): Promise<DownloadEntry> =>
+  request<unknown>({
+    method: 'POST',
+    url: `/api/download/${id}/retry`
+  }).then((payload) => {
+    const downloads = extractDownloadArray(payload).map(normalizeDownloadEntry);
+    return (
+      downloads[0] ??
+      normalizeDownloadEntry({
+        id,
+        filename: '',
+        status: 'queued',
+        progress: 0,
+        priority: 0
+      })
+    );
+  });
+
+export const updateDownloadPriority = async (id: string | number, priority: number) =>
+  request<DownloadEntry>({
+    method: 'PATCH',
+    url: `/api/download/${id}/priority`,
+    data: { priority }
+  }).then(normalizeDownloadEntry);
+
+export interface StartDownloadPayload {
+  track_id: string;
+}
+
+export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> =>
+  request<unknown>({
+    method: 'POST',
+    url: '/api/download',
+    data: payload
+  }).then((response) => {
+    const downloads = extractDownloadArray(response).map(normalizeDownloadEntry);
+    return (
+      downloads[0] ??
+      normalizeDownloadEntry({
+        id: '',
+        filename: '',
+        status: 'queued',
+        progress: 0,
+        priority: 0
+      })
+    );
+  });
+
 export interface DownloadExportFilters {
   status?: string;
   from?: string;
   to?: string;
 }
 
-export interface StartDownloadPayload {
-  track_id: string;
-}
+export const exportDownloads = async (format: 'csv' | 'json', filters: DownloadExportFilters = {}) => {
+  const params: Record<string, string> = { format };
+  if (filters.status) {
+    params.status = filters.status;
+  }
+  if (filters.from) {
+    params.from = filters.from;
+  }
+  if (filters.to) {
+    params.to = filters.to;
+  }
+  return request<Blob>({
+    method: 'GET',
+    url: '/api/downloads/export',
+    params,
+    responseType: 'blob'
+  });
+};
 
-export interface ArtistPreferenceEntry {
-  artist_id: string;
-  release_id: string;
-  selected: boolean;
-}
-
-export interface ArtistPreferencesResponse {
-  preferences: ArtistPreferenceEntry[];
-}
-
-export type ActivityType = 'sync' | 'search' | 'download' | 'metadata' | 'worker' | (string & {});
+export type ActivityType =
+  | 'sync'
+  | 'autosync'
+  | 'search'
+  | 'download'
+  | 'download_retry'
+  | 'download_retry_failed'
+  | 'download_retry_scheduled'
+  | 'metadata'
+  | 'worker'
+  | 'worker_started'
+  | 'worker_stopped'
+  | 'worker_blocked'
+  | (string & {});
 
 export type ActivityStatus =
   | 'queued'
   | 'running'
   | 'completed'
+  | 'partial'
   | 'failed'
   | 'cancelled'
   | 'started'
   | 'stopped'
   | 'stale'
-  | 'restarted'
+  | 'blocked'
   | (string & {});
 
 export interface ActivityItem {
@@ -214,280 +477,12 @@ export interface ActivityItem {
   details?: Record<string, unknown>;
 }
 
-export interface ActivityHistoryResponse {
-  items: ActivityItem[];
-  total_count: number;
-}
-
-export const fetchSettings = async (): Promise<SettingsResponse> => {
-  const { data } = await api.get<SettingsResponse>('/settings');
-  return data;
-};
-
-export const updateSetting = async (setting: UpdateSettingPayload): Promise<void> => {
-  await api.post('/settings', setting);
-};
-
-export const updateSettings = async (settings: UpdateSettingPayload[]): Promise<void> => {
-  for (const setting of settings) {
-    await updateSetting(setting);
-  }
-};
-
-export const fetchSpotifyStatus = async (): Promise<StatusResponse> => {
-  const { data } = await api.get<StatusResponse>('/spotify/status');
-  return data;
-};
-
-export const fetchSystemStatus = async (): Promise<StatusResponse> => {
-  const { data } = await api.get<StatusResponse>('/status');
-  return data;
-};
-
-export const fetchSpotifyPlaylists = async (): Promise<SpotifyPlaylist[]> => {
-  const { data } = await api.get<SpotifyPlaylistsResponse>('/spotify/playlists');
-  return data.playlists;
-};
-
-export const fetchFollowedArtists = async (): Promise<SpotifyArtist[]> => {
-  const { data } = await api.get<FollowedArtistsResponse>('/spotify/artists/followed');
-  return data.artists;
-};
-
-export const fetchArtistReleases = async (
-  artistId: string
-): Promise<SpotifyArtistRelease[]> => {
-  const { data } = await api.get<ArtistReleasesResponse>(`/spotify/artist/${artistId}/releases`);
-  return data.releases;
-};
-
-export const searchSpotifyTracks = async (query: string): Promise<SpotifyTrackSummary[]> => {
-  const { data } = await api.get<SpotifySearchResponse>('/spotify/search/tracks', {
-    params: { query }
-  });
-  return data.items;
-};
-
-export const fetchPlexStatus = async (): Promise<PlexStatusResponse> => {
-  const { data } = await api.get<PlexStatusResponse>('/plex/status');
-  return data;
-};
-
-export const fetchPlexLibraries = async (): Promise<PlexLibrariesResponse> => {
-  const { data } = await api.get<PlexLibrariesResponse>('/plex/library/sections');
-  return data;
-};
-
-export const fetchSoulseekStatus = async (): Promise<StatusResponse> => {
-  const { data } = await api.get<StatusResponse>('/soulseek/status');
-  return data;
-};
-
-export const checkSpotifyHealth = async (): Promise<ServiceHealthResponse> => {
-  const { data } = await api.get<ServiceHealthResponse>('/api/health/spotify');
-  return data;
-};
-
-export const checkPlexHealth = async (): Promise<ServiceHealthResponse> => {
-  const { data } = await api.get<ServiceHealthResponse>('/api/health/plex');
-  return data;
-};
-
-export const checkSoulseekHealth = async (): Promise<ServiceHealthResponse> => {
-  const { data } = await api.get<ServiceHealthResponse>('/api/health/soulseek');
-  return data;
-};
-
-export const fetchSoulseekDownloads = async (): Promise<SoulseekDownloadEntry[]> => {
-  const { data } = await api.get<SoulseekDownloadsResponse>('/soulseek/downloads');
-  return data.downloads;
-};
-
-export const fetchArtistPreferences = async (): Promise<ArtistPreferenceEntry[]> => {
-  const { data } = await api.get<ArtistPreferencesResponse>('/settings/artist-preferences');
-  return data.preferences;
-};
-
-export const runSpotifyToPlexMatch = async (
-  payload: MatchingRequestPayload
-): Promise<MatchingResponsePayload> => {
-  const { data } = await api.post<MatchingResponsePayload>('/matching/spotify-to-plex', payload);
-  return data;
-};
-
-export const runSpotifyToSoulseekMatch = async (
-  payload: MatchingRequestPayload
-): Promise<MatchingResponsePayload> => {
-  const { data } = await api.post<MatchingResponsePayload>('/matching/spotify-to-soulseek', payload);
-  return data;
-};
-
-export const saveArtistPreferences = async (
-  preferences: ArtistPreferenceEntry[]
-): Promise<ArtistPreferenceEntry[]> => {
-  const { data } = await api.post<ArtistPreferencesResponse>('/settings/artist-preferences', {
-    preferences
-  });
-  return data.preferences;
-};
-
-export const runSpotifyToPlexAlbumMatch = async (
-  payload: AlbumMatchingRequestPayload
-): Promise<MatchingResponsePayload> => {
-  const { data } = await api.post<MatchingResponsePayload>(
-    '/matching/spotify-to-plex-album',
-    payload
-  );
-  return data;
-};
-
-export const runBeetsImport = async (payload: BeetsImportRequest): Promise<BeetsImportResponse> => {
-  const { data } = await api.post<BeetsImportResponse>('/beets/import', payload);
-  return data;
-};
-
-export const fetchBeetsStats = async (): Promise<BeetsStatsResponse> => {
-  const { data } = await api.get<BeetsStatsResponse>('/beets/stats');
-  return data;
-};
-
-export const triggerSync = async (): Promise<void> => {
-  await api.post('/api/sync');
-};
-
-const extractDownloadEntries = (payload: unknown): SoulseekDownloadEntry[] => {
-  if (Array.isArray(payload)) {
-    return payload as SoulseekDownloadEntry[];
-  }
-  if (
-    payload &&
-    typeof payload === 'object' &&
-    Array.isArray((payload as { downloads?: SoulseekDownloadEntry[] }).downloads)
-  ) {
-    return (payload as { downloads: SoulseekDownloadEntry[] }).downloads;
-  }
-  return [];
-};
-
-const mapDownloadEntry = (entry: SoulseekDownloadEntry | DownloadEntry): DownloadEntry => {
-  const status =
-    'status' in entry && typeof entry.status === 'string'
-      ? entry.status
-      : 'state' in entry && typeof entry.state === 'string'
-        ? entry.state
-        : 'unknown';
-
-  const rawPriority = (entry as { priority?: unknown }).priority;
-  const priority =
-    typeof rawPriority === 'number'
-      ? rawPriority
-      : typeof rawPriority === 'string'
-        ? Number.parseInt(rawPriority, 10) || 0
-        : 0;
-
-  const username =
-    'username' in entry && typeof (entry as { username?: unknown }).username !== 'undefined'
-      ? ((entry as { username?: unknown }).username as string | null | undefined)
-      : undefined;
-
-  return {
-    id: entry.id,
-    filename: entry.filename,
-    status,
-    progress: entry.progress ?? 0,
-    created_at: 'created_at' in entry ? entry.created_at : undefined,
-    updated_at: 'updated_at' in entry ? entry.updated_at : undefined,
-    priority,
-    username: username ?? undefined
-  };
-};
-
-const requestDownloads = async (
-  params?: Record<string, number | boolean | string>
-): Promise<DownloadEntry[]> => {
-  const { data } = await api.get<SoulseekDownloadsResponse>('/api/downloads', {
-    params: params && Object.keys(params).length > 0 ? params : undefined
-  });
-  return extractDownloadEntries(data).map(mapDownloadEntry);
-};
-
-export const fetchDownloads = async (
-  options: FetchDownloadsOptions = {}
-): Promise<DownloadEntry[]> => {
-  const { includeAll = false, limit, offset, status } = options;
-  const params: Record<string, number | boolean | string> = {};
-
-  if (includeAll) {
-    params.all = true;
-  }
-  if (typeof limit === 'number') {
-    params.limit = limit;
-  }
-  if (typeof offset === 'number') {
-    params.offset = offset;
-  }
-  if (status) {
-    params.status = status;
-  }
-
-  return requestDownloads(params);
-};
-
-export const fetchDownloadById = async (id: string): Promise<DownloadEntry> => {
-  const { data } = await api.get<SoulseekDownloadEntry | DownloadEntry>(`/api/download/${id}`);
-  return mapDownloadEntry(data);
-};
-
-export const cancelDownload = async (id: string): Promise<void> => {
-  await api.delete(`/api/download/${id}`);
-};
-
-export const updateDownloadPriority = async (
-  id: string,
-  priority: number
-): Promise<DownloadEntry> => {
-  const { data } = await api.patch<SoulseekDownloadEntry | DownloadEntry>(
-    `/api/download/${id}/priority`,
-    { priority }
-  );
-  return mapDownloadEntry(data);
-};
-
-export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
-  const { data } = await api.post('/api/download', payload);
-  const downloads = extractDownloadEntries(data);
-  const first = downloads[0] ?? (data as SoulseekDownloadEntry | DownloadEntry | undefined);
-  if (!first) {
-    return {
-      id: '',
-      filename: '',
-      status: 'unknown',
-      progress: 0,
-      priority: 0
-    };
-  }
-  return mapDownloadEntry(first);
-};
-
-export const retryDownload = async (id: string): Promise<DownloadEntry> => {
-  const { data } = await api.post(`/api/download/${id}/retry`);
-  const downloads = extractDownloadEntries(data);
-  const first = downloads[0] ?? (data as SoulseekDownloadEntry | DownloadEntry | undefined);
-  if (!first) {
-    return {
-      id: id,
-      filename: '',
-      status: 'queued',
-      progress: 0,
-      priority: 0
-    };
-  }
-  return mapDownloadEntry(first);
-};
-
 const parseActivityDetails = (value: unknown): Record<string, unknown> | undefined => {
-  if (value === null || value === undefined) {
+  if (!value) {
     return undefined;
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
   }
   if (typeof value === 'string') {
     try {
@@ -495,135 +490,48 @@ const parseActivityDetails = (value: unknown): Record<string, unknown> | undefin
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
-      return undefined;
     } catch (error) {
-      console.warn('Failed to parse activity details JSON', error);
-      return undefined;
+      console.warn('Failed to parse activity details', error);
     }
-  }
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
   }
   return undefined;
 };
 
-const normalizeActivityItems = (items: unknown[]): ActivityItem[] =>
-  items
-    .filter((candidate): candidate is ActivityItem & { details?: unknown } => {
-      if (!candidate || typeof candidate !== 'object') {
-        return false;
-      }
-      const typed = candidate as Record<string, unknown>;
-      return typeof typed.timestamp === 'string' && typeof typed.type === 'string' && typeof typed.status === 'string';
-    })
-    .map((item) => {
-      const details = parseActivityDetails((item as { details?: unknown }).details);
-      return details ? { ...item, details } : { ...item, details: undefined };
-    });
-
-export const fetchActivityFeed = async (): Promise<ActivityItem[]> => {
-  const { data } = await api.get('/api/activity');
-  if (Array.isArray(data)) {
-    return normalizeActivityItems(data);
+const normalizeActivityItem = (entry: unknown): ActivityItem | null => {
+  if (!entry || typeof entry !== 'object') {
+    return null;
   }
-  if (Array.isArray((data as { items?: unknown[] }).items)) {
-    return normalizeActivityItems((data as { items: unknown[] }).items);
+  const record = entry as Record<string, unknown>;
+  if (typeof record.timestamp !== 'string' || typeof record.type !== 'string' || typeof record.status !== 'string') {
+    return null;
+  }
+  const details = parseActivityDetails(record.details);
+  return {
+    timestamp: record.timestamp,
+    type: record.type as ActivityType,
+    status: record.status as ActivityStatus,
+    details
+  };
+};
+
+export const getActivityFeed = async (): Promise<ActivityItem[]> => {
+  const payload = await request<unknown>({
+    method: 'GET',
+    url: '/api/activity'
+  });
+  if (Array.isArray(payload)) {
+    return payload.map(normalizeActivityItem).filter((item): item is ActivityItem => item !== null);
+  }
+  if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown[] }).items)) {
+    return (payload as { items: unknown[] }).items
+      .map(normalizeActivityItem)
+      .filter((item): item is ActivityItem => item !== null);
   }
   return [];
 };
 
-export const fetchActivityHistory = async (
-  limit = 50,
-  offset = 0,
-  type?: string,
-  status?: string
-): Promise<ActivityHistoryResponse> => {
-  const params: Record<string, number | string> = {};
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
-  const safeOffset = Math.max(Math.floor(offset), 0);
-  if (safeLimit) {
-    params.limit = safeLimit;
-  }
-  if (safeOffset) {
-    params.offset = safeOffset;
-  }
-  if (type) {
-    params.type = type;
-  }
-  if (status) {
-    params.status = status;
-  }
-
-  const { data } = await api.get('/api/activity', { params });
-  if (Array.isArray(data)) {
-    const items = normalizeActivityItems(data);
-    return { items, total_count: data.length };
-  }
-
-  const parsed = data as { items?: unknown[]; total_count?: unknown };
-  const items = Array.isArray(parsed.items) ? normalizeActivityItems(parsed.items) : [];
-  const totalCount =
-    typeof parsed.total_count === 'number'
-      ? parsed.total_count
-      : Array.isArray(parsed.items)
-        ? parsed.items.length
-        : items.length;
-
-  return { items, total_count: totalCount };
-};
-
-export interface ActivityHistoryFilters {
-  type?: string;
-  status?: string;
-  from?: string;
-  to?: string;
-}
-
-export const exportActivityHistory = async (
-  format: 'csv' | 'json',
-  filters: ActivityHistoryFilters = {}
-): Promise<Blob> => {
-  const params: Record<string, string> = { format };
-
-  if (filters.type) {
-    params.type = filters.type;
-  }
-  if (filters.status) {
-    params.status = filters.status;
-  }
-  if (filters.from) {
-    params.from = filters.from;
-  }
-  if (filters.to) {
-    params.to = filters.to;
-  }
-
-  const response = await api.get('/api/activity/export', {
-    params,
-    responseType: 'blob'
+export const triggerManualSync = async () =>
+  request<void>({
+    method: 'POST',
+    url: '/api/sync'
   });
-  return response.data;
-};
-
-export const exportDownloads = async (
-  format: 'csv' | 'json',
-  filters: DownloadExportFilters = {}
-): Promise<Blob> => {
-  const params: Record<string, string> = { format };
-
-  if (filters.status) {
-    params.status = filters.status;
-  }
-  if (filters.from) {
-    params.from = filters.from;
-  }
-  if (filters.to) {
-    params.to = filters.to;
-  }
-
-  const response = await api.get('/api/downloads/export', {
-    params,
-    responseType: 'blob'
-  });
-  return response.data;
-};

@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Switch } from '../components/ui/switch';
 import { useToast } from '../hooks/useToast';
 import {
+  ApiError,
   ArtistPreferenceEntry,
-  fetchArtistPreferences,
-  fetchArtistReleases,
-  fetchFollowedArtists,
+  getArtistPreferences,
+  getArtistReleases,
+  getFollowedArtists,
   saveArtistPreferences,
   SpotifyArtist,
   SpotifyArtistRelease
@@ -58,13 +59,23 @@ const ArtistsPage = () => {
     isLoading: isLoadingArtists
   } = useQuery<SpotifyArtist[]>({
     queryKey: ['spotify-followed-artists'],
-    queryFn: fetchFollowedArtists,
-    onError: () =>
+    queryFn: getFollowedArtists,
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Artists konnten nicht geladen werden',
         description: 'Bitte Backend-Verbindung prüfen.',
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   const {
@@ -72,13 +83,23 @@ const ArtistsPage = () => {
     refetch: refetchPreferences
   } = useQuery<ArtistPreferenceEntry[]>({
     queryKey: ['artist-preferences'],
-    queryFn: fetchArtistPreferences,
-    onError: () =>
+    queryFn: getArtistPreferences,
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Artist-Präferenzen fehlgeschlagen',
         description: 'Die Auswahl konnte nicht geladen werden.',
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   const {
@@ -91,14 +112,24 @@ const ArtistsPage = () => {
       if (!selectedArtistId) {
         return Promise.resolve<SpotifyArtistRelease[]>([]);
       }
-      return fetchArtistReleases(selectedArtistId);
+      return getArtistReleases(selectedArtistId);
     },
-    onError: () =>
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Releases konnten nicht geladen werden',
         description: 'Bitte versuchen Sie es erneut.',
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   const baseSelection = useMemo(() => {
@@ -152,7 +183,16 @@ const ArtistsPage = () => {
       void refetchPreferences();
       void refetchReleases();
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Speichern fehlgeschlagen',
         description: 'Die Auswahl konnte nicht gespeichert werden.',

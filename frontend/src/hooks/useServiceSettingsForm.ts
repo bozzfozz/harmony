@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useForm, UseFormReturn } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '../lib/query';
-import { fetchSettings, updateSettings } from '../lib/api';
+import { ApiError, getSettings, updateSettings } from '../lib/api';
 import { useToast } from './useToast';
 
 export interface SettingsFieldDefinition {
@@ -39,14 +39,24 @@ const useServiceSettingsForm = ({
 
   const settingsQuery = useQuery({
     queryKey: ['settings'],
-    queryFn: fetchSettings,
+    queryFn: getSettings,
     refetchInterval: 30000,
-    onError: () =>
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: '❌ Fehler beim Laden',
         description: loadErrorDescription,
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   const defaultValues = useMemo(() => {
@@ -81,7 +91,18 @@ const useServiceSettingsForm = ({
       toast({ title: successTitle });
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: () => toast({ title: errorTitle, variant: 'destructive' })
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if ([401, 403, 503].includes(error.status ?? 0)) {
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
+      toast({ title: errorTitle, variant: 'destructive' });
+    }
   });
 
   const onSubmit = form.handleSubmit((values) => mutation.mutate(values));

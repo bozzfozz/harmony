@@ -2,14 +2,14 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ActivityFeed from '../components/ActivityFeed';
 import { renderWithProviders } from '../test-utils';
-import { fetchActivityFeed } from '../lib/api';
+import { getActivityFeed } from '../lib/api';
 
 jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
-  fetchActivityFeed: jest.fn()
+  getActivityFeed: jest.fn()
 }));
 
-const mockedFetchActivityFeed = fetchActivityFeed as jest.MockedFunction<typeof fetchActivityFeed>;
+const mockedGetActivityFeed = getActivityFeed as jest.MockedFunction<typeof getActivityFeed>;
 
 const toastMock = jest.fn();
 
@@ -19,7 +19,7 @@ describe('ActivityFeed', () => {
   });
 
   it('renders activity entries with icons and status colours', async () => {
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       {
         timestamp: '2024-03-18T12:00:00Z',
         type: 'sync',
@@ -57,7 +57,7 @@ describe('ActivityFeed', () => {
   });
 
   it('renders blocked events with red icon and label', async () => {
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       { timestamp: '2024-03-18T12:10:00Z', type: 'sync', status: 'sync_blocked' },
       { timestamp: '2024-03-18T12:09:00Z', type: 'download', status: 'download_blocked' },
       {
@@ -91,7 +91,7 @@ describe('ActivityFeed', () => {
 
   it('renders worker events with dedicated icons, colours and details', async () => {
     const user = userEvent.setup();
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       {
         timestamp: '2024-03-18T12:04:00Z',
         type: 'worker',
@@ -153,7 +153,7 @@ describe('ActivityFeed', () => {
   });
 
   it('notifies when no activities are available', async () => {
-    mockedFetchActivityFeed.mockResolvedValue([]);
+    mockedGetActivityFeed.mockResolvedValue([]);
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
@@ -164,7 +164,7 @@ describe('ActivityFeed', () => {
   });
 
   it('shows toast on error', async () => {
-    mockedFetchActivityFeed.mockRejectedValue(new Error('network error'));
+    mockedGetActivityFeed.mockRejectedValue(new Error('network error'));
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
@@ -174,7 +174,7 @@ describe('ActivityFeed', () => {
 
   it('renders sync details with counters and error tooltip', async () => {
     const user = userEvent.setup();
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       {
         timestamp: '2024-03-18T12:00:00Z',
         type: 'sync',
@@ -204,7 +204,7 @@ describe('ActivityFeed', () => {
 
   it('renders search details with query and per source matches', async () => {
     const user = userEvent.setup();
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       {
         timestamp: '2024-03-18T12:01:00Z',
         type: 'search',
@@ -231,7 +231,7 @@ describe('ActivityFeed', () => {
 
   it('toggles accordion visibility for details', async () => {
     const user = userEvent.setup();
-    mockedFetchActivityFeed.mockResolvedValue([
+    mockedGetActivityFeed.mockResolvedValue([
       {
         timestamp: '2024-03-18T12:02:00Z',
         type: 'search',

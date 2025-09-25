@@ -25,6 +25,11 @@ const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
       'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400',
     dot: 'bg-amber-400'
   },
+  blocked: {
+    badge:
+      'border-amber-500/60 bg-amber-500/15 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-300',
+    dot: 'bg-amber-500'
+  },
   default: {
     badge: 'border-border bg-muted text-muted-foreground',
     dot: 'bg-muted-foreground'
