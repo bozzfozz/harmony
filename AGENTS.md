@@ -1,53 +1,116 @@
-# Contribution Guidelines for Agents and Humans
+# AGENTS.md — Neutrale Richtlinien für Agenten und Menschen
 
-These neutral guidelines apply to any software project and are intended for both AI assistants and human contributors. They prioritize clarity, reliability, and shared accountability.
+Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-Agenten für Software- und Wissensprojekte.
 
-## 1. Commit Hygiene
-- Write commit messages using the Conventional Commits prefixes: `feat`, `fix`, `docs`, `test`, or `chore`.
-- Keep each commit focused; describe the change, its scope, and its intent.
+## 1. Geltungsbereich und Rollen
+- Agent: Automatisierter Beitragender, deterministisch und auditierbar.
+- Maintainer: Review, Freigabe, Sicherheit.
+- Contributor: Menschliche Beitragende.
 
-### Example
-```
-feat/add-auth: implement token-based login flow
-```
+## 2. Leitprinzipien
+- Klarheit: Explizite Absichten, kleine Schritte, überprüfbare Effekte.
+- Simplicity First: Einfache, gut erklärbare Lösungen statt cleverer Komplexität.
+- Reproduzierbarkeit: Gleicher Input führt zu gleichem Output.
+- Nachvollziehbarkeit: Lückenlose Historie; ADRs für nicht-offensichtliche Entscheidungen.
+- Qualität vor Umfang: DRY, KISS, keine toten Strukturen.
+- Sicherheit: Least-Privilege, keine Secrets im Repo.
+- Kontinuierliche Verbesserung: Dieses Dokument ist lebend.
 
-## 2. Design Principles
-- **Simplicity First**: prefer straightforward, well-explained solutions over clever or complex alternatives.
-- Maintain a consistent project structure—follow the established naming conventions (e.g., `snake_case`, `PascalCase`, `kebab-case`), avoid duplicating modules or files, and respect the existing architecture.
-- Document non-obvious decisions in comments or Architecture Decision Records (ADRs) so future contributors understand the rationale.
+## 3. Arbeitsablauf (End-to-End)
+1. Issue: Problem, Nutzen, Akzeptanzkriterien, Risiken, Done-Definition.
+2. Branching: type/short-topic, z. B. feat/add-login, fix/restore-tests. Ein Branch = ein kohärentes Ziel.
+3. Commit Hygiene:
+   - Conventional Commits: feat, fix, docs, test, chore.
+   - Ein Commit pro fokussierter Änderung. Beschreibe Was, Warum, Scope.
+   - Beispiel: feat/add-auth: implement token-based login flow.
+4. PR-Disziplin:
+   - Klein und fokussiert. Issue referenzieren. TASK_ID im Titel und im Body.
+   - Erkläre was und warum, inkl. Testnachweisen.
+5. Review: Zwei-Augen-Prinzip bei risikoreichen Änderungen.
+6. CI-Quality Gates: Lint, Typen, Tests, Security-Scans müssen grün sein.
+7. Merge: Squash-Merge bevorzugt. CHANGELOG pflegen.
+8. Release: SemVer, Tags, Release-Notes, Rollback-Plan.
+9. Post-merge: Monitoring, Metriken, Incident-Prozess.
 
-## 3. Branching
-- Name branches using the format `type/short-topic`, such as `feat/add-login` or `fix/restore-tests`.
-- Branches should represent a single coherent objective to keep history clean and reviews manageable.
+## 4. Qualitätsstandards
+- Coding: PEP 8, Type Hints, Docstrings (PEP 257), keine Magic Numbers, klare Fehlerbehandlung.
+- Design-Prinzipien: Konsistente Struktur; Namenskonventionen (snake_case, PascalCase, kebab-case) einhalten; Duplikate vermeiden; Architektur respektieren.
+- Testing Expectations:
+  - Relevante Suites vor jedem Commit/PR ausführen.
+  - Neue Features/Fixes erfordern neue Unit- und Integrationstests.
+  - Coverage nicht senken ohne Plan zur Wiederherstellung.
+- Quality Gates & Tools:
+  - Python: ruff oder flake8, black, isort, mypy.
+  - JS/TS (falls vorhanden): eslint, prettier.
+  - Lint-Warnungen beheben, toten Code entfernen.
 
-## 4. Testing Expectations
-- Always run the relevant test suites before committing any changes.
-- Add automated tests for every new feature or bug fix; include both unit and integration coverage as appropriate.
-- Do not reduce overall test coverage without an agreed plan to restore it.
+## 5. Prompt- und Agent-Spezifika
+- Prompt-Design: Ziel, Eingaben, Ausgaben, Constraints, Abbruchkriterien; Idempotenz; Trennung Instruktion/Daten.
+- Konfiguration: Prompts versionieren unter prompts/<name>@vX.Y.Z.md; Parameter und Limits (Timeout, Retries, Rate-Limits) deklarieren.
+- Werkzeugnutzung: Nur freigegebene Tools; Minimalrechte; auditierbare Aufrufe; Schreibzugriff nur auf erlaubte Pfade.
+- Beweise/Logs: Eingaben-Hash, Artefakt-Hashes, Laufzeit, Retries, Exit-Status; keine personenbezogenen Daten.
+- AI-spezifische Verantwortlichkeiten:
+  - AI-generierter Code ist vollständig, ausführbar, mit bestandenen Tests.
+  - Human Maintainer Review ist vor Merge obligatorisch.
 
-## 5. Quality Gates
-- Enforce linting and formatting via tools such as Ruff or ESLint, and Black or Prettier. Resolve all warnings and eliminate dead code before submission.
-- Run security scanners (e.g., Bandit for Python, `npm audit` for JavaScript/TypeScript). Never commit secrets, tokens, or other sensitive credentials.
+## 6. Daten, Geheimnisse, Compliance
+- Secrets: Niemals im Code oder Commit; Secret-Manager nutzen; Rotation dokumentieren.
+- Security-Scanner: Python bandit; JS/TS npm audit oder Äquivalent. Findings adressieren.
+- Datenschutz: Datenminimierung, Zweckbindung, Löschkonzepte.
+- Lizenzen und Header: Drittcode nur mit kompatibler Lizenz. Bis zur Lizenzwahl: Datei-Header "Copyright <year> Contributors".
 
-## 6. Documentation Duties
-- Update README files, CHANGELOG entries, and inline documentation when behavior changes or new functionality is introduced.
-- Provide thorough docstrings or comments for complex functions, classes, and modules.
+## 7. Release, Rollback, Migration
+- SemVer: MAJOR inkompatibel, MINOR Feature, PATCH Fix.
+- Migrationen: Reversibel, Dry-Run, Backups.
+- Rollback: Definierter Trigger, RTO/RPO, automatisiertes Zurücksetzen.
 
-## 7. Pull Request Discipline
-- Keep pull requests small, focused, and easy to review. Reference the relevant issue or task.
-- Clearly explain **what** changed and **why** the change was necessary, including testing evidence.
-- Ensure tests and linters pass before requesting human review.
+## 8. Incident-Prozess
+1. Erkennen: Monitoring, Alerts, SLO/SLI.
+2. Eindämmen: Feature-Flag oder Rollback.
+3. Beheben: Patch mit Tests.
+4. Postmortem: Ursachen, Maßnahmen, Fristen.
 
-## 8. AI-Specific Responsibilities
-- AI-generated code must be complete, executable, and accompanied by passing tests.
-- A human maintainer must review and approve AI-generated contributions before they merge.
+## 9. Checklisten
+PR-Checkliste:
+- [ ] Issue verlinkt und Beschreibung vollständig
+- [ ] Kleine, fokussierte Änderung
+- [ ] Lint, Typprüfung, Tests grün
+- [ ] Security-Scan ohne Blocker
+- [ ] Doku aktualisiert (README, CHANGELOG, ADRs)
+- [ ] Rollback-Plan vorhanden
+- [ ] TASK_ID im Titel und im PR-Body (verweist auf docs/task-template.md)
+- [ ] Testnachweise (z. B. pytest -q, Coverage-Summary, relevante Logs)
 
-## 9. Licensing & Headers
-- Until an explicit project license is adopted, limit file headers to: `Copyright <year> Contributors`.
+Agent-Ausführung:
+- [ ] Eingaben validiert, Schema geprüft
+- [ ] Schreibpfade erlaubt
+- [ ] Rate-Limit und Retry-Policy gesetzt
+- [ ] Logs ohne personenbezogene Daten
+- [ ] Artefakte gehasht und abgelegt
 
-## 10. Continuous Improvement
-- Treat these guidelines as living documentation. Propose updates when new tools, processes, or insights can improve collaboration.
+## 10. Vorlagen
+Issue:
+- Titel: kurz, präzise
+- Beschreibung: Problem, Nutzen
+- Akzeptanzkriterien: messbar
+- Risiken/Annahmen: Stichpunkte
+- Fertig wenn: Kriterien
 
-## 11. Task-Vorlagen
-- Vor jeder Implementierung MUSS ein Task nach `docs/task-template.md` erstellt und im PR verlinkt werden (TASK_ID im Titel & in Commits). Dieser Schritt ist verbindlich und wird als eigener Review-Check geprüft.
+PR-Beschreibung:
+- Änderung: was, warum
+- Scope: module/paket
+- Breaking changes: ja/nein und welche
+- Tests: neu/angepasst, Abdeckung, Testnachweise
+- Security: Scan-Ergebnis, Secrets
+- Rollback: Strategie
+- TASK_ID: z. B. TASK-123 (siehe docs/task-template.md)
 
+ADR (Kurzform):
+- Titel, Datum, Kontext, Entscheidung, Alternativen, Folgen
+
+## 11. Durchsetzung
+- CI-Gates erzwingen Lint, Typen, Tests, Security-Scans.
+- Pre-Commit Hooks empfohlen: ruff, black, isort.
+- PR wird geblockt, wenn TASK_ID oder Testnachweise fehlen.
+- Merge nur bei erfüllten Checklisten.
+- Wiederholte Verstöße führen zu Review-Pflicht und ggf. Rechtemanagement.
