@@ -1,43 +1,49 @@
 # ToDo
 
 ## ✅ Erledigt
-- Basis-Backend mit FastAPI und Routern (Spotify, Plex, Soulseek, Matching, Settings)  
-- Clients für Spotify, Plex, Soulseek, Beets  
-- Worker für Sync, Matching, Scan, AutoSync  
-- Spotify-Integration inkl. Playlists und Suche  
-- Smart Matching mit Konfidenz-Scores  
-- Concurrent Downloads über SyncWorker  
-- Retry-Logik mit Backoff  
-- AutoSync-Playlists  
-- Auto-Database-Updates (grundlegend)  
-- Plex-Scans über ScanWorker  
+- FastAPI-Anwendung mit Routern (Spotify, Plex, Soulseek, Matching, Beets, Settings)  
+- Worker-System (PlaylistSyncWorker, SyncWorker, MatchingWorker, ScanWorker, DiscographyWorker, MetadataWorker, ArtworkWorker, LyricsWorker, AutoSyncWorker)  
+- Datenbank-Anbindung mit Session-Handling und Modellen  
+- Spotify-Integration (Suche, Playlists, Audio-Features, Recommendations)  
+- Concurrent Downloads mit Fortschritts-API  
+- Retry-Logik mit Backoff (max. 3 Versuche)  
+- Plex-Scan über ScanWorker inkl. inkrementeller Scans  
+- Automatische Datenbank-Updates durch Worker  
+- Beets-Integration (import, move, write, update)  
+- AutoSync für Playlists und fehlende Tracks (inkl. FLAC-Priorität)  
+- Matching-Engine für Spotify ↔ Plex/Soulseek  
 
 ---
 
 ## ⬜️ Offen
+- **Smart Search** ⚠️  
+  - Nur Aggregation von Spotify, Plex und Soulseek verfügbar.  
+  - Filter für Genre, Jahr und Qualität fehlen.  
 
-### Core Features
-- **Smart Search erweitern**: Filteroptionen für Genre, Jahr, Qualität im `/api/search` Endpunkt ergänzen.  
-- **Complete Discographies**: Endpunkt + Worker-Logik für komplette Künstlerdiskografien mit automatischer Kategorisierung entwickeln.  
-- **Rich Metadata**: Erweiterung der Datenbank und Worker, um Genre, Komponist, Produzent, ISRC, Copyright zu speichern.  
-- **High-Quality Artwork**: Pipeline für hochauflösende Cover-Downloads und Einbettung in Dateien implementieren.  
+- **File Organization** ❌  
+  - Keine eigene Logik für Umbenennung oder strukturierte Ordner.  
+  - Aktuell nur Beets-Import.  
 
-### Erweiterte Features
-- **Metadata Enhancement**: Beets-Integration um Tagging + Album Art erweitern; Felder validieren.  
-- **Automatic Lyrics (LRC)**: Lyrics-Service anbinden, LRC-Dateien speichern und mit Downloads verknüpfen.  
-- **Auto Server Scanning**: Plex-Refresh nach jedem erfolgreichen Download automatisch anstoßen.  
-- **Auto Database Updates**: Soulseek-/Beets-Synchronisation erweitern, damit Datenbankeinträge nach Imports aktualisiert werden.  
-- **File Organization**: Eigene Logik für strukturierte Ordner/Umbenennung ergänzen (nicht nur Beets).  
-- **Artist Discovery**: API und UI für das Durchstöbern kompletter Diskografien.  
-- **Wishlist System**: API + UI, die fehlgeschlagene Downloads (`auto_sync_skipped_tracks`) anzeigt und manuelles Retry erlaubt.  
-- **Artist Watchlist**: System zum Überwachen neuer Releases inkl. Benachrichtigung und automatischem Ergänzen fehlender Tracks.  
-- **Background Automation**: Retry-Mechanismus erweitern → fehlgeschlagene Downloads stündlich erneut versuchen (nicht nur max. 3 Retries).
+- **Artist Discovery** ❌  
+  - Kein Router oder UI zum Browsen kompletter Diskografien.  
+
+- **Wishlist System** ❌  
+  - Fehlgeschlagene Downloads werden nicht persistent gespeichert.  
+  - Keine API/Retry-Integration.  
+
+- **Artist Watchlist** ❌  
+  - Keine Überwachung neuer Releases implementiert.  
+
+- **Background Automation** ❌  
+  - Retry-Logik beschränkt auf max. 3 Backoff-Versuche.  
+  - Kein stündliches Langzeit-Retry implementiert.  
 
 ---
 
-## 🏁 Nächste Meilensteine
-1. **Beets-Router** ins Haupt-Backend einbinden (aktuell nur lokal nutzbar).  
-2. **Smart Search** mit Filteroptionen erweitern.  
-3. **Lyrics-Pipeline** als neues Feature starten.  
-4. **Wishlist/Watchlist-System** entwerfen und implementieren.  
-5. **UI-Integration** für alle neuen Features (Spotify/Plex/Soulseek Settings, Lyrics, Discovery, Wishlist).
+## 🏁 Meilensteine
+1. **Such-Filter erweitern** (Genre, Jahr, Qualität) → Smart Search verbessern  
+2. **Eigene Dateiorganisation** entwickeln (strukturierte Ordner, benutzerdefinierte Patterns)  
+3. **Artist Discovery**-Seite/API für komplettes Durchstöbern von Diskografien  
+4. **Wishlist-System** aufbauen (fehlgeschlagene Downloads speichern, UI/Retry)  
+5. **Artist Watchlist** implementieren (neue Releases überwachen, automatische Ergänzungen)  
+6. **Background Automation** erweitern → stündliche Wiederholjobs für fehlgeschlagene Downloads
