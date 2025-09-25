@@ -144,6 +144,60 @@ POST /api/metadata/update HTTP/1.1
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 | `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
 
+### Aggregierte Suche (`POST /api/search`)
+
+**Request-Body**
+
+```json
+{
+  "query": "The Beatles",
+  "sources": ["spotify", "plex", "soulseek"],
+  "genre": "rock",
+  "year": 1969,
+  "quality": "FLAC"
+}
+```
+
+- `query` (Pflicht): Freitext, wird automatisch beschnitten.
+- `sources` (optional): Teilmenge von `spotify`, `plex`, `soulseek`. Fehlt das Feld, durchsucht Harmony alle Quellen.
+- `genre`, `year`, `quality` (optional): Filtert Ergebnisse auf Genre, Erscheinungsjahr sowie Audioqualität (z. B. `FLAC`, `320kbps`).
+
+**Antwortstruktur**
+
+```json
+{
+  "query": "The Beatles",
+  "filters": {"genre": "rock", "year": 1969, "quality": "FLAC"},
+  "results": [
+    {
+      "id": "plex-1",
+      "source": "plex",
+      "type": "track",
+      "artist": "The Beatles",
+      "album": "Abbey Road",
+      "title": "Come Together",
+      "year": 1969,
+      "quality": "FLAC 1000kbps"
+    },
+    {
+      "id": "soulseek-42",
+      "source": "soulseek",
+      "type": "file",
+      "artist": "The Beatles",
+      "album": "Abbey Road",
+      "title": "Something",
+      "year": 1969,
+      "quality": "FLAC 900kbps"
+    }
+  ],
+  "errors": {
+    "spotify": "Spotify client unavailable"
+  }
+}
+```
+
+Die Liste `results` vereinheitlicht die Daten aller Quellen. Qualitätsfilter schließen automatisch alle Treffer ohne Angabe von Format/Bitrate aus (Spotify liefert bei aktivem Qualitätsfilter keine Ergebnisse). Das Feld `errors` ist optional und enthält pro Quelle eine Fehlermeldung, falls einzelne Dienste nicht erreichbar waren.
+
 > **Hinweis:** Die in diesem Dokument verwendeten Statusnamen für Activity-Events sind zentral in `app/utils/events.py` hinterlegt und werden von Routern, Workern und Tests gemeinsam genutzt.
 
 > **UI-Tipp:** Die Downloads-Seite bietet einen Button „Alle fehlgeschlagenen neu starten“, der nacheinander `POST /api/download/{id}/retry` für alle fehlgeschlagenen Transfers ausführt.

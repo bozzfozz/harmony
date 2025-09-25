@@ -18,6 +18,16 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+## Smart Search
+
+Die globale Suche (`POST /api/search`) kombiniert Spotify-, Plex- und Soulseek-Ergebnisse in einer normalisierten Trefferliste. Optional lassen sich drei Filter setzen:
+
+- `genre`: Begrenzt die Ergebnisse auf ein bestimmtes Genre (z. B. `rock`).
+- `year`: Filtert nach Veröffentlichungsjahr (`int`).
+- `quality`: Erwartete Audioqualität, etwa `FLAC` oder `320kbps`. Streaming-Resultate (Spotify) werden bei aktivem Qualitätsfilter automatisch ausgeschlossen.
+
+Die Antwort enthält für jeden Treffer konsistente Felder (`id`, `source`, `type`, `artist`, `album`, `title`, `year`, `quality`) und führt alle Quellen in einer Liste zusammen. Fehler einzelner Dienste werden im Feld `errors` gesammelt und blockieren den Gesamtaufruf nicht.
+
 ## Complete Discographies
 
 Harmony kann komplette Künstler-Diskografien automatisiert herunterladen. Für einen Spotify-Artist werden alle Alben samt Tracks
