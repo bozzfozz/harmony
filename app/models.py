@@ -1,4 +1,5 @@
 """Database models for Harmony."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -46,6 +47,7 @@ class Download(Base):
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
+    organized_path = Column(String(2048), nullable=True)
     genre = Column(String(255), nullable=True)
     composer = Column(String(255), nullable=True)
     producer = Column(String(255), nullable=True)
@@ -122,7 +124,9 @@ class Setting(Base):
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
 
 class SettingHistory(Base):

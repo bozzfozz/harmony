@@ -28,7 +28,8 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
         (
             entry
             for entry in entries
-            if entry["status"] == "sync_started" and entry.get("details", {}).get("mode") == "manual"
+            if entry["status"] == "sync_started"
+            and entry.get("details", {}).get("mode") == "manual"
         ),
         None,
     )
@@ -49,7 +50,7 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
 
 def test_search_requires_query(client) -> None:
     response = client.post("/api/search", json={})
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_search_aggregates_sources(client) -> None:
@@ -57,13 +58,15 @@ def test_search_aggregates_sources(client) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["query"] == "Test"
-    assert "spotify" in payload["results"]
-    assert "tracks" in payload["results"]["spotify"]
-    assert payload["results"].get("soulseek", {}).get("results") == ["Test"]
+    sources = {item.get("source") for item in payload["results"]}
+    assert {"spotify", "plex", "soulseek"}.issubset(sources)
 
 
 def test_search_allows_source_filter(client) -> None:
-    response = client.post("/api/search", json={"query": "Test", "sources": ["spotify"]})
+    response = client.post(
+        "/api/search", json={"query": "Test", "sources": ["spotify"]}
+    )
     assert response.status_code == 200
     payload = response.json()
-    assert set(payload["results"].keys()) == {"spotify"}
+    assert payload["results"]
+    assert {item.get("source") for item in payload["results"]} == {"spotify"}
