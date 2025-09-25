@@ -89,7 +89,7 @@ async def startup_event() -> None:
         )
         await app.state.artwork_worker.start()
 
-        app.state.lyrics_worker = LyricsWorker()
+        app.state.lyrics_worker = LyricsWorker(spotify_client=spotify_client)
         await app.state.lyrics_worker.start()
 
         app.state.rich_metadata_worker = MetadataWorker(

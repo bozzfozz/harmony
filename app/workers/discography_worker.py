@@ -270,6 +270,10 @@ class DiscographyWorker:
         if duration is not None:
             track_info["duration"] = duration
 
+        spotify_track_id = track.get("id") or track.get("spotify_id")
+        if isinstance(spotify_track_id, str) and spotify_track_id.strip():
+            track_info["spotify_track_id"] = spotify_track_id.strip()
+
         try:
             await self._lyrics.enqueue(download_identifier, str(file_path), track_info)
         except Exception as exc:  # pragma: no cover - defensive logging

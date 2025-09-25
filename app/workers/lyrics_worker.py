@@ -6,19 +6,26 @@ import inspect
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
 from urllib.parse import quote
 
 import httpx
 
+from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
-from app.utils.lyrics_utils import generate_lrc
+from app.utils import lyrics_utils
+from app.utils.lyrics_utils import (
+    convert_to_lrc,
+    fetch_spotify_lyrics,
+    save_lrc_file,
+)
 
 logger = get_logger(__name__)
 
-LyricsProvider = Callable[[Dict[str, Any]], Awaitable[Optional[str]] | Optional[str]]
+LyricsPayload = Dict[str, Any]
+LyricsProvider = Callable[[Dict[str, Any]], Awaitable[Optional[LyricsPayload]] | Optional[LyricsPayload]]
 
 
 @dataclass(slots=True)
@@ -28,11 +35,15 @@ class LyricsJob:
     track_info: Dict[str, Any]
 
 
-async def default_lyrics_provider(track_info: Dict[str, Any]) -> Optional[str]:
-    """Fetch lyrics from the public lyrics.ovh API."""
+async def default_fallback_provider(track_info: Mapping[str, Any]) -> Optional[LyricsPayload]:
+    """Fetch lyrics from Musixmatch or the public lyrics.ovh API."""
 
-    artist = str(track_info.get("artist") or track_info.get("artist_name") or "").strip()
-    title = str(track_info.get("title") or track_info.get("name") or "").strip()
+    musixmatch_payload = await lyrics_utils.fetch_musixmatch_subtitles(track_info)
+    if musixmatch_payload:
+        return musixmatch_payload
+
+    artist = _resolve_text(track_info, ("artist", "artist_name", "artists"))
+    title = _resolve_text(track_info, ("title", "name", "track"))
     if not artist or not title:
         return None
 
@@ -59,7 +70,12 @@ async def default_lyrics_provider(track_info: Dict[str, Any]) -> Optional[str]:
 
     lyrics = payload.get("lyrics") if isinstance(payload, dict) else None
     if isinstance(lyrics, str) and lyrics.strip():
-        return lyrics
+        return {
+            "title": title,
+            "artist": artist,
+            "album": _resolve_text(track_info, ("album", "album_name", "release")),
+            "lyrics": lyrics.strip(),
+        }
     return None
 
 
@@ -68,9 +84,13 @@ class LyricsWorker:
 
     def __init__(
         self,
-        lyrics_provider: LyricsProvider | None = None,
+        *,
+        spotify_client: SpotifyClient | None = None,
+        fallback_provider: LyricsProvider | None = None,
     ) -> None:
-        self._provider = lyrics_provider or default_lyrics_provider
+        self._spotify = spotify_client
+        lyrics_utils.SPOTIFY_CLIENT = spotify_client
+        self._fallback = fallback_provider or default_fallback_provider
         self._queue: asyncio.Queue[Optional[LyricsJob]] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -141,21 +161,34 @@ class LyricsWorker:
     async def _create_lrc(self, job: LyricsJob) -> Path:
         audio_path = Path(job.file_path)
         target = audio_path.with_suffix(".lrc")
-        target.parent.mkdir(parents=True, exist_ok=True)
 
-        lyrics = await self._obtain_lyrics(job.track_info)
-        if not lyrics:
+        lyrics_payload = await self._obtain_lyrics(job.track_info)
+        if not lyrics_payload:
             raise ValueError("Lyrics provider returned no content")
 
-        lrc_content = generate_lrc(job.track_info, lyrics)
-        target.write_text(lrc_content, encoding="utf-8")
+        combined: Dict[str, Any] = dict(job.track_info)
+        combined.update(lyrics_payload)
+
+        lrc_content = convert_to_lrc(combined)
+        save_lrc_file(target, lrc_content)
         return target
 
-    async def _obtain_lyrics(self, track_info: Dict[str, Any]) -> Optional[str]:
-        result = self._provider(track_info)
+    async def _obtain_lyrics(self, track_info: Dict[str, Any]) -> Optional[LyricsPayload]:
+        track_id = self._extract_spotify_id(track_info)
+        if track_id:
+            spotify_payload = await asyncio.to_thread(fetch_spotify_lyrics, track_id)
+            if spotify_payload:
+                return spotify_payload
+
+        result = self._fallback(track_info)
         if inspect.isawaitable(result):
-            return await result  # type: ignore[return-value]
-        return result
+            result = await result  # type: ignore[assignment]
+
+        if isinstance(result, Mapping):
+            return dict(result)
+        if isinstance(result, str):
+            return {"lyrics": result}
+        return None
 
     def _update_download(self, download_id: int, *, status: str, path: str | None) -> None:
         with session_scope() as session:
@@ -164,6 +197,48 @@ class LyricsWorker:
                 return
             download.lyrics_status = status
             download.lyrics_path = path
+            download.has_lyrics = bool(path and status == "done")
             download.updated_at = datetime.utcnow()
             session.add(download)
 
+    @staticmethod
+    def _extract_spotify_id(track_info: Mapping[str, Any]) -> Optional[str]:
+        keys = (
+            "spotify_track_id",
+            "spotifyTrackId",
+            "spotify_id",
+            "spotifyId",
+            "id",
+        )
+        for key in keys:
+            value = track_info.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, Mapping):
+                nested = value.get("id")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+        return None
+
+
+def _resolve_text(track_info: Mapping[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = track_info.get(key)
+        if isinstance(value, Mapping):
+            nested = value.get("name")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, Mapping):
+                nested = first.get("name")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+            if isinstance(first, str) and first.strip():
+                return first.strip()
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+__all__ = ["LyricsWorker", "default_fallback_provider"]
