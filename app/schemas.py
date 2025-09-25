@@ -133,6 +133,9 @@ class SoulseekDownloadEntry(BaseModel):
     isrc: Optional[str] = None
     copyright: Optional[str] = None
     artwork_url: Optional[str] = None
+    artwork_path: Optional[str] = None
+    artwork_status: Optional[str] = None
+    has_artwork: Optional[bool] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None
@@ -160,6 +163,9 @@ class DownloadEntryResponse(BaseModel):
     isrc: Optional[str] = None
     copyright: Optional[str] = None
     artwork_url: Optional[str] = None
+    artwork_path: Optional[str] = None
+    artwork_status: Optional[str] = None
+    has_artwork: Optional[bool] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None

@@ -54,6 +54,7 @@ class Download(Base):
     artwork_url = Column(String(2048), nullable=True)
     artwork_path = Column(String(2048), nullable=True)
     artwork_status = Column(String(32), nullable=False, default="pending")
+    has_artwork = Column(Boolean, nullable=False, default=False)
     lyrics_path = Column(String(2048), nullable=True)
     lyrics_status = Column(String(32), nullable=False, default="pending")
     has_lyrics = Column(Boolean, nullable=False, default=False)

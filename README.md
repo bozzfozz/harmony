@@ -73,7 +73,9 @@ Beispielantwort:
 
 ## High-Quality Artwork
 
-Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in maximaler Spotify-Auflösung herunter. Fällt die Spotify-Quelle aus, werden vorhandene Plex- oder Soulseek-Informationen als Fallback genutzt. Das Bild wird im Zielordner als `cover.jpg`/`cover.png` abgelegt und mittels Mutagen direkt in die Audiodatei eingebettet. Über den Endpoint `GET /soulseek/download/{id}/artwork` lässt sich das Cover als Pfad, Base64-kodierter Inhalt oder direkt als Binärdaten abrufen.
+Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in maximaler Spotify-Auflösung herunter. Die Originaldatei wird zentral im Verzeichnis `./artwork/` (bzw. per `HARMONY_ARTWORK_DIR`) abgelegt und anschließend mit Mutagen in die Audiodatei eingebettet. Schlägt der Spotify-Abruf fehl, versucht Harmony das Artwork über Plex-Metadaten, Soulseek oder externe Dienste wie Last.fm oder MusicBrainz zu ermitteln. Der Download-Datensatz speichert den Speicherort (`artwork_path`) sowie den Status (`has_artwork`).
+
+Über den Endpoint `GET /soulseek/download/{id}/artwork` liefert die API das eingebettete Cover direkt als `image/jpeg` (inkl. korrektem MIME-Type). Mit `POST /soulseek/download/{id}/artwork/refresh` lässt sich jederzeit ein erneuter Abruf auslösen, etwa wenn bessere Quellen verfügbar geworden sind.
 
 ## Harmony Web UI
 

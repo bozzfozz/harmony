@@ -1,4 +1,3 @@
-import base64
 from pathlib import Path
 from typing import Any, Dict
 
@@ -6,10 +5,9 @@ import pytest
 
 from app.db import session_scope
 from app.models import Download
+from app.utils import artwork_utils
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.sync_worker import SyncWorker
-from app.utils import artwork_utils
-from app.workers import artwork_worker as artwork_worker_module
 from tests.conftest import StubSoulseekClient
 
 
@@ -29,58 +27,100 @@ async def test_artwork_worker_fetches_spotify_cover(monkeypatch, tmp_path) -> No
         session.refresh(download)
         download_id = download.id
 
-    source_cover = tmp_path / "temp.jpg"
+    stored_files: Dict[str, Path] = {}
 
-    def fake_download(url: str) -> Path:
-        source_cover.write_bytes(b"image-bytes")
-        return source_cover
-
-    embedded: Dict[str, Path] = {}
+    def fake_download(url: str, target: Path) -> Path:
+        destination = Path(target)
+        if not destination.suffix:
+            destination = destination.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"image-bytes")
+        stored_files["downloaded"] = destination
+        return destination
 
     def fake_embed(audio_file: Path, artwork_file: Path) -> None:
-        embedded["audio"] = Path(audio_file)
-        embedded["artwork"] = Path(artwork_file)
+        stored_files["audio"] = Path(audio_file)
+        stored_files["artwork"] = Path(artwork_file)
 
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
-    monkeypatch.setattr(artwork_worker_module, "download_artwork", fake_download)
-    monkeypatch.setattr(artwork_worker_module, "embed_artwork", fake_embed)
 
     class StubSpotify:
-        def get_track_details(self, track_id: str) -> Dict[str, Any]:
-            assert track_id == "spotify-track"
+        def get_album_details(self, album_id: str) -> Dict[str, Any]:
+            assert album_id == "album-123"
             return {
-                "album": {
-                    "images": [
-                        {"url": "http://example.com/cover.jpg", "width": 1000, "height": 1000}
-                    ]
-                }
+                "images": [
+                    {"url": "http://example.com/cover.jpg", "width": 2000, "height": 2000},
+                ]
             }
 
-    worker = ArtworkWorker(spotify_client=StubSpotify())
+        def get_track_details(self, track_id: str) -> Dict[str, Any]:
+            return {}
+
+    artwork_dir = tmp_path / "artwork"
+    worker = ArtworkWorker(spotify_client=StubSpotify(), storage_directory=artwork_dir)
     await worker.start()
     try:
         await worker.enqueue(
             download_id,
             str(audio_path),
             metadata={},
-            spotify_track_id="spotify-track",
+            spotify_album_id="album-123",
         )
         await worker.wait_for_pending()
     finally:
         await worker.stop()
 
-    assert embedded["audio"] == audio_path
-    stored_cover = embedded["artwork"]
+    stored_cover = stored_files["artwork"]
+    assert stored_files["audio"] == audio_path
     assert stored_cover.exists()
-    assert stored_cover.parent == audio_path.parent
+    assert stored_cover.parent == artwork_dir.resolve()
     assert stored_cover.read_bytes() == b"image-bytes"
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
         assert refreshed is not None
+        assert refreshed.has_artwork is True
         assert refreshed.artwork_status == "done"
         assert Path(refreshed.artwork_path or "") == stored_cover
+
+
+@pytest.mark.asyncio
+async def test_artwork_worker_marks_failure(monkeypatch, tmp_path) -> None:
+    audio_path = tmp_path / "failure.mp3"
+    audio_path.write_bytes(b"audio")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    def fake_download(url: str, target: Path) -> Path:
+        raise RuntimeError("no artwork")
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+
+    worker = ArtworkWorker(storage_directory=tmp_path / "artwork")
+    await worker.start()
+    try:
+        await worker.enqueue(download_id, str(audio_path), metadata={})
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is False
+        assert refreshed.artwork_status == "failed"
+        assert refreshed.artwork_path is None
 
 
 @pytest.mark.asyncio
@@ -96,6 +136,7 @@ async def test_sync_worker_schedules_artwork(tmp_path) -> None:
             request_payload={
                 "spotify_id": "track-123",
                 "metadata": {"artwork_url": "http://existing.example/cover.jpg"},
+                "album": {"id": "album-999"},
             },
         )
         session.add(download)
@@ -114,6 +155,7 @@ async def test_sync_worker_schedules_artwork(tmp_path) -> None:
             *,
             metadata: Dict[str, Any] | None = None,
             spotify_track_id: str | None = None,
+            spotify_album_id: str | None = None,
             artwork_url: str | None = None,
         ) -> None:
             self.jobs.append(
@@ -122,6 +164,7 @@ async def test_sync_worker_schedules_artwork(tmp_path) -> None:
                     "file_path": file_path,
                     "metadata": dict(metadata or {}),
                     "spotify_track_id": spotify_track_id,
+                    "spotify_album_id": spotify_album_id,
                     "artwork_url": artwork_url,
                 }
             )
@@ -145,10 +188,11 @@ async def test_sync_worker_schedules_artwork(tmp_path) -> None:
     assert job["download_id"] == download_id
     assert job["file_path"] == str(audio_path)
     assert job["spotify_track_id"] == "track-123"
+    assert job["spotify_album_id"] == "album-999"
     assert job["artwork_url"] == "http://existing.example/cover.jpg"
 
 
-def test_artwork_endpoint_returns_base64(client, tmp_path) -> None:
+def test_artwork_endpoint_returns_image(client, tmp_path) -> None:
     cover_path = tmp_path / "cover.png"
     cover_path.write_bytes(b"png-bytes")
 
@@ -159,18 +203,14 @@ def test_artwork_endpoint_returns_base64(client, tmp_path) -> None:
             progress=100.0,
             artwork_status="done",
             artwork_path=str(cover_path),
+            has_artwork=True,
         )
         session.add(download)
         session.commit()
         session.refresh(download)
         download_id = download.id
 
-    response = client.get(
-        f"/soulseek/download/{download_id}/artwork",
-        params={"format": "base64"},
-    )
+    response = client.get(f"/soulseek/download/{download_id}/artwork")
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "done"
-    assert payload["mime_type"].startswith("image/")
-    assert base64.b64decode(payload["data"]) == b"png-bytes"
+    assert response.headers["content-type"].startswith("image/")
+    assert response._body == b"png-bytes"
