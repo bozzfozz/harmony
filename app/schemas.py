@@ -1,4 +1,5 @@
 """Pydantic schemas for request and response bodies."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -127,6 +128,7 @@ class SoulseekDownloadEntry(BaseModel):
     created_at: datetime
     updated_at: datetime
     priority: int = 0
+    organized_path: Optional[str] = None
     genre: Optional[str] = None
     composer: Optional[str] = None
     producer: Optional[str] = None
@@ -159,6 +161,7 @@ class DownloadEntryResponse(BaseModel):
     updated_at: datetime
     priority: int = 0
     username: Optional[str] = None
+    organized_path: Optional[str] = None
     genre: Optional[str] = None
     composer: Optional[str] = None
     producer: Optional[str] = None

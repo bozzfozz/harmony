@@ -1,4 +1,5 @@
 """Background worker for processing Soulseek download jobs."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +12,12 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
-from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.activity import (
+    record_activity,
+    record_worker_started,
+    record_worker_stopped,
+)
+from app.utils.file_utils import organize_file
 from app.utils.events import (
     DOWNLOAD_RETRY_COMPLETED,
     DOWNLOAD_RETRY_FAILED,
@@ -75,6 +81,7 @@ class SyncWorker:
         self._retry_attempts: Dict[int, int] = {}
         self._retry_lock = asyncio.Lock()
         self._retry_tasks: Set[asyncio.Task] = set()
+        self._music_dir = Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -267,8 +274,13 @@ class SyncWorker:
                 logger.warning("Download refresh failed: %s", exc)
                 active_downloads = False
 
-            interval = self._base_poll_interval if active_downloads else min(
-                self._idle_poll_interval, max(self._current_poll_interval * 1.5, self._base_poll_interval)
+            interval = (
+                self._base_poll_interval
+                if active_downloads
+                else min(
+                    self._idle_poll_interval,
+                    max(self._current_poll_interval * 1.5, self._base_poll_interval),
+                )
             )
             self._current_poll_interval = interval
             try:
@@ -282,7 +294,9 @@ class SyncWorker:
             await self._process_job(job.payload)
         except DownloadJobError as exc:
             self._job_store.mark_failed(job.id, str(exc))
-            logger.debug("Download job %s marked as failed after scheduling retry", job.id)
+            logger.debug(
+                "Download job %s marked as failed after scheduling retry", job.id
+            )
             return
         except Exception as exc:
             self._job_store.mark_failed(job.id, str(exc))
@@ -624,7 +638,9 @@ class SyncWorker:
                 try:
                     await self._client.cancel_download(str(identifier))
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Failed to cancel download %s via client: %s", identifier, exc)
+                    logger.warning(
+                        "Failed to cancel download %s via client: %s", identifier, exc
+                    )
             async with self._cancel_lock:
                 for identifier in to_cancel:
                     self._cancelled_downloads.discard(identifier)
@@ -633,7 +649,9 @@ class SyncWorker:
             try:
                 await self._handle_download_completion(identifier, payload)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Failed to enrich metadata for download %s: %s", identifier, exc)
+                logger.warning(
+                    "Failed to enrich metadata for download %s: %s", identifier, exc
+                )
 
         return active
 
@@ -650,9 +668,7 @@ class SyncWorker:
             request_payload = dict(download.request_payload or {})
             filename = download.filename
 
-        file_path = (
-            self._resolve_download_path(payload, request_payload) or filename
-        )
+        file_path = self._resolve_download_path(payload, request_payload) or filename
         metadata: Dict[str, Any] = {}
         artwork_url: Optional[str] = None
         if file_path and self._metadata_worker is not None:
@@ -700,12 +716,57 @@ class SyncWorker:
             with session_scope() as session:
                 record = session.get(Download, download_id)
                 if record is not None:
+                    organized_path: Path | None = None
+                    if file_path:
+                        record.filename = str(file_path)
+                        existing_path = (
+                            Path(record.organized_path)
+                            if isinstance(record.organized_path, str)
+                            else None
+                        )
+                        if existing_path is not None and existing_path.exists():
+                            file_path = str(existing_path)
+                            record.filename = file_path
+                        else:
+                            payload_copy: Dict[str, Any] = dict(
+                                record.request_payload or {}
+                            )
+                            nested_metadata: Dict[str, Any] = dict(
+                                payload_copy.get("metadata") or {}
+                            )
+                            for key, value in metadata.items():
+                                if isinstance(value, (str, int, float)):
+                                    text = str(value).strip()
+                                    if text and key not in nested_metadata:
+                                        nested_metadata[key] = text
+                            if nested_metadata:
+                                payload_copy["metadata"] = nested_metadata
+                                record.request_payload = payload_copy
+                            try:
+                                organized_path = organize_file(record, self._music_dir)
+                            except FileNotFoundError:
+                                logger.debug(
+                                    "Download file missing for organization: %s",
+                                    file_path,
+                                )
+                            except Exception as exc:  # pragma: no cover - defensive
+                                logger.warning(
+                                    "Failed to organise download %s: %s",
+                                    download_id,
+                                    exc,
+                                )
+                            else:
+                                file_path = str(organized_path)
+
                     if spotify_track_id:
                         record.spotify_track_id = spotify_track_id
                     if spotify_album_id:
                         record.spotify_album_id = spotify_album_id
                     if artwork_url:
                         record.artwork_url = artwork_url
+                    if organized_path is not None:
+                        record.organized_path = str(organized_path)
+                        record.filename = str(organized_path)
                     record.updated_at = datetime.utcnow()
                     session.add(record)
 

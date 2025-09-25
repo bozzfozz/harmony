@@ -166,7 +166,12 @@ async def test_sync_worker_schedules_lyrics_generation(tmp_path) -> None:
     finally:
         await lyrics_worker.stop()
 
-    lrc_path = audio_path.with_suffix(".lrc")
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        organized_path = Path(refreshed.filename)
+
+    lrc_path = organized_path.with_suffix(".lrc")
     assert lrc_path.exists()
     assert "Sync Song" in lrc_path.read_text(encoding="utf-8")
 

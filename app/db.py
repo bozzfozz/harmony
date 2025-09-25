@@ -155,6 +155,7 @@ def _apply_schema_extensions(engine: Engine) -> None:
         "producer": "VARCHAR(255)",
         "isrc": "VARCHAR(64)",
         "copyright": "VARCHAR(512)",
+        "organized_path": "VARCHAR(2048)",
     }
 
     for column_name, ddl in column_definitions.items():
