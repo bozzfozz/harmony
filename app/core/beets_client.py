@@ -6,6 +6,10 @@ import os
 import shlex
 import subprocess
 import re
+import tempfile
+from contextlib import suppress
+from urllib.parse import urlparse
+from urllib.request import urlopen
 
 from app.utils.logging_config import get_logger
 
@@ -165,6 +169,47 @@ class BeetsClient:
         parsed = self._parse_count_output(result.stdout, "Wrote", "written")
         logger.debug("Parsed write output: %s", parsed)
         return parsed
+
+    def update_metadata(self, file_path: str | Path, tags: Mapping[str, object]) -> None:
+        """Persist *tags* to *file_path* via ``beet modify`` and ``beet write``."""
+
+        path = Path(file_path)
+        assignments = [
+            f"{key}={value}"
+            for key, value in tags.items()
+            if value not in {None, ""}
+        ]
+        if assignments:
+            modify_args: list[str] = ["beet", "modify", "-y", str(path)]
+            modify_args.extend(assignments)
+            self._run(modify_args)
+
+        write_args: list[str] = ["beet", "write", "-y", str(path)]
+        if assignments:
+            for key in tags:
+                write_args.extend(["-f", key])
+        self._run(write_args)
+
+    def embed_artwork(self, file_path: str | Path, image_url: str) -> None:
+        """Download *image_url* and embed it into *file_path* via ``beet embedart``."""
+
+        if not image_url:
+            raise BeetsClientError("image_url must not be empty")
+
+        suffix = Path(urlparse(image_url).path or "").suffix or ".jpg"
+        tmp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp_path = Path(tmp.name)
+                with urlopen(image_url) as response:
+                    tmp.write(response.read())
+
+            args = ["beet", "embedart", "-f", str(tmp_path), str(Path(file_path))]
+            self._run(args)
+        finally:
+            if tmp_path is not None:
+                with suppress(FileNotFoundError):
+                    tmp_path.unlink()
 
     def fields(self) -> list[str]:
         """Return the list of available fields from ``beet fields``."""

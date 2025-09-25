@@ -76,8 +76,14 @@ async def startup_event() -> None:
         matching_engine = get_matching_engine()
         plex_client = get_plex_client()
         spotify_client = get_spotify_client()
+        beets_client = BeetsClient()
 
-        app.state.sync_worker = SyncWorker(soulseek_client)
+        app.state.sync_worker = SyncWorker(
+            soulseek_client,
+            spotify_client=spotify_client,
+            plex_client=plex_client,
+            beets_client=beets_client,
+        )
         await app.state.sync_worker.start()
 
         app.state.matching_worker = MatchingWorker(matching_engine)
@@ -94,7 +100,6 @@ async def startup_event() -> None:
             app.state.matching_worker,
         )
 
-        beets_client = BeetsClient()
         def _load_preferences() -> dict[str, bool]:
             with session_scope() as session:
                 records = (

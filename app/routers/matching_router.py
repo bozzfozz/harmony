@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db, get_matching_engine
 from app.logging import get_logger
-from app.models import Match
+from app.models import Download, Match
 from app.schemas import AlbumMatchingRequest, MatchingRequest, MatchingResponse
 
 logger = get_logger(__name__)
@@ -25,6 +25,38 @@ def _extract_target_id(candidate: Optional[Dict[str, Any]]) -> Optional[str]:
         if value is not None:
             return str(value)
     return None
+
+
+def _attach_download_metadata(
+    best_match: Optional[Dict[str, Any]], session: Session
+) -> Optional[Dict[str, Any]]:
+    if not best_match:
+        return best_match
+
+    for key in ("download_id", "id"):
+        identifier = best_match.get(key)
+        try:
+            download_id = int(identifier)
+        except (TypeError, ValueError):
+            continue
+        download = session.get(Download, download_id)
+        if download is None:
+            continue
+        enriched = dict(best_match)
+        metadata_payload: Dict[str, Any] = {}
+        if isinstance(enriched.get("metadata"), dict):
+            metadata_payload = dict(enriched["metadata"])
+        for field in ("genre", "composer", "producer", "isrc"):
+            value = getattr(download, field)
+            if value and field not in metadata_payload:
+                metadata_payload[field] = value
+        if download.artwork_url and not enriched.get("artwork_url"):
+            enriched["artwork_url"] = download.artwork_url
+        if metadata_payload:
+            enriched["metadata"] = metadata_payload
+        return enriched
+
+    return best_match
 
 
 def _persist_match(session: Session, match: Match) -> None:
@@ -77,7 +109,8 @@ def spotify_to_plex(
         confidence=confidence,
     )
     _persist_match(session, match)
-    return MatchingResponse(best_match=best_match, confidence=confidence)
+    enriched_match = _attach_download_metadata(best_match, session)
+    return MatchingResponse(best_match=enriched_match, confidence=confidence)
 
 
 @router.post("/spotify-to-soulseek", response_model=MatchingResponse)
@@ -103,7 +136,8 @@ def spotify_to_soulseek(
         confidence=best_score,
     )
     _persist_match(session, match)
-    return MatchingResponse(best_match=best_candidate, confidence=best_score)
+    enriched_match = _attach_download_metadata(best_candidate, session)
+    return MatchingResponse(best_match=enriched_match, confidence=best_score)
 
 
 @router.post("/spotify-to-plex-album", response_model=MatchingResponse)

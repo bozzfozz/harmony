@@ -180,3 +180,111 @@ class SpotifyClient:
             artist_id,
             album_type="album,single,compilation",
         )
+
+    def get_track_metadata(self, track_id: str) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {}
+        if not track_id:
+            return metadata
+
+        try:
+            track = self._execute(self._client.track, track_id)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Spotify track lookup failed for %s: %s", track_id, exc)
+            return metadata
+
+        if not isinstance(track, dict):
+            return metadata
+
+        external_ids = track.get("external_ids") or {}
+        isrc = external_ids.get("isrc")
+        if isrc:
+            metadata["isrc"] = str(isrc)
+
+        album = track.get("album") or {}
+        album_id = album.get("id")
+        album_data: Dict[str, Any] | None = None
+        if album_id:
+            try:
+                album_data = self._execute(self._client.album, album_id)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug("Spotify album lookup failed for %s: %s", album_id, exc)
+
+        genres: list[str] = []
+        if album_data:
+            payload = album_data.get("genres")
+            if isinstance(payload, list):
+                genres = [str(item) for item in payload if item]
+
+        if not genres:
+            artists = track.get("artists")
+            if isinstance(artists, list):
+                for artist in artists:
+                    artist_id = artist.get("id") if isinstance(artist, dict) else None
+                    if not artist_id:
+                        continue
+                    try:
+                        artist_payload = self._execute(self._client.artist, artist_id)
+                    except Exception as exc:  # pragma: no cover - defensive logging
+                        logger.debug("Spotify artist lookup failed for %s: %s", artist_id, exc)
+                        continue
+                    artist_genres = artist_payload.get("genres") if isinstance(artist_payload, dict) else None
+                    if isinstance(artist_genres, list) and artist_genres:
+                        genres = [str(item) for item in artist_genres if item]
+                        if genres:
+                            break
+
+        if genres:
+            metadata["genre"] = genres[0]
+
+        artwork_url = self._pick_best_image(album.get("images"))
+        if not artwork_url and album_data is not None:
+            artwork_url = self._pick_best_image(album_data.get("images"))
+        if artwork_url:
+            metadata["artwork_url"] = artwork_url
+
+        copyrights = album.get("copyrights")
+        if not copyrights and album_data is not None:
+            copyrights = album_data.get("copyrights")
+        text = self._extract_copyright(copyrights)
+        if text:
+            metadata["copyright"] = text
+
+        return metadata
+
+    @staticmethod
+    def _pick_best_image(images: Any) -> Optional[str]:
+        if not isinstance(images, list):
+            return None
+        best_url: Optional[str] = None
+        best_score = -1
+        for item in images:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("url")
+            if not url:
+                continue
+            width = item.get("width") or 0
+            height = item.get("height") or 0
+            score = int(width) * int(height)
+            if score > best_score:
+                best_score = score
+                best_url = str(url)
+        return best_url
+
+    @staticmethod
+    def _extract_copyright(payload: Any) -> Optional[str]:
+        if isinstance(payload, list):
+            for entry in payload:
+                if isinstance(entry, dict):
+                    text = entry.get("text") or entry.get("copyright")
+                    if text:
+                        return str(text)
+                elif isinstance(entry, str) and entry:
+                    return entry
+        elif isinstance(payload, dict):
+            text = payload.get("text") or payload.get("copyright")
+            if text:
+                return str(text)
+        elif isinstance(payload, str) and payload:
+            return payload
+        return None

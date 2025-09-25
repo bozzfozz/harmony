@@ -4,9 +4,12 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
+from app.core.beets_client import BeetsClient
+from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
+from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
@@ -44,8 +47,14 @@ class SyncWorker:
         base_poll_interval: float = 2.0,
         idle_poll_interval: Optional[float] = None,
         concurrency: Optional[int] = None,
+        spotify_client: SpotifyClient | None = None,
+        plex_client: PlexClient | None = None,
+        beets_client: BeetsClient | None = None,
     ) -> None:
         self._client = soulseek_client
+        self._spotify = spotify_client
+        self._plex = plex_client
+        self._beets = beets_client
         self._job_store = PersistentJobQueue("sync")
         self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]] = (
             asyncio.PriorityQueue()
@@ -556,6 +565,7 @@ class SyncWorker:
             pending_cancels = set(self._cancelled_downloads)
 
         to_cancel: List[int] = []
+        completed_downloads: List[Tuple[int, Dict[str, Any]]] = []
         with session_scope() as session:
             for payload in downloads:
                 download_id = payload.get("download_id") or payload.get("id")
@@ -566,9 +576,10 @@ class SyncWorker:
                 if download is None:
                     continue
 
-                state = str(payload.get("state", download.state))
+                previous_state = download.state
+                state = str(payload.get("state", previous_state))
                 if state not in ALLOWED_STATES:
-                    state = download.state
+                    state = previous_state
 
                 progress_value = payload.get("progress", download.progress)
                 try:
@@ -598,6 +609,8 @@ class SyncWorker:
                 download.state = state
                 download.progress = progress
                 download.updated_at = datetime.utcnow()
+                if state == "completed" and previous_state != "completed":
+                    completed_downloads.append((int(download_id), dict(payload)))
 
         if active:
             write_setting("metrics.sync.active_downloads", "1")
@@ -615,7 +628,209 @@ class SyncWorker:
                 for identifier in to_cancel:
                     self._cancelled_downloads.discard(identifier)
 
+        for identifier, payload in completed_downloads:
+            try:
+                await self._handle_download_completion(identifier, payload)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to enrich metadata for download %s: %s", identifier, exc)
+
         return active
 
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("sync")
+
+    async def _handle_download_completion(
+        self, download_id: int, payload: Dict[str, Any]
+    ) -> None:
+        with session_scope() as session:
+            download = session.get(Download, download_id)
+            if download is None:
+                return
+            request_payload = dict(download.request_payload or {})
+            filename = download.filename
+
+        metadata = await self._collect_metadata(download_id, payload, request_payload)
+        file_path = (
+            self._resolve_download_path(payload, request_payload) or filename
+        )
+
+        tags = {
+            key: value
+            for key, value in metadata.items()
+            if key in {"genre", "composer", "producer", "isrc", "copyright"}
+            and value
+        }
+        artwork_url = metadata.get("artwork_url")
+
+        if self._beets is not None and file_path:
+            if tags:
+                try:
+                    await asyncio.to_thread(self._beets.update_metadata, file_path, tags)
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Failed to update metadata via beets for %s: %s", file_path, exc
+                    )
+            if artwork_url:
+                try:
+                    await asyncio.to_thread(
+                        self._beets.embed_artwork, file_path, artwork_url
+                    )
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Failed to embed artwork via beets for %s: %s", file_path, exc
+                    )
+
+        with session_scope() as session:
+            download = session.get(Download, download_id)
+            if download is None:
+                return
+            updated = False
+            for key in ("genre", "composer", "producer", "isrc"):
+                value = metadata.get(key)
+                if value and getattr(download, key) != value:
+                    setattr(download, key, value)
+                    updated = True
+            if artwork_url and download.artwork_url != artwork_url:
+                download.artwork_url = artwork_url
+                updated = True
+            if updated:
+                download.updated_at = datetime.utcnow()
+            session.add(download)
+
+    async def _collect_metadata(
+        self,
+        download_id: int,
+        payload: Mapping[str, Any],
+        request_payload: Mapping[str, Any],
+    ) -> Dict[str, str]:
+        metadata: Dict[str, str] = {}
+        metadata.update(self._extract_metadata_from_payload(request_payload))
+        metadata.update(self._extract_metadata_from_payload(payload))
+
+        metadata_func = getattr(self._client, "get_download_metadata", None)
+        if callable(metadata_func):
+            try:
+                extra = await metadata_func(str(download_id))
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Soulseek metadata lookup failed for %s: %s", download_id, exc
+                )
+            else:
+                metadata.update(self._extract_metadata_from_payload(extra))
+
+        spotify_id = self._extract_spotify_id(request_payload)
+        if not spotify_id:
+            spotify_id = self._extract_spotify_id(payload)
+        if spotify_id and self._spotify is not None:
+            try:
+                spotify_metadata = self._spotify.get_track_metadata(spotify_id)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Spotify metadata lookup failed for %s: %s", spotify_id, exc
+                )
+            else:
+                metadata.update(
+                    {
+                        key: str(value)
+                        for key, value in spotify_metadata.items()
+                        if value not in {None, ""}
+                    }
+                )
+
+        plex_id = self._extract_plex_id(request_payload)
+        if not plex_id:
+            plex_id = self._extract_plex_id(payload)
+        if plex_id and self._plex is not None:
+            try:
+                plex_metadata = await self._plex.get_track_metadata(str(plex_id))
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug("Plex metadata lookup failed for %s: %s", plex_id, exc)
+            else:
+                metadata.update(
+                    {
+                        key: str(value)
+                        for key, value in plex_metadata.items()
+                        if value not in {None, ""}
+                    }
+                )
+
+        return metadata
+
+    @staticmethod
+    def _extract_metadata_from_payload(payload: Mapping[str, Any] | None) -> Dict[str, str]:
+        metadata: Dict[str, str] = {}
+        if not isinstance(payload, Mapping):
+            return metadata
+        for key in ("genre", "composer", "producer", "isrc", "artwork_url", "copyright"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)):
+                text = str(value).strip()
+                if text:
+                    metadata[key] = text
+        nested = payload.get("metadata")
+        if isinstance(nested, Mapping):
+            nested_metadata = SyncWorker._extract_metadata_from_payload(nested)
+            for key, value in nested_metadata.items():
+                metadata.setdefault(key, value)
+        return metadata
+
+    @staticmethod
+    def _extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
+        if not isinstance(payload, Mapping):
+            return None
+        keys = (
+            "spotify_id",
+            "spotifyId",
+            "spotify_track_id",
+            "spotifyTrackId",
+            "spotify_track",
+        )
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, Mapping):
+                nested = value.get("id")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+        nested = payload.get("track")
+        if isinstance(nested, Mapping):
+            candidate = nested.get("spotify_id") or nested.get("id")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        return None
+
+    @staticmethod
+    def _extract_plex_id(payload: Mapping[str, Any] | None) -> Optional[str]:
+        if not isinstance(payload, Mapping):
+            return None
+        for key in ("plex_id", "plexId", "plex_rating_key", "ratingKey", "rating_key"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        nested = payload.get("metadata")
+        if isinstance(nested, Mapping):
+            candidate = nested.get("ratingKey") or nested.get("id")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        return None
+
+    @staticmethod
+    def _resolve_download_path(
+        *payloads: Mapping[str, Any] | None,
+    ) -> Optional[str]:
+        for payload in payloads:
+            if not isinstance(payload, Mapping):
+                continue
+            for key in (
+                "local_path",
+                "localPath",
+                "path",
+                "file_path",
+                "filePath",
+                "filename",
+            ):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None

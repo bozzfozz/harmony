@@ -128,6 +128,23 @@ class SoulseekClient:
     async def get_queue_position(self, download_id: str) -> Dict[str, Any]:
         return await self._request("GET", f"transfers/downloads/{download_id}/queue")
 
+    async def get_download_metadata(self, download_id: str) -> Dict[str, Any]:
+        try:
+            payload = await self.get_download(download_id)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to fetch download metadata for %s: %s", download_id, exc)
+            return {}
+
+        metadata = payload.get("metadata") if isinstance(payload, dict) else None
+        if not isinstance(metadata, dict):
+            return {}
+        normalised: Dict[str, Any] = {}
+        for key, value in metadata.items():
+            if value in {None, ""}:
+                continue
+            normalised[str(key)] = value
+        return normalised
+
     async def enqueue(self, username: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not username:
             raise ValueError("username is required for enqueue requests")
