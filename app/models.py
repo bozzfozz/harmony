@@ -50,6 +50,7 @@ class Download(Base):
     composer = Column(String(255), nullable=True)
     producer = Column(String(255), nullable=True)
     isrc = Column(String(64), nullable=True)
+    copyright = Column(String(512), nullable=True)
     artwork_url = Column(String(2048), nullable=True)
     artwork_path = Column(String(2048), nullable=True)
     artwork_status = Column(String(32), nullable=False, default="pending")

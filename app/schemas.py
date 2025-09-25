@@ -131,6 +131,7 @@ class SoulseekDownloadEntry(BaseModel):
     composer: Optional[str] = None
     producer: Optional[str] = None
     isrc: Optional[str] = None
+    copyright: Optional[str] = None
     artwork_url: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
@@ -156,6 +157,7 @@ class DownloadEntryResponse(BaseModel):
     composer: Optional[str] = None
     producer: Optional[str] = None
     isrc: Optional[str] = None
+    copyright: Optional[str] = None
     artwork_url: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
@@ -176,6 +178,18 @@ class DownloadListResponse(BaseModel):
 
 class SoulseekCancelResponse(BaseModel):
     cancelled: bool
+
+
+class DownloadMetadataResponse(BaseModel):
+    id: int
+    filename: str
+    genre: Optional[str] = None
+    composer: Optional[str] = None
+    producer: Optional[str] = None
+    isrc: Optional[str] = None
+    copyright: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DownloadPriorityUpdate(BaseModel):

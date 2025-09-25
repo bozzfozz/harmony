@@ -11,7 +11,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Async Plex-Client** mit Zugriff auf Bibliotheken, Sessions, PlayQueues, Live-TV und Echtzeit-Benachrichtigungen.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
-- **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und bettet das Cover nun in höchster verfügbarer Auflösung ein.
+- **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und Copyright, bettet Cover in höchster verfügbarer Auflösung ein und stellt die Tags per API bereit.
 - **Automatic Lyrics**: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten.
 - **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Plex/Soulseek inklusive Persistierung.
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
@@ -39,6 +39,24 @@ nachverfolgt werden.
 ## Automatic Lyrics
 
 Nach erfolgreich abgeschlossenen Downloads erstellt Harmony automatisch eine `.lrc`-Datei mit synchronisierten Lyrics und legt sie im gleichen Verzeichnis wie die Audiodatei ab. Der Fortschritt wird im Download-Datensatz gespeichert. Über den neuen Endpunkt `GET /soulseek/download/{id}/lyrics` lässt sich der Inhalt der generierten LRC-Datei abrufen; solange die Generierung noch läuft, liefert der Endpunkt einen entsprechenden Status.
+
+## Rich Metadata
+
+Der neue Metadata-Worker lauscht auf abgeschlossene Downloads und reichert jede Audiodatei mit zusätzlichen Tags an. Die Informationen stammen primär aus der Spotify-API (Track-, Album- und Künstlerdaten), fehlende Felder werden über Plex ergänzt. Harmony schreibt Genre, Komponist, Produzent, ISRC und Copyright direkt in die Mediendatei, persistiert die Werte in der `downloads`-Tabelle und stellt sie über `GET /soulseek/download/{id}/metadata` als JSON zur Verfügung.
+
+Beispielantwort:
+
+```json
+{
+  "id": 42,
+  "filename": "Artist - Track.flac",
+  "genre": "House",
+  "composer": "Composer A",
+  "producer": "Producer B",
+  "isrc": "ISRC123456789",
+  "copyright": "2024 Example Records"
+}
+```
 
 ## High-Quality Artwork
 
