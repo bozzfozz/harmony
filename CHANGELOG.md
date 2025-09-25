@@ -2,6 +2,7 @@
 
 ## v1.x.x
 
+- Smart Search Filter – `/api/search` akzeptiert ein optionales `filters`-Objekt mit Genre-, Jahr- und Qualitätsangabe. Die Trefferliste enthält nun einheitliche `genre`-Felder, Filter werden case-insensitiv auf alle Quellen angewandt und Suchanfragen mit Filtern werden im Log festgehalten.
 - Smart Search – `/api/search` akzeptiert optionale Filter für Genre, Jahr und Audioqualität. Die Ergebnisse werden als einheitliche Trefferliste mit Quelle, Typ, Jahr und Qualitätslabel zurückgegeben. Fehler einzelner Dienste tauchen weiterhin separat im `errors`-Block auf.
 - High-Quality Artwork – Downloads enthalten automatisch eingebettete Cover in Originalauflösung. Artwork-Dateien werden pro `spotify_album_id` zwischengespeichert (konfigurierbar via `ARTWORK_DIR`) und beim Abschluss von Downloads in MP3/FLAC/MP4 eingebettet. Neue API-Endpunkte: `GET /soulseek/download/{id}/artwork` (liefert Bild oder `404`) und `POST /soulseek/download/{id}/artwork/refresh` (erneut einreihen). Download-Datensätze speichern die zugehörigen Spotify-IDs (`spotify_track_id`, `spotify_album_id`).
 - File Organization – abgeschlossene Downloads werden automatisch nach `Artist/Album/Track` in den Musik-Ordner (`MUSIC_DIR`, Default `./music`) verschoben. Auch Alben ohne Metadaten landen in einem eigenen `<Unknown Album>`-Verzeichnis, Dateinamen werden normalisiert und Duplikate mit Suffixen (`_1`, `_2`, …) abgelegt. Der endgültige Pfad steht in der Datenbank (`downloads.organized_path`) sowie in `GET /soulseek/downloads` zur Verfügung.

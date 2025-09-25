@@ -41,6 +41,7 @@ class StubSpotifyClient:
                     "release_date": "1969-01-01",
                     "artists": [{"name": "Tester"}],
                 },
+                "genre": "rock",
                 "duration_ms": 200000,
             },
         }
@@ -56,6 +57,7 @@ class StubSpotifyClient:
                 "name": "Album",
                 "artists": [{"name": "Tester"}],
                 "release_date": "1969-02-02",
+                "genres": ["rock"],
             }
         }
         self.playlist_items: Dict[str, Dict[str, Any]] = {
@@ -96,7 +98,13 @@ class StubSpotifyClient:
         year: int | None = None,
     ) -> Dict[str, Any]:
         self.last_requests["artists"] = {"query": query, "genre": genre, "year": year}
-        return {"artists": {"items": [{"id": "artist-1", "name": "Tester"}]}}
+        return {
+            "artists": {
+                "items": [
+                    {"id": "artist-1", "name": "Tester", "genres": ["rock"]}
+                ]
+            }
+        }
 
     def search_albums(
         self,
