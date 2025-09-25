@@ -1,6 +1,7 @@
-import { ReactNode, useEffect, useMemo, useRef } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Select } from './ui/select';
 import { useToast } from '../hooks/useToast';
 import { ApiError, getActivityFeed, ActivityItem, ActivityStatus, ActivityType } from '../lib/api';
 import { useQuery } from '../lib/query';
@@ -84,6 +85,35 @@ const isKnownActivityType = (type: ActivityType): type is KnownActivityType =>
 
 const isKnownStatus = (status: string): status is KnownStatus =>
   Object.prototype.hasOwnProperty.call(STATUS_STYLES, status);
+
+type ActivityFilter = 'all' | 'sync' | 'download' | 'metadata' | 'worker';
+
+const ACTIVITY_FILTER_OPTIONS: Array<{ value: ActivityFilter; label: string }> = [
+  { value: 'all', label: 'Alle' },
+  { value: 'sync', label: 'Sync' },
+  { value: 'download', label: 'Download' },
+  { value: 'metadata', label: 'Metadata' },
+  { value: 'worker', label: 'Worker' }
+];
+
+const matchesFilter = (item: ActivityItem, filter: ActivityFilter) => {
+  if (filter === 'all') {
+    return true;
+  }
+  if (filter === 'sync') {
+    return item.type === 'sync' || item.type === 'autosync';
+  }
+  if (filter === 'download') {
+    return item.type === 'download' || item.type.startsWith('download_');
+  }
+  if (filter === 'metadata') {
+    return item.type === 'metadata';
+  }
+  if (filter === 'worker') {
+    return item.type === 'worker' || item.type.startsWith('worker_');
+  }
+  return true;
+};
 
 const prettify = (value: string) => {
   const normalized = value.replace(/[_-]+/g, ' ').trim();
@@ -491,6 +521,7 @@ const renderActivitySummary = (item: ActivityItem) => {
 const ActivityFeed = () => {
   const { toast } = useToast();
   const emptyToastShownRef = useRef(false);
+  const [filter, setFilter] = useState<ActivityFilter>('all');
 
   const { data, isLoading, isError } = useQuery<ActivityItem[]>({
     queryKey: ['activity-feed'],
@@ -535,12 +566,31 @@ const ActivityFeed = () => {
     return [...data].sort((a, b) => parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp));
   }, [data]);
 
+  const filteredRows = useMemo(() => rows.filter((item) => matchesFilter(item, filter)), [rows, filter]);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Activity Feed</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="mb-4 flex flex-col gap-1 sm:w-56">
+          <label htmlFor="activity-type-filter" className="text-sm font-medium text-foreground">
+            Event-Typ
+          </label>
+          <Select
+            id="activity-type-filter"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value as ActivityFilter)}
+            disabled={isLoading || rows.length === 0}
+          >
+            {ACTIVITY_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-6 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" aria-label="Lade Aktivitäten" />
@@ -551,9 +601,11 @@ const ActivityFeed = () => {
           </p>
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">Keine Aktivitäten vorhanden.</p>
+        ) : filteredRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Keine Aktivitäten für diesen Typ.</p>
         ) : (
           <div className="space-y-3">
-            {rows.map((item) => {
+            {filteredRows.map((item) => {
               const detailsContent = renderActivityDetails(item);
               const key = `${item.timestamp}-${item.type}-${item.status}`;
               if (!detailsContent) {
