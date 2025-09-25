@@ -8,6 +8,7 @@
 - [x] Design-Guidelines dokumentiert und im UI angewendet.
 - [x] Release-Filter (Album/Single/EP) auf der Artists-Seite ergänzt.
 - [x] Event-Typ-Filter im Activity Feed ergänzt.
+- [x] Sammel-Retry für fehlgeschlagene Downloads auf der Downloads-Seite ergänzt.
 
 ## Offen
 - [ ] Integrationstests für globale API-Fehler (401/403/503) inklusive Redirect-Checks ergänzen.

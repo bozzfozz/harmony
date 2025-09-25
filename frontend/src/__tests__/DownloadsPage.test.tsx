@@ -36,6 +36,24 @@ describe('DownloadsPage', () => {
     jest.clearAllMocks();
   });
 
+  it('shows the bulk retry button when failed downloads exist', async () => {
+    mockedGetDownloads.mockResolvedValue([
+      {
+        id: 10,
+        filename: 'Failed Song.mp3',
+        status: 'failed',
+        progress: 0,
+        priority: 1
+      }
+    ]);
+
+    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+
+    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
+    expect(bulkButton).toBeInTheDocument();
+    expect(bulkButton).toBeEnabled();
+  });
+
   it('filters downloads by status', async () => {
     mockedGetDownloads.mockResolvedValue([
       {
@@ -114,6 +132,86 @@ describe('DownloadsPage', () => {
 
     expect(await screen.findByText('Retried File.mp3')).toBeInTheDocument();
     expect(screen.getByText('Download Retry Scheduled')).toBeInTheDocument();
+  });
+
+  it('retries all failed downloads when using the bulk retry button', async () => {
+    mockedGetDownloads.mockResolvedValue([
+      {
+        id: 11,
+        filename: 'First Failed.mp3',
+        status: 'failed',
+        progress: 0,
+        priority: 1
+      },
+      {
+        id: 12,
+        filename: 'Second Failed.mp3',
+        status: 'failed',
+        progress: 0,
+        priority: 2
+      },
+      {
+        id: 13,
+        filename: 'Completed.mp3',
+        status: 'completed',
+        progress: 100,
+        priority: 3
+      }
+    ]);
+    mockedRetryDownload.mockResolvedValue({
+      id: 11,
+      filename: 'First Failed.mp3',
+      status: 'queued',
+      progress: 0,
+      priority: 1
+    } as never);
+
+    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+
+    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
+    await userEvent.click(bulkButton);
+
+    await waitFor(() => expect(mockedRetryDownload).toHaveBeenCalledTimes(2));
+    expect(mockedRetryDownload).toHaveBeenCalledWith('11');
+    expect(mockedRetryDownload).toHaveBeenCalledWith('12');
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Alle fehlgeschlagenen Downloads wurden neu gestartet' })
+    );
+  });
+
+  it('shows an error toast when the bulk retry fails', async () => {
+    mockedGetDownloads.mockResolvedValue([
+      {
+        id: 20,
+        filename: 'Broken.mp3',
+        status: 'failed',
+        progress: 0,
+        priority: 1
+      }
+    ]);
+    mockedRetryDownload.mockRejectedValue(
+      new ApiError({
+        message: 'Retry fehlgeschlagen',
+        status: 500,
+        data: null,
+        originalError: new Error('retry failed')
+      })
+    );
+
+    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+
+    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
+    await userEvent.click(bulkButton);
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Neu-Start fehlgeschlagen',
+          description: 'Retry fehlgeschlagen'
+        })
+      )
+    );
+    expect(mockedRetryDownload).toHaveBeenCalledTimes(1);
   });
 
   it('exports downloads as CSV', async () => {
