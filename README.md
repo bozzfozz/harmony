@@ -20,13 +20,13 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 ## Smart Search
 
-Die globale Suche (`POST /api/search`) kombiniert Spotify-, Plex- und Soulseek-Ergebnisse in einer normalisierten Trefferliste. Optional lassen sich drei Filter setzen:
+Die globale Suche (`POST /api/search`) kombiniert Spotify-, Plex- und Soulseek-Ergebnisse in einer normalisierten Trefferliste. Optional lässt sich ein `filters`-Objekt mit bis zu drei Kriterien setzen:
 
 - `genre`: Begrenzt die Ergebnisse auf ein bestimmtes Genre (z. B. `rock`).
-- `year`: Filtert nach Veröffentlichungsjahr (`int`).
+- `year`: Filtert nach Veröffentlichungsjahr (Ganzzahl oder String).
 - `quality`: Erwartete Audioqualität, etwa `FLAC` oder `320kbps`. Streaming-Resultate (Spotify) werden bei aktivem Qualitätsfilter automatisch ausgeschlossen.
 
-Die Antwort enthält für jeden Treffer konsistente Felder (`id`, `source`, `type`, `artist`, `album`, `title`, `year`, `quality`) und führt alle Quellen in einer Liste zusammen. Fehler einzelner Dienste werden im Feld `errors` gesammelt und blockieren den Gesamtaufruf nicht.
+Die Filter greifen nach dem Abruf aller Quellen und sind case-insensitiv. Die Antwort enthält für jeden Treffer konsistente Felder (`id`, `source`, `type`, `artist`, `album`, `title`, `year`, `genre`, `quality`) und führt alle Quellen in einer Liste zusammen. Fehler einzelner Dienste werden im Feld `errors` gesammelt und blockieren den Gesamtaufruf nicht.
 
 ## Complete Discographies
 

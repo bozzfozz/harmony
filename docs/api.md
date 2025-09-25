@@ -152,15 +152,17 @@ POST /api/metadata/update HTTP/1.1
 {
   "query": "The Beatles",
   "sources": ["spotify", "plex", "soulseek"],
-  "genre": "rock",
-  "year": 1969,
-  "quality": "FLAC"
+  "filters": {
+    "genre": "rock",
+    "year": 1969,
+    "quality": "FLAC"
+  }
 }
 ```
 
 - `query` (Pflicht): Freitext, wird automatisch beschnitten.
 - `sources` (optional): Teilmenge von `spotify`, `plex`, `soulseek`. Fehlt das Feld, durchsucht Harmony alle Quellen.
-- `genre`, `year`, `quality` (optional): Filtert Ergebnisse auf Genre, Erscheinungsjahr sowie Audioqualität (z. B. `FLAC`, `320kbps`).
+- `filters` (optional): Objekt mit `genre`, `year`, `quality`. Die Werte werden fallunabhängig verglichen; `year` akzeptiert Integer oder Strings.
 
 **Antwortstruktur**
 
@@ -177,6 +179,7 @@ POST /api/metadata/update HTTP/1.1
       "album": "Abbey Road",
       "title": "Come Together",
       "year": 1969,
+      "genre": "rock",
       "quality": "FLAC 1000kbps"
     },
     {
@@ -187,6 +190,7 @@ POST /api/metadata/update HTTP/1.1
       "album": "Abbey Road",
       "title": "Something",
       "year": 1969,
+      "genre": "rock",
       "quality": "FLAC 900kbps"
     }
   ],
@@ -196,7 +200,7 @@ POST /api/metadata/update HTTP/1.1
 }
 ```
 
-Die Liste `results` vereinheitlicht die Daten aller Quellen. Qualitätsfilter schließen automatisch alle Treffer ohne Angabe von Format/Bitrate aus (Spotify liefert bei aktivem Qualitätsfilter keine Ergebnisse). Das Feld `errors` ist optional und enthält pro Quelle eine Fehlermeldung, falls einzelne Dienste nicht erreichbar waren.
+Die Liste `results` vereinheitlicht die Daten aller Quellen. Qualitätsfilter schließen automatisch alle Treffer ohne Angabe von Format/Bitrate aus (Spotify liefert bei aktivem Qualitätsfilter keine Ergebnisse). Genre- und Jahresfilter greifen nachgelagert auf Basis der gelieferten Metadaten. Das Feld `errors` ist optional und enthält pro Quelle eine Fehlermeldung, falls einzelne Dienste nicht erreichbar waren.
 
 > **Hinweis:** Die in diesem Dokument verwendeten Statusnamen für Activity-Events sind zentral in `app/utils/events.py` hinterlegt und werden von Routern, Workern und Tests gemeinsam genutzt.
 

@@ -32,6 +32,53 @@ class SearchFilters:
     quality: str | None = None
 
 
+class SearchFilterPayload(BaseModel):
+    """Payload model for optional search filters."""
+
+    genre: str | None = Field(default=None, description="Optionales Genre-Filter")
+    year: int | None = Field(default=None, ge=0, description="Optionales Jahr-Filter")
+    quality: str | None = Field(
+        default=None,
+        description="Optionale Qualitätsanforderung (z. B. FLAC, 320kbps)",
+    )
+
+    @field_validator("genre", "quality", mode="before")
+    @classmethod
+    def _normalise_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+    @field_validator("year", mode="before")
+    @classmethod
+    def _coerce_year(cls, value: Any) -> int | None:
+        if value in {None, ""}:
+            return None
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("year must be positive")
+            return value
+        if isinstance(value, float):
+            if value < 0:
+                raise ValueError("year must be positive")
+            return int(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            if not stripped.isdigit():
+                raise ValueError("year must be a number")
+            return int(stripped)
+        raise ValueError("year must be numeric")
+
+    def to_filters(self) -> SearchFilters:
+        return SearchFilters(genre=self.genre, year=self.year, quality=self.quality)
+
+    def as_activity_details(self) -> Dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
 class SearchRequest(BaseModel):
     """Request payload for the global search endpoint."""
 
@@ -39,10 +86,8 @@ class SearchRequest(BaseModel):
     sources: List[str] | str | None = Field(
         default=None, description="Optionale Quellenauswahl (spotify, plex, soulseek)"
     )
-    genre: str | None = Field(default=None, description="Optionales Genre-Filter")
-    year: int | None = Field(default=None, ge=0, description="Optionales Jahr-Filter")
-    quality: str | None = Field(
-        default=None, description="Optionale Qualitätsanforderung (z. B. FLAC, 320kbps)"
+    filters: SearchFilterPayload | None = Field(
+        default=None, description="Optionale Filter für Genre, Jahr und Qualität"
     )
 
     @field_validator("query")
@@ -52,14 +97,6 @@ class SearchRequest(BaseModel):
         if not stripped:
             raise ValueError("Query is required")
         return stripped
-
-    @field_validator("genre", "quality", mode="before")
-    @classmethod
-    def _normalise_optional(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        stripped = str(value).strip()
-        return stripped or None
 
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
@@ -163,11 +200,8 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
     """Perform a combined search across Spotify, Plex and Soulseek."""
 
     query = payload.query
-    filters = SearchFilters(
-        genre=payload.genre,
-        year=payload.year,
-        quality=payload.quality,
-    )
+    filter_payload = payload.filters or SearchFilterPayload()
+    filters = filter_payload.to_filters()
     requested_sources = _normalise_sources(payload.sources)
     detail_sources = sorted(requested_sources)
 
@@ -175,17 +209,10 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
         "query": query,
         "sources": detail_sources,
     }
-    filter_details = {
-        key: value
-        for key, value in (
-            ("genre", payload.genre),
-            ("year", payload.year),
-            ("quality", payload.quality),
-        )
-        if value is not None
-    }
+    filter_details = filter_payload.as_activity_details()
     if filter_details:
         activity_details["filters"] = filter_details
+        logger.info("Applying search filters: %s", filter_details)
 
     record_activity("search", "search_started", details=activity_details)
 
@@ -337,6 +364,8 @@ def _search_spotify(
             continue
         if filters.year and normalised.get("year") not in {None, filters.year}:
             continue
+        if filters.genre and not _genre_matches(normalised.get("genre"), filters.genre):
+            continue
         results.append(normalised)
 
     albums = (
@@ -350,6 +379,8 @@ def _search_spotify(
             continue
         if filters.year and normalised.get("year") not in {None, filters.year}:
             continue
+        if filters.genre and not _genre_matches(normalised.get("genre"), filters.genre):
+            continue
         results.append(normalised)
 
     artists = (
@@ -360,6 +391,8 @@ def _search_spotify(
     for item in artists or []:
         normalised = _normalise_spotify_artist(item)
         if normalised is not None:
+            if filters.genre and not _genre_matches(normalised.get("genre"), filters.genre):
+                continue
             results.append(normalised)
 
     return results
@@ -428,6 +461,14 @@ def _normalise_spotify_track(item: Dict[str, Any]) -> Dict[str, Any] | None:
     ]
     if not track_id or not title:
         return None
+    genre = _extract_spotify_genre(item)
+    if genre is None:
+        genre = _extract_spotify_genre(album_payload)
+    if genre is None:
+        for artist_payload in item.get("artists", []) or []:
+            genre = _extract_spotify_genre(artist_payload)
+            if genre:
+                break
     return {
         "id": str(track_id),
         "source": "spotify",
@@ -436,6 +477,7 @@ def _normalise_spotify_track(item: Dict[str, Any]) -> Dict[str, Any] | None:
         "album": album_name or None,
         "title": title,
         "year": _parse_year(album_payload.get("release_date")),
+        "genre": genre,
         "quality": None,
     }
 
@@ -450,6 +492,12 @@ def _normalise_spotify_album(item: Dict[str, Any]) -> Dict[str, Any] | None:
     ]
     if not album_id or not name:
         return None
+    genre = _extract_spotify_genre(item)
+    if genre is None:
+        for artist_payload in item.get("artists", []) or []:
+            genre = _extract_spotify_genre(artist_payload)
+            if genre:
+                break
     return {
         "id": str(album_id),
         "source": "spotify",
@@ -458,6 +506,7 @@ def _normalise_spotify_album(item: Dict[str, Any]) -> Dict[str, Any] | None:
         "album": name,
         "title": name,
         "year": _parse_year(item.get("release_date")),
+        "genre": genre,
         "quality": None,
     }
 
@@ -475,6 +524,7 @@ def _normalise_spotify_artist(item: Dict[str, Any]) -> Dict[str, Any] | None:
         "album": None,
         "title": name,
         "year": None,
+        "genre": _extract_spotify_genre(item),
         "quality": None,
     }
 
@@ -501,7 +551,10 @@ def _normalise_plex_entry(
         return None
 
     genres = _extract_plex_genres(entry)
-    if filters.genre and (not genres or filters.genre.lower() not in genres):
+    if filters.genre and (
+        not genres
+        or not any(_genre_matches(genre, filters.genre) for genre in genres)
+    ):
         return None
 
     quality = _extract_plex_quality(entry.get("Media"))
@@ -517,30 +570,36 @@ def _normalise_plex_entry(
         "album": album or None,
         "title": title or str(identifier),
         "year": year,
+        "genre": genres[0] if genres else None,
         "quality": quality,
     }
 
 
-def _extract_plex_genres(entry: Dict[str, Any]) -> set[str]:
-    genres: set[str] = set()
+def _extract_plex_genres(entry: Dict[str, Any]) -> list[str]:
+    genres: list[str] = []
     raw = entry.get("Genre")
     if isinstance(raw, list):
         for item in raw:
-            tag = None
-            if isinstance(item, dict):
-                tag = item.get("tag")
-            elif isinstance(item, str):
-                tag = item
-            if isinstance(tag, str):
-                genres.add(tag.lower())
-    elif isinstance(raw, dict):
-        tag = raw.get("tag")
-        if isinstance(tag, str):
-            genres.add(tag.lower())
-    raw_genre = entry.get("genre")
-    if isinstance(raw_genre, str):
-        genres.add(raw_genre.lower())
-    return genres
+            label = _normalise_genre_label(item)
+            if label:
+                genres.append(label)
+    elif raw is not None:
+        label = _normalise_genre_label(raw)
+        if label:
+            genres.append(label)
+    raw_genre = _normalise_genre_label(entry.get("genre"))
+    if raw_genre:
+        genres.append(raw_genre)
+    # preserve order but drop duplicates
+    seen: set[str] = set()
+    unique: list[str] = []
+    for label in genres:
+        lowered = label.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique.append(label)
+    return unique
 
 
 def _extract_plex_quality(media_payload: Any) -> str | None:
@@ -601,6 +660,7 @@ def _normalise_soulseek_results(payload: Any, filters: SearchFilters) -> List[Di
                     "album": None,
                     "title": title,
                     "year": None,
+                    "genre": None,
                     "quality": None,
                 }
             )
@@ -633,10 +693,8 @@ def _normalise_soulseek_file(
         return None
 
     genre_value = file_info.get("genre") or container.get("genre")
-    if filters.genre and genre_value:
-        if filters.genre.lower() not in {str(genre_value).lower()}:
-            return None
-    elif filters.genre and genre_value is None:
+    genre_label = _normalise_genre_label(genre_value)
+    if filters.genre and not _genre_matches(genre_label, filters.genre):
         return None
 
     codec = (
@@ -664,8 +722,21 @@ def _normalise_soulseek_file(
         "album": album or None,
         "title": title,
         "year": year,
+        "genre": genre_label,
         "quality": quality,
     }
+
+
+def _extract_spotify_genre(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    genre = _normalise_genre_label(payload.get("genre"))
+    if genre:
+        return genre
+    genres_value = payload.get("genres")
+    if genres_value is None and "genre" in payload:
+        genres_value = payload["genre"]
+    return _normalise_genre_label(genres_value)
 
 
 def _build_quality_label(codec: Any, bitrate: Any) -> str | None:
@@ -687,6 +758,31 @@ def _build_quality_label(codec: Any, bitrate: Any) -> str | None:
     if not parts:
         return None
     return " ".join(parts)
+
+
+def _normalise_genre_label(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, dict):
+        for key in ("tag", "name", "label", "title"):
+            if key in value:
+                return _normalise_genre_label(value.get(key))
+        return None
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, dict)):
+        for entry in value:
+            label = _normalise_genre_label(entry)
+            if label:
+                return label
+    return None
+
+
+def _genre_matches(value: str | None, requested: str | None) -> bool:
+    if not requested:
+        return True
+    if not value:
+        return False
+    return requested.lower() in value.lower()
 
 
 def _quality_matches(available: str | None, requested: str | None) -> bool:
