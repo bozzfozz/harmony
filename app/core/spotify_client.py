@@ -166,6 +166,79 @@ class SpotifyClient:
 
         return self._execute(self._client.album, album_id)
 
+    def get_artist_albums(
+        self,
+        artist_id: str,
+        *,
+        include_groups: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Return the list of albums for a Spotify artist."""
+
+        if not artist_id:
+            return []
+
+        albums: List[Dict[str, Any]] = []
+        offset = 0
+        while True:
+            kwargs: Dict[str, Any] = {"limit": limit, "offset": offset}
+            if include_groups:
+                kwargs["include_groups"] = include_groups
+            response = self._execute(self._client.artist_albums, artist_id, **kwargs)
+            if isinstance(response, dict):
+                items = response.get("items")
+                if isinstance(items, list):
+                    albums.extend(item for item in items if isinstance(item, dict))
+                else:
+                    items = []
+                if not response.get("next") or not items:
+                    break
+            elif isinstance(response, list):
+                albums.extend(item for item in response if isinstance(item, dict))
+                if len(response) < limit:
+                    break
+            else:
+                break
+            offset += limit
+        return albums
+
+    def get_album_tracks(
+        self,
+        album_id: str,
+        *,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Return all tracks for the given Spotify album."""
+
+        if not album_id:
+            return []
+
+        tracks: List[Dict[str, Any]] = []
+        offset = 0
+        while True:
+            response = self._execute(
+                self._client.album_tracks,
+                album_id,
+                limit=limit,
+                offset=offset,
+            )
+            if isinstance(response, dict):
+                items = response.get("items")
+                if isinstance(items, list):
+                    tracks.extend(item for item in items if isinstance(item, dict))
+                else:
+                    items = []
+                if not response.get("next") or not items:
+                    break
+            elif isinstance(response, list):
+                tracks.extend(item for item in response if isinstance(item, dict))
+                if len(response) < limit:
+                    break
+            else:
+                break
+            offset += limit
+        return tracks
+
     def remove_tracks_from_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
         return self._execute(
             self._client.playlist_remove_all_occurrences_of_items, playlist_id, track_uris

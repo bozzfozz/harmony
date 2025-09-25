@@ -31,6 +31,7 @@ from app.routers import (
     system_router,
     soulseek_router,
     spotify_router,
+    watchlist_router,
 )
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
@@ -45,6 +46,7 @@ from app.workers import (
     PlaylistSyncWorker,
     ScanWorker,
     SyncWorker,
+    WatchlistWorker,
 )
 from app.models import ArtistPreference
 from sqlalchemy import select
@@ -64,6 +66,7 @@ app.include_router(system_router, tags=["System"])
 app.include_router(download_router)
 app.include_router(activity_router)
 app.include_router(health_router, prefix="/api/health", tags=["Health"])
+app.include_router(watchlist_router, tags=["Watchlist"])
 
 
 @app.on_event("startup")
@@ -114,6 +117,23 @@ async def startup_event() -> None:
 
         app.state.playlist_worker = PlaylistSyncWorker(spotify_client)
         await app.state.playlist_worker.start()
+
+        interval_raw = os.getenv("WATCHLIST_INTERVAL")
+        try:
+            interval_seconds = float(interval_raw) if interval_raw else 86_400.0
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid WATCHLIST_INTERVAL value %s; falling back to default", interval_raw
+            )
+            interval_seconds = 86_400.0
+
+        app.state.watchlist_worker = WatchlistWorker(
+            spotify_client=spotify_client,
+            soulseek_client=soulseek_client,
+            sync_worker=app.state.sync_worker,
+            interval_seconds=interval_seconds,
+        )
+        await app.state.watchlist_worker.start()
 
         app.state.metadata_worker = MetadataUpdateWorker(
             app.state.scan_worker,
@@ -170,6 +190,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "scan_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "playlist_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "watchlist_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "metadata_worker", None):
         await worker.stop()
