@@ -1,4 +1,5 @@
 """Workers responsible for metadata management."""
+
 from __future__ import annotations
 
 import asyncio
@@ -41,6 +42,7 @@ class MetadataWorker:
         self._spotify = spotify_client
         self._plex = plex_client
         metadata_utils.SPOTIFY_CLIENT = spotify_client
+        metadata_utils.PLEX_CLIENT = plex_client
         self._queue: asyncio.Queue[MetadataJob | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -104,7 +106,9 @@ class MetadataWorker:
             try:
                 metadata = await self._process_job(job)
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.exception("Metadata enrichment failed for %s: %s", job.download_id, exc)
+                logger.exception(
+                    "Metadata enrichment failed for %s: %s", job.download_id, exc
+                )
                 if not job.result.done():
                     job.result.set_exception(exc)
             else:
@@ -117,9 +121,15 @@ class MetadataWorker:
         metadata = await self._collect_metadata(job)
 
         try:
-            await asyncio.to_thread(metadata_utils.write_metadata, job.audio_path, metadata)
+            await asyncio.to_thread(
+                metadata_utils.write_metadata_tags, job.audio_path, metadata
+            )
         except FileNotFoundError:
-            logger.debug("Audio file missing for download %s: %s", job.download_id, job.audio_path)
+            logger.debug(
+                "Audio file missing for download %s: %s",
+                job.download_id,
+                job.audio_path,
+            )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.debug(
                 "Failed to persist metadata for download %s: %s", job.download_id, exc
@@ -138,7 +148,7 @@ class MetadataWorker:
             spotify_id = self._extract_spotify_id(job.payload)
         if spotify_id:
             spotify_metadata = await asyncio.to_thread(
-                metadata_utils.extract_spotify_metadata, spotify_id
+                metadata_utils.extract_metadata_from_spotify, spotify_id
             )
             for key, value in spotify_metadata.items():
                 if value is None:
@@ -152,10 +162,11 @@ class MetadataWorker:
             plex_id = self._extract_plex_id(job.payload)
         if plex_id and self._plex is not None:
             try:
-                plex_metadata = await self._plex.get_track_metadata(str(plex_id))
+                plex_payload = await self._plex.get_track_metadata(str(plex_id))
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.debug("Plex metadata lookup failed for %s: %s", plex_id, exc)
             else:
+                plex_metadata = metadata_utils.extract_metadata_from_plex(plex_payload)
                 for key, value in plex_metadata.items():
                     if value is None:
                         continue
@@ -188,7 +199,9 @@ class MetadataWorker:
             session.add(download)
 
     @staticmethod
-    def _extract_metadata_from_payload(payload: Mapping[str, Any] | None) -> Dict[str, str]:
+    def _extract_metadata_from_payload(
+        payload: Mapping[str, Any] | None,
+    ) -> Dict[str, str]:
         metadata: Dict[str, str] = {}
         if not isinstance(payload, Mapping):
             return metadata

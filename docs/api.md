@@ -875,6 +875,8 @@ X-Plex-Token: <token>
 | `GET` | `/soulseek/download/{id}/queue` | Fragt Queue-Positionen ab. |
 | `GET` | `/soulseek/download/{id}/artwork` | Liefert das gespeicherte Cover (`image/jpeg`/`image/png`) oder `404`, falls kein Artwork vorliegt. |
 | `POST` | `/soulseek/download/{id}/artwork/refresh` | Stößt die Artwork-Aufbereitung erneut an (`202 Accepted`). |
+| `GET` | `/soulseek/download/{id}/metadata` | Gibt die gespeicherten Metadaten (Genre, Komponist, Produzent, ISRC, Copyright) zurück. |
+| `POST` | `/soulseek/download/{id}/metadata/refresh` | Startet einen asynchronen Metadaten-Refresh (`202 Accepted`). |
 | `POST` | `/soulseek/enqueue` | Fügt mehrere Dateien der Warteschlange hinzu. |
 | `GET` | `/soulseek/uploads` | Lädt Uploads. |
 | `GET` | `/soulseek/uploads/all` | Alle Uploads. |

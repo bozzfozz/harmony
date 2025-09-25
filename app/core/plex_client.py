@@ -1,4 +1,5 @@
 """Async Plex client built on top of the public Plex API."""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,6 +10,7 @@ import aiohttp
 
 from app.config import PlexConfig
 from app.logging import get_logger
+from app.utils.metadata_utils import extract_metadata_from_plex
 
 logger = get_logger(__name__)
 
@@ -115,7 +117,12 @@ class PlexClient:
         expect_json: bool = True,
     ) -> Any:
         return await self._request(
-            "POST", path, params=params, data=data, json_body=json_body, expect_json=expect_json
+            "POST",
+            path,
+            params=params,
+            data=data,
+            json_body=json_body,
+            expect_json=expect_json,
         )
 
     async def _put(
@@ -126,7 +133,9 @@ class PlexClient:
         data: Dict[str, Any] | None = None,
         json_body: Dict[str, Any] | None = None,
     ) -> Any:
-        return await self._request("PUT", path, params=params, data=data, json_body=json_body)
+        return await self._request(
+            "PUT", path, params=params, data=data, json_body=json_body
+        )
 
     async def _delete(self, path: str, params: Dict[str, Any] | None = None) -> Any:
         return await self._request("DELETE", path, params=params)
@@ -143,7 +152,9 @@ class PlexClient:
 
         return await self._get(f"/library/sections/{section_id}/all", params=params)
 
-    async def refresh_library_section(self, section_id: str, *, full: bool = False) -> None:
+    async def refresh_library_section(
+        self, section_id: str, *, full: bool = False
+    ) -> None:
         """Trigger a Plex library scan for the given section."""
 
         params = {"force": int(bool(full))}
@@ -212,14 +223,7 @@ class PlexClient:
         if entry is None:
             return {}
 
-        metadata: Dict[str, Any] = {}
-        composer = self._extract_person(entry, ("composers", "Composers", "composer", "Composer"))
-        if composer:
-            metadata["composer"] = composer
-        producer = self._extract_person(entry, ("producers", "Producers", "producer", "Producer"))
-        if producer:
-            metadata["producer"] = producer
-        return metadata
+        return extract_metadata_from_plex(entry)
 
     async def get_devices(self) -> Any:
         return await self._get("/devices")
@@ -243,40 +247,14 @@ class PlexClient:
                     return first
         return None
 
-    @staticmethod
-    def _extract_person(entry: Dict[str, Any], keys: tuple[str, ...]) -> str | None:
-        for key in keys:
-            value = entry.get(key)
-            if not value:
-                continue
-            if isinstance(value, list):
-                for candidate in value:
-                    name = PlexClient._normalise_person(candidate)
-                    if name:
-                        return name
-            else:
-                name = PlexClient._normalise_person(value)
-                if name:
-                    return name
-        return None
-
-    @staticmethod
-    def _normalise_person(value: Any) -> str | None:
-        if isinstance(value, dict):
-            for key in ("tag", "name", "title"):
-                payload = value.get(key)
-                if isinstance(payload, str) and payload.strip():
-                    return payload.strip()
-        elif isinstance(value, str) and value.strip():
-            return value.strip()
-        return None
-
     async def get_library_statistics(self) -> Dict[str, int]:
         """Compute high level statistics for the Plex music library."""
 
         stats = {"artists": 0, "albums": 0, "tracks": 0}
         libraries = await self.get_libraries()
-        container = libraries.get("MediaContainer", {}) if isinstance(libraries, dict) else {}
+        container = (
+            libraries.get("MediaContainer", {}) if isinstance(libraries, dict) else {}
+        )
         for section in container.get("Directory", []):
             if section.get("type") != "artist":
                 continue
@@ -303,7 +281,9 @@ class PlexClient:
         return stats
 
     @asynccontextmanager
-    async def listen_notifications(self) -> AsyncIterator[aiohttp.ClientWebSocketResponse]:
+    async def listen_notifications(
+        self,
+    ) -> AsyncIterator[aiohttp.ClientWebSocketResponse]:
         """Connect to the Plex websocket notification endpoint."""
 
         session = await self._ensure_session()
@@ -315,4 +295,3 @@ class PlexClient:
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
-

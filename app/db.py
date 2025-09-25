@@ -1,4 +1,5 @@
 """Database configuration and helper utilities."""
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,9 @@ _logger = logging.getLogger(__name__)
 
 
 def _build_engine(database_url: str) -> Engine:
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+    connect_args = (
+        {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+    )
     return create_engine(database_url, connect_args=connect_args)
 
 
@@ -147,6 +150,11 @@ def _apply_schema_extensions(engine: Engine) -> None:
     column_definitions = {
         "spotify_track_id": "VARCHAR(128)",
         "spotify_album_id": "VARCHAR(128)",
+        "genre": "VARCHAR(255)",
+        "composer": "VARCHAR(255)",
+        "producer": "VARCHAR(255)",
+        "isrc": "VARCHAR(64)",
+        "copyright": "VARCHAR(512)",
     }
 
     for column_name, ddl in column_definitions.items():
