@@ -12,6 +12,8 @@ sich an den in `app/routers` definierten Routen. Alle Antworten sind JSON-codier
 | Artists | ![Artists](./screenshots/artists.svg) |
 | Settings | ![Settings](./screenshots/settings.svg) |
 
+> **Artists-Filter:** Die Artists-Seite unterstützt Release-Filter für Alben, Singles und EPs. Die Tabelle reagiert unmittelbar auf die Auswahl (Alle, Alben, Singles, EPs).
+
 ## System
 
 | Methode | Pfad | Beschreibung |

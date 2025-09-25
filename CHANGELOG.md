@@ -7,6 +7,7 @@ Alle Änderungen an diesem Projekt werden in diesem Dokument festgehalten. Diese
 - Globale API-Fehlerüberwachung mit Toasts und Redirect-Logik für unauthorisierte Antworten.
 - Dashboard-Karten für Service-Status, Worker-Zustand und Activity Feed inklusive neuer Eventtypen (`*_blocked`, `worker_*`).
 - Frontend-Testabdeckung für Dashboard, Downloads, Artists und Settings mit Fokus auf Toast-Verhalten und Interaktionen.
+- ArtistsPage um Release-Filter für Alben, Singles und EPs erweitert.
 
 ### Changed
 - Frontend auf 4 Kernseiten reduziert, API-Client vereinheitlicht, Design-Guidelines verpflichtend.

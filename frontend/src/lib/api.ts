@@ -275,6 +275,7 @@ export interface SpotifyArtistRelease {
   id: string;
   name: string;
   album_type?: string;
+  release_type?: string;
   release_date?: string;
   total_tracks?: number;
 }

@@ -6,6 +6,7 @@
 - [x] Dashboard-Karten für Service-Status, Worker-Zustand und Activity Feed vereinheitlicht.
 - [x] Frontend-Tests für Dashboard, Downloads, Artists und Settings aktualisiert.
 - [x] Design-Guidelines dokumentiert und im UI angewendet.
+- [x] Release-Filter (Album/Single/EP) auf der Artists-Seite ergänzt.
 
 ## Offen
 - [ ] Integrationstests für globale API-Fehler (401/403/503) inklusive Redirect-Checks ergänzen.
