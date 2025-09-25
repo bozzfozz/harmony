@@ -36,6 +36,7 @@ const createRelease = (overrides: Partial<SpotifyArtistRelease> = {}): SpotifyAr
   id: overrides.id ?? 'release-1',
   name: overrides.name ?? 'Release One',
   album_type: overrides.album_type ?? 'album',
+  release_type: overrides.release_type ?? overrides.album_type ?? 'album',
   release_date: overrides.release_date ?? '2023-04-20',
   total_tracks: overrides.total_tracks ?? 12
 });
@@ -89,6 +90,105 @@ describe('ArtistsPage', () => {
     expect(screen.getByText('2001')).toBeInTheDocument();
     expect(screen.getByText('14')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Discovery/ })).toBeChecked();
+  });
+
+  it('filtert Releases auf "Alben"', async () => {
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Daft Punk' })]);
+    mockedGetReleases.mockResolvedValue([
+      createRelease({ id: 'release-album', name: 'Discovery', release_type: 'album' }),
+      createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' }),
+      createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
+    ]);
+
+    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+
+    await userEvent.click(await screen.findByText('Daft Punk'));
+    await screen.findByRole('tab', { name: 'Alle' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Alben' }));
+
+    expect(await screen.findByText('Discovery')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('One More Time')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Alive 1997')).not.toBeInTheDocument());
+  });
+
+  it('filtert Releases auf "Singles"', async () => {
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Daft Punk' })]);
+    mockedGetReleases.mockResolvedValue([
+      createRelease({ id: 'release-album', name: 'Discovery', release_type: 'album' }),
+      createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' }),
+      createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
+    ]);
+
+    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+
+    await userEvent.click(await screen.findByText('Daft Punk'));
+    await screen.findByRole('tab', { name: 'Alle' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Singles' }));
+
+    expect(await screen.findByText('One More Time')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Discovery')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Alive 1997')).not.toBeInTheDocument());
+  });
+
+  it('filtert Releases auf "EPs"', async () => {
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Daft Punk' })]);
+    mockedGetReleases.mockResolvedValue([
+      createRelease({ id: 'release-album', name: 'Discovery', release_type: 'album' }),
+      createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' }),
+      createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
+    ]);
+
+    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+
+    await userEvent.click(await screen.findByText('Daft Punk'));
+    await screen.findByRole('tab', { name: 'Alle' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'EPs' }));
+
+    expect(await screen.findByText('Alive 1997')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Discovery')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('One More Time')).not.toBeInTheDocument());
+  });
+
+  it('setzt den Filter "Alle" wieder zurück', async () => {
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Daft Punk' })]);
+    mockedGetReleases.mockResolvedValue([
+      createRelease({ id: 'release-album', name: 'Discovery', release_type: 'album' }),
+      createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' }),
+      createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
+    ]);
+
+    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+
+    await userEvent.click(await screen.findByText('Daft Punk'));
+    await screen.findByRole('tab', { name: 'Alle' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Singles' }));
+    expect(await screen.findByText('One More Time')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Alle' }));
+
+    await waitFor(() => expect(screen.getByText('Discovery')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alive 1997')).toBeInTheDocument());
+  });
+
+  it('zeigt eine Meldung, wenn keine Releases zum Filter passen', async () => {
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Daft Punk' })]);
+    mockedGetReleases.mockResolvedValue([
+      createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' })
+    ]);
+
+    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+
+    await userEvent.click(await screen.findByText('Daft Punk'));
+    await screen.findByRole('tab', { name: 'Alle' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'EPs' }));
+
+    await waitFor(() => expect(screen.getByText(/Keine Releases gefunden/)).toBeInTheDocument());
+    expect(screen.queryByText('One More Time')).not.toBeInTheDocument();
   });
 
   it('erlaubt das Ändern und Speichern der Auswahl', async () => {

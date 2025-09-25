@@ -3,6 +3,7 @@ import { Loader2, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Switch } from '../components/ui/switch';
 import { useToast } from '../hooks/useToast';
@@ -17,6 +18,15 @@ import {
   SpotifyArtistRelease
 } from '../lib/api';
 import { useMutation, useQuery } from '../lib/query';
+
+type ReleaseFilterValue = 'all' | 'album' | 'single' | 'ep';
+
+const releaseFilterOptions: { value: ReleaseFilterValue; label: string }[] = [
+  { value: 'all', label: 'Alle' },
+  { value: 'album', label: 'Alben' },
+  { value: 'single', label: 'Singles' },
+  { value: 'ep', label: 'EPs' }
+];
 
 const toTitleCase = (value?: string | null) => {
   if (!value) {
@@ -53,6 +63,7 @@ const ArtistsPage = () => {
   const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Record<string, boolean>>({});
   const [releaseCounts, setReleaseCounts] = useState<Record<string, number>>({});
+  const [releaseFilter, setReleaseFilter] = useState<ReleaseFilterValue>('all');
 
   const {
     data: artists,
@@ -161,6 +172,10 @@ const ArtistsPage = () => {
   }, [baseSelection, selectedArtistId]);
 
   useEffect(() => {
+    setReleaseFilter('all');
+  }, [selectedArtistId]);
+
+  useEffect(() => {
     if (!selectedArtistId) {
       return;
     }
@@ -215,6 +230,16 @@ const ArtistsPage = () => {
   );
 
   const releaseRows = useMemo(() => releases ?? [], [releases]);
+  const filteredReleaseRows = useMemo(() => {
+    if (releaseFilter === 'all') {
+      return releaseRows;
+    }
+
+    return releaseRows.filter((release) => {
+      const normalizedType = (release.release_type ?? release.album_type ?? '').toLowerCase();
+      return normalizedType === releaseFilter;
+    });
+  }, [releaseFilter, releaseRows]);
 
   const currentSelection = selection;
   const isDirty = useMemo(
@@ -312,38 +337,58 @@ const ArtistsPage = () => {
     }
 
     return (
-      <div className="overflow-hidden rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Titel</TableHead>
-              <TableHead>Typ</TableHead>
-              <TableHead>Erscheinungsjahr</TableHead>
-              <TableHead>Tracks</TableHead>
-              <TableHead className="text-right">Für Sync aktivieren</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {releaseRows.map((release) => {
-              const isSelected = selection[release.id] ?? false;
-              return (
-                <TableRow key={release.id}>
-                  <TableCell className="font-medium">{release.name}</TableCell>
-                  <TableCell>{toTitleCase(release.album_type)}</TableCell>
-                  <TableCell>{getReleaseYear(release.release_date)}</TableCell>
-                  <TableCell>{release.total_tracks ?? '—'}</TableCell>
-                  <TableCell className="text-right">
-                    <Switch
-                      checked={isSelected}
-                      onCheckedChange={(value) => handleToggle(release.id, value)}
-                      aria-label={`Sync für ${release.name}`}
-                    />
-                  </TableCell>
+      <div className="space-y-4">
+        <Tabs
+          value={releaseFilter}
+          onValueChange={(value) => setReleaseFilter(value as ReleaseFilterValue)}
+          className="w-full"
+        >
+          <TabsList className="grid w-full max-w-md grid-cols-4">
+            {releaseFilterOptions.map((option) => (
+              <TabsTrigger key={option.value} value={option.value}>
+                {option.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        {!filteredReleaseRows.length ? (
+          <p className="text-sm text-muted-foreground">Keine Releases gefunden.</p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Titel</TableHead>
+                  <TableHead>Typ</TableHead>
+                  <TableHead>Erscheinungsjahr</TableHead>
+                  <TableHead>Tracks</TableHead>
+                  <TableHead className="text-right">Für Sync aktivieren</TableHead>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredReleaseRows.map((release) => {
+                  const isSelected = selection[release.id] ?? false;
+                  const releaseType = release.release_type ?? release.album_type;
+                  return (
+                    <TableRow key={release.id}>
+                      <TableCell className="font-medium">{release.name}</TableCell>
+                      <TableCell>{toTitleCase(releaseType)}</TableCell>
+                      <TableCell>{getReleaseYear(release.release_date)}</TableCell>
+                      <TableCell>{release.total_tracks ?? '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <Switch
+                          checked={isSelected}
+                          onCheckedChange={(value) => handleToggle(release.id, value)}
+                          aria-label={`Sync für ${release.name}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     );
   };
