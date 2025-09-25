@@ -114,3 +114,46 @@ ADR (Kurzform):
 - PR wird geblockt, wenn TASK_ID oder Testnachweise fehlen.
 - Merge nur bei erfüllten Checklisten.
 - Wiederholte Verstöße führen zu Review-Pflicht und ggf. Rechtemanagement.
+
+## 12. Task-Template-Pflicht
+Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
+
+- Abweichungen sind nur mit ausdrücklicher Maintainer-Freigabe zulässig und müssen im PR begründet werden.
+- PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) nachvollziehbar aus.
+- TASK_ID bleibt im Titel und Body verpflichtend und verweist auf das ausgefüllte Template.
+
+## 13. ToDo-Pflege (verbindlich)
+Nach Abschluss **jedes Tasks** ist `ToDo.md` zu pflegen.
+
+- Erledigte Punkte entfernen oder abhaken, Folgeaufgaben dokumentieren.
+- PR-Beschreibung enthält einen expliziten **Nachweis des ToDo-Updates** (z. B. Link/Commit-Hash, Screenshot des Boards).
+- Ohne ToDo-Nachweis erfolgt kein Merge.
+
+## 14. Completion Gates (Pflicht)
+Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen.
+
+- Backend: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
+- Frontend (falls vorhanden): `npm test`, `tsc --noEmit`.
+- OpenAPI-Gate: Änderungen am Schema geprüft; API-Verträge (Statuscodes, Strukturen) eingehalten.
+- Coverage-Ziel: ≥ 85 % in geänderten Modulen oder begründete Ausnahme im PR.
+
+## 15. Prohibited
+- Keine `BACKUP`-Dateien anlegen oder verändern.
+- Keine Lizenzdateien ändern oder hinzufügen ohne Maintainer-Freigabe.
+- Keine Secrets oder Access-Tokens im Repo ablegen (nur über ENV/Secret-Store).
+- Keine stillen Breaking Changes; nur mit Major-Bump und dokumentierter Migration zulässig.
+
+## 16. Frontend-Standards
+- `docs/ui-design-guidelines.md` ist verbindlich (Farben, Typografie, Spacing, Komponenten, Interaktionen).
+- TypeScript strikt: `tsc --noEmit` muss erfolgreich sein; API-Clients defensiv implementieren.
+- UI-Änderungen nutzen die vorgegebenen Komponentenbibliotheken (z. B. shadcn/ui, Radix) und etablierten Patterns (Tabs, Cards, Toasts).
+
+## 17. Backend-Standards
+- Public-API-Verträge dokumentieren; Fehlercodes: `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMITED`, `DEPENDENCY_ERROR`, `INTERNAL_ERROR`.
+- Idempotenz und Nebenläufigkeit sicherstellen (Queues, Locks, Backoff-Strategien).
+- Logging strukturiert mit `event`, `entity_id`, `status`, `duration_ms`; Fehlermeldungen aussagekräftig halten.
+
+## 18. Review & PR
+- Commits folgen Conventional-Commit-Standards (feat/fix/docs/test/chore).
+- PR-Beschreibung MUSS enthalten: Was/Warum, Dateiänderungen (Neu/Geändert/Gelöscht), Migrationshinweise, Testnachweise (Logs/Screens), Risiken/Limitierungen, Verweis auf AGENTS.md/Template-Konformität sowie den **Nachweis des ToDo-Updates**.
+- Review achtet auf vollständige Template-Erfüllung und Einhaltung aller Completion Gates.
