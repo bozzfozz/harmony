@@ -32,13 +32,31 @@ from tests.simple_client import SimpleTestClient
 class StubSpotifyClient:
     def __init__(self) -> None:
         self.tracks: Dict[str, Dict[str, Any]] = {
-            "track-1": {"id": "track-1", "name": "Test Song", "artists": [{"name": "Tester"}], "duration_ms": 200000},
+            "track-1": {
+                "id": "track-1",
+                "name": "Test Song",
+                "artists": [{"name": "Tester"}],
+                "album": {
+                    "name": "Test Album",
+                    "release_date": "1969-01-01",
+                    "artists": [{"name": "Tester"}],
+                },
+                "duration_ms": 200000,
+            },
         }
         self.playlists = [
             {"id": "playlist-1", "name": "My Playlist", "tracks": {"total": 1}},
         ]
         self.audio_features: Dict[str, Dict[str, Any]] = {
             "track-1": {"id": "track-1", "danceability": 0.5},
+        }
+        self.albums: Dict[str, Dict[str, Any]] = {
+            "album-1": {
+                "id": "album-1",
+                "name": "Album",
+                "artists": [{"name": "Tester"}],
+                "release_date": "1969-02-02",
+            }
         }
         self.playlist_items: Dict[str, Dict[str, Any]] = {
             "playlist-1": {"items": [{"track": self.tracks["track-1"]}], "total": 1}
@@ -53,18 +71,43 @@ class StubSpotifyClient:
                 {"id": "release-1", "name": "Test Release", "album_group": "album"}
             ]
         }
+        self.last_requests: Dict[str, Dict[str, Any]] = {}
 
     def is_authenticated(self) -> bool:
         return True
 
-    def search_tracks(self, query: str, limit: int = 20) -> Dict[str, Any]:
+    def search_tracks(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: str | None = None,
+        year: int | None = None,
+    ) -> Dict[str, Any]:
+        self.last_requests["tracks"] = {"query": query, "genre": genre, "year": year}
         return {"tracks": {"items": list(self.tracks.values())}}
 
-    def search_artists(self, query: str, limit: int = 20) -> Dict[str, Any]:
+    def search_artists(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: str | None = None,
+        year: int | None = None,
+    ) -> Dict[str, Any]:
+        self.last_requests["artists"] = {"query": query, "genre": genre, "year": year}
         return {"artists": {"items": [{"id": "artist-1", "name": "Tester"}]}}
 
-    def search_albums(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        return {"albums": {"items": [{"id": "album-1", "name": "Album", "artists": [{"name": "Tester"}]}]}}
+    def search_albums(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: str | None = None,
+        year: int | None = None,
+    ) -> Dict[str, Any]:
+        self.last_requests["albums"] = {"query": query, "genre": genre, "year": year}
+        return {"albums": {"items": [self.albums["album-1"]]}}
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
         return {"items": [dict(item) for item in self.playlists]}
@@ -170,8 +213,43 @@ class StubPlexClient:
             }
         }
         self.library_items = {
-            ("1", "10"): {
-                "MediaContainer": {"totalSize": 2, "Metadata": [{"ratingKey": "a"}, {"ratingKey": "b"}]}
+            (
+                "1",
+                "10",
+            ): {
+                "MediaContainer": {
+                    "totalSize": 2,
+                    "Metadata": [
+                        {
+                            "ratingKey": "plex-1",
+                            "title": "Test Track One",
+                            "parentTitle": "Test Album",
+                            "grandparentTitle": "Plex Artist",
+                            "year": 1969,
+                            "Genre": [{"tag": "rock"}],
+                            "Media": [
+                                {
+                                    "bitrate": 1000,
+                                    "audioCodec": "flac",
+                                }
+                            ],
+                        },
+                        {
+                            "ratingKey": "plex-2",
+                            "title": "Other Track",
+                            "parentTitle": "Other Album",
+                            "grandparentTitle": "Plex Artist",
+                            "year": 2005,
+                            "Genre": [{"tag": "electronic"}],
+                            "Media": [
+                                {
+                                    "bitrate": 320,
+                                    "audioCodec": "mp3",
+                                }
+                            ],
+                        },
+                    ],
+                }
             },
             ("1", "9"): {
                 "MediaContainer": {"totalSize": 3, "Metadata": [{"ratingKey": "a"}]}
@@ -194,6 +272,7 @@ class StubPlexClient:
         self.devices = {"MediaContainer": {"Device": [{"name": "Player"}]}}
         self.dvr = {"MediaContainer": {"Directory": [{"name": "DVR"}]}}
         self.livetv = {"MediaContainer": {"Directory": [{"name": "Channel"}]}}
+        self.last_library_params: Dict[tuple[str, str], Dict[str, Any]] = {}
 
     async def get_sessions(self) -> Dict[str, Any]:
         return self.sessions
@@ -206,6 +285,7 @@ class StubPlexClient:
 
     async def get_library_items(self, section_id: str, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         type_value = (params or {}).get("type", "")
+        self.last_library_params[(section_id, type_value)] = dict(params or {})
         return self.library_items.get((section_id, type_value), {"MediaContainer": {"Metadata": []}})
 
     async def get_metadata(self, item_id: str) -> Dict[str, Any]:
@@ -312,12 +392,53 @@ class StubSoulseekClient:
                 "status": {"online": True},
             }
         }
+        self.search_results: list[Dict[str, Any]] = [
+            {
+                "username": "user-1",
+                "files": [
+                    {
+                        "id": "soulseek-1",
+                        "filename": "Test Song.flac",
+                        "title": "Test Song",
+                        "artist": "Soulseek Artist",
+                        "album": "Soulseek Album",
+                        "bitrate": 1000,
+                        "format": "flac",
+                        "year": 1969,
+                        "genre": "rock",
+                    },
+                    {
+                        "id": "soulseek-2",
+                        "filename": "Other Track.mp3",
+                        "title": "Other Track",
+                        "artist": "Soulseek Artist",
+                        "album": "Soulseek Album",
+                        "bitrate": 320,
+                        "format": "mp3",
+                        "year": 2005,
+                        "genre": "electronic",
+                    },
+                ],
+            }
+        ]
 
     async def get_download_status(self) -> Dict[str, Any]:
         return {"downloads": list(self.downloads.values())}
 
     async def search(self, query: str) -> Dict[str, Any]:
-        return {"results": [query]}
+        matches: list[Dict[str, Any]] = []
+        query_lower = query.lower()
+        for result in self.search_results:
+            files = []
+            for file_info in result.get("files", []):
+                title = str(file_info.get("title") or file_info.get("filename") or "").lower()
+                if query_lower in title:
+                    files.append(dict(file_info))
+            if files:
+                entry = dict(result)
+                entry["files"] = files
+                matches.append(entry)
+        return {"results": matches}
 
     async def download(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         for file_info in payload.get("files", []):

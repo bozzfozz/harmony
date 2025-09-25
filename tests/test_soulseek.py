@@ -12,7 +12,11 @@ def test_soulseek_status(client: SimpleTestClient) -> None:
 def test_soulseek_search(client: SimpleTestClient) -> None:
     response = client.post("/soulseek/search", json={"query": "Test"})
     assert response.status_code == 200
-    assert response.json()["results"] == ["Test"]
+    payload = response.json()
+    assert payload["results"]
+    entry = payload["results"][0]
+    assert entry["files"]
+    assert entry["files"][0]["title"].lower().startswith("test")
 
 
 def test_soulseek_download_flow(client: SimpleTestClient) -> None:

@@ -93,14 +93,53 @@ class SpotifyClient:
             return False
         return bool(profile)
 
-    def search_tracks(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        return self._execute(self._client.search, q=query, type="track", limit=limit)
+    def _build_search_query(
+        self,
+        query: str,
+        *,
+        genre: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> str:
+        terms = [query]
+        if genre:
+            term = f'genre:"{genre}"' if " " in genre else f"genre:{genre}"
+            terms.append(term)
+        if year is not None:
+            terms.append(f"year:{year}")
+        return " ".join(term for term in terms if term)
 
-    def search_artists(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        return self._execute(self._client.search, q=query, type="artist", limit=limit)
+    def search_tracks(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        search_query = self._build_search_query(query, genre=genre, year=year)
+        return self._execute(self._client.search, q=search_query, type="track", limit=limit)
 
-    def search_albums(self, query: str, limit: int = 20) -> Dict[str, Any]:
-        return self._execute(self._client.search, q=query, type="album", limit=limit)
+    def search_artists(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        search_query = self._build_search_query(query, genre=genre, year=year)
+        return self._execute(self._client.search, q=search_query, type="artist", limit=limit)
+
+    def search_albums(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        genre: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        search_query = self._build_search_query(query, genre=genre, year=year)
+        return self._execute(self._client.search, q=search_query, type="album", limit=limit)
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
         return self._execute(self._client.current_user_playlists, limit=limit)
