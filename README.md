@@ -12,6 +12,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
 - **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und bettet das Original-Coverbild ein.
+- **Automatic Lyrics**: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten.
 - **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Plex/Soulseek inklusive Persistierung.
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
@@ -34,6 +35,10 @@ curl -X POST \
 
 Der Status der Discography-Jobs wird in der Datenbank protokolliert und kann über die Soulseek- und Matching-Endpunkte
 nachverfolgt werden.
+
+## Automatic Lyrics
+
+Nach erfolgreich abgeschlossenen Downloads erstellt Harmony automatisch eine `.lrc`-Datei mit synchronisierten Lyrics und legt sie im gleichen Verzeichnis wie die Audiodatei ab. Der Fortschritt wird im Download-Datensatz gespeichert. Über den neuen Endpunkt `GET /soulseek/download/{id}/lyrics` lässt sich der Inhalt der generierten LRC-Datei abrufen; solange die Generierung noch läuft, liefert der Endpunkt einen entsprechenden Status.
 
 ## Harmony Web UI
 

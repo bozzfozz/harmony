@@ -6,6 +6,7 @@ from .playlist_sync_worker import PlaylistSyncWorker
 from .metadata_worker import MetadataUpdateWorker
 from .scan_worker import ScanWorker
 from .sync_worker import SyncWorker
+from .lyrics_worker import LyricsWorker
 
 __all__ = [
     "AutoSyncWorker",
@@ -15,4 +16,5 @@ __all__ = [
     "PlaylistSyncWorker",
     "ScanWorker",
     "SyncWorker",
+    "LyricsWorker",
 ]
