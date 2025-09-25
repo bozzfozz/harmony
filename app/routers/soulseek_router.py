@@ -19,6 +19,7 @@ from app.models import DiscographyJob, Download
 from app.schemas import (
     DiscographyDownloadRequest,
     DiscographyJobResponse,
+    DownloadMetadataResponse,
     SoulseekCancelResponse,
     SoulseekDownloadRequest,
     SoulseekDownloadResponse,
@@ -112,6 +113,7 @@ async def soulseek_download(
                     "composer": download.composer,
                     "producer": download.producer,
                     "isrc": download.isrc,
+                    "copyright": download.copyright,
                     "artwork_url": download.artwork_url,
                 }
             )
@@ -176,6 +178,23 @@ def soulseek_download_lyrics(
         raise HTTPException(status_code=500, detail="Unable to read lyrics file") from exc
 
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
+
+@router.get(
+    "/download/{download_id}/metadata",
+    response_model=DownloadMetadataResponse,
+)
+def soulseek_download_metadata(
+    download_id: int,
+    session: Session = Depends(get_db),
+) -> DownloadMetadataResponse:
+    """Return the stored metadata for a completed download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    return DownloadMetadataResponse.model_validate(download)
 
 
 @router.get("/download/{download_id}/artwork")

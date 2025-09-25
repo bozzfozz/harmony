@@ -40,6 +40,7 @@ from app.workers import (
     DiscographyWorker,
     LyricsWorker,
     MatchingWorker,
+    MetadataWorker,
     MetadataUpdateWorker,
     PlaylistSyncWorker,
     ScanWorker,
@@ -91,11 +92,15 @@ async def startup_event() -> None:
         app.state.lyrics_worker = LyricsWorker()
         await app.state.lyrics_worker.start()
 
-        app.state.sync_worker = SyncWorker(
-            soulseek_client,
+        app.state.rich_metadata_worker = MetadataWorker(
             spotify_client=spotify_client,
             plex_client=plex_client,
-            beets_client=beets_client,
+        )
+        await app.state.rich_metadata_worker.start()
+
+        app.state.sync_worker = SyncWorker(
+            soulseek_client,
+            metadata_worker=app.state.rich_metadata_worker,
             artwork_worker=app.state.artwork_worker,
             lyrics_worker=app.state.lyrics_worker,
         )
@@ -155,6 +160,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "artwork_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "lyrics_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "rich_metadata_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "sync_worker", None):
         await worker.stop()

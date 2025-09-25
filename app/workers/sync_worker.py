@@ -4,12 +4,10 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
-from app.core.beets_client import BeetsClient
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
-from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
@@ -24,6 +22,7 @@ from app.utils.settings_store import increment_counter, read_setting, write_sett
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
+from app.workers.metadata_worker import MetadataWorker
 from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
@@ -49,16 +48,12 @@ class SyncWorker:
         base_poll_interval: float = 2.0,
         idle_poll_interval: Optional[float] = None,
         concurrency: Optional[int] = None,
-        spotify_client: SpotifyClient | None = None,
-        plex_client: PlexClient | None = None,
-        beets_client: BeetsClient | None = None,
+        metadata_worker: MetadataWorker | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
     ) -> None:
         self._client = soulseek_client
-        self._spotify = spotify_client
-        self._plex = plex_client
-        self._beets = beets_client
+        self._metadata_worker = metadata_worker
         self._artwork = artwork_worker
         self._lyrics = lyrics_worker
         self._job_store = PersistentJobQueue("sync")
@@ -655,53 +650,41 @@ class SyncWorker:
             request_payload = dict(download.request_payload or {})
             filename = download.filename
 
-        metadata = await self._collect_metadata(download_id, payload, request_payload)
         file_path = (
             self._resolve_download_path(payload, request_payload) or filename
         )
+        metadata: Dict[str, Any] = {}
+        artwork_url: Optional[str] = None
+        if file_path and self._metadata_worker is not None:
+            try:
+                metadata = await self._metadata_worker.enqueue(
+                    download_id,
+                    Path(file_path),
+                    payload=payload,
+                    request_payload=request_payload,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Metadata worker failed for download %s: %s", download_id, exc
+                )
+            else:
+                artwork_url = metadata.get("artwork_url")
 
-        tags = {
-            key: value
-            for key, value in metadata.items()
-            if key in {"genre", "composer", "producer", "isrc", "copyright"}
-            and value
-        }
-        artwork_url = metadata.get("artwork_url")
+        metadata = dict(metadata or {})
+        for source in (request_payload, payload):
+            for key, value in self._extract_basic_metadata(source).items():
+                metadata.setdefault(key, value)
 
-        if self._beets is not None and file_path:
-            if tags:
-                try:
-                    await asyncio.to_thread(self._beets.update_metadata, file_path, tags)
-                except Exception as exc:  # pragma: no cover - defensive logging
-                    logger.warning(
-                        "Failed to update metadata via beets for %s: %s", file_path, exc
-                    )
-            if artwork_url:
-                try:
-                    await asyncio.to_thread(
-                        self._beets.embed_artwork, file_path, artwork_url
-                    )
-                except Exception as exc:  # pragma: no cover - defensive logging
-                    logger.warning(
-                        "Failed to embed artwork via beets for %s: %s", file_path, exc
-                    )
-
-        with session_scope() as session:
-            download = session.get(Download, download_id)
-            if download is None:
-                return
-            updated = False
-            for key in ("genre", "composer", "producer", "isrc"):
-                value = metadata.get(key)
-                if value and getattr(download, key) != value:
-                    setattr(download, key, value)
-                    updated = True
-            if artwork_url and download.artwork_url != artwork_url:
-                download.artwork_url = artwork_url
-                updated = True
-            if updated:
-                download.updated_at = datetime.utcnow()
-            session.add(download)
+        if not artwork_url:
+            fallback_artwork = self._resolve_text(
+                ("artwork_url", "cover_url", "image_url", "thumbnail", "thumb"),
+                metadata,
+                payload,
+                request_payload,
+            )
+            if fallback_artwork:
+                artwork_url = fallback_artwork
+                metadata.setdefault("artwork_url", artwork_url)
 
         spotify_track_id = self._extract_spotify_id(request_payload)
         if not spotify_track_id:
@@ -772,83 +755,6 @@ class SyncWorker:
                     exc,
                 )
 
-    async def _collect_metadata(
-        self,
-        download_id: int,
-        payload: Mapping[str, Any],
-        request_payload: Mapping[str, Any],
-    ) -> Dict[str, str]:
-        metadata: Dict[str, str] = {}
-        metadata.update(self._extract_metadata_from_payload(request_payload))
-        metadata.update(self._extract_metadata_from_payload(payload))
-
-        metadata_func = getattr(self._client, "get_download_metadata", None)
-        if callable(metadata_func):
-            try:
-                extra = await metadata_func(str(download_id))
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug(
-                    "Soulseek metadata lookup failed for %s: %s", download_id, exc
-                )
-            else:
-                metadata.update(self._extract_metadata_from_payload(extra))
-
-        spotify_id = self._extract_spotify_id(request_payload)
-        if not spotify_id:
-            spotify_id = self._extract_spotify_id(payload)
-        if spotify_id and self._spotify is not None:
-            try:
-                spotify_metadata = self._spotify.get_track_metadata(spotify_id)
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug(
-                    "Spotify metadata lookup failed for %s: %s", spotify_id, exc
-                )
-            else:
-                metadata.update(
-                    {
-                        key: str(value)
-                        for key, value in spotify_metadata.items()
-                        if value not in {None, ""}
-                    }
-                )
-
-        plex_id = self._extract_plex_id(request_payload)
-        if not plex_id:
-            plex_id = self._extract_plex_id(payload)
-        if plex_id and self._plex is not None:
-            try:
-                plex_metadata = await self._plex.get_track_metadata(str(plex_id))
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug("Plex metadata lookup failed for %s: %s", plex_id, exc)
-            else:
-                metadata.update(
-                    {
-                        key: str(value)
-                        for key, value in plex_metadata.items()
-                        if value not in {None, ""}
-                    }
-                )
-
-        return metadata
-
-    @staticmethod
-    def _extract_metadata_from_payload(payload: Mapping[str, Any] | None) -> Dict[str, str]:
-        metadata: Dict[str, str] = {}
-        if not isinstance(payload, Mapping):
-            return metadata
-        for key in ("genre", "composer", "producer", "isrc", "artwork_url", "copyright"):
-            value = payload.get(key)
-            if isinstance(value, (str, int)):
-                text = str(value).strip()
-                if text:
-                    metadata[key] = text
-        nested = payload.get("metadata")
-        if isinstance(nested, Mapping):
-            nested_metadata = SyncWorker._extract_metadata_from_payload(nested)
-            for key, value in nested_metadata.items():
-                metadata.setdefault(key, value)
-        return metadata
-
     @staticmethod
     def _extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
         if not isinstance(payload, Mapping):
@@ -871,21 +777,6 @@ class SyncWorker:
         nested = payload.get("track")
         if isinstance(nested, Mapping):
             candidate = nested.get("spotify_id") or nested.get("id")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        return None
-
-    @staticmethod
-    def _extract_plex_id(payload: Mapping[str, Any] | None) -> Optional[str]:
-        if not isinstance(payload, Mapping):
-            return None
-        for key in ("plex_id", "plexId", "plex_rating_key", "ratingKey", "rating_key"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        nested = payload.get("metadata")
-        if isinstance(nested, Mapping):
-            candidate = nested.get("ratingKey") or nested.get("id")
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
         return None
@@ -941,9 +832,27 @@ class SyncWorker:
                 candidate = SyncWorker._normalise_metadata_value(payload.get(key))
                 if candidate:
                     return candidate
-            nested = payload.get("metadata")
-            if isinstance(nested, Mapping):
-                nested_value = SyncWorker._resolve_text(keys, nested)
-                if nested_value:
-                    return nested_value
+                nested = payload.get("metadata")
+                if isinstance(nested, Mapping):
+                    nested_value = SyncWorker._resolve_text(keys, nested)
+                    if nested_value:
+                        return nested_value
         return None
+
+    @staticmethod
+    def _extract_basic_metadata(payload: Mapping[str, Any] | None) -> Dict[str, str]:
+        metadata: Dict[str, str] = {}
+        if not isinstance(payload, Mapping):
+            return metadata
+        keys = ("genre", "composer", "producer", "isrc", "copyright", "artwork_url")
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, (str, int, float)):
+                text = str(value).strip()
+                if text:
+                    metadata[key] = text
+        nested = payload.get("metadata")
+        if isinstance(nested, Mapping):
+            for key, value in SyncWorker._extract_basic_metadata(nested).items():
+                metadata.setdefault(key, value)
+        return metadata
