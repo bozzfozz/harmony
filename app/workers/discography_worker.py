@@ -12,6 +12,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import DiscographyJob
 from app.routers.matching_router import calculate_discography_missing
+from app.workers.lyrics_worker import LyricsWorker
 
 logger = get_logger(__name__)
 
@@ -32,11 +33,13 @@ class DiscographyWorker:
         *,
         plex_client: PlexClient | None = None,
         beets_client: BeetsClient | None = None,
+        lyrics_worker: LyricsWorker | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
         self._plex = plex_client
         self._beets = beets_client
+        self._lyrics = lyrics_worker
         self._queue: asyncio.Queue[Optional[int]] = asyncio.Queue()
         self._task: asyncio.Task | None = None
         self._running = False
@@ -136,6 +139,7 @@ class DiscographyWorker:
                 continue
             await self._soulseek.download({"username": username, "files": [file_info]})
             self._import_with_beets(file_info)
+            await self._maybe_generate_lyrics(file_info, artist_name, album, track)
 
     @staticmethod
     def _build_search_query(
@@ -204,3 +208,65 @@ class DiscographyWorker:
             importer(str(filename), quiet=True)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning("Beets import failed for %s: %s", filename, exc)
+
+    async def _maybe_generate_lyrics(
+        self,
+        file_info: Dict[str, Any],
+        artist_name: str,
+        album: Dict[str, Any],
+        track: Dict[str, Any],
+    ) -> None:
+        if self._lyrics is None:
+            return
+
+        file_path = (
+            file_info.get("local_path")
+            or file_info.get("path")
+            or file_info.get("filename")
+        )
+        if not file_path:
+            return
+
+        download_identifier: Optional[int]
+        try:
+            identifier = file_info.get("download_id")
+            download_identifier = int(identifier) if identifier is not None else None
+        except (TypeError, ValueError):  # pragma: no cover - defensive conversion
+            download_identifier = None
+
+        track_info: Dict[str, Any] = {}
+        title = track.get("name") or track.get("title")
+        if isinstance(title, str) and title.strip():
+            track_info["title"] = title.strip()
+
+        artist = artist_name
+        if not artist:
+            artists = track.get("artists")
+            if isinstance(artists, list) and artists:
+                first = artists[0]
+                if isinstance(first, dict):
+                    artist = str(first.get("name") or "").strip()
+                else:
+                    artist = str(first).strip()
+            elif isinstance(track.get("artist"), str):
+                artist = track.get("artist", "")
+        if artist:
+            track_info["artist"] = artist
+
+        if isinstance(album, dict):
+            album_name = album.get("name")
+            if isinstance(album_name, str) and album_name.strip():
+                track_info["album"] = album_name.strip()
+
+        duration = (
+            track.get("duration_ms")
+            or track.get("duration")
+            or track.get("durationMs")
+        )
+        if duration is not None:
+            track_info["duration"] = duration
+
+        try:
+            await self._lyrics.enqueue(download_identifier, str(file_path), track_info)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Unable to schedule lyrics for discography download: %s", exc)

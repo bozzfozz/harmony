@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,7 @@ from app.schemas import (
     SoulseekSearchResponse,
     StatusResponse,
 )
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 logger = get_logger(__name__)
 
@@ -140,6 +142,38 @@ async def soulseek_download(
 
     detail: Dict[str, Any] = {"downloads": created_downloads}
     return SoulseekDownloadResponse(status="queued", detail=detail)
+
+
+@router.get("/download/{download_id}/lyrics")
+def soulseek_download_lyrics(
+    download_id: int,
+    session: Session = Depends(get_db),
+) -> Response:
+    """Return the generated LRC lyrics for a completed download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    status = (download.lyrics_status or "").lower()
+    if status != "done" or not download.lyrics_path:
+        if status == "pending" or not status:
+            return JSONResponse(status_code=202, content={"status": "pending"})
+        if status == "failed":
+            raise HTTPException(status_code=502, detail="Lyrics generation failed")
+        raise HTTPException(status_code=404, detail="Lyrics file not available")
+
+    lyrics_path = Path(download.lyrics_path)
+    if not lyrics_path.exists():
+        raise HTTPException(status_code=404, detail="Lyrics file not found")
+
+    try:
+        content = lyrics_path.read_text(encoding="utf-8")
+    except OSError as exc:  # pragma: no cover - defensive logging
+        logger.error("Failed to read lyrics file %s: %s", lyrics_path, exc)
+        raise HTTPException(status_code=500, detail="Unable to read lyrics file") from exc
+
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 
 @router.post("/discography/download", response_model=DiscographyJobResponse)

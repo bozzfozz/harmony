@@ -453,6 +453,25 @@ class StubTransfersApi:
         return await self._soulseek.enqueue(username, files)
 
 
+class StubLyricsWorker:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[int | None, str, Dict[str, Any]]] = []
+
+    async def start(self) -> None:
+        return None
+
+    async def stop(self) -> None:
+        return None
+
+    async def enqueue(
+        self,
+        download_id: int | None,
+        file_path: str,
+        track_info: Dict[str, Any],
+    ) -> None:
+        self.jobs.append((download_id, file_path, dict(track_info)))
+
+
 @pytest.fixture(autouse=True)
 def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
@@ -492,6 +511,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     stub_plex = StubPlexClient()
     stub_soulseek = StubSoulseekClient()
     stub_transfers = StubTransfersApi(stub_soulseek)
+    stub_lyrics = StubLyricsWorker()
     engine = dependency_matching_engine()
 
     async def noop_start(self) -> None:  # type: ignore[override]
@@ -528,7 +548,8 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     app.state.transfers_stub = stub_transfers
     app.state.plex_stub = stub_plex
     app.state.spotify_stub = stub_spotify
-    app.state.sync_worker = SyncWorker(stub_soulseek)
+    app.state.lyrics_worker = stub_lyrics
+    app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
     app.state.playlist_worker = PlaylistSyncWorker(stub_spotify, interval_seconds=0.1)
 
     with SimpleTestClient(app) as test_client:

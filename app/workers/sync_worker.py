@@ -22,6 +22,7 @@ from app.utils.events import (
 )
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
+from app.workers.lyrics_worker import LyricsWorker
 from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
@@ -50,11 +51,13 @@ class SyncWorker:
         spotify_client: SpotifyClient | None = None,
         plex_client: PlexClient | None = None,
         beets_client: BeetsClient | None = None,
+        lyrics_worker: LyricsWorker | None = None,
     ) -> None:
         self._client = soulseek_client
         self._spotify = spotify_client
         self._plex = plex_client
         self._beets = beets_client
+        self._lyrics = lyrics_worker
         self._job_store = PersistentJobQueue("sync")
         self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]] = (
             asyncio.PriorityQueue()
@@ -697,6 +700,55 @@ class SyncWorker:
                 download.updated_at = datetime.utcnow()
             session.add(download)
 
+        if self._lyrics is not None and file_path:
+            track_info: Dict[str, Any] = dict(metadata)
+            track_info.setdefault("filename", filename)
+            track_info.setdefault("download_id", download_id)
+
+            title = track_info.get("title") or self._resolve_text(
+                ("title", "track", "name", "filename"),
+                metadata,
+                payload,
+                request_payload,
+            )
+            track_info["title"] = title or filename
+
+            artist = track_info.get("artist") or self._resolve_text(
+                ("artist", "artist_name", "artists"),
+                metadata,
+                payload,
+                request_payload,
+            )
+            if artist:
+                track_info["artist"] = artist
+
+            album = track_info.get("album") or self._resolve_text(
+                ("album", "album_name", "release"),
+                metadata,
+                payload,
+                request_payload,
+            )
+            if album:
+                track_info["album"] = album
+
+            duration = track_info.get("duration") or self._resolve_text(
+                ("duration", "duration_ms", "durationMs", "length"),
+                metadata,
+                payload,
+                request_payload,
+            )
+            if duration:
+                track_info["duration"] = duration
+
+            try:
+                await self._lyrics.enqueue(download_id, file_path, track_info)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Failed to schedule lyrics generation for download %s: %s",
+                    download_id,
+                    exc,
+                )
+
     async def _collect_metadata(
         self,
         download_id: int,
@@ -833,4 +885,42 @@ class SyncWorker:
                 value = payload.get(key)
                 if isinstance(value, str) and value.strip():
                     return value.strip()
+        return None
+
+    @staticmethod
+    def _normalise_metadata_value(value: Any) -> Optional[str]:
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        if isinstance(value, (int, float)):
+            text = str(value).strip()
+            return text or None
+        if isinstance(value, Mapping):
+            for key in ("name", "title", "value"):
+                nested = SyncWorker._normalise_metadata_value(value.get(key))
+                if nested:
+                    return nested
+        if isinstance(value, list) and value:
+            return SyncWorker._normalise_metadata_value(value[0])
+        return None
+
+    @staticmethod
+    def _resolve_text(
+        keys: Iterable[str],
+        *payloads: Mapping[str, Any] | None,
+    ) -> Optional[str]:
+        for payload in payloads:
+            if not isinstance(payload, Mapping):
+                continue
+            for key in keys:
+                if key not in payload:
+                    continue
+                candidate = SyncWorker._normalise_metadata_value(payload.get(key))
+                if candidate:
+                    return candidate
+            nested = payload.get("metadata")
+            if isinstance(nested, Mapping):
+                nested_value = SyncWorker._resolve_text(keys, nested)
+                if nested_value:
+                    return nested_value
         return None
