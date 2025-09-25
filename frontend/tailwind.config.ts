@@ -1,4 +1,5 @@
 import { createRequire } from 'module';
+import colors from 'tailwindcss/colors';
 import type { Config } from 'tailwindcss';
 
 const require = createRequire(import.meta.url);
@@ -17,6 +18,7 @@ const config: Config = {
   darkMode: ['class'],
   content: [
     './index.html',
+    './layout/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
     './src/components/**/*.{ts,tsx}',
     './src/pages/**/*.{ts,tsx}'
@@ -63,12 +65,63 @@ const config: Config = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))'
-        }
+        },
+        slate: colors.slate
+      },
+      fontFamily: {
+        sans: [
+          'Inter',
+          'ui-sans-serif',
+          'system-ui',
+          'Segoe UI',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif'
+        ],
+        mono: [
+          'JetBrains Mono',
+          'SFMono-Regular',
+          'Menlo',
+          'Monaco',
+          'Consolas',
+          'Liberation Mono',
+          'Courier New',
+          'monospace'
+        ]
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
+      },
+      keyframes: {
+        'fade-in': {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        'slide-in-from-right': {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(0)' }
+        },
+        'slide-out-to-right': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(100%)' }
+        },
+        'fade-in-overlay': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
+        },
+        'fade-out': {
+          '0%': { opacity: '1' },
+          '100%': { opacity: '0' }
+        }
+      },
+      animation: {
+        'fade-in': 'fade-in 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-in-from-right': 'slide-in-from-right 300ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-out-to-right': 'slide-out-to-right 300ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-in-overlay': 'fade-in-overlay 200ms ease-out',
+        'fade-out': 'fade-out 200ms ease-out'
       }
     }
   },
