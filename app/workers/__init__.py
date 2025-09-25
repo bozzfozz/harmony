@@ -1,4 +1,5 @@
 """Background worker exports."""
+from .artwork_worker import ArtworkWorker
 from .auto_sync_worker import AutoSyncWorker
 from .discography_worker import DiscographyWorker
 from .matching_worker import MatchingWorker
@@ -9,6 +10,7 @@ from .sync_worker import SyncWorker
 from .lyrics_worker import LyricsWorker
 
 __all__ = [
+    "ArtworkWorker",
     "AutoSyncWorker",
     "DiscographyWorker",
     "MatchingWorker",

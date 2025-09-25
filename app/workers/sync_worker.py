@@ -22,6 +22,7 @@ from app.utils.events import (
 )
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
+from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.persistence import PersistentJobQueue, QueuedJob
 
@@ -51,12 +52,14 @@ class SyncWorker:
         spotify_client: SpotifyClient | None = None,
         plex_client: PlexClient | None = None,
         beets_client: BeetsClient | None = None,
+        artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
     ) -> None:
         self._client = soulseek_client
         self._spotify = spotify_client
         self._plex = plex_client
         self._beets = beets_client
+        self._artwork = artwork_worker
         self._lyrics = lyrics_worker
         self._job_store = PersistentJobQueue("sync")
         self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]] = (
@@ -699,6 +702,26 @@ class SyncWorker:
             if updated:
                 download.updated_at = datetime.utcnow()
             session.add(download)
+
+        spotify_track_id = self._extract_spotify_id(request_payload)
+        if not spotify_track_id:
+            spotify_track_id = self._extract_spotify_id(payload)
+
+        if self._artwork is not None and file_path:
+            try:
+                await self._artwork.enqueue(
+                    download_id,
+                    str(file_path),
+                    metadata=dict(metadata),
+                    spotify_track_id=spotify_track_id,
+                    artwork_url=artwork_url,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Failed to schedule artwork embedding for download %s: %s",
+                    download_id,
+                    exc,
+                )
 
         if self._lyrics is not None and file_path:
             track_info: Dict[str, Any] = dict(metadata)

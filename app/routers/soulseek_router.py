@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -174,6 +176,55 @@ def soulseek_download_lyrics(
         raise HTTPException(status_code=500, detail="Unable to read lyrics file") from exc
 
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
+
+@router.get("/download/{download_id}/artwork")
+def soulseek_download_artwork(
+    download_id: int,
+    format: str = Query("path"),
+    session: Session = Depends(get_db),
+) -> Response:
+    """Return the stored artwork for a completed download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    status = (download.artwork_status or "").lower()
+    if status != "done" or not download.artwork_path:
+        if status in {"", "pending"}:
+            return JSONResponse(status_code=202, content={"status": "pending"})
+        if status == "failed":
+            raise HTTPException(status_code=502, detail="Artwork generation failed")
+        raise HTTPException(status_code=404, detail="Artwork not available")
+
+    artwork_path = Path(download.artwork_path)
+    if not artwork_path.exists():
+        raise HTTPException(status_code=404, detail="Artwork file not found")
+
+    fmt = (format or "path").lower()
+    if fmt == "base64":
+        try:
+            data = artwork_path.read_bytes()
+        except OSError as exc:  # pragma: no cover - defensive logging
+            logger.error("Failed to read artwork file %s: %s", artwork_path, exc)
+            raise HTTPException(status_code=500, detail="Unable to read artwork file") from exc
+        encoded = base64.b64encode(data).decode("ascii")
+        mime_type = mimetypes.guess_type(str(artwork_path))[0] or "application/octet-stream"
+        return JSONResponse(
+            {"status": "done", "data": encoded, "mime_type": mime_type}
+        )
+
+    if fmt == "raw":
+        try:
+            content = artwork_path.read_bytes()
+        except OSError as exc:  # pragma: no cover - defensive logging
+            logger.error("Failed to read artwork file %s: %s", artwork_path, exc)
+            raise HTTPException(status_code=500, detail="Unable to read artwork file") from exc
+        media_type = mimetypes.guess_type(str(artwork_path))[0] or "application/octet-stream"
+        return Response(content, media_type=media_type)
+
+    return JSONResponse({"status": "done", "path": str(artwork_path)})
 
 
 @router.post("/discography/download", response_model=DiscographyJobResponse)
