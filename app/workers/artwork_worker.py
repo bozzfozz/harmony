@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
+import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
-from app.utils.artwork_utils import download_artwork, embed_artwork
+from app.utils import artwork_utils
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,7 @@ class ArtworkJob:
     file_path: str
     metadata: Dict[str, Any]
     spotify_track_id: Optional[str]
+    spotify_album_id: Optional[str]
     artwork_url: Optional[str]
 
 
@@ -36,13 +38,18 @@ class ArtworkWorker:
         spotify_client: SpotifyClient | None = None,
         plex_client: PlexClient | None = None,
         soulseek_client: SoulseekClient | None = None,
+        *,
+        storage_directory: Path | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._plex = plex_client
         self._soulseek = soulseek_client
+        artwork_utils.SPOTIFY_CLIENT = spotify_client
         self._queue: asyncio.Queue[Optional[ArtworkJob]] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
+        base_dir = storage_directory or Path(os.getenv("HARMONY_ARTWORK_DIR", "./artwork"))
+        self._storage_dir = Path(base_dir).resolve()
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -71,6 +78,7 @@ class ArtworkWorker:
         *,
         metadata: Mapping[str, Any] | None = None,
         spotify_track_id: str | None = None,
+        spotify_album_id: str | None = None,
         artwork_url: str | None = None,
     ) -> None:
         job = ArtworkJob(
@@ -78,6 +86,7 @@ class ArtworkWorker:
             file_path=str(file_path),
             metadata=dict(metadata or {}),
             spotify_track_id=spotify_track_id,
+            spotify_album_id=spotify_album_id,
             artwork_url=artwork_url,
         )
         if not self._running:
@@ -121,9 +130,15 @@ class ArtworkWorker:
 
         candidates = await self._collect_candidate_urls(job)
         artwork_file: Path | None = None
+        target_base = self._storage_dir / self._generate_storage_name(job, audio_path)
+        self._storage_dir.mkdir(parents=True, exist_ok=True)
         for url in candidates:
             try:
-                artwork_file = await asyncio.to_thread(download_artwork, url)
+                artwork_file = await asyncio.to_thread(
+                    artwork_utils.download_artwork,
+                    url,
+                    target_base,
+                )
             except Exception:
                 continue
             if artwork_file.exists():
@@ -132,15 +147,23 @@ class ArtworkWorker:
         if artwork_file is None or not artwork_file.exists():
             raise ValueError("Unable to retrieve artwork image")
 
-        target = self._store_artwork(audio_path, artwork_file)
-        await asyncio.to_thread(embed_artwork, audio_path, target)
-        return target
+        await asyncio.to_thread(artwork_utils.embed_artwork, audio_path, artwork_file)
+        return artwork_file
 
     async def _collect_candidate_urls(self, job: ArtworkJob) -> list[str]:
         urls: list[str] = []
 
+        album_id = await asyncio.to_thread(self._resolve_spotify_album_id, job)
+        if album_id:
+            spotify_album_url = await asyncio.to_thread(
+                artwork_utils.fetch_spotify_artwork,
+                album_id,
+            )
+            if spotify_album_url:
+                urls.append(spotify_album_url)
+
         spotify_url = await asyncio.to_thread(self._get_spotify_artwork_url, job.spotify_track_id)
-        if spotify_url:
+        if spotify_url and spotify_url not in urls:
             urls.append(spotify_url)
 
         metadata_url = self._extract_metadata_artwork(job.metadata)
@@ -161,6 +184,40 @@ class ArtworkWorker:
             seen.add(url)
             unique_urls.append(url)
         return unique_urls
+
+    def _resolve_spotify_album_id(self, job: ArtworkJob) -> Optional[str]:
+        if job.spotify_album_id:
+            return job.spotify_album_id
+
+        metadata_album = job.metadata.get("album")
+        if isinstance(metadata_album, Mapping):
+            for key in ("spotify_id", "spotifyId", "id"):
+                value = metadata_album.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+        direct_id = job.metadata.get("spotify_album_id") or job.metadata.get("album_id")
+        if isinstance(direct_id, str) and direct_id.strip():
+            return direct_id.strip()
+
+        if job.spotify_track_id and self._spotify is not None:
+            try:
+                track = self._spotify.get_track_details(job.spotify_track_id)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Failed to resolve album id for %s: %s",
+                    job.spotify_track_id,
+                    exc,
+                )
+            else:
+                if isinstance(track, Mapping):
+                    album = track.get("album")
+                    if isinstance(album, Mapping):
+                        candidate = album.get("id")
+                        if isinstance(candidate, str) and candidate.strip():
+                            return candidate.strip()
+
+        return None
 
     def _get_spotify_artwork_url(self, track_id: str | None) -> Optional[str]:
         if not track_id or self._spotify is None:
@@ -248,19 +305,15 @@ class ArtworkWorker:
                 best_url = str(url)
         return best_url
 
-    @staticmethod
-    def _store_artwork(audio_path: Path, artwork_path: Path) -> Path:
-        target_dir = audio_path.parent
-        suffix = artwork_path.suffix or ".jpg"
-        target = target_dir / f"cover{suffix}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            if target.exists():
-                target.unlink()
-        except OSError:  # pragma: no cover - defensive cleanup
-            logger.debug("Unable to remove existing artwork at %s", target)
-        shutil.move(str(artwork_path), target)
-        return target
+    def _generate_storage_name(self, job: ArtworkJob, audio_path: Path) -> str:
+        candidate = job.spotify_album_id or job.spotify_track_id or audio_path.stem
+        if not candidate and job.download_id is not None:
+            candidate = f"download-{job.download_id}"
+        if not candidate:
+            candidate = audio_path.stem or "artwork"
+        slug = re.sub(r"[^a-zA-Z0-9._-]", "_", candidate)
+        slug = slug.strip("_") or "artwork"
+        return slug
 
     def _update_download(self, download_id: int, *, status: str, path: str | None) -> None:
         with session_scope() as session:
@@ -269,6 +322,7 @@ class ArtworkWorker:
                 return
             download.artwork_status = status
             download.artwork_path = path
+            download.has_artwork = bool(path) and status == "done"
             download.updated_at = datetime.utcnow()
             session.add(download)
 

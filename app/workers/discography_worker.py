@@ -304,11 +304,15 @@ class DiscographyWorker:
             download_identifier = None
 
         metadata: Dict[str, Any] = {}
+        spotify_album_id = None
         if isinstance(album, dict):
             metadata["album"] = dict(album)
             images = album.get("images")
             if isinstance(images, list):
                 metadata.setdefault("artwork_urls", []).extend(images)
+            candidate = album.get("id") or album.get("spotify_id") or album.get("spotifyId")
+            if isinstance(candidate, str) and candidate.strip():
+                spotify_album_id = candidate.strip()
 
         artwork_url = None
         if isinstance(track, dict):
@@ -328,6 +332,7 @@ class DiscographyWorker:
                 str(file_path),
                 metadata=metadata,
                 spotify_track_id=spotify_track_id,
+                spotify_album_id=spotify_album_id,
                 artwork_url=artwork_url if isinstance(artwork_url, str) else None,
             )
         except Exception as exc:  # pragma: no cover - defensive logging

@@ -122,6 +122,11 @@ class SpotifyClient:
     def add_tracks_to_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
         return self._execute(self._client.playlist_add_items, playlist_id, track_uris)
 
+    def get_album_details(self, album_id: str) -> Dict[str, Any]:
+        """Return metadata for a single Spotify album."""
+
+        return self._execute(self._client.album, album_id)
+
     def remove_tracks_from_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
         return self._execute(
             self._client.playlist_remove_all_occurrences_of_items, playlist_id, track_uris

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import mimetypes
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +27,7 @@ from app.schemas import (
     SoulseekSearchResponse,
     StatusResponse,
 )
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from app.workers.sync_worker import SyncWorker
 
@@ -117,6 +116,9 @@ async def soulseek_download(
                     "isrc": download.isrc,
                     "copyright": download.copyright,
                     "artwork_url": download.artwork_url,
+                    "artwork_path": download.artwork_path,
+                    "artwork_status": download.artwork_status,
+                    "has_artwork": download.has_artwork,
                 }
             )
         session.commit()
@@ -327,10 +329,9 @@ def _resolve_numeric_field(
 @router.get("/download/{download_id}/artwork")
 def soulseek_download_artwork(
     download_id: int,
-    format: str = Query("path"),
     session: Session = Depends(get_db),
 ) -> Response:
-    """Return the stored artwork for a completed download."""
+    """Return the stored artwork as an image file."""
 
     download = session.get(Download, download_id)
     if download is None:
@@ -348,29 +349,70 @@ def soulseek_download_artwork(
     if not artwork_path.exists():
         raise HTTPException(status_code=404, detail="Artwork file not found")
 
-    fmt = (format or "path").lower()
-    if fmt == "base64":
-        try:
-            data = artwork_path.read_bytes()
-        except OSError as exc:  # pragma: no cover - defensive logging
-            logger.error("Failed to read artwork file %s: %s", artwork_path, exc)
-            raise HTTPException(status_code=500, detail="Unable to read artwork file") from exc
-        encoded = base64.b64encode(data).decode("ascii")
-        mime_type = mimetypes.guess_type(str(artwork_path))[0] or "application/octet-stream"
-        return JSONResponse(
-            {"status": "done", "data": encoded, "mime_type": mime_type}
+    media_type = mimetypes.guess_type(str(artwork_path))[0] or "image/jpeg"
+    return FileResponse(artwork_path, media_type=media_type, filename=artwork_path.name)
+
+
+@router.post("/download/{download_id}/artwork/refresh")
+async def soulseek_refresh_artwork(
+    download_id: int,
+    request: Request,
+    session: Session = Depends(get_db),
+) -> JSONResponse:
+    """Force an artwork refresh for a completed download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    audio_path = Path(download.filename)
+    if not audio_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    download.artwork_status = "pending"
+    download.artwork_path = None
+    download.has_artwork = False
+    download.updated_at = datetime.utcnow()
+    session.add(download)
+    session.commit()
+
+    request_payload = download.request_payload if isinstance(download.request_payload, dict) else {}
+    metadata: Dict[str, Any] = {}
+    nested_metadata = request_payload.get("metadata") if isinstance(request_payload, dict) else {}
+    if isinstance(nested_metadata, dict):
+        metadata.update(nested_metadata)
+    if isinstance(request_payload, dict):
+        for key in ("album", "artwork_urls", "spotify_album_id", "album_id"):
+            value = request_payload.get(key)
+            if value is not None and key not in metadata:
+                metadata[key] = value
+        if download.artwork_url and "artwork_url" not in metadata:
+            metadata["artwork_url"] = download.artwork_url
+
+    spotify_track_id = SyncWorker._extract_spotify_id(request_payload)
+    if not spotify_track_id:
+        spotify_track_id = SyncWorker._extract_spotify_id(metadata)
+
+    spotify_album_id = SyncWorker._extract_spotify_album_id(metadata, request_payload)
+
+    worker = getattr(request.app.state, "artwork_worker", None)
+    if worker is None or not hasattr(worker, "enqueue"):
+        return JSONResponse(status_code=202, content={"status": "pending"})
+
+    try:
+        await worker.enqueue(
+            download.id,
+            str(audio_path),
+            metadata=metadata,
+            spotify_track_id=spotify_track_id,
+            spotify_album_id=spotify_album_id,
+            artwork_url=metadata.get("artwork_url"),
         )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Failed to refresh artwork for download %s: %s", download.id, exc)
+        raise HTTPException(status_code=502, detail="Failed to refresh artwork") from exc
 
-    if fmt == "raw":
-        try:
-            content = artwork_path.read_bytes()
-        except OSError as exc:  # pragma: no cover - defensive logging
-            logger.error("Failed to read artwork file %s: %s", artwork_path, exc)
-            raise HTTPException(status_code=500, detail="Unable to read artwork file") from exc
-        media_type = mimetypes.guess_type(str(artwork_path))[0] or "application/octet-stream"
-        return Response(content, media_type=media_type)
-
-    return JSONResponse({"status": "done", "path": str(artwork_path)})
+    return JSONResponse(status_code=202, content={"status": "pending"})
 
 
 @router.post("/discography/download", response_model=DiscographyJobResponse)

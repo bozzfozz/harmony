@@ -690,6 +690,12 @@ class SyncWorker:
         if not spotify_track_id:
             spotify_track_id = self._extract_spotify_id(payload)
 
+        spotify_album_id = self._extract_spotify_album_id(
+            metadata,
+            payload,
+            request_payload,
+        )
+
         if self._artwork is not None and file_path:
             try:
                 await self._artwork.enqueue(
@@ -697,6 +703,7 @@ class SyncWorker:
                     str(file_path),
                     metadata=dict(metadata),
                     spotify_track_id=spotify_track_id,
+                    spotify_album_id=spotify_album_id,
                     artwork_url=artwork_url,
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
@@ -781,6 +788,32 @@ class SyncWorker:
             candidate = nested.get("spotify_id") or nested.get("id")
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
+        return None
+
+    @staticmethod
+    def _extract_spotify_album_id(
+        *payloads: Mapping[str, Any] | None,
+    ) -> Optional[str]:
+        for payload in payloads:
+            if not isinstance(payload, Mapping):
+                continue
+            direct = payload.get("spotify_album_id") or payload.get("album_id")
+            if isinstance(direct, str) and direct.strip():
+                return direct.strip()
+            album_payload = payload.get("album")
+            if isinstance(album_payload, Mapping):
+                for key in ("spotify_id", "spotifyId", "id"):
+                    value = album_payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+            track_payload = payload.get("track")
+            if isinstance(track_payload, Mapping):
+                album_info = track_payload.get("album")
+                if isinstance(album_info, Mapping):
+                    for key in ("spotify_id", "spotifyId", "id"):
+                        value = album_info.get(key)
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()
         return None
 
     @staticmethod
