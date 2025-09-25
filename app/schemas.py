@@ -136,6 +136,8 @@ class SoulseekDownloadEntry(BaseModel):
     artwork_path: Optional[str] = None
     artwork_status: Optional[str] = None
     has_artwork: Optional[bool] = None
+    spotify_track_id: Optional[str] = None
+    spotify_album_id: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None
@@ -166,6 +168,8 @@ class DownloadEntryResponse(BaseModel):
     artwork_path: Optional[str] = None
     artwork_status: Optional[str] = None
     has_artwork: Optional[bool] = None
+    spotify_track_id: Optional[str] = None
+    spotify_album_id: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None

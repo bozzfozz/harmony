@@ -696,6 +696,19 @@ class SyncWorker:
             request_payload,
         )
 
+        if download_id is not None:
+            with session_scope() as session:
+                record = session.get(Download, download_id)
+                if record is not None:
+                    if spotify_track_id:
+                        record.spotify_track_id = spotify_track_id
+                    if spotify_album_id:
+                        record.spotify_album_id = spotify_album_id
+                    if artwork_url:
+                        record.artwork_url = artwork_url
+                    record.updated_at = datetime.utcnow()
+                    session.add(record)
+
         if self._artwork is not None and file_path:
             try:
                 await self._artwork.enqueue(
