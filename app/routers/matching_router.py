@@ -10,7 +10,15 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db, get_matching_engine
 from app.logging import get_logger
 from app.models import Download, Match
-from app.schemas import AlbumMatchingRequest, MatchingRequest, MatchingResponse
+from app.schemas import (
+    AlbumMatchingRequest,
+    DiscographyMatchingRequest,
+    DiscographyMatchingResponse,
+    DiscographyMissingAlbum,
+    DiscographyMissingTrack,
+    MatchingRequest,
+    MatchingResponse,
+)
 
 logger = get_logger(__name__)
 
@@ -92,6 +100,84 @@ def _extract_album_tracks(album: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
+def _extract_spotify_track_id(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    if value.startswith("spotify://track:"):
+        return value.split(":")[-1]
+    if value.startswith("spotify:track:"):
+        return value.split(":")[-1]
+    if "spotify.com/track/" in value:
+        return value.rsplit("/", 1)[-1]
+    return None
+
+
+def _extract_track_identifier(candidate: Dict[str, Any]) -> Optional[str]:
+    guid = candidate.get("guid")
+    track_id = _extract_spotify_track_id(guid if isinstance(guid, str) else None)
+    if track_id:
+        return track_id
+
+    guids = candidate.get("Guid")
+    if isinstance(guids, list):
+        for entry in guids:
+            if not isinstance(entry, dict):
+                continue
+            parsed = _extract_spotify_track_id(entry.get("id"))
+            if parsed:
+                return parsed
+
+    for key in ("ratingKey", "id", "key"):
+        value = candidate.get(key)
+        if isinstance(value, str) and value.startswith("spotify:"):
+            parsed = _extract_spotify_track_id(value)
+            if parsed:
+                return parsed
+    return None
+
+
+def calculate_discography_missing(
+    artist_id: str,
+    albums: List[Dict[str, Any]],
+    plex_items: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Determine which Spotify tracks are missing from Plex for a discography."""
+
+    existing_ids: set[str] = set()
+    for item in plex_items:
+        if not isinstance(item, dict):
+            continue
+        track_id = _extract_track_identifier(item)
+        if track_id:
+            existing_ids.add(track_id)
+
+    missing_albums: List[Dict[str, Any]] = []
+    missing_tracks: List[Dict[str, Any]] = []
+
+    for album_entry in albums:
+        if not isinstance(album_entry, dict):
+            continue
+        album_data = album_entry.get("album") if isinstance(album_entry.get("album"), dict) else album_entry
+        track_entries = album_entry.get("tracks")
+        if isinstance(track_entries, list):
+            tracks = [track for track in track_entries if isinstance(track, dict)]
+        else:
+            tracks = _extract_album_tracks(album_entry)
+        album_missing: List[Dict[str, Any]] = []
+        for track in tracks:
+            track_id = track.get("id") or track.get("spotify_id")
+            if not track_id:
+                continue
+            if track_id in existing_ids:
+                continue
+            album_missing.append(track)
+            missing_tracks.append({"album": album_data, "track": track})
+        if album_missing:
+            missing_albums.append({"album": album_data, "missing_tracks": album_missing})
+
+    return missing_albums, missing_tracks
+
+
 @router.post("/spotify-to-plex", response_model=MatchingResponse)
 def spotify_to_plex(
     payload: MatchingRequest,
@@ -170,3 +256,26 @@ def spotify_to_plex_album(
         if matches:
             _persist_matches(session, matches)
     return MatchingResponse(best_match=best_match, confidence=confidence)
+
+
+@router.post("/discography/plex", response_model=DiscographyMatchingResponse)
+def discography_to_plex(
+    payload: DiscographyMatchingRequest,
+) -> DiscographyMatchingResponse:
+    """Return missing Spotify tracks for a complete discography."""
+
+    missing_albums, missing_tracks = calculate_discography_missing(
+        payload.artist_id,
+        payload.albums,
+        payload.plex_items,
+    )
+    return DiscographyMatchingResponse(
+        missing_albums=[
+            DiscographyMissingAlbum(album=item.get("album", {}), missing_tracks=item.get("missing_tracks", []))
+            for item in missing_albums
+        ],
+        missing_tracks=[
+            DiscographyMissingTrack(album=item.get("album", {}), track=item.get("track", {}))
+            for item in missing_tracks
+        ],
+    )

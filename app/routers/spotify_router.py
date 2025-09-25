@@ -12,6 +12,7 @@ from app.dependencies import get_db, get_spotify_client
 from app.models import Playlist
 from app.schemas import (
     ArtistReleasesResponse,
+    DiscographyResponse,
     AudioFeaturesResponse,
     FollowedArtistsResponse,
     PlaylistItemsResponse,
@@ -103,6 +104,32 @@ def get_artist_releases(
     raw_items = response.get("items") if isinstance(response, dict) else []
     releases = [item for item in raw_items or [] if isinstance(item, dict)]
     return ArtistReleasesResponse(artist_id=artist_id, releases=releases)
+
+
+@router.get("/artist/{artist_id}/discography", response_model=DiscographyResponse)
+def get_artist_discography(
+    artist_id: str,
+    client: SpotifyClient = Depends(get_spotify_client),
+) -> DiscographyResponse:
+    response = client.get_artist_discography(artist_id)
+    albums_payload = response.get("albums") if isinstance(response, dict) else []
+    albums = []
+    for entry in albums_payload or []:
+        if not isinstance(entry, dict):
+            continue
+        album_data = entry.get("album") if isinstance(entry.get("album"), dict) else None
+        if album_data is None:
+            album_data = {key: value for key, value in entry.items() if key != "tracks"}
+        tracks = entry.get("tracks")
+        if isinstance(tracks, list):
+            track_items = [track for track in tracks if isinstance(track, dict)]
+        elif isinstance(tracks, dict):
+            items = tracks.get("items") if isinstance(tracks, dict) else []
+            track_items = [track for track in items if isinstance(track, dict)]
+        else:
+            track_items = []
+        albums.append({"album": album_data, "tracks": track_items})
+    return DiscographyResponse(artist_id=artist_id, albums=albums)
 
 
 @router.get("/playlists", response_model=PlaylistResponse)
