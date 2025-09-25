@@ -264,6 +264,10 @@ Weitere Endpunkte:
 - `GET /beets/fields` – zeigt verfügbare Metadatenfelder.
 - `POST /beets/move` & `POST /beets/write` – verschiebt Dateien bzw. schreibt Tags.
 
+## Contributing
+
+Für neue Arbeiten bitte die [Task-Vorlage](docs/task-template.md) nutzen und im PR referenzieren.
+
 ## Tests & CI
 
 ```bash

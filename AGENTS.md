@@ -48,3 +48,6 @@ feat/add-auth: implement token-based login flow
 ## 10. Continuous Improvement
 - Treat these guidelines as living documentation. Propose updates when new tools, processes, or insights can improve collaboration.
 
+## 11. Task-Vorlagen
+- Vor jeder Implementierung MUSS ein Task nach `docs/task-template.md` erstellt und im PR verlinkt werden (TASK_ID im Titel & in Commits). Dieser Schritt ist verbindlich und wird als eigener Review-Check geprüft.
+
