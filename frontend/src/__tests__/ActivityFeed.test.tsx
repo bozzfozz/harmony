@@ -252,4 +252,44 @@ describe('ActivityFeed', () => {
     await user.click(summary.closest('summary') ?? summary);
     await waitFor(() => expect(detailsElement).not.toHaveAttribute('open'));
   });
+
+  it('filters events by selected type', async () => {
+    const user = userEvent.setup();
+    mockedGetActivityFeed.mockResolvedValue([
+      { timestamp: '2024-03-18T12:10:00Z', type: 'sync', status: 'completed' },
+      { timestamp: '2024-03-18T12:09:00Z', type: 'download', status: 'completed' },
+      { timestamp: '2024-03-18T12:08:00Z', type: 'metadata', status: 'running' },
+      { timestamp: '2024-03-18T12:07:00Z', type: 'worker_started', status: 'started' }
+    ]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const filterSelect = await screen.findByLabelText('Event-Typ');
+    expect(filterSelect).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getAllByTestId('activity-entry')).toHaveLength(4));
+
+    await user.selectOptions(filterSelect, 'download');
+
+    await waitFor(() => {
+      const filteredEntries = screen.getAllByTestId('activity-entry');
+      expect(filteredEntries).toHaveLength(1);
+      expect(within(filteredEntries[0]).getByText('Download')).toBeInTheDocument();
+    });
+
+    await user.selectOptions(filterSelect, 'all');
+
+    await waitFor(() => expect(screen.getAllByTestId('activity-entry')).toHaveLength(4));
+  });
+
+  it('keeps the empty state when no activities are present', async () => {
+    mockedGetActivityFeed.mockResolvedValue([]);
+
+    renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
+
+    const filterSelect = await screen.findByLabelText('Event-Typ');
+    expect(filterSelect).toBeDisabled();
+
+    await waitFor(() => expect(screen.getByText('Keine Aktivitäten vorhanden.')).toBeInTheDocument());
+  });
 });
