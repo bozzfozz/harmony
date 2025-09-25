@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import os
+# ruff: noqa: E402
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List

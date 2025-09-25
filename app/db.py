@@ -1,11 +1,12 @@
 """Database configuration and helper utilities."""
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -20,6 +21,8 @@ _engine: Optional[Engine] = None
 SessionLocal: Optional[sessionmaker[Session]] = None
 _configured_database_url: Optional[str] = None
 _initializing_db: bool = False
+
+_logger = logging.getLogger(__name__)
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -109,9 +112,10 @@ def init_db() -> None:
     try:
         _ensure_engine(auto_init=False)
         assert _engine is not None
-        from app import models  # Import models for metadata
+        from app import models  # noqa: F401  # Import models for metadata side-effects
 
         Base.metadata.create_all(bind=_engine)
+        _apply_schema_extensions(_engine)
     finally:
         _initializing_db = False
 
@@ -128,6 +132,36 @@ def reset_engine_for_tests() -> None:
     SessionLocal = None
     _configured_database_url = None
     _initializing_db = False
+
+
+def _apply_schema_extensions(engine: Engine) -> None:
+    """Apply small, idempotent schema updates for legacy databases."""
+
+    try:
+        inspector = inspect(engine)
+        columns = {column["name"] for column in inspector.get_columns("downloads")}
+    except Exception as exc:  # pragma: no cover - defensive logging
+        _logger.debug("Unable to inspect downloads table: %s", exc)
+        return
+
+    column_definitions = {
+        "spotify_track_id": "VARCHAR(128)",
+        "spotify_album_id": "VARCHAR(128)",
+    }
+
+    for column_name, ddl in column_definitions.items():
+        if column_name in columns:
+            continue
+        statement = text(f"ALTER TABLE downloads ADD COLUMN {column_name} {ddl}")
+        try:
+            with engine.begin() as connection:
+                connection.execute(statement)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning(
+                "Failed to add column %s to downloads table: %s",
+                column_name,
+                exc,
+            )
 
 
 __all__ = [

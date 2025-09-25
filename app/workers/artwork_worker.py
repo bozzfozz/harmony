@@ -30,6 +30,15 @@ class ArtworkJob:
     artwork_url: Optional[str]
 
 
+@dataclass(slots=True)
+class DownloadContext:
+    id: int
+    filename: str
+    spotify_track_id: Optional[str]
+    spotify_album_id: Optional[str]
+    request_payload: Mapping[str, Any] | None
+
+
 class ArtworkWorker:
     """Download high-resolution artwork and embed it into media files."""
 
@@ -48,7 +57,10 @@ class ArtworkWorker:
         self._queue: asyncio.Queue[Optional[ArtworkJob]] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
-        base_dir = storage_directory or Path(os.getenv("HARMONY_ARTWORK_DIR", "./artwork"))
+        base_dir = storage_directory
+        if base_dir is None:
+            env_dir = os.getenv("ARTWORK_DIR") or os.getenv("HARMONY_ARTWORK_DIR")
+            base_dir = Path(env_dir) if env_dir else Path("./artwork")
         self._storage_dir = Path(base_dir).resolve()
 
     async def start(self) -> None:
@@ -109,40 +121,93 @@ class ArtworkWorker:
 
     async def _process_job(self, job: ArtworkJob) -> None:
         download_id = job.download_id
+        download_context: DownloadContext | None = None
         if download_id is not None:
-            self._update_download(download_id, status="pending", path=None)
+            with session_scope() as session:
+                record = session.get(Download, download_id)
+                if record is not None:
+                    payload = record.request_payload
+                    payload_mapping = (
+                        dict(payload)
+                        if isinstance(payload, Mapping)
+                        else None
+                    )
+                    download_context = DownloadContext(
+                        id=record.id,
+                        filename=record.filename,
+                        spotify_track_id=record.spotify_track_id,
+                        spotify_album_id=record.spotify_album_id,
+                        request_payload=payload_mapping,
+                    )
+                    if not job.spotify_track_id and record.spotify_track_id:
+                        job.spotify_track_id = record.spotify_track_id
+                    if not job.spotify_album_id and record.spotify_album_id:
+                        job.spotify_album_id = record.spotify_album_id
+                    if not job.artwork_url and record.artwork_url:
+                        job.artwork_url = record.artwork_url
+        if download_id is not None:
+            self._update_download(
+                download_id,
+                status="pending",
+                path=None,
+                spotify_track_id=job.spotify_track_id,
+                spotify_album_id=job.spotify_album_id,
+                artwork_url=job.artwork_url,
+            )
 
         try:
-            artwork_path = await self._handle_job(job)
+            artwork_path = await self._handle_job(job, download_context)
         except Exception as exc:
             if download_id is not None:
-                self._update_download(download_id, status="failed", path=None)
+                self._update_download(
+                    download_id,
+                    status="failed",
+                    path=None,
+                    spotify_track_id=job.spotify_track_id,
+                    spotify_album_id=job.spotify_album_id,
+                )
             logger.debug("Artwork processing failed for %s: %s", download_id, exc)
             return
 
         if download_id is not None:
-            self._update_download(download_id, status="done", path=str(artwork_path))
+            self._update_download(
+                download_id,
+                status="done",
+                path=str(artwork_path),
+                spotify_track_id=job.spotify_track_id,
+                spotify_album_id=job.spotify_album_id,
+                artwork_url=job.artwork_url,
+            )
 
-    async def _handle_job(self, job: ArtworkJob) -> Path:
+    async def _handle_job(
+        self,
+        job: ArtworkJob,
+        download: DownloadContext | None,
+    ) -> Path:
         audio_path = Path(job.file_path)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-        candidates = await self._collect_candidate_urls(job)
+        candidates = await self._collect_candidate_urls(job, download)
         artwork_file: Path | None = None
         target_base = self._storage_dir / self._generate_storage_name(job, audio_path)
         self._storage_dir.mkdir(parents=True, exist_ok=True)
-        for url in candidates:
-            try:
-                artwork_file = await asyncio.to_thread(
-                    artwork_utils.download_artwork,
-                    url,
-                    target_base,
-                )
-            except Exception:
-                continue
-            if artwork_file.exists():
-                break
+
+        cached_file = self._find_cached_artwork(target_base)
+        if cached_file is not None:
+            artwork_file = cached_file
+        else:
+            for url in candidates:
+                try:
+                    artwork_file = await asyncio.to_thread(
+                        artwork_utils.download_artwork,
+                        url,
+                        target_base,
+                    )
+                except Exception:
+                    continue
+                if artwork_file.exists():
+                    break
 
         if artwork_file is None or not artwork_file.exists():
             raise ValueError("Unable to retrieve artwork image")
@@ -150,11 +215,20 @@ class ArtworkWorker:
         await asyncio.to_thread(artwork_utils.embed_artwork, audio_path, artwork_file)
         return artwork_file
 
-    async def _collect_candidate_urls(self, job: ArtworkJob) -> list[str]:
+    async def _collect_candidate_urls(
+        self,
+        job: ArtworkJob,
+        download: DownloadContext | None,
+    ) -> list[str]:
         urls: list[str] = []
 
-        album_id = await asyncio.to_thread(self._resolve_spotify_album_id, job)
+        album_id = await asyncio.to_thread(
+            self._resolve_spotify_album_id,
+            job,
+            download,
+        )
         if album_id:
+            job.spotify_album_id = job.spotify_album_id or album_id
             spotify_album_url = await asyncio.to_thread(
                 artwork_utils.fetch_spotify_artwork,
                 album_id,
@@ -185,9 +259,41 @@ class ArtworkWorker:
             unique_urls.append(url)
         return unique_urls
 
-    def _resolve_spotify_album_id(self, job: ArtworkJob) -> Optional[str]:
+    def _resolve_spotify_album_id(
+        self,
+        job: ArtworkJob,
+        download: DownloadContext | None,
+    ) -> Optional[str]:
         if job.spotify_album_id:
             return job.spotify_album_id
+
+        payload: Dict[str, Any] = {}
+        if download is not None and download.request_payload:
+            payload.update(download.request_payload)
+        if job.metadata:
+            existing_metadata = payload.get("metadata")
+            if isinstance(existing_metadata, Mapping):
+                combined = dict(existing_metadata)
+                combined.update(job.metadata)
+                payload["metadata"] = combined
+            else:
+                payload["metadata"] = dict(job.metadata)
+
+        context = DownloadContext(
+            id=download.id if download is not None else (job.download_id or 0),
+            filename=job.file_path if job.file_path else (download.filename if download else ""),
+            spotify_track_id=job.spotify_track_id or (download.spotify_track_id if download else None),
+            spotify_album_id=download.spotify_album_id if download else None,
+            request_payload=payload or None,
+        )
+
+        try:
+            inferred = artwork_utils.infer_spotify_album_id(context)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Album inference failed for download %s: %s", context.id, exc)
+        else:
+            if inferred:
+                return inferred
 
         metadata_album = job.metadata.get("album")
         if isinstance(metadata_album, Mapping):
@@ -315,7 +421,32 @@ class ArtworkWorker:
         slug = slug.strip("_") or "artwork"
         return slug
 
-    def _update_download(self, download_id: int, *, status: str, path: str | None) -> None:
+    def _find_cached_artwork(self, target_base: Path) -> Path | None:
+        if target_base.exists() and target_base.is_file():
+            return target_base
+
+        candidates: list[Path] = []
+        if target_base.suffix:
+            candidates.append(target_base)
+        else:
+            for suffix in (".jpg", ".jpeg", ".png", ".webp"):
+                candidates.append(target_base.with_suffix(suffix))
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _update_download(
+        self,
+        download_id: int,
+        *,
+        status: str,
+        path: str | None,
+        spotify_track_id: str | None = None,
+        spotify_album_id: str | None = None,
+        artwork_url: str | None = None,
+    ) -> None:
         with session_scope() as session:
             download = session.get(Download, int(download_id))
             if download is None:
@@ -323,6 +454,12 @@ class ArtworkWorker:
             download.artwork_status = status
             download.artwork_path = path
             download.has_artwork = bool(path) and status == "done"
+            if spotify_track_id:
+                download.spotify_track_id = spotify_track_id
+            if spotify_album_id:
+                download.spotify_album_id = spotify_album_id
+            if artwork_url:
+                download.artwork_url = artwork_url
             download.updated_at = datetime.utcnow()
             session.add(download)
 

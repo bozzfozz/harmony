@@ -55,6 +55,8 @@ class Download(Base):
     artwork_path = Column(String(2048), nullable=True)
     artwork_status = Column(String(32), nullable=False, default="pending")
     has_artwork = Column(Boolean, nullable=False, default=False)
+    spotify_track_id = Column(String(128), nullable=True, index=True)
+    spotify_album_id = Column(String(128), nullable=True, index=True)
     lyrics_path = Column(String(2048), nullable=True)
     lyrics_status = Column(String(32), nullable=False, default="pending")
     has_lyrics = Column(Boolean, nullable=False, default=False)

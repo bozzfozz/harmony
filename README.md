@@ -73,9 +73,9 @@ Beispielantwort:
 
 ## High-Quality Artwork
 
-Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in maximaler Spotify-Auflösung herunter. Die Originaldatei wird zentral im Verzeichnis `./artwork/` (bzw. per `HARMONY_ARTWORK_DIR`) abgelegt und anschließend mit Mutagen in die Audiodatei eingebettet. Schlägt der Spotify-Abruf fehl, versucht Harmony das Artwork über Plex-Metadaten, Soulseek oder externe Dienste wie Last.fm oder MusicBrainz zu ermitteln. Der Download-Datensatz speichert den Speicherort (`artwork_path`) sowie den Status (`has_artwork`).
+Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in maximaler Spotify-Auflösung herunter. Die Originaldatei wird zentral im Verzeichnis `./artwork/` abgelegt; über die Umgebungsvariable `ARTWORK_DIR` (Fallback `HARMONY_ARTWORK_DIR`) lässt sich der Speicherort anpassen. Für jede Spotify-Album-ID wird das Bild nur einmal heruntergeladen und anschließend wiederverwendet. Beim Einbetten sorgt Mutagen für ID3/FLAC/MP4-Tags in Originalauflösung. Schlägt der Spotify-Abruf fehl, versucht Harmony das Artwork über Plex-Metadaten, Soulseek oder externe Dienste wie Last.fm oder MusicBrainz zu ermitteln. Der Download-Datensatz speichert neben Pfad (`artwork_path`) und Status (`has_artwork`) nun auch die zugehörigen Spotify-IDs (`spotify_track_id`, `spotify_album_id`).
 
-Über den Endpoint `GET /soulseek/download/{id}/artwork` liefert die API das eingebettete Cover direkt als `image/jpeg` (inkl. korrektem MIME-Type). Mit `POST /soulseek/download/{id}/artwork/refresh` lässt sich jederzeit ein erneuter Abruf auslösen, etwa wenn bessere Quellen verfügbar geworden sind.
+Über den Endpoint `GET /soulseek/download/{id}/artwork` liefert die API das eingebettete Cover direkt als `image/jpeg` (inkl. korrektem MIME-Type). Ist noch kein Artwork verfügbar, antwortet der Server mit `404`. Mit `POST /soulseek/download/{id}/artwork/refresh` lässt sich jederzeit ein erneuter Abruf auslösen, etwa wenn bessere Quellen verfügbar geworden sind; das Cover wird dabei neu heruntergeladen, zwischengespeichert und erneut eingebettet.
 
 ## Harmony Web UI
 

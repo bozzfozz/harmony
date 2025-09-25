@@ -30,6 +30,7 @@ from app.schemas import (
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from app.workers.sync_worker import SyncWorker
+from app.utils import artwork_utils
 
 logger = get_logger(__name__)
 
@@ -337,12 +338,7 @@ def soulseek_download_artwork(
     if download is None:
         raise HTTPException(status_code=404, detail="Download not found")
 
-    status = (download.artwork_status or "").lower()
-    if status != "done" or not download.artwork_path:
-        if status in {"", "pending"}:
-            return JSONResponse(status_code=202, content={"status": "pending"})
-        if status == "failed":
-            raise HTTPException(status_code=502, detail="Artwork generation failed")
+    if not download.has_artwork or not download.artwork_path:
         raise HTTPException(status_code=404, detail="Artwork not available")
 
     artwork_path = Path(download.artwork_path)
@@ -369,14 +365,9 @@ async def soulseek_refresh_artwork(
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
-    download.artwork_status = "pending"
-    download.artwork_path = None
-    download.has_artwork = False
-    download.updated_at = datetime.utcnow()
-    session.add(download)
-    session.commit()
-
-    request_payload = download.request_payload if isinstance(download.request_payload, dict) else {}
+    request_payload = (
+        download.request_payload if isinstance(download.request_payload, dict) else {}
+    )
     metadata: Dict[str, Any] = {}
     nested_metadata = request_payload.get("metadata") if isinstance(request_payload, dict) else {}
     if isinstance(nested_metadata, dict):
@@ -386,14 +377,38 @@ async def soulseek_refresh_artwork(
             value = request_payload.get(key)
             if value is not None and key not in metadata:
                 metadata[key] = value
-        if download.artwork_url and "artwork_url" not in metadata:
-            metadata["artwork_url"] = download.artwork_url
+    if download.artwork_url and "artwork_url" not in metadata:
+        metadata["artwork_url"] = download.artwork_url
 
     spotify_track_id = SyncWorker._extract_spotify_id(request_payload)
     if not spotify_track_id:
         spotify_track_id = SyncWorker._extract_spotify_id(metadata)
+    if not spotify_track_id and download.spotify_track_id:
+        spotify_track_id = download.spotify_track_id
 
     spotify_album_id = SyncWorker._extract_spotify_album_id(metadata, request_payload)
+    if not spotify_album_id and download.spotify_album_id:
+        spotify_album_id = download.spotify_album_id
+
+    if spotify_track_id:
+        download.spotify_track_id = spotify_track_id
+    if spotify_album_id:
+        download.spotify_album_id = spotify_album_id
+
+    inferred_album = artwork_utils.infer_spotify_album_id(download)
+    if inferred_album and not spotify_album_id:
+        spotify_album_id = inferred_album
+        download.spotify_album_id = inferred_album
+
+    download.artwork_status = "pending"
+    download.artwork_path = None
+    download.has_artwork = False
+    download.updated_at = datetime.utcnow()
+    session.add(download)
+    session.commit()
+
+    if spotify_album_id and "spotify_album_id" not in metadata:
+        metadata["spotify_album_id"] = spotify_album_id
 
     worker = getattr(request.app.state, "artwork_worker", None)
     if worker is None or not hasattr(worker, "enqueue"):

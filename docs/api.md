@@ -819,6 +819,8 @@ X-Plex-Token: <token>
 | `GET` | `/soulseek/downloads/all` | Delegiert an `SoulseekClient.get_all_downloads()`. |
 | `DELETE` | `/soulseek/downloads/completed` | Entfernt erledigte Downloads. |
 | `GET` | `/soulseek/download/{id}/queue` | Fragt Queue-Positionen ab. |
+| `GET` | `/soulseek/download/{id}/artwork` | Liefert das gespeicherte Cover (`image/jpeg`/`image/png`) oder `404`, falls kein Artwork vorliegt. |
+| `POST` | `/soulseek/download/{id}/artwork/refresh` | Stößt die Artwork-Aufbereitung erneut an (`202 Accepted`). |
 | `POST` | `/soulseek/enqueue` | Fügt mehrere Dateien der Warteschlange hinzu. |
 | `GET` | `/soulseek/uploads` | Lädt Uploads. |
 | `GET` | `/soulseek/uploads/all` | Alle Uploads. |
@@ -829,6 +831,8 @@ X-Plex-Token: <token>
 | `GET` | `/soulseek/user/{username}/directory?path=...` | Abfrage eines Unterordners. |
 | `GET` | `/soulseek/user/{username}/info` | Benutzerinformationen. |
 | `GET` | `/soulseek/user/{username}/status` | Online-Status. |
+
+> **Download-Felder:** Antworten aus `/soulseek/downloads` enthalten neben Fortschritt und Pfad auch Artwork-Informationen (`artwork_status`, `artwork_path`, `has_artwork`) sowie die ermittelten Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Über diese IDs werden Cover-Dateien zwischengespeichert und später wiederverwendet.
 
 **Beispiel:**
 
