@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
 
 import aiohttp
 
@@ -234,6 +234,168 @@ class PlexClient:
     async def get_live_tv(self, params: Dict[str, Any] | None = None) -> Any:
         return await self._get("/livetv", params=params)
 
+    async def search_music(
+        self,
+        query: str,
+        *,
+        section_id: str | None = None,
+        mediatypes: Sequence[str] | None = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Search the Plex music library for artists, albums or tracks."""
+
+        library_section = section_id or await self._default_music_section()
+        if not library_section:
+            return []
+
+        params: Dict[str, Any] = {"query": query, "sort": "titleSort:asc"}
+        if limit:
+            params["limit"] = max(int(limit), 1)
+
+        type_codes: list[str] = []
+        for mediatype in mediatypes or []:
+            mapped = self._map_media_type(mediatype)
+            if mapped:
+                type_codes.append(mapped)
+        if type_codes:
+            params["type"] = ",".join(type_codes)
+
+        payload = await self.get_library_items(library_section, params=params)
+        return self._extract_search_entries(payload)
+
+    async def _default_music_section(self) -> Optional[str]:
+        libraries = await self.get_libraries()
+        if not isinstance(libraries, dict):
+            return None
+        container = libraries.get("MediaContainer")
+        if not isinstance(container, dict):
+            return None
+        for directory in container.get("Directory", []):
+            if not isinstance(directory, dict):
+                continue
+            if directory.get("type") == "artist":
+                key = directory.get("key")
+                if key:
+                    return str(key)
+        return None
+
+    def _map_media_type(self, mediatype: str | None) -> Optional[str]:
+        if not mediatype:
+            return None
+        lowered = str(mediatype).strip().lower()
+        if lowered in self._MUSIC_TYPE_MAP:
+            return self._MUSIC_TYPE_MAP[lowered]
+        if lowered in {"8", "9", "10"}:
+            return lowered
+        return None
+
+    @staticmethod
+    def _extract_search_entries(payload: Any) -> List[Dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return []
+        container = payload.get("MediaContainer")
+        if isinstance(container, dict):
+            metadata = container.get("Metadata")
+            if isinstance(metadata, list):
+                return [entry for entry in metadata if isinstance(entry, dict)]
+        return []
+
+    @classmethod
+    def normalise_music_entry(cls, entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a simplified representation of a Plex metadata entry."""
+
+        mediatype_raw = entry.get("type") or entry.get("metadataType")
+        mediatype = cls._resolve_media_type(str(mediatype_raw) if mediatype_raw else "")
+
+        title = str(entry.get("title") or "")
+        album = str(entry.get("parentTitle") or entry.get("title") or "")
+        artist_candidates: list[str] = []
+        if mediatype == "track":
+            artist_value = entry.get("grandparentTitle") or entry.get("originalTitle")
+            if artist_value:
+                artist_candidates.append(str(artist_value))
+        elif mediatype == "album":
+            artist_value = entry.get("parentTitle") or entry.get("grandparentTitle")
+            if artist_value:
+                artist_candidates.append(str(artist_value))
+        elif mediatype == "artist" and title:
+            artist_candidates.append(title)
+
+        media = entry.get("Media")
+        bitrate: Optional[int] = None
+        audio_codec: Optional[str] = None
+        if isinstance(media, list) and media:
+            primary_media = media[0]
+            if isinstance(primary_media, dict):
+                bitrate_value = primary_media.get("bitrate")
+                if isinstance(bitrate_value, (int, float)):
+                    bitrate = int(bitrate_value)
+                elif isinstance(bitrate_value, str) and bitrate_value.isdigit():
+                    bitrate = int(bitrate_value)
+                codec_value = primary_media.get("audioCodec") or primary_media.get(
+                    "container"
+                )
+                if codec_value:
+                    audio_codec = str(codec_value).lower()
+
+        raw_genres = entry.get("Genre") or entry.get("Genres")
+        genres: list[str] = []
+        if isinstance(raw_genres, list):
+            for genre in raw_genres:
+                if isinstance(genre, dict):
+                    tag = genre.get("tag") or genre.get("label")
+                    if tag:
+                        genres.append(str(tag))
+
+        duration_value = entry.get("duration")
+        duration_ms: Optional[int] = None
+        if isinstance(duration_value, (int, float)):
+            duration_ms = int(duration_value)
+        elif isinstance(duration_value, str) and duration_value.isdigit():
+            duration_ms = int(duration_value)
+
+        year_value = entry.get("year")
+        year: Optional[int] = None
+        if isinstance(year_value, int):
+            year = year_value
+        elif isinstance(year_value, str) and year_value.isdigit():
+            year = int(year_value)
+
+        return {
+            "id": str(entry.get("ratingKey")) if entry.get("ratingKey") else None,
+            "type": mediatype,
+            "title": title,
+            "album": album,
+            "artists": artist_candidates,
+            "year": year,
+            "duration_ms": duration_ms,
+            "bitrate": bitrate,
+            "format": audio_codec,
+            "genres": genres,
+            "extra": {
+                "ratingKey": entry.get("ratingKey"),
+                "key": entry.get("key"),
+                "librarySectionID": entry.get("librarySectionID"),
+                "summary": entry.get("summary"),
+            },
+        }
+
+    @classmethod
+    def _resolve_media_type(cls, mediatype: str) -> str:
+        lowered = mediatype.strip().lower()
+        reverse_map = {value: key for key, value in cls._MUSIC_TYPE_MAP.items()}
+        if lowered in reverse_map:
+            return reverse_map[lowered]
+        if lowered in cls._MUSIC_TYPE_MAP:
+            return lowered
+        if lowered == "1" or lowered == "artist":
+            return "artist"
+        if lowered == "2" or lowered == "album":
+            return "album"
+        if lowered == "4" or lowered == "track":
+            return "track"
+        return "track"
+
     @staticmethod
     def _extract_metadata_entry(payload: Any) -> Dict[str, Any] | None:
         if not isinstance(payload, dict):
@@ -295,3 +457,5 @@ class PlexClient:
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
+
+    _MUSIC_TYPE_MAP = {"track": "10", "album": "9", "artist": "8"}

@@ -1,9 +1,11 @@
 """Async client for the slskd REST API."""
+
 from __future__ import annotations
 
 import asyncio
 import time
 from collections import deque
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -53,7 +55,9 @@ class SoulseekClient:
     async def _respect_rate_limit(self) -> None:
         async with self._lock:
             now = time.monotonic()
-            while self._timestamps and now - self._timestamps[0] > self.RATE_LIMIT_WINDOW:
+            while (
+                self._timestamps and now - self._timestamps[0] > self.RATE_LIMIT_WINDOW
+            ):
                 self._timestamps.popleft()
             if len(self._timestamps) >= self.RATE_LIMIT_COUNT:
                 wait_time = self.RATE_LIMIT_WINDOW - (now - self._timestamps[0])
@@ -71,7 +75,9 @@ class SoulseekClient:
         backoff = 0.5
         for attempt in range(1, self._max_retries + 1):
             try:
-                async with session.request(method, url, headers=headers, **kwargs) as response:
+                async with session.request(
+                    method, url, headers=headers, **kwargs
+                ) as response:
                     if response.status >= 400:
                         content = await response.text()
                         raise SoulseekClientError(
@@ -102,7 +108,9 @@ class SoulseekClient:
         downloads = payload.get("files")
         if not isinstance(downloads, list) or not downloads:
             raise ValueError("files must be a non-empty list")
-        return await self._request("POST", f"transfers/downloads/{username}", json=downloads)
+        return await self._request(
+            "POST", f"transfers/downloads/{username}", json=downloads
+        )
 
     async def get_download_status(self) -> Dict[str, Any]:
         return await self._request("GET", "transfers/downloads")
@@ -132,7 +140,9 @@ class SoulseekClient:
         try:
             payload = await self.get_download(download_id)
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning("Failed to fetch download metadata for %s: %s", download_id, exc)
+            logger.warning(
+                "Failed to fetch download metadata for %s: %s", download_id, exc
+            )
             return {}
 
         metadata = payload.get("metadata") if isinstance(payload, dict) else None
@@ -145,7 +155,9 @@ class SoulseekClient:
             normalised[str(key)] = value
         return normalised
 
-    async def enqueue(self, username: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(
+        self, username: str, files: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         if not username:
             raise ValueError("username is required for enqueue requests")
         if not isinstance(files, list) or not files:
@@ -190,10 +202,140 @@ class SoulseekClient:
         return await self._request("GET", f"users/{username}/browsing-status")
 
     async def user_directory(self, username: str, path: str) -> Dict[str, Any]:
-        return await self._request("GET", f"users/{username}/directory", params={"path": path})
+        return await self._request(
+            "GET", f"users/{username}/directory", params={"path": path}
+        )
 
     async def user_info(self, username: str) -> Dict[str, Any]:
         return await self._request("GET", f"users/{username}/info")
 
     async def user_status(self, username: str) -> Dict[str, Any]:
         return await self._request("GET", f"users/{username}/status")
+
+    @staticmethod
+    def _normalise_username(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+    def normalise_search_results(self, payload: Any) -> List[Dict[str, Any]]:
+        """Flatten the raw search payload returned by slskd."""
+
+        if payload is None:
+            return []
+
+        if isinstance(payload, dict):
+            results = payload.get("results") or payload.get("matches") or []
+            if isinstance(results, list):
+                entries = results
+            elif isinstance(results, dict):
+                entries = [results]
+            else:
+                entries = []
+        elif isinstance(payload, list):
+            entries = payload
+        else:
+            entries = []
+
+        normalised: list[Dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            username = self._normalise_username(entry.get("username"))
+            files = entry.get("files") or []
+            if isinstance(files, dict):
+                files = files.values()
+            for file_info in files:
+                if not isinstance(file_info, dict):
+                    continue
+                normalised.append(self._normalise_file(username, file_info))
+        return normalised
+
+    @staticmethod
+    def _normalise_file(
+        username: Optional[str], file_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        identifier = (
+            file_info.get("id")
+            or file_info.get("token")
+            or file_info.get("path")
+            or file_info.get("filename")
+        )
+        item_id = str(identifier) if identifier is not None else None
+
+        filename = str(file_info.get("filename") or file_info.get("path") or "")
+        title = str(file_info.get("title") or filename)
+        artist_value = file_info.get("artist") or file_info.get("artists")
+        if isinstance(artist_value, list):
+            artists = [str(item) for item in artist_value if item]
+        elif artist_value:
+            artists = [str(artist_value)]
+        else:
+            artists = []
+        album = file_info.get("album")
+        album_title = str(album) if album else None
+
+        bitrate_value = file_info.get("bitrate")
+        bitrate: Optional[int] = None
+        if isinstance(bitrate_value, (int, float)):
+            bitrate = int(bitrate_value)
+        elif isinstance(bitrate_value, str) and bitrate_value.isdigit():
+            bitrate = int(bitrate_value)
+
+        format_value = file_info.get("format") or file_info.get("extension")
+        if not format_value and filename:
+            format_value = Path(filename).suffix.lstrip(".")
+        audio_format = str(format_value).lower() if format_value else None
+
+        duration_value = (
+            file_info.get("duration_ms")
+            or file_info.get("duration")
+            or file_info.get("length")
+        )
+        duration_ms: Optional[int] = None
+        if isinstance(duration_value, (int, float)):
+            duration_ms = int(duration_value)
+        elif isinstance(duration_value, str) and duration_value.isdigit():
+            duration_ms = int(duration_value)
+
+        year_value = file_info.get("year") or file_info.get("date")
+        year: Optional[int] = None
+        if isinstance(year_value, int):
+            year = year_value
+        elif isinstance(year_value, str) and year_value.isdigit():
+            year = int(year_value)
+
+        genre_value = file_info.get("genre") or file_info.get("genres")
+        if isinstance(genre_value, list):
+            genres = [str(item) for item in genre_value if item]
+        elif genre_value:
+            genres = [str(genre_value)]
+        else:
+            genres = []
+
+        size_value = file_info.get("size")
+        if isinstance(size_value, (int, float)):
+            size = int(size_value)
+        elif isinstance(size_value, str) and size_value.isdigit():
+            size = int(size_value)
+        else:
+            size = None
+
+        return {
+            "id": item_id,
+            "title": title,
+            "artists": artists,
+            "album": album_title,
+            "year": year,
+            "duration_ms": duration_ms,
+            "bitrate": bitrate,
+            "format": audio_format,
+            "genres": genres,
+            "extra": {
+                "username": username,
+                "path": file_info.get("path") or filename,
+                "size": size,
+                "availability": file_info.get("availability"),
+            },
+        }

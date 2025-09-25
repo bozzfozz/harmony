@@ -1,4 +1,5 @@
 """Entry point for the Harmony FastAPI application."""
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ from app.routers import (
     health_router,
     matching_router,
     metadata_router,
+    search_router,
     plex_router,
     settings_router,
     sync_router,
@@ -61,6 +63,7 @@ app.include_router(matching_router, prefix="/matching", tags=["Matching"])
 app.include_router(settings_router, prefix="/settings", tags=["Settings"])
 app.include_router(beets_router, prefix="/beets", tags=["Beets"])
 app.include_router(metadata_router, tags=["Metadata"])
+app.include_router(search_router, tags=["Search"])
 app.include_router(sync_router, tags=["Sync"])
 app.include_router(system_router, tags=["System"])
 app.include_router(download_router)
@@ -123,7 +126,8 @@ async def startup_event() -> None:
             interval_seconds = float(interval_raw) if interval_raw else 86_400.0
         except (TypeError, ValueError):
             logger.warning(
-                "Invalid WATCHLIST_INTERVAL value %s; falling back to default", interval_raw
+                "Invalid WATCHLIST_INTERVAL value %s; falling back to default",
+                interval_raw,
             )
             interval_seconds = 86_400.0
 
@@ -142,9 +146,7 @@ async def startup_event() -> None:
 
         def _load_preferences() -> dict[str, bool]:
             with session_scope() as session:
-                records = (
-                    session.execute(select(ArtistPreference)).scalars().all()
-                )
+                records = session.execute(select(ArtistPreference)).scalars().all()
                 return {
                     record.release_id: record.selected
                     for record in records

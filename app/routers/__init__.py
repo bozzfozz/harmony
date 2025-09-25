@@ -5,6 +5,7 @@ from .health_router import router as health_router
 from .matching_router import router as matching_router
 from .metadata_router import router as metadata_router
 from .plex_router import router as plex_router
+from .search_router import router as search_router
 from .settings_router import router as settings_router
 from .soulseek_router import router as soulseek_router
 from .spotify_router import router as spotify_router
@@ -19,6 +20,7 @@ __all__ = [
     "health_router",
     "matching_router",
     "metadata_router",
+    "search_router",
     "plex_router",
     "settings_router",
     "soulseek_router",

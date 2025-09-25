@@ -20,13 +20,18 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 ## Smart Search
 
-Die globale Suche (`POST /api/search`) kombiniert Spotify-, Plex- und Soulseek-Ergebnisse in einer normalisierten Trefferliste. Optional lässt sich ein `filters`-Objekt mit bis zu drei Kriterien setzen:
+Die globale Suche (`POST /search`) aggregiert Spotify-, Plex- und Soulseek-Ergebnisse in einer gemeinsamen Trefferliste mit einheitlichem Schema (`id`, `source`, `type`, `title`, `artists`, `album`, `year`, `duration_ms`, `bitrate`, `format`, `score`). Serverseitige Filter greifen nach der Aggregation und unterstützen folgende Kriterien:
 
-- `genre`: Begrenzt die Ergebnisse auf ein bestimmtes Genre (z. B. `rock`).
-- `year`: Filtert nach Veröffentlichungsjahr (Ganzzahl oder String).
-- `quality`: Erwartete Audioqualität, etwa `FLAC` oder `320kbps`. Streaming-Resultate (Spotify) werden bei aktivem Qualitätsfilter automatisch ausgeschlossen.
+- `types`: Liste der gewünschten Entitätstypen (`track`, `album`, `artist`).
+- `genres`: Mehrere Genres, case-insensitiv verglichen.
+- `year_range`: Bereich `[min, max]` für Veröffentlichungsjahre.
+- `duration_ms`: Bereich `[min, max]` für die Laufzeit in Millisekunden.
+- `explicit`: `true`/`false` zur Einschränkung auf Spotify-Tracks mit oder ohne Explicit-Flag.
+- `min_bitrate`: Mindestbitrate in kbps (wirkt auf Plex- und Soulseek-Dateien).
+- `preferred_formats`: Liste bevorzugter Audioformate, die das Ranking beeinflusst.
+- `username`: Soulseek-spezifischer Filter auf einen bestimmten Benutzer.
 
-Die Filter greifen nach dem Abruf aller Quellen und sind case-insensitiv. Die Antwort enthält für jeden Treffer konsistente Felder (`id`, `source`, `type`, `artist`, `album`, `title`, `year`, `genre`, `quality`) und führt alle Quellen in einer Liste zusammen. Fehler einzelner Dienste werden im Feld `errors` gesammelt und blockieren den Gesamtaufruf nicht.
+Die Ergebnisse lassen sich über `sort` nach `relevance`, `bitrate`, `year` oder `duration` (auf- oder absteigend) ordnen und per `pagination` (`page`, `size`, max. 100) seitenweise abrufen. Teilfehler einzelner Quellen werden als `errors` ausgewiesen, ohne den Gesamtabruf zu blockieren.
 
 ## Complete Discographies
 

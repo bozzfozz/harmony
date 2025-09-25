@@ -1,10 +1,11 @@
 """Music matching logic used by Harmony."""
+
 from __future__ import annotations
 
 import re
 import unicodedata
 from difflib import SequenceMatcher
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 
 class MusicMatchingEngine:
@@ -24,23 +25,96 @@ class MusicMatchingEngine:
             return 0.0
         return SequenceMatcher(None, na, nb).ratio()
 
-    def calculate_match_confidence(self, spotify_track: Dict[str, str], plex_track: Dict[str, str]) -> float:
+    def calculate_match_confidence(
+        self, spotify_track: Dict[str, str], plex_track: Dict[str, str]
+    ) -> float:
         title_score = self._ratio(spotify_track.get("name"), plex_track.get("title"))
         artist_score = self._ratio(
-            (spotify_track.get("artists") or [{}])[0].get("name") if isinstance(spotify_track.get("artists"), list) else spotify_track.get("artist"),
+            (
+                (spotify_track.get("artists") or [{}])[0].get("name")
+                if isinstance(spotify_track.get("artists"), list)
+                else spotify_track.get("artist")
+            ),
             plex_track.get("artist") or plex_track.get("grandparentTitle"),
         )
         album_score = self._ratio(
-            (spotify_track.get("album") or {}).get("name") if isinstance(spotify_track.get("album"), dict) else spotify_track.get("album"),
+            (
+                (spotify_track.get("album") or {}).get("name")
+                if isinstance(spotify_track.get("album"), dict)
+                else spotify_track.get("album")
+            ),
             plex_track.get("album") or plex_track.get("parentTitle"),
         )
         duration_spotify = spotify_track.get("duration_ms")
         duration_plex = plex_track.get("duration")
         duration_score = 0.0
         if duration_spotify and duration_plex:
-            duration_score = 1.0 - min(abs(duration_spotify - duration_plex) / max(duration_spotify, duration_plex), 1)
+            duration_score = 1.0 - min(
+                abs(duration_spotify - duration_plex)
+                / max(duration_spotify, duration_plex),
+                1,
+            )
 
-        return round((title_score * 0.5) + (artist_score * 0.3) + (album_score * 0.15) + (duration_score * 0.05), 4)
+        return round(
+            (title_score * 0.5)
+            + (artist_score * 0.3)
+            + (album_score * 0.15)
+            + (duration_score * 0.05),
+            4,
+        )
+
+    def compute_relevance_score(self, query: str, candidate: Dict[str, Any]) -> float:
+        """Return a lightweight similarity score for arbitrary music items."""
+
+        normalised_query = self._normalize(query)
+        if not normalised_query:
+            return 0.0
+
+        title = candidate.get("title")
+        album = candidate.get("album")
+        artists_raw = candidate.get("artists")
+        if isinstance(artists_raw, str):
+            artists: list[str] = [artists_raw]
+        elif isinstance(artists_raw, Iterable):
+            artists = [str(entry) for entry in artists_raw if entry]
+        else:
+            artists = []
+
+        title_score = self._ratio(query, title)
+        album_score = self._ratio(query, album)
+        artist_score = 0.0
+        for artist in artists:
+            artist_score = max(artist_score, self._ratio(query, artist))
+
+        composite_terms = [title or "", album or "", " ".join(artists)]
+        composite_target = " ".join(term for term in composite_terms if term)
+        composite_score = self._ratio(query, composite_target)
+
+        type_hint = str(candidate.get("type") or "").lower()
+        if type_hint == "track":
+            weights = (0.55, 0.25, 0.15, 0.05)
+        elif type_hint == "album":
+            weights = (0.35, 0.15, 0.4, 0.1)
+        elif type_hint == "artist":
+            weights = (0.15, 0.65, 0.1, 0.1)
+        else:
+            weights = (0.4, 0.3, 0.2, 0.1)
+
+        score = (
+            (title_score * weights[0])
+            + (artist_score * weights[1])
+            + (album_score * weights[2])
+            + (composite_score * weights[3])
+        )
+
+        normalised_title = self._normalize(title)
+        normalised_album = self._normalize(album)
+        if normalised_title and normalised_title == normalised_query:
+            score += 0.1
+        elif normalised_album and normalised_album == normalised_query:
+            score += 0.05
+
+        return round(min(score, 1.0), 4)
 
     def find_best_match(
         self, spotify_track: Dict[str, str], plex_candidates: Iterable[Dict[str, str]]
@@ -57,7 +131,9 @@ class MusicMatchingEngine:
     def calculate_slskd_match_confidence(
         self, spotify_track: Dict[str, str], soulseek_entry: Dict[str, str]
     ) -> float:
-        title_score = self._ratio(spotify_track.get("name"), soulseek_entry.get("filename"))
+        title_score = self._ratio(
+            spotify_track.get("name"), soulseek_entry.get("filename")
+        )
         artist = (
             (spotify_track.get("artists") or [{}])[0].get("name")
             if isinstance(spotify_track.get("artists"), list)
@@ -65,7 +141,9 @@ class MusicMatchingEngine:
         )
         artist_score = self._ratio(artist, soulseek_entry.get("username"))
         bitrate_score = 1.0 if soulseek_entry.get("bitrate", 0) >= 256 else 0.5
-        return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)
+        return round(
+            (title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4
+        )
 
     def _extract_album_artist(self, album: Dict[str, str]) -> Optional[str]:
         artists = album.get("artists")
@@ -77,7 +155,13 @@ class MusicMatchingEngine:
         return album.get("artist") or album.get("grandparentTitle")
 
     def _album_track_count(self, album: Dict[str, str]) -> Optional[int]:
-        for key in ("total_tracks", "trackCount", "leafCount", "childCount", "track_count"):
+        for key in (
+            "total_tracks",
+            "trackCount",
+            "leafCount",
+            "childCount",
+            "track_count",
+        ):
             value = album.get(key)
             if isinstance(value, int):
                 return value
@@ -116,7 +200,9 @@ class MusicMatchingEngine:
 
         name_score = self._ratio(spotify_album.get("name"), plex_album.get("title"))
         spotify_artist = self._extract_album_artist(spotify_album)
-        plex_artist = self._extract_album_artist(plex_album) or plex_album.get("parentTitle")
+        plex_artist = self._extract_album_artist(plex_album) or plex_album.get(
+            "parentTitle"
+        )
         artist_score = self._ratio(spotify_artist, plex_artist)
 
         spotify_tracks = self._album_track_count(spotify_album)
@@ -133,7 +219,12 @@ class MusicMatchingEngine:
         if spotify_year and plex_year:
             year_score = 1.0 if spotify_year == plex_year else 0.0
 
-        score = (name_score * 0.4) + (artist_score * 0.4) + (track_count_score * 0.1) + (year_score * 0.1)
+        score = (
+            (name_score * 0.4)
+            + (artist_score * 0.4)
+            + (track_count_score * 0.1)
+            + (year_score * 0.1)
+        )
         return round(score, 4)
 
     def find_best_album_match(
