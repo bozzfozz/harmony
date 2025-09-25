@@ -8,6 +8,7 @@ from .metadata_worker import MetadataUpdateWorker, MetadataWorker
 from .scan_worker import ScanWorker
 from .sync_worker import SyncWorker
 from .lyrics_worker import LyricsWorker
+from .watchlist_worker import WatchlistWorker
 
 __all__ = [
     "ArtworkWorker",
@@ -20,4 +21,5 @@ __all__ = [
     "ScanWorker",
     "SyncWorker",
     "LyricsWorker",
+    "WatchlistWorker",
 ]

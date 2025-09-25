@@ -165,6 +165,23 @@ class ArtistPreference(Base):
     selected = Column(Boolean, nullable=False, default=True)
 
 
+class WatchlistArtist(Base):
+    __tablename__ = "watchlist_artists"
+    __table_args__ = (
+        Index(
+            "ix_watchlist_artists_spotify_artist_id",
+            "spotify_artist_id",
+            unique=True,
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    spotify_artist_id = Column(String(128), nullable=False)
+    name = Column(String(512), nullable=False)
+    last_checked = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class WorkerJob(Base):
     __tablename__ = "worker_jobs"
 

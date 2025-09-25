@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, computed_field
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
 
 
 class StatusResponse(BaseModel):
@@ -85,6 +85,33 @@ class UserProfileResponse(BaseModel):
 class RecommendationsResponse(BaseModel):
     tracks: List[Dict[str, Any]]
     seeds: List[Dict[str, Any]]
+
+
+class WatchlistArtistCreate(BaseModel):
+    spotify_artist_id: str = Field(..., description="Spotify artist identifier")
+    name: str = Field(..., description="Display name for the artist")
+
+    @field_validator("spotify_artist_id", "name")
+    @classmethod
+    def _ensure_non_empty(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Value must not be empty")
+        return stripped
+
+
+class WatchlistArtistEntry(BaseModel):
+    id: int
+    spotify_artist_id: str
+    name: str
+    last_checked: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WatchlistListResponse(BaseModel):
+    items: List[WatchlistArtistEntry]
 
 
 class SoulseekSearchRequest(BaseModel):

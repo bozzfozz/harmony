@@ -73,6 +73,20 @@ class StubSpotifyClient:
                 {"id": "release-1", "name": "Test Release", "album_group": "album"}
             ]
         }
+        self.artist_albums: Dict[str, List[Dict[str, Any]]] = {
+            "artist-1": [
+                {
+                    "id": "album-1",
+                    "name": "Album",
+                    "artists": [{"name": "Tester"}],
+                    "release_date": "1969-02-02",
+                    "release_date_precision": "day",
+                }
+            ]
+        }
+        self.album_tracks: Dict[str, List[Dict[str, Any]]] = {
+            "album-1": [dict(self.tracks["track-1"])],
+        }
         self.last_requests: Dict[str, Dict[str, Any]] = {}
 
     def is_authenticated(self) -> bool:
@@ -119,6 +133,29 @@ class StubSpotifyClient:
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
         return {"items": [dict(item) for item in self.playlists]}
+
+    def get_artist_albums(
+        self,
+        artist_id: str,
+        include_groups: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Dict[str, Any]]:
+        albums = list(self.artist_albums.get(artist_id, []))
+        start = max(offset, 0)
+        end = start + max(limit, 1)
+        return [dict(item) for item in albums[start:end]]
+
+    def get_album_tracks(
+        self,
+        album_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Dict[str, Any]]:
+        tracks = list(self.album_tracks.get(album_id, []))
+        start = max(offset, 0)
+        end = start + max(limit, 1)
+        return [dict(item) for item in tracks[start:end]]
 
     def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
         return {

@@ -952,6 +952,21 @@ Content-Type: application/json
 }
 ```
 
+## Watchlist (`/watchlist`)
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `GET` | `/watchlist` | Listet alle überwachten Artists (`id`, `spotify_artist_id`, `name`, `last_checked`, `created_at`). |
+| `POST` | `/watchlist` | Fügt einen Artist hinzu (`{"spotify_artist_id": "...", "name": "..."}`). `last_checked` wird auf den aktuellen Zeitpunkt gesetzt. |
+| `DELETE` | `/watchlist/{id}` | Entfernt den Artist aus der Watchlist. |
+
+**Automatischer Worker**
+
+- Läuft standardmäßig alle `86400` Sekunden (`WATCHLIST_INTERVAL`).
+- Für jeden Artist werden neue Releases via Spotify ermittelt und fehlende Tracks über Soulseek gesucht.
+- Bereits vorhandene Downloads (Status ≠ `failed`/`cancelled`) werden übersprungen, um Dubletten zu vermeiden.
+- Bei Fehlern wird der Artist protokolliert und erst im nächsten Lauf erneut geprüft.
+
 ## Settings (`/settings`)
 
 | Methode | Pfad | Beschreibung |
