@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.dependencies import get_db, get_soulseek_client
 from app.logging import get_logger
-from app.models import Download
+from app.models import DiscographyJob, Download
 from app.schemas import (
+    DiscographyDownloadRequest,
+    DiscographyJobResponse,
     SoulseekCancelResponse,
     SoulseekDownloadRequest,
     SoulseekDownloadResponse,
@@ -138,6 +140,36 @@ async def soulseek_download(
 
     detail: Dict[str, Any] = {"downloads": created_downloads}
     return SoulseekDownloadResponse(status="queued", detail=detail)
+
+
+@router.post("/discography/download", response_model=DiscographyJobResponse)
+async def soulseek_discography_download(
+    payload: DiscographyDownloadRequest,
+    request: Request,
+    session: Session = Depends(get_db),
+) -> DiscographyJobResponse:
+    """Persist and enqueue a complete discography download job."""
+
+    if not payload.artist_id:
+        raise HTTPException(status_code=400, detail="Artist identifier is required")
+
+    job = DiscographyJob(
+        artist_id=payload.artist_id,
+        artist_name=payload.artist_name,
+        status="pending",
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    worker = getattr(request.app.state, "discography_worker", None)
+    try:
+        if worker is not None and hasattr(worker, "enqueue"):
+            await worker.enqueue(job.id)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Failed to enqueue discography job %s: %s", job.id, exc)
+
+    return DiscographyJobResponse(job_id=job.id, status=job.status)
 
 
 @router.get("/downloads", response_model=SoulseekDownloadStatus)

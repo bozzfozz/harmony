@@ -17,6 +17,24 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+## Complete Discographies
+
+Harmony kann komplette Künstler-Diskografien automatisiert herunterladen. Für einen Spotify-Artist werden alle Alben samt Tracks
+ermittelt, mit der Plex-Bibliothek abgeglichen und fehlende Titel über Soulseek nachgeladen. Nach dem Download übernimmt Beets die
+Kategorisierung.
+
+Beispiel-API-Aufruf:
+
+```bash
+curl -X POST \
+  http://localhost:8000/soulseek/discography/download \
+  -H 'Content-Type: application/json' \
+  -d '{"artist_id": "123"}'
+```
+
+Der Status der Discography-Jobs wird in der Datenbank protokolliert und kann über die Soulseek- und Matching-Endpunkte
+nachverfolgt werden.
+
 ## Harmony Web UI
 
 Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](frontend/). Sie orientiert sich am Porttracker-Layout mit Sidebar, Header, Karten, Tabellen und Tabs. Das UI nutzt Tailwind CSS, shadcn/ui (Radix UI Komponenten) und React Query für Live-Daten aus den bestehenden APIs.

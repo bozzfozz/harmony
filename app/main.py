@@ -36,6 +36,7 @@ from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.workers import (
     AutoSyncWorker,
+    DiscographyWorker,
     MatchingWorker,
     MetadataUpdateWorker,
     PlaylistSyncWorker,
@@ -120,6 +121,14 @@ async def startup_event() -> None:
         )
         await app.state.auto_sync_worker.start()
 
+        app.state.discography_worker = DiscographyWorker(
+            spotify_client,
+            soulseek_client,
+            plex_client=plex_client,
+            beets_client=beets_client,
+        )
+        await app.state.discography_worker.start()
+
     logger.info("Harmony application started")
 
 
@@ -136,6 +145,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "playlist_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "metadata_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "discography_worker", None):
         await worker.stop()
     try:
         plex_client = get_plex_client()

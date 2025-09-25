@@ -78,6 +78,22 @@ class Download(Base):
         self.request_payload = payload
 
 
+class DiscographyJob(Base):
+    __tablename__ = "discography_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artist_id = Column(String(128), nullable=False, index=True)
+    artist_name = Column(String(512), nullable=True)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class Match(Base):
     __tablename__ = "matches"
 

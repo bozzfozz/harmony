@@ -181,6 +181,75 @@ class SpotifyClient:
             album_type="album,single,compilation",
         )
 
+    def get_album_tracks(self, album_id: str, *, market: Optional[str] = None) -> Dict[str, Any]:
+        """Return all tracks for a Spotify album."""
+
+        limit = 50
+        offset = 0
+        collected: List[Dict[str, Any]] = []
+        last_response: Dict[str, Any] | None = None
+
+        while True:
+            params: Dict[str, Any] = {"limit": limit, "offset": offset}
+            if market:
+                params["market"] = market
+            response = self._execute(self._client.album_tracks, album_id, **params)
+            last_response = response
+            items = response.get("items") if isinstance(response, dict) else []
+            if not isinstance(items, list):
+                items = []
+            collected.extend(item for item in items if isinstance(item, dict))
+            if len(items) < limit:
+                break
+            total = response.get("total") if isinstance(response, dict) else None
+            offset += limit
+            if total is not None and offset >= int(total):
+                break
+
+        total_tracks = (
+            last_response.get("total")
+            if isinstance(last_response, dict) and "total" in last_response
+            else len(collected)
+        )
+        return {"items": collected, "total": total_tracks}
+
+    def get_artist_discography(self, artist_id: str) -> Dict[str, Any]:
+        """Fetch the complete discography for an artist including tracks."""
+
+        limit = 50
+        offset = 0
+        albums: List[Dict[str, Any]] = []
+        seen_album_ids: set[str] = set()
+
+        while True:
+            response = self._execute(
+                self._client.artist_albums,
+                artist_id,
+                album_type="album,single,compilation",
+                limit=limit,
+                offset=offset,
+            )
+            items = response.get("items") if isinstance(response, dict) else []
+            if not isinstance(items, list):
+                items = []
+            for album in items:
+                if not isinstance(album, dict):
+                    continue
+                album_id = album.get("id")
+                if not album_id or album_id in seen_album_ids:
+                    continue
+                seen_album_ids.add(album_id)
+                tracks_response = self.get_album_tracks(str(album_id))
+                albums.append({"album": album, "tracks": tracks_response.get("items", [])})
+            if len(items) < limit:
+                break
+            total = response.get("total") if isinstance(response, dict) else None
+            offset += limit
+            if total is not None and offset >= int(total):
+                break
+
+        return {"artist_id": artist_id, "albums": albums}
+
     def get_track_metadata(self, track_id: str) -> Dict[str, Any]:
         metadata: Dict[str, Any] = {}
         if not track_id:

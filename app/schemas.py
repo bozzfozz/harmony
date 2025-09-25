@@ -36,6 +36,16 @@ class ArtistReleasesResponse(BaseModel):
     releases: List[Dict[str, Any]]
 
 
+class DiscographyAlbum(BaseModel):
+    album: Dict[str, Any]
+    tracks: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DiscographyResponse(BaseModel):
+    artist_id: str
+    albums: List[DiscographyAlbum] = Field(default_factory=list)
+
+
 class PlaylistEntry(BaseModel):
     id: str
     name: str
@@ -83,6 +93,16 @@ class SoulseekSearchRequest(BaseModel):
 class SoulseekDownloadRequest(BaseModel):
     username: str = Field(..., description="Soulseek username hosting the files")
     files: List[Dict[str, Any]] = Field(..., description="List of files to download")
+
+
+class DiscographyDownloadRequest(BaseModel):
+    artist_id: str
+    artist_name: Optional[str] = None
+
+
+class DiscographyJobResponse(BaseModel):
+    job_id: int
+    status: str
 
 
 class SoulseekSearchResponse(BaseModel):
@@ -166,6 +186,27 @@ class MatchingRequest(BaseModel):
 class MatchingResponse(BaseModel):
     best_match: Optional[Dict[str, Any]]
     confidence: float
+
+
+class DiscographyMatchingRequest(BaseModel):
+    artist_id: str
+    albums: List[Dict[str, Any]] = Field(default_factory=list)
+    plex_items: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DiscographyMissingAlbum(BaseModel):
+    album: Dict[str, Any]
+    missing_tracks: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DiscographyMissingTrack(BaseModel):
+    album: Dict[str, Any]
+    track: Dict[str, Any]
+
+
+class DiscographyMatchingResponse(BaseModel):
+    missing_albums: List[DiscographyMissingAlbum] = Field(default_factory=list)
+    missing_tracks: List[DiscographyMissingTrack] = Field(default_factory=list)
 
 
 class AlbumMatchingRequest(BaseModel):
