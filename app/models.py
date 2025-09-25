@@ -46,6 +46,11 @@ class Download(Base):
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
+    genre = Column(String(255), nullable=True)
+    composer = Column(String(255), nullable=True)
+    producer = Column(String(255), nullable=True)
+    isrc = Column(String(64), nullable=True)
+    artwork_url = Column(String(2048), nullable=True)
     request_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(

@@ -201,6 +201,26 @@ class PlexClient:
         payload = {"key": item_id, **tags}
         return await self._post("/:/settags", json_body=payload)
 
+    async def get_track_metadata(self, item_id: str) -> Dict[str, Any]:
+        try:
+            payload = await self.get_metadata(item_id)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Plex metadata lookup failed for %s: %s", item_id, exc)
+            return {}
+
+        entry = self._extract_metadata_entry(payload)
+        if entry is None:
+            return {}
+
+        metadata: Dict[str, Any] = {}
+        composer = self._extract_person(entry, ("composers", "Composers", "composer", "Composer"))
+        if composer:
+            metadata["composer"] = composer
+        producer = self._extract_person(entry, ("producers", "Producers", "producer", "Producer"))
+        if producer:
+            metadata["producer"] = producer
+        return metadata
+
     async def get_devices(self) -> Any:
         return await self._get("/devices")
 
@@ -209,6 +229,47 @@ class PlexClient:
 
     async def get_live_tv(self, params: Dict[str, Any] | None = None) -> Any:
         return await self._get("/livetv", params=params)
+
+    @staticmethod
+    def _extract_metadata_entry(payload: Any) -> Dict[str, Any] | None:
+        if not isinstance(payload, dict):
+            return None
+        container = payload.get("MediaContainer")
+        if isinstance(container, dict):
+            metadata = container.get("Metadata")
+            if isinstance(metadata, list) and metadata:
+                first = metadata[0]
+                if isinstance(first, dict):
+                    return first
+        return None
+
+    @staticmethod
+    def _extract_person(entry: Dict[str, Any], keys: tuple[str, ...]) -> str | None:
+        for key in keys:
+            value = entry.get(key)
+            if not value:
+                continue
+            if isinstance(value, list):
+                for candidate in value:
+                    name = PlexClient._normalise_person(candidate)
+                    if name:
+                        return name
+            else:
+                name = PlexClient._normalise_person(value)
+                if name:
+                    return name
+        return None
+
+    @staticmethod
+    def _normalise_person(value: Any) -> str | None:
+        if isinstance(value, dict):
+            for key in ("tag", "name", "title"):
+                payload = value.get(key)
+                if isinstance(payload, str) and payload.strip():
+                    return payload.strip()
+        elif isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
 
     async def get_library_statistics(self) -> Dict[str, int]:
         """Compute high level statistics for the Plex music library."""

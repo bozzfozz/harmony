@@ -107,6 +107,11 @@ class SoulseekDownloadEntry(BaseModel):
     created_at: datetime
     updated_at: datetime
     priority: int = 0
+    genre: Optional[str] = None
+    composer: Optional[str] = None
+    producer: Optional[str] = None
+    isrc: Optional[str] = None
+    artwork_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +130,11 @@ class DownloadEntryResponse(BaseModel):
     updated_at: datetime
     priority: int = 0
     username: Optional[str] = None
+    genre: Optional[str] = None
+    composer: Optional[str] = None
+    producer: Optional[str] = None
+    isrc: Optional[str] = None
+    artwork_url: Optional[str] = None
     state: str = Field(exclude=True)
 
     model_config = ConfigDict(from_attributes=True)

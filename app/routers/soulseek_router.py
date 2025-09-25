@@ -102,6 +102,11 @@ async def soulseek_download(
                     "filename": filename,
                     "state": download.state,
                     "progress": download.progress,
+                    "genre": download.genre,
+                    "composer": download.composer,
+                    "producer": download.producer,
+                    "isrc": download.isrc,
+                    "artwork_url": download.artwork_url,
                 }
             )
         session.commit()
