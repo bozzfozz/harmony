@@ -35,6 +35,7 @@ from app.routers import (
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.workers import (
+    ArtworkWorker,
     AutoSyncWorker,
     DiscographyWorker,
     LyricsWorker,
@@ -80,6 +81,13 @@ async def startup_event() -> None:
         spotify_client = get_spotify_client()
         beets_client = BeetsClient()
 
+        app.state.artwork_worker = ArtworkWorker(
+            spotify_client=spotify_client,
+            plex_client=plex_client,
+            soulseek_client=soulseek_client,
+        )
+        await app.state.artwork_worker.start()
+
         app.state.lyrics_worker = LyricsWorker()
         await app.state.lyrics_worker.start()
 
@@ -88,6 +96,7 @@ async def startup_event() -> None:
             spotify_client=spotify_client,
             plex_client=plex_client,
             beets_client=beets_client,
+            artwork_worker=app.state.artwork_worker,
             lyrics_worker=app.state.lyrics_worker,
         )
         await app.state.sync_worker.start()
@@ -131,6 +140,7 @@ async def startup_event() -> None:
             soulseek_client,
             plex_client=plex_client,
             beets_client=beets_client,
+            artwork_worker=app.state.artwork_worker,
             lyrics_worker=app.state.lyrics_worker,
         )
         await app.state.discography_worker.start()
@@ -141,6 +151,8 @@ async def startup_event() -> None:
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     if worker := getattr(app.state, "auto_sync_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "artwork_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "lyrics_worker", None):
         await worker.stop()

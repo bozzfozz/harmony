@@ -12,6 +12,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import DiscographyJob
 from app.routers.matching_router import calculate_discography_missing
+from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 
 logger = get_logger(__name__)
@@ -33,12 +34,14 @@ class DiscographyWorker:
         *,
         plex_client: PlexClient | None = None,
         beets_client: BeetsClient | None = None,
+        artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
         self._plex = plex_client
         self._beets = beets_client
+        self._artwork = artwork_worker
         self._lyrics = lyrics_worker
         self._queue: asyncio.Queue[Optional[int]] = asyncio.Queue()
         self._task: asyncio.Task | None = None
@@ -139,6 +142,7 @@ class DiscographyWorker:
                 continue
             await self._soulseek.download({"username": username, "files": [file_info]})
             self._import_with_beets(file_info)
+            await self._maybe_embed_artwork(file_info, album, track)
             await self._maybe_generate_lyrics(file_info, artist_name, album, track)
 
     @staticmethod
@@ -270,3 +274,57 @@ class DiscographyWorker:
             await self._lyrics.enqueue(download_identifier, str(file_path), track_info)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.debug("Unable to schedule lyrics for discography download: %s", exc)
+
+    async def _maybe_embed_artwork(
+        self,
+        file_info: Dict[str, Any],
+        album: Dict[str, Any],
+        track: Dict[str, Any],
+    ) -> None:
+        if self._artwork is None:
+            return
+
+        file_path = (
+            file_info.get("local_path")
+            or file_info.get("path")
+            or file_info.get("filename")
+        )
+        if not file_path:
+            return
+
+        download_identifier: Optional[int]
+        try:
+            identifier = file_info.get("download_id")
+            download_identifier = int(identifier) if identifier is not None else None
+        except (TypeError, ValueError):  # pragma: no cover - defensive conversion
+            download_identifier = None
+
+        metadata: Dict[str, Any] = {}
+        if isinstance(album, dict):
+            metadata["album"] = dict(album)
+            images = album.get("images")
+            if isinstance(images, list):
+                metadata.setdefault("artwork_urls", []).extend(images)
+
+        artwork_url = None
+        if isinstance(track, dict):
+            artwork_url = track.get("albumArt") or track.get("artwork_url")
+            if isinstance(artwork_url, dict):
+                metadata.setdefault("artwork_urls", []).append(artwork_url)
+
+        spotify_track_id = None
+        if isinstance(track, dict):
+            candidate = track.get("id") or track.get("spotify_id")
+            if isinstance(candidate, str) and candidate.strip():
+                spotify_track_id = candidate.strip()
+
+        try:
+            await self._artwork.enqueue(
+                download_identifier,
+                str(file_path),
+                metadata=metadata,
+                spotify_track_id=spotify_track_id,
+                artwork_url=artwork_url if isinstance(artwork_url, str) else None,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Unable to schedule artwork embedding: %s", exc)
