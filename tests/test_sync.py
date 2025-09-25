@@ -49,24 +49,23 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
 
 
 def test_search_requires_query(client) -> None:
-    response = client.post("/api/search", json={})
+    response = client.post("/search", json={})
     assert response.status_code == 422
 
 
 def test_search_aggregates_sources(client) -> None:
-    response = client.post("/api/search", json={"query": "Test"})
+    response = client.post("/search", json={"query": "Test"})
     assert response.status_code == 200
     payload = response.json()
-    assert payload["query"] == "Test"
-    sources = {item.get("source") for item in payload["results"]}
+    assert payload["page"] == 1
+    assert payload["total"] >= 1
+    sources = {item.get("source") for item in payload["items"]}
     assert {"spotify", "plex", "soulseek"}.issubset(sources)
 
 
 def test_search_allows_source_filter(client) -> None:
-    response = client.post(
-        "/api/search", json={"query": "Test", "sources": ["spotify"]}
-    )
+    response = client.post("/search", json={"query": "Test", "sources": ["spotify"]})
     assert response.status_code == 200
     payload = response.json()
-    assert payload["results"]
-    assert {item.get("source") for item in payload["results"]} == {"spotify"}
+    assert payload["items"]
+    assert {item.get("source") for item in payload["items"]} == {"spotify"}

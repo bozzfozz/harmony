@@ -133,7 +133,7 @@ POST /api/metadata/update HTTP/1.1
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker (liefert `503` + `sync_blocked`, wenn Zugangsdaten fehlen). |
-| `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) aus. |
+| `POST` | `/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) mit Filtern, Sortierung & Paging aus. |
 | `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset`, optional `?all=true` sowie Status-Filter `?status=queued|running|completed|failed|cancelled`. |
 | `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker (liefert `503` + `download_blocked` ohne Soulseek-Credentials). |
@@ -144,59 +144,79 @@ POST /api/metadata/update HTTP/1.1
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 | `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
 
-### Aggregierte Suche (`POST /api/search`)
+### Aggregierte Suche (`POST /search`)
 
 **Request-Body**
 
 ```json
 {
-  "query": "The Beatles",
+  "query": "radiohead",
   "sources": ["spotify", "plex", "soulseek"],
   "filters": {
-    "genre": "rock",
-    "year": 1969,
-    "quality": "FLAC"
-  }
+    "types": ["artist", "album", "track"],
+    "genres": ["rock", "alternative"],
+    "year_range": [1990, 2025],
+    "duration_ms": [0, 600000],
+    "explicit": null,
+    "min_bitrate": 256,
+    "preferred_formats": ["flac", "alac", "mp3"],
+    "username": null
+  },
+  "sort": {"by": "relevance", "order": "desc"},
+  "pagination": {"page": 1, "size": 25}
 }
 ```
 
 - `query` (Pflicht): Freitext, wird automatisch beschnitten.
 - `sources` (optional): Teilmenge von `spotify`, `plex`, `soulseek`. Fehlt das Feld, durchsucht Harmony alle Quellen.
-- `filters` (optional): Objekt mit `genre`, `year`, `quality`. Die Werte werden fallunabhängig verglichen; `year` akzeptiert Integer oder Strings.
+- `filters` (optional): Objekt mit `types`, `genres`, `year_range`, `duration_ms`, `explicit`, `min_bitrate`, `preferred_formats`, `username`.
+- `sort` (optional): Objekt mit `by` (`relevance`, `bitrate`, `year`, `duration`) und `order` (`asc` oder `desc`).
+- `pagination` (optional): Seite (`page` ≥ 1) und Seitengröße (`size` 1–100).
 
 **Antwortstruktur**
 
 ```json
 {
-  "query": "The Beatles",
-  "filters": {"genre": "rock", "year": 1969, "quality": "FLAC"},
-  "results": [
+  "page": 1,
+  "size": 25,
+  "total": 73,
+  "items": [
     {
-      "id": "plex-1",
-      "source": "plex",
+      "id": "spotify:track:...",
       "type": "track",
-      "artist": "The Beatles",
-      "album": "Abbey Road",
-      "title": "Come Together",
-      "year": 1969,
-      "genre": "rock",
-      "quality": "FLAC 1000kbps"
+      "source": "spotify",
+      "title": "Weird Fishes/Arpeggi",
+      "artists": ["Radiohead"],
+      "album": "In Rainbows",
+      "year": 2007,
+      "duration_ms": 308000,
+      "bitrate": null,
+      "format": null,
+      "score": 0.94,
+      "extra": {
+        "spotify_album_id": "...",
+        "spotify_artist_ids": ["..."]
+      }
     },
     {
-      "id": "soulseek-42",
+      "id": "soulseek:file:abcdef",
+      "type": "track",
       "source": "soulseek",
-      "type": "file",
-      "artist": "The Beatles",
-      "album": "Abbey Road",
-      "title": "Something",
-      "year": 1969,
-      "genre": "rock",
-      "quality": "FLAC 900kbps"
+      "title": "Weird Fishes",
+      "artists": ["Radiohead"],
+      "album": "In Rainbows (Deluxe)",
+      "year": 2007,
+      "duration_ms": 307000,
+      "bitrate": 320,
+      "format": "mp3",
+      "score": 0.88,
+      "extra": {
+        "username": "user123",
+        "path": "Radiohead/Weird Fishes.mp3",
+        "size": 9423921
+      }
     }
-  ],
-  "errors": {
-    "spotify": "Spotify client unavailable"
-  }
+  ]
 }
 ```
 

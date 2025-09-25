@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 import sys
 
@@ -114,9 +114,7 @@ class StubSpotifyClient:
         self.last_requests["artists"] = {"query": query, "genre": genre, "year": year}
         return {
             "artists": {
-                "items": [
-                    {"id": "artist-1", "name": "Tester", "genres": ["rock"]}
-                ]
+                "items": [{"id": "artist-1", "name": "Tester", "genres": ["rock"]}]
             }
         }
 
@@ -159,9 +157,7 @@ class StubSpotifyClient:
 
     def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
         return {
-            "artists": {
-                "items": [dict(item) for item in self.followed_artists[:limit]]
-            }
+            "artists": {"items": [dict(item) for item in self.followed_artists[:limit]]}
         }
 
     def get_artist_releases(self, artist_id: str) -> Dict[str, Any]:
@@ -177,23 +173,36 @@ class StubSpotifyClient:
 
     def get_multiple_audio_features(self, track_ids: list[str]) -> Dict[str, Any]:
         return {
-            "audio_features": [self.audio_features.get(track_id, {"id": track_id}) for track_id in track_ids]
+            "audio_features": [
+                self.audio_features.get(track_id, {"id": track_id})
+                for track_id in track_ids
+            ]
         }
 
     def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
         return self.playlist_items.get(playlist_id, {"items": [], "total": 0})
 
-    def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+    def add_tracks_to_playlist(
+        self, playlist_id: str, track_uris: list[str]
+    ) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         for uri in track_uris:
             playlist["items"].append({"track": {"uri": uri}})
         playlist["total"] = len(playlist["items"])
         return {"snapshot_id": "mock"}
 
-    def remove_tracks_from_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+    def remove_tracks_from_playlist(
+        self, playlist_id: str, track_uris: list[str]
+    ) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         playlist["items"] = [
-            item for item in playlist["items"] if item.get("track", {}).get("uri") not in set(track_uris)
+            item
+            for item in playlist["items"]
+            if item.get("track", {}).get("uri") not in set(track_uris)
         ]
         playlist["total"] = len(playlist["items"])
         return {"snapshot_id": "mock"}
@@ -201,7 +210,9 @@ class StubSpotifyClient:
     def reorder_playlist_items(
         self, playlist_id: str, range_start: int, insert_before: int
     ) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         items = playlist["items"]
         if 0 <= range_start < len(items):
             track = items.pop(range_start)
@@ -304,9 +315,15 @@ class StubPlexClient:
             },
         }
         self.metadata = {"100": {"title": "Test Item", "year": 2020}}
-        self.sessions = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Session"}]}}
-        self.session_history = {"MediaContainer": {"size": 1, "Metadata": [{"title": "History"}]}}
-        self.playlists = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Playlist"}]}}
+        self.sessions = {
+            "MediaContainer": {"size": 1, "Metadata": [{"title": "Session"}]}
+        }
+        self.session_history = {
+            "MediaContainer": {"size": 1, "Metadata": [{"title": "History"}]}
+        }
+        self.playlists = {
+            "MediaContainer": {"size": 1, "Metadata": [{"title": "Playlist"}]}
+        }
         self.created_playlists: list[dict[str, Any]] = []
         self.playqueues: Dict[str, Any] = {}
         self.timeline_updates: list[dict[str, Any]] = []
@@ -325,21 +342,31 @@ class StubPlexClient:
     async def get_library_statistics(self) -> Dict[str, int]:
         return {"artists": 2, "albums": 3, "tracks": 5}
 
-    async def get_libraries(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def get_libraries(
+        self, params: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         return self.libraries
 
-    async def get_library_items(self, section_id: str, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def get_library_items(
+        self, section_id: str, params: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         type_value = (params or {}).get("type", "")
         self.last_library_params[(section_id, type_value)] = dict(params or {})
-        return self.library_items.get((section_id, type_value), {"MediaContainer": {"Metadata": []}})
+        return self.library_items.get(
+            (section_id, type_value), {"MediaContainer": {"Metadata": []}}
+        )
 
     async def get_metadata(self, item_id: str) -> Dict[str, Any]:
         return self.metadata[item_id]
 
-    async def get_session_history(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def get_session_history(
+        self, params: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         return self.session_history
 
-    async def get_timeline(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def get_timeline(
+        self, params: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         return {"timeline": params or {}}
 
     async def update_timeline(self, data: Dict[str, Any]) -> str:
@@ -361,7 +388,9 @@ class StubPlexClient:
         self.created_playlists.append(payload)
         return {"status": "created", "payload": payload}
 
-    async def update_playlist(self, playlist_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_playlist(
+        self, playlist_id: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return {"status": "updated", "id": playlist_id, "payload": payload}
 
     async def delete_playlist(self, playlist_id: str) -> Dict[str, Any]:
@@ -379,7 +408,9 @@ class StubPlexClient:
         self.ratings.append({"key": item_id, "rating": rating})
         return "ok"
 
-    async def sync_tags(self, item_id: str, tags: Dict[str, list[str]]) -> Dict[str, Any]:
+    async def sync_tags(
+        self, item_id: str, tags: Dict[str, list[str]]
+    ) -> Dict[str, Any]:
         self.tags[item_id] = tags
         return {"status": "tags-updated", "id": item_id, "tags": tags}
 
@@ -391,6 +422,76 @@ class StubPlexClient:
 
     async def get_live_tv(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         return self.livetv
+
+    async def _default_music_section(self) -> str:
+        return "1"
+
+    @staticmethod
+    def _map_media_type(mediatype: str | None) -> str:
+        mapping = {"track": "10", "album": "9", "artist": "8"}
+        if not mediatype:
+            return "10"
+        lowered = str(mediatype).lower()
+        return mapping.get(lowered, lowered)
+
+    @staticmethod
+    def _extract_search_entries(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
+        container = (
+            payload.get("MediaContainer", {}) if isinstance(payload, dict) else {}
+        )
+        metadata = container.get("Metadata", []) if isinstance(container, dict) else []
+        return [entry for entry in metadata if isinstance(entry, dict)]
+
+    @staticmethod
+    def normalise_music_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+        media = entry.get("Media") or []
+        bitrate = None
+        audio_codec = None
+        if isinstance(media, list) and media:
+            first = media[0]
+            if isinstance(first, dict):
+                bitrate_value = first.get("bitrate")
+                if isinstance(bitrate_value, int):
+                    bitrate = bitrate_value
+                audio_codec = first.get("audioCodec")
+        genres = []
+        for genre in entry.get("Genre", []) or []:
+            if isinstance(genre, dict) and genre.get("tag"):
+                genres.append(str(genre.get("tag")))
+        return {
+            "id": entry.get("ratingKey"),
+            "type": "track",
+            "title": entry.get("title"),
+            "album": entry.get("parentTitle"),
+            "artists": (
+                [entry.get("grandparentTitle")] if entry.get("grandparentTitle") else []
+            ),
+            "year": entry.get("year"),
+            "duration_ms": entry.get("duration"),
+            "bitrate": bitrate,
+            "format": str(audio_codec).lower() if audio_codec else None,
+            "genres": genres,
+            "extra": {"ratingKey": entry.get("ratingKey")},
+        }
+
+    async def search_music(
+        self,
+        query: str,
+        *,
+        section_id: str | None = None,
+        mediatypes: Sequence[str] | None = None,
+        limit: int = 50,
+    ) -> list[Dict[str, Any]]:
+        del query, limit
+        section = section_id or "1"
+        types = mediatypes or ("track", "album", "artist")
+        results: list[Dict[str, Any]] = []
+        for mediatype in types:
+            mapped = self._map_media_type(mediatype)
+            params = {"type": mapped}
+            payload = await self.get_library_items(section, params=params)
+            results.extend(self._extract_search_entries(payload))
+        return results
 
     @asynccontextmanager
     async def listen_notifications(self):  # pragma: no cover - exercised via tests
@@ -423,8 +524,18 @@ class StubSoulseekClient:
         self.downloads: Dict[int, Dict[str, Any]] = {}
         self.queue_positions: Dict[int, Dict[str, Any]] = {}
         self.uploads: Dict[str, Dict[str, Any]] = {
-            "up-1": {"id": "up-1", "filename": "upload.flac", "state": "uploading", "progress": 40.0},
-            "up-2": {"id": "up-2", "filename": "done.flac", "state": "completed", "progress": 100.0},
+            "up-1": {
+                "id": "up-1",
+                "filename": "upload.flac",
+                "state": "uploading",
+                "progress": 40.0,
+            },
+            "up-2": {
+                "id": "up-2",
+                "filename": "done.flac",
+                "state": "completed",
+                "progress": 100.0,
+            },
         }
         self.enqueued: list[Dict[str, Any]] = []
         self.user_records: Dict[str, Dict[str, Any]] = {
@@ -476,7 +587,9 @@ class StubSoulseekClient:
         for result in self.search_results:
             files = []
             for file_info in result.get("files", []):
-                title = str(file_info.get("title") or file_info.get("filename") or "").lower()
+                title = str(
+                    file_info.get("title") or file_info.get("filename") or ""
+                ).lower()
                 if query_lower in title:
                     files.append(dict(file_info))
             if files:
@@ -484,6 +597,45 @@ class StubSoulseekClient:
                 entry["files"] = files
                 matches.append(entry)
         return {"results": matches}
+
+    def normalise_search_results(self, payload: Any) -> list[Dict[str, Any]]:
+        if isinstance(payload, dict):
+            results = payload.get("results") or []
+        elif isinstance(payload, list):
+            results = payload
+        else:
+            results = []
+        flattened: list[Dict[str, Any]] = []
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            username = entry.get("username")
+            for file_info in entry.get("files", []):
+                if not isinstance(file_info, dict):
+                    continue
+                flattened.append(
+                    {
+                        "id": file_info.get("id"),
+                        "title": file_info.get("title") or file_info.get("filename"),
+                        "artists": (
+                            [file_info.get("artist")] if file_info.get("artist") else []
+                        ),
+                        "album": file_info.get("album"),
+                        "year": file_info.get("year"),
+                        "duration_ms": file_info.get("duration_ms"),
+                        "bitrate": file_info.get("bitrate"),
+                        "format": file_info.get("format"),
+                        "genres": (
+                            [file_info.get("genre")] if file_info.get("genre") else []
+                        ),
+                        "extra": {
+                            "username": username,
+                            "path": file_info.get("filename"),
+                            "size": file_info.get("size"),
+                        },
+                    }
+                )
+        return flattened
 
     async def download(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         for file_info in payload.get("files", []):
@@ -514,7 +666,9 @@ class StubSoulseekClient:
 
     async def remove_completed_downloads(self) -> Dict[str, Any]:
         before = len(self.downloads)
-        self.downloads = {k: v for k, v in self.downloads.items() if v.get("state") != "completed"}
+        self.downloads = {
+            k: v for k, v in self.downloads.items() if v.get("state") != "completed"
+        }
         removed = before - len(self.downloads)
         return {"removed": removed}
 
@@ -522,7 +676,9 @@ class StubSoulseekClient:
         identifier = int(download_id)
         return self.queue_positions.get(identifier, {"position": None})
 
-    async def enqueue(self, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(
+        self, username: str, files: list[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         job = {"username": username, "files": files}
         self.enqueued.append(job)
         return {"status": "enqueued", "job": job}
@@ -537,14 +693,20 @@ class StubSoulseekClient:
         return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
 
     async def get_uploads(self) -> list[Dict[str, Any]]:
-        return [upload for upload in self.uploads.values() if upload.get("state") != "completed"]
+        return [
+            upload
+            for upload in self.uploads.values()
+            if upload.get("state") != "completed"
+        ]
 
     async def get_all_uploads(self) -> list[Dict[str, Any]]:
         return list(self.uploads.values())
 
     async def remove_completed_uploads(self) -> Dict[str, Any]:
         before = len(self.uploads)
-        self.uploads = {k: v for k, v in self.uploads.items() if v.get("state") != "completed"}
+        self.uploads = {
+            k: v for k, v in self.uploads.items() if v.get("state") != "completed"
+        }
         removed = before - len(self.uploads)
         return {"removed": removed}
 
@@ -612,7 +774,9 @@ class StubTransfersApi:
         self.cancelled.append(identifier)
         return await self._soulseek.cancel_download(str(identifier))
 
-    async def enqueue(self, *, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(
+        self, *, username: str, files: list[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         if self.raise_enqueue is not None:
             raise self.raise_enqueue
         job = {"username": username, "files": files}
