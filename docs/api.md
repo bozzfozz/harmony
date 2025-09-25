@@ -146,6 +146,8 @@ POST /api/metadata/update HTTP/1.1
 
 > **Hinweis:** Die in diesem Dokument verwendeten Statusnamen für Activity-Events sind zentral in `app/utils/events.py` hinterlegt und werden von Routern, Workern und Tests gemeinsam genutzt.
 
+> **UI-Tipp:** Die Downloads-Seite bietet einen Button „Alle fehlgeschlagenen neu starten“, der nacheinander `POST /api/download/{id}/retry` für alle fehlgeschlagenen Transfers ausführt.
+
 **Activity Feed / Activity History:**
 
 Unterstützte Query-Parameter:

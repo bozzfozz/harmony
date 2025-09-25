@@ -173,6 +173,51 @@ const DownloadsPage = () => {
     }
   });
 
+  const failedDownloads = useMemo(
+    () => (downloads ?? []).filter((download) => (download.status ?? '').toLowerCase() === 'failed'),
+    [downloads]
+  );
+  const failedDownloadIds = useMemo(
+    () => failedDownloads.map((download) => String(download.id)),
+    [failedDownloads]
+  );
+  const hasFailedDownloads = failedDownloadIds.length > 0;
+
+  const bulkRetryMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await retryDownload(id);
+      }
+    },
+    onSuccess: async () => {
+      toast({ title: 'Alle fehlgeschlagenen Downloads wurden neu gestartet' });
+      await refetch();
+    },
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+        toast({
+          title: 'Neu-Start fehlgeschlagen',
+          description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
+      const description = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      toast({
+        title: 'Neu-Start fehlgeschlagen',
+        description,
+        variant: 'destructive'
+      });
+    }
+  });
+
   const updatePriorityMutation = useMutation({
     mutationFn: ({ id, priority }: { id: string; priority: number }) =>
       updateDownloadPriority(id, priority),
@@ -378,6 +423,25 @@ const DownloadsPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!hasFailedDownloads || bulkRetryMutation.isPending) {
+                  return;
+                }
+                void bulkRetryMutation.mutateAsync(failedDownloadIds);
+              }}
+              disabled={!hasFailedDownloads || bulkRetryMutation.isPending}
+            >
+              {bulkRetryMutation.isPending ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Wird neu gestartet...
+                </span>
+              ) : (
+                'Alle fehlgeschlagenen neu starten'
+              )}
+            </Button>
             <Button
               variant="outline"
               size="sm"
