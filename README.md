@@ -65,7 +65,7 @@ Beispiel einer erzeugten `.lrc`-Datei:
 
 ## Rich Metadata
 
-Der neue Metadata-Worker lauscht auf abgeschlossene Downloads und reichert jede Audiodatei mit zusätzlichen Tags an. Die Informationen stammen primär aus der Spotify-API (Track-, Album- und Künstlerdaten), fehlende Felder werden über Plex ergänzt. Harmony schreibt Genre, Komponist, Produzent, ISRC und Copyright direkt in die Mediendatei, persistiert die Werte in der `downloads`-Tabelle und stellt sie über `GET /soulseek/download/{id}/metadata` als JSON zur Verfügung.
+Der neue Metadata-Worker lauscht auf abgeschlossene Downloads und reichert jede Audiodatei mit zusätzlichen Tags an. Die Informationen stammen primär aus der Spotify-API (Track-, Album- und Künstlerdaten), fehlende Felder werden über Plex ergänzt. Harmony schreibt Genre, Komponist, Produzent, ISRC und Copyright direkt in die Mediendatei, persistiert die Werte in der `downloads`-Tabelle und stellt sie über `GET /soulseek/download/{id}/metadata` als JSON zur Verfügung. Über `POST /soulseek/download/{id}/metadata/refresh` kann jederzeit ein erneuter Enrichment-Lauf angestoßen werden – die API antwortet sofort mit `202`, während der Worker im Hintergrund Spotify- und Plex-Daten abgleicht und die Tags neu schreibt.
 
 Beispielantwort:
 

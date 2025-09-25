@@ -1,8 +1,16 @@
 """Helpers for extracting and writing rich audio metadata."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
+
+try:  # Python 3.11+: ``asyncio`` is only required when Plex metadata extraction
+    # receives coroutine results. Import lazily to keep runtime overhead low when
+    # running in synchronous contexts.
+    import asyncio
+except Exception:  # pragma: no cover - fallback when asyncio is unavailable
+    asyncio = None  # type: ignore[assignment]
 
 from app.logging import get_logger
 
@@ -17,6 +25,7 @@ except ImportError:  # pragma: no cover - fallback when mutagen is unavailable
 # populates this attribute at runtime which keeps the function easily mockable
 # during tests.
 SPOTIFY_CLIENT: Any | None = None
+PLEX_CLIENT: Any | None = None
 
 # Mapping between Harmony metadata keys and the tag identifiers that mutagen
 # understands. The keys intentionally mirror the columns on the ``downloads``
@@ -30,7 +39,7 @@ TAG_FIELDS = {
 }
 
 
-def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
+def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
     """Return rich metadata for the given Spotify track identifier.
 
     The helper consolidates information from the track payload itself together
@@ -44,7 +53,9 @@ def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
 
     client = SPOTIFY_CLIENT
     if client is None:
-        logger.debug("Spotify metadata requested for %s but no client configured", track_id)
+        logger.debug(
+            "Spotify metadata requested for %s but no client configured", track_id
+        )
         return {}
 
     metadata: Dict[str, str] = {}
@@ -57,8 +68,16 @@ def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
 
     if isinstance(track_payload, Mapping):
         _merge_metadata_value(metadata, "genre", _extract_genre(track_payload))
-        _merge_metadata_value(metadata, "composer", _extract_person(track_payload, ("composer", "composers")))
-        _merge_metadata_value(metadata, "producer", _extract_person(track_payload, ("producer", "producers")))
+        _merge_metadata_value(
+            metadata,
+            "composer",
+            _extract_person(track_payload, ("composer", "composers")),
+        )
+        _merge_metadata_value(
+            metadata,
+            "producer",
+            _extract_person(track_payload, ("producer", "producers")),
+        )
 
         external_ids = track_payload.get("external_ids")
         if isinstance(external_ids, Mapping):
@@ -69,7 +88,11 @@ def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
         album_payload = track_payload.get("album")
         if isinstance(album_payload, Mapping):
             _merge_metadata_value(metadata, "genre", _extract_genre(album_payload))
-            _merge_metadata_value(metadata, "copyright", _extract_copyright(album_payload.get("copyrights")))
+            _merge_metadata_value(
+                metadata,
+                "copyright",
+                _extract_copyright(album_payload.get("copyrights")),
+            )
             artwork_url = _pick_best_image(album_payload.get("images"))
             if artwork_url:
                 metadata["artwork_url"] = artwork_url
@@ -81,7 +104,9 @@ def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
     try:
         supplemental = client.get_track_metadata(track_id)
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.debug("Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc)
+        logger.debug(
+            "Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc
+        )
     else:
         for key, value in supplemental.items():
             if key not in TAG_FIELDS and key != "artwork_url":
@@ -92,7 +117,76 @@ def extract_spotify_metadata(track_id: str) -> Dict[str, str]:
     return metadata
 
 
-def write_metadata(audio_file: Path, metadata: Dict[str, Any]) -> None:
+def extract_metadata_from_plex(payload: Any) -> Dict[str, str]:
+    """Normalise metadata extracted from Plex payloads.
+
+    The helper accepts either the raw response returned from the Plex API or the
+    already extracted ``Metadata`` entry.  The worker can therefore pass the
+    result of :meth:`PlexClient.get_track_metadata` directly without additional
+    transformations.  When the payload is a string identifier a lookup is
+    attempted using a configured Plex client; this keeps the function flexible
+    for direct usage in scripts or tests.
+    """
+
+    if isinstance(payload, str):
+        if not payload:
+            return {}
+        client = PLEX_CLIENT
+        if client is None:
+            logger.debug(
+                "Plex metadata requested for %s but no client configured", payload
+            )
+            return {}
+        try:
+            result = client.get_track_metadata(payload)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Plex metadata lookup failed for %s: %s", payload, exc)
+            return {}
+        if (
+            asyncio is not None
+            and hasattr(asyncio, "iscoroutine")
+            and asyncio.iscoroutine(result)
+        ):
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None and loop.is_running():
+                # In an active event loop we cannot synchronously wait for the
+                # coroutine; the caller must perform the lookup instead.
+                logger.debug(
+                    "Received coroutine for Plex metadata in running loop; aborting"
+                )
+                return {}
+            if asyncio is not None:
+                result = asyncio.run(result)  # type: ignore[arg-type]
+        payload = result
+
+    entry = _extract_plex_entry(payload)
+    if entry is None:
+        return {}
+
+    metadata: Dict[str, str] = {}
+    _merge_metadata_value(
+        metadata,
+        "composer",
+        _extract_plex_person(entry, ("composers", "Composers", "composer", "Composer")),
+    )
+    _merge_metadata_value(
+        metadata,
+        "producer",
+        _extract_plex_person(entry, ("producers", "Producers", "producer", "Producer")),
+    )
+    _merge_metadata_value(metadata, "genre", _extract_plex_genre(entry))
+    _merge_metadata_value(metadata, "isrc", _extract_plex_guid(entry))
+    _merge_metadata_value(
+        metadata, "copyright", _normalise_text(entry.get("copyright"))
+    )
+
+    return metadata
+
+
+def write_metadata_tags(audio_file: Path, metadata: Dict[str, Any]) -> None:
     """Persist the provided metadata onto the local audio file."""
 
     if not metadata:
@@ -131,7 +225,76 @@ def write_metadata(audio_file: Path, metadata: Dict[str, Any]) -> None:
         raise
 
 
-def _merge_metadata_value(metadata: Dict[str, str], key: str, value: Optional[str]) -> None:
+def _extract_plex_entry(payload: Any) -> Mapping[str, Any] | None:
+    if isinstance(payload, Mapping):
+        if "MediaContainer" in payload:
+            container = payload.get("MediaContainer")
+            if isinstance(container, Mapping):
+                metadata = container.get("Metadata")
+                if isinstance(metadata, list) and metadata:
+                    first = metadata[0]
+                    if isinstance(first, Mapping):
+                        return first
+                if isinstance(metadata, Mapping):
+                    return metadata
+        else:
+            return payload
+    return None
+
+
+def _extract_plex_person(
+    entry: Mapping[str, Any], keys: Iterable[str]
+) -> Optional[str]:
+    for key in keys:
+        value = entry.get(key)
+        if not value:
+            continue
+        if isinstance(value, list):
+            for candidate in value:
+                person = _normalise_text(
+                    candidate.get("tag")
+                    if isinstance(candidate, Mapping)
+                    else candidate
+                )
+                if person:
+                    return person
+        else:
+            person = _normalise_text(value)
+            if person:
+                return person
+    return None
+
+
+def _extract_plex_genre(entry: Mapping[str, Any]) -> Optional[str]:
+    genre = entry.get("genre") or entry.get("Genre")
+    if isinstance(genre, list):
+        for candidate in genre:
+            text = _normalise_text(
+                candidate.get("tag") if isinstance(candidate, Mapping) else candidate
+            )
+            if text:
+                return text
+    return _normalise_text(genre)
+
+
+def _extract_plex_guid(entry: Mapping[str, Any]) -> Optional[str]:
+    guids = entry.get("Guid") or entry.get("guids")
+    if isinstance(guids, list):
+        for candidate in guids:
+            if isinstance(candidate, Mapping):
+                text = _normalise_text(candidate.get("id"))
+                if text and text.startswith("isrc://"):
+                    return text.split("isrc://", 1)[-1]
+    guid = entry.get("guid")
+    text = _normalise_text(guid)
+    if text and text.startswith("isrc://"):
+        return text.split("isrc://", 1)[-1]
+    return None
+
+
+def _merge_metadata_value(
+    metadata: Dict[str, str], key: str, value: Optional[str]
+) -> None:
     if value and key not in metadata:
         metadata[key] = value
 
@@ -221,4 +384,15 @@ def _normalise_text(value: Any) -> Optional[str]:
     return None
 
 
-__all__ = ["extract_spotify_metadata", "write_metadata", "SPOTIFY_CLIENT"]
+extract_spotify_metadata = extract_metadata_from_spotify
+write_metadata = write_metadata_tags
+
+__all__ = [
+    "extract_metadata_from_spotify",
+    "extract_metadata_from_plex",
+    "write_metadata_tags",
+    "extract_spotify_metadata",
+    "write_metadata",
+    "SPOTIFY_CLIENT",
+    "PLEX_CLIENT",
+]

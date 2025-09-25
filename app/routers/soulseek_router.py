@@ -1,4 +1,5 @@
 """Soulseek API endpoints."""
+
 from __future__ import annotations
 
 import asyncio
@@ -43,7 +44,9 @@ def _translate_error(message: str, exc: SoulseekClientError) -> HTTPException:
 
 
 @router.get("/status", response_model=StatusResponse)
-async def soulseek_status(client: SoulseekClient = Depends(get_soulseek_client)) -> StatusResponse:
+async def soulseek_status(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> StatusResponse:
     """Return connectivity status for the Soulseek daemon."""
 
     try:
@@ -95,7 +98,9 @@ async def soulseek_download(
     job_files: List[Dict[str, Any]] = []
     try:
         for file_info in payload.files:
-            filename = str(file_info.get("filename") or file_info.get("name") or "unknown")
+            filename = str(
+                file_info.get("filename") or file_info.get("name") or "unknown"
+            )
             download = Download(filename=filename, state="queued", progress=0.0)
             session.add(download)
             session.flush()
@@ -184,7 +189,9 @@ def soulseek_download_lyrics(
         content = lyrics_path.read_text(encoding="utf-8")
     except OSError as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to read lyrics file %s: %s", lyrics_path, exc)
-        raise HTTPException(status_code=500, detail="Unable to read lyrics file") from exc
+        raise HTTPException(
+            status_code=500, detail="Unable to read lyrics file"
+        ) from exc
 
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
@@ -240,6 +247,46 @@ def soulseek_download_metadata(
     return DownloadMetadataResponse.model_validate(download)
 
 
+@router.post("/download/{download_id}/metadata/refresh")
+async def refresh_download_metadata(
+    download_id: int,
+    request: Request,
+    session: Session = Depends(get_db),
+) -> JSONResponse:
+    """Trigger a metadata refresh for the given download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    worker = getattr(request.app.state, "rich_metadata_worker", None)
+    if worker is None or not hasattr(worker, "enqueue"):
+        raise HTTPException(status_code=503, detail="Metadata worker unavailable")
+
+    if not download.filename:
+        raise HTTPException(status_code=400, detail="Download has no filename")
+
+    audio_path = Path(download.filename)
+    if not audio_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    payload = dict(download.request_payload or {})
+
+    async def _run_refresh() -> None:
+        try:
+            await worker.enqueue(
+                download.id,
+                audio_path,
+                payload=payload,
+                request_payload=dict(download.request_payload or {}),
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Metadata refresh failed for %s: %s", download_id, exc)
+
+    asyncio.create_task(_run_refresh())
+    return JSONResponse(status_code=202, content={"status": "queued"})
+
+
 def _build_track_info(download: Download) -> Dict[str, Any]:
     info: Dict[str, Any] = {}
     sources = _collect_track_sources(download)
@@ -259,7 +306,9 @@ def _build_track_info(download: Download) -> Dict[str, Any]:
     if album:
         info["album"] = album
 
-    duration = _resolve_numeric_field(("duration", "duration_ms", "durationMs", "length"), sources)
+    duration = _resolve_numeric_field(
+        ("duration", "duration_ms", "durationMs", "length"), sources
+    )
     if duration is not None:
         info["duration"] = duration
 
@@ -369,7 +418,9 @@ async def soulseek_refresh_artwork(
         download.request_payload if isinstance(download.request_payload, dict) else {}
     )
     metadata: Dict[str, Any] = {}
-    nested_metadata = request_payload.get("metadata") if isinstance(request_payload, dict) else {}
+    nested_metadata = (
+        request_payload.get("metadata") if isinstance(request_payload, dict) else {}
+    )
     if isinstance(nested_metadata, dict):
         metadata.update(nested_metadata)
     if isinstance(request_payload, dict):
@@ -425,7 +476,9 @@ async def soulseek_refresh_artwork(
         )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to refresh artwork for download %s: %s", download.id, exc)
-        raise HTTPException(status_code=502, detail="Failed to refresh artwork") from exc
+        raise HTTPException(
+            status_code=502, detail="Failed to refresh artwork"
+        ) from exc
 
     return JSONResponse(status_code=202, content={"status": "pending"})
 
@@ -509,7 +562,9 @@ async def soulseek_download_detail(
 
 
 @router.get("/downloads/all")
-async def soulseek_all_downloads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+async def soulseek_all_downloads(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
     try:
         downloads = await client.get_all_downloads()
     except SoulseekClientError as exc:
@@ -572,7 +627,9 @@ async def soulseek_upload_detail(
 
 
 @router.get("/uploads")
-async def soulseek_uploads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+async def soulseek_uploads(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
     try:
         uploads = await client.get_uploads()
     except SoulseekClientError as exc:
@@ -581,7 +638,9 @@ async def soulseek_uploads(client: SoulseekClient = Depends(get_soulseek_client)
 
 
 @router.get("/uploads/all")
-async def soulseek_all_uploads(client: SoulseekClient = Depends(get_soulseek_client)) -> Dict[str, Any]:
+async def soulseek_all_uploads(
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Dict[str, Any]:
     try:
         uploads = await client.get_all_uploads()
     except SoulseekClientError as exc:
