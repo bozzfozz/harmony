@@ -1,7 +1,8 @@
 # ToDo
 
 ## ✅ Erledigt
-- FastAPI-Anwendung mit Routern (Spotify, Plex, Soulseek, Matching, Beets, Settings)  
+- AGENTS.md aktualisiert (Task-Template-Pflicht & ToDo-Pflege etabliert)
+- FastAPI-Anwendung mit Routern (Spotify, Plex, Soulseek, Matching, Beets, Settings)
 - Worker-System (PlaylistSyncWorker, SyncWorker, MatchingWorker, ScanWorker, DiscographyWorker, MetadataWorker, ArtworkWorker, LyricsWorker, AutoSyncWorker)  
 - Datenbank-Anbindung mit Session-Handling und Modellen  
 - Spotify-Integration (Suche, Playlists, Audio-Features, Recommendations)  
