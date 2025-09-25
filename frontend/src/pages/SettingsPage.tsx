@@ -13,7 +13,7 @@ import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 import { useToast } from '../hooks/useToast';
-import { checkPlexHealth, checkSoulseekHealth, checkSpotifyHealth } from '../lib/api';
+import { ApiError, testServiceConnection, type ServiceIdentifier } from '../lib/api';
 
 const spotifyFields = [
   { key: 'SPOTIFY_CLIENT_ID', label: 'Client ID', placeholder: 'Spotify client ID' },
@@ -34,13 +34,11 @@ const soulseekFields = [
 
 const maskedKeys = new Set(['SPOTIFY_CLIENT_SECRET', 'PLEX_TOKEN', 'SLSKD_API_KEY']);
 
-const SERVICE_CHECKERS = {
-  spotify: { label: 'Spotify', action: checkSpotifyHealth },
-  plex: { label: 'Plex', action: checkPlexHealth },
-  soulseek: { label: 'Soulseek', action: checkSoulseekHealth }
-} as const;
-
-type ServiceKey = keyof typeof SERVICE_CHECKERS;
+const SERVICE_LABELS: Record<ServiceIdentifier, string> = {
+  spotify: 'Spotify',
+  plex: 'Plex',
+  soulseek: 'Soulseek'
+};
 
 const SettingsPage = () => {
   const { toast } = useToast();
@@ -65,17 +63,17 @@ const SettingsPage = () => {
     errorTitle: 'Failed to save Soulseek settings'
   });
 
-  const [isTesting, setIsTesting] = useState<Record<ServiceKey, boolean>>({
+  const [isTesting, setIsTesting] = useState<Record<ServiceIdentifier, boolean>>({
     spotify: false,
     plex: false,
     soulseek: false
   });
 
-  const handleTestConnection = async (service: ServiceKey) => {
+  const handleTestConnection = async (service: ServiceIdentifier) => {
     setIsTesting((previous) => ({ ...previous, [service]: true }));
-    const { label, action } = SERVICE_CHECKERS[service];
+    const label = SERVICE_LABELS[service];
     try {
-      const result = await action();
+      const result = await testServiceConnection(service);
       if (result.status === 'ok') {
         const optionalHint =
           result.optional_missing.length > 0
@@ -95,7 +93,24 @@ const SettingsPage = () => {
         });
       }
     } catch (error) {
-      toast({
+      if (error instanceof ApiError) {
+        if (error.status === 503) {
+          if (!error.handled) {
+            toast({
+              title: `❌ ${label}-Zugangsdaten erforderlich`,
+              description: 'Bitte ergänzen Sie die Credentials im entsprechenden Tab.',
+              variant: 'destructive'
+            });
+          }
+          error.markHandled();
+          return;
+        }
+      if (error.handled) {
+        return;
+      }
+      error.markHandled();
+    }
+    toast({
         title: `❌ ${label}-Verbindung konnte nicht geprüft werden`,
         description: 'Der Health-Endpoint ist derzeit nicht erreichbar.',
         variant: 'destructive'

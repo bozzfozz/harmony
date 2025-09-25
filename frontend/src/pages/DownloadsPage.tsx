@@ -1,5 +1,4 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
-import { isAxiosError } from 'axios';
 import { Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -9,10 +8,11 @@ import { Select } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { useToast } from '../hooks/useToast';
 import {
+  ApiError,
   DownloadEntry,
   cancelDownload,
   exportDownloads,
-  fetchDownloads,
+  getDownloads,
   retryDownload,
   startDownload,
   updateDownloadPriority
@@ -26,7 +26,8 @@ const statusOptions = [
   { value: 'queued', label: 'Warteschlange' },
   { value: 'completed', label: 'Abgeschlossen' },
   { value: 'failed', label: 'Fehlgeschlagen' },
-  { value: 'cancelled', label: 'Abgebrochen' }
+  { value: 'cancelled', label: 'Abgebrochen' },
+  { value: 'blocked', label: 'Blockiert' }
 ];
 
 const DownloadsPage = () => {
@@ -38,6 +39,21 @@ const DownloadsPage = () => {
   const [priorityDrafts, setPriorityDrafts] = useState<Record<number, number>>({});
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
 
+  const handleCredentialsError = (error: unknown) => {
+    if (error instanceof ApiError && error.status === 503) {
+      if (!error.handled) {
+        toast({
+          title: '❌ Zugangsdaten erforderlich',
+          description: 'Bitte hinterlegen Sie gültige Zugangsdaten in den Einstellungen.',
+          variant: 'destructive'
+        });
+      }
+      error.markHandled();
+      return true;
+    }
+    return false;
+  };
+
   const {
     data: downloads,
     isLoading,
@@ -46,17 +62,27 @@ const DownloadsPage = () => {
   } = useQuery<DownloadEntry[]>({
     queryKey: ['downloads', showAllDownloads ? 'all' : 'active', statusFilter],
     queryFn: () =>
-      fetchDownloads({
+      getDownloads({
         includeAll: showAllDownloads,
         status: statusFilter === 'all' ? undefined : statusFilter
       }),
     refetchInterval: 15000,
-    onError: () =>
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Downloads konnten nicht geladen werden',
         description: 'Bitte Backend-Logs prüfen.',
         variant: 'destructive'
-      })
+      });
+    }
   });
 
   const startDownloadMutation = useMutation({
@@ -72,13 +98,14 @@ const DownloadsPage = () => {
       void refetch();
     },
     onError: (error) => {
-      if (isAxiosError(error) && error.response?.status === 503) {
-        toast({
-          title: 'Download blockiert',
-          description: 'Bitte konfigurieren Sie den Soulseek-Zugang.',
-          variant: 'destructive'
-        });
+      if (handleCredentialsError(error)) {
         return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
       }
       toast({
         title: 'Download fehlgeschlagen',
@@ -97,7 +124,16 @@ const DownloadsPage = () => {
       });
       void refetch();
     },
-    onError: () => {
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Abbruch fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
@@ -119,7 +155,16 @@ const DownloadsPage = () => {
       });
       void refetch();
     },
-    onError: () => {
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Neu-Start fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
@@ -143,7 +188,16 @@ const DownloadsPage = () => {
       });
       void refetch();
     },
-    onError: () => {
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Priorität konnte nicht aktualisiert werden',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
@@ -208,6 +262,15 @@ const DownloadsPage = () => {
       URL.revokeObjectURL(url);
       toast({ title: `Export ${format.toUpperCase()} erstellt` });
     } catch (error) {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+      }
       toast({
         title: 'Export fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',

@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import DownloadsPage from '../pages/DownloadsPage';
 import { renderWithProviders } from '../test-utils';
 import {
+  ApiError,
   cancelDownload,
   exportDownloads,
-  fetchDownloads,
+  getDownloads,
   retryDownload,
   startDownload,
   updateDownloadPriority
@@ -13,7 +14,7 @@ import {
 
 jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
-  fetchDownloads: jest.fn(),
+  getDownloads: jest.fn(),
   startDownload: jest.fn(),
   cancelDownload: jest.fn(),
   retryDownload: jest.fn(),
@@ -21,7 +22,7 @@ jest.mock('../lib/api', () => ({
   exportDownloads: jest.fn()
 }));
 
-const mockedFetchDownloads = fetchDownloads as jest.MockedFunction<typeof fetchDownloads>;
+const mockedGetDownloads = getDownloads as jest.MockedFunction<typeof getDownloads>;
 const mockedStartDownload = startDownload as jest.MockedFunction<typeof startDownload>;
 const mockedCancelDownload = cancelDownload as jest.MockedFunction<typeof cancelDownload>;
 const mockedRetryDownload = retryDownload as jest.MockedFunction<typeof retryDownload>;
@@ -36,7 +37,7 @@ describe('DownloadsPage', () => {
   });
 
   it('filters downloads by status', async () => {
-    mockedFetchDownloads.mockResolvedValue([
+    mockedGetDownloads.mockResolvedValue([
       {
         id: 1,
         filename: 'Queued File.mp3',
@@ -49,9 +50,9 @@ describe('DownloadsPage', () => {
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
     expect(await screen.findByText('Queued File.mp3')).toBeInTheDocument();
-    expect(mockedFetchDownloads).toHaveBeenCalledWith({ includeAll: false, status: undefined });
+    expect(mockedGetDownloads).toHaveBeenCalledWith({ includeAll: false, status: undefined });
 
-    mockedFetchDownloads.mockResolvedValueOnce([
+    mockedGetDownloads.mockResolvedValueOnce([
       {
         id: 2,
         filename: 'Failed File.mp3',
@@ -64,13 +65,13 @@ describe('DownloadsPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('Status'), ['failed']);
 
     await waitFor(() =>
-      expect(mockedFetchDownloads).toHaveBeenLastCalledWith({ includeAll: false, status: 'failed' })
+      expect(mockedGetDownloads).toHaveBeenLastCalledWith({ includeAll: false, status: 'failed' })
     );
     expect(await screen.findByText('Failed File.mp3')).toBeInTheDocument();
   });
 
   it('updates priority via the inline editor', async () => {
-    mockedFetchDownloads.mockResolvedValue([
+    mockedGetDownloads.mockResolvedValue([
       {
         id: 3,
         filename: 'Priority File.mp3',
@@ -99,7 +100,7 @@ describe('DownloadsPage', () => {
   });
 
   it('displays retry statuses with readable labels', async () => {
-    mockedFetchDownloads.mockResolvedValue([
+    mockedGetDownloads.mockResolvedValue([
       {
         id: 4,
         filename: 'Retried File.mp3',
@@ -116,7 +117,7 @@ describe('DownloadsPage', () => {
   });
 
   it('exports downloads as CSV', async () => {
-    mockedFetchDownloads.mockResolvedValue([]);
+    mockedGetDownloads.mockResolvedValue([]);
     const blob = new Blob(['id,filename'], { type: 'text/csv' });
     mockedExportDownloads.mockResolvedValue(blob);
 
@@ -145,8 +146,13 @@ describe('DownloadsPage', () => {
   });
 
   it('shows a blocked toast when the backend rejects download requests with 503', async () => {
-    mockedFetchDownloads.mockResolvedValue([]);
-    mockedStartDownload.mockRejectedValue({ isAxiosError: true, response: { status: 503 } } as never);
+    mockedGetDownloads.mockResolvedValue([]);
+    mockedStartDownload.mockRejectedValue(new ApiError({
+      message: 'Credentials missing',
+      status: 503,
+      data: null,
+      originalError: new Error('credentials missing')
+    }));
 
     renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
 
@@ -158,8 +164,8 @@ describe('DownloadsPage', () => {
 
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Download blockiert' })
+        expect.objectContaining({ title: '❌ Zugangsdaten erforderlich' })
       )
     );
-  });
+});
 });

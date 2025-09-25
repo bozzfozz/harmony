@@ -1,37 +1,27 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import SpotifyPage from './pages/SpotifyPage';
-import PlexPage from './pages/PlexPage';
-import SoulseekPage from './pages/SoulseekPage';
-import MatchingPage from './pages/MatchingPage';
-import SettingsPage from './pages/SettingsPage';
-import BeetsPage from './pages/BeetsPage';
-import DownloadsPage from './pages/DownloadsPage';
+import ApiErrorListener from './components/ApiErrorListener';
+import Toaster from './components/ui/toaster';
 import { ThemeProvider } from './components/theme-provider';
-import ToastProvider from './components/ToastProvider';
+import DashboardPage from './pages/DashboardPage';
+import DownloadsPage from './pages/DownloadsPage';
 import ArtistsPage from './pages/ArtistsPage';
-import ActivityHistoryPage from './pages/ActivityHistoryPage';
+import SettingsPage from './pages/SettingsPage';
 
 const App = () => (
   <ThemeProvider>
-    <ToastProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/spotify" element={<SpotifyPage />} />
-          <Route path="/artists" element={<ArtistsPage />} />
-          <Route path="/plex" element={<PlexPage />} />
-          <Route path="/soulseek" element={<SoulseekPage />} />
-          <Route path="/downloads" element={<DownloadsPage />} />
-          <Route path="/activity" element={<ActivityHistoryPage />} />
-          <Route path="/beets" element={<BeetsPage />} />
-          <Route path="/matching" element={<MatchingPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </Layout>
-    </ToastProvider>
+    <ApiErrorListener />
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/downloads" element={<DownloadsPage />} />
+        <Route path="/artists" element={<ArtistsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Layout>
+    <Toaster />
   </ThemeProvider>
 );
 

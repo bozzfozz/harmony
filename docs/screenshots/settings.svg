@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <rect width="800" height="450" fill="#f8fafc" />
+  <rect x="32" y="32" width="736" height="70" rx="16" fill="#cffafe" stroke="#0891b2" stroke-width="2" />
+  <text x="52" y="78" font-family="Inter, sans-serif" font-size="20" fill="#0f172a">Credential Tabs</text>
+  <rect x="32" y="120" width="736" height="296" rx="20" fill="#ffffff" stroke="#cbd5f5" stroke-width="2" />
+  <text x="52" y="166" font-family="Inter, sans-serif" font-size="18" fill="#1e293b">Formulare &amp; Verbindungstests</text>
+</svg>

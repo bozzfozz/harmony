@@ -3,6 +3,15 @@
 Die folgenden Tabellen geben einen Überblick über die wichtigsten REST-Endpunkte des Harmony-Backends. Beispiel-Requests orientieren
 sich an den in `app/routers` definierten Routen. Alle Antworten sind JSON-codiert.
 
+## UI-Übersicht
+
+| Seite | Vorschau |
+| --- | --- |
+| Dashboard | ![Dashboard](./screenshots/dashboard.svg) |
+| Downloads | ![Downloads](./screenshots/downloads.svg) |
+| Artists | ![Artists](./screenshots/artists.svg) |
+| Settings | ![Settings](./screenshots/settings.svg) |
+
 ## System
 
 | Methode | Pfad | Beschreibung |

@@ -3,9 +3,9 @@ import { screen, waitFor } from '@testing-library/react';
 import ArtistsPage from '../pages/ArtistsPage';
 import { renderWithProviders } from '../test-utils';
 import {
-  fetchArtistPreferences,
-  fetchArtistReleases,
-  fetchFollowedArtists,
+  getArtistPreferences,
+  getArtistReleases,
+  getFollowedArtists,
   saveArtistPreferences,
   ArtistPreferenceEntry,
   SpotifyArtist,
@@ -14,15 +14,15 @@ import {
 
 jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
-  fetchFollowedArtists: jest.fn(),
-  fetchArtistReleases: jest.fn(),
-  fetchArtistPreferences: jest.fn(),
+  getFollowedArtists: jest.fn(),
+  getArtistReleases: jest.fn(),
+  getArtistPreferences: jest.fn(),
   saveArtistPreferences: jest.fn()
 }));
 
-const mockedFetchFollowed = fetchFollowedArtists as jest.MockedFunction<typeof fetchFollowedArtists>;
-const mockedFetchReleases = fetchArtistReleases as jest.MockedFunction<typeof fetchArtistReleases>;
-const mockedFetchPreferences = fetchArtistPreferences as jest.MockedFunction<typeof fetchArtistPreferences>;
+const mockedGetFollowed = getFollowedArtists as jest.MockedFunction<typeof getFollowedArtists>;
+const mockedGetReleases = getArtistReleases as jest.MockedFunction<typeof getArtistReleases>;
+const mockedGetPreferences = getArtistPreferences as jest.MockedFunction<typeof getArtistPreferences>;
 const mockedSavePreferences = saveArtistPreferences as jest.MockedFunction<typeof saveArtistPreferences>;
 
 const createArtist = (overrides: Partial<SpotifyArtist> = {}): SpotifyArtist => ({
@@ -51,13 +51,13 @@ describe('ArtistsPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedFetchPreferences.mockResolvedValue([]);
-    mockedFetchReleases.mockResolvedValue([]);
+    mockedGetPreferences.mockResolvedValue([]);
+    mockedGetReleases.mockResolvedValue([]);
     mockedSavePreferences.mockResolvedValue([]);
   });
 
   it('lädt gefolgte Artists', async () => {
-    mockedFetchFollowed.mockResolvedValue([createArtist({ name: 'Daft Punk' })]);
+    mockedGetFollowed.mockResolvedValue([createArtist({ name: 'Daft Punk' })]);
 
     renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
 
@@ -66,12 +66,12 @@ describe('ArtistsPage', () => {
   });
 
   it('zeigt Releases eines ausgewählten Artists an', async () => {
-    mockedFetchFollowed.mockResolvedValue([
+    mockedGetFollowed.mockResolvedValue([
       createArtist({ id: 'artist-1', name: 'Daft Punk' }),
       createArtist({ id: 'artist-2', name: 'Justice' })
     ]);
-    mockedFetchPreferences.mockResolvedValue([createPreference({ artist_id: 'artist-1', selected: true })]);
-    mockedFetchReleases.mockImplementation(async (artistId) => {
+    mockedGetPreferences.mockResolvedValue([createPreference({ artist_id: 'artist-1', selected: true })]);
+    mockedGetReleases.mockImplementation(async (artistId) => {
       if (artistId === 'artist-1') {
         return [createRelease({ name: 'Discovery', album_type: 'album', release_date: '2001-03-12', total_tracks: 14 })];
       }
@@ -82,7 +82,7 @@ describe('ArtistsPage', () => {
 
     await userEvent.click(await screen.findByText('Daft Punk'));
 
-    await waitFor(() => expect(mockedFetchReleases).toHaveBeenCalledWith('artist-1'));
+    await waitFor(() => expect(mockedGetReleases).toHaveBeenCalledWith('artist-1'));
 
     expect(await screen.findByText('Discovery')).toBeInTheDocument();
     expect(screen.getByText('Album')).toBeInTheDocument();
@@ -92,12 +92,12 @@ describe('ArtistsPage', () => {
   });
 
   it('erlaubt das Ändern und Speichern der Auswahl', async () => {
-    mockedFetchFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Hot Chip' })]);
-    mockedFetchPreferences.mockResolvedValue([
+    mockedGetFollowed.mockResolvedValue([createArtist({ id: 'artist-1', name: 'Hot Chip' })]);
+    mockedGetPreferences.mockResolvedValue([
       createPreference({ artist_id: 'artist-1', release_id: 'release-1', selected: false }),
       createPreference({ artist_id: 'artist-1', release_id: 'release-2', selected: false })
     ]);
-    mockedFetchReleases.mockResolvedValue([
+    mockedGetReleases.mockResolvedValue([
       createRelease({ id: 'release-1', name: 'The Warning', album_type: 'album', release_date: '2006-05-22' }),
       createRelease({ id: 'release-2', name: 'Over and Over', album_type: 'single', release_date: '2005-10-31' })
     ]);
@@ -132,7 +132,7 @@ describe('ArtistsPage', () => {
   });
 
   it('zeigt einen Fehler-Toast, wenn Artists nicht geladen werden können', async () => {
-    mockedFetchFollowed.mockRejectedValue(new Error('network error'));
+    mockedGetFollowed.mockRejectedValue(new Error('network error'));
 
     renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
 

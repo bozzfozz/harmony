@@ -1,21 +1,20 @@
-import { createContext, useContext } from 'react';
+import { dismiss, toast as showToast, useToast as useUiToast } from '../components/ui/use-toast';
 
 export interface ToastMessage {
   title: string;
   description?: string;
-  variant?: 'default' | 'destructive';
+  variant?: 'default' | 'destructive' | 'success' | 'info';
 }
-
-export interface ToastContextValue {
-  toast: (message: ToastMessage) => void;
-}
-
-export const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
+  const context = useUiToast();
+
+  return {
+    toast: ({ title, description, variant = 'default' }: ToastMessage) =>
+      showToast({ title, description, variant }),
+    dismiss: context.dismiss,
+    toasts: context.toasts
+  };
 };
+
+export { dismiss };
