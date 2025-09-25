@@ -56,6 +56,7 @@ class Download(Base):
     artwork_status = Column(String(32), nullable=False, default="pending")
     lyrics_path = Column(String(2048), nullable=True)
     lyrics_status = Column(String(32), nullable=False, default="pending")
+    has_lyrics = Column(Boolean, nullable=False, default=False)
     request_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(

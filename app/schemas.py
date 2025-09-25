@@ -135,6 +135,7 @@ class SoulseekDownloadEntry(BaseModel):
     artwork_url: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
+    has_lyrics: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -161,6 +162,7 @@ class DownloadEntryResponse(BaseModel):
     artwork_url: Optional[str] = None
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
+    has_lyrics: Optional[bool] = None
     state: str = Field(exclude=True)
 
     model_config = ConfigDict(from_attributes=True)

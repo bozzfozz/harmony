@@ -710,6 +710,8 @@ class SyncWorker:
             track_info: Dict[str, Any] = dict(metadata)
             track_info.setdefault("filename", filename)
             track_info.setdefault("download_id", download_id)
+            if spotify_track_id:
+                track_info.setdefault("spotify_track_id", spotify_track_id)
 
             title = track_info.get("title") or self._resolve_text(
                 ("title", "track", "name", "filename"),

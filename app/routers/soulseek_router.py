@@ -30,6 +30,8 @@ from app.schemas import (
 )
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from app.workers.sync_worker import SyncWorker
+
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -160,8 +162,12 @@ def soulseek_download_lyrics(
         raise HTTPException(status_code=404, detail="Download not found")
 
     status = (download.lyrics_status or "").lower()
-    if status != "done" or not download.lyrics_path:
-        if status == "pending" or not status:
+    if download.has_lyrics and download.lyrics_path:
+        lyrics_path = Path(download.lyrics_path)
+        if not lyrics_path.exists():
+            raise HTTPException(status_code=404, detail="Lyrics file not found")
+    else:
+        if status in {"", "pending"}:
             return JSONResponse(status_code=202, content={"status": "pending"})
         if status == "failed":
             raise HTTPException(status_code=502, detail="Lyrics generation failed")
@@ -180,6 +186,40 @@ def soulseek_download_lyrics(
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 
+@router.post("/download/{download_id}/lyrics/refresh")
+async def refresh_download_lyrics(
+    download_id: int,
+    request: Request,
+    session: Session = Depends(get_db),
+) -> JSONResponse:
+    """Force a new lyrics lookup for the given download."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    worker = getattr(request.app.state, "lyrics_worker", None)
+    if worker is None or not hasattr(worker, "enqueue"):
+        raise HTTPException(status_code=503, detail="Lyrics worker unavailable")
+
+    if not download.filename:
+        raise HTTPException(status_code=400, detail="Download has no filename")
+
+    track_info = _build_track_info(download)
+    track_info.setdefault("filename", download.filename)
+    track_info.setdefault("download_id", download.id)
+
+    await worker.enqueue(download.id, download.filename, track_info)
+
+    download.lyrics_status = "pending"
+    download.has_lyrics = False
+    download.updated_at = datetime.utcnow()
+    session.add(download)
+    session.commit()
+
+    return JSONResponse(status_code=202, content={"status": "queued"})
+
+
 @router.get(
     "/download/{download_id}/metadata",
     response_model=DownloadMetadataResponse,
@@ -195,6 +235,93 @@ def soulseek_download_metadata(
         raise HTTPException(status_code=404, detail="Download not found")
 
     return DownloadMetadataResponse.model_validate(download)
+
+
+def _build_track_info(download: Download) -> Dict[str, Any]:
+    info: Dict[str, Any] = {}
+    sources = _collect_track_sources(download)
+
+    filename = download.filename or ""
+    stem = Path(filename).stem if filename else ""
+
+    title = _resolve_track_field(("title", "name", "track"), sources, default=stem)
+    if title:
+        info["title"] = title
+
+    artist = _resolve_track_field(("artist", "artist_name", "artists"), sources)
+    if artist:
+        info["artist"] = artist
+
+    album = _resolve_track_field(("album", "album_name", "release"), sources)
+    if album:
+        info["album"] = album
+
+    duration = _resolve_numeric_field(("duration", "duration_ms", "durationMs", "length"), sources)
+    if duration is not None:
+        info["duration"] = duration
+
+    for source in sources:
+        spotify_track_id = SyncWorker._extract_spotify_id(source)
+        if spotify_track_id:
+            info["spotify_track_id"] = spotify_track_id
+            break
+
+    return info
+
+
+def _collect_track_sources(download: Download) -> List[Dict[str, Any]]:
+    sources: List[Dict[str, Any]] = []
+    payload = download.request_payload or {}
+    if isinstance(payload, dict):
+        sources.append(payload)
+        for key in ("metadata", "track", "info"):
+            nested = payload.get(key)
+            if isinstance(nested, dict):
+                sources.append(nested)
+    return sources
+
+
+def _resolve_track_field(
+    keys: tuple[str, ...],
+    sources: List[Dict[str, Any]],
+    *,
+    default: str = "",
+) -> str:
+    for source in sources:
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, dict):
+                nested = value.get("name")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+            if isinstance(value, list) and value:
+                first = value[0]
+                if isinstance(first, dict):
+                    nested = first.get("name")
+                    if isinstance(nested, str) and nested.strip():
+                        return nested.strip()
+                elif isinstance(first, str) and first.strip():
+                    return first.strip()
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return default
+
+
+def _resolve_numeric_field(
+    keys: tuple[str, ...],
+    sources: List[Dict[str, Any]],
+) -> float | None:
+    for source in sources:
+        for key in keys:
+            value = source.get(key)
+            if value is None:
+                continue
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            return numeric
+    return None
 
 
 @router.get("/download/{download_id}/artwork")
