@@ -149,6 +149,9 @@ def _apply_schema_extensions(engine: Engine) -> None:
         "isrc": "VARCHAR(64)",
         "copyright": "VARCHAR(512)",
         "organized_path": "VARCHAR(2048)",
+        "retry_count": "INTEGER NOT NULL DEFAULT 0",
+        "next_retry_at": "DATETIME",
+        "last_error": "TEXT",
     }
 
     for column_name, ddl in column_definitions.items():

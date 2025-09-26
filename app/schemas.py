@@ -147,10 +147,23 @@ class SoulseekDownloadResponse(BaseModel):
     detail: Optional[Dict[str, Any]] = None
 
 
+def _canonical_download_state(value: str | None) -> str:
+    mapping = {
+        "queued": "pending",
+        "downloading": "in_progress",
+        "completed": "completed",
+        "failed": "failed",
+        "dead_letter": "dead_letter",
+        "cancelled": "failed",
+    }
+    normalized = (value or "").strip().lower()
+    return mapping.get(normalized, normalized or "pending")
+
+
 class SoulseekDownloadEntry(BaseModel):
     id: int
     filename: str
-    state: str
+    db_state: str = Field(alias="state", exclude=True)
     progress: float
     created_at: datetime
     updated_at: datetime
@@ -170,8 +183,15 @@ class SoulseekDownloadEntry(BaseModel):
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None
+    retry_count: int = 0
+    next_retry_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field(return_type=str, alias="state")
+    def state(self) -> str:
+        return _canonical_download_state(self.db_state)
 
 
 class SoulseekDownloadStatus(BaseModel):
@@ -203,13 +223,22 @@ class DownloadEntryResponse(BaseModel):
     lyrics_status: Optional[str] = None
     lyrics_path: Optional[str] = None
     has_lyrics: Optional[bool] = None
-    state: str = Field(exclude=True)
+    db_state: str = Field(alias="state", exclude=True)
+    retry_count: int = 0
+    next_retry_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field(return_type=str, alias="state")
+    def state(self) -> str:
+        """Expose canonical download state names."""
+
+        return _canonical_download_state(self.db_state)
+
     @computed_field(return_type=str)
     def status(self) -> str:
-        """Expose the persisted state under the public ``status`` attribute."""
+        """Provide backwards compatible ``status`` attribute."""
 
         return self.state
 

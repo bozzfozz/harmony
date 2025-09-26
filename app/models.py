@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text
@@ -38,12 +39,23 @@ class Playlist(Base):
     )
 
 
+class DownloadState(str, Enum):
+    """Supported lifecycle states for a download record."""
+
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    DEAD_LETTER = "dead_letter"
+
+
 class Download(Base):
     __tablename__ = "downloads"
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(1024), nullable=False)
-    state = Column(String(50), nullable=False, default="queued", index=True)
+    state = Column(String(50), nullable=False, default=DownloadState.QUEUED.value, index=True)
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
@@ -70,6 +82,9 @@ class Download(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+    retry_count = Column(Integer, nullable=False, default=0)
+    next_retry_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
 
     @property
     def job_id(self) -> Optional[str]:

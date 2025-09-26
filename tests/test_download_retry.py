@@ -1,19 +1,25 @@
 from __future__ import annotations
 
-import asyncio
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
+import random
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download
+from app.utils.activity import activity_manager
 from app.utils.events import (
-    DOWNLOAD_RETRY_COMPLETED,
     DOWNLOAD_RETRY_FAILED,
     DOWNLOAD_RETRY_SCHEDULED,
 )
-from app.utils.activity import activity_manager
-from app.workers.sync_worker import MAX_RETRY_ATTEMPTS, RETRY_BACKOFF, SyncWorker
+from app.workers.retry_scheduler import RetryScheduler
+from app.workers.sync_worker import (
+    DownloadJobError,
+    RetryConfig,
+    SyncWorker,
+    _calculate_backoff_seconds,
+)
 
 
 class FlakySoulseekClient:
@@ -35,15 +41,14 @@ class FlakySoulseekClient:
 
 
 @pytest.mark.asyncio
-async def test_retry_is_scheduled_and_completed(monkeypatch) -> None:
+async def test_retry_schedule_sets_next_retry_at(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_engine_for_tests()
     init_db()
     activity_manager.clear()
 
-    monkeypatch.setattr(
-        "app.workers.sync_worker.RETRY_BACKOFF",
-        tuple(0.01 for _ in RETRY_BACKOFF),
-    )
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "0")
 
     client = FlakySoulseekClient(failures=1)
     worker = SyncWorker(client, concurrency=1)
@@ -54,6 +59,7 @@ async def test_retry_is_scheduled_and_completed(monkeypatch) -> None:
             state="queued",
             progress=0.0,
             priority=5,
+            username="tester",
         )
         session.add(download)
         session.flush()
@@ -61,43 +67,101 @@ async def test_retry_is_scheduled_and_completed(monkeypatch) -> None:
 
     job = {
         "username": "tester",
-        "files": [{"download_id": download_id, "priority": 5}],
+        "files": [{"download_id": download_id, "priority": 5, "filename": "priority-track.mp3"}],
         "priority": 5,
     }
 
-    await worker.enqueue(job)
-    await asyncio.sleep(0.05)
-
-    entries = activity_manager.list()
-    statuses = [entry["status"] for entry in entries]
-    assert DOWNLOAD_RETRY_SCHEDULED in statuses
-    assert DOWNLOAD_RETRY_COMPLETED in statuses
+    try:
+        await worker.enqueue(job)
+    except DownloadJobError:
+        pass
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
         assert refreshed is not None
-        assert refreshed.priority == 5
-        assert refreshed.request_payload.get("retry_attempts") is None
+        assert refreshed.retry_count == 1
+        assert refreshed.state == "failed"
+        assert refreshed.last_error is not None
+        assert refreshed.next_retry_at is not None
+        assert refreshed.next_retry_at > datetime.utcnow()
 
-    assert len(client.download_calls) >= 2
+    events = [entry["status"] for entry in activity_manager.list()]
+    assert DOWNLOAD_RETRY_SCHEDULED in events
+    assert len(client.download_calls) == 1
+    recorded = client.download_calls[0]
+    assert recorded["username"] == "tester"
+    assert recorded["files"][0]["download_id"] == download_id
 
 
 @pytest.mark.asyncio
-async def test_retry_fails_after_max_attempts(monkeypatch) -> None:
+async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_engine_for_tests()
     init_db()
     activity_manager.clear()
 
-    monkeypatch.setattr(
-        "app.workers.sync_worker.RETRY_BACKOFF",
-        tuple(0.01 for _ in RETRY_BACKOFF),
-    )
-    monkeypatch.setattr(
-        "app.workers.sync_worker.MAX_RETRY_ATTEMPTS",
-        MAX_RETRY_ATTEMPTS,
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "5")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "0")
+
+    with session_scope() as session:
+        download = Download(
+            filename="stalled.mp3",
+            state="failed",
+            progress=0.0,
+            priority=4,
+            username="tester",
+            retry_count=1,
+            next_retry_at=datetime.utcnow() - timedelta(seconds=5),
+            request_payload={
+                "file": {"filename": "stalled.mp3", "priority": 4},
+                "username": "tester",
+                "priority": 4,
+            },
+        )
+        session.add(download)
+        session.flush()
+        payload = dict(download.request_payload or {})
+        payload.setdefault("file", {})["download_id"] = download.id
+        download.request_payload = payload
+        session.add(download)
+        download_id = download.id
+
+    captured: List[Dict[str, Any]] = []
+
+    class RecordingWorker:
+        async def enqueue(self, job: Dict[str, Any]) -> None:
+            captured.append(job)
+
+    scheduler = RetryScheduler(
+        RecordingWorker(),
+        retry_config=RetryConfig(max_attempts=5, base_seconds=1.0, jitter_pct=0.0),
     )
 
-    client = FlakySoulseekClient(failures=MAX_RETRY_ATTEMPTS + 1)
+    await scheduler._scan_and_enqueue()
+
+    assert len(captured) == 1
+    job = captured[0]
+    assert job["username"] == "tester"
+    assert job["files"][0]["download_id"] == download_id
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.state == "queued"
+        assert refreshed.next_retry_at is None
+
+
+@pytest.mark.asyncio
+async def test_dlq_after_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "1")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "0")
+
+    client = FlakySoulseekClient(failures=2)
     worker = SyncWorker(client, concurrency=1)
 
     with session_scope() as session:
@@ -106,6 +170,7 @@ async def test_retry_fails_after_max_attempts(monkeypatch) -> None:
             state="queued",
             progress=0.0,
             priority=1,
+            username="tester",
         )
         session.add(download)
         session.flush()
@@ -113,21 +178,62 @@ async def test_retry_fails_after_max_attempts(monkeypatch) -> None:
 
     job = {
         "username": "tester",
-        "files": [{"download_id": download_id, "priority": 1}],
+        "files": [{"download_id": download_id, "priority": 1, "filename": "stubborn-track.mp3"}],
         "priority": 1,
     }
 
-    await worker.enqueue(job)
-    await asyncio.sleep(0.1)
-
-    entries = activity_manager.list()
-    statuses = [entry["status"] for entry in entries]
-    assert DOWNLOAD_RETRY_FAILED in statuses
+    for _ in range(2):
+        try:
+            await worker.enqueue(job)
+        except DownloadJobError:
+            pass
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
         assert refreshed is not None
-        assert refreshed.state == "failed"
-        assert refreshed.request_payload.get("retry_attempts") == MAX_RETRY_ATTEMPTS
+        assert refreshed.state == "dead_letter"
+        assert refreshed.retry_count == 2
+        assert refreshed.next_retry_at is None
+        assert refreshed.last_error is not None
 
-    assert len(client.download_calls) >= MAX_RETRY_ATTEMPTS + 1
+    events = [entry["status"] for entry in activity_manager.list()]
+    assert DOWNLOAD_RETRY_FAILED in events
+
+
+def test_jitter_within_bounds() -> None:
+    config = RetryConfig(max_attempts=5, base_seconds=10.0, jitter_pct=0.2)
+    rng = random.Random(42)
+    base_delay = config.base_seconds * (2 ** min(3, 6))
+    lower = base_delay * (1 - config.jitter_pct)
+    upper = base_delay * (1 + config.jitter_pct)
+    for _ in range(5):
+        delay = _calculate_backoff_seconds(3, config, rng)
+        assert lower <= delay <= upper
+
+
+def test_requeue_endpoint_guards_on_dead_letter(client) -> None:
+    payload = {
+        "username": "tester",
+        "files": [
+            {
+                "id": 1,
+                "filename": "song.flac",
+                "priority": 3,
+            }
+        ],
+    }
+
+    response = client.post("/soulseek/download", json=payload)
+    assert response.status_code == 200
+    download_id = response.json()["detail"]["downloads"][0]["id"]
+
+    with session_scope() as session:
+        record = session.get(Download, download_id)
+        assert record is not None
+        record.state = "dead_letter"
+        record.retry_count = 5
+        record.next_retry_at = None
+        session.add(record)
+
+    requeue = client.post(f"/soulseek/downloads/{download_id}/requeue")
+    assert requeue.status_code == 409

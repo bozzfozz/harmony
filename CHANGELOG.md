@@ -14,3 +14,4 @@
 - Automatic Lyrics – Downloads enthalten jetzt synchronisierte `.lrc`-Dateien mit Songtexten aus der Spotify-API (Fallback Musixmatch/lyrics.ovh) samt neuen Endpunkten zum Abruf und Refresh.
 - Artist Watchlist – neue Tabelle `watchlist_artists`, API-Endpunkte (`GET/POST/DELETE /watchlist`) sowie ein periodischer Worker, der neue Releases erkennt, fehlende Tracks via Soulseek lädt und an den SyncWorker übergibt. Konfigurierbar über `WATCHLIST_INTERVAL`.
 - CI-Gates – Push/PR-Workflow führt Ruff, Black, Mypy, Pytest, Jest, TypeScript-Build und einen OpenAPI-Snapshot-Vergleich aus und sorgt damit für reproduzierbare Qualitätsprüfungen.
+- Persistente Soulseek-Retries – Downloads behalten `retry_count`, `next_retry_at`, `last_error` und wechseln nach Überschreitung der Grenze in den Dead-Letter-Status. Ein neuer Retry-Scheduler re-enqueued fällige Jobs mit exponentiellem Backoff, und `/soulseek/downloads/{id}/requeue` erlaubt manuelle Neuversuche.

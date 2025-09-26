@@ -413,6 +413,17 @@
             ],
             "title": "Isrc"
           },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
           "lyrics_path": {
             "anyOf": [
               {
@@ -434,6 +445,18 @@
               }
             ],
             "title": "Lyrics Status"
+          },
+          "next_retry_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Retry At"
           },
           "organized_path": {
             "anyOf": [
@@ -466,6 +489,11 @@
             "title": "Progress",
             "type": "number"
           },
+          "retry_count": {
+            "default": 0,
+            "title": "Retry Count",
+            "type": "integer"
+          },
           "spotify_album_id": {
             "anyOf": [
               {
@@ -488,8 +516,14 @@
             ],
             "title": "Spotify Track Id"
           },
+          "state": {
+            "description": "Expose canonical download state names.",
+            "readOnly": true,
+            "title": "State",
+            "type": "string"
+          },
           "status": {
-            "description": "Expose the persisted state under the public ``status`` attribute.",
+            "description": "Provide backwards compatible ``status`` attribute.",
             "readOnly": true,
             "title": "Status",
             "type": "string"
@@ -517,6 +551,7 @@
           "progress",
           "created_at",
           "updated_at",
+          "state",
           "status"
         ],
         "title": "DownloadEntryResponse",
@@ -1788,6 +1823,17 @@
             ],
             "title": "Isrc"
           },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
           "lyrics_path": {
             "anyOf": [
               {
@@ -1809,6 +1855,18 @@
               }
             ],
             "title": "Lyrics Status"
+          },
+          "next_retry_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Retry At"
           },
           "organized_path": {
             "anyOf": [
@@ -1841,6 +1899,11 @@
             "title": "Progress",
             "type": "number"
           },
+          "retry_count": {
+            "default": 0,
+            "title": "Retry Count",
+            "type": "integer"
+          },
           "spotify_album_id": {
             "anyOf": [
               {
@@ -1864,6 +1927,7 @@
             "title": "Spotify Track Id"
           },
           "state": {
+            "readOnly": true,
             "title": "State",
             "type": "string"
           },
@@ -1876,10 +1940,10 @@
         "required": [
           "id",
           "filename",
-          "state",
           "progress",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "state"
         ],
         "title": "SoulseekDownloadEntry",
         "type": "object"
@@ -5311,6 +5375,47 @@
           }
         },
         "summary": "Soulseek Remove Completed Downloads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/downloads/{download_id}/requeue": {
+      "post": {
+        "description": "Manually requeue a download unless it resides in the dead-letter queue.",
+        "operationId": "soulseek_requeue_download_soulseek_downloads__download_id__requeue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Requeue Download",
         "tags": [
           "Soulseek"
         ]

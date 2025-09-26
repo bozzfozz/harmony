@@ -193,7 +193,7 @@ class WatchlistWorker:
                 session.execute(
                     select(Download.spotify_track_id)
                     .where(Download.spotify_track_id.in_(track_ids))
-                    .where(Download.state.notin_(["failed", "cancelled"]))
+                    .where(Download.state.notin_(["failed", "cancelled", "dead_letter"]))
                 )
                 .scalars()
                 .all()

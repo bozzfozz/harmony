@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
+from app.db import session_scope
 from app.dependencies import get_db, get_soulseek_client
 from app.logging import get_logger
 from app.models import DiscographyJob, Download
@@ -99,13 +100,38 @@ async def soulseek_download(
     try:
         for file_info in payload.files:
             filename = str(file_info.get("filename") or file_info.get("name") or "unknown")
-            download = Download(filename=filename, state="queued", progress=0.0)
+            download = Download(
+                filename=filename,
+                state="queued",
+                progress=0.0,
+                username=payload.username,
+                retry_count=0,
+                next_retry_at=None,
+                last_error=None,
+            )
             session.add(download)
             session.flush()
 
             payload_copy = dict(file_info)
             payload_copy.setdefault("filename", filename)
             payload_copy["download_id"] = download.id
+
+            try:
+                priority_value = int(payload_copy.get("priority", download.priority) or 0)
+            except (TypeError, ValueError):
+                priority_value = 0
+
+            download.priority = priority_value or download.priority
+            download.request_payload = {
+                "file": dict(payload_copy),
+                "username": payload.username,
+                "priority": priority_value,
+            }
+            download.next_retry_at = None
+            download.last_error = None
+            session.add(download)
+
+            payload_copy.setdefault("priority", priority_value)
             job_files.append(payload_copy)
 
             created_downloads.append(
@@ -508,6 +534,84 @@ def soulseek_downloads(session: Session = Depends(get_db)) -> SoulseekDownloadSt
     stmt = select(Download).order_by(Download.created_at.desc())
     downloads = session.execute(stmt).scalars().all()
     return SoulseekDownloadStatus(downloads=downloads)
+
+
+@router.post("/downloads/{download_id}/requeue", status_code=202)
+async def soulseek_requeue_download(
+    download_id: int,
+    request: Request,
+    session: Session = Depends(get_db),
+) -> JSONResponse:
+    """Manually requeue a download unless it resides in the dead-letter queue."""
+
+    download = session.get(Download, download_id)
+    if download is None:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    if download.state == "dead_letter":
+        raise HTTPException(status_code=409, detail="Download is in the dead-letter queue")
+
+    if download.state in {"queued", "downloading"}:
+        raise HTTPException(status_code=409, detail="Download is already active")
+
+    worker = getattr(request.app.state, "sync_worker", None)
+    if worker is None or not hasattr(worker, "enqueue"):
+        raise HTTPException(status_code=503, detail="Sync worker unavailable")
+
+    request_payload = dict(download.request_payload or {})
+    file_info = request_payload.get("file")
+    if not isinstance(file_info, dict):
+        raise HTTPException(status_code=409, detail="Download cannot be requeued")
+
+    username = request_payload.get("username") or download.username
+    if not username:
+        raise HTTPException(status_code=409, detail="Download username missing for retry")
+
+    priority_value = SyncWorker._coerce_priority(
+        file_info.get("priority") or request_payload.get("priority") or download.priority
+    )
+
+    file_payload = dict(file_info)
+    file_payload["download_id"] = download.id
+    file_payload.setdefault("priority", priority_value)
+
+    job = {
+        "username": username,
+        "files": [file_payload],
+        "priority": priority_value,
+    }
+
+    download.job_id = None
+    download.state = "queued"
+    download.retry_count = 0
+    download.next_retry_at = None
+    download.last_error = None
+    download.updated_at = datetime.utcnow()
+    request_payload.update(
+        {
+            "file": dict(file_payload),
+            "username": username,
+            "priority": priority_value,
+        }
+    )
+    download.request_payload = request_payload
+
+    session.add(download)
+    session.commit()
+
+    try:
+        await worker.enqueue(job)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Failed to requeue download %s: %s", download_id, exc)
+        with session_scope() as recovery:
+            record = recovery.get(Download, download_id)
+            if record is not None:
+                record.state = "failed"
+                record.last_error = str(exc)
+                record.updated_at = datetime.utcnow()
+        raise HTTPException(status_code=502, detail="Failed to requeue download") from exc
+
+    return JSONResponse(status_code=202, content={"status": "enqueued"})
 
 
 @router.delete("/download/{download_id}", response_model=SoulseekCancelResponse)

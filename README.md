@@ -177,7 +177,7 @@ Harmony folgt einer klar getrennten Schichten-Architektur:
 
 - **Core**: Enthält API-Clients (`spotify_client.py`, `plex_client.py`, `soulseek_client.py`, `beets_client.py`) und die Matching-Engine.
 - **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Plex, Soulseek, Matching, Settings, Beets).
-- **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads, Plex-Statistiken und Matching-Jobs.
+- **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads, Plex-Statistiken und Matching-Jobs. Ein zusätzlicher Retry-Scheduler prüft fällige Downloads und sorgt für persistente Neuversuche mit exponentiellem Backoff.
 - **Datenbank-Layer**: `app/db.py`, SQLAlchemy-Modelle und -Schemas verwalten persistente Zustände.
 
 Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architecture.md`](docs/architecture.md).
@@ -239,6 +239,11 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
 | `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
 | `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
+| `RETRY_MAX_ATTEMPTS` | Maximale Anzahl an Download-Versuchen (Default: `10`) |
+| `RETRY_BASE_SECONDS` | Basisverzögerung für exponentielles Backoff in Sekunden (Default: `60`) |
+| `RETRY_JITTER_PCT` | Zufälliges Jitter (± Prozent) zur Vermeidung eines Thundering Herd (Default: `0.2`) |
+| `RETRY_SCAN_INTERVAL_SEC` | Intervall des Retry-Schedulers in Sekunden (Default: `60`) |
+| `RETRY_SCAN_BATCH_LIMIT` | Maximale Anzahl neu eingeplanter Downloads pro Scheduler-Lauf (Default: `100`) |
 
 > **Hinweis:** Spotify-, Plex- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
 
@@ -248,7 +253,7 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 
 - **Spotify** (`/spotify`): Status, Suche, Track-Details, Audio-Features, Benutzerbibliothek, Playlists, Empfehlungen.
 - **Plex** (`/plex`): Status & Statistiken, Bibliotheken, PlayQueues, Playlists, Timeline, Bewertungen, Benachrichtigungen.
-- **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos.
+- **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos. Enthält `/soulseek/downloads/{id}/requeue` für manuelle Neuversuche und liefert Retry-Metadaten (`state`, `retry_count`, `next_retry_at`, `last_error`).
 - **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
 - **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.

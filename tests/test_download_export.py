@@ -47,7 +47,7 @@ def test_json_export_returns_full_payload(client) -> None:
     assert {entry["id"] for entry in payload} == set(ids.values())
     queued_entry = next(entry for entry in payload if entry["id"] == ids["newer"])
     assert queued_entry["priority"] == 5
-    assert queued_entry["status"] == "queued"
+    assert queued_entry["status"] == "pending"
 
 
 def test_csv_export_contains_expected_header(client) -> None:
