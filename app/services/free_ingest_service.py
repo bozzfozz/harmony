@@ -20,7 +20,13 @@ from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import Download, IngestItem, IngestJob
+from app.models import (
+    Download,
+    IngestItem,
+    IngestItemState,
+    IngestJob,
+    IngestJobState,
+)
 from app.workers.sync_worker import SyncWorker
 
 
@@ -57,14 +63,26 @@ class NormalizedTrack:
 
 
 @dataclass(slots=True)
-class IngestSubmission:
-    job_id: str
-    accepted_playlists: int
-    accepted_tracks: int
-    skipped_playlists: int
-    skipped_tracks: int
+class IngestAccepted:
+    playlists: int
+    tracks: int
     batches: int
-    skip_reason: Optional[str]
+
+
+@dataclass(slots=True)
+class IngestSkipped:
+    playlists: int
+    tracks: int
+    reason: Optional[str] = None
+
+
+@dataclass(slots=True)
+class IngestSubmission:
+    ok: bool
+    job_id: str
+    accepted: IngestAccepted
+    skipped: IngestSkipped
+    error: Optional[str]
 
 
 @dataclass(slots=True)
@@ -81,8 +99,8 @@ class JobStatus:
     id: str
     state: str
     counts: JobCounts
-    skipped_playlists: int
-    skipped_tracks: int
+    accepted: IngestAccepted
+    skipped: IngestSkipped
     error: Optional[str]
 
 
@@ -118,56 +136,102 @@ class FreeIngestService:
         skip_reason = playlist_skip_reason or track_skip_reason
         job_id = f"job_{uuid.uuid4().hex}"
         batch_size = self._resolve_batch_size(batch_hint)
-        batches = self._calculate_batches(len(normalised_tracks), batch_size)
+        initial_tracks = len(normalised_tracks)
 
         logger.info(
-            "event=free_ingest_submit job_id=%s playlists=%s tracks=%s",
+            "event=ingest_normalized source=FREE job_id=%s playlists=%s tracks=%s",
             job_id,
             len(normalised_links),
-            len(normalised_tracks),
+            initial_tracks,
         )
+
+        accepted_playlists = list(normalised_links)
+        accepted_tracks = list(normalised_tracks)
+        job_error: Optional[str] = None
+
+        if not self._has_capacity() and (accepted_playlists or accepted_tracks):
+            job_error = "backpressure"
+            skip_reason = skip_reason or job_error
+            skipped_playlists += len(accepted_playlists)
+            skipped_tracks += len(accepted_tracks)
+            accepted_playlists.clear()
+            accepted_tracks.clear()
+            logger.warning(
+                "event=ingest_skipped source=FREE job_id=%s reason=%s pending_limit=%s",
+                job_id,
+                job_error,
+                self._config.ingest.max_pending_jobs,
+            )
+        elif skip_reason:
+            logger.info(
+                "event=ingest_skipped source=FREE job_id=%s reason=%s skipped_playlists=%s skipped_tracks=%s",
+                job_id,
+                skip_reason,
+                skipped_playlists,
+                skipped_tracks,
+            )
+
+        job_note = job_error or skip_reason
 
         self._persist_job(
             job_id=job_id,
-            playlists=normalised_links,
-            tracks=normalised_tracks,
+            playlists=accepted_playlists,
+            tracks=accepted_tracks,
             skipped_playlists=skipped_playlists,
             skipped_tracks=skipped_tracks,
         )
 
-        total_tracks = len(normalised_tracks)
+        total_tracks = len(accepted_tracks)
         queued_tracks = 0
         failed_tracks = 0
 
-        if normalised_tracks:
+        if accepted_tracks:
             try:
                 queued_tracks, failed_tracks = await self._enqueue_tracks(
                     job_id,
-                    normalised_tracks,
+                    accepted_tracks,
                     batch_size=batch_size,
                 )
             except Exception as exc:  # pragma: no cover - defensive guard
-                logger.error("event=free_ingest_enqueue_failed job_id=%s error=%s", job_id, exc)
-                self._update_job_state(job_id, "failed", error=str(exc))
+                logger.error("event=ingest_enqueue_failed job_id=%s error=%s", job_id, exc)
+                self._update_job_state(job_id, IngestJobState.FAILED, error=str(exc))
                 raise
+        else:
+            self._update_job_state(
+                job_id,
+                IngestJobState.NORMALIZED,
+                error=job_note,
+            )
 
         self._finalise_job_state(
             job_id,
             total_tracks=total_tracks,
             queued_tracks=queued_tracks,
             failed_tracks=failed_tracks,
+            error=job_note,
         )
 
-        status_code_reason = skip_reason or ("partial" if failed_tracks and queued_tracks else None)
+        accepted = IngestAccepted(
+            playlists=len(accepted_playlists),
+            tracks=total_tracks,
+            batches=self._calculate_batches(total_tracks, batch_size),
+        )
+        skipped = IngestSkipped(
+            playlists=skipped_playlists,
+            tracks=skipped_tracks,
+            reason=skip_reason,
+        )
+
+        submission_error = job_error
+        if submission_error is None and failed_tracks and queued_tracks:
+            submission_error = "partial"
 
         return IngestSubmission(
+            ok=True,
             job_id=job_id,
-            accepted_playlists=len(normalised_links),
-            accepted_tracks=len(normalised_tracks),
-            skipped_playlists=skipped_playlists,
-            skipped_tracks=skipped_tracks,
-            batches=batches,
-            skip_reason=status_code_reason,
+            accepted=accepted,
+            skipped=skipped,
+            error=submission_error,
         )
 
     def get_job_status(self, job_id: str) -> JobStatus | None:
@@ -195,12 +259,43 @@ class FreeIngestService:
                 failed=int(counts_map.get("failed", 0)),
             )
 
+            playlist_total = session.execute(
+                select(func.count())
+                .select_from(IngestItem)
+                .where(
+                    IngestItem.job_id == job_id,
+                    IngestItem.source_type == "LINK",
+                )
+            ).scalar_one()
+            track_total = session.execute(
+                select(func.count())
+                .select_from(IngestItem)
+                .where(
+                    IngestItem.job_id == job_id,
+                    IngestItem.source_type != "LINK",
+                )
+            ).scalar_one()
+
+            batches = self._calculate_batches(
+                int(track_total), self._resolve_batch_size(None)
+            )
+            accepted = IngestAccepted(
+                playlists=int(playlist_total),
+                tracks=int(track_total),
+                batches=batches,
+            )
+            skipped = IngestSkipped(
+                playlists=int(job.skipped_playlists or 0),
+                tracks=int(job.skipped_tracks or 0),
+                reason=job.error if job.state != IngestJobState.FAILED.value else None,
+            )
+
             return JobStatus(
                 id=job.id,
                 state=job.state,
                 counts=counts,
-                skipped_playlists=int(job.skipped_playlists or 0),
-                skipped_tracks=int(job.skipped_tracks or 0),
+                accepted=accepted,
+                skipped=skipped,
                 error=job.error,
             )
 
@@ -364,6 +459,23 @@ class FreeIngestService:
 
     # Persistence helpers --------------------------------------------------
 
+    def _has_capacity(self) -> bool:
+        with session_scope() as session:
+            pending = session.execute(
+                select(func.count())
+                .select_from(IngestJob)
+                .where(
+                    IngestJob.state.in_(
+                        [
+                            IngestJobState.REGISTERED.value,
+                            IngestJobState.NORMALIZED.value,
+                            IngestJobState.QUEUED.value,
+                        ]
+                    )
+                )
+            ).scalar_one()
+        return pending < self._config.ingest.max_pending_jobs
+
     def _persist_job(
         self,
         *,
@@ -379,7 +491,7 @@ class FreeIngestService:
                 id=job_id,
                 source="FREE",
                 created_at=now,
-                state="running",
+                state=IngestJobState.REGISTERED.value,
                 skipped_playlists=skipped_playlists,
                 skipped_tracks=skipped_tracks,
                 error=None,
@@ -400,10 +512,13 @@ class FreeIngestService:
                     duration_sec=None,
                     dedupe_hash=self._hash_parts(playlist_id),
                     source_fingerprint=fingerprint,
-                    state="registered",
+                    state=IngestItemState.REGISTERED.value,
                     error=None,
                     created_at=now,
                 )
+                session.add(item)
+                session.flush()
+                item.state = IngestItemState.NORMALIZED.value
                 session.add(item)
 
             for track in tracks:
@@ -424,22 +539,31 @@ class FreeIngestService:
                         track.duration_sec or "",
                     ),
                     source_fingerprint=fingerprint,
-                    state="registered",
+                    state=IngestItemState.REGISTERED.value,
                     error=None,
                     created_at=now,
                 )
                 session.add(item)
                 session.flush()
-                item.state = "normalized"
+                item.state = IngestItemState.NORMALIZED.value
                 session.add(item)
                 track.item_id = item.id
 
-    def _update_job_state(self, job_id: str, state: str, *, error: str | None = None) -> None:
+            job.state = IngestJobState.NORMALIZED.value
+            session.add(job)
+
+    def _update_job_state(
+        self,
+        job_id: str,
+        state: IngestJobState | str,
+        *,
+        error: str | None = None,
+    ) -> None:
         with session_scope() as session:
             job = session.get(IngestJob, job_id)
             if job is None:
                 return
-            job.state = state
+            job.state = state.value if isinstance(state, IngestJobState) else str(state)
             job.error = error
             session.add(job)
 
@@ -450,18 +574,29 @@ class FreeIngestService:
         total_tracks: int,
         queued_tracks: int,
         failed_tracks: int,
+        error: str | None,
     ) -> None:
         if total_tracks == 0:
-            self._update_job_state(job_id, "completed", error=None)
-            return
-
-        if queued_tracks == total_tracks:
-            self._update_job_state(job_id, "completed", error=None)
+            final_state = IngestJobState.COMPLETED
+            final_error = error
+        elif queued_tracks == total_tracks:
+            final_state = IngestJobState.COMPLETED
+            final_error = error
         elif queued_tracks > 0:
-            reason = f"queued={queued_tracks} failed={failed_tracks}"
-            self._update_job_state(job_id, "partial", error=reason)
+            final_state = IngestJobState.COMPLETED
+            final_error = error or f"partial queued={queued_tracks} failed={failed_tracks}"
         else:
-            self._update_job_state(job_id, "failed", error="no_tracks_queued")
+            final_state = IngestJobState.FAILED
+            final_error = error or "no_tracks_queued"
+
+        self._update_job_state(job_id, final_state, error=final_error)
+        logger.info(
+            "event=ingest_completed source=FREE job_id=%s state=%s queued=%s failed=%s",
+            job_id,
+            final_state.value,
+            queued_tracks,
+            failed_tracks,
+        )
 
     # Queue helpers --------------------------------------------------------
 
@@ -472,6 +607,10 @@ class FreeIngestService:
         *,
         batch_size: int,
     ) -> Tuple[int, int]:
+        if not tracks:
+            return 0, 0
+
+        self._update_job_state(job_id, IngestJobState.QUEUED)
         queued = 0
         failed = 0
 
@@ -481,12 +620,16 @@ class FreeIngestService:
                     success = await self._enqueue_track(job_id, track)
                 except Exception as exc:
                     logger.error(
-                        "event=free_ingest_track_enqueue_failed job_id=%s item_id=%s error=%s",
+                        "event=ingest_enqueue_failed job_id=%s item_id=%s error=%s",
                         job_id,
                         track.item_id,
                         exc,
                     )
-                    self._set_item_state(track.item_id, "failed", error=str(exc))
+                    self._set_item_state(
+                        track.item_id,
+                        IngestItemState.FAILED,
+                        error=str(exc),
+                    )
                     failed += 1
                     continue
                 if success:
@@ -494,6 +637,13 @@ class FreeIngestService:
                 else:
                     failed += 1
 
+        logger.info(
+            "event=ingest_enqueued source=FREE job_id=%s queued=%s failed=%s batches=%s",
+            job_id,
+            queued,
+            failed,
+            self._calculate_batches(len(tracks), batch_size),
+        )
         return queued, failed
 
     async def _enqueue_track(self, job_id: str, track: NormalizedTrack) -> bool:
@@ -518,7 +668,7 @@ class FreeIngestService:
                 break
 
         if not username or not candidate or not query_used:
-            self._set_item_state(track.item_id, "failed", error="no_match")
+            self._set_item_state(track.item_id, IngestItemState.FAILED, error="no_match")
             return False
 
         priority = 10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
@@ -543,10 +693,10 @@ class FreeIngestService:
             else:
                 await self._soulseek.download(job_payload)
         except Exception:
-            self._set_item_state(track.item_id, "failed", error="queue_error")
+            self._set_item_state(track.item_id, IngestItemState.FAILED, error="queue_error")
             raise
 
-        self._set_item_state(track.item_id, "queued", error=None)
+        self._set_item_state(track.item_id, IngestItemState.QUEUED, error=None)
         return True
 
     def _create_download_record(
@@ -663,12 +813,18 @@ class FreeIngestService:
         _, _, _, username, candidate = best
         return username, candidate
 
-    def _set_item_state(self, item_id: int, state: str, *, error: str | None) -> None:
+    def _set_item_state(
+        self,
+        item_id: int,
+        state: IngestItemState | str,
+        *,
+        error: str | None,
+    ) -> None:
         with session_scope() as session:
             item = session.get(IngestItem, item_id)
             if item is None:
                 return
-            item.state = state
+            item.state = state.value if isinstance(state, IngestItemState) else str(state)
             item.error = error
             session.add(item)
 
@@ -680,10 +836,11 @@ class FreeIngestService:
             yield items[start : start + size]
 
     def _resolve_batch_size(self, batch_hint: Optional[int]) -> int:
-        default = self._config.free_ingest.batch_size
+        base = max(1, self._config.ingest.batch_size)
+        ceiling = max(base, self._config.free_ingest.batch_size)
         if batch_hint is None:
-            return default
-        return max(1, min(batch_hint, default * 2))
+            return ceiling
+        return max(1, min(batch_hint, ceiling * 2))
 
     @staticmethod
     def _calculate_batches(total_tracks: int, batch_size: int) -> int:

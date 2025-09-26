@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, 
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import Download, IngestItem
+from app.models import Download, IngestItem, IngestItemState
 from app.utils.activity import (
     record_activity,
     record_worker_started,
@@ -452,7 +452,7 @@ class SyncWorker:
                     if ingest_item_id is not None:
                         self._update_ingest_item_state(
                             ingest_item_id,
-                            "failed",
+                            IngestItemState.FAILED,
                             error=error_message or None,
                         )
                 else:
@@ -815,7 +815,7 @@ class SyncWorker:
                 )
 
         if ingest_item_id is not None:
-            self._update_ingest_item_state(ingest_item_id, "completed", error=None)
+            self._update_ingest_item_state(ingest_item_id, IngestItemState.COMPLETED, error=None)
 
         if self._scan_worker is not None:
             try:
@@ -842,14 +842,18 @@ class SyncWorker:
         return None
 
     @staticmethod
-    def _update_ingest_item_state(item_id: int, state: str, *, error: Optional[str]) -> None:
+    def _update_ingest_item_state(
+        item_id: int,
+        state: IngestItemState | str,
+        *,
+        error: Optional[str],
+    ) -> None:
         with session_scope() as session:
             item = session.get(IngestItem, item_id)
             if item is None:
                 return
-            item.state = state
-            if error is not None:
-                item.error = error
+            item.state = state.value if isinstance(state, IngestItemState) else str(state)
+            item.error = error
             session.add(item)
 
     @staticmethod

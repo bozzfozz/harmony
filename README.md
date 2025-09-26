@@ -30,6 +30,13 @@ Im FREE-Modus stehen neben den Parser-Endpunkten (`/spotify/free/*`) auch die Fr
 - `POST /spotify/import/free/upload` nimmt `multipart/form-data` (CSV/TXT/JSON) entgegen, parst serverseitig in Tracks und ruft intern den Free-Ingest-Service auf.
 - `GET /spotify/import/jobs/{job_id}` liefert den Job-Status inklusive Zählern (`registered`, `normalized`, `queued`, `failed`, `completed`) sowie Skip-Gründen.
 
+Die Ingest-Pipeline teilt sich für FREE- und PRO-Quellen dieselben Datenstrukturen
+(`ingest_jobs`, `ingest_items`) und Zustände (`registered` → `normalized` → `queued`
+→ `completed`/`failed`). Responses enthalten konsistente `accepted`/`skipped`
+Blöcke sowie ein optionales `error`-Feld für Partial-Success-Szenarien
+(HTTP `207`). Globale Einstellungen wie `INGEST_BATCH_SIZE` (Chunking) und
+`INGEST_MAX_PENDING_JOBS` (Backpressure) steuern das Verhalten beider Modi.
+
 Die Web-Oberfläche bietet hierfür einen dedizierten Spotify-Screen mit Modus-Schalter, Importkarte und Job-Übersicht.
 
 ### PRO Backfill & Playlist-Expansion

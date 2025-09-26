@@ -261,13 +261,38 @@ class AutoSyncSkippedTrack(Base):
     last_attempt_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class IngestJobState(str, Enum):
+    """Lifecycle states shared across ingest job implementations."""
+
+    REGISTERED = "registered"
+    NORMALIZED = "normalized"
+    QUEUED = "queued"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class IngestItemState(str, Enum):
+    """Lifecycle states for individual ingest items."""
+
+    REGISTERED = "registered"
+    NORMALIZED = "normalized"
+    QUEUED = "queued"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class IngestJob(Base):
     __tablename__ = "ingest_jobs"
 
     id = Column(String(64), primary_key=True)
     source = Column(String(16), nullable=False, default="FREE")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    state = Column(String(32), nullable=False, default="pending", index=True)
+    state = Column(
+        String(32),
+        nullable=False,
+        default=IngestJobState.REGISTERED.value,
+        index=True,
+    )
     skipped_playlists = Column(Integer, nullable=False, default=0)
     skipped_tracks = Column(Integer, nullable=False, default=0)
     error = Column(Text, nullable=True)
@@ -294,7 +319,12 @@ class IngestItem(Base):
     isrc = Column(String(64), nullable=True)
     dedupe_hash = Column(String(64), nullable=False, index=True)
     source_fingerprint = Column(String(64), nullable=False, index=True)
-    state = Column(String(32), nullable=False, default="registered", index=True)
+    state = Column(
+        String(32),
+        nullable=False,
+        default=IngestItemState.REGISTERED.value,
+        index=True,
+    )
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 

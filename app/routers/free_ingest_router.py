@@ -62,7 +62,7 @@ class SubmissionSkipped(BaseModel):
 class SubmissionResponse(BaseModel):
     ok: bool
     job_id: Optional[str]
-    accepted: Optional[SubmissionAccepted]
+    accepted: SubmissionAccepted
     skipped: SubmissionSkipped
     error: Optional[Dict[str, Any]] = None
 
@@ -79,6 +79,7 @@ class JobStatusModel(BaseModel):
     id: str
     state: str
     counts: JobCountsModel
+    accepted: SubmissionAccepted
     skipped: SubmissionSkipped
     error: Optional[str] = None
 
@@ -104,28 +105,36 @@ def _get_service(
 
 
 def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
-    skipped_reason = result.skip_reason
     skipped_payload = SubmissionSkipped(
-        playlists=result.skipped_playlists,
-        tracks=result.skipped_tracks,
-        reason=skipped_reason,
+        playlists=result.skipped.playlists,
+        tracks=result.skipped.tracks,
+        reason=result.skipped.reason,
     )
     accepted_payload = SubmissionAccepted(
-        playlists=result.accepted_playlists,
-        tracks=result.accepted_tracks,
-        batches=result.batches,
+        playlists=result.accepted.playlists,
+        tracks=result.accepted.tracks,
+        batches=result.accepted.batches,
     )
+    error_payload: Optional[Dict[str, Any]] = None
+    if result.error:
+        code = "PARTIAL_SUCCESS" if result.error == "partial" else result.error.upper()
+        error_payload = {"code": code, "message": result.error}
     return SubmissionResponse(
-        ok=True,
+        ok=result.ok,
         job_id=result.job_id,
         accepted=accepted_payload,
         skipped=skipped_payload,
-        error=None,
+        error=error_payload,
     )
 
 
 def _submission_status_code(result: IngestSubmission) -> int:
-    if result.skip_reason or result.skipped_playlists or result.skipped_tracks:
+    if (
+        result.error
+        or result.skipped.reason
+        or result.skipped.playlists
+        or result.skipped.tracks
+    ):
         return status.HTTP_207_MULTI_STATUS
     return status.HTTP_202_ACCEPTED
 
@@ -226,15 +235,21 @@ async def get_free_ingest_job(
         completed=status_info.counts.completed,
         failed=status_info.counts.failed,
     )
+    accepted = SubmissionAccepted(
+        playlists=status_info.accepted.playlists,
+        tracks=status_info.accepted.tracks,
+        batches=status_info.accepted.batches,
+    )
     skipped = SubmissionSkipped(
-        playlists=status_info.skipped_playlists,
-        tracks=status_info.skipped_tracks,
-        reason=None,
+        playlists=status_info.skipped.playlists,
+        tracks=status_info.skipped.tracks,
+        reason=status_info.skipped.reason,
     )
     payload = JobStatusModel(
         id=status_info.id,
         state=status_info.state,
         counts=counts,
+        accepted=accepted,
         skipped=skipped,
         error=status_info.error,
     )

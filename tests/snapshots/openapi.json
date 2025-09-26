@@ -1016,6 +1016,9 @@
       },
       "JobStatusModel": {
         "properties": {
+          "accepted": {
+            "$ref": "#/components/schemas/SubmissionAccepted"
+          },
           "counts": {
             "$ref": "#/components/schemas/JobCountsModel"
           },
@@ -1046,6 +1049,7 @@
           "id",
           "state",
           "counts",
+          "accepted",
           "skipped"
         ],
         "title": "JobStatusModel",
@@ -2403,14 +2407,7 @@
       "SubmissionResponse": {
         "properties": {
           "accepted": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SubmissionAccepted"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/SubmissionAccepted"
           },
           "error": {
             "anyOf": [

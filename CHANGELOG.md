@@ -6,6 +6,13 @@
 
 ## v1.x.x
 
+- Unified ingest pipeline for Spotify FREE and PRO sources: shared job/item states
+  (`registered` → `normalized` → `queued` → `completed`/`failed`), consistent metrics
+  (`ingest_normalized`, `ingest_enqueued`, `ingest_skipped`, `ingest_completed`),
+  optional backpressure via `INGEST_MAX_PENDING_JOBS`, configurable chunking with
+  `INGEST_BATCH_SIZE`, partial success responses (HTTP 207 + structured `error`)
+  instead of hard failures, and enriched job status snapshots including accepted
+  vs. skipped counts.
 - Spotify FREE Ingest – neue Endpunkte (`POST /spotify/import/free`, `POST /spotify/import/free/upload`, `GET /spotify/import/jobs/{id}`) erfassen bis zu 100 Spotify-Playlist-Links sowie große Tracklisten ohne OAuth, normalisieren die Einträge (Artist/Titel/Album/Dauer), deduplizieren sie, erzeugen persistente `ingest_jobs`/`ingest_items` Datensätze und übergeben normalisierte Batches direkt an den bestehenden Soulseek-Sync-Worker. File-Uploads (CSV/TXT/JSON) werden serverseitig gestreamt geparst, Limits (`FREE_MAX_PLAYLISTS`, `FREE_MAX_TRACKS_PER_REQUEST`, `FREE_BATCH_SIZE`) sind konfigurierbar, Job-Status liefert registrierte/queued/failed Counts und Skip-Gründe.
 - Spotify PRO Backfill – neue Tabelle `backfill_jobs`, Spotify-Cache (`spotify_cache`) und Worker, der FREE-Ingest-Items ohne `spotify_track_id` mit Spotify-Suche/Heuristiken (`artist`/`title`/`album`/Dauer±2s) abgleicht, ISRC/Dauer aktualisiert, Cache-Hits protokolliert und Playlist-Links bei Bedarf über die API expandiert (`POST /spotify/backfill/run`, `GET /spotify/backfill/jobs/{id}`). Konfigurierbar per `BACKFILL_MAX_ITEMS` und `BACKFILL_CACHE_TTL_SEC`.
 - Smart Search v2 – `/search` bündelt Spotify-, Plex- und Soulseek-Ergebnisse in einem normalisierten Schema inklusive Score, Bitrate/Format, erweiterten Filtern (Typ, Genre, Jahr, Dauer, Explicit, Mindestbitrate, bevorzugte Formate, Soulseek-Username), Sortierung (`relevance`, `bitrate`, `year`, `duration`) und Pagination.
