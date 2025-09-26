@@ -144,6 +144,7 @@ def _apply_schema_extensions(engine: Engine) -> None:
         "spotify_track_id": "VARCHAR(128)",
         "spotify_album_id": "VARCHAR(128)",
         "artwork_path": "VARCHAR(2048)",
+        "artwork_url": "VARCHAR(2048)",
         "artwork_status": "VARCHAR(32) NOT NULL DEFAULT 'pending'",
         "has_artwork": "BOOLEAN NOT NULL DEFAULT 0",
         "genre": "VARCHAR(255)",

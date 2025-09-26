@@ -489,6 +489,7 @@ async def soulseek_refresh_artwork(
             spotify_track_id=spotify_track_id,
             spotify_album_id=spotify_album_id,
             artwork_url=metadata.get("artwork_url"),
+            refresh=True,
         )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to refresh artwork for download %s: %s", download.id, exc)

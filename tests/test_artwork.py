@@ -21,6 +21,8 @@ def _make_artwork_config(
     *,
     fallback_enabled: bool = False,
     fallback_timeout: float = 5.0,
+    min_edge: int = 600,
+    min_bytes: int = 120_000,
 ) -> ArtworkConfig:
     provider = "musicbrainz" if fallback_enabled else "none"
     return ArtworkConfig(
@@ -28,12 +30,15 @@ def _make_artwork_config(
         timeout_seconds=5.0,
         max_bytes=5 * 1024 * 1024,
         concurrency=1,
+        min_edge=min_edge,
+        min_bytes=min_bytes,
         fallback=ArtworkFallbackConfig(
             enabled=fallback_enabled,
             provider=provider,
             timeout_seconds=fallback_timeout,
             max_bytes=5 * 1024 * 1024,
         ),
+        poststep_enabled=False,
     )
 
 
@@ -70,6 +75,7 @@ async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 
     class StubSpotify:
         def __init__(self) -> None:
@@ -261,6 +267,157 @@ def test_embed_mp3_flac_m4a(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert tracker["mp4_cover"]["format"] == 2
 
 
+def test_artwork_utils_lowres_detection() -> None:
+    small = {"width": 320, "height": 320, "bytes": 80_000}
+    large = {"width": 1500, "height": 1500, "bytes": 400_000}
+    unknown_small = {"width": 0, "height": 0, "bytes": 120_000}
+    unknown_large = {"width": 0, "height": 0, "bytes": 220_000}
+
+    assert artwork_utils.is_low_res(small, min_edge=1000, min_bytes=150_000) is True
+    assert artwork_utils.is_low_res(large, min_edge=1000, min_bytes=150_000) is False
+    assert artwork_utils.is_low_res(unknown_small, min_edge=1000, min_bytes=150_000) is True
+    assert artwork_utils.is_low_res(unknown_large, min_edge=1000, min_bytes=150_000) is False
+
+
+@pytest.mark.asyncio
+async def test_embed_replace_when_lowres_present(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "lowres.mp3"
+    audio_path.write_bytes(b"audio")
+    existing_art = tmp_path / "old.jpg"
+    existing_art.write_bytes(b"old")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+            artwork_status="pending",
+            artwork_path=str(existing_art),
+            has_artwork=True,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    stored: Dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        artwork_utils,
+        "extract_embed_info",
+        lambda *_: {"width": 300, "height": 300, "bytes": 50_000},
+    )
+    monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: "http://img/cover.jpg")
+
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
+        destination = target.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"new-art")
+        stored["downloaded"] = destination
+        stored["url"] = url
+        return destination
+
+    def fake_embed(audio_file: Path, artwork_file: Path) -> None:
+        stored["embedded"] = (Path(audio_file), Path(artwork_file))
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
+
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork", min_edge=800),
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(
+            download_id,
+            str(audio_path),
+            metadata={
+                "artwork_url": "http://example.com/cover.jpg",
+                "artist": "Artist",
+                "album": "Album",
+            },
+        )
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert stored.get("embedded") == (audio_path, stored.get("downloaded"))
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is True
+        assert refreshed.artwork_status == "done"
+        assert Path(refreshed.artwork_path or "") == stored["downloaded"]
+        assert refreshed.artwork_url == "http://example.com/cover.jpg"
+
+
+@pytest.mark.asyncio
+async def test_no_replace_when_hires_and_no_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "hires.mp3"
+    audio_path.write_bytes(b"audio")
+    existing_art = tmp_path / "existing.jpg"
+    existing_art.write_bytes(b"art")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+            artwork_status="pending",
+            artwork_path=str(existing_art),
+            has_artwork=True,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    monkeypatch.setattr(
+        artwork_utils,
+        "extract_embed_info",
+        lambda *_: {"width": 1600, "height": 1600, "bytes": 400_000},
+    )
+    download_calls: list[str] = []
+
+    def unexpected_download(*_a: Any, **_k: Any) -> Path:
+        download_calls.append("download")
+        raise AssertionError("download_artwork should not run for high-resolution embeds")
+
+    def unexpected_embed(*_a: Any, **_k: Any) -> None:
+        download_calls.append("embed")
+        raise AssertionError("embed_artwork should not run for high-resolution embeds")
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", unexpected_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", unexpected_embed)
+
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork", min_edge=800),
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(download_id, str(audio_path), metadata={})
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert download_calls == []
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is True
+        assert refreshed.artwork_path == str(existing_art)
+
+
 def test_no_artwork_found(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -285,6 +442,7 @@ def test_no_artwork_found(
 
     monkeypatch.setattr(artwork_utils, "download_artwork", raise_no_art)
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 
     async def process() -> None:
         worker = ArtworkWorker(
@@ -293,7 +451,11 @@ def test_no_artwork_found(
         )
         await worker.start()
         try:
-            await worker.enqueue(download_id, str(audio_path), metadata={})
+            await worker.enqueue(
+                download_id,
+                str(audio_path),
+                metadata={"spotify_album_id": "album-poststep"},
+            )
             await worker.wait_for_pending()
         finally:
             await worker.stop()
@@ -344,6 +506,7 @@ def test_refresh_endpoint_enqueues(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
             spotify_track_id: str | None = None,
             spotify_album_id: str | None = None,
             artwork_url: str | None = None,
+            refresh: bool = False,
         ) -> None:
             jobs.append(
                 {
@@ -353,6 +516,7 @@ def test_refresh_endpoint_enqueues(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
                     "spotify_track_id": spotify_track_id,
                     "spotify_album_id": spotify_album_id,
                     "artwork_url": artwork_url,
+                    "refresh": refresh,
                 }
             )
 
@@ -372,6 +536,7 @@ def test_refresh_endpoint_enqueues(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert job["file_path"] == str(audio_path)
     assert job["metadata"].get("artwork_url") == "http://example.com/original.jpg"
     assert job["spotify_album_id"] == "album-999"
+    assert job["refresh"] is True
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
@@ -415,6 +580,7 @@ async def test_sync_worker_schedules_artwork(tmp_path: Path) -> None:
             spotify_track_id: str | None = None,
             spotify_album_id: str | None = None,
             artwork_url: str | None = None,
+            refresh: bool = False,
         ) -> None:
             self.jobs.append(
                 {
@@ -424,6 +590,7 @@ async def test_sync_worker_schedules_artwork(tmp_path: Path) -> None:
                     "spotify_track_id": spotify_track_id,
                     "spotify_album_id": spotify_album_id,
                     "artwork_url": artwork_url,
+                    "refresh": refresh,
                 }
             )
 
@@ -447,6 +614,7 @@ async def test_sync_worker_schedules_artwork(tmp_path: Path) -> None:
     assert job["spotify_track_id"] == "track-123"
     assert job["spotify_album_id"] == "album-999"
     assert job["artwork_url"] == "http://existing.example/cover.jpg"
+    assert job["refresh"] is False
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
@@ -504,9 +672,10 @@ async def test_fallback_disabled_no_call(monkeypatch: pytest.MonkeyPatch, tmp_pa
         calls.append("fallback")
         return "https://coverartarchive.org/release-group/xyz/front"
 
-    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", fake_fetch)
+    monkeypatch.setattr(artwork_utils, "fetch_caa_artwork", fake_fetch)
     monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 
     worker = ArtworkWorker(
         storage_directory=tmp_path / "artwork",
@@ -555,7 +724,7 @@ async def test_musicbrainz_fallback_success(
     stored: Dict[str, Any] = {}
 
     monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
-    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", lambda *_, **__: fallback_url)
+    monkeypatch.setattr(artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url)
 
     def fake_download(url: str, target: Path, **_: Any) -> Path:
         stored["download_url"] = url
@@ -621,8 +790,9 @@ async def test_musicbrainz_fallback_fail(
     fallback_url = "https://coverartarchive.org/release-group/5678/front"
 
     monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
-    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", lambda *_, **__: fallback_url)
+    monkeypatch.setattr(artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url)
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 
     def raise_download(*_args: Any, **_kwargs: Any) -> Path:
         raise RuntimeError("CAA failure")
@@ -649,6 +819,80 @@ async def test_musicbrainz_fallback_fail(
         assert refreshed is not None
         assert refreshed.has_artwork is False
         assert refreshed.artwork_status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_beets_poststep_guarded_by_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class StubBeets:
+        def __init__(self) -> None:
+            self.commands: list[tuple[str, str]] = []
+
+        def write(self, query: str) -> dict[str, object]:
+            self.commands.append(("write", query))
+            return {"success": True}
+
+        def update(self, path: str | Path) -> str:
+            self.commands.append(("update", str(path)))
+            return ""
+
+    monkeypatch.setattr(
+        artwork_utils, "fetch_spotify_artwork", lambda *_: "http://img/poststep.jpg"
+    )
+
+    def fake_download(_url: str, target: Path, **_: Any) -> Path:
+        destination = target.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"art")
+        return destination
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
+
+    async def run(setting_value: str | None) -> list[tuple[str, str]]:
+        stub = StubBeets()
+        monkeypatch.setattr("app.workers.artwork_worker.get_setting", lambda *_: setting_value)
+        audio_path = tmp_path / f"poststep-{setting_value or 'none'}.mp3"
+        audio_path.write_bytes(b"audio")
+
+        with session_scope() as session:
+            download = Download(
+                filename=str(audio_path),
+                state="completed",
+                progress=100.0,
+            )
+            session.add(download)
+            session.commit()
+            session.refresh(download)
+            download_id = download.id
+
+        worker = ArtworkWorker(
+            storage_directory=tmp_path / "artwork",
+            config=_make_artwork_config(tmp_path / "artwork"),
+            beets_client=stub,
+        )
+        await worker.start()
+        try:
+            await worker.enqueue(
+                download_id,
+                str(audio_path),
+                metadata={"spotify_album_id": "album-poststep"},
+            )
+            await worker.wait_for_pending()
+        finally:
+            await worker.stop()
+
+        return stub.commands
+
+    disabled_commands = await run(None)
+    assert disabled_commands == []
+
+    enabled_commands = await run("true")
+    assert any(cmd[0] == "write" for cmd in enabled_commands)
+    assert any(cmd[0] == "update" for cmd in enabled_commands)
 
 
 def test_host_allowlist_enforced(tmp_path: Path) -> None:
