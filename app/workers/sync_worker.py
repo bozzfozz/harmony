@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
+import random
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -33,13 +35,73 @@ from app.workers.persistence import PersistentJobQueue, QueuedJob
 
 logger = get_logger(__name__)
 
-ALLOWED_STATES = {"queued", "downloading", "completed", "failed", "cancelled"}
+ALLOWED_STATES = {"queued", "downloading", "completed", "failed", "cancelled", "dead_letter"}
 
 DEFAULT_CONCURRENCY = 2
 DEFAULT_IDLE_POLL = 15.0
 
-MAX_RETRY_ATTEMPTS = 3
-RETRY_BACKOFF = (5, 15, 30)
+DEFAULT_MAX_RETRY_ATTEMPTS = 10
+DEFAULT_RETRY_BASE_SECONDS = 60.0
+DEFAULT_RETRY_JITTER_PCT = 0.2
+MAX_BACKOFF_EXPONENT = 6
+
+
+@dataclass(slots=True)
+class RetryConfig:
+    """Configuration options for persistent download retries."""
+
+    max_attempts: int
+    base_seconds: float
+    jitter_pct: float
+
+
+def _safe_int(value: str | None, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _safe_float(value: str | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _load_retry_config() -> RetryConfig:
+    """Resolve retry configuration using environment defaults."""
+
+    max_attempts = _safe_int(os.getenv("RETRY_MAX_ATTEMPTS"), DEFAULT_MAX_RETRY_ATTEMPTS)
+    base_seconds = _safe_float(os.getenv("RETRY_BASE_SECONDS"), DEFAULT_RETRY_BASE_SECONDS)
+    jitter_pct = _safe_float(os.getenv("RETRY_JITTER_PCT"), DEFAULT_RETRY_JITTER_PCT)
+    return RetryConfig(max_attempts=max_attempts, base_seconds=base_seconds, jitter_pct=jitter_pct)
+
+
+def _calculate_backoff_seconds(attempt: int, config: RetryConfig, rng: random.Random) -> float:
+    """Return the retry delay for a given attempt applying jitter."""
+
+    bounded_attempt = max(0, min(attempt, MAX_BACKOFF_EXPONENT))
+    delay = config.base_seconds * (2**bounded_attempt)
+    jitter_pct = max(0.0, config.jitter_pct)
+    if jitter_pct:
+        jitter_factor = rng.uniform(1 - jitter_pct, 1 + jitter_pct)
+    else:
+        jitter_factor = 1.0
+    return max(0.0, delay * jitter_factor)
+
+
+def _truncate_error(message: str, limit: int = 512) -> str:
+    text = message.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
 class DownloadJobError(RuntimeError):
@@ -78,10 +140,9 @@ class SyncWorker:
         self._concurrency = max(1, concurrency or self._resolve_concurrency())
         self._cancelled_downloads: Set[int] = set()
         self._cancel_lock = asyncio.Lock()
-        self._retry_attempts: Dict[int, int] = {}
-        self._retry_lock = asyncio.Lock()
-        self._retry_tasks: Set[asyncio.Task] = set()
         self._music_dir = Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+        self._retry_config = _load_retry_config()
+        self._retry_rng = random.Random()
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -120,30 +181,6 @@ class SyncWorker:
         priority = 0 if job is None else max(self._coerce_priority(job.priority), 0)
         await self._queue.put((-priority, self._enqueue_sequence, job))
 
-    def _track_task(self, task: asyncio.Task) -> None:
-        self._retry_tasks.add(task)
-        task.add_done_callback(self._retry_tasks.discard)
-
-    async def _cancel_retry_tasks(self) -> None:
-        pending = [task for task in list(self._retry_tasks) if not task.done()]
-        if not pending:
-            return
-
-        for task in pending:
-            task.cancel()
-
-        logger.info("Awaiting %d pending retry task(s)", len(pending))
-        await asyncio.gather(*pending, return_exceptions=True)
-
-        remaining = [task for task in pending if not task.done()]
-        if remaining:
-            logger.warning(
-                "Retry tasks still pending after cancellation: %d",
-                len(remaining),
-            )
-
-        self._retry_tasks.difference_update(pending)
-
     async def start(self) -> None:
         if self._manager_task is not None and not self._manager_task.done():
             return
@@ -161,7 +198,6 @@ class SyncWorker:
                 await self._manager_task
             finally:
                 self._manager_task = None
-        await self._cancel_retry_tasks()
 
     async def enqueue(self, job: Dict[str, Any]) -> None:
         """Submit a download job for processing."""
@@ -182,6 +218,7 @@ class SyncWorker:
                     if download is None:
                         continue
                     download.job_id = job_identifier
+                    download.username = job.get("username") or download.username
                     payload = dict(download.request_payload or {})
                     file_priority = self._extract_file_priority(file_info)
                     if not file_priority:
@@ -189,8 +226,13 @@ class SyncWorker:
                     if not file_priority:
                         file_priority = self._coerce_priority(download.priority)
                     payload["priority"] = file_priority
+                    payload["username"] = job.get("username")
+                    payload["file"] = dict(file_info)
                     download.request_payload = payload
+                    download.state = "queued"
+                    download.next_retry_at = None
                     download.updated_at = now
+                    session.add(download)
 
         if self.is_running():
             await self._put_job(record)
@@ -235,7 +277,6 @@ class SyncWorker:
                     await self._poll_task
                 except asyncio.CancelledError:  # pragma: no cover - lifecycle cleanup
                     pass
-            await self._cancel_retry_tasks()
             self._job_store.requeue_incomplete()
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("sync", WORKER_STOPPED)
@@ -328,6 +369,23 @@ class SyncWorker:
             logger.debug("All downloads in job cancelled before processing")
             return
 
+        now = datetime.utcnow()
+        with session_scope() as session:
+            for file_info in filtered_files:
+                identifier = file_info.get("download_id") or file_info.get("id")
+                try:
+                    download_id = int(identifier)
+                except (TypeError, ValueError):
+                    continue
+                download = session.get(Download, download_id)
+                if download is None or download.state == "dead_letter":
+                    continue
+                download.state = "downloading"
+                download.next_retry_at = None
+                download.last_error = None
+                download.updated_at = now
+                session.add(download)
+
         try:
             await self._client.download({"username": username, "files": filtered_files})
         except Exception as exc:  # pragma: no cover - defensive
@@ -346,42 +404,67 @@ class SyncWorker:
         if not files:
             return
 
-        retry_batches: Dict[int, List[Dict[str, Any]]] = {}
         scheduled: List[Dict[str, Any]] = []
-        failures: List[Dict[str, Any]] = []
-        error_message = str(error)
+        dead_letters: List[Dict[str, Any]] = []
+        username = job.get("username")
+        error_message = _truncate_error(str(error))
+        now = datetime.utcnow()
 
-        for file_info in files:
-            identifier = file_info.get("download_id") or file_info.get("id")
-            try:
-                download_id = int(identifier)
-            except (TypeError, ValueError):
-                continue
+        with session_scope() as session:
+            for file_info in files:
+                identifier = file_info.get("download_id") or file_info.get("id")
+                try:
+                    download_id = int(identifier)
+                except (TypeError, ValueError):
+                    continue
 
-            attempts = await self._increment_retry_attempt(download_id)
-            if attempts <= MAX_RETRY_ATTEMPTS:
-                delay_index = min(attempts, len(RETRY_BACKOFF)) - 1
-                delay = RETRY_BACKOFF[delay_index]
-                payload = dict(file_info)
-                payload["download_id"] = download_id
-                if "priority" not in payload:
-                    payload["priority"] = self._extract_file_priority(payload)
-                retry_batches.setdefault(delay, []).append(payload)
-                scheduled.append(
-                    {
-                        "download_id": download_id,
-                        "attempt": attempts,
-                        "delay_seconds": delay,
-                    }
-                )
-            else:
-                recorded_attempts = await self._mark_retry_failed(download_id)
-                failures.append(
-                    {
-                        "download_id": download_id,
-                        "attempts": recorded_attempts,
-                    }
-                )
+                download = session.get(Download, download_id)
+                if download is None:
+                    continue
+
+                download.username = username or download.username
+                download.retry_count = int(download.retry_count or 0) + 1
+                download.last_error = error_message or None
+                download.job_id = None
+                download.progress = 0.0
+                download.updated_at = now
+
+                if download.retry_count > self._retry_config.max_attempts:
+                    download.state = "dead_letter"
+                    download.next_retry_at = None
+                    dead_letters.append(
+                        {
+                            "download_id": download_id,
+                            "retry_count": download.retry_count,
+                        }
+                    )
+                    logger.warning(
+                        "event=retry_dead_letter download_id=%s retry_count=%s result=dead_letter",
+                        download_id,
+                        download.retry_count,
+                    )
+                else:
+                    delay_seconds = _calculate_backoff_seconds(
+                        download.retry_count, self._retry_config, self._retry_rng
+                    )
+                    download.state = "failed"
+                    download.next_retry_at = now + timedelta(seconds=delay_seconds)
+                    scheduled.append(
+                        {
+                            "download_id": download_id,
+                            "retry_count": download.retry_count,
+                            "delay_seconds": delay_seconds,
+                            "next_retry_at": download.next_retry_at.isoformat(),
+                        }
+                    )
+                    logger.info(
+                        "event=retry_schedule download_id=%s retry_count=%s next_retry_at=%s result=scheduled",
+                        download_id,
+                        download.retry_count,
+                        download.next_retry_at.isoformat(),
+                    )
+
+                session.add(download)
 
         if scheduled:
             record_activity(
@@ -389,91 +472,49 @@ class SyncWorker:
                 DOWNLOAD_RETRY_SCHEDULED,
                 details={
                     "downloads": scheduled,
-                    "username": job.get("username"),
+                    "username": username,
                 },
             )
-        if failures:
+        if dead_letters:
             record_activity(
                 "download",
                 DOWNLOAD_RETRY_FAILED,
                 details={
-                    "downloads": failures,
-                    "username": job.get("username"),
+                    "downloads": dead_letters,
+                    "username": username,
                     "error": error_message,
                 },
             )
 
-        if retry_batches:
-            items = sorted(retry_batches.items(), key=lambda entry: entry[0])
-            if not self.is_running():
-                for delay, batch in items:
-                    priority = max(
-                        (self._extract_file_priority(item) for item in batch),
-                        default=0,
-                    )
-                    retry_job = {
-                        "username": job.get("username"),
-                        "files": batch,
-                        "priority": priority,
-                    }
-                    try:
-                        if delay > 0:
-                            await asyncio.sleep(delay)
-                        await self.enqueue(retry_job)
-                    except Exception as exc:  # pragma: no cover - defensive
-                        logger.error("Failed to enqueue retry job for %s: %s", batch, exc)
-                        for item in batch:
-                            identifier = item.get("download_id")
-                            if identifier is None:
-                                continue
-                            await self._mark_retry_failed(int(identifier))
-                        record_activity(
-                            "download",
-                            DOWNLOAD_RETRY_FAILED,
-                            details={
-                                "downloads": [
-                                    {
-                                        "download_id": item.get("download_id"),
-                                    }
-                                    for item in batch
-                                    if item.get("download_id") is not None
-                                ],
-                                "error": str(exc),
-                            },
-                        )
-            else:
-                for delay, batch in items:
-                    priority = max(
-                        (self._extract_file_priority(item) for item in batch),
-                        default=0,
-                    )
-                    retry_job = {
-                        "username": job.get("username"),
-                        "files": batch,
-                        "priority": priority,
-                    }
-                    download_ids = [
-                        int(item.get("download_id"))
-                        for item in batch
-                        if item.get("download_id") is not None
-                    ]
-                    task = asyncio.create_task(
-                        self._delayed_enqueue(retry_job, delay, download_ids)
-                    )
-                    self._track_task(task)
-
     async def _handle_retry_success(self, files: Iterable[Dict[str, Any]]) -> None:
         completed: List[Dict[str, Any]] = []
-        for file_info in files:
-            identifier = file_info.get("download_id") or file_info.get("id")
-            try:
-                download_id = int(identifier)
-            except (TypeError, ValueError):
-                continue
+        now = datetime.utcnow()
+        with session_scope() as session:
+            for file_info in files:
+                identifier = file_info.get("download_id") or file_info.get("id")
+                try:
+                    download_id = int(identifier)
+                except (TypeError, ValueError):
+                    continue
 
-            attempts = await self._clear_retry_state(download_id)
-            if attempts > 0:
-                completed.append({"download_id": download_id, "attempts": attempts})
+                download = session.get(Download, download_id)
+                if download is None:
+                    continue
+
+                attempts = int(download.retry_count or 0)
+                download.next_retry_at = None
+                download.last_error = None
+                download.state = "downloading"
+                download.updated_at = now
+                session.add(download)
+
+                if attempts > 0:
+                    completed.append({"download_id": download_id, "retry_count": attempts})
+                    logger.info(
+                        "event=retry_enqueue download_id=%s retry_count=%s result=enqueued",
+                        download_id,
+                        attempts,
+                    )
 
         if completed:
             record_activity(
@@ -481,75 +522,6 @@ class SyncWorker:
                 DOWNLOAD_RETRY_COMPLETED,
                 details={"downloads": completed},
             )
-
-    async def _delayed_enqueue(
-        self,
-        job: Dict[str, Any],
-        delay: int,
-        download_ids: List[int],
-    ) -> None:
-        try:
-            await asyncio.sleep(delay)
-            await self.enqueue(job)
-        except asyncio.CancelledError:  # pragma: no cover - shutdown handling
-            return
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to enqueue retry job for %s: %s", download_ids, exc)
-            for download_id in download_ids:
-                await self._mark_retry_failed(download_id)
-            record_activity(
-                "download",
-                DOWNLOAD_RETRY_FAILED,
-                details={
-                    "downloads": [{"download_id": identifier} for identifier in download_ids],
-                    "error": str(exc),
-                },
-            )
-
-    async def _increment_retry_attempt(self, download_id: int) -> int:
-        async with self._retry_lock:
-            attempts = self._retry_attempts.get(download_id, 0) + 1
-            self._retry_attempts[download_id] = attempts
-        with session_scope() as session:
-            download = session.get(Download, download_id)
-            if download is None:
-                return attempts
-            payload = dict(download.request_payload or {})
-            payload["retry_attempts"] = attempts
-            download.request_payload = payload
-            download.state = "queued"
-            download.progress = 0.0
-            download.updated_at = datetime.utcnow()
-        return attempts
-
-    async def _mark_retry_failed(self, download_id: int) -> int:
-        async with self._retry_lock:
-            attempts = self._retry_attempts.pop(download_id, MAX_RETRY_ATTEMPTS)
-        attempts = max(1, min(attempts, MAX_RETRY_ATTEMPTS))
-        with session_scope() as session:
-            download = session.get(Download, download_id)
-            if download is None:
-                return attempts
-            payload = dict(download.request_payload or {})
-            payload["retry_attempts"] = attempts
-            download.request_payload = payload
-            download.state = "failed"
-            download.progress = 0.0
-            download.updated_at = datetime.utcnow()
-        return attempts
-
-    async def _clear_retry_state(self, download_id: int) -> int:
-        async with self._retry_lock:
-            attempts = self._retry_attempts.pop(download_id, 0)
-        with session_scope() as session:
-            download = session.get(Download, download_id)
-            if download is None:
-                return attempts
-            payload = dict(download.request_payload or {})
-            if payload.pop("retry_attempts", None) is not None:
-                download.request_payload = payload
-                download.updated_at = datetime.utcnow()
-        return attempts
 
     async def refresh_downloads(self) -> bool:
         """Poll Soulseek for download progress and persist it."""
@@ -582,6 +554,8 @@ class SyncWorker:
 
                 download = session.get(Download, int(download_id))
                 if download is None:
+                    continue
+                if download.state == "dead_letter":
                     continue
 
                 previous_state = download.state
@@ -701,6 +675,11 @@ class SyncWorker:
             with session_scope() as session:
                 record = session.get(Download, download_id)
                 if record is not None:
+                    record.state = "completed"
+                    record.retry_count = 0
+                    record.next_retry_at = None
+                    record.last_error = None
+                    record.job_id = None
                     organized_path: Path | None = None
                     if file_path:
                         record.filename = str(file_path)

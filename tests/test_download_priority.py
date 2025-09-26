@@ -123,7 +123,7 @@ def test_priority_can_be_updated_via_api(client) -> None:
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["priority"] == 7
-    assert detail["status"] == "queued"
+    assert detail["status"] == "pending"
 
     with session_scope() as session:
         refreshed_download = session.get(Download, download_id)

@@ -34,7 +34,7 @@ def test_soulseek_download_flow(client: SimpleTestClient) -> None:
     assert response.status_code == 200
     downloads = response.json()["downloads"]
     download = next(item for item in downloads if item["id"] == download_id)
-    assert download["state"] == "queued"
+    assert download["state"] == "pending"
     assert download["progress"] == 0.0
 
     stub = client.app.state.soulseek_stub
@@ -44,7 +44,7 @@ def test_soulseek_download_flow(client: SimpleTestClient) -> None:
     response = client.get("/soulseek/downloads")
     downloads = response.json()["downloads"]
     download = next(item for item in downloads if item["id"] == download_id)
-    assert download["state"] == "downloading"
+    assert download["state"] == "in_progress"
     assert download["progress"] > 0
 
     stub.set_status(download_id, progress=100.0, state="completed")

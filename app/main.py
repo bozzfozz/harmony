@@ -50,6 +50,7 @@ from app.workers import (
     SyncWorker,
     WatchlistWorker,
 )
+from app.workers.retry_scheduler import RetryScheduler
 from app.models import ArtistPreference
 from sqlalchemy import select
 
@@ -111,6 +112,9 @@ async def startup_event() -> None:
             lyrics_worker=app.state.lyrics_worker,
         )
         await app.state.sync_worker.start()
+
+        app.state.retry_scheduler = RetryScheduler(app.state.sync_worker)
+        await app.state.retry_scheduler.start()
 
         app.state.matching_worker = MatchingWorker(matching_engine)
         await app.state.matching_worker.start()
@@ -182,6 +186,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "lyrics_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "rich_metadata_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "retry_scheduler", None):
         await worker.stop()
     if worker := getattr(app.state, "sync_worker", None):
         await worker.stop()

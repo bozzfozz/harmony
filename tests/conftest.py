@@ -26,6 +26,7 @@ from app.main import app
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
 from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
+from app.workers.retry_scheduler import RetryScheduler
 from tests.simple_client import SimpleTestClient
 
 
@@ -793,10 +794,12 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     monkeypatch.setattr(MatchingWorker, "start", noop_start)
     monkeypatch.setattr(ScanWorker, "start", noop_start)
     monkeypatch.setattr(PlaylistSyncWorker, "start", noop_start)
+    monkeypatch.setattr(RetryScheduler, "start", noop_start)
     monkeypatch.setattr(SyncWorker, "stop", noop_stop)
     monkeypatch.setattr(MatchingWorker, "stop", noop_stop)
     monkeypatch.setattr(ScanWorker, "stop", noop_stop)
     monkeypatch.setattr(PlaylistSyncWorker, "stop", noop_stop)
+    monkeypatch.setattr(RetryScheduler, "stop", noop_stop)
 
     from app import dependencies as deps
 
@@ -818,6 +821,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     app.state.spotify_stub = stub_spotify
     app.state.lyrics_worker = stub_lyrics
     app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
+    app.state.retry_scheduler = RetryScheduler(app.state.sync_worker)
     app.state.playlist_worker = PlaylistSyncWorker(stub_spotify, interval_seconds=0.1)
 
     with SimpleTestClient(app) as test_client:

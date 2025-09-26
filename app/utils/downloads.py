@@ -13,9 +13,12 @@ from app.schemas import DownloadEntryResponse
 
 STATUS_FILTERS: Dict[str, set[str]] = {
     "running": {"running", "downloading"},
+    "in_progress": {"running", "downloading"},
     "queued": {"queued"},
+    "pending": {"queued"},
     "completed": {"completed"},
-    "failed": {"failed"},
+    "failed": {"failed", "dead_letter"},
+    "dead_letter": {"dead_letter"},
     "cancelled": {"cancelled"},
 }
 
