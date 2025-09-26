@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from types import TracebackType
-from typing import Any, Dict, Optional, Type
+from typing import Any, AsyncContextManager, Dict, Optional, Type
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
@@ -26,6 +26,7 @@ class SimpleTestClient:
         self.app = app
         self._loop = asyncio.new_event_loop()
         self._previous_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._lifespan_context: Optional[AsyncContextManager[None]] = None
 
     def __enter__(self) -> "SimpleTestClient":
         try:
@@ -33,7 +34,12 @@ class SimpleTestClient:
         except RuntimeError:
             self._previous_loop = None
         asyncio.get_event_loop_policy().set_event_loop(self._loop)
-        self._loop.run_until_complete(self.app.router.startup())
+        lifespan_factory = getattr(self.app.router, "lifespan_context", None)
+        if callable(lifespan_factory):
+            self._lifespan_context = lifespan_factory(self.app)
+            self._loop.run_until_complete(self._lifespan_context.__aenter__())
+        else:
+            self._loop.run_until_complete(self.app.router.startup())
         return self
 
     def __exit__(
@@ -42,7 +48,11 @@ class SimpleTestClient:
         exc: Optional[BaseException],
         tb: Optional[TracebackType],
     ) -> None:
-        self._loop.run_until_complete(self.app.router.shutdown())
+        if self._lifespan_context is not None:
+            self._loop.run_until_complete(self._lifespan_context.__aexit__(exc_type, exc, tb))
+            self._lifespan_context = None
+        else:
+            self._loop.run_until_complete(self.app.router.shutdown())
         self._loop.close()
         if self._previous_loop is not None:
             asyncio.get_event_loop_policy().set_event_loop(self._previous_loop)

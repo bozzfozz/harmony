@@ -51,7 +51,7 @@ async def create_free_import(
 
     if body_size > hard_cap_bytes:
         return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             content={
                 "ok": False,
                 "error": {
@@ -73,7 +73,7 @@ async def create_free_import(
         )
     except TooManyItemsError as exc:
         return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             content={
                 "ok": False,
                 "error": {

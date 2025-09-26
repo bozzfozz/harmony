@@ -193,6 +193,17 @@ npm run typecheck
 npm run build
 ```
 
+### Code-Qualität lokal (optional offline)
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+# Tools vollständig:
+make all
+# Offline-Fallback (nur Pflichtgates laufen):
+CI_OFFLINE=true make all
+```
+
 ### Features der UI
 
 - Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.

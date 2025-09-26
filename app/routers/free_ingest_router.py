@@ -145,7 +145,7 @@ async def submit_free_ingest(
 ) -> JSONResponse:
     if not payload.playlist_links and not payload.tracks:
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message="playlist_links or tracks required",
         )
@@ -159,7 +159,7 @@ async def submit_free_ingest(
     except PlaylistValidationError as exc:
         details = [{"url": item.url, "reason": item.reason} for item in exc.invalid_links]
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message="invalid playlist links",
             details=details,
@@ -181,14 +181,14 @@ async def upload_free_ingest(
         filename, content = _parse_multipart_file(content_type, body)
     except ValueError as exc:
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message=str(exc),
         )
 
     if not content:
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message="file is empty",
         )
@@ -197,14 +197,14 @@ async def upload_free_ingest(
         tracks = FreeIngestService.parse_tracks_from_file(content, filename)
     except ValueError as exc:
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message=str(exc),
         )
 
     if not tracks:
         return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             code="VALIDATION_ERROR",
             message="no tracks found in file",
         )
