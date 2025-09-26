@@ -870,38 +870,31 @@ Authorization: Bearer <token>
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
-| `GET` | `/plex/status` | Liefert Sitzungen und Bibliotheksstatistiken. |
-| `GET` | `/plex/library/sections` | Listet Bibliotheken (Alias: `/plex/libraries`). |
-| `GET` | `/plex/library/sections/{section_id}/all` | Durchsucht eine Bibliothek (Alias: `/plex/library/{section_id}/items`). |
-| `GET` | `/plex/library/metadata/{item_id}` | Metadaten für ein Item. |
-| `GET` | `/plex/status/sessions` | Aktive Sessions (Alias: `/plex/sessions`). |
-| `GET` | `/plex/status/sessions/history/all` | Wiedergabeverlauf (Alias: `/plex/history`). |
-| `GET`/`POST` | `/plex/timeline` | Holt bzw. aktualisiert Timeline-Daten. |
-| `POST` | `/plex/scrobble` / `/plex/unscrobble` | Spielposition melden. |
-| `GET`/`POST`/`PUT`/`DELETE` | `/plex/playlists` | Playlist-Verwaltung. |
-| `POST` | `/plex/playQueues` | Erstellt PlayQueues. |
-| `GET` | `/plex/playQueues/{playqueue_id}` | Lädt eine bestehende PlayQueue. |
-| `POST` | `/plex/rate` | Bewertet ein Item. |
-| `POST` | `/plex/tags/{item_id}` | Synchronisiert Tags. |
-| `GET` | `/plex/devices` | Verfügbare Geräte. |
-| `GET` | `/plex/dvr` | DVR-Daten. |
-| `GET` | `/plex/livetv` | Live-TV-Informationen. |
-| `GET` | `/plex/notifications` | Server-Sent Events Stream für Plex-Benachrichtigungen. |
+| `GET` | `/plex/status` | Verbindungsstatus, Servername, Version und Anzahl der Bibliotheken. |
+| `GET` | `/plex/libraries` | Liefert eine Liste aller verfügbaren Bibliotheken mit ID, Titel und Typ. |
+| `POST` | `/plex/library/{section_id}/scan` | Stößt einen inkrementellen Bibliotheksscan an (`202` bei Erfolg, dedupliziert). |
+| `GET` | `/plex/search` | Schlanke Suche für `artist`, `album` und `track` inklusive GUID/Ratings. |
+| `GET` | `/plex/tracks` | Kompakte Trackliste für Matching (`title`, `track`, `guid`, `ratingKey`, `section_id`). |
 
 **Beispiel:**
 
 ```http
-GET /plex/library/sections/1/all?type=10 HTTP/1.1
+GET /plex/tracks?artist=Daft%20Punk&album=Discovery HTTP/1.1
 X-Plex-Token: <token>
 ```
 
 ```json
 {
-  "MediaContainer": {
-    "Metadata": [
-      {"ratingKey": "123", "title": "Discovery", "parentTitle": "Daft Punk"}
-    ]
-  }
+  "ok": true,
+  "data": [
+    {
+      "title": "One More Time",
+      "track": 1,
+      "guid": "plex://track/123",
+      "ratingKey": "987",
+      "section_id": 1
+    }
+  ]
 }
 ```
 

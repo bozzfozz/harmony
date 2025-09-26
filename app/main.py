@@ -107,11 +107,15 @@ async def startup_event() -> None:
         )
         await app.state.rich_metadata_worker.start()
 
+        scan_worker = ScanWorker(plex_client)
+        app.state.scan_worker = scan_worker
+
         app.state.sync_worker = SyncWorker(
             soulseek_client,
             metadata_worker=app.state.rich_metadata_worker,
             artwork_worker=app.state.artwork_worker,
             lyrics_worker=app.state.lyrics_worker,
+            scan_worker=scan_worker,
         )
         await app.state.sync_worker.start()
 
@@ -121,8 +125,7 @@ async def startup_event() -> None:
         app.state.matching_worker = MatchingWorker(matching_engine)
         await app.state.matching_worker.start()
 
-        app.state.scan_worker = ScanWorker(plex_client)
-        await app.state.scan_worker.start()
+        await scan_worker.start()
 
         app.state.playlist_worker = PlaylistSyncWorker(spotify_client)
         await app.state.playlist_worker.start()

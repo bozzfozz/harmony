@@ -1,253 +1,296 @@
-"""Extended Plex API endpoints exposed through FastAPI."""
+"""Lean Plex API router focused on matching and library scans."""
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict
+from typing import Any, Dict, Iterable, List, Optional, TYPE_CHECKING, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import JSONResponse
 
-from app.core.plex_client import PlexClient, PlexClientError
+from app.core.plex_client import (
+    PlexClient,
+    PlexClientAuthError,
+    PlexClientError,
+    PlexClientNotFoundError,
+    PlexClientRateLimitedError,
+)
 from app.dependencies import get_plex_client
 from app.logging import get_logger
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from app.workers.scan_worker import ScanWorker
+
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
+SUPPORTED_SEARCH_TYPES: set[str] = {"artist", "album", "track"}
 
-def _collect_query_params(request: Request) -> Dict[str, Any]:
-    return {key: value for key, value in request.query_params.multi_items()}
+
+def _error_response(*, status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"ok": False, "error": {"code": code, "message": message}},
+    )
+
+
+def _map_client_error(exc: PlexClientError) -> JSONResponse:
+    if isinstance(exc, PlexClientAuthError):
+        status_code = (
+            status.HTTP_401_UNAUTHORIZED
+            if exc.status_code == status.HTTP_401_UNAUTHORIZED
+            else status.HTTP_403_FORBIDDEN
+        )
+        return _error_response(
+            status_code=status_code,
+            code="AUTH_ERROR",
+            message="Authentication with Plex failed",
+        )
+    if isinstance(exc, PlexClientNotFoundError):
+        return _error_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="NOT_FOUND",
+            message="Requested Plex resource was not found",
+        )
+    if isinstance(exc, PlexClientRateLimitedError):
+        return _error_response(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="RATE_LIMITED",
+            message=str(exc),
+        )
+    return _error_response(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        code="DEPENDENCY_ERROR",
+        message=str(exc),
+    )
+
+
+def _resolve_scan_worker(request: Request) -> Optional["ScanWorker"]:
+    worker = getattr(request.app.state, "scan_worker", None)
+    if worker is None or not hasattr(worker, "request_scan"):
+        return None
+    if TYPE_CHECKING:  # pragma: no cover - not executed at runtime
+        assert isinstance(worker, ScanWorker)
+    return cast("ScanWorker", worker)
 
 
 @router.get("/status")
-async def plex_status(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
+async def plex_status(client: PlexClient = Depends(get_plex_client)) -> Any:
     try:
-        sessions = await client.get_sessions()
-        stats = await client.get_library_statistics()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Failed to query Plex status: %s", exc)
-        return {"status": "disconnected"}
-    return {"status": "connected", "sessions": sessions, "library": stats}
-
-
-@router.get("/library/sections")
-async def list_libraries(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    try:
-        params = _collect_query_params(request)
-        return await client.get_libraries(params=params or None)
+        status_payload = await client.get_status()
     except PlexClientError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-
-
-@router.get("/libraries", include_in_schema=False)
-async def list_libraries_legacy(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    """Backward compatible alias for :func:`list_libraries`."""
-
-    return await list_libraries(request, client)
-
-
-@router.get("/library/sections/{section_id}/all")
-async def browse_library(
-    section_id: str, request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    try:
-        params = _collect_query_params(request)
-        return await client.get_library_items(section_id, params=params or None)
-    except PlexClientError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-
-
-@router.get("/library/{section_id}/items", include_in_schema=False)
-async def browse_library_legacy(
-    section_id: str, request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    """Backward compatible alias for :func:`browse_library`."""
-
-    return await browse_library(section_id, request, client)
-
-
-@router.get("/library/metadata/{item_id}")
-async def fetch_metadata(
-    item_id: str, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    try:
-        return await client.get_metadata(item_id)
-    except PlexClientError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-
-
-@router.get("/metadata/{item_id}", include_in_schema=False)
-async def fetch_metadata_legacy(
-    item_id: str, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    """Backward compatible alias for :func:`fetch_metadata`."""
-
-    return await fetch_metadata(item_id, client)
-
-
-@router.get("/status/sessions")
-async def active_sessions(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
-    return await client.get_sessions()
-
-
-@router.get("/sessions", include_in_schema=False)
-async def active_sessions_legacy(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
-    """Backward compatible alias for :func:`active_sessions`."""
-
-    return await active_sessions(client)
-
-
-@router.get("/status/sessions/history/all")
-async def session_history(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    params = _collect_query_params(request)
-    return await client.get_session_history(params=params or None)
-
-
-@router.get("/history", include_in_schema=False)
-async def session_history_legacy(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    """Backward compatible alias for :func:`session_history`."""
-
-    return await session_history(request, client)
-
-
-@router.get("/timeline")
-async def get_timeline(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    params = _collect_query_params(request)
-    return await client.get_timeline(params=params or None)
-
-
-@router.post("/timeline")
-async def post_timeline(
-    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> str:
-    return await client.update_timeline(payload)
-
-
-@router.post("/scrobble")
-async def post_scrobble(
-    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> str:
-    return await client.scrobble(payload)
-
-
-@router.post("/unscrobble")
-async def post_unscrobble(
-    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> str:
-    return await client.unscrobble(payload)
-
-
-@router.get("/playlists")
-async def list_playlists(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
-    return await client.get_playlists()
-
-
-@router.post("/playlists")
-async def create_playlist(
-    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    return await client.create_playlist(payload)
-
-
-@router.put("/playlists/{playlist_id}")
-async def update_playlist(
-    playlist_id: str, payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    return await client.update_playlist(playlist_id, payload)
-
-
-@router.delete("/playlists/{playlist_id}")
-async def delete_playlist(
-    playlist_id: str, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    return await client.delete_playlist(playlist_id)
-
-
-@router.post("/playQueues")
-async def create_playqueue(
-    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    return await client.create_playqueue(payload)
-
-
-@router.get("/playQueues/{playqueue_id}")
-async def get_playqueue(
-    playqueue_id: str, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    return await client.get_playqueue(playqueue_id)
-
-
-@router.post("/rate")
-async def rate_item(payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)) -> str:
-    item_id = payload.get("key")
-    rating = payload.get("rating")
-    if not item_id or rating is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Both 'key' and 'rating' must be provided",
+        logger.warning("Plex status query failed: %s", exc)
+        return _map_client_error(exc)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected Plex status failure: %s", exc)
+        return _error_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="DEPENDENCY_ERROR",
+            message="Unable to query Plex status",
         )
-    return await client.rate_item(str(item_id), int(rating))
+
+    server_info = status_payload.get("server", {}) if isinstance(status_payload, dict) else {}
+    libraries = status_payload.get("libraries", 0) if isinstance(status_payload, dict) else 0
+    return {
+        "ok": True,
+        "server": {
+            "name": str(server_info.get("name", "unknown")),
+            "version": str(server_info.get("version", "")),
+        },
+        "libraries": int(libraries or 0),
+    }
 
 
-@router.post("/rate/{item_id}", include_in_schema=False)
-async def rate_item_legacy(
-    item_id: str, rating: int, client: PlexClient = Depends(get_plex_client)
-) -> str:
-    """Backward compatible alias for :func:`rate_item`."""
+@router.get("/libraries")
+async def plex_libraries(client: PlexClient = Depends(get_plex_client)) -> Any:
+    try:
+        payload = await client.get_libraries()
+    except PlexClientError as exc:
+        logger.warning("Listing Plex libraries failed: %s", exc)
+        return _map_client_error(exc)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected Plex library failure: %s", exc)
+        return _error_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="DEPENDENCY_ERROR",
+            message="Unable to list Plex libraries",
+        )
 
-    return await client.rate_item(item_id, rating)
+    directories: Iterable[Dict[str, Any]] = []
+    if isinstance(payload, dict):
+        container = payload.get("MediaContainer")
+        if isinstance(container, dict):
+            directory_field = container.get("Directory")
+            if isinstance(directory_field, list):
+                directories = [entry for entry in directory_field if isinstance(entry, dict)]
+
+    simplified: List[Dict[str, Any]] = []
+    for entry in directories:
+        section_id = entry.get("key")
+        title = entry.get("title")
+        section_type = entry.get("type") or entry.get("agent")
+        if section_id is None or title is None:
+            continue
+        simplified.append(
+            {
+                "section_id": str(section_id),
+                "title": str(title),
+                "type": str(section_type or "unknown"),
+            }
+        )
+
+    return {"ok": True, "data": simplified}
 
 
-@router.post("/tags/{item_id}")
-async def sync_tags(
-    item_id: str, payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    tags = {key: value for key, value in payload.items() if isinstance(value, list)}
-    return await client.sync_tags(item_id, tags)
+@router.post("/library/{section_id}/scan", status_code=status.HTTP_202_ACCEPTED)
+async def plex_trigger_scan(
+    section_id: str,
+    request: Request,
+    client: PlexClient = Depends(get_plex_client),
+) -> Any:
+    worker = _resolve_scan_worker(request)
+    try:
+        if worker is not None:
+            queued = await worker.request_scan(section_id)
+        else:
+            await client.refresh_library_section(section_id, full=False)
+            queued = True
+    except PlexClientError as exc:
+        logger.warning("Failed to trigger Plex scan for section %s: %s", section_id, exc)
+        return _map_client_error(exc)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected Plex scan error for section %s: %s", section_id, exc)
+        return _error_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="DEPENDENCY_ERROR",
+            message="Unable to trigger Plex scan",
+        )
+
+    return {"ok": True, "queued": bool(queued), "section_id": section_id}
 
 
-@router.get("/devices")
-async def list_devices(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
-    return await client.get_devices()
+@router.get("/search")
+async def plex_search(
+    q: str = Query(..., min_length=1, max_length=200),
+    type: Optional[str] = Query(None, alias="type"),
+    client: PlexClient = Depends(get_plex_client),
+) -> Any:
+    item_type: Optional[str] = None
+    if type is not None:
+        candidate = type.strip().lower()
+        if candidate not in SUPPORTED_SEARCH_TYPES:
+            return _error_response(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="VALIDATION_ERROR",
+                message="Unsupported search type",
+            )
+        item_type = candidate
+
+    mediatypes: Optional[Iterable[str]] = (item_type,) if item_type else None
+    try:
+        entries = await client.search_music(q, mediatypes=mediatypes, limit=50)
+    except PlexClientError as exc:
+        logger.warning("Plex search failed for query %s: %s", q, exc)
+        return _map_client_error(exc)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected Plex search error for query %s: %s", q, exc)
+        return _error_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="DEPENDENCY_ERROR",
+            message="Unable to query Plex search",
+        )
+
+    items: List[Dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        normalised = client.normalise_music_entry(entry)
+        normalised_type = normalised.get("type") or entry.get("type")
+        if normalised_type not in SUPPORTED_SEARCH_TYPES:
+            continue
+        section_id = entry.get("librarySectionID") or normalised.get("extra", {}).get(
+            "librarySectionID"
+        )
+        guid_value = entry.get("guid")
+        if not guid_value:
+            guid_container = entry.get("Guid")
+            if isinstance(guid_container, list) and guid_container:
+                first_guid = guid_container[0]
+                if isinstance(first_guid, dict):
+                    guid_value = first_guid.get("id")
+        if not guid_value:
+            guid_value = normalised.get("extra", {}).get("guid")
+
+        item = {
+            "type": str(normalised_type),
+            "title": str(normalised.get("title") or entry.get("title") or ""),
+            "guid": str(guid_value or ""),
+            "ratingKey": str(
+                entry.get("ratingKey") or normalised.get("extra", {}).get("ratingKey", "")
+            ),
+            "section_id": (
+                int(section_id)
+                if isinstance(section_id, (int, float))
+                else str(section_id) if section_id else None
+            ),
+        }
+        parent_title = entry.get("parentTitle") or normalised.get("album")
+        grandparent_title = entry.get("grandparentTitle")
+        if normalised_type == "album":
+            item["parentTitle"] = str(parent_title or "")
+        if normalised_type == "track":
+            item["parentTitle"] = str(parent_title or "")
+            item["grandparentTitle"] = str(
+                grandparent_title or normalised.get("artists", [""])[0] or ""
+            )
+        items.append(item)
+
+    return {"ok": True, "data": items}
 
 
-@router.get("/dvr")
-async def list_dvr(client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
-    return await client.get_dvr()
+@router.get("/tracks")
+async def plex_tracks(
+    artist: Optional[str] = Query(None, min_length=1, max_length=200),
+    album: Optional[str] = Query(None, min_length=1, max_length=200),
+    client: PlexClient = Depends(get_plex_client),
+) -> Any:
+    if not artist and not album:
+        return _error_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="VALIDATION_ERROR",
+            message="artist or album parameter required",
+        )
 
+    try:
+        tracks = await client.list_tracks(artist=artist, album=album)
+    except PlexClientError as exc:
+        logger.warning("Listing Plex tracks failed: %s", exc)
+        return _map_client_error(exc)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected Plex track lookup failure: %s", exc)
+        return _error_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="DEPENDENCY_ERROR",
+            message="Unable to list Plex tracks",
+        )
 
-@router.get("/livetv")
-async def list_live_tv(
-    request: Request, client: PlexClient = Depends(get_plex_client)
-) -> Dict[str, Any]:
-    params = _collect_query_params(request)
-    return await client.get_live_tv(params=params or None)
+    compact: List[Dict[str, Any]] = []
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        title = track.get("title")
+        rating_key = track.get("ratingKey")
+        if not title or not rating_key:
+            continue
+        compact.append(
+            {
+                "title": str(title),
+                "track": int(track.get("track", 0) or 0),
+                "guid": str(track.get("guid", "")),
+                "ratingKey": str(rating_key),
+                "section_id": track.get("section_id"),
+            }
+        )
 
-
-@router.get("/notifications")
-async def listen_notifications(client: PlexClient = Depends(get_plex_client)) -> StreamingResponse:
-    async def event_stream() -> AsyncIterator[bytes]:
-        try:
-            async with client.listen_notifications() as websocket:
-                async for message in websocket:
-                    if message.type.name == "TEXT":
-                        yield f"data: {message.data}\n\n".encode("utf-8")
-                    elif message.type.name == "ERROR":
-                        logger.error("Plex notification stream error: %s", websocket.exception())
-                        break
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error("Failed to stream Plex notifications: %s", exc)
-            yield f"event: error\ndata: {exc}\n\n".encode("utf-8")
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return {"ok": True, "data": compact}
