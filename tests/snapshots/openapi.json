@@ -3734,122 +3734,30 @@
         ]
       }
     },
-    "/plex/devices": {
+    "/plex/libraries": {
       "get": {
-        "operationId": "list_devices_plex_devices_get",
+        "operationId": "plex_libraries_plex_libraries_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Devices Plex Devices Get",
-                  "type": "object"
+                  "title": "Response Plex Libraries Plex Libraries Get"
                 }
               }
             },
             "description": "Successful Response"
           }
         },
-        "summary": "List Devices",
+        "summary": "Plex Libraries",
         "tags": [
           "Plex"
         ]
       }
     },
-    "/plex/dvr": {
-      "get": {
-        "operationId": "list_dvr_plex_dvr_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Dvr Plex Dvr Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Dvr",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/library/metadata/{item_id}": {
-      "get": {
-        "operationId": "fetch_metadata_plex_library_metadata__item_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "title": "Item Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Fetch Metadata Plex Library Metadata  Item Id  Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Fetch Metadata",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/library/sections": {
-      "get": {
-        "operationId": "list_libraries_plex_library_sections_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Libraries Plex Library Sections Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Libraries",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/library/sections/{section_id}/all": {
-      "get": {
-        "operationId": "browse_library_plex_library_sections__section_id__all_get",
+    "/plex/library/{section_id}/scan": {
+      "post": {
+        "operationId": "plex_trigger_scan_plex_library__section_id__scan_post",
         "parameters": [
           {
             "in": "path",
@@ -3862,13 +3770,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Browse Library Plex Library Sections  Section Id  All Get",
-                  "type": "object"
+                  "title": "Response Plex Trigger Scan Plex Library  Section Id  Scan Post"
                 }
               }
             },
@@ -3885,373 +3791,50 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Browse Library",
+        "summary": "Plex Trigger Scan",
         "tags": [
           "Plex"
         ]
       }
     },
-    "/plex/livetv": {
+    "/plex/search": {
       "get": {
-        "operationId": "list_live_tv_plex_livetv_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Live Tv Plex Livetv Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Live Tv",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/notifications": {
-      "get": {
-        "operationId": "listen_notifications_plex_notifications_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Listen Notifications",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/playQueues": {
-      "post": {
-        "operationId": "create_playqueue_plex_playQueues_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Playqueue Plex Playqueues Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Playqueue",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/playQueues/{playqueue_id}": {
-      "get": {
-        "operationId": "get_playqueue_plex_playQueues__playqueue_id__get",
+        "operationId": "plex_search_plex_search_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "playqueue_id",
+            "in": "query",
+            "name": "q",
             "required": true,
             "schema": {
-              "title": "Playqueue Id",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
               "type": "string"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Playqueue Plex Playqueues  Playqueue Id  Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Playqueue",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/playlists": {
-      "get": {
-        "operationId": "list_playlists_plex_playlists_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Playlists Plex Playlists Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Playlists",
-        "tags": [
-          "Plex"
-        ]
-      },
-      "post": {
-        "operationId": "create_playlist_plex_playlists_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Playlist Plex Playlists Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Playlist",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/playlists/{playlist_id}": {
-      "delete": {
-        "operationId": "delete_playlist_plex_playlists__playlist_id__delete",
-        "parameters": [
           {
-            "in": "path",
-            "name": "playlist_id",
-            "required": true,
+            "in": "query",
+            "name": "type",
+            "required": false,
             "schema": {
-              "title": "Playlist Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Playlist Plex Playlists  Playlist Id  Delete",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Playlist",
-        "tags": [
-          "Plex"
-        ]
-      },
-      "put": {
-        "operationId": "update_playlist_plex_playlists__playlist_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "playlist_id",
-            "required": true,
-            "schema": {
-              "title": "Playlist Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Playlist Plex Playlists  Playlist Id  Put",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Playlist",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/rate": {
-      "post": {
-        "operationId": "rate_item_plex_rate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Rate Item Plex Rate Post",
+              "anyOf": [
+                {
                   "type": "string"
+                },
+                {
+                  "type": "null"
                 }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Rate Item",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/scrobble": {
-      "post": {
-        "operationId": "post_scrobble_plex_scrobble_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
+              ],
+              "title": "Type"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Post Scrobble Plex Scrobble Post",
-                  "type": "string"
+                  "title": "Response Plex Search Plex Search Get"
                 }
               }
             },
@@ -4268,7 +3851,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Post Scrobble",
+        "summary": "Plex Search",
         "tags": [
           "Plex"
         ]
@@ -4282,9 +3865,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Plex Status Plex Status Get",
-                  "type": "object"
+                  "title": "Response Plex Status Plex Status Get"
                 }
               }
             },
@@ -4297,86 +3878,53 @@
         ]
       }
     },
-    "/plex/status/sessions": {
+    "/plex/tracks": {
       "get": {
-        "operationId": "active_sessions_plex_status_sessions_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Active Sessions Plex Status Sessions Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Active Sessions",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/status/sessions/history/all": {
-      "get": {
-        "operationId": "session_history_plex_status_sessions_history_all_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Session History Plex Status Sessions History All Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Session History",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/tags/{item_id}": {
-      "post": {
-        "operationId": "sync_tags_plex_tags__item_id__post",
+        "operationId": "plex_tracks_plex_tracks_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "item_id",
-            "required": true,
+            "in": "query",
+            "name": "artist",
+            "required": false,
             "schema": {
-              "title": "Item Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artist"
+            }
+          },
+          {
+            "in": "query",
+            "name": "album",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Album"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Sync Tags Plex Tags  Item Id  Post",
-                  "type": "object"
+                  "title": "Response Plex Tracks Plex Tracks Get"
                 }
               }
             },
@@ -4393,116 +3941,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Sync Tags",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/timeline": {
-      "get": {
-        "operationId": "get_timeline_plex_timeline_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Timeline Plex Timeline Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Timeline",
-        "tags": [
-          "Plex"
-        ]
-      },
-      "post": {
-        "operationId": "post_timeline_plex_timeline_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Post Timeline Plex Timeline Post",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Post Timeline",
-        "tags": [
-          "Plex"
-        ]
-      }
-    },
-    "/plex/unscrobble": {
-      "post": {
-        "operationId": "post_unscrobble_plex_unscrobble_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Payload",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Post Unscrobble Plex Unscrobble Post",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Post Unscrobble",
+        "summary": "Plex Tracks",
         "tags": [
           "Plex"
         ]

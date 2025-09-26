@@ -314,7 +314,21 @@ class StubPlexClient:
             ("1", "9"): {"MediaContainer": {"totalSize": 3, "Metadata": [{"ratingKey": "a"}]}},
             ("1", "8"): {"MediaContainer": {"totalSize": 5, "Metadata": [{"ratingKey": "t"}]}},
         }
-        self.metadata = {"100": {"title": "Test Item", "year": 2020}}
+        self.metadata = {
+            "100": {
+                "MediaContainer": {
+                    "Metadata": [
+                        {
+                            "ratingKey": "100",
+                            "title": "Test Item",
+                            "parentTitle": "Test Album",
+                            "grandparentTitle": "Test Artist",
+                            "year": 2020,
+                        }
+                    ]
+                }
+            }
+        }
         self.sessions = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Session"}]}}
         self.session_history = {"MediaContainer": {"size": 1, "Metadata": [{"title": "History"}]}}
         self.playlists = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Playlist"}]}}
@@ -329,12 +343,17 @@ class StubPlexClient:
         self.dvr = {"MediaContainer": {"Directory": [{"name": "DVR"}]}}
         self.livetv = {"MediaContainer": {"Directory": [{"name": "Channel"}]}}
         self.last_library_params: Dict[tuple[str, str], Dict[str, Any]] = {}
+        self.refresh_calls: list[tuple[str, bool]] = []
+        self.status_payload = {"server": {"name": "Stub Plex", "version": "1.0"}, "libraries": 1}
 
     async def get_sessions(self) -> Dict[str, Any]:
         return self.sessions
 
     async def get_library_statistics(self) -> Dict[str, int]:
         return {"artists": 2, "albums": 3, "tracks": 5}
+
+    async def get_status(self) -> Dict[str, Any]:
+        return dict(self.status_payload)
 
     async def get_libraries(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         return self.libraries
@@ -398,6 +417,42 @@ class StubPlexClient:
         self.tags[item_id] = tags
         return {"status": "tags-updated", "id": item_id, "tags": tags}
 
+    async def refresh_library_section(self, section_id: str, *, full: bool = False) -> None:
+        self.refresh_calls.append((section_id, full))
+
+    async def list_tracks(
+        self,
+        *,
+        artist: str | None = None,
+        album: str | None = None,
+        section_id: str | None = None,
+    ) -> list[Dict[str, Any]]:
+        section = section_id or "1"
+        payload = await self.get_library_items(section, params={"type": "10"})
+        metadata = self._extract_search_entries(payload)
+        results: list[Dict[str, Any]] = []
+        for entry in metadata:
+            if artist and entry.get("grandparentTitle") != artist:
+                continue
+            if album and entry.get("parentTitle") != album:
+                continue
+            guid_list = entry.get("Guid") or [{}]
+            guid = ""
+            if isinstance(guid_list, list) and guid_list:
+                first = guid_list[0]
+                if isinstance(first, dict):
+                    guid = first.get("id", "")
+            results.append(
+                {
+                    "title": entry.get("title"),
+                    "track": entry.get("index", 0),
+                    "guid": guid,
+                    "ratingKey": entry.get("ratingKey"),
+                    "section_id": section,
+                }
+            )
+        return results
+
     async def get_devices(self) -> Dict[str, Any]:
         return self.devices
 
@@ -408,6 +463,9 @@ class StubPlexClient:
         return self.livetv
 
     async def _default_music_section(self) -> str:
+        return "1"
+
+    async def default_music_section(self) -> str:
         return "1"
 
     @staticmethod

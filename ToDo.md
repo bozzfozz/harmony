@@ -7,6 +7,7 @@
   - Der SyncWorker verarbeitet Downloads mit persistenter Queue, Prioritäten-Handling, Backoff-Retrys und übergibt organisierte Dateien an das Dateisystem mittels `organize_file`.【F:app/workers/sync_worker.py†L36-L430】【F:app/utils/file_utils.py†L114-L191】
   - Persistente Soulseek-Retries mit Dead-Letter-Queue, Scheduler und manuellem `/soulseek/downloads/{id}/requeue`-Endpoint halten problematische Downloads sichtbar und planen Neuversuche automatisch.【F:app/workers/sync_worker.py†L36-L620】【F:app/workers/retry_scheduler.py†L1-L207】【F:app/routers/soulseek_router.py†L1-L498】
   - Artwork-Pipeline cached Spotify- und MusicBrainz/CAA-Cover pro Album, erkennt Low-Res-Embeds anhand konfigurierbarer Grenzen und ersetzt nur dann; neue ENV-Flags steuern Timeouts, Concurrency sowie den optionalen `beet write`/`beet update`-Poststep.【F:app/workers/artwork_worker.py†L1-L814】【F:app/utils/artwork_utils.py†L1-L420】【F:app/config.py†L30-L200】
+  - Plex-Integration auf Matching & Scans verschlankt (`/plex/status`, `/plex/libraries`, `/plex/library/{id}/scan`, `/plex/search`, `/plex/tracks`) inklusive deduplizierter Scan-Requests und aktualisierter Tests/Dokumentation.【F:app/routers/plex_router.py†L1-L186】【F:app/core/plex_client.py†L1-L299】【F:tests/test_plex_router.py†L1-L130】
 - **Frontend**
   - Das React-Frontend liefert geroutete Seiten für Dashboard, Downloads, Artists und Settings und nutzt einen Vite/TypeScript-Tooling-Stack inklusive Lint-, Test- und Build-Skripten.【F:frontend/src/App.tsx†L1-L25】【F:frontend/package.json†L1-L35】
 - **Tests**

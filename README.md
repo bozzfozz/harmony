@@ -8,7 +8,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
-- **Async Plex-Client** mit Zugriff auf Bibliotheken, Sessions, PlayQueues, Live-TV und Echtzeit-Benachrichtigungen.
+- **Lean Plex-Client** mit Fokus auf Status, Bibliotheksübersicht, Such- und Track-Lookups sowie schlanke Scan-Trigger.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
 - **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und Copyright, bettet Cover in höchster verfügbarer Auflösung ein und stellt die Tags per API bereit.
@@ -252,7 +252,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](docs/api.md). Die wichtigsten Gruppen im Überblick:
 
 - **Spotify** (`/spotify`): Status, Suche, Track-Details, Audio-Features, Benutzerbibliothek, Playlists, Empfehlungen.
-- **Plex** (`/plex`): Status & Statistiken, Bibliotheken, PlayQueues, Playlists, Timeline, Bewertungen, Benachrichtigungen.
+- **Plex** (`/plex`): Status, Bibliotheken, Scan-Trigger, Suche und kompakte Tracklisten.
 - **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos. Enthält `/soulseek/downloads/{id}/requeue` für manuelle Neuversuche und liefert Retry-Metadaten (`state`, `retry_count`, `next_retry_at`, `last_error`).
 - **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.

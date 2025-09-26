@@ -99,7 +99,9 @@ async def test_scan_worker_uses_incremental_and_dynamic_interval() -> None:
     plex = StubPlexClient()
     worker = ScanWorker(plex)
 
-    await worker._perform_scan()
+    assert worker._resolve_interval() == 1
+
+    await worker.request_scan("1")
 
     assert plex.refresh_calls == [("1", False)]
     assert read_setting("metrics.scan.incremental") == "1"
