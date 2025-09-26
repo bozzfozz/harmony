@@ -47,7 +47,7 @@ def _parse_iso8601(value: str) -> datetime:
         parsed = datetime.fromisoformat(candidate)
     except ValueError as exc:  # pragma: no cover - defensive validation
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid datetime parameter",
         ) from exc
     if parsed.tzinfo is not None:
@@ -391,7 +391,7 @@ def export_downloads(
     fmt = (format or "json").strip().lower()
     if fmt not in {"json", "csv"}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Unsupported export format",
         )
 

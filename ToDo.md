@@ -2,8 +2,8 @@
 
 ## ✅ Erledigt
 - **Backend**
-  - FastAPI bindet alle Spotify-, Plex-, Soulseek-, Matching-, Settings-, Beets-, Search-, Sync-, System-, Download-, Activity-, Health- und Watchlist-Router ein, initialisiert die Datenbank und setzt Default-Settings beim Start.【F:app/main.py†L60-L177】
-  - Der Startup-Hook startet die Artwork-, Lyrics-, Metadata-, Sync-, Matching-, Scan-, Playlist-, Watchlist-, AutoSync- und Discography-Worker und der Shutdown-Hook stoppt sie wieder sauber.【F:app/main.py†L76-L208】
+  - FastAPI bindet alle Spotify-, Plex-, Soulseek-, Matching-, Settings-, Beets-, Search-, Sync-, System-, Download-, Activity-, Health- und Watchlist-Router ein, initialisiert die Datenbank und setzt Default-Settings im Lifespan-Hook.【F:app/main.py†L87-L92】【F:app/main.py†L250-L269】
+  - Der Lifespan-Handler startet die Artwork-, Lyrics-, Metadata-, Sync-, Matching-, Scan-, Playlist-, Watchlist-, AutoSync- und Discography-Worker und stoppt sie über die zentralisierte Shutdown-Routine wieder sauber.【F:app/main.py†L95-L214】
   - Der SyncWorker verarbeitet Downloads mit persistenter Queue, Prioritäten-Handling, Backoff-Retrys und übergibt organisierte Dateien an das Dateisystem mittels `organize_file`.【F:app/workers/sync_worker.py†L36-L430】【F:app/utils/file_utils.py†L114-L191】
   - Persistente Soulseek-Retries mit Dead-Letter-Queue, Scheduler und manuellem `/soulseek/downloads/{id}/requeue`-Endpoint halten problematische Downloads sichtbar und planen Neuversuche automatisch.【F:app/workers/sync_worker.py†L36-L620】【F:app/workers/retry_scheduler.py†L1-L207】【F:app/routers/soulseek_router.py†L1-L498】
   - Spotify FREE-Modus mit Modusschalter, Parser und Enqueue (`/spotify/mode`, `/spotify/free/*`) inkl. Settings-Limits und FLAC-Priorisierung.【F:app/routers/spotify_router.py†L27-L55】【F:app/routers/spotify_free_router.py†L1-L357】【F:app/config.py†L15-L120】
@@ -23,19 +23,19 @@
 - **Suche**
   - Smart Search erhielt strukturierte Filter (Genre, Jahr, Qualität) inkl. Normalisierung, Ranking-Boosts und aktualisierte API-Dokumentation.【F:app/routers/search_router.py†L1-L280】【F:docs/api.md†L130-L233】
 - **Infrastruktur / CI**
-  - Die CI auf Push/PR führt `ruff`, `black --check`, `mypy app`, `pytest -q`, `npm test`, `npm run typecheck`, `npm run build` sowie den OpenAPI-Snapshot-Vergleich aus.【F:.github/workflows/ci.yml†L1-L74】
-  - Black ist auf Version 24.8.0 gepinnt und nutzt die gemeinsame `pyproject.toml`-Konfiguration für reproduzierbare Formatierungsläufe.【F:.github/workflows/ci.yml†L26-L36】【F:pyproject.toml†L1-L14】
+  - Die CI auf Push/PR führt `ruff`, `black --check`, `mypy app`, `pytest -q`, `npm test`, `npm run typecheck`, `npm run build` sowie den OpenAPI-Snapshot-Vergleich aus.【F:.github/workflows/ci.yml†L1-L95】
+  - Black ist auf Version 24.8.0 gepinnt und nutzt die gemeinsame `pyproject.toml`-Konfiguration für reproduzierbare Formatierungsläufe.【F:.github/workflows/ci.yml†L26-L35】【F:pyproject.toml†L1-L14】
+  - Bandit, Radon, Vulture und pip-audit sind als Dev-Abhängigkeiten verfügbar, per Makefile lokal aufrufbar und in der CI als verpflichtende Gates integriert; Offline-Umgebungen können die Security- und Analyse-Ziele über `CI_OFFLINE=true` gezielt überspringen.【F:requirements-dev.txt†L1-L4】【F:Makefile†L1-L36】【F:.github/workflows/ci.yml†L20-L69】【F:README.md†L196-L205】
 
 ## ⬜️ Offen
 - **Backend**
-  - FastAPI nutzt weiterhin die veralteten `@app.on_event`-Hooks für Startup/Shutdown, was Deprecation-Warnings erzeugt und auf Lifespan-Events migriert werden sollte.【F:app/main.py†L75-L201】【8a3823†L1-L34】
--  - DLQ-Einträge benötigen langfristig UI/Management (Filter, Retry, Cleanup) und Monitoring-Kennzahlen.【F:app/routers/soulseek_router.py†L180-L225】
+  - DLQ-Einträge benötigen langfristig UI/Management (Filter, Retry, Cleanup) und Monitoring-Kennzahlen.【F:app/routers/soulseek_router.py†L180-L225】
 - **Tests**
-  - Der Testlauf produziert wiederkehrende Deprecation-Warnings, die das Rauschen in der Pipeline erhöhen.【8a3823†L1-L34】
+  - Der neue Lifespan-Pfad benötigt ergänzende Tests, die Start-/Stop-Orchestrierung und fehlertolerantes Verhalten der Worker absichern.【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
 
 ## 🏁 Nächste Meilensteine
 - **Backend**
-  - Startup/Shutdown auf FastAPI-Lifespan umstellen und Warnungen eliminieren, inklusive Testabdeckung der Worker-Lifecycle-Logik.【F:app/main.py†L75-L201】【8a3823†L1-L34】
+  - Worker-Lifecycle im FastAPI-Lifespan mit gezielten Tests absichern (z. B. Fehlerpfade, wiederholte Starts).【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
   - DLQ-Downloads im Frontend visualisieren und steuerbar machen (bulk requeue, purge) inkl. Monitoring von Retry-Metriken.【F:app/workers/retry_scheduler.py†L1-L207】
-- **Tests**
-  - Deprecation-Warnings adressieren oder `-W error` aktivieren, um die Suite warning-frei zu halten.【8a3823†L1-L34】
+  - **Tests**
+    - Suite läuft warning-frei; prüfen, ob `-W error` aktiviert werden kann, um Regressionen künftig sofort zu bremsen.【09fe8d†L1-L2】

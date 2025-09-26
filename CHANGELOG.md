@@ -6,6 +6,11 @@
 
 ## v1.x.x
 
+- chore: code hygiene sweep – migrate FastAPI startup/shutdown handling to the
+  lifespan API, refresh deprecated status-code constants, and document the
+  current code-health baseline.
+- ci: add dev toolchain (bandit/radon/vulture/pip-audit) with offline fallback
+  targets and extended CI gates across security and analysis tooling.
 - fix: preserve FREE ingest partial failure details when skips occur and surface
   skip metadata (queued/failed/skipped counts, skip reason) in job status
   responses.

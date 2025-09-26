@@ -53,7 +53,7 @@ def resolve_status_filter(value: str) -> set[str]:
     states = STATUS_FILTERS.get(normalised)
     if states is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid status filter",
         )
     return states
