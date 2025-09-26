@@ -6,6 +6,9 @@
 
 ## v1.x.x
 
+- fix: offload Spotify lookups in the watchlist worker to executor threads to
+  prevent event-loop starvation and add regression coverage around the
+  cancellation-safe path.
 - chore: code hygiene sweep – migrate FastAPI startup/shutdown handling to the
   lifespan API, refresh deprecated status-code constants, and document the
   current code-health baseline.

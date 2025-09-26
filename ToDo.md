@@ -30,6 +30,8 @@
 ## ⬜️ Offen
 - **Backend**
   - DLQ-Einträge benötigen langfristig UI/Management (Filter, Retry, Cleanup) und Monitoring-Kennzahlen.【F:app/routers/soulseek_router.py†L180-L225】
+  - Watchlist-, AutoSync- und Discography-Worker auf weitere blockierende API-Calls prüfen und bei Bedarf via `asyncio.to_thread` oder dedizierte Executor kapseln.【F:app/workers/watchlist_worker.py†L101-L210】
+  - `BeetsClient.embed_artwork` benötigt einen HTTP-Timeout und defensive Size-Limits für den Download der Artwork-Datei.【F:app/core/beets_client.py†L186-L212】
 - **Tests**
   - Der neue Lifespan-Pfad benötigt ergänzende Tests, die Start-/Stop-Orchestrierung und fehlertolerantes Verhalten der Worker absichern.【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
 

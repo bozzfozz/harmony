@@ -119,7 +119,9 @@ class WatchlistWorker:
             artist.last_checked,
         )
         try:
-            albums = self._spotify.get_artist_albums(artist.spotify_artist_id)
+            albums = await asyncio.to_thread(
+                self._spotify.get_artist_albums, artist.spotify_artist_id
+            )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error(
                 "Spotify lookup failed for artist %s: %s",
@@ -140,7 +142,7 @@ class WatchlistWorker:
             if not album_id:
                 continue
             try:
-                tracks = self._spotify.get_album_tracks(album_id)
+                tracks = await asyncio.to_thread(self._spotify.get_album_tracks, album_id)
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning(
                     "Failed to fetch tracks for album %s: %s",
