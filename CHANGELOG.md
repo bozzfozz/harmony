@@ -13,3 +13,4 @@
 - Complete Discographies – gesamte Künstlerdiskografien können automatisch heruntergeladen und kategorisiert werden.
 - Automatic Lyrics – Downloads enthalten jetzt synchronisierte `.lrc`-Dateien mit Songtexten aus der Spotify-API (Fallback Musixmatch/lyrics.ovh) samt neuen Endpunkten zum Abruf und Refresh.
 - Artist Watchlist – neue Tabelle `watchlist_artists`, API-Endpunkte (`GET/POST/DELETE /watchlist`) sowie ein periodischer Worker, der neue Releases erkennt, fehlende Tracks via Soulseek lädt und an den SyncWorker übergibt. Konfigurierbar über `WATCHLIST_INTERVAL`.
+- CI-Gates – Push/PR-Workflow führt Ruff, Black, Mypy, Pytest, Jest, TypeScript-Build und einen OpenAPI-Snapshot-Vergleich aus und sorgt damit für reproduzierbare Qualitätsprüfungen.

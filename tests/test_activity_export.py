@@ -53,7 +53,7 @@ def test_activity_export_csv(client) -> None:
     assert reader.fieldnames == ["id", "timestamp", "type", "status", "details"]
     assert rows[0]["type"] == "sync"
     assert rows[0]["status"] == "completed"
-    assert rows[0]["details"] == "{\"runs\":2}"
+    assert rows[0]["details"] == '{"runs":2}'
 
 
 def test_activity_export_filters(client) -> None:

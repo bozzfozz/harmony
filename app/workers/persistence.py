@@ -1,4 +1,5 @@
 """Persistence helpers for worker job queues."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -163,9 +164,7 @@ class PersistentJobQueue:
                 return False
 
             if job.state not in {"queued", "retrying"}:
-                logger.error(
-                    "Cannot update priority for job %s in state %s", job_id, job.state
-                )
+                logger.error("Cannot update priority for job %s in state %s", job_id, job.state)
                 return False
 
             payload = dict(job.payload or {})

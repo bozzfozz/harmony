@@ -1,4 +1,5 @@
 """Worker that reconciles Spotify data with Plex and downloads missing tracks."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,7 +7,17 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, Iterable, Iterator, List, MutableMapping, Sequence
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    MutableMapping,
+    Sequence,
+)
 
 from sqlalchemy import delete, select
 
@@ -328,9 +339,7 @@ class AutoSyncWorker:
                 if downloaded:
                     try:
                         await self._retry(self._plex.get_library_statistics)
-                        record_activity(
-                            "sync", "plex_updated", details={"source": source}
-                        )
+                        record_activity("sync", "plex_updated", details={"source": source})
                     except Exception as exc:  # pragma: no cover - defensive logging
                         logger.error("Failed to refresh Plex statistics: %s", exc)
                         record_activity(
@@ -391,9 +400,7 @@ class AutoSyncWorker:
             try:
                 playlist_items = self._spotify.get_playlist_items(playlist_id)
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning(
-                    "Failed to load Spotify playlist %s: %s", playlist_id, exc
-                )
+                logger.warning("Failed to load Spotify playlist %s: %s", playlist_id, exc)
                 continue
             for item in self._iter_dicts(self._extract_collection(playlist_items, "items")):
                 track_payload = item.get("track") or item
@@ -442,9 +449,7 @@ class AutoSyncWorker:
                     self._plex.get_library_items, str(section_id), {"type": "10"}
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning(
-                    "Failed to load Plex section %s items: %s", section_id, exc
-                )
+                logger.warning("Failed to load Plex section %s items: %s", section_id, exc)
                 continue
             container_payload = (
                 payload.get("MediaContainer", {}) if isinstance(payload, dict) else {}
@@ -512,11 +517,17 @@ class AutoSyncWorker:
                 reason = "quality" if rejection == "quality" else "no_results"
                 failure_reasons.add(reason)
                 if reason == "quality":
-                    logger.info("Rejecting Soulseek candidates below %dkbps for %s", min_bitrate, query)
+                    logger.info(
+                        "Rejecting Soulseek candidates below %dkbps for %s", min_bitrate, query
+                    )
                     record_activity(
                         "sync",
                         "soulseek_low_quality",
-                        details={"source": source, "track": track.as_dict(), "min_bitrate": min_bitrate},
+                        details={
+                            "source": source,
+                            "track": track.as_dict(),
+                            "min_bitrate": min_bitrate,
+                        },
                     )
                 else:
                     logger.info("No Soulseek results for %s", query)
@@ -889,5 +900,5 @@ class AutoSyncWorker:
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("autosync")
 
-REQUIRED_CREDENTIAL_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")
 
+REQUIRED_CREDENTIAL_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")

@@ -1,4 +1,5 @@
 """Health endpoints for external service integrations."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

@@ -133,4 +133,3 @@ def test_scan_worker_updates_status(client: SimpleTestClient) -> None:
     assert stored_settings["plex_album_count"] == "3"
     assert stored_settings["plex_track_count"] == "5"
     assert "T" in stored_settings["plex_last_scan"]
-

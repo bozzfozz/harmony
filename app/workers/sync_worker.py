@@ -218,8 +218,7 @@ class SyncWorker:
             await self._put_job(job)
 
         self._worker_tasks = [
-            asyncio.create_task(self._worker_loop(index))
-            for index in range(self._concurrency)
+            asyncio.create_task(self._worker_loop(index)) for index in range(self._concurrency)
         ]
         self._poll_task = asyncio.create_task(self._poll_loop())
 
@@ -294,9 +293,7 @@ class SyncWorker:
             await self._process_job(job.payload)
         except DownloadJobError as exc:
             self._job_store.mark_failed(job.id, str(exc))
-            logger.debug(
-                "Download job %s marked as failed after scheduling retry", job.id
-            )
+            logger.debug("Download job %s marked as failed after scheduling retry", job.id)
             return
         except Exception as exc:
             self._job_store.mark_failed(job.id, str(exc))
@@ -424,9 +421,7 @@ class SyncWorker:
                             await asyncio.sleep(delay)
                         await self.enqueue(retry_job)
                     except Exception as exc:  # pragma: no cover - defensive
-                        logger.error(
-                            "Failed to enqueue retry job for %s: %s", batch, exc
-                        )
+                        logger.error("Failed to enqueue retry job for %s: %s", batch, exc)
                         for item in batch:
                             identifier = item.get("download_id")
                             if identifier is None:
@@ -506,9 +501,7 @@ class SyncWorker:
                 "download",
                 DOWNLOAD_RETRY_FAILED,
                 details={
-                    "downloads": [
-                        {"download_id": identifier} for identifier in download_ids
-                    ],
+                    "downloads": [{"download_id": identifier} for identifier in download_ids],
                     "error": str(exc),
                 },
             )
@@ -638,9 +631,7 @@ class SyncWorker:
                 try:
                     await self._client.cancel_download(str(identifier))
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning(
-                        "Failed to cancel download %s via client: %s", identifier, exc
-                    )
+                    logger.warning("Failed to cancel download %s via client: %s", identifier, exc)
             async with self._cancel_lock:
                 for identifier in to_cancel:
                     self._cancelled_downloads.discard(identifier)
@@ -649,18 +640,14 @@ class SyncWorker:
             try:
                 await self._handle_download_completion(identifier, payload)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning(
-                    "Failed to enrich metadata for download %s: %s", identifier, exc
-                )
+                logger.warning("Failed to enrich metadata for download %s: %s", identifier, exc)
 
         return active
 
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("sync")
 
-    async def _handle_download_completion(
-        self, download_id: int, payload: Dict[str, Any]
-    ) -> None:
+    async def _handle_download_completion(self, download_id: int, payload: Dict[str, Any]) -> None:
         with session_scope() as session:
             download = session.get(Download, download_id)
             if download is None:
@@ -680,9 +667,7 @@ class SyncWorker:
                     request_payload=request_payload,
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug(
-                    "Metadata worker failed for download %s: %s", download_id, exc
-                )
+                logger.debug("Metadata worker failed for download %s: %s", download_id, exc)
             else:
                 artwork_url = metadata.get("artwork_url")
 
@@ -728,9 +713,7 @@ class SyncWorker:
                             file_path = str(existing_path)
                             record.filename = file_path
                         else:
-                            payload_copy: Dict[str, Any] = dict(
-                                record.request_payload or {}
-                            )
+                            payload_copy: Dict[str, Any] = dict(record.request_payload or {})
                             nested_metadata: Dict[str, Any] = dict(
                                 payload_copy.get("metadata") or {}
                             )

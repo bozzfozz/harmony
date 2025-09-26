@@ -1,4 +1,5 @@
 """Expose the Harmony activity feed as an API endpoint."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -104,14 +105,18 @@ def _serialise_csv(events: list[ActivityEvent], payload: list[Dict[str, Any]]) -
     writer.writerow(["id", "timestamp", "type", "status", "details"])
 
     for event, entry in zip(events, payload):
-        details_str = json.dumps(entry.get("details", {}), ensure_ascii=False, separators=(",", ":"))
-        writer.writerow([
-            event.id,
-            entry.get("timestamp", ""),
-            entry.get("type", ""),
-            entry.get("status", ""),
-            details_str,
-        ])
+        details_str = json.dumps(
+            entry.get("details", {}), ensure_ascii=False, separators=(",", ":")
+        )
+        writer.writerow(
+            [
+                event.id,
+                entry.get("timestamp", ""),
+                entry.get("type", ""),
+                entry.get("status", ""),
+                details_str,
+            ]
+        )
 
     return buffer.getvalue()
 
@@ -147,5 +152,5 @@ def export_activity_history(
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -1,4 +1,5 @@
 """Background worker responsible for fetching and embedding artwork."""
+
 from __future__ import annotations
 
 import asyncio
@@ -127,11 +128,7 @@ class ArtworkWorker:
                 record = session.get(Download, download_id)
                 if record is not None:
                     payload = record.request_payload
-                    payload_mapping = (
-                        dict(payload)
-                        if isinstance(payload, Mapping)
-                        else None
-                    )
+                    payload_mapping = dict(payload) if isinstance(payload, Mapping) else None
                     download_context = DownloadContext(
                         id=record.id,
                         filename=record.filename,
@@ -282,7 +279,8 @@ class ArtworkWorker:
         context = DownloadContext(
             id=download.id if download is not None else (job.download_id or 0),
             filename=job.file_path if job.file_path else (download.filename if download else ""),
-            spotify_track_id=job.spotify_track_id or (download.spotify_track_id if download else None),
+            spotify_track_id=job.spotify_track_id
+            or (download.spotify_track_id if download else None),
             spotify_album_id=download.spotify_album_id if download else None,
             request_payload=payload or None,
         )
@@ -462,4 +460,3 @@ class ArtworkWorker:
                 download.artwork_url = artwork_url
             download.updated_at = datetime.utcnow()
             session.add(download)
-

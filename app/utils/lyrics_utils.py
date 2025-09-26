@@ -1,4 +1,5 @@
 """Utility helpers for fetching and storing synchronised lyrics."""
+
 from __future__ import annotations
 
 import base64
@@ -146,11 +147,7 @@ async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[
         logger.debug("Musixmatch response was not valid JSON for %s - %s", artist, title)
         return None
 
-    subtitle = (
-        payload.get("message", {})
-        .get("body", {})
-        .get("subtitle")
-    )
+    subtitle = payload.get("message", {}).get("body", {}).get("subtitle")
     if not isinstance(subtitle, Mapping):
         return None
 
@@ -179,9 +176,7 @@ async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[
 def _extract_track_metadata(payload: Mapping[str, Any]) -> Dict[str, Any]:
     metadata: Dict[str, Any] = {}
     metadata["title"] = _coerce_text(
-        payload.get("name")
-        or payload.get("title")
-        or payload.get("track")
+        payload.get("name") or payload.get("title") or payload.get("track")
     )
     artist = ""
     artists = payload.get("artists")
@@ -196,9 +191,7 @@ def _extract_track_metadata(payload: Mapping[str, Any]) -> Dict[str, Any]:
     if isinstance(album_payload, Mapping):
         metadata["album"] = _coerce_text(album_payload.get("name"))
     metadata["duration"] = (
-        payload.get("duration_ms")
-        or payload.get("duration")
-        or payload.get("length")
+        payload.get("duration_ms") or payload.get("duration") or payload.get("length")
     )
     return {key: value for key, value in metadata.items() if value}
 
@@ -224,7 +217,9 @@ def _extract_sync_lyrics(payload: Mapping[str, Any]) -> List[Tuple[float, str]]:
     return []
 
 
-def _resolve_field(data: Mapping[str, Any] | None, candidates: Sequence[str], *, default: str = "") -> str:
+def _resolve_field(
+    data: Mapping[str, Any] | None, candidates: Sequence[str], *, default: str = ""
+) -> str:
     if not isinstance(data, Mapping):
         return default
     for key in candidates:
@@ -277,11 +272,7 @@ def _normalise_sync_lines(data: Any) -> List[Tuple[float, str]]:
             timestamp: Optional[float] = None
             text = ""
             if isinstance(item, Mapping):
-                text = _coerce_text(
-                    item.get("text")
-                    or item.get("line")
-                    or item.get("lyrics")
-                )
+                text = _coerce_text(item.get("text") or item.get("line") or item.get("lyrics"))
                 timestamp = _coerce_timestamp(
                     item.get("time")
                     or item.get("timestamp")

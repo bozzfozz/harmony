@@ -186,9 +186,7 @@ async def test_autosync_handles_service_errors() -> None:
     activity_manager.clear()
 
     plex_client.get_libraries.side_effect = None
-    plex_client.get_library_items = AsyncMock(
-        return_value={"MediaContainer": {"Metadata": []}}
-    )
+    plex_client.get_library_items = AsyncMock(return_value={"MediaContainer": {"Metadata": []}})
     soulseek_client.search.return_value = {"results": []}
 
     await worker.run_once(source="test")
@@ -212,9 +210,7 @@ async def test_activity_feed_order() -> None:
             "results": [
                 {
                     "username": "user",
-                    "files": [
-                        {"filename": "Song Z.flac", "path": "/tmp/songz.flac"}
-                    ],
+                    "files": [{"filename": "Song Z.flac", "path": "/tmp/songz.flac"}],
                 }
             ]
         },
@@ -229,4 +225,3 @@ async def test_activity_feed_order() -> None:
     assert "plex_checked" in statuses
     assert "beets_imported" in statuses
     assert statuses[-1] == "sync_completed"
-

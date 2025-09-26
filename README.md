@@ -136,12 +136,30 @@ Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Da
 ### Tests & Builds
 
 ```bash
-npm run test    # Lokale Jest/Vitest-Tests (in CI deaktiviert)
-npm run build   # TypeScript + Vite Build
+npm test          # Jest-Suite im jsdom-Environment
+npm run typecheck # TypeScript Strict-Checks (`tsc --noEmit`)
+npm run build     # TypeScript + Vite Build
 ```
 
-> **Hinweis:** In der CI-Umgebung werden Frontend-Tests übersprungen, da dort kein Zugriff auf die npm-Registry besteht. Lokal
-> können die Tests weiterhin über Jest oder Vitest ausgeführt werden.
+> **Hinweis:** Die CI führt alle drei Befehle auf jedem Push/PR aus. Lokal hilft `npm ci`, eine saubere Umgebung analog zur
+> Pipeline zu erstellen.
+
+## Lokale Checks & CI-Gates
+
+Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
+
+```bash
+ruff check .
+black --check .
+mypy app
+pytest -q
+
+cd frontend
+npm ci
+npm test
+npm run typecheck
+npm run build
+```
 
 ### Features der UI
 

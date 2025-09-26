@@ -1,4 +1,5 @@
 """Central definitions of activity event status constants."""
+
 from __future__ import annotations
 
 AUTOSYNC_BLOCKED = "autosync_blocked"

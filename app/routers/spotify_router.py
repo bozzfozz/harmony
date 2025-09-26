@@ -1,4 +1,5 @@
 """Spotify API endpoints."""
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -246,7 +247,9 @@ def get_saved_tracks(
     client: SpotifyClient = Depends(get_spotify_client),
 ) -> SavedTracksResponse:
     saved = client.get_saved_tracks(limit=limit)
-    return SavedTracksResponse(items=saved.get("items", []), total=saved.get("total", len(saved.get("items", []))))
+    return SavedTracksResponse(
+        items=saved.get("items", []), total=saved.get("total", len(saved.get("items", [])))
+    )
 
 
 @router.put("/me/tracks", response_model=StatusResponse)

@@ -1,4 +1,5 @@
 """Settings management endpoints."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -43,15 +44,22 @@ def get_settings(session: Session = Depends(get_db)) -> SettingsResponse:
     effective_settings.update(settings_dict)
     for key in CONFIGURATION_KEYS:
         effective_settings.setdefault(key, None)
-    updated_at = max((setting.updated_at or setting.created_at for setting in settings), default=datetime.utcnow())
+    updated_at = max(
+        (setting.updated_at or setting.created_at for setting in settings),
+        default=datetime.utcnow(),
+    )
     return SettingsResponse(settings=effective_settings, updated_at=updated_at)
 
 
 @router.post("", response_model=SettingsResponse)
-def update_setting(payload: SettingsPayload, session: Session = Depends(get_db)) -> SettingsResponse:
+def update_setting(
+    payload: SettingsPayload, session: Session = Depends(get_db)
+) -> SettingsResponse:
     if not payload.key:
         raise HTTPException(status_code=400, detail="Key must not be empty")
-    setting = session.execute(select(Setting).where(Setting.key == payload.key)).scalar_one_or_none()
+    setting = session.execute(
+        select(Setting).where(Setting.key == payload.key)
+    ).scalar_one_or_none()
     now = datetime.utcnow()
 
     history_entry = SettingHistory(
@@ -75,9 +83,7 @@ def update_setting(payload: SettingsPayload, session: Session = Depends(get_db))
 @router.get("/history", response_model=SettingsHistoryResponse)
 def get_settings_history(session: Session = Depends(get_db)) -> SettingsHistoryResponse:
     history_entries = (
-        session.execute(
-            select(SettingHistory).order_by(SettingHistory.changed_at.desc()).limit(50)
-        )
+        session.execute(select(SettingHistory).order_by(SettingHistory.changed_at.desc()).limit(50))
         .scalars()
         .all()
     )
@@ -127,7 +133,9 @@ def save_artist_preferences(
         artist_id = preference.artist_id.strip()
         release_id = preference.release_id.strip()
         if not artist_id or not release_id:
-            raise HTTPException(status_code=400, detail="artist_id and release_id must not be empty")
+            raise HTTPException(
+                status_code=400, detail="artist_id and release_id must not be empty"
+            )
         key = (artist_id, release_id)
         if key in seen:
             continue

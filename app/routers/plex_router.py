@@ -1,4 +1,5 @@
 """Extended Plex API endpoints exposed through FastAPI."""
+
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict
@@ -71,7 +72,9 @@ async def browse_library_legacy(
 
 
 @router.get("/library/metadata/{item_id}")
-async def fetch_metadata(item_id: str, client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
+async def fetch_metadata(
+    item_id: str, client: PlexClient = Depends(get_plex_client)
+) -> Dict[str, Any]:
     try:
         return await client.get_metadata(item_id)
     except PlexClientError as exc:
@@ -125,17 +128,23 @@ async def get_timeline(
 
 
 @router.post("/timeline")
-async def post_timeline(payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)) -> str:
+async def post_timeline(
+    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
+) -> str:
     return await client.update_timeline(payload)
 
 
 @router.post("/scrobble")
-async def post_scrobble(payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)) -> str:
+async def post_scrobble(
+    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
+) -> str:
     return await client.scrobble(payload)
 
 
 @router.post("/unscrobble")
-async def post_unscrobble(payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)) -> str:
+async def post_unscrobble(
+    payload: Dict[str, Any], client: PlexClient = Depends(get_plex_client)
+) -> str:
     return await client.unscrobble(payload)
 
 
@@ -159,7 +168,9 @@ async def update_playlist(
 
 
 @router.delete("/playlists/{playlist_id}")
-async def delete_playlist(playlist_id: str, client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
+async def delete_playlist(
+    playlist_id: str, client: PlexClient = Depends(get_plex_client)
+) -> Dict[str, Any]:
     return await client.delete_playlist(playlist_id)
 
 
@@ -171,7 +182,9 @@ async def create_playqueue(
 
 
 @router.get("/playQueues/{playqueue_id}")
-async def get_playqueue(playqueue_id: str, client: PlexClient = Depends(get_plex_client)) -> Dict[str, Any]:
+async def get_playqueue(
+    playqueue_id: str, client: PlexClient = Depends(get_plex_client)
+) -> Dict[str, Any]:
     return await client.get_playqueue(playqueue_id)
 
 
@@ -238,4 +251,3 @@ async def listen_notifications(client: PlexClient = Depends(get_plex_client)) ->
             yield f"event: error\ndata: {exc}\n\n".encode("utf-8")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
-

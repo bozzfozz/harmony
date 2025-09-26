@@ -1,4 +1,5 @@
 """Download management endpoints for Harmony."""
+
 from __future__ import annotations
 
 import json
@@ -258,7 +259,9 @@ async def start_download(
         session.rollback()
         logger.exception("Failed to persist download request: %s", exc)
         record_activity("download", "failed", details={"reason": "persistence_error"})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to queue download") from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to queue download"
+        ) from exc
 
     job_priority = max(job_priorities or [0])
     job = {"username": payload.username, "files": job_files, "priority": job_priority}
@@ -272,7 +275,9 @@ async def start_download(
             download.updated_at = now
         session.commit()
         record_activity("download", "failed", details={"reason": "enqueue_error"})
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to enqueue download") from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to enqueue download"
+        ) from exc
 
     download_payload = [
         {
@@ -476,9 +481,7 @@ async def retry_download(
         )
 
     filesize = (
-        payload_copy.get("filesize")
-        or payload_copy.get("size")
-        or payload_copy.get("file_size")
+        payload_copy.get("filesize") or payload_copy.get("size") or payload_copy.get("file_size")
     )
     if filesize is not None:
         payload_copy.setdefault("filesize", filesize)

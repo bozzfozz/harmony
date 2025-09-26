@@ -1,4 +1,5 @@
 """Routes that manage the metadata refresh workflow."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -56,7 +57,9 @@ async def start_metadata_update(request: Request) -> dict[str, object]:
     except MetadataUpdateRunningError as exc:
         logger.warning("Metadata update already running")
         record_activity("metadata", "already_running")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Metadata update already running") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Metadata update already running"
+        ) from exc
     record_activity("metadata", "started", details={"state": state})
     return {"message": "Metadata update started", "state": state}
 
@@ -77,4 +80,3 @@ async def stop_metadata_update(request: Request) -> dict[str, object]:
     state = await worker.stop()
     record_activity("metadata", "stopped", details={"state": state})
     return {"message": "Stop signal issued", "state": state}
-

@@ -1,4 +1,5 @@
 """Utility helpers for reading and writing dynamic settings."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,9 +16,7 @@ def write_setting(key: str, value: str) -> None:
 
     now = datetime.utcnow()
     with session_scope() as session:
-        setting = (
-            session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
-        )
+        setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
         if setting is None:
             session.add(
                 Setting(
@@ -36,9 +35,7 @@ def read_setting(key: str) -> Optional[str]:
     """Return the stored value for ``key`` if present."""
 
     with session_scope() as session:
-        setting = (
-            session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
-        )
+        setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
         if setting is None:
             return None
         return setting.value
@@ -74,9 +71,7 @@ def increment_counter(key: str, *, amount: int = 1) -> int:
         return int(current) if current and current.isdigit() else 0
 
     with session_scope() as session:
-        setting = (
-            session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
-        )
+        setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
         now = datetime.utcnow()
         if setting is None:
             new_value = amount

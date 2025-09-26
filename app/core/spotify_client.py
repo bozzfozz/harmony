@@ -46,9 +46,7 @@ class SpotifyClient:
             self._client = client
         else:
             if spotipy is None:
-                raise RuntimeError(
-                    "spotipy is required for SpotifyClient but is not installed"
-                )
+                raise RuntimeError("spotipy is required for SpotifyClient but is not installed")
             if not (config.client_id and config.client_secret and config.redirect_uri):
                 raise ValueError("Spotify configuration is incomplete")
 
@@ -74,9 +72,7 @@ class SpotifyClient:
             self._respect_rate_limit()
             try:
                 return func(*args, **kwargs)
-            except (
-                SpotifyException
-            ) as exc:  # pragma: no cover - network errors are mocked in tests
+            except SpotifyException as exc:  # pragma: no cover - network errors are mocked in tests
                 status = getattr(exc, "http_status", None)
                 if status not in {429, 502, 503} or attempt == self._max_retries:
                     logger.error("Spotify API request failed", exc_info=exc)
@@ -122,9 +118,7 @@ class SpotifyClient:
         year: Optional[int] = None,
     ) -> Dict[str, Any]:
         search_query = self._build_search_query(query, genre=genre, year=year)
-        return self._execute(
-            self._client.search, q=search_query, type="track", limit=limit
-        )
+        return self._execute(self._client.search, q=search_query, type="track", limit=limit)
 
     def search_artists(
         self,
@@ -135,9 +129,7 @@ class SpotifyClient:
         year: Optional[int] = None,
     ) -> Dict[str, Any]:
         search_query = self._build_search_query(query, genre=genre, year=year)
-        return self._execute(
-            self._client.search, q=search_query, type="artist", limit=limit
-        )
+        return self._execute(self._client.search, q=search_query, type="artist", limit=limit)
 
     def search_albums(
         self,
@@ -148,9 +140,7 @@ class SpotifyClient:
         year: Optional[int] = None,
     ) -> Dict[str, Any]:
         search_query = self._build_search_query(query, genre=genre, year=year)
-        return self._execute(
-            self._client.search, q=search_query, type="album", limit=limit
-        )
+        return self._execute(self._client.search, q=search_query, type="album", limit=limit)
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
         return self._execute(self._client.current_user_playlists, limit=limit)
@@ -169,9 +159,7 @@ class SpotifyClient:
     def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
         return self._execute(self._client.playlist_items, playlist_id, limit=limit)
 
-    def add_tracks_to_playlist(
-        self, playlist_id: str, track_uris: List[str]
-    ) -> Dict[str, Any]:
+    def add_tracks_to_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
         return self._execute(self._client.playlist_add_items, playlist_id, track_uris)
 
     def get_album_details(self, album_id: str) -> Dict[str, Any]:
@@ -376,9 +364,7 @@ class SpotifyClient:
                     continue
                 seen_album_ids.add(album_id)
                 tracks_response = self.get_album_tracks(str(album_id))
-                albums.append(
-                    {"album": album, "tracks": tracks_response.get("items", [])}
-                )
+                albums.append({"album": album, "tracks": tracks_response.get("items", [])})
             if len(items) < limit:
                 break
             total = response.get("total") if isinstance(response, dict) else None
@@ -432,14 +418,10 @@ class SpotifyClient:
                     try:
                         artist_payload = self._execute(self._client.artist, artist_id)
                     except Exception as exc:  # pragma: no cover - defensive logging
-                        logger.debug(
-                            "Spotify artist lookup failed for %s: %s", artist_id, exc
-                        )
+                        logger.debug("Spotify artist lookup failed for %s: %s", artist_id, exc)
                         continue
                     artist_genres = (
-                        artist_payload.get("genres")
-                        if isinstance(artist_payload, dict)
-                        else None
+                        artist_payload.get("genres") if isinstance(artist_payload, dict) else None
                     )
                     if isinstance(artist_genres, list) and artist_genres:
                         genres = [str(item) for item in artist_genres if item]

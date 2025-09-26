@@ -1,4 +1,5 @@
 """Worker that periodically scans the Plex library."""
+
 from __future__ import annotations
 
 import asyncio
@@ -100,9 +101,7 @@ class ScanWorker:
             self._upsert_setting(session, "plex_artist_count", str(artist_count), now)
             self._upsert_setting(session, "plex_album_count", str(album_count), now)
             self._upsert_setting(session, "plex_track_count", str(track_count), now)
-            self._upsert_setting(
-                session, "plex_last_scan", now.isoformat(timespec="seconds"), now
-            )
+            self._upsert_setting(session, "plex_last_scan", now.isoformat(timespec="seconds"), now)
         duration_ms = int((time.perf_counter() - start) * 1000)
         write_setting("metrics.scan.duration_ms", str(duration_ms))
         write_setting("metrics.scan.incremental", "1" if incremental else "0")
@@ -158,14 +157,14 @@ class ScanWorker:
                 await self._client.refresh_library_section(str(section_id), full=False)
                 triggered = True
             except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("Failed to trigger incremental scan for section %s: %s", section_id, exc)
+                logger.debug(
+                    "Failed to trigger incremental scan for section %s: %s", section_id, exc
+                )
         return triggered
 
     @staticmethod
     def _upsert_setting(session, key: str, value: str, timestamp: datetime) -> None:
-        setting = session.execute(
-            select(Setting).where(Setting.key == key)
-        ).scalar_one_or_none()
+        setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
         if setting is None:
             session.add(
                 Setting(

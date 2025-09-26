@@ -1,4 +1,5 @@
 """Watchlist management endpoints."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -25,9 +26,7 @@ def list_watchlist(session: Session = Depends(get_db)) -> WatchlistListResponse:
     """Return all registered watchlist artists."""
 
     records = (
-        session.execute(
-            select(WatchlistArtist).order_by(WatchlistArtist.created_at.asc())
-        )
+        session.execute(select(WatchlistArtist).order_by(WatchlistArtist.created_at.asc()))
         .scalars()
         .all()
     )
@@ -52,9 +51,7 @@ def add_watchlist_artist(
 
     existing = (
         session.execute(
-            select(WatchlistArtist).where(
-                WatchlistArtist.spotify_artist_id == spotify_id
-            )
+            select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == spotify_id)
         )
         .scalars()
         .first()

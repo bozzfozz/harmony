@@ -1,4 +1,5 @@
 """Matching endpoints for Harmony."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
@@ -157,7 +158,9 @@ def calculate_discography_missing(
     for album_entry in albums:
         if not isinstance(album_entry, dict):
             continue
-        album_data = album_entry.get("album") if isinstance(album_entry.get("album"), dict) else album_entry
+        album_data = (
+            album_entry.get("album") if isinstance(album_entry.get("album"), dict) else album_entry
+        )
         track_entries = album_entry.get("tracks")
         if isinstance(track_entries, list):
             tracks = [track for track in track_entries if isinstance(track, dict)]
@@ -271,7 +274,9 @@ def discography_to_plex(
     )
     return DiscographyMatchingResponse(
         missing_albums=[
-            DiscographyMissingAlbum(album=item.get("album", {}), missing_tracks=item.get("missing_tracks", []))
+            DiscographyMissingAlbum(
+                album=item.get("album", {}), missing_tracks=item.get("missing_tracks", [])
+            )
             for item in missing_albums
         ],
         missing_tracks=[

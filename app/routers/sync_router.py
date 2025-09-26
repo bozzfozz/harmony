@@ -1,4 +1,5 @@
 """Routes that coordinate manual sync and aggregated search operations."""
+
 from __future__ import annotations
 
 import asyncio
@@ -167,10 +168,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
         "errors": len(errors),
     }
     if errors:
-        error_list = [
-            {"source": key, "message": value}
-            for key, value in sorted(errors.items())
-        ]
+        error_list = [{"source": key, "message": value} for key, value in sorted(errors.items())]
         record_activity(
             "sync",
             "sync_partial",
@@ -221,9 +219,7 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
 
     if "spotify" in requested_sources:
         try:
-            spotify_results = _search_spotify(
-                dependencies.get_spotify_client(), query, filters
-            )
+            spotify_results = _search_spotify(dependencies.get_spotify_client(), query, filters)
             results["spotify"] = spotify_results
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception("Spotify search failed: %s", exc)
@@ -234,9 +230,7 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
     if "plex" in requested_sources:
         plex_client = _ensure_plex_client()
         if plex_client is not None:
-            async_tasks["plex"] = asyncio.create_task(
-                _search_plex(plex_client, query, filters)
-            )
+            async_tasks["plex"] = asyncio.create_task(_search_plex(plex_client, query, filters))
         else:
             errors["plex"] = "Plex client unavailable"
             results["plex"] = []
@@ -280,10 +274,7 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
     record_activity("search", "search_completed", details=summary_details)
 
     if errors:
-        error_list = [
-            {"source": key, "message": value}
-            for key, value in sorted(errors.items())
-        ]
+        error_list = [{"source": key, "message": value} for key, value in sorted(errors.items())]
         failure_details = dict(activity_details)
         failure_details["errors"] = error_list
         record_activity("search", "search_failed", details=failure_details)
@@ -552,8 +543,7 @@ def _normalise_plex_entry(
 
     genres = _extract_plex_genres(entry)
     if filters.genre and (
-        not genres
-        or not any(_genre_matches(genre, filters.genre) for genre in genres)
+        not genres or not any(_genre_matches(genre, filters.genre) for genre in genres)
     ):
         return None
 
@@ -709,10 +699,7 @@ def _normalise_soulseek_file(
         return None
 
     identifier = (
-        file_info.get("id")
-        or file_info.get("download_id")
-        or file_info.get("filename")
-        or title
+        file_info.get("id") or file_info.get("download_id") or file_info.get("filename") or title
     )
     return {
         "id": str(identifier),
@@ -834,4 +821,3 @@ def _normalise_sources(sources: Any) -> set[str]:
 def _missing_credentials() -> dict[str, tuple[str, ...]]:
     with session_scope() as session:
         return collect_missing_credentials(session, REQUIRED_SERVICES)
-

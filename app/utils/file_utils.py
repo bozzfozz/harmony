@@ -11,9 +11,7 @@ from app.models import Download
 
 _INVALID_CHARS = re.compile(r"[^A-Za-z0-9 _.-]")
 _MULTI_SEP = re.compile(r"[\s._-]+")
-_ALBUM_PATTERN = re.compile(
-    r"^(?P<artist>.+?)\s*-\s*(?P<album>.+?)\s*-\s*(?P<rest>.+)$"
-)
+_ALBUM_PATTERN = re.compile(r"^(?P<artist>.+?)\s*-\s*(?P<album>.+?)\s*-\s*(?P<rest>.+)$")
 
 
 def sanitize_name(name: str) -> str:
@@ -82,9 +80,7 @@ def _collect_metadata(download: Download) -> Mapping[str, str]:
     return result
 
 
-def _merge_metadata(
-    target: MutableMapping[str, str], source: Mapping[str, Any]
-) -> None:
+def _merge_metadata(target: MutableMapping[str, str], source: Mapping[str, Any]) -> None:
     for key, value in source.items():
         text = _normalise_value(value)
         if not text:
@@ -123,20 +119,14 @@ def organize_file(download: Download, base_dir: Path) -> Path:
         raise FileNotFoundError(source_path)
 
     metadata = dict(_collect_metadata(download))
-    artist = (
-        _first_text(metadata, "artist", "artist_name", "artists") or "Unknown Artist"
-    )
+    artist = _first_text(metadata, "artist", "artist_name", "artists") or "Unknown Artist"
     album = (
         _first_text(metadata, "album", "album_name", "release")
         or guess_album_from_filename(source_path.name)
         or "<Unknown Album>"
     )
-    title = (
-        _first_text(metadata, "title", "track", "name") or source_path.stem or "Track"
-    )
-    disc_number = _parse_track_number(
-        _first_text(metadata, "disc_number", "discnumber", "disc")
-    )
+    title = _first_text(metadata, "title", "track", "name") or source_path.stem or "Track"
+    disc_number = _parse_track_number(_first_text(metadata, "disc_number", "discnumber", "disc"))
 
     track_number = _parse_track_number(
         _first_text(
@@ -187,9 +177,7 @@ def organize_file(download: Download, base_dir: Path) -> Path:
     counter = 0
     while temp_path.exists():
         counter += 1
-        temp_path = destination.with_name(
-            f".{destination.stem}.tmp{counter}{extension}"
-        )
+        temp_path = destination.with_name(f".{destination.stem}.tmp{counter}{extension}")
 
     moved = source_path.replace(temp_path)
     try:

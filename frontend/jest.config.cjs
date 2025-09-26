@@ -1,21 +1,20 @@
-import type { Config } from 'jest';
-
-const config: Config = {
-  preset: 'ts-jest',
+const config = {
+  preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  transform: {
-    '^.+\\.(t|j)sx?$': [
-      'ts-jest',
-      { tsconfig: '<rootDir>/tsconfig.json', useESM: true }
-    ]
-  },
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+      tsconfig: '<rootDir>/tsconfig.json'
+    }
+  },
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
   },
+  testMatch: ['**/__tests__/**/*.smoke.test.tsx'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };
 
-export default config;
+module.exports = config;

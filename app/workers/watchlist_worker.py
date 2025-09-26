@@ -1,4 +1,5 @@
 """Background worker that watches Spotify artists for new releases."""
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +38,9 @@ class WatchlistWorker:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
         self._sync = sync_worker
-        self._interval = max(float(interval_seconds or DEFAULT_INTERVAL_SECONDS), MIN_INTERVAL_SECONDS)
+        self._interval = max(
+            float(interval_seconds or DEFAULT_INTERVAL_SECONDS), MIN_INTERVAL_SECONDS
+        )
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._running = False
@@ -126,11 +129,7 @@ class WatchlistWorker:
             return
 
         last_checked = artist.last_checked
-        recent_albums = [
-            album
-            for album in albums
-            if self._is_new_release(album, last_checked)
-        ]
+        recent_albums = [album for album in albums if self._is_new_release(album, last_checked)]
         if not recent_albums:
             self._update_last_checked(artist.id)
             return
@@ -227,10 +226,7 @@ class WatchlistWorker:
 
         payload = dict(file_info)
         filename = str(
-            payload.get("filename")
-            or payload.get("name")
-            or track.get("name")
-            or "unknown"
+            payload.get("filename") or payload.get("name") or track.get("name") or "unknown"
         )
         priority = self._extract_priority(payload)
         track_id = str(track.get("id") or "").strip()

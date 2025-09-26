@@ -60,7 +60,9 @@ def test_artist_preferences_persist(client) -> None:
 
 @pytest.mark.asyncio
 async def test_autosync_respects_artist_preferences() -> None:
-    allowed = _create_track("Allowed Song", "Preferred", spotify_id="track-1", album_id="release-keep")
+    allowed = _create_track(
+        "Allowed Song", "Preferred", spotify_id="track-1", album_id="release-keep"
+    )
     blocked = _create_track("Blocked Song", "Other", spotify_id="track-2", album_id="release-skip")
 
     worker, spotify_client, plex_client, soulseek_client, beets_client = _build_worker(
@@ -70,9 +72,7 @@ async def test_autosync_respects_artist_preferences() -> None:
             "results": [
                 {
                     "username": "dj_user",
-                    "files": [
-                        {"filename": "Allowed Song.mp3", "path": "/downloads/allowed.mp3"}
-                    ],
+                    "files": [{"filename": "Allowed Song.mp3", "path": "/downloads/allowed.mp3"}],
                 }
             ]
         },

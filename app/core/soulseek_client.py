@@ -55,9 +55,7 @@ class SoulseekClient:
     async def _respect_rate_limit(self) -> None:
         async with self._lock:
             now = time.monotonic()
-            while (
-                self._timestamps and now - self._timestamps[0] > self.RATE_LIMIT_WINDOW
-            ):
+            while self._timestamps and now - self._timestamps[0] > self.RATE_LIMIT_WINDOW:
                 self._timestamps.popleft()
             if len(self._timestamps) >= self.RATE_LIMIT_COUNT:
                 wait_time = self.RATE_LIMIT_WINDOW - (now - self._timestamps[0])
@@ -75,14 +73,10 @@ class SoulseekClient:
         backoff = 0.5
         for attempt in range(1, self._max_retries + 1):
             try:
-                async with session.request(
-                    method, url, headers=headers, **kwargs
-                ) as response:
+                async with session.request(method, url, headers=headers, **kwargs) as response:
                     if response.status >= 400:
                         content = await response.text()
-                        raise SoulseekClientError(
-                            f"slskd error {response.status}: {content[:200]}"
-                        )
+                        raise SoulseekClientError(f"slskd error {response.status}: {content[:200]}")
                     if "application/json" in response.headers.get("Content-Type", ""):
                         return await response.json()
                     return await response.text()
@@ -108,9 +102,7 @@ class SoulseekClient:
         downloads = payload.get("files")
         if not isinstance(downloads, list) or not downloads:
             raise ValueError("files must be a non-empty list")
-        return await self._request(
-            "POST", f"transfers/downloads/{username}", json=downloads
-        )
+        return await self._request("POST", f"transfers/downloads/{username}", json=downloads)
 
     async def get_download_status(self) -> Dict[str, Any]:
         return await self._request("GET", "transfers/downloads")
@@ -140,9 +132,7 @@ class SoulseekClient:
         try:
             payload = await self.get_download(download_id)
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Failed to fetch download metadata for %s: %s", download_id, exc
-            )
+            logger.warning("Failed to fetch download metadata for %s: %s", download_id, exc)
             return {}
 
         metadata = payload.get("metadata") if isinstance(payload, dict) else None
@@ -155,9 +145,7 @@ class SoulseekClient:
             normalised[str(key)] = value
         return normalised
 
-    async def enqueue(
-        self, username: str, files: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def enqueue(self, username: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not username:
             raise ValueError("username is required for enqueue requests")
         if not isinstance(files, list) or not files:
@@ -202,9 +190,7 @@ class SoulseekClient:
         return await self._request("GET", f"users/{username}/browsing-status")
 
     async def user_directory(self, username: str, path: str) -> Dict[str, Any]:
-        return await self._request(
-            "GET", f"users/{username}/directory", params={"path": path}
-        )
+        return await self._request("GET", f"users/{username}/directory", params={"path": path})
 
     async def user_info(self, username: str) -> Dict[str, Any]:
         return await self._request("GET", f"users/{username}/info")
@@ -253,9 +239,7 @@ class SoulseekClient:
         return normalised
 
     @staticmethod
-    def _normalise_file(
-        username: Optional[str], file_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _normalise_file(username: Optional[str], file_info: Dict[str, Any]) -> Dict[str, Any]:
         identifier = (
             file_info.get("id")
             or file_info.get("token")
@@ -289,9 +273,7 @@ class SoulseekClient:
         audio_format = str(format_value).lower() if format_value else None
 
         duration_value = (
-            file_info.get("duration_ms")
-            or file_info.get("duration")
-            or file_info.get("length")
+            file_info.get("duration_ms") or file_info.get("duration") or file_info.get("length")
         )
         duration_ms: Optional[int] = None
         if isinstance(duration_value, (int, float)):

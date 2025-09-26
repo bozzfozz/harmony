@@ -1,4 +1,5 @@
 """Application configuration utilities for Harmony."""
+
 from __future__ import annotations
 
 import os
@@ -53,9 +54,7 @@ class AppConfig:
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
-DEFAULT_SPOTIFY_SCOPE = (
-    "user-library-read playlist-read-private playlist-read-collaborative"
-)
+DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
 
 
 def _load_settings_from_db(
@@ -187,11 +186,7 @@ def load_config() -> AppConfig:
         ),
     )
 
-    soulseek_base_env = (
-        os.getenv("SLSKD_URL")
-        or legacy_slskd_url
-        or DEFAULT_SOULSEEK_URL
-    )
+    soulseek_base_env = os.getenv("SLSKD_URL") or legacy_slskd_url or DEFAULT_SOULSEEK_URL
     soulseek = SoulseekConfig(
         base_url=_resolve_setting(
             "SLSKD_URL",
