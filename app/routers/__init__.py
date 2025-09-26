@@ -2,6 +2,7 @@ from .activity_router import router as activity_router
 from .beets_router import router as beets_router
 from .download_router import router as download_router
 from .health_router import router as health_router
+from .imports_router import router as imports_router
 from .matching_router import router as matching_router
 from .metadata_router import router as metadata_router
 from .plex_router import router as plex_router
@@ -19,6 +20,7 @@ __all__ = [
     "beets_router",
     "download_router",
     "health_router",
+    "imports_router",
     "matching_router",
     "metadata_router",
     "search_router",

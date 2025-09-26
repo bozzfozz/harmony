@@ -20,6 +20,9 @@ class SpotifyConfig:
     mode: str
     free_import_max_lines: int
     free_import_max_file_bytes: int
+    free_import_max_playlist_links: int
+    free_import_hard_cap_multiplier: int
+    free_accept_user_urls: bool
 
 
 @dataclass(slots=True)
@@ -89,7 +92,9 @@ DEFAULT_ARTWORK_FALLBACK_TIMEOUT = 12.0
 DEFAULT_ARTWORK_FALLBACK_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_SPOTIFY_MODE = "PRO"
 DEFAULT_FREE_IMPORT_MAX_LINES = 200
-DEFAULT_FREE_IMPORT_MAX_FILE_BYTES = 1_000_000
+DEFAULT_FREE_IMPORT_MAX_FILE_BYTES = 1_048_576
+DEFAULT_FREE_IMPORT_MAX_PLAYLIST_LINKS = 1_000
+DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER = 10
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -253,6 +258,24 @@ def load_config() -> AppConfig:
                 os.getenv("FREE_IMPORT_MAX_FILE_BYTES"),
                 default=DEFAULT_FREE_IMPORT_MAX_FILE_BYTES,
             ),
+        ),
+        free_import_max_playlist_links=max(
+            1,
+            _as_int(
+                os.getenv("FREE_IMPORT_MAX_PLAYLIST_LINKS"),
+                default=DEFAULT_FREE_IMPORT_MAX_PLAYLIST_LINKS,
+            ),
+        ),
+        free_import_hard_cap_multiplier=max(
+            1,
+            _as_int(
+                os.getenv("FREE_IMPORT_HARD_CAP_MULTIPLIER"),
+                default=DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER,
+            ),
+        ),
+        free_accept_user_urls=_as_bool(
+            os.getenv("FREE_ACCEPT_USER_URLS"),
+            default=False,
         ),
     )
 
