@@ -3,16 +3,38 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import pytest
 
+from app.config import ArtworkConfig, ArtworkFallbackConfig
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.sync_worker import SyncWorker
 from tests.conftest import StubSoulseekClient
+
+
+def _make_artwork_config(
+    base_dir: Path,
+    *,
+    fallback_enabled: bool = False,
+    fallback_timeout: float = 5.0,
+) -> ArtworkConfig:
+    provider = "musicbrainz" if fallback_enabled else "none"
+    return ArtworkConfig(
+        directory=str(base_dir),
+        timeout_seconds=5.0,
+        max_bytes=5 * 1024 * 1024,
+        concurrency=1,
+        fallback=ArtworkFallbackConfig(
+            enabled=fallback_enabled,
+            provider=provider,
+            timeout_seconds=fallback_timeout,
+            max_bytes=5 * 1024 * 1024,
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -33,7 +55,7 @@ async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     stored: Dict[str, Any] = {}
 
-    def fake_download(url: str, target: Path) -> Path:
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
         stored["download_url"] = url
         destination = Path(target)
         if not destination.suffix:
@@ -75,7 +97,11 @@ async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path
             self.track_calls.append(track_id)
             return {"album": {"id": "album-123"}}
 
-    worker = ArtworkWorker(spotify_client=StubSpotify(), storage_directory=tmp_path / "artwork")
+    worker = ArtworkWorker(
+        spotify_client=StubSpotify(),
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork"),
+    )
     await worker.start()
     try:
         await worker.enqueue(
@@ -92,6 +118,7 @@ async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert stored["download_url"] == "http://example.com/large.jpg"
     assert stored["embedded"] == (audio_path, stored_path)
     assert stored_path.exists()
+    assert stored_path.name.endswith("_original.jpg")
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
@@ -260,7 +287,10 @@ def test_no_artwork_found(
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
 
     async def process() -> None:
-        worker = ArtworkWorker(storage_directory=tmp_path / "artwork")
+        worker = ArtworkWorker(
+            storage_directory=tmp_path / "artwork",
+            config=_make_artwork_config(tmp_path / "artwork"),
+        )
         await worker.start()
         try:
             await worker.enqueue(download_id, str(audio_path), metadata={})
@@ -280,7 +310,7 @@ def test_no_artwork_found(
     assert response.status_code == 404
 
 
-def test_refresh_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client) -> None:
+def test_refresh_endpoint_enqueues(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client) -> None:
     audio_path = tmp_path / "refresh.mp3"
     audio_path.write_bytes(b"audio")
 
@@ -450,3 +480,184 @@ def test_artwork_endpoint_returns_image(client, tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/")
     assert response._body == b"png-bytes"
+
+
+@pytest.mark.asyncio
+async def test_fallback_disabled_no_call(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    audio_path = tmp_path / "no-fallback.mp3"
+    audio_path.write_bytes(b"audio")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    calls: List[str] = []
+
+    def fake_fetch(*_args: Any, **_kwargs: Any) -> str:
+        calls.append("fallback")
+        return "https://coverartarchive.org/release-group/xyz/front"
+
+    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", fake_fetch)
+    monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork", fallback_enabled=False),
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(
+            download_id,
+            str(audio_path),
+            metadata={"artist": "Artist", "album": "Album"},
+        )
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert calls == []
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is False
+        assert refreshed.artwork_status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_musicbrainz_fallback_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "fallback.mp3"
+    audio_path.write_bytes(b"audio")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    fallback_url = "https://coverartarchive.org/release-group/1234/front"
+    stored: Dict[str, Any] = {}
+
+    monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", lambda *_, **__: fallback_url)
+
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
+        stored["download_url"] = url
+        destination = target.with_suffix(".png")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"image-bytes")
+        return destination
+
+    def fake_embed(audio_file: Path, artwork_file: Path) -> None:
+        stored["embedded"] = (Path(audio_file), Path(artwork_file))
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
+
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork", fallback_enabled=True),
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(
+            download_id,
+            str(audio_path),
+            metadata={"artist": "Artist", "album": "Album"},
+        )
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert stored["download_url"] == fallback_url
+    audio_file, art_file = stored["embedded"]
+    assert audio_file == audio_path
+    assert art_file.name.startswith("1234")
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is True
+        assert refreshed.artwork_status == "done"
+        assert refreshed.artwork_url == fallback_url
+        assert Path(refreshed.artwork_path or "").exists()
+
+
+@pytest.mark.asyncio
+async def test_musicbrainz_fallback_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    audio_path = tmp_path / "fallback-fail.mp3"
+    audio_path.write_bytes(b"audio")
+
+    with session_scope() as session:
+        download = Download(
+            filename=str(audio_path),
+            state="completed",
+            progress=100.0,
+        )
+        session.add(download)
+        session.commit()
+        session.refresh(download)
+        download_id = download.id
+
+    fallback_url = "https://coverartarchive.org/release-group/5678/front"
+
+    monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "fetch_fallback_artwork", lambda *_, **__: fallback_url)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+
+    def raise_download(*_args: Any, **_kwargs: Any) -> Path:
+        raise RuntimeError("CAA failure")
+
+    monkeypatch.setattr(artwork_utils, "download_artwork", raise_download)
+
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=_make_artwork_config(tmp_path / "artwork", fallback_enabled=True),
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(
+            download_id,
+            str(audio_path),
+            metadata={"artist": "Artist", "album": "Album"},
+        )
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.has_artwork is False
+        assert refreshed.artwork_status == "failed"
+
+
+def test_host_allowlist_enforced(tmp_path: Path) -> None:
+    target = tmp_path / "blocked.jpg"
+    with pytest.raises(ValueError):
+        artwork_utils.download_artwork(
+            "https://untrusted.example.com/image.jpg",
+            target,
+            allowed_hosts=("coverartarchive.org",),
+        )
+
+    assert not target.exists()

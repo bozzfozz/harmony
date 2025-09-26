@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pytest
 
+from app.config import ArtworkConfig, ArtworkFallbackConfig
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
@@ -34,7 +35,7 @@ def test_download_flow_with_artwork(
     downloads: list[str] = []
     embeds: Dict[str, Any] = {}
 
-    def fake_download(url: str, target: Path) -> Path:
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
         downloads.append(url)
         destination = target.with_suffix(".jpg")
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -49,7 +50,19 @@ def test_download_flow_with_artwork(
     monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
 
     async def process() -> None:
-        worker = ArtworkWorker(storage_directory=tmp_path / "artwork")
+        config = ArtworkConfig(
+            directory=str(tmp_path / "artwork"),
+            timeout_seconds=5.0,
+            max_bytes=5 * 1024 * 1024,
+            concurrency=1,
+            fallback=ArtworkFallbackConfig(
+                enabled=False,
+                provider="none",
+                timeout_seconds=5.0,
+                max_bytes=5 * 1024 * 1024,
+            ),
+        )
+        worker = ArtworkWorker(storage_directory=tmp_path / "artwork", config=config)
         await worker.start()
         try:
             await worker.enqueue(

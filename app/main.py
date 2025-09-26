@@ -93,6 +93,7 @@ async def startup_event() -> None:
             spotify_client=spotify_client,
             plex_client=plex_client,
             soulseek_client=soulseek_client,
+            config=config.artwork,
         )
         await app.state.artwork_worker.start()
 

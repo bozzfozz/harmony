@@ -933,7 +933,7 @@ X-Plex-Token: <token>
 | `GET` | `/soulseek/user/{username}/info` | Benutzerinformationen. |
 | `GET` | `/soulseek/user/{username}/status` | Online-Status. |
 
-> **Download-Felder:** Antworten aus `/soulseek/downloads` enthalten neben Fortschritt und Pfad auch Artwork-Informationen (`artwork_status`, `artwork_path`, `has_artwork`) sowie die ermittelten Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Über diese IDs werden Cover-Dateien zwischengespeichert und später wiederverwendet.
+> **Download-Felder:** Antworten aus `/soulseek/downloads` enthalten neben Fortschritt und Pfad auch Artwork-Informationen (`artwork_status`, `artwork_path`, `has_artwork`) sowie die ermittelten Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Der Artwork-Worker cached Cover pro Spotify-Album bzw. MusicBrainz-Release-Group (`<id>_original.<ext>`) im Verzeichnis `ARTWORK_DIR`. Über `ARTWORK_FALLBACK_ENABLED` + `ARTWORK_FALLBACK_PROVIDER=musicbrainz` lässt sich ein Fallback auf MusicBrainz/CAA aktivieren (Hosts: `musicbrainz.org`, `coverartarchive.org`), Timeouts und Größenlimits sind über `ARTWORK_TIMEOUT_SEC`, `ARTWORK_MAX_BYTES`, `ARTWORK_FALLBACK_TIMEOUT_SEC`, `ARTWORK_FALLBACK_MAX_BYTES` sowie `ARTWORK_CONCURRENCY` konfigurierbar.
 
 **Beispiel:**
 
