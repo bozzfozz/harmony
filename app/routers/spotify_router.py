@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import load_config
 from app.core.spotify_client import SpotifyClient
-from app.dependencies import get_db, get_spotify_client
+from app.dependencies import get_app_config, get_db, get_spotify_client
 from app.models import Playlist
 from app.schemas import (
     ArtistReleasesResponse,
@@ -25,6 +26,7 @@ from app.schemas import (
     TrackDetailResponse,
     UserProfileResponse,
 )
+from app.utils.settings_store import write_setting
 
 router = APIRouter()
 
@@ -40,6 +42,27 @@ class PlaylistReorderPayload(BaseModel):
 
 class TrackIdsPayload(BaseModel):
     ids: List[str]
+
+
+class SpotifyModeResponse(BaseModel):
+    mode: Literal["FREE", "PRO"]
+
+
+class SpotifyModePayload(BaseModel):
+    mode: Literal["FREE", "PRO"]
+
+
+@router.get("/mode", response_model=SpotifyModeResponse)
+def get_spotify_mode() -> SpotifyModeResponse:
+    config = load_config()
+    return SpotifyModeResponse(mode=config.spotify.mode)
+
+
+@router.post("/mode")
+def update_spotify_mode(payload: SpotifyModePayload) -> dict[str, bool]:
+    write_setting("SPOTIFY_MODE", payload.mode)
+    get_app_config.cache_clear()
+    return {"ok": True}
 
 
 @router.get("/status", response_model=StatusResponse)

@@ -293,6 +293,91 @@ export const getArtistReleases = async (artistId: string): Promise<SpotifyArtist
     url: `/spotify/artist/${artistId}/releases`
   }).then((response) => response.releases ?? []);
 
+export type SpotifyMode = 'FREE' | 'PRO';
+
+export interface SpotifyModeResponse {
+  mode: SpotifyMode;
+}
+
+export const getSpotifyMode = async (): Promise<SpotifyModeResponse> =>
+  request<SpotifyModeResponse>({
+    method: 'GET',
+    url: '/spotify/mode'
+  });
+
+export const setSpotifyMode = async (mode: SpotifyMode): Promise<{ ok: boolean }> =>
+  request<{ ok: boolean }>({
+    method: 'POST',
+    url: '/spotify/mode',
+    data: { mode }
+  });
+
+export interface NormalizedTrack {
+  source: 'user';
+  kind: 'track';
+  artist: string;
+  title: string;
+  album?: string | null;
+  release_year?: number | null;
+  spotify_track_id?: string | null;
+  spotify_album_id?: string | null;
+  query: string;
+}
+
+export interface SpotifyFreeParsePayload {
+  lines: string[];
+  file_token?: string | null;
+}
+
+export interface SpotifyFreeParseResponse {
+  items: NormalizedTrack[];
+}
+
+export const parseSpotifyFreeInput = async (
+  payload: SpotifyFreeParsePayload
+): Promise<SpotifyFreeParseResponse> =>
+  request<SpotifyFreeParseResponse>({
+    method: 'POST',
+    url: '/spotify/free/parse',
+    data: payload
+  });
+
+export interface SpotifyFreeEnqueuePayload {
+  items: NormalizedTrack[];
+}
+
+export interface SpotifyFreeEnqueueResponse {
+  queued: number;
+  skipped: number;
+}
+
+export const enqueueSpotifyFreeTracks = async (
+  payload: SpotifyFreeEnqueuePayload
+): Promise<SpotifyFreeEnqueueResponse> =>
+  request<SpotifyFreeEnqueueResponse>({
+    method: 'POST',
+    url: '/spotify/free/enqueue',
+    data: payload
+  });
+
+export interface SpotifyFreeUploadPayload {
+  filename: string;
+  content: string;
+}
+
+export interface SpotifyFreeUploadResponse {
+  file_token: string;
+}
+
+export const uploadSpotifyFreeFile = async (
+  payload: SpotifyFreeUploadPayload
+): Promise<SpotifyFreeUploadResponse> =>
+  request<SpotifyFreeUploadResponse>({
+    method: 'POST',
+    url: '/spotify/free/upload',
+    data: payload
+  });
+
 export interface DownloadEntry {
   id: number | string;
   filename: string;

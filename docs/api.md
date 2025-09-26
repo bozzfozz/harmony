@@ -102,6 +102,72 @@ Die neue **Service-Verbindungen**-Karte visualisiert die Credential-Checks mit E
 
 Die Karten aktualisieren sich alle 10 Sekunden automatisch über den `/status`-Endpoint.
 
+## Spotify-Modi & FREE-Import
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `GET` | `/spotify/mode` | Liefert den aktuellen Modus (`FREE` oder `PRO`). |
+| `POST` | `/spotify/mode` | Aktualisiert den Modus. Body: `{ "mode": "FREE" }`. |
+| `POST` | `/spotify/free/upload` | Erwartet `{ "filename": "*.txt", "content": "…" }` (max. 1 MB UTF-8) und liefert ein temporäres Token. |
+| `POST` | `/spotify/free/parse` | Normalisiert Zeilen bzw. Uploads zu `NormalizedTrack[]`. |
+| `POST` | `/spotify/free/enqueue` | Erstellt Soulseek-Downloads aus den normalisierten Tracks, FLAC wird priorisiert. |
+
+**Modus abfragen:**
+
+```http
+GET /spotify/mode HTTP/1.1
+```
+
+```json
+{ "mode": "FREE" }
+```
+
+**Parser-Beispiel:**
+
+```http
+POST /spotify/free/parse HTTP/1.1
+Content-Type: application/json
+
+{
+  "lines": [
+    "Radiohead - Paranoid Android | OK Computer | 1997",
+    "Sigur Rós - Svefn-g-englar https://open.spotify.com/track/7ouMYWpwJ422jRcDASZB7P"
+  ]
+}
+```
+
+```json
+{
+  "items": [
+    {
+      "source": "user",
+      "kind": "track",
+      "artist": "Radiohead",
+      "title": "Paranoid Android",
+      "album": "OK Computer",
+      "release_year": 1997,
+      "spotify_track_id": null,
+      "spotify_album_id": null,
+      "query": "Paranoid Android Radiohead OK Computer 1997"
+    },
+    {
+      "source": "user",
+      "kind": "track",
+      "artist": "Sigur Rós",
+      "title": "Svefn-g-englar",
+      "album": null,
+      "release_year": null,
+      "spotify_track_id": "7ouMYWpwJ422jRcDASZB7P",
+      "spotify_album_id": null,
+      "query": "Svefn-g-englar Sigur Rós"
+    }
+  ]
+}
+```
+
+Ungültige Zeilen liefern `400` mit `error.details` inklusive Zeilennummer und Fehlermeldung. Die Enqueue-Antwort enthält `queued`
+und `skipped`, sodass doppelte oder unvollständige Einträge nachvollzogen werden können.
+
 ## Metadata (`/api/metadata`)
 
 | Methode | Pfad | Beschreibung |

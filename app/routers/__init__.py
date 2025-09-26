@@ -9,6 +9,7 @@ from .search_router import router as search_router
 from .settings_router import router as settings_router
 from .soulseek_router import router as soulseek_router
 from .spotify_router import router as spotify_router
+from .spotify_free_router import router as spotify_free_router
 from .sync_router import router as sync_router
 from .watchlist_router import router as watchlist_router
 from .system_router import router as system_router
@@ -25,6 +26,7 @@ __all__ = [
     "settings_router",
     "soulseek_router",
     "spotify_router",
+    "spotify_free_router",
     "sync_router",
     "system_router",
     "watchlist_router",

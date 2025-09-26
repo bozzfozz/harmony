@@ -1,6 +1,6 @@
 import { ReactNode, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { CircleDot, Download, Menu, Moon, Settings, Sun, Users } from 'lucide-react';
+import { CircleDot, Download, Menu, Moon, Music, Settings, Sun, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: CircleDot },
   { to: '/downloads', label: 'Downloads', icon: Download },
   { to: '/artists', label: 'Artists', icon: Users },
+  { to: '/spotify', label: 'Spotify', icon: Music },
   { to: '/settings', label: 'Settings', icon: Settings }
 ] as const;
 
