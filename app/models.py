@@ -282,15 +282,55 @@ class IngestItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(String(64), ForeignKey("ingest_jobs.id"), nullable=False, index=True)
-    source_type = Column(String(10), nullable=False)
+    source_type = Column(String(32), nullable=False)
     playlist_url = Column(String(2048), nullable=True)
     raw_line = Column(Text, nullable=True)
     artist = Column(String(512), nullable=True)
     title = Column(String(512), nullable=True)
     album = Column(String(512), nullable=True)
     duration_sec = Column(Integer, nullable=True)
+    spotify_track_id = Column(String(128), nullable=True, index=True)
+    spotify_album_id = Column(String(128), nullable=True, index=True)
+    isrc = Column(String(64), nullable=True)
     dedupe_hash = Column(String(64), nullable=False, index=True)
     source_fingerprint = Column(String(64), nullable=False, index=True)
     state = Column(String(32), nullable=False, default="registered", index=True)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class BackfillJob(Base):
+    __tablename__ = "backfill_jobs"
+    __table_args__ = (
+        Index("ix_backfill_jobs_state", "state"),
+        Index("ix_backfill_jobs_created_at", "created_at"),
+    )
+
+    id = Column(String(64), primary_key=True)
+    state = Column(String(32), nullable=False, default="queued")
+    requested_items = Column(Integer, nullable=False, default=0)
+    processed_items = Column(Integer, nullable=False, default=0)
+    matched_items = Column(Integer, nullable=False, default=0)
+    cache_hits = Column(Integer, nullable=False, default=0)
+    cache_misses = Column(Integer, nullable=False, default=0)
+    expanded_playlists = Column(Integer, nullable=False, default=0)
+    expanded_tracks = Column(Integer, nullable=False, default=0)
+    expand_playlists = Column(Boolean, nullable=False, default=False)
+    duration_ms = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class SpotifyCache(Base):
+    __tablename__ = "spotify_cache"
+
+    key = Column(String(512), primary_key=True)
+    track_id = Column(String(128), nullable=True)
+    album_id = Column(String(128), nullable=True)
+    expires_at = Column(DateTime, nullable=False)

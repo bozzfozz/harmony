@@ -21,6 +21,7 @@ from app.db import init_db, session_scope
 from app.logging import configure_logging, get_logger
 from app.routers import (
     activity_router,
+    backfill_router,
     beets_router,
     download_router,
     free_ingest_router,
@@ -38,10 +39,12 @@ from app.routers import (
     spotify_free_router,
     watchlist_router,
 )
+from app.services.backfill_service import BackfillService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.workers import (
     ArtworkWorker,
+    BackfillWorker,
     AutoSyncWorker,
     DiscographyWorker,
     LyricsWorker,
@@ -61,6 +64,7 @@ app = FastAPI(title="Harmony Backend", version="1.4.0")
 logger = get_logger(__name__)
 
 app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
+app.include_router(backfill_router, prefix="/spotify/backfill", tags=["Spotify Backfill"])
 app.include_router(spotify_free_router)
 app.include_router(free_ingest_router)
 app.include_router(imports_router)
@@ -136,6 +140,10 @@ async def startup_event() -> None:
         app.state.playlist_worker = PlaylistSyncWorker(spotify_client)
         await app.state.playlist_worker.start()
 
+        app.state.backfill_service = BackfillService(config.spotify, spotify_client)
+        app.state.backfill_worker = BackfillWorker(app.state.backfill_service)
+        await app.state.backfill_worker.start()
+
         interval_raw = os.getenv("WATCHLIST_INTERVAL")
         try:
             interval_seconds = float(interval_raw) if interval_raw else 86_400.0
@@ -207,6 +215,8 @@ async def shutdown_event() -> None:
     if worker := getattr(app.state, "scan_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "playlist_worker", None):
+        await worker.stop()
+    if worker := getattr(app.state, "backfill_worker", None):
         await worker.stop()
     if worker := getattr(app.state, "watchlist_worker", None):
         await worker.stop()

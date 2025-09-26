@@ -173,16 +173,44 @@ def _apply_schema_extensions(engine: Engine) -> None:
             )
 
     try:
+        ingest_columns = {column["name"] for column in inspector.get_columns("ingest_items")}
+    except Exception as exc:  # pragma: no cover - defensive logging
+        _logger.debug("Unable to inspect ingest_items table: %s", exc)
+        ingest_columns = set()
+
+    ingest_column_definitions = {
+        "spotify_track_id": "VARCHAR(128)",
+        "spotify_album_id": "VARCHAR(128)",
+        "isrc": "VARCHAR(64)",
+    }
+
+    for column_name, ddl in ingest_column_definitions.items():
+        if column_name in ingest_columns:
+            continue
+        statement = text(f"ALTER TABLE ingest_items ADD COLUMN {column_name} {ddl}")
+        try:
+            with engine.begin() as connection:
+                connection.execute(statement)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning(
+                "Failed to add column %s to ingest_items table: %s",
+                column_name,
+                exc,
+            )
+
+    try:
         tables = set(inspector.get_table_names())
     except Exception as exc:  # pragma: no cover - defensive logging
         _logger.debug("Unable to list tables: %s", exc)
         return
 
     from app.models import (  # Local import to avoid cycles
+        BackfillJob,
         ImportBatch,
         ImportSession,
         IngestItem,
         IngestJob,
+        SpotifyCache,
     )
 
     if "import_sessions" not in tables:
@@ -208,6 +236,18 @@ def _apply_schema_extensions(engine: Engine) -> None:
             IngestItem.__table__.create(bind=engine, checkfirst=True)
         except Exception as exc:  # pragma: no cover - defensive logging
             _logger.warning("Failed to create ingest_items table: %s", exc)
+
+    if "backfill_jobs" not in tables:
+        try:
+            BackfillJob.__table__.create(bind=engine, checkfirst=True)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning("Failed to create backfill_jobs table: %s", exc)
+
+    if "spotify_cache" not in tables:
+        try:
+            SpotifyCache.__table__.create(bind=engine, checkfirst=True)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning("Failed to create spotify_cache table: %s", exc)
 
 
 __all__ = [

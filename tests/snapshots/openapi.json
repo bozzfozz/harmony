@@ -123,6 +123,145 @@
         "title": "AudioFeaturesResponse",
         "type": "object"
       },
+      "BackfillJobCounts": {
+        "properties": {
+          "cache_hits": {
+            "title": "Cache Hits",
+            "type": "integer"
+          },
+          "cache_misses": {
+            "title": "Cache Misses",
+            "type": "integer"
+          },
+          "expanded_playlists": {
+            "title": "Expanded Playlists",
+            "type": "integer"
+          },
+          "expanded_tracks": {
+            "title": "Expanded Tracks",
+            "type": "integer"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "integer"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requested",
+          "processed",
+          "matched",
+          "cache_hits",
+          "cache_misses",
+          "expanded_playlists",
+          "expanded_tracks"
+        ],
+        "title": "BackfillJobCounts",
+        "type": "object"
+      },
+      "BackfillJobResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/BackfillJobCounts"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expand_playlists": {
+            "title": "Expand Playlists",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "job_id",
+          "state",
+          "counts",
+          "expand_playlists"
+        ],
+        "title": "BackfillJobResponse",
+        "type": "object"
+      },
+      "BackfillRunRequest": {
+        "properties": {
+          "expand_playlists": {
+            "default": true,
+            "title": "Expand Playlists",
+            "type": "boolean"
+          },
+          "max_items": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items"
+          }
+        },
+        "title": "BackfillRunRequest",
+        "type": "object"
+      },
+      "BackfillRunResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "job_id"
+        ],
+        "title": "BackfillRunResponse",
+        "type": "object"
+      },
       "DiscographyAlbum": {
         "properties": {
           "album": {
@@ -5853,6 +5992,89 @@
         "summary": "Get Audio Features",
         "tags": [
           "Spotify"
+        ]
+      }
+    },
+    "/spotify/backfill/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_backfill_job_spotify_backfill_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Backfill Job",
+        "tags": [
+          "Spotify Backfill"
+        ]
+      }
+    },
+    "/spotify/backfill/run": {
+      "post": {
+        "operationId": "run_backfill_spotify_backfill_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackfillRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Backfill",
+        "tags": [
+          "Spotify Backfill"
         ]
       }
     },

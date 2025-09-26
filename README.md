@@ -9,6 +9,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
+- **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.
 - **Lean Plex-Client** mit Fokus auf Status, Bibliotheksübersicht, Such- und Track-Lookups sowie schlanke Scan-Trigger.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
@@ -30,6 +31,17 @@ Im FREE-Modus stehen neben den Parser-Endpunkten (`/spotify/free/*`) auch die Fr
 - `GET /spotify/import/jobs/{job_id}` liefert den Job-Status inklusive Zählern (`registered`, `normalized`, `queued`, `failed`, `completed`) sowie Skip-Gründen.
 
 Die Web-Oberfläche bietet hierfür einen dedizierten Spotify-Screen mit Modus-Schalter, Importkarte und Job-Übersicht.
+
+### PRO Backfill & Playlist-Expansion
+
+Sobald gültige Spotify-Credentials für den PRO-Modus hinterlegt sind, lassen sich bestehende FREE-Ingest-Datensätze automatisch um Spotify-Metadaten ergänzen. Der Endpoint `POST /spotify/backfill/run` startet einen asynchronen Job (Payload z. B. `{ "max_items": 2000, "expand_playlists": true }`) und liefert sofort eine `202`-Antwort mit Job-ID. Der Fortschritt und aggregierte Kennzahlen (`processed`, `matched`, `cache_hits`, `expanded_playlists`, `expanded_tracks`) können über `GET /spotify/backfill/jobs/{id}` abgefragt werden.
+
+Der Backfill vergleicht Künstler/Titel/Album sowie die vorhandene Dauer (±2 Sekunden) mit der Spotify-Suche, berücksichtigt vorhandene ISRCs und nutzt ein persistentes Cache-Table (`spotify_cache`), um wiederholte Anfragen zu vermeiden. Playlist-Links (`ingest_items.source_type='LINK'`) werden optional expandiert: Der Worker ruft die Spotify-Playlist ab, legt pro Track einen neuen `ingest_item` mit `source_type='PRO_PLAYLIST_EXPANSION'` an und markiert den ursprünglichen Link-Eintrag als abgeschlossen.
+
+Das Verhalten lässt sich über zwei Umgebungsvariablen konfigurieren:
+
+- `BACKFILL_MAX_ITEMS` (Default `2000`): Obergrenze je Job für zu prüfende Ingest-Tracks.
+- `BACKFILL_CACHE_TTL_SEC` (Default `604800` = 7 Tage): Gültigkeitsdauer des `(artist,title,album)` → `spotify_track_id`-Caches.
 
 ## Smart Search
 
