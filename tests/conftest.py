@@ -96,8 +96,16 @@ class StubSpotifyClient:
         *,
         genre: str | None = None,
         year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> Dict[str, Any]:
-        self.last_requests["tracks"] = {"query": query, "genre": genre, "year": year}
+        self.last_requests["tracks"] = {
+            "query": query,
+            "genre": genre,
+            "year": year,
+            "year_from": year_from,
+            "year_to": year_to,
+        }
         return {"tracks": {"items": list(self.tracks.values())}}
 
     def search_artists(
@@ -107,8 +115,16 @@ class StubSpotifyClient:
         *,
         genre: str | None = None,
         year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> Dict[str, Any]:
-        self.last_requests["artists"] = {"query": query, "genre": genre, "year": year}
+        self.last_requests["artists"] = {
+            "query": query,
+            "genre": genre,
+            "year": year,
+            "year_from": year_from,
+            "year_to": year_to,
+        }
         return {"artists": {"items": [{"id": "artist-1", "name": "Tester", "genres": ["rock"]}]}}
 
     def search_albums(
@@ -118,8 +134,16 @@ class StubSpotifyClient:
         *,
         genre: str | None = None,
         year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> Dict[str, Any]:
-        self.last_requests["albums"] = {"query": query, "genre": genre, "year": year}
+        self.last_requests["albums"] = {
+            "query": query,
+            "genre": genre,
+            "year": year,
+            "year_from": year_from,
+            "year_to": year_to,
+        }
         return {"albums": {"items": [self.albums["album-1"]]}}
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
@@ -437,8 +461,11 @@ class StubPlexClient:
         section_id: str | None = None,
         mediatypes: Sequence[str] | None = None,
         limit: int = 50,
+        genre: str | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> list[Dict[str, Any]]:
-        del query, limit
+        del query, limit, genre, year_from, year_to
         section = section_id or "1"
         types = mediatypes or ("track", "album", "artist")
         results: list[Dict[str, Any]] = []
@@ -533,11 +560,23 @@ class StubSoulseekClient:
                 ],
             }
         ]
+        self.last_search_payload: Dict[str, Any] | None = None
 
     async def get_download_status(self) -> Dict[str, Any]:
         return {"downloads": list(self.downloads.values())}
 
-    async def search(self, query: str) -> Dict[str, Any]:
+    async def search(
+        self,
+        query: str,
+        *,
+        min_bitrate: int | None = None,
+        format_priority: Sequence[str] | None = None,
+    ) -> Dict[str, Any]:
+        self.last_search_payload = {
+            "query": query,
+            "min_bitrate": min_bitrate,
+            "format_priority": list(format_priority) if format_priority else None,
+        }
         matches: list[Dict[str, Any]] = []
         query_lower = query.lower()
         for result in self.search_results:

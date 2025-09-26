@@ -2,129 +2,56 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 SourceLiteral = Literal["spotify", "plex", "soulseek"]
 ItemTypeLiteral = Literal["track", "album", "artist"]
-SortByLiteral = Literal["relevance", "bitrate", "year", "duration"]
-SortOrderLiteral = Literal["asc", "desc"]
-
-
-class SearchFilters(BaseModel):
-    """Filter options that may be applied to search results."""
-
-    types: Optional[List[ItemTypeLiteral]] = Field(
-        default=None,
-        description="Restrict results to specific item types.",
-    )
-    genres: Optional[List[str]] = Field(
-        default=None, description="One or more genres to match (case-insensitive)."
-    )
-    year_range: Optional[Tuple[Optional[int], Optional[int]]] = Field(
-        default=None,
-        description="Inclusive year range, expressed as [min, max].",
-    )
-    duration_ms: Optional[Tuple[Optional[int], Optional[int]]] = Field(
-        default=None,
-        description="Inclusive duration range in milliseconds.",
-    )
-    explicit: Optional[bool] = Field(
-        default=None,
-        description="Whether to include only explicit or clean tracks (Spotify only).",
-    )
-    min_bitrate: Optional[int] = Field(
-        default=None, ge=0, description="Minimum accepted bitrate in kbps."
-    )
-    preferred_formats: Optional[List[str]] = Field(
-        default=None,
-        description="Preferred audio file formats (used to boost relevance).",
-    )
-    username: Optional[str] = Field(
-        default=None,
-        description="Restrict Soulseek matches to a specific username.",
-    )
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    @field_validator("types", mode="before")
-    @classmethod
-    def _normalise_types(cls, value: Optional[Sequence[str]]) -> Optional[List[ItemTypeLiteral]]:
-        if value in (None, "", []):
-            return None
-        filtered: list[ItemTypeLiteral] = []
-        for entry in value:
-            if not entry:
-                continue
-            lowered = str(entry).strip().lower()
-            if lowered in {"track", "album", "artist"}:
-                filtered.append(lowered)  # type: ignore[arg-type]
-        return filtered or None
-
-    @field_validator("genres", "preferred_formats", mode="before")
-    @classmethod
-    def _normalise_list(cls, value: Optional[Sequence[str]]) -> Optional[List[str]]:
-        if value in (None, ""):
-            return None
-        normalised = [str(item).strip() for item in value if str(item).strip()]
-        return normalised or None
-
-    @field_validator("year_range", "duration_ms", mode="before")
-    @classmethod
-    def _validate_range(
-        cls, value: Optional[Sequence[Optional[int]]]
-    ) -> Optional[Tuple[Optional[int], Optional[int]]]:
-        if value in (None, ""):
-            return None
-        if not isinstance(value, Sequence) or len(value) != 2:
-            raise ValueError("Range filters must contain exactly two values")
-        start_raw, end_raw = value[0], value[1]
-        start = int(start_raw) if start_raw not in {None, ""} else None
-        end = int(end_raw) if end_raw not in {None, ""} else None
-        if start is not None and end is not None and start > end:
-            raise ValueError("Range start must be less than or equal to range end")
-        return (start, end)
-
-    @field_validator("username")
-    @classmethod
-    def _strip_username(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        stripped = value.strip()
-        return stripped or None
-
-
-class SearchSort(BaseModel):
-    """Sorting configuration for search results."""
-
-    by: SortByLiteral = Field(default="relevance")
-    order: SortOrderLiteral = Field(default="desc")
-
-
-class SearchPagination(BaseModel):
-    """Pagination options for the search endpoint."""
-
-    page: int = Field(default=1, ge=1)
-    size: int = Field(default=25, ge=1, le=100)
+SearchTypeLiteral = Literal["track", "album", "artist", "mixed"]
 
 
 class SearchRequest(BaseModel):
-    """Incoming payload for the unified search endpoint."""
+    """Schema describing the smart search payload."""
 
-    query: str = Field(..., description="Free-text search query.")
-    sources: Optional[List[SourceLiteral]] = Field(
-        default=None,
-        description="Explicit set of sources to query. Defaults to all sources.",
+    query: str = Field(..., description="Free-text search query")
+    type: SearchTypeLiteral = Field(
+        default="mixed", description="Result type filter (artist/album/track/mixed)"
     )
-    filters: SearchFilters = Field(default_factory=SearchFilters)
-    sort: SearchSort = Field(default_factory=SearchSort)
-    pagination: SearchPagination = Field(default_factory=SearchPagination)
+    sources: List[SourceLiteral] = Field(
+        default_factory=lambda: ["spotify", "plex", "soulseek"],
+        description="Sources to query",
+    )
+    genre: Optional[str] = Field(
+        default=None,
+        description="Optional genre filter (case-insensitive, diacritic agnostic)",
+    )
+    year_from: Optional[int] = Field(
+        default=None,
+        ge=1900,
+        le=2099,
+        description="Lower bound of the release year (inclusive)",
+    )
+    year_to: Optional[int] = Field(
+        default=None,
+        ge=1900,
+        le=2099,
+        description="Upper bound of the release year (inclusive)",
+    )
+    min_bitrate: Optional[int] = Field(
+        default=None, ge=0, description="Minimum acceptable bitrate in kbps"
+    )
+    format_priority: Optional[List[str]] = Field(
+        default=None,
+        description="Preferred audio formats used for secondary sorting",
+    )
+    limit: int = Field(default=25, ge=1, description="Maximum number of items to return")
+    offset: int = Field(default=0, ge=0, description="Offset for pagination")
 
     @field_validator("query")
     @classmethod
-    def _validate_query(cls, value: str) -> str:
+    def _ensure_query(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
             raise ValueError("Query must not be empty")
@@ -132,52 +59,85 @@ class SearchRequest(BaseModel):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def _normalise_sources(cls, value: Optional[Sequence[str]]) -> Optional[List[SourceLiteral]]:
+    def _normalise_sources(cls, value: Optional[Sequence[str]]) -> List[SourceLiteral]:
         if value in (None, "", []):
-            return None
+            return ["spotify", "plex", "soulseek"]
         normalised: list[SourceLiteral] = []
         for entry in value:
             if not entry:
                 continue
             lowered = str(entry).strip().lower()
-            if lowered in {"spotify", "plex", "soulseek"}:
+            if lowered in {"spotify", "plex", "soulseek"} and lowered not in normalised:
                 normalised.append(lowered)  # type: ignore[arg-type]
-        return normalised or None
+        return normalised or ["spotify", "plex", "soulseek"]
+
+    @field_validator("genre")
+    @classmethod
+    def _strip_genre(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("format_priority", mode="before")
+    @classmethod
+    def _normalise_formats(cls, value: Optional[Sequence[str]]) -> Optional[List[str]]:
+        if value in (None, ""):
+            return None
+        normalised: list[str] = []
+        for entry in value:
+            if not entry:
+                continue
+            formatted = str(entry).strip()
+            if not formatted:
+                continue
+            normalised.append(formatted.upper())
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for item in normalised:
+            if item not in seen:
+                seen.add(item)
+                ordered.append(item)
+        return ordered or None
+
+    @field_validator("year_to")
+    @classmethod
+    def _validate_year_range(cls, year_to: Optional[int], info: ValidationInfo) -> Optional[int]:
+        year_from = info.data.get("year_from") if info.data else None
+        if year_from is not None and year_to is not None and year_from > year_to:
+            raise ValueError("year_from must be less than or equal to year_to")
+        return year_to
 
 
 class SearchItem(BaseModel):
-    """Normalised search item returned by the unified search endpoint."""
+    """Normalised search result entry."""
 
-    id: str
     type: ItemTypeLiteral
+    id: str
     source: SourceLiteral
     title: str
-    artists: List[str] = Field(default_factory=list)
+    artist: Optional[str] = None
     album: Optional[str] = None
     year: Optional[int] = None
-    duration_ms: Optional[int] = None
+    genres: List[str] = Field(default_factory=list)
     bitrate: Optional[int] = None
     format: Optional[str] = None
-    explicit: Optional[bool] = None
-    score: float = 0.0
-    genres: List[str] = Field(default_factory=list)
-    extra: Dict[str, Any] = Field(default_factory=dict)
+    score: float = Field(default=0.0, ge=0.0, le=1.0)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("score")
+    @field_validator("metadata", mode="before")
     @classmethod
-    def _clamp_score(cls, value: float) -> float:
-        if value < 0.0:
-            return 0.0
-        if value > 1.0:
-            return 1.0
-        return round(value, 4)
+    def _ensure_metadata(cls, value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if value is None:
+            return {}
+        return value
 
 
 class SearchResponse(BaseModel):
-    """Response envelope for the unified search endpoint."""
+    """Envelope returned by the smart search endpoint."""
 
-    page: int
-    size: int
+    ok: bool = True
     total: int
+    limit: int
+    offset: int
     items: List[SearchItem]
-    errors: Optional[Dict[str, str]] = None

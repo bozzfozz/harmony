@@ -100,6 +100,8 @@ class SpotifyClient:
         *,
         genre: Optional[str] = None,
         year: Optional[int] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
     ) -> str:
         terms = [query]
         if genre:
@@ -107,6 +109,13 @@ class SpotifyClient:
             terms.append(term)
         if year is not None:
             terms.append(f"year:{year}")
+        elif year_from is not None or year_to is not None:
+            if year_from is not None and year_to is not None:
+                terms.append(f"year:{year_from}-{year_to}")
+            elif year_from is not None:
+                terms.append(f"year:{year_from}-")
+            elif year_to is not None:
+                terms.append(f"year:-{year_to}")
         return " ".join(term for term in terms if term)
 
     def search_tracks(
@@ -116,8 +125,12 @@ class SpotifyClient:
         *,
         genre: Optional[str] = None,
         year: Optional[int] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
     ) -> Dict[str, Any]:
-        search_query = self._build_search_query(query, genre=genre, year=year)
+        search_query = self._build_search_query(
+            query, genre=genre, year=year, year_from=year_from, year_to=year_to
+        )
         return self._execute(self._client.search, q=search_query, type="track", limit=limit)
 
     def search_artists(
@@ -127,8 +140,12 @@ class SpotifyClient:
         *,
         genre: Optional[str] = None,
         year: Optional[int] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
     ) -> Dict[str, Any]:
-        search_query = self._build_search_query(query, genre=genre, year=year)
+        search_query = self._build_search_query(
+            query, genre=genre, year=year, year_from=year_from, year_to=year_to
+        )
         return self._execute(self._client.search, q=search_query, type="artist", limit=limit)
 
     def search_albums(
@@ -138,8 +155,12 @@ class SpotifyClient:
         *,
         genre: Optional[str] = None,
         year: Optional[int] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
     ) -> Dict[str, Any]:
-        search_query = self._build_search_query(query, genre=genre, year=year)
+        search_query = self._build_search_query(
+            query, genre=genre, year=year, year_from=year_from, year_to=year_to
+        )
         return self._execute(self._client.search, q=search_query, type="album", limit=limit)
 
     def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
