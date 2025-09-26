@@ -6,7 +6,7 @@ import asyncio
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import aiohttp
 
@@ -91,8 +91,18 @@ class SoulseekClient:
         if self._session_owner and self._session and not self._session.closed:
             await self._session.close()
 
-    async def search(self, query: str) -> Dict[str, Any]:
-        payload = {"searchText": query, "filterResponses": True}
+    async def search(
+        self,
+        query: str,
+        *,
+        min_bitrate: Optional[int] = None,
+        format_priority: Sequence[str] | None = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"searchText": query, "filterResponses": True}
+        if min_bitrate is not None:
+            payload["minBitrate"] = int(min_bitrate)
+        if format_priority:
+            payload["preferredFormats"] = list(format_priority)
         return await self._request("POST", "searches", json=payload)
 
     async def download(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -271,6 +281,18 @@ class SoulseekClient:
         if not format_value and filename:
             format_value = Path(filename).suffix.lstrip(".")
         audio_format = str(format_value).lower() if format_value else None
+        if not audio_format and filename:
+            lowered = filename.lower()
+            for marker, resolved in (
+                ("flac", "flac"),
+                ("alac", "alac"),
+                ("wav", "wav"),
+                ("aiff", "aiff"),
+                ("aac", "aac"),
+            ):
+                if marker in lowered:
+                    audio_format = resolved
+                    break
 
         duration_value = (
             file_info.get("duration_ms") or file_info.get("duration") or file_info.get("length")
@@ -303,6 +325,16 @@ class SoulseekClient:
             size = int(size_value)
         else:
             size = None
+
+        if bitrate is None:
+            if audio_format in {"flac", "alac", "wav", "aiff"}:
+                bitrate = 1000
+            elif filename:
+                lowered = filename.lower()
+                if "320" in lowered:
+                    bitrate = 320
+                elif "256" in lowered:
+                    bitrate = 256
 
         return {
             "id": item_id,

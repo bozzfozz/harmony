@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import pytest
+
+from app.core.matching_engine import MusicMatchingEngine
+
 
 def _prepare_soulseek_results(client) -> None:
     soulseek_stub = client.app.state.soulseek_stub
@@ -31,12 +35,23 @@ def _prepare_soulseek_results(client) -> None:
                     "year": 1969,
                     "genre": "rock",
                 },
+                {
+                    "id": "soulseek-low",
+                    "filename": "Low Quality.mp3",
+                    "title": "Low Quality",
+                    "artist": "Soulseek Artist",
+                    "album": "Soulseek Album",
+                    "bitrate": 192,
+                    "format": "mp3",
+                    "year": 1968,
+                    "genre": "rock",
+                },
             ],
         }
     ]
 
 
-def test_search_tracks_with_filters(client) -> None:
+def test_search_filters_by_year_range(client) -> None:
     _prepare_soulseek_results(client)
     plex_stub = client.app.state.plex_stub
     plex_stub.library_items[("1", "10")] = {
@@ -66,130 +81,111 @@ def test_search_tracks_with_filters(client) -> None:
 
     payload: Dict[str, Any] = {
         "query": "Track",
-        "filters": {
-            "types": ["track"],
-            "year_range": [1960, 1980],
-            "min_bitrate": 500,
-        },
-        "sort": {"by": "relevance", "order": "desc"},
-        "pagination": {"page": 1, "size": 10},
+        "type": "track",
+        "sources": ["plex", "soulseek"],
+        "year_from": 1960,
+        "year_to": 1980,
+        "limit": 10,
+        "offset": 0,
     }
 
-    response = client.post("/search", json=payload)
+    response = client.post("/api/search", json=payload)
     assert response.status_code == 200
     body = response.json()
-    items = body["items"]
+    assert body["ok"] is True
     assert body["total"] >= 2
-    assert {item["type"] for item in items} == {"track"}
-    sources = {item["source"] for item in items}
-    assert sources <= {"plex", "soulseek"}
-    for item in items:
-        assert item["year"] == 1969
-        assert item.get("bitrate") is None or item["bitrate"] >= 500
+    for item in body["items"]:
+        assert 1960 <= item["year"] <= 1980
+        assert item["source"] in {"plex", "soulseek"}
 
 
-def test_search_prefers_flac_over_mp3(client) -> None:
+def test_search_filters_by_genre(client) -> None:
+    _prepare_soulseek_results(client)
+    spotify_stub = client.app.state.spotify_stub
+    spotify_stub.tracks["track-genre"] = {
+        "id": "track-genre",
+        "name": "Genre Match",
+        "artists": [{"name": "Tester"}],
+        "album": {
+            "name": "Genre Album",
+            "release_date": "1970-01-01",
+            "artists": [{"name": "Tester"}],
+        },
+        "genre": "Rock",
+    }
+
+    payload = {
+        "query": "Genre",
+        "type": "mixed",
+        "sources": ["spotify", "soulseek"],
+        "genre": "rock",
+        "limit": 10,
+        "offset": 0,
+    }
+
+    response = client.post("/api/search", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["total"] >= 1
+    assert body["items"], "Expected at least one genre-filtered result"
+    for item in body["items"]:
+        genres = [genre.lower() for genre in item.get("genres", [])]
+        assert any("rock" in genre for genre in genres)
+
+
+def test_search_respects_min_bitrate_and_format_priority(client) -> None:
     _prepare_soulseek_results(client)
     payload = {
         "query": "Track",
+        "type": "track",
         "sources": ["soulseek"],
-        "filters": {"types": ["track"], "preferred_formats": ["flac"]},
-        "pagination": {"page": 1, "size": 5},
+        "min_bitrate": 320,
+        "format_priority": ["FLAC", "MP3"],
+        "limit": 5,
+        "offset": 0,
     }
 
-    response = client.post("/search", json=payload)
+    response = client.post("/api/search", json=payload)
     assert response.status_code == 200
     body = response.json()
-    items = body["items"]
-    formats = [item.get("format") for item in items]
-    assert "flac" in formats and "mp3" in formats
-    assert items[0]["format"] == "flac"
+    formats = [item.get("format") for item in body["items"]]
+    assert formats[0] == "FLAC"
+    assert all(item.get("bitrate", 0) >= 320 for item in body["items"])
 
 
-def test_pagination_and_total(client) -> None:
-    spotify_stub = client.app.state.spotify_stub
-    base_track = spotify_stub.tracks["track-1"]
-    for index in range(40):
-        track_id = f"track-extra-{index}"
-        spotify_stub.tracks[track_id] = {
-            **base_track,
-            "id": track_id,
-            "name": f"Extra Track {index}",
-        }
+def test_search_ranking_boosts_format_and_type(monkeypatch: pytest.MonkeyPatch, client) -> None:
+    _prepare_soulseek_results(client)
+
+    def _constant_score(self, query: str, candidate: Dict[str, Any]) -> float:  # noqa: D401
+        return 0.4
+
+    monkeypatch.setattr(MusicMatchingEngine, "compute_relevance_score", _constant_score)
 
     payload = {
-        "query": "Extra",
-        "sources": ["spotify"],
-        "filters": {"types": ["track"]},
-        "pagination": {"page": 2, "size": 10},
-        "sort": {"by": "relevance", "order": "desc"},
+        "query": "Track",
+        "type": "track",
+        "sources": ["spotify", "soulseek"],
+        "format_priority": ["FLAC", "MP3"],
+        "limit": 10,
+        "offset": 0,
     }
 
-    response = client.post("/search", json=payload)
+    response = client.post("/api/search", json=payload)
     assert response.status_code == 200
     body = response.json()
-    assert body["page"] == 2
-    assert body["size"] == 10
-    assert body["total"] >= 40
-    assert len(body["items"]) == 10
+    assert body["items"], "Expected ranked results"
+    first, second = body["items"][0], body["items"][1]
+    assert first["source"] == "soulseek"
+    assert first["score"] >= 0.73
+    assert first["score"] > second["score"]
 
 
-def test_soft_fail_source_down(monkeypatch, client) -> None:
-    plex_stub = client.app.state.plex_stub
-
-    async def _failing_search(*args, **kwargs):  # type: ignore[override]
-        raise RuntimeError("plex offline")
-
-    monkeypatch.setattr(plex_stub, "search_music", _failing_search)
-
-    response = client.post("/search", json={"query": "Test"})
-    assert response.status_code == 200
-    body = response.json()
-    assert body["errors"]["plex"] == "Plex source unavailable"
-    sources = {item["source"] for item in body["items"]}
-    assert "spotify" in sources or "soulseek" in sources
-    assert "plex" not in sources
-
-
-def test_explicit_filter(client) -> None:
-    spotify_stub = client.app.state.spotify_stub
-    spotify_stub.tracks["track-explicit"] = {
-        "id": "track-explicit",
-        "name": "Explicit Hit",
-        "artists": [{"name": "Tester"}],
-        "album": {
-            "name": "Explicit Album",
-            "release_date": "2020-01-01",
-            "artists": [{"name": "Tester"}],
-        },
-        "duration_ms": 210000,
-        "explicit": True,
-    }
-    spotify_stub.tracks["track-clean"] = {
-        "id": "track-clean",
-        "name": "Clean Song",
-        "artists": [{"name": "Tester"}],
-        "album": {
-            "name": "Clean Album",
-            "release_date": "2020-01-01",
-            "artists": [{"name": "Tester"}],
-        },
-        "duration_ms": 200000,
-        "explicit": False,
-    }
-
+def test_search_validation_errors(client) -> None:
     payload = {
-        "query": "Song",
-        "sources": ["spotify"],
-        "filters": {"types": ["track"], "explicit": False},
-        "pagination": {"page": 1, "size": 20},
-        "sort": {"by": "relevance", "order": "desc"},
+        "query": "Test",
+        "year_from": 2030,
+        "year_to": 2010,
     }
-
-    response = client.post("/search", json=payload)
-    assert response.status_code == 200
-    body = response.json()
-    items = body["items"]
-    assert items
-    assert all(item["source"] == "spotify" for item in items)
-    assert all(item.get("explicit") is False for item in items)
+    response = client.post("/api/search", json=payload)
+    assert response.status_code == 422

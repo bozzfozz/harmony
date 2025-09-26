@@ -1159,174 +1159,8 @@
         "title": "SearchFilterPayload",
         "type": "object"
       },
-      "SearchFilters": {
-        "description": "Filter options that may be applied to search results.",
-        "properties": {
-          "duration_ms": {
-            "anyOf": [
-              {
-                "maxItems": 2,
-                "minItems": 2,
-                "prefixItems": [
-                  {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Inclusive duration range in milliseconds.",
-            "title": "Duration Ms"
-          },
-          "explicit": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Whether to include only explicit or clean tracks (Spotify only).",
-            "title": "Explicit"
-          },
-          "genres": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "One or more genres to match (case-insensitive).",
-            "title": "Genres"
-          },
-          "min_bitrate": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Minimum accepted bitrate in kbps.",
-            "title": "Min Bitrate"
-          },
-          "preferred_formats": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Preferred audio file formats (used to boost relevance).",
-            "title": "Preferred Formats"
-          },
-          "types": {
-            "anyOf": [
-              {
-                "items": {
-                  "enum": [
-                    "track",
-                    "album",
-                    "artist"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Restrict results to specific item types.",
-            "title": "Types"
-          },
-          "username": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Restrict Soulseek matches to a specific username.",
-            "title": "Username"
-          },
-          "year_range": {
-            "anyOf": [
-              {
-                "maxItems": 2,
-                "minItems": 2,
-                "prefixItems": [
-                  {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                ],
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Inclusive year range, expressed as [min, max].",
-            "title": "Year Range"
-          }
-        },
-        "title": "SearchFilters",
-        "type": "object"
-      },
       "SearchItem": {
-        "description": "Normalised search item returned by the unified search endpoint.",
+        "description": "Normalised search result entry.",
         "properties": {
           "album": {
             "anyOf": [
@@ -1339,12 +1173,16 @@
             ],
             "title": "Album"
           },
-          "artists": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Artists",
-            "type": "array"
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist"
           },
           "bitrate": {
             "anyOf": [
@@ -1356,33 +1194,6 @@
               }
             ],
             "title": "Bitrate"
-          },
-          "duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Ms"
-          },
-          "explicit": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Explicit"
-          },
-          "extra": {
-            "additionalProperties": true,
-            "title": "Extra",
-            "type": "object"
           },
           "format": {
             "anyOf": [
@@ -1406,8 +1217,15 @@
             "title": "Id",
             "type": "string"
           },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
           "score": {
             "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Score",
             "type": "number"
           },
@@ -1446,51 +1264,17 @@
           }
         },
         "required": [
-          "id",
           "type",
+          "id",
           "source",
           "title"
         ],
         "title": "SearchItem",
         "type": "object"
       },
-      "SearchPagination": {
-        "description": "Pagination options for the search endpoint.",
-        "properties": {
-          "page": {
-            "default": 1,
-            "minimum": 1.0,
-            "title": "Page",
-            "type": "integer"
-          },
-          "size": {
-            "default": 25,
-            "maximum": 100.0,
-            "minimum": 1.0,
-            "title": "Size",
-            "type": "integer"
-          }
-        },
-        "title": "SearchPagination",
-        "type": "object"
-      },
       "SearchResponse": {
-        "description": "Response envelope for the unified search endpoint.",
+        "description": "Envelope returned by the smart search endpoint.",
         "properties": {
-          "errors": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errors"
-          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SearchItem"
@@ -1498,13 +1282,18 @@
             "title": "Items",
             "type": "array"
           },
-          "page": {
-            "title": "Page",
+          "limit": {
+            "title": "Limit",
             "type": "integer"
           },
-          "size": {
-            "title": "Size",
+          "offset": {
+            "title": "Offset",
             "type": "integer"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
           },
           "total": {
             "title": "Total",
@@ -1512,39 +1301,12 @@
           }
         },
         "required": [
-          "page",
-          "size",
           "total",
+          "limit",
+          "offset",
           "items"
         ],
         "title": "SearchResponse",
-        "type": "object"
-      },
-      "SearchSort": {
-        "description": "Sorting configuration for search results.",
-        "properties": {
-          "by": {
-            "default": "relevance",
-            "enum": [
-              "relevance",
-              "bitrate",
-              "year",
-              "duration"
-            ],
-            "title": "By",
-            "type": "string"
-          },
-          "order": {
-            "default": "desc",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "title": "Order",
-            "type": "string"
-          }
-        },
-        "title": "SearchSort",
         "type": "object"
       },
       "ServiceHealthResponse": {
@@ -2445,31 +2207,12 @@
         "type": "object"
       },
       "app__schemas_search__SearchRequest": {
-        "description": "Incoming payload for the unified search endpoint.",
+        "description": "Schema describing the smart search payload.",
         "properties": {
-          "filters": {
-            "$ref": "#/components/schemas/SearchFilters"
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/SearchPagination"
-          },
-          "query": {
-            "description": "Free-text search query.",
-            "title": "Query",
-            "type": "string"
-          },
-          "sort": {
-            "$ref": "#/components/schemas/SearchSort"
-          },
-          "sources": {
+          "format_priority": {
             "anyOf": [
               {
                 "items": {
-                  "enum": [
-                    "spotify",
-                    "plex",
-                    "soulseek"
-                  ],
                   "type": "string"
                 },
                 "type": "array"
@@ -2478,8 +2221,105 @@
                 "type": "null"
               }
             ],
-            "description": "Explicit set of sources to query. Defaults to all sources.",
-            "title": "Sources"
+            "description": "Preferred audio formats used for secondary sorting",
+            "title": "Format Priority"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional genre filter (case-insensitive, diacritic agnostic)",
+            "title": "Genre"
+          },
+          "limit": {
+            "default": 25,
+            "description": "Maximum number of items to return",
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "min_bitrate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum acceptable bitrate in kbps",
+            "title": "Min Bitrate"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset for pagination",
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Free-text search query",
+            "title": "Query",
+            "type": "string"
+          },
+          "sources": {
+            "description": "Sources to query",
+            "items": {
+              "enum": [
+                "spotify",
+                "plex",
+                "soulseek"
+              ],
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "type": {
+            "default": "mixed",
+            "description": "Result type filter (artist/album/track/mixed)",
+            "enum": [
+              "track",
+              "album",
+              "artist",
+              "mixed"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "maximum": 2099.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lower bound of the release year (inclusive)",
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "maximum": 2099.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upper bound of the release year (inclusive)",
+            "title": "Year To"
           }
         },
         "required": [
@@ -4665,48 +4505,6 @@
         "summary": "Post Unscrobble",
         "tags": [
           "Plex"
-        ]
-      }
-    },
-    "/search": {
-      "post": {
-        "description": "Aggregate search results across all configured music sources.",
-        "operationId": "unified_search_search_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/app__schemas_search__SearchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SearchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Unified Search",
-        "tags": [
-          "Search"
         ]
       }
     },

@@ -235,6 +235,9 @@ class PlexClient:
         section_id: str | None = None,
         mediatypes: Sequence[str] | None = None,
         limit: int = 50,
+        genre: str | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> List[Dict[str, Any]]:
         """Search the Plex music library for artists, albums or tracks."""
 
@@ -245,6 +248,15 @@ class PlexClient:
         params: Dict[str, Any] = {"query": query, "sort": "titleSort:asc"}
         if limit:
             params["limit"] = max(int(limit), 1)
+        if genre:
+            params["genre"] = genre
+        if year_from is not None or year_to is not None:
+            if year_from is not None and year_to is not None:
+                params["year"] = f"{year_from}-{year_to}"
+            elif year_from is not None:
+                params["year"] = f">={year_from}"
+            elif year_to is not None:
+                params["year"] = f"<={year_to}"
 
         type_codes: list[str] = []
         for mediatype in mediatypes or []:

@@ -133,7 +133,7 @@ POST /api/metadata/update HTTP/1.1
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
 | `POST` | `/api/sync` | Startet einen manuellen Playlist-/Bibliotheksabgleich inkl. AutoSyncWorker (liefert `503` + `sync_blocked`, wenn Zugangsdaten fehlen). |
-| `POST` | `/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) mit Filtern, Sortierung & Paging aus. |
+| `POST` | `/api/search` | Führt eine Quell-übergreifende Suche (Spotify/Plex/Soulseek) mit strukturierten Filtern, Normalisierung & Ranking aus. |
 | `GET` | `/api/downloads` | Listet Downloads mit `?limit`, `?offset`, optional `?all=true` sowie Status-Filter `?status=queued|running|completed|failed|cancelled`. |
 | `GET` | `/api/download/{id}` | Liefert Status, Fortschritt sowie Zeitstempel eines Downloads. |
 | `POST` | `/api/download` | Persistiert Downloads und übergibt sie an den Soulseek-Worker (liefert `503` + `download_blocked` ohne Soulseek-Credentials). |
@@ -144,83 +144,104 @@ POST /api/metadata/update HTTP/1.1
 | `GET` | `/api/activity` | Liefert die persistente Activity History (Paging + Filter). |
 | `GET` | `/api/activity/export` | Exportiert die Activity History als JSON- oder CSV-Datei inkl. optionaler Filter. |
 
-### Aggregierte Suche (`POST /search`)
+### Aggregierte Suche (`POST /api/search`)
 
 **Request-Body**
 
 ```json
 {
   "query": "radiohead",
+  "type": "mixed",
   "sources": ["spotify", "plex", "soulseek"],
-  "filters": {
-    "types": ["artist", "album", "track"],
-    "genres": ["rock", "alternative"],
-    "year_range": [1990, 2025],
-    "duration_ms": [0, 600000],
-    "explicit": null,
-    "min_bitrate": 256,
-    "preferred_formats": ["flac", "alac", "mp3"],
-    "username": null
-  },
-  "sort": {"by": "relevance", "order": "desc"},
-  "pagination": {"page": 1, "size": 25}
+  "genre": "art rock",
+  "year_from": 1990,
+  "year_to": 2024,
+  "min_bitrate": 320,
+  "format_priority": ["FLAC", "ALAC", "AAC"],
+  "limit": 25,
+  "offset": 0
 }
 ```
 
-- `query` (Pflicht): Freitext, wird automatisch beschnitten.
-- `sources` (optional): Teilmenge von `spotify`, `plex`, `soulseek`. Fehlt das Feld, durchsucht Harmony alle Quellen.
-- `filters` (optional): Objekt mit `types`, `genres`, `year_range`, `duration_ms`, `explicit`, `min_bitrate`, `preferred_formats`, `username`.
-- `sort` (optional): Objekt mit `by` (`relevance`, `bitrate`, `year`, `duration`) und `order` (`asc` oder `desc`).
-- `pagination` (optional): Seite (`page` ≥ 1) und Seitengröße (`size` 1–100).
+- `query` (Pflicht): Freitext, wird vor Verarbeitung beschnitten.
+- `type`: `track`, `album`, `artist` oder `mixed` (Default).
+- `sources`: Teilmenge von `spotify`, `plex`, `soulseek` (Default: alle Quellen).
+- `genre`: Case-insensitive Filter (Diakritika werden ignoriert).
+- `year_from` / `year_to`: Inklusive Jahresbereich (`1900`–`2099`).
+- `min_bitrate`: Mindestbitrate in kbps (berücksichtigt nur bekannte Werte).
+- `format_priority`: Reihenfolge bevorzugter Formate als sekundäre Sortierung.
+- `limit`: Anzahl Treffer (Default `25`, maximal `SEARCH_MAX_LIMIT`, standardmäßig `100`).
+- `offset`: Startindex fürs Paging (Default `0`).
 
 **Antwortstruktur**
 
 ```json
 {
-  "page": 1,
-  "size": 25,
+  "ok": true,
   "total": 73,
+  "limit": 25,
+  "offset": 0,
   "items": [
     {
-      "id": "spotify:track:...",
       "type": "track",
+      "id": "spotify:track:...",
       "source": "spotify",
       "title": "Weird Fishes/Arpeggi",
-      "artists": ["Radiohead"],
+      "artist": "Radiohead",
       "album": "In Rainbows",
       "year": 2007,
-      "duration_ms": 308000,
+      "genres": ["Art Rock", "Alternative"],
       "bitrate": null,
       "format": null,
       "score": 0.94,
-      "extra": {
-        "spotify_album_id": "...",
-        "spotify_artist_ids": ["..."]
+      "metadata": {
+        "raw": {"popularity": 78, "uri": "spotify:track:..."},
+        "artists": ["Radiohead"]
       }
     },
     {
-      "id": "soulseek:file:abcdef",
       "type": "track",
+      "id": "soulseek:file:abcdef",
       "source": "soulseek",
       "title": "Weird Fishes",
-      "artists": ["Radiohead"],
+      "artist": "Radiohead",
       "album": "In Rainbows (Deluxe)",
       "year": 2007,
-      "duration_ms": 307000,
+      "genres": ["Rock"],
       "bitrate": 320,
-      "format": "mp3",
+      "format": "MP3",
       "score": 0.88,
-      "extra": {
-        "username": "user123",
-        "path": "Radiohead/Weird Fishes.mp3",
-        "size": 9423921
+      "metadata": {
+        "raw": {
+          "username": "user123",
+          "path": "Radiohead/Weird Fishes.mp3",
+          "size": 9423921
+        }
       }
     }
   ]
 }
 ```
 
-Die Liste `results` vereinheitlicht die Daten aller Quellen. Qualitätsfilter schließen automatisch alle Treffer ohne Angabe von Format/Bitrate aus (Spotify liefert bei aktivem Qualitätsfilter keine Ergebnisse). Genre- und Jahresfilter greifen nachgelagert auf Basis der gelieferten Metadaten. Das Feld `errors` ist optional und enthält pro Quelle eine Fehlermeldung, falls einzelne Dienste nicht erreichbar waren.
+- `ok`: `false`, wenn mindestens eine Quelle nicht verfügbar war (Daten werden trotzdem geliefert).
+- `total`: Treffer nach Filtern/Ranking vor Paging (serverseitige Obergrenze `1000`).
+- `items`: Normalisierte Treffer mit Score sowie Rohdaten (`metadata.raw`).
+
+**Ranking & Filterung**
+
+- Basisscore: Fuzzy-Relevanz des Matching-Engines.
+- Boosts: Format (`FLAC` +0,15, `ALAC` +0,12, `AAC`/`OGG` +0,03), Bitrate (`≥1000` kbps +0,1, `≥320` kbps +0,05, `≥256` kbps +0,02), Typ-Match bei gesetztem `type` (+0,1) sowie Jahr im gewünschten Intervall (+0,05).
+- Format-Prioritäten wirken als sekundärer Sortierschlüssel (nach Score, vor Bitrate/Jahr).
+- Bitrate-Filter schließen nur Einträge mit bekannter Bitrate < Mindestwert aus; unbekannte Werte bleiben enthalten.
+- Genre-Filter nutzen diakritikunabhängige `contains`-Matches.
+
+**Fehlerfälle**
+
+- Validierungsfehler (`422`): z. B. `year_from > year_to` oder ungültiger `type`.
+- `DEPENDENCY_ERROR` (`503`): Alle Quellen fehlgeschlagen (Antwort enthält `{ "ok": false, "code": "DEPENDENCY_ERROR", "errors": {"spotify": "timeout"} }`).
+- `INTERNAL_ERROR` (`500`): Unerwarteter Serverfehler.
+
+
 
 > **Hinweis:** Die in diesem Dokument verwendeten Statusnamen für Activity-Events sind zentral in `app/utils/events.py` hinterlegt und werden von Routern, Workern und Tests gemeinsam genutzt.
 
