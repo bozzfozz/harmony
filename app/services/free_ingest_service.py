@@ -102,6 +102,10 @@ class JobStatus:
     accepted: IngestAccepted
     skipped: IngestSkipped
     error: Optional[str]
+    queued_tracks: int
+    failed_tracks: int
+    skipped_tracks: int
+    skip_reason: Optional[str]
 
 
 class FreeIngestService:
@@ -208,6 +212,8 @@ class FreeIngestService:
             total_tracks=total_tracks,
             queued_tracks=queued_tracks,
             failed_tracks=failed_tracks,
+            skipped_tracks=skipped_tracks,
+            skip_reason=skip_reason,
             error=job_note,
         )
 
@@ -282,11 +288,18 @@ class FreeIngestService:
                 tracks=int(track_total),
                 batches=batches,
             )
+            skipped_tracks_total = int(job.skipped_tracks or 0)
+            skip_reason = None
+            stored_error = job.error
+            error_message, skip_reason = self._split_error_and_skip_reason(job.state, stored_error)
             skipped = IngestSkipped(
                 playlists=int(job.skipped_playlists or 0),
-                tracks=int(job.skipped_tracks or 0),
-                reason=job.error if job.state != IngestJobState.FAILED.value else None,
+                tracks=skipped_tracks_total,
+                reason=skip_reason,
             )
+
+            queued_tracks = int(counts.queued + counts.completed)
+            failed_tracks = counts.failed
 
             return JobStatus(
                 id=job.id,
@@ -294,7 +307,11 @@ class FreeIngestService:
                 counts=counts,
                 accepted=accepted,
                 skipped=skipped,
-                error=job.error,
+                error=error_message,
+                queued_tracks=queued_tracks,
+                failed_tracks=failed_tracks,
+                skipped_tracks=skipped_tracks_total,
+                skip_reason=skip_reason,
             )
 
     # Playlist helpers -----------------------------------------------------
@@ -572,6 +589,8 @@ class FreeIngestService:
         total_tracks: int,
         queued_tracks: int,
         failed_tracks: int,
+        skipped_tracks: int,
+        skip_reason: str | None,
         error: str | None,
     ) -> None:
         if total_tracks == 0:
@@ -582,19 +601,52 @@ class FreeIngestService:
             final_error = error
         elif queued_tracks > 0:
             final_state = IngestJobState.COMPLETED
-            final_error = error or f"partial queued={queued_tracks} failed={failed_tracks}"
+            final_error = f"partial queued={queued_tracks} failed={failed_tracks}"
         else:
             final_state = IngestJobState.FAILED
-            final_error = error or "no_tracks_queued"
+            final_error = error or f"failed={failed_tracks}"
 
-        self._update_job_state(job_id, final_state, error=final_error)
+        stored_error = final_error
+        if skip_reason and final_error and skip_reason != final_error:
+            stored_error = f"{final_error}||skip_reason={skip_reason}"
+        elif skip_reason and not final_error:
+            stored_error = skip_reason
+
+        self._update_job_state(job_id, final_state, error=stored_error)
         logger.info(
-            "event=ingest_completed source=FREE job_id=%s state=%s queued=%s failed=%s",
+            "event=ingest_completed source=FREE job_id=%s state=%s queued=%s failed=%s skipped=%s skip_reason=%s",
             job_id,
             final_state.value,
             queued_tracks,
             failed_tracks,
+            skipped_tracks,
+            skip_reason,
         )
+
+    @staticmethod
+    def _split_error_and_skip_reason(
+        job_state: str, stored_error: str | None
+    ) -> tuple[Optional[str], Optional[str]]:
+        if stored_error is None:
+            return None, None
+
+        text = stored_error.strip()
+        if not text:
+            return None, None
+
+        skip_reason: Optional[str] = None
+        message: Optional[str] = text
+
+        if "||skip_reason=" in text:
+            base, _, skip = text.partition("||skip_reason=")
+            message = base.strip() or None
+            skip = skip.strip()
+            skip_reason = skip or None
+        else:
+            if job_state != IngestJobState.FAILED.value and not text.startswith("partial "):
+                skip_reason = text
+
+        return message, skip_reason
 
     # Queue helpers --------------------------------------------------------
 
