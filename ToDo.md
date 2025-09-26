@@ -6,6 +6,7 @@
   - Der Startup-Hook startet die Artwork-, Lyrics-, Metadata-, Sync-, Matching-, Scan-, Playlist-, Watchlist-, AutoSync- und Discography-Worker und der Shutdown-Hook stoppt sie wieder sauber.【F:app/main.py†L84-L201】
   - Der SyncWorker verarbeitet Downloads mit persistenter Queue, Prioritäten-Handling, Backoff-Retrys und übergibt organisierte Dateien an das Dateisystem mittels `organize_file`.【F:app/workers/sync_worker.py†L36-L409】【F:app/utils/file_utils.py†L118-L203】
   - Persistente Soulseek-Retries mit Dead-Letter-Queue, Scheduler und manuellem `/soulseek/downloads/{id}/requeue`-Endpoint halten problematische Downloads sichtbar und planen Neuversuche automatisch.【F:app/workers/sync_worker.py†L36-L520】【F:app/workers/retry_scheduler.py†L1-L207】【F:app/routers/soulseek_router.py†L16-L225】
+  - Artwork-Pipeline cached Spotify- und MusicBrainz/CAA-Cover pro Album, respektiert Timeouts/Size-Limits und bettet Bilder direkt in die Audiodateien ein; neue ENV-Flags steuern Cache, Concurrency und Fallback.【F:app/workers/artwork_worker.py†L1-L373】【F:app/utils/artwork_utils.py†L1-L267】【F:app/config.py†L31-L161】
 - **Frontend**
   - Das React-Frontend liefert geroutete Seiten für Dashboard, Downloads, Artists und Settings und nutzt einen Vite/TypeScript-Tooling-Stack inklusive Lint-, Test- und Build-Skripten.【F:frontend/src/App.tsx†L1-L25】【F:frontend/package.json†L1-L35】
 - **Tests**

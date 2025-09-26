@@ -43,18 +43,66 @@ class DatabaseConfig:
 
 
 @dataclass(slots=True)
+class ArtworkFallbackConfig:
+    enabled: bool
+    provider: str
+    timeout_seconds: float
+    max_bytes: int
+
+
+@dataclass(slots=True)
+class ArtworkConfig:
+    directory: str
+    timeout_seconds: float
+    max_bytes: int
+    concurrency: int
+    fallback: ArtworkFallbackConfig
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     plex: PlexConfig
     soulseek: SoulseekConfig
     logging: LoggingConfig
     database: DatabaseConfig
+    artwork: ArtworkConfig
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
+DEFAULT_ARTWORK_DIR = "./artwork"
+DEFAULT_ARTWORK_TIMEOUT = 15.0
+DEFAULT_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
+DEFAULT_ARTWORK_CONCURRENCY = 2
+DEFAULT_ARTWORK_FALLBACK_TIMEOUT = 12.0
+DEFAULT_ARTWORK_FALLBACK_MAX_BYTES = 10 * 1024 * 1024
+
+
+def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _as_int(value: Optional[str], *, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Optional[str], *, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _load_settings_from_db(
@@ -204,10 +252,35 @@ def load_config() -> AppConfig:
     logging = LoggingConfig(level=os.getenv("HARMONY_LOG_LEVEL", "INFO"))
     database = DatabaseConfig(url=database_url)
 
+    artwork_dir = os.getenv("ARTWORK_DIR") or os.getenv("HARMONY_ARTWORK_DIR")
+    artwork_config = ArtworkConfig(
+        directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
+        timeout_seconds=_as_float(
+            os.getenv("ARTWORK_TIMEOUT_SEC"), default=DEFAULT_ARTWORK_TIMEOUT
+        ),
+        max_bytes=_as_int(os.getenv("ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES),
+        concurrency=max(
+            1, _as_int(os.getenv("ARTWORK_CONCURRENCY"), default=DEFAULT_ARTWORK_CONCURRENCY)
+        ),
+        fallback=ArtworkFallbackConfig(
+            enabled=_as_bool(os.getenv("ARTWORK_FALLBACK_ENABLED"), default=False),
+            provider=(os.getenv("ARTWORK_FALLBACK_PROVIDER") or "musicbrainz"),
+            timeout_seconds=_as_float(
+                os.getenv("ARTWORK_FALLBACK_TIMEOUT_SEC"),
+                default=DEFAULT_ARTWORK_FALLBACK_TIMEOUT,
+            ),
+            max_bytes=_as_int(
+                os.getenv("ARTWORK_FALLBACK_MAX_BYTES"),
+                default=DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
+            ),
+        ),
+    )
+
     return AppConfig(
         spotify=spotify,
         plex=plex,
         soulseek=soulseek,
         logging=logging,
         database=database,
+        artwork=artwork_config,
     )

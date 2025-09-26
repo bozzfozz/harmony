@@ -1,4 +1,4 @@
-"""Helper utilities for fetching, caching and embedding album artwork."""
+"""Artwork helper utilities used by the artwork worker and routers."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Sequence
+from urllib.parse import urlparse
 
 import httpx
 
@@ -20,6 +21,11 @@ SPOTIFY_CLIENT: Any | None = None
 
 DEFAULT_TIMEOUT = 15.0
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+FALLBACK_HOST_ALLOWLIST: tuple[str, ...] = (
+    "musicbrainz.org",
+    "coverartarchive.org",
+)
+USER_AGENT = "Harmony/1.0"
 
 
 def fetch_spotify_artwork(album_id: str) -> Optional[str]:
@@ -52,6 +58,7 @@ def download_artwork(
     *,
     timeout: float = DEFAULT_TIMEOUT,
     max_bytes: int = MAX_IMAGE_SIZE_BYTES,
+    allowed_hosts: Sequence[str] | None = None,
 ) -> Path:
     """Download ``url`` to ``path`` enforcing sane timeouts and file sizes."""
 
@@ -59,56 +66,111 @@ def download_artwork(
     if not url:
         raise ValueError("Artwork URL must be provided")
 
-    headers = {"User-Agent": "Harmony/1.0"}
+    if allowed_hosts is not None and not allowed_remote_host(url, allowed_hosts=allowed_hosts):
+        raise ValueError(f"Host for artwork {url} is not allowed")
+
+    headers = {"User-Agent": USER_AGENT}
 
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
-            response = client.get(url)
-            response.raise_for_status()
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
+                if content_type and not content_type.startswith("image/"):
+                    logger.debug(
+                        "Discarding non-image artwork payload from %s (%s)",
+                        url,
+                        content_type,
+                    )
+                    raise ValueError("Downloaded file is not a recognised image")
+
+                length_header = response.headers.get("content-length")
+                if length_header:
+                    try:
+                        content_length = int(length_header)
+                    except (TypeError, ValueError):
+                        content_length = None
+                    if content_length and content_length > max_bytes:
+                        raise ValueError("Artwork exceeds maximum allowed size")
+
+                suffix = _guess_extension(url, content_type or None)
+                destination = _resolve_destination(Path(path), suffix)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+
+                fd, temp_path = tempfile.mkstemp(prefix="harmony-artwork-", suffix=suffix)
+                written = 0
+                try:
+                    with os.fdopen(fd, "wb") as handle:
+                        for chunk in response.iter_bytes():
+                            if not chunk:
+                                continue
+                            written += len(chunk)
+                            if written > max_bytes:
+                                raise ValueError("Artwork exceeds maximum allowed size")
+                            handle.write(chunk)
+                    if destination.exists():
+                        destination.unlink()
+                    os.replace(temp_path, destination)
+                except Exception:
+                    try:
+                        os.unlink(temp_path)
+                    except FileNotFoundError:  # pragma: no cover - best effort cleanup
+                        pass
+                    raise
     except httpx.HTTPError as exc:  # pragma: no cover - dependent on network
         logger.debug("Failed to download artwork from %s: %s", url, exc)
         raise
 
-    content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
-    if content_type and not content_type.startswith("image/"):
-        logger.debug("Discarding non-image artwork payload from %s (%s)", url, content_type)
-        raise ValueError("Downloaded file is not a recognised image")
-
-    length_header = response.headers.get("content-length")
-    if length_header:
-        try:
-            content_length = int(length_header)
-        except (TypeError, ValueError):
-            content_length = None
-        if content_length and content_length > max_bytes:
-            raise ValueError("Artwork exceeds maximum allowed size")
-
-    suffix = _guess_extension(url, content_type or None)
-    destination = _resolve_destination(Path(path), suffix)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    fd, temp_path = tempfile.mkstemp(prefix="harmony-artwork-", suffix=suffix)
-    written = 0
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            for chunk in response.iter_bytes():
-                if not chunk:
-                    continue
-                written += len(chunk)
-                if written > max_bytes:
-                    raise ValueError("Artwork exceeds maximum allowed size")
-                handle.write(chunk)
-        if destination.exists():
-            destination.unlink()
-        os.replace(temp_path, destination)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:  # pragma: no cover - best effort cleanup
-            pass
-        raise
-
     return destination
+
+
+def fetch_fallback_artwork(
+    artist: str,
+    album: str,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> Optional[str]:
+    """Resolve a Cover Art Archive URL for the given artist/album via MusicBrainz."""
+
+    artist = (artist or "").strip()
+    album = (album or "").strip()
+    if not artist or not album:
+        return None
+
+    params = {
+        "fmt": "json",
+        "limit": 1,
+        "query": f'artist:"{artist}" AND release:"{album}"',
+    }
+
+    headers = {"User-Agent": USER_AGENT}
+
+    try:
+        with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
+            response = client.get("https://musicbrainz.org/ws/2/release-group/", params=params)
+            response.raise_for_status()
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:  # pragma: no cover - network dependent
+        logger.debug(
+            "MusicBrainz fallback lookup failed for %s - %s: %s",
+            artist,
+            album,
+            exc,
+        )
+        return None
+
+    release_groups = _extract_release_groups(payload)
+    for entry in release_groups:
+        mbid = _extract_release_group_id(entry)
+        if not mbid:
+            continue
+        url = f"https://coverartarchive.org/release-group/{mbid}/front"
+        if allowed_remote_host(url):
+            return url
+        logger.debug("Discarding fallback url with disallowed host: %s", url)
+        return None
+
+    return None
 
 
 def embed_artwork(audio_file: Path, artwork_file: Path) -> None:
@@ -160,6 +222,34 @@ def embed_artwork(audio_file: Path, artwork_file: Path) -> None:
     except Exception as exc:
         logger.error("Failed to embed artwork into %s: %s", audio_path, exc)
         raise
+
+
+def allowed_remote_host(
+    url: str,
+    *,
+    allowed_hosts: Sequence[str] | None = None,
+) -> bool:
+    """Return ``True`` if ``url`` targets an allow-listed host."""
+
+    allowed = tuple(allowed_hosts or FALLBACK_HOST_ALLOWLIST)
+    if not allowed:
+        return True
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+
+    for allowed_host in allowed:
+        candidate = allowed_host.lower()
+        if host == candidate or host.endswith(f".{candidate}"):
+            return True
+
+    return False
 
 
 def infer_spotify_album_id(download: Download) -> Optional[str]:
@@ -340,3 +430,26 @@ def _extract_spotify_track_id(payload: Mapping[str, Any]) -> Optional[str]:
 def _uuid_sequence() -> Iterable[str]:
     while True:
         yield os.urandom(16).hex()
+
+
+def _extract_release_groups(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    keys = (
+        "release-groups",
+        "release_groups",
+        "release-group",
+        "releaseGroup",
+        "results",
+    )
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [entry for entry in value if isinstance(entry, Mapping)]
+    return []
+
+
+def _extract_release_group_id(payload: Mapping[str, Any]) -> Optional[str]:
+    for key in ("id", "mbid"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None

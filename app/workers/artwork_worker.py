@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+from urllib.parse import urlparse
 
+from app.config import ArtworkConfig, load_config
 from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -29,6 +32,7 @@ class ArtworkJob:
     spotify_track_id: Optional[str]
     spotify_album_id: Optional[str]
     artwork_url: Optional[str]
+    cache_key: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -50,36 +54,55 @@ class ArtworkWorker:
         soulseek_client: SoulseekClient | None = None,
         *,
         storage_directory: Path | None = None,
+        config: ArtworkConfig | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._plex = plex_client
         self._soulseek = soulseek_client
         artwork_utils.SPOTIFY_CLIENT = spotify_client
+
+        if config is None:
+            config = load_config().artwork
+
+        if storage_directory is not None:
+            base_dir = Path(storage_directory)
+        else:
+            base_dir = Path(config.directory or (os.getenv("ARTWORK_DIR") or "./artwork"))
+
+        self._storage_dir = base_dir.expanduser().resolve()
+        self._timeout = float(config.timeout_seconds)
+        self._max_bytes = int(config.max_bytes)
+        self._concurrency = max(1, int(config.concurrency))
+
+        fallback_provider = (config.fallback.provider or "").strip().lower()
+        self._fallback_enabled = config.fallback.enabled and fallback_provider not in {"", "none"}
+        self._fallback_provider = fallback_provider or "musicbrainz"
+        self._fallback_timeout = float(config.fallback.timeout_seconds)
+        self._fallback_max_bytes = int(config.fallback.max_bytes)
+
         self._queue: asyncio.Queue[Optional[ArtworkJob]] = asyncio.Queue()
-        self._task: asyncio.Task[None] | None = None
+        self._workers: list[asyncio.Task[None]] = []
         self._running = False
-        base_dir = storage_directory
-        if base_dir is None:
-            env_dir = os.getenv("ARTWORK_DIR") or os.getenv("HARMONY_ARTWORK_DIR")
-            base_dir = Path(env_dir) if env_dir else Path("./artwork")
-        self._storage_dir = Path(base_dir).resolve()
 
     async def start(self) -> None:
-        if self._task is not None and not self._task.done():
+        if self._running:
             return
+        self._storage_dir.mkdir(parents=True, exist_ok=True)
         self._running = True
-        self._task = asyncio.create_task(self._run())
+        self._workers = [asyncio.create_task(self._worker_loop()) for _ in range(self._concurrency)]
 
     async def stop(self) -> None:
         if not self._running:
             return
         self._running = False
-        await self._queue.put(None)
-        if self._task is not None:
+        for _ in range(len(self._workers)):
+            await self._queue.put(None)
+        for task in self._workers:
             try:
-                await self._task
-            finally:
-                self._task = None
+                await task
+            except Exception:  # pragma: no cover - defensive logging
+                logger.exception("Artwork worker task failed during shutdown")
+        self._workers.clear()
 
     async def wait_for_pending(self) -> None:
         await self._queue.join()
@@ -107,7 +130,7 @@ class ArtworkWorker:
             return
         await self._queue.put(job)
 
-    async def _run(self) -> None:
+    async def _worker_loop(self) -> None:
         while True:
             job = await self._queue.get()
             if job is None:
@@ -142,6 +165,7 @@ class ArtworkWorker:
                         job.spotify_album_id = record.spotify_album_id
                     if not job.artwork_url and record.artwork_url:
                         job.artwork_url = record.artwork_url
+
         if download_id is not None:
             self._update_download(
                 download_id,
@@ -152,9 +176,11 @@ class ArtworkWorker:
                 artwork_url=job.artwork_url,
             )
 
+        start_time = time.monotonic()
         try:
             artwork_path = await self._handle_job(job, download_context)
         except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
             if download_id is not None:
                 self._update_download(
                     download_id,
@@ -163,9 +189,20 @@ class ArtworkWorker:
                     spotify_track_id=job.spotify_track_id,
                     spotify_album_id=job.spotify_album_id,
                 )
-            logger.debug("Artwork processing failed for %s: %s", download_id, exc)
+            logger.info(
+                "Artwork processing failed",
+                extra={
+                    "event": "artwork_fetch",
+                    "download_id": download_id,
+                    "album_id": job.spotify_album_id or job.cache_key,
+                    "status": "failed",
+                    "duration_ms": duration_ms,
+                },
+            )
+            logger.debug("Artwork processing exception: %s", exc)
             return
 
+        duration_ms = int((time.monotonic() - start_time) * 1000)
         if download_id is not None:
             self._update_download(
                 download_id,
@@ -175,6 +212,17 @@ class ArtworkWorker:
                 spotify_album_id=job.spotify_album_id,
                 artwork_url=job.artwork_url,
             )
+
+        logger.info(
+            "Artwork processed successfully",
+            extra={
+                "event": "artwork_fetch",
+                "download_id": download_id,
+                "album_id": job.spotify_album_id or job.cache_key,
+                "status": "success",
+                "duration_ms": duration_ms,
+            },
+        )
 
     async def _handle_job(
         self,
@@ -186,25 +234,51 @@ class ArtworkWorker:
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
         candidates = await self._collect_candidate_urls(job, download)
-        artwork_file: Path | None = None
+        if not candidates:
+            raise ValueError("No artwork sources available")
+
         target_base = self._storage_dir / self._generate_storage_name(job, audio_path)
-        self._storage_dir.mkdir(parents=True, exist_ok=True)
+        artwork_file: Path | None = None
 
         cached_file = self._find_cached_artwork(target_base)
         if cached_file is not None:
+            logger.info(
+                "Artwork cache hit",
+                extra={
+                    "event": "artwork_cache_hit",
+                    "download_id": job.download_id,
+                    "album_id": job.spotify_album_id or job.cache_key,
+                    "status": "hit",
+                },
+            )
             artwork_file = cached_file
         else:
             for url in candidates:
                 try:
+                    timeout = self._timeout
+                    max_bytes = self._max_bytes
+                    allowed_hosts: Sequence[str] | None = None
+                    if artwork_utils.allowed_remote_host(
+                        url, allowed_hosts=artwork_utils.FALLBACK_HOST_ALLOWLIST
+                    ):
+                        allowed_hosts = artwork_utils.FALLBACK_HOST_ALLOWLIST
+                        timeout = self._fallback_timeout
+                        max_bytes = self._fallback_max_bytes
+
                     artwork_file = await asyncio.to_thread(
                         artwork_utils.download_artwork,
                         url,
                         target_base,
+                        timeout=timeout,
+                        max_bytes=max_bytes,
+                        allowed_hosts=allowed_hosts,
                     )
-                except Exception:
+                except Exception as exc:  # pragma: no cover - network/IO failures
+                    logger.debug("Artwork download failed from %s: %s", url, exc)
                     continue
-                if artwork_file.exists():
-                    break
+
+                job.artwork_url = url
+                break
 
         if artwork_file is None or not artwork_file.exists():
             raise ValueError("Unable to retrieve artwork image")
@@ -226,6 +300,7 @@ class ArtworkWorker:
         )
         if album_id:
             job.spotify_album_id = job.spotify_album_id or album_id
+            job.cache_key = job.cache_key or album_id
             spotify_album_url = await asyncio.to_thread(
                 artwork_utils.fetch_spotify_artwork,
                 album_id,
@@ -233,7 +308,10 @@ class ArtworkWorker:
             if spotify_album_url:
                 urls.append(spotify_album_url)
 
-        spotify_url = await asyncio.to_thread(self._get_spotify_artwork_url, job.spotify_track_id)
+        spotify_url = await asyncio.to_thread(
+            self._get_spotify_artwork_url,
+            job.spotify_track_id,
+        )
         if spotify_url and spotify_url not in urls:
             urls.append(spotify_url)
 
@@ -246,7 +324,30 @@ class ArtworkWorker:
 
         urls.extend(self._extract_additional_urls(job.metadata))
 
-        # Deduplicate whilst preserving order.
+        if self._fallback_enabled and self._fallback_provider == "musicbrainz":
+            artist, album = self._extract_artist_album(job, download)
+            if artist and album:
+                fallback_url = await asyncio.to_thread(
+                    artwork_utils.fetch_fallback_artwork,
+                    artist,
+                    album,
+                    timeout=self._fallback_timeout,
+                )
+                if fallback_url:
+                    job.cache_key = job.cache_key or self._extract_fallback_cache_key(fallback_url)
+                    job.artwork_url = fallback_url
+                    urls.append(fallback_url)
+                    logger.info(
+                        "Artwork fallback candidate resolved",
+                        extra={
+                            "event": "artwork_fetch",
+                            "download_id": job.download_id,
+                            "album_id": job.spotify_album_id or job.cache_key,
+                            "status": "fallback",
+                            "provider": "musicbrainz",
+                        },
+                    )
+
         seen: set[str] = set()
         unique_urls: list[str] = []
         for url in urls:
@@ -340,7 +441,6 @@ class ArtworkWorker:
             if url:
                 return url
 
-        # Some Spotify payloads return images at the top level.
         url = self._pick_best_image(track.get("images"))
         if url:
             return url
@@ -378,7 +478,6 @@ class ArtworkWorker:
                     if isinstance(url, str) and url.strip():
                         urls.append(url.strip())
 
-        # Plex metadata can expose an absolute URL via the thumb key.
         plex_thumb = metadata.get("plex_thumb") or metadata.get("plex_artwork")
         if isinstance(plex_thumb, str) and plex_thumb.strip():
             urls.append(plex_thumb.strip())
@@ -410,13 +509,15 @@ class ArtworkWorker:
         return best_url
 
     def _generate_storage_name(self, job: ArtworkJob, audio_path: Path) -> str:
-        candidate = job.spotify_album_id or job.spotify_track_id or audio_path.stem
+        candidate = job.cache_key or job.spotify_album_id or job.spotify_track_id or audio_path.stem
         if not candidate and job.download_id is not None:
             candidate = f"download-{job.download_id}"
         if not candidate:
             candidate = audio_path.stem or "artwork"
         slug = re.sub(r"[^a-zA-Z0-9._-]", "_", candidate)
         slug = slug.strip("_") or "artwork"
+        if not slug.endswith("_original"):
+            slug = f"{slug}_original"
         return slug
 
     def _find_cached_artwork(self, target_base: Path) -> Path | None:
@@ -460,3 +561,91 @@ class ArtworkWorker:
                 download.artwork_url = artwork_url
             download.updated_at = datetime.utcnow()
             session.add(download)
+
+    def _extract_artist_album(
+        self,
+        job: ArtworkJob,
+        download: DownloadContext | None,
+    ) -> tuple[Optional[str], Optional[str]]:
+        sources = list(self._collect_metadata_sources(job, download))
+        artist = self._extract_text(
+            ("artist", "artist_name", "artistName", "artists"),
+            sources,
+        )
+        album = self._extract_text(
+            ("album", "album_name", "albumName", "release"),
+            sources,
+        )
+        return artist, album
+
+    def _collect_metadata_sources(
+        self,
+        job: ArtworkJob,
+        download: DownloadContext | None,
+    ) -> Iterable[Mapping[str, Any]]:
+        sources: list[Mapping[str, Any]] = []
+        for payload in (job.metadata,):
+            if isinstance(payload, Mapping) and payload not in sources:
+                sources.append(payload)
+                nested = payload.get("metadata")
+                if isinstance(nested, Mapping):
+                    sources.append(nested)
+
+        if download and download.request_payload:
+            payload = download.request_payload
+            if isinstance(payload, Mapping) and payload not in sources:
+                sources.append(payload)
+                nested = payload.get("metadata")
+                if isinstance(nested, Mapping):
+                    sources.append(nested)
+
+            track_payload = payload.get("track") if isinstance(payload, Mapping) else None
+            if isinstance(track_payload, Mapping):
+                sources.append(track_payload)
+
+            file_payload = payload.get("file") if isinstance(payload, Mapping) else None
+            if isinstance(file_payload, Mapping):
+                sources.append(file_payload)
+
+        return sources
+
+    def _extract_text(
+        self,
+        keys: Sequence[str],
+        sources: Iterable[Mapping[str, Any]],
+    ) -> Optional[str]:
+        for source in sources:
+            for key in keys:
+                if key not in source:
+                    continue
+                candidate = self._normalise_text(source[key])
+                if candidate:
+                    return candidate
+        return None
+
+    def _normalise_text(self, value: Any) -> Optional[str]:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, Mapping):
+            for key in ("name", "title", "value"):
+                nested = value.get(key)
+                candidate = self._normalise_text(nested)
+                if candidate:
+                    return candidate
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            for entry in value:
+                candidate = self._normalise_text(entry)
+                if candidate:
+                    return candidate
+        return None
+
+    def _extract_fallback_cache_key(self, url: str) -> Optional[str]:
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return None
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        for index, segment in enumerate(segments):
+            if segment == "release-group" and index + 1 < len(segments):
+                return segments[index + 1]
+        return None
