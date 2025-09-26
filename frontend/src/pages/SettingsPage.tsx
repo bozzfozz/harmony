@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle
@@ -13,7 +14,14 @@ import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 import { useToast } from '../hooks/useToast';
-import { ApiError, testServiceConnection, type ServiceIdentifier } from '../lib/api';
+import {
+  ApiError,
+  getSpotifyMode,
+  setSpotifyMode,
+  testServiceConnection,
+  type ServiceIdentifier,
+  type SpotifyMode
+} from '../lib/api';
 
 const spotifyFields = [
   { key: 'SPOTIFY_CLIENT_ID', label: 'Client ID', placeholder: 'Spotify client ID' },
@@ -42,6 +50,9 @@ const SERVICE_LABELS: Record<ServiceIdentifier, string> = {
 
 const SettingsPage = () => {
   const { toast } = useToast();
+  const [spotifyMode, setSpotifyModeState] = useState<SpotifyMode>('PRO');
+  const [isModeLoading, setIsModeLoading] = useState(true);
+  const [isModeUpdating, setIsModeUpdating] = useState(false);
   const spotify = useServiceSettingsForm({
     fields: spotifyFields,
     loadErrorDescription: 'Spotify settings could not be loaded.',
@@ -68,6 +79,47 @@ const SettingsPage = () => {
     plex: false,
     soulseek: false
   });
+
+  useEffect(() => {
+    const fetchMode = async () => {
+      try {
+        const response = await getSpotifyMode();
+        setSpotifyModeState(response.mode);
+      } catch (error) {
+        if (error instanceof ApiError && !error.handled) {
+          toast({
+            title: 'Spotify-Modus',
+            description: error.message,
+            variant: 'destructive'
+          });
+          error.markHandled();
+        }
+      } finally {
+        setIsModeLoading(false);
+      }
+    };
+    fetchMode();
+  }, [toast]);
+
+  const updateMode = async (mode: SpotifyMode) => {
+    if (mode === spotifyMode) {
+      return;
+    }
+    setIsModeUpdating(true);
+    try {
+      await setSpotifyMode(mode);
+      setSpotifyModeState(mode);
+      toast({
+        title: 'Spotify-Modus gespeichert',
+        description: mode === 'FREE' ? 'FREE-Modus ist aktiv.' : 'PRO-Modus ist aktiv.'
+      });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Moduswechsel fehlgeschlagen.';
+      toast({ title: 'Spotify-Modus', description: message, variant: 'destructive' });
+    } finally {
+      setIsModeUpdating(false);
+    }
+  };
 
   const handleTestConnection = async (service: ServiceIdentifier) => {
     setIsTesting((previous) => ({ ...previous, [service]: true }));
@@ -128,6 +180,40 @@ const SettingsPage = () => {
         <TabsTrigger value="soulseek">Soulseek</TabsTrigger>
       </TabsList>
       <TabsContent value="spotify">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Moduswahl</CardTitle>
+            <CardDescription>Wechsle zwischen Spotify FREE und PRO direkt aus den Einstellungen.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isModeLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Lade aktuellen Modus …
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant={spotifyMode === 'FREE' ? 'default' : 'outline'}
+                  disabled={isModeUpdating}
+                  onClick={() => updateMode('FREE')}
+                >
+                  Spotify FREE
+                </Button>
+                <Button
+                  type="button"
+                  variant={spotifyMode === 'PRO' ? 'default' : 'outline'}
+                  disabled={isModeUpdating}
+                  onClick={() => updateMode('PRO')}
+                >
+                  Spotify PRO
+                </Button>
+                <span className="text-xs text-muted-foreground">Aktuell: {spotifyMode}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Spotify configuration</CardTitle>

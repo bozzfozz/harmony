@@ -17,6 +17,9 @@ class SpotifyConfig:
     client_secret: Optional[str]
     redirect_uri: Optional[str]
     scope: str
+    mode: str
+    free_import_max_lines: int
+    free_import_max_file_bytes: int
 
 
 @dataclass(slots=True)
@@ -84,6 +87,9 @@ DEFAULT_ARTWORK_MIN_EDGE = 1000
 DEFAULT_ARTWORK_MIN_BYTES = 150_000
 DEFAULT_ARTWORK_FALLBACK_TIMEOUT = 12.0
 DEFAULT_ARTWORK_FALLBACK_MAX_BYTES = 10 * 1024 * 1024
+DEFAULT_SPOTIFY_MODE = "PRO"
+DEFAULT_FREE_IMPORT_MAX_LINES = 200
+DEFAULT_FREE_IMPORT_MAX_FILE_BYTES = 1_000_000
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -156,6 +162,13 @@ def get_setting(key: str, *, database_url: Optional[str] = None) -> Optional[str
     return settings.get(key)
 
 
+def _normalise_mode(value: Optional[str]) -> str:
+    candidate = (value or "").strip().upper()
+    if candidate not in {"FREE", "PRO"}:
+        return DEFAULT_SPOTIFY_MODE
+    return candidate
+
+
 def _resolve_setting(
     key: str,
     *,
@@ -196,6 +209,7 @@ def load_config() -> AppConfig:
         "SLSKD_URL",
         "SLSKD_API_KEY",
         "BEETS_POSTSTEP_ENABLED",
+        "SPOTIFY_MODE",
     ]
     db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
     legacy_slskd_url = _legacy_slskd_url()
@@ -219,6 +233,27 @@ def load_config() -> AppConfig:
             fallback=os.getenv("SPOTIFY_REDIRECT_URI"),
         ),
         scope=os.getenv("SPOTIFY_SCOPE", DEFAULT_SPOTIFY_SCOPE),
+        mode=_normalise_mode(
+            _resolve_setting(
+                "SPOTIFY_MODE",
+                db_settings=db_settings,
+                fallback=os.getenv("SPOTIFY_MODE"),
+            )
+        ),
+        free_import_max_lines=max(
+            1,
+            _as_int(
+                os.getenv("FREE_IMPORT_MAX_LINES"),
+                default=DEFAULT_FREE_IMPORT_MAX_LINES,
+            ),
+        ),
+        free_import_max_file_bytes=max(
+            1,
+            _as_int(
+                os.getenv("FREE_IMPORT_MAX_FILE_BYTES"),
+                default=DEFAULT_FREE_IMPORT_MAX_FILE_BYTES,
+            ),
+        ),
     )
 
     plex_base_url_env = os.getenv("PLEX_BASE_URL") or os.getenv("PLEX_URL")

@@ -8,6 +8,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
+- **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth: Text- oder Datei-Eingaben werden zu Soulseek-Downloads normalisiert.
 - **Lean Plex-Client** mit Fokus auf Status, Bibliotheksübersicht, Such- und Track-Lookups sowie schlanke Scan-Trigger.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
@@ -17,6 +18,13 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
+
+## Spotify Modi
+
+Harmony kennt zwei Betriebsarten: **PRO** nutzt die vollständige OAuth-/API-Integration, **FREE** erlaubt parserbasierte
+Imports ohne Spotify-Credentials. Der Modus wird per `GET/POST /spotify/mode` verwaltet und in der Settings-Tabelle persistiert.
+Im FREE-Modus stehen die Endpunkte `/spotify/free/parse`, `/spotify/free/enqueue` sowie `/spotify/free/upload` zur Verfügung.
+Die Web-Oberfläche bietet hierfür einen dedizierten Spotify-Screen mit Modus-Schalter und Importkarte.
 
 ## Smart Search
 
@@ -252,6 +260,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](docs/api.md). Die wichtigsten Gruppen im Überblick:
 
 - **Spotify** (`/spotify`): Status, Suche, Track-Details, Audio-Features, Benutzerbibliothek, Playlists, Empfehlungen.
+- **Spotify FREE** (`/spotify/free`): Parser- und Enqueue-Endpunkte für importierte Titel ohne OAuth-Integration.
 - **Plex** (`/plex`): Status, Bibliotheken, Scan-Trigger, Suche und kompakte Tracklisten.
 - **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos. Enthält `/soulseek/downloads/{id}/requeue` für manuelle Neuversuche und liefert Retry-Metadaten (`state`, `retry_count`, `next_retry_at`, `last_error`).
 - **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.

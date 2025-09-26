@@ -33,6 +33,7 @@ from app.routers import (
     system_router,
     soulseek_router,
     spotify_router,
+    spotify_free_router,
     watchlist_router,
 )
 from app.utils.activity import activity_manager
@@ -58,6 +59,7 @@ app = FastAPI(title="Harmony Backend", version="1.4.0")
 logger = get_logger(__name__)
 
 app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
+app.include_router(spotify_free_router)
 app.include_router(plex_router, prefix="/plex", tags=["Plex"])
 app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
 app.include_router(matching_router, prefix="/matching", tags=["Matching"])

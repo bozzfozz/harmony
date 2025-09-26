@@ -659,6 +659,40 @@
         "title": "DownloadPriorityUpdate",
         "type": "object"
       },
+      "EnqueueRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NormalizedTrack"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EnqueueRequest",
+        "type": "object"
+      },
+      "EnqueueResponse": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queued",
+          "skipped"
+        ],
+        "title": "EnqueueResponse",
+        "type": "object"
+      },
       "FieldsResponse": {
         "properties": {
           "fields": {
@@ -877,6 +911,123 @@
           "success"
         ],
         "title": "MoveResponse",
+        "type": "object"
+      },
+      "NormalizedTrack": {
+        "properties": {
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album"
+          },
+          "artist": {
+            "title": "Artist",
+            "type": "string"
+          },
+          "kind": {
+            "default": "track",
+            "title": "Kind",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "release_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Year"
+          },
+          "source": {
+            "default": "user",
+            "title": "Source",
+            "type": "string"
+          },
+          "spotify_album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Album Id"
+          },
+          "spotify_track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Track Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artist",
+          "title",
+          "query"
+        ],
+        "title": "NormalizedTrack",
+        "type": "object"
+      },
+      "ParseRequest": {
+        "properties": {
+          "file_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Token"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "title": "ParseRequest",
+        "type": "object"
+      },
+      "ParseResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NormalizedTrack"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ParseResponse",
         "type": "object"
       },
       "PlaylistEntry": {
@@ -1816,6 +1967,40 @@
         "title": "SoulseekSearchResponse",
         "type": "object"
       },
+      "SpotifyModePayload": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "FREE",
+              "PRO"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SpotifyModePayload",
+        "type": "object"
+      },
+      "SpotifyModeResponse": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "FREE",
+              "PRO"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SpotifyModeResponse",
+        "type": "object"
+      },
       "SpotifySearchResponse": {
         "properties": {
           "items": {
@@ -1984,6 +2169,37 @@
           "message"
         ],
         "title": "UpdateResponse",
+        "type": "object"
+      },
+      "UploadPayload": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ],
+        "title": "UploadPayload",
+        "type": "object"
+      },
+      "UploadResponse": {
+        "properties": {
+          "file_token": {
+            "title": "File Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_token"
+        ],
+        "title": "UploadResponse",
         "type": "object"
       },
       "UserProfileResponse": {
@@ -5385,6 +5601,129 @@
         ]
       }
     },
+    "/spotify/free/enqueue": {
+      "post": {
+        "operationId": "enqueue_tracks_spotify_free_enqueue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnqueueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enqueue Tracks",
+        "tags": [
+          "Spotify FREE"
+        ]
+      }
+    },
+    "/spotify/free/parse": {
+      "post": {
+        "operationId": "parse_import_lines_spotify_free_parse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Parse Import Lines",
+        "tags": [
+          "Spotify FREE"
+        ]
+      }
+    },
+    "/spotify/free/upload": {
+      "post": {
+        "operationId": "upload_import_file_spotify_free_upload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Import File",
+        "tags": [
+          "Spotify FREE"
+        ]
+      }
+    },
     "/spotify/me": {
       "get": {
         "operationId": "get_current_user_spotify_me_get",
@@ -5614,6 +5953,70 @@
           }
         },
         "summary": "Save Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/mode": {
+      "get": {
+        "operationId": "get_spotify_mode_spotify_mode_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Spotify Mode",
+        "tags": [
+          "Spotify"
+        ]
+      },
+      "post": {
+        "operationId": "update_spotify_mode_spotify_mode_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyModePayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Update Spotify Mode Spotify Mode Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Spotify Mode",
         "tags": [
           "Spotify"
         ]
