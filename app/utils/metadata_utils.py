@@ -53,9 +53,7 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
 
     client = SPOTIFY_CLIENT
     if client is None:
-        logger.debug(
-            "Spotify metadata requested for %s but no client configured", track_id
-        )
+        logger.debug("Spotify metadata requested for %s but no client configured", track_id)
         return {}
 
     metadata: Dict[str, str] = {}
@@ -104,9 +102,7 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
     try:
         supplemental = client.get_track_metadata(track_id)
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.debug(
-            "Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc
-        )
+        logger.debug("Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc)
     else:
         for key, value in supplemental.items():
             if key not in TAG_FIELDS and key != "artwork_url":
@@ -133,20 +129,14 @@ def extract_metadata_from_plex(payload: Any) -> Dict[str, str]:
             return {}
         client = PLEX_CLIENT
         if client is None:
-            logger.debug(
-                "Plex metadata requested for %s but no client configured", payload
-            )
+            logger.debug("Plex metadata requested for %s but no client configured", payload)
             return {}
         try:
             result = client.get_track_metadata(payload)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.debug("Plex metadata lookup failed for %s: %s", payload, exc)
             return {}
-        if (
-            asyncio is not None
-            and hasattr(asyncio, "iscoroutine")
-            and asyncio.iscoroutine(result)
-        ):
+        if asyncio is not None and hasattr(asyncio, "iscoroutine") and asyncio.iscoroutine(result):
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
@@ -154,9 +144,7 @@ def extract_metadata_from_plex(payload: Any) -> Dict[str, str]:
             if loop is not None and loop.is_running():
                 # In an active event loop we cannot synchronously wait for the
                 # coroutine; the caller must perform the lookup instead.
-                logger.debug(
-                    "Received coroutine for Plex metadata in running loop; aborting"
-                )
+                logger.debug("Received coroutine for Plex metadata in running loop; aborting")
                 return {}
             if asyncio is not None:
                 result = asyncio.run(result)  # type: ignore[arg-type]
@@ -179,9 +167,7 @@ def extract_metadata_from_plex(payload: Any) -> Dict[str, str]:
     )
     _merge_metadata_value(metadata, "genre", _extract_plex_genre(entry))
     _merge_metadata_value(metadata, "isrc", _extract_plex_guid(entry))
-    _merge_metadata_value(
-        metadata, "copyright", _normalise_text(entry.get("copyright"))
-    )
+    _merge_metadata_value(metadata, "copyright", _normalise_text(entry.get("copyright")))
 
     return metadata
 
@@ -242,9 +228,7 @@ def _extract_plex_entry(payload: Any) -> Mapping[str, Any] | None:
     return None
 
 
-def _extract_plex_person(
-    entry: Mapping[str, Any], keys: Iterable[str]
-) -> Optional[str]:
+def _extract_plex_person(entry: Mapping[str, Any], keys: Iterable[str]) -> Optional[str]:
     for key in keys:
         value = entry.get(key)
         if not value:
@@ -252,9 +236,7 @@ def _extract_plex_person(
         if isinstance(value, list):
             for candidate in value:
                 person = _normalise_text(
-                    candidate.get("tag")
-                    if isinstance(candidate, Mapping)
-                    else candidate
+                    candidate.get("tag") if isinstance(candidate, Mapping) else candidate
                 )
                 if person:
                     return person
@@ -292,9 +274,7 @@ def _extract_plex_guid(entry: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
-def _merge_metadata_value(
-    metadata: Dict[str, str], key: str, value: Optional[str]
-) -> None:
+def _merge_metadata_value(metadata: Dict[str, str], key: str, value: Optional[str]) -> None:
     if value and key not in metadata:
         metadata[key] = value
 

@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
-    "test": "echo 'Frontend tests are skipped in CI (no npm registry access)'"
+    "test": "jest --runInBand",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.0.3",

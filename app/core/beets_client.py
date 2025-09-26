@@ -63,9 +63,7 @@ class BeetsClient:
 
         return result
 
-    def import_file(
-        self, path: str | Path, quiet: bool = True, autotag: bool = True
-    ) -> str:
+    def import_file(self, path: str | Path, quiet: bool = True, autotag: bool = True) -> str:
         """Import *path* into the beets library using ``beet import``."""
 
         args: list[str] = ["beet", "import"]
@@ -174,11 +172,7 @@ class BeetsClient:
         """Persist *tags* to *file_path* via ``beet modify`` and ``beet write``."""
 
         path = Path(file_path)
-        assignments = [
-            f"{key}={value}"
-            for key, value in tags.items()
-            if value not in {None, ""}
-        ]
+        assignments = [f"{key}={value}" for key, value in tags.items() if value not in {None, ""}]
         if assignments:
             modify_args: list[str] = ["beet", "modify", "-y", str(path)]
             modify_args.extend(assignments)
@@ -220,9 +214,7 @@ class BeetsClient:
         logger.debug("Parsed fields: %s", fields)
         return fields
 
-    def query(
-        self, query: str, fmt: str = "$artist - $album - $title"
-    ) -> list[str]:
+    def query(self, query: str, fmt: str = "$artist - $album - $title") -> list[str]:
         """Return formatted items for *query* via ``beet ls``."""
 
         query_args = self._parse_query(query)
@@ -246,9 +238,7 @@ class BeetsClient:
         return parts
 
     @staticmethod
-    def _parse_count_output(
-        stdout: str | None, verb: str, key: str
-    ) -> dict[str, object]:
+    def _parse_count_output(stdout: str | None, verb: str, key: str) -> dict[str, object]:
         output = (stdout or "").strip()
         pattern = rf"{verb} (\d+) items"
         match = re.search(pattern, output)

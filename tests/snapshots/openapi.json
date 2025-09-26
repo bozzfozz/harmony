@@ -1,0 +1,6919 @@
+{
+  "components": {
+    "schemas": {
+      "AlbumMatchingRequest": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "spotify_album": {
+            "additionalProperties": true,
+            "title": "Spotify Album",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spotify_album",
+          "candidates"
+        ],
+        "title": "AlbumMatchingRequest",
+        "type": "object"
+      },
+      "ArtistPreferenceEntry": {
+        "properties": {
+          "artist_id": {
+            "title": "Artist Id",
+            "type": "string"
+          },
+          "release_id": {
+            "title": "Release Id",
+            "type": "string"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "artist_id",
+          "release_id",
+          "selected"
+        ],
+        "title": "ArtistPreferenceEntry",
+        "type": "object"
+      },
+      "ArtistPreferencesPayload": {
+        "properties": {
+          "preferences": {
+            "items": {
+              "$ref": "#/components/schemas/ArtistPreferenceEntry"
+            },
+            "title": "Preferences",
+            "type": "array"
+          }
+        },
+        "title": "ArtistPreferencesPayload",
+        "type": "object"
+      },
+      "ArtistPreferencesResponse": {
+        "properties": {
+          "preferences": {
+            "items": {
+              "$ref": "#/components/schemas/ArtistPreferenceEntry"
+            },
+            "title": "Preferences",
+            "type": "array"
+          }
+        },
+        "required": [
+          "preferences"
+        ],
+        "title": "ArtistPreferencesResponse",
+        "type": "object"
+      },
+      "ArtistReleasesResponse": {
+        "properties": {
+          "artist_id": {
+            "title": "Artist Id",
+            "type": "string"
+          },
+          "releases": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Releases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "artist_id",
+          "releases"
+        ],
+        "title": "ArtistReleasesResponse",
+        "type": "object"
+      },
+      "AudioFeaturesResponse": {
+        "properties": {
+          "audio_features": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Audio Features"
+          }
+        },
+        "required": [
+          "audio_features"
+        ],
+        "title": "AudioFeaturesResponse",
+        "type": "object"
+      },
+      "DiscographyAlbum": {
+        "properties": {
+          "album": {
+            "additionalProperties": true,
+            "title": "Album",
+            "type": "object"
+          },
+          "tracks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "album"
+        ],
+        "title": "DiscographyAlbum",
+        "type": "object"
+      },
+      "DiscographyDownloadRequest": {
+        "properties": {
+          "artist_id": {
+            "title": "Artist Id",
+            "type": "string"
+          },
+          "artist_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist Name"
+          }
+        },
+        "required": [
+          "artist_id"
+        ],
+        "title": "DiscographyDownloadRequest",
+        "type": "object"
+      },
+      "DiscographyJobResponse": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "DiscographyJobResponse",
+        "type": "object"
+      },
+      "DiscographyMatchingRequest": {
+        "properties": {
+          "albums": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Albums",
+            "type": "array"
+          },
+          "artist_id": {
+            "title": "Artist Id",
+            "type": "string"
+          },
+          "plex_items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Plex Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "artist_id"
+        ],
+        "title": "DiscographyMatchingRequest",
+        "type": "object"
+      },
+      "DiscographyMatchingResponse": {
+        "properties": {
+          "missing_albums": {
+            "items": {
+              "$ref": "#/components/schemas/DiscographyMissingAlbum"
+            },
+            "title": "Missing Albums",
+            "type": "array"
+          },
+          "missing_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/DiscographyMissingTrack"
+            },
+            "title": "Missing Tracks",
+            "type": "array"
+          }
+        },
+        "title": "DiscographyMatchingResponse",
+        "type": "object"
+      },
+      "DiscographyMissingAlbum": {
+        "properties": {
+          "album": {
+            "additionalProperties": true,
+            "title": "Album",
+            "type": "object"
+          },
+          "missing_tracks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Missing Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "album"
+        ],
+        "title": "DiscographyMissingAlbum",
+        "type": "object"
+      },
+      "DiscographyMissingTrack": {
+        "properties": {
+          "album": {
+            "additionalProperties": true,
+            "title": "Album",
+            "type": "object"
+          },
+          "track": {
+            "additionalProperties": true,
+            "title": "Track",
+            "type": "object"
+          }
+        },
+        "required": [
+          "album",
+          "track"
+        ],
+        "title": "DiscographyMissingTrack",
+        "type": "object"
+      },
+      "DiscographyResponse": {
+        "properties": {
+          "albums": {
+            "items": {
+              "$ref": "#/components/schemas/DiscographyAlbum"
+            },
+            "title": "Albums",
+            "type": "array"
+          },
+          "artist_id": {
+            "title": "Artist Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artist_id"
+        ],
+        "title": "DiscographyResponse",
+        "type": "object"
+      },
+      "DownloadEntryResponse": {
+        "description": "Download information returned to API consumers.",
+        "properties": {
+          "artwork_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Path"
+          },
+          "artwork_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Status"
+          },
+          "artwork_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Url"
+          },
+          "composer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composer"
+          },
+          "copyright": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copyright"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "has_artwork": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Artwork"
+          },
+          "has_lyrics": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Lyrics"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc"
+          },
+          "lyrics_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lyrics Path"
+          },
+          "lyrics_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lyrics Status"
+          },
+          "organized_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organized Path"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producer"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "spotify_album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Album Id"
+          },
+          "spotify_track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Track Id"
+          },
+          "status": {
+            "description": "Expose the persisted state under the public ``status`` attribute.",
+            "readOnly": true,
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "progress",
+          "created_at",
+          "updated_at",
+          "status"
+        ],
+        "title": "DownloadEntryResponse",
+        "type": "object"
+      },
+      "DownloadListResponse": {
+        "properties": {
+          "downloads": {
+            "items": {
+              "$ref": "#/components/schemas/DownloadEntryResponse"
+            },
+            "title": "Downloads",
+            "type": "array"
+          }
+        },
+        "required": [
+          "downloads"
+        ],
+        "title": "DownloadListResponse",
+        "type": "object"
+      },
+      "DownloadMetadataResponse": {
+        "properties": {
+          "composer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composer"
+          },
+          "copyright": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copyright"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producer"
+          }
+        },
+        "required": [
+          "id",
+          "filename"
+        ],
+        "title": "DownloadMetadataResponse",
+        "type": "object"
+      },
+      "DownloadPriorityUpdate": {
+        "properties": {
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "priority"
+        ],
+        "title": "DownloadPriorityUpdate",
+        "type": "object"
+      },
+      "FieldsResponse": {
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "FieldsResponse",
+        "type": "object"
+      },
+      "FollowedArtistsResponse": {
+        "properties": {
+          "artists": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Artists",
+            "type": "array"
+          }
+        },
+        "required": [
+          "artists"
+        ],
+        "title": "FollowedArtistsResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImportRequest": {
+        "properties": {
+          "autotag": {
+            "default": true,
+            "title": "Autotag",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "quiet": {
+            "default": true,
+            "title": "Quiet",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ImportRequest",
+        "type": "object"
+      },
+      "ImportResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "ImportResponse",
+        "type": "object"
+      },
+      "ListAlbumsResponse": {
+        "properties": {
+          "albums": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Albums",
+            "type": "array"
+          }
+        },
+        "required": [
+          "albums"
+        ],
+        "title": "ListAlbumsResponse",
+        "type": "object"
+      },
+      "ListTracksResponse": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks"
+        ],
+        "title": "ListTracksResponse",
+        "type": "object"
+      },
+      "MatchingRequest": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "spotify_track": {
+            "additionalProperties": true,
+            "title": "Spotify Track",
+            "type": "object"
+          }
+        },
+        "required": [
+          "spotify_track",
+          "candidates"
+        ],
+        "title": "MatchingRequest",
+        "type": "object"
+      },
+      "MatchingResponse": {
+        "properties": {
+          "best_match": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Match"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          }
+        },
+        "required": [
+          "best_match",
+          "confidence"
+        ],
+        "title": "MatchingResponse",
+        "type": "object"
+      },
+      "MoveRequest": {
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          }
+        },
+        "title": "MoveRequest",
+        "type": "object"
+      },
+      "MoveResponse": {
+        "properties": {
+          "moved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "MoveResponse",
+        "type": "object"
+      },
+      "PlaylistEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "track_count": {
+            "title": "Track Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "track_count",
+          "updated_at"
+        ],
+        "title": "PlaylistEntry",
+        "type": "object"
+      },
+      "PlaylistItemsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PlaylistItemsResponse",
+        "type": "object"
+      },
+      "PlaylistReorderPayload": {
+        "properties": {
+          "insert_before": {
+            "title": "Insert Before",
+            "type": "integer"
+          },
+          "range_start": {
+            "title": "Range Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "range_start",
+          "insert_before"
+        ],
+        "title": "PlaylistReorderPayload",
+        "type": "object"
+      },
+      "PlaylistResponse": {
+        "properties": {
+          "playlists": {
+            "items": {
+              "$ref": "#/components/schemas/PlaylistEntry"
+            },
+            "title": "Playlists",
+            "type": "array"
+          }
+        },
+        "required": [
+          "playlists"
+        ],
+        "title": "PlaylistResponse",
+        "type": "object"
+      },
+      "PlaylistTracksPayload": {
+        "properties": {
+          "uris": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Uris",
+            "type": "array"
+          }
+        },
+        "required": [
+          "uris"
+        ],
+        "title": "PlaylistTracksPayload",
+        "type": "object"
+      },
+      "QueryRequest": {
+        "properties": {
+          "format": {
+            "default": "$artist - $album - $title",
+            "title": "Format",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "QueryRequest",
+        "type": "object"
+      },
+      "QueryResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "RecommendationsResponse": {
+        "properties": {
+          "seeds": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Seeds",
+            "type": "array"
+          },
+          "tracks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks",
+          "seeds"
+        ],
+        "title": "RecommendationsResponse",
+        "type": "object"
+      },
+      "RemoveRequest": {
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "RemoveRequest",
+        "type": "object"
+      },
+      "RemoveResponse": {
+        "properties": {
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "removed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "RemoveResponse",
+        "type": "object"
+      },
+      "SavedTracksResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SavedTracksResponse",
+        "type": "object"
+      },
+      "SearchFilterPayload": {
+        "description": "Payload model for optional search filters.",
+        "properties": {
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optionales Genre-Filter",
+            "title": "Genre"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optionale Qualit\u00e4tsanforderung (z. B. FLAC, 320kbps)",
+            "title": "Quality"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optionales Jahr-Filter",
+            "title": "Year"
+          }
+        },
+        "title": "SearchFilterPayload",
+        "type": "object"
+      },
+      "SearchFilters": {
+        "description": "Filter options that may be applied to search results.",
+        "properties": {
+          "duration_ms": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive duration range in milliseconds.",
+            "title": "Duration Ms"
+          },
+          "explicit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether to include only explicit or clean tracks (Spotify only).",
+            "title": "Explicit"
+          },
+          "genres": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One or more genres to match (case-insensitive).",
+            "title": "Genres"
+          },
+          "min_bitrate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum accepted bitrate in kbps.",
+            "title": "Min Bitrate"
+          },
+          "preferred_formats": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preferred audio file formats (used to boost relevance).",
+            "title": "Preferred Formats"
+          },
+          "types": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "track",
+                    "album",
+                    "artist"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Restrict results to specific item types.",
+            "title": "Types"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Restrict Soulseek matches to a specific username.",
+            "title": "Username"
+          },
+          "year_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive year range, expressed as [min, max].",
+            "title": "Year Range"
+          }
+        },
+        "title": "SearchFilters",
+        "type": "object"
+      },
+      "SearchItem": {
+        "description": "Normalised search item returned by the unified search endpoint.",
+        "properties": {
+          "album": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album"
+          },
+          "artists": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artists",
+            "type": "array"
+          },
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "explicit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explicit"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "title": "Extra",
+            "type": "object"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Genres",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "score": {
+            "default": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "spotify",
+              "plex",
+              "soulseek"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "track",
+              "album",
+              "artist"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "source",
+          "title"
+        ],
+        "title": "SearchItem",
+        "type": "object"
+      },
+      "SearchPagination": {
+        "description": "Pagination options for the search endpoint.",
+        "properties": {
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "default": 25,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "title": "SearchPagination",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "description": "Response envelope for the unified search endpoint.",
+        "properties": {
+          "errors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "size",
+          "total",
+          "items"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "SearchSort": {
+        "description": "Sorting configuration for search results.",
+        "properties": {
+          "by": {
+            "default": "relevance",
+            "enum": [
+              "relevance",
+              "bitrate",
+              "year",
+              "duration"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "order": {
+            "default": "desc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Order",
+            "type": "string"
+          }
+        },
+        "title": "SearchSort",
+        "type": "object"
+      },
+      "ServiceHealthResponse": {
+        "properties": {
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "optional_missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Optional Missing",
+            "type": "array"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "fail"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "status"
+        ],
+        "title": "ServiceHealthResponse",
+        "type": "object"
+      },
+      "SettingsHistoryEntry": {
+        "properties": {
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          }
+        },
+        "required": [
+          "key",
+          "old_value",
+          "new_value",
+          "changed_at"
+        ],
+        "title": "SettingsHistoryEntry",
+        "type": "object"
+      },
+      "SettingsHistoryResponse": {
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsHistoryEntry"
+            },
+            "title": "History",
+            "type": "array"
+          }
+        },
+        "required": [
+          "history"
+        ],
+        "title": "SettingsHistoryResponse",
+        "type": "object"
+      },
+      "SettingsPayload": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "SettingsPayload",
+        "type": "object"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "settings": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "settings",
+          "updated_at"
+        ],
+        "title": "SettingsResponse",
+        "type": "object"
+      },
+      "SoulseekCancelResponse": {
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cancelled"
+        ],
+        "title": "SoulseekCancelResponse",
+        "type": "object"
+      },
+      "SoulseekDownloadEntry": {
+        "properties": {
+          "artwork_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Path"
+          },
+          "artwork_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Status"
+          },
+          "artwork_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Url"
+          },
+          "composer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composer"
+          },
+          "copyright": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copyright"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Genre"
+          },
+          "has_artwork": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Artwork"
+          },
+          "has_lyrics": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Lyrics"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "isrc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isrc"
+          },
+          "lyrics_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lyrics Path"
+          },
+          "lyrics_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lyrics Status"
+          },
+          "organized_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organized Path"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producer"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "spotify_album_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Album Id"
+          },
+          "spotify_track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Track Id"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "state",
+          "progress",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SoulseekDownloadEntry",
+        "type": "object"
+      },
+      "SoulseekDownloadRequest": {
+        "properties": {
+          "files": {
+            "description": "List of files to download",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "username": {
+            "description": "Soulseek username hosting the files",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "files"
+        ],
+        "title": "SoulseekDownloadRequest",
+        "type": "object"
+      },
+      "SoulseekDownloadResponse": {
+        "description": "Response payload when a Soulseek download is queued.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SoulseekDownloadResponse",
+        "type": "object"
+      },
+      "SoulseekDownloadStatus": {
+        "properties": {
+          "downloads": {
+            "items": {
+              "$ref": "#/components/schemas/SoulseekDownloadEntry"
+            },
+            "title": "Downloads",
+            "type": "array"
+          }
+        },
+        "required": [
+          "downloads"
+        ],
+        "title": "SoulseekDownloadStatus",
+        "type": "object"
+      },
+      "SoulseekSearchRequest": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SoulseekSearchRequest",
+        "type": "object"
+      },
+      "SoulseekSearchResponse": {
+        "description": "Response payload for Soulseek search results.",
+        "properties": {
+          "raw": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "results": {
+            "items": {},
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SoulseekSearchResponse",
+        "type": "object"
+      },
+      "SpotifySearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SpotifySearchResponse",
+        "type": "object"
+      },
+      "StatsResponse": {
+        "properties": {
+          "stats": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Stats",
+            "type": "object"
+          }
+        },
+        "required": [
+          "stats"
+        ],
+        "title": "StatsResponse",
+        "type": "object"
+      },
+      "StatusResponse": {
+        "properties": {
+          "album_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Album Count"
+          },
+          "artist_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist Count"
+          },
+          "connections": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connections"
+          },
+          "last_scan": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "track_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Count"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StatusResponse",
+        "type": "object"
+      },
+      "TrackDetailResponse": {
+        "properties": {
+          "track": {
+            "additionalProperties": true,
+            "title": "Track",
+            "type": "object"
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "title": "TrackDetailResponse",
+        "type": "object"
+      },
+      "TrackIdsPayload": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "TrackIdsPayload",
+        "type": "object"
+      },
+      "UpdateRequest": {
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "UpdateRequest",
+        "type": "object"
+      },
+      "UpdateResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "UpdateResponse",
+        "type": "object"
+      },
+      "UserProfileResponse": {
+        "properties": {
+          "profile": {
+            "additionalProperties": true,
+            "title": "Profile",
+            "type": "object"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "title": "UserProfileResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WatchlistArtistCreate": {
+        "properties": {
+          "name": {
+            "description": "Display name for the artist",
+            "title": "Name",
+            "type": "string"
+          },
+          "spotify_artist_id": {
+            "description": "Spotify artist identifier",
+            "title": "Spotify Artist Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "spotify_artist_id",
+          "name"
+        ],
+        "title": "WatchlistArtistCreate",
+        "type": "object"
+      },
+      "WatchlistArtistEntry": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_checked": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "spotify_artist_id": {
+            "title": "Spotify Artist Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "spotify_artist_id",
+          "name",
+          "created_at"
+        ],
+        "title": "WatchlistArtistEntry",
+        "type": "object"
+      },
+      "WatchlistListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WatchlistArtistEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "WatchlistListResponse",
+        "type": "object"
+      },
+      "WriteRequest": {
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          }
+        },
+        "title": "WriteRequest",
+        "type": "object"
+      },
+      "WriteResponse": {
+        "properties": {
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          },
+          "written": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Written"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "WriteResponse",
+        "type": "object"
+      },
+      "app__routers__sync_router__SearchRequest": {
+        "description": "Request payload for the global search endpoint.",
+        "properties": {
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchFilterPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optionale Filter f\u00fcr Genre, Jahr und Qualit\u00e4t"
+          },
+          "query": {
+            "description": "Freitext-Suchbegriff",
+            "title": "Query",
+            "type": "string"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optionale Quellenauswahl (spotify, plex, soulseek)",
+            "title": "Sources"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "app__schemas_search__SearchRequest": {
+        "description": "Incoming payload for the unified search endpoint.",
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/SearchFilters"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/SearchPagination"
+          },
+          "query": {
+            "description": "Free-text search query.",
+            "title": "Query",
+            "type": "string"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SearchSort"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "spotify",
+                    "plex",
+                    "soulseek"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit set of sources to query. Defaults to all sources.",
+            "title": "Sources"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Harmony Backend",
+    "version": "1.4.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Root  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "description": "Return the most recent activity entries from persistent storage.",
+        "operationId": "list_activity_api_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Activity Api Activity Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Activity",
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/activity/export": {
+      "get": {
+        "description": "Export activity history entries either as JSON or CSV.",
+        "operationId": "export_activity_history_api_activity_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Activity History",
+        "tags": [
+          "Activity"
+        ]
+      }
+    },
+    "/api/download": {
+      "post": {
+        "description": "Persist requested downloads and enqueue them for the SyncWorker.",
+        "operationId": "start_download_api_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoulseekDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Download Api Download Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Download",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/download/{download_id}": {
+      "delete": {
+        "description": "Cancel a queued or running download.",
+        "operationId": "cancel_download_api_download__download_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Download Api Download  Download Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Download",
+        "tags": [
+          "Download"
+        ]
+      },
+      "get": {
+        "description": "Return the persisted state of a single download.",
+        "operationId": "get_download_api_download__download_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadEntryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Download",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/download/{download_id}/priority": {
+      "patch": {
+        "description": "Update the priority of a persisted download.",
+        "operationId": "update_download_priority_api_download__download_id__priority_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadPriorityUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadEntryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Download Priority",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/download/{download_id}/retry": {
+      "post": {
+        "description": "Retry a failed or cancelled download by creating a new entry.",
+        "operationId": "retry_download_api_download__download_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Download Api Download  Download Id  Retry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Download",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/downloads": {
+      "get": {
+        "description": "Return downloads with optional status filtering.",
+        "operationId": "list_downloads_api_downloads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "All",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Downloads",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/downloads/export": {
+      "get": {
+        "description": "Export downloads as JSON or CSV without paging limits.",
+        "operationId": "export_downloads_api_downloads_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Downloads",
+        "tags": [
+          "Download"
+        ]
+      }
+    },
+    "/api/health/plex": {
+      "get": {
+        "operationId": "plex_health_api_health_plex_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plex Health",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/health/soulseek": {
+      "get": {
+        "operationId": "soulseek_health_api_health_soulseek_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Health",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/health/spotify": {
+      "get": {
+        "operationId": "spotify_health_api_health_spotify_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Spotify Health",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/metadata/status": {
+      "get": {
+        "description": "Return the current metadata job status.",
+        "operationId": "get_metadata_status_api_metadata_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Metadata Status Api Metadata Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Metadata Status",
+        "tags": [
+          "Metadata",
+          "Metadata"
+        ]
+      }
+    },
+    "/api/metadata/stop": {
+      "post": {
+        "description": "Request to stop the running metadata job.",
+        "operationId": "stop_metadata_update_api_metadata_stop_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Metadata Update Api Metadata Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop Metadata Update",
+        "tags": [
+          "Metadata",
+          "Metadata"
+        ]
+      }
+    },
+    "/api/metadata/update": {
+      "post": {
+        "description": "Kick off a metadata update job.",
+        "operationId": "start_metadata_update_api_metadata_update_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Metadata Update Api Metadata Update Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start Metadata Update",
+        "tags": [
+          "Metadata",
+          "Metadata"
+        ]
+      }
+    },
+    "/api/search": {
+      "post": {
+        "description": "Perform a combined search across Spotify, Plex and Soulseek.",
+        "operationId": "global_search_api_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__routers__sync_router__SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Search Api Search Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Search",
+        "tags": [
+          "Sync",
+          "Sync"
+        ]
+      }
+    },
+    "/api/sync": {
+      "post": {
+        "description": "Run playlist and library synchronisation tasks on demand.",
+        "operationId": "trigger_manual_sync_api_sync_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Manual Sync Api Sync Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Trigger Manual Sync",
+        "tags": [
+          "Sync",
+          "Sync"
+        ]
+      }
+    },
+    "/api/system/stats": {
+      "get": {
+        "description": "Return system statistics such as CPU, memory and disk usage.",
+        "operationId": "get_system_stats_api_system_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get System Stats Api System Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get System Stats",
+        "tags": [
+          "System",
+          "System"
+        ]
+      }
+    },
+    "/beets/albums": {
+      "get": {
+        "description": "List all albums managed by Beets.",
+        "operationId": "list_albums_beets_albums_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAlbumsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Albums",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/fields": {
+      "get": {
+        "description": "Return all available Beets fields.",
+        "operationId": "list_fields_beets_fields_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Fields",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/import": {
+      "post": {
+        "description": "Import new music into the Beets library.",
+        "operationId": "import_music_beets_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Music",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/move": {
+      "post": {
+        "description": "Move files in the Beets library, optionally filtering by a query.",
+        "operationId": "move_items_beets_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move Items",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/query": {
+      "post": {
+        "description": "Execute a formatted Beets query.",
+        "operationId": "run_query_beets_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Query",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/remove": {
+      "delete": {
+        "description": "Remove library items that match a query.",
+        "operationId": "remove_items_beets_remove_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Items",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/stats": {
+      "get": {
+        "description": "Return statistics about the Beets library.",
+        "operationId": "library_stats_beets_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Library Stats",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/tracks": {
+      "get": {
+        "description": "List all track titles managed by Beets.",
+        "operationId": "list_tracks_beets_tracks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListTracksResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Tracks",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/update": {
+      "post": {
+        "description": "Update Beets library metadata, optionally for a specific path.",
+        "operationId": "update_library_beets_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Library",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/beets/write": {
+      "post": {
+        "description": "Write tags to files, optionally filtering by a query.",
+        "operationId": "write_tags_beets_write_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Tags",
+        "tags": [
+          "Beets"
+        ]
+      }
+    },
+    "/matching/discography/plex": {
+      "post": {
+        "description": "Return missing Spotify tracks for a complete discography.",
+        "operationId": "discography_to_plex_matching_discography_plex_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscographyMatchingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscographyMatchingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discography To Plex",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
+    "/matching/spotify-to-plex": {
+      "post": {
+        "description": "Match a Spotify track against Plex candidates and persist the result.",
+        "operationId": "spotify_to_plex_matching_spotify_to_plex_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spotify To Plex",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
+    "/matching/spotify-to-plex-album": {
+      "post": {
+        "description": "Return the best matching Plex album for the provided Spotify album.",
+        "operationId": "spotify_to_plex_album_matching_spotify_to_plex_album_post",
+        "parameters": [
+          {
+            "description": "Persist album matches for individual tracks",
+            "in": "query",
+            "name": "persist",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Persist album matches for individual tracks",
+              "title": "Persist",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlbumMatchingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spotify To Plex Album",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
+    "/matching/spotify-to-soulseek": {
+      "post": {
+        "description": "Match a Spotify track against Soulseek candidates and persist the result.",
+        "operationId": "spotify_to_soulseek_matching_spotify_to_soulseek_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spotify To Soulseek",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
+    "/plex/devices": {
+      "get": {
+        "operationId": "list_devices_plex_devices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Devices Plex Devices Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Devices",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/dvr": {
+      "get": {
+        "operationId": "list_dvr_plex_dvr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Dvr Plex Dvr Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Dvr",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/library/metadata/{item_id}": {
+      "get": {
+        "operationId": "fetch_metadata_plex_library_metadata__item_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fetch Metadata Plex Library Metadata  Item Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Metadata",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/library/sections": {
+      "get": {
+        "operationId": "list_libraries_plex_library_sections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Libraries Plex Library Sections Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Libraries",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/library/sections/{section_id}/all": {
+      "get": {
+        "operationId": "browse_library_plex_library_sections__section_id__all_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "section_id",
+            "required": true,
+            "schema": {
+              "title": "Section Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Browse Library Plex Library Sections  Section Id  All Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Browse Library",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/livetv": {
+      "get": {
+        "operationId": "list_live_tv_plex_livetv_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Live Tv Plex Livetv Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Live Tv",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/notifications": {
+      "get": {
+        "operationId": "listen_notifications_plex_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Listen Notifications",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/playQueues": {
+      "post": {
+        "operationId": "create_playqueue_plex_playQueues_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Playqueue Plex Playqueues Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Playqueue",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/playQueues/{playqueue_id}": {
+      "get": {
+        "operationId": "get_playqueue_plex_playQueues__playqueue_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playqueue_id",
+            "required": true,
+            "schema": {
+              "title": "Playqueue Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Playqueue Plex Playqueues  Playqueue Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Playqueue",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/playlists": {
+      "get": {
+        "operationId": "list_playlists_plex_playlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Playlists Plex Playlists Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Playlists",
+        "tags": [
+          "Plex"
+        ]
+      },
+      "post": {
+        "operationId": "create_playlist_plex_playlists_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Playlist Plex Playlists Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Playlist",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/playlists/{playlist_id}": {
+      "delete": {
+        "operationId": "delete_playlist_plex_playlists__playlist_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Playlist Plex Playlists  Playlist Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Playlist",
+        "tags": [
+          "Plex"
+        ]
+      },
+      "put": {
+        "operationId": "update_playlist_plex_playlists__playlist_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Playlist Plex Playlists  Playlist Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Playlist",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/rate": {
+      "post": {
+        "operationId": "rate_item_plex_rate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Rate Item Plex Rate Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rate Item",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/scrobble": {
+      "post": {
+        "operationId": "post_scrobble_plex_scrobble_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Post Scrobble Plex Scrobble Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Scrobble",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/status": {
+      "get": {
+        "operationId": "plex_status_plex_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plex Status Plex Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plex Status",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/status/sessions": {
+      "get": {
+        "operationId": "active_sessions_plex_status_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Active Sessions Plex Status Sessions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Active Sessions",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/status/sessions/history/all": {
+      "get": {
+        "operationId": "session_history_plex_status_sessions_history_all_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Session History Plex Status Sessions History All Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Session History",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/tags/{item_id}": {
+      "post": {
+        "operationId": "sync_tags_plex_tags__item_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sync Tags Plex Tags  Item Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Tags",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/timeline": {
+      "get": {
+        "operationId": "get_timeline_plex_timeline_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Timeline Plex Timeline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Timeline",
+        "tags": [
+          "Plex"
+        ]
+      },
+      "post": {
+        "operationId": "post_timeline_plex_timeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Post Timeline Plex Timeline Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Timeline",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/plex/unscrobble": {
+      "post": {
+        "operationId": "post_unscrobble_plex_unscrobble_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Post Unscrobble Plex Unscrobble Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Unscrobble",
+        "tags": [
+          "Plex"
+        ]
+      }
+    },
+    "/search": {
+      "post": {
+        "description": "Aggregate search results across all configured music sources.",
+        "operationId": "unified_search_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__schemas_search__SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unified Search",
+        "tags": [
+          "Search"
+        ]
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "get_settings_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "post": {
+        "operationId": "update_setting_settings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Setting",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/artist-preferences": {
+      "get": {
+        "operationId": "get_artist_preferences_settings_artist_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Artist Preferences",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "post": {
+        "operationId": "save_artist_preferences_settings_artist_preferences_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtistPreferencesPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Artist Preferences",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/settings/history": {
+      "get": {
+        "operationId": "get_settings_history_settings_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings History",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/soulseek/discography/download": {
+      "post": {
+        "description": "Persist and enqueue a complete discography download job.",
+        "operationId": "soulseek_discography_download_soulseek_discography_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscographyDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscographyJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Discography Download",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download": {
+      "post": {
+        "description": "Queue a Soulseek download job and persist queued entries.",
+        "operationId": "soulseek_download_soulseek_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoulseekDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoulseekDownloadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}": {
+      "delete": {
+        "description": "Cancel a Soulseek download by identifier.",
+        "operationId": "soulseek_cancel_soulseek_download__download_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoulseekCancelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Cancel",
+        "tags": [
+          "Soulseek"
+        ]
+      },
+      "get": {
+        "operationId": "soulseek_download_detail_soulseek_download__download_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Download Detail Soulseek Download  Download Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download Detail",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/artwork": {
+      "get": {
+        "description": "Return the stored artwork as an image file.",
+        "operationId": "soulseek_download_artwork_soulseek_download__download_id__artwork_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download Artwork",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/artwork/refresh": {
+      "post": {
+        "description": "Force an artwork refresh for a completed download.",
+        "operationId": "soulseek_refresh_artwork_soulseek_download__download_id__artwork_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Refresh Artwork",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/lyrics": {
+      "get": {
+        "description": "Return the generated LRC lyrics for a completed download.",
+        "operationId": "soulseek_download_lyrics_soulseek_download__download_id__lyrics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download Lyrics",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/lyrics/refresh": {
+      "post": {
+        "description": "Force a new lyrics lookup for the given download.",
+        "operationId": "refresh_download_lyrics_soulseek_download__download_id__lyrics_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Download Lyrics",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/metadata": {
+      "get": {
+        "description": "Return the stored metadata for a completed download.",
+        "operationId": "soulseek_download_metadata_soulseek_download__download_id__metadata_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadMetadataResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download Metadata",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/metadata/refresh": {
+      "post": {
+        "description": "Trigger a metadata refresh for the given download.",
+        "operationId": "refresh_download_metadata_soulseek_download__download_id__metadata_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Download Metadata",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/download/{download_id}/queue": {
+      "get": {
+        "operationId": "soulseek_download_queue_soulseek_download__download_id__queue_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Download Queue Soulseek Download  Download Id  Queue Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Download Queue",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/downloads": {
+      "get": {
+        "description": "Return persisted download progress from the database.",
+        "operationId": "soulseek_downloads_soulseek_downloads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoulseekDownloadStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Downloads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/downloads/all": {
+      "get": {
+        "operationId": "soulseek_all_downloads_soulseek_downloads_all_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek All Downloads Soulseek Downloads All Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek All Downloads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/downloads/completed": {
+      "delete": {
+        "operationId": "soulseek_remove_completed_downloads_soulseek_downloads_completed_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Remove Completed Downloads Soulseek Downloads Completed Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Remove Completed Downloads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/enqueue": {
+      "post": {
+        "operationId": "soulseek_enqueue_soulseek_enqueue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoulseekDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Enqueue Soulseek Enqueue Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Enqueue",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/search": {
+      "post": {
+        "description": "Perform a Soulseek search and normalise the JSON response.",
+        "operationId": "soulseek_search_soulseek_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoulseekSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoulseekSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Search",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/status": {
+      "get": {
+        "description": "Return connectivity status for the Soulseek daemon.",
+        "operationId": "soulseek_status_soulseek_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Status",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/upload/{upload_id}": {
+      "delete": {
+        "operationId": "soulseek_cancel_upload_soulseek_upload__upload_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Cancel Upload Soulseek Upload  Upload Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Cancel Upload",
+        "tags": [
+          "Soulseek"
+        ]
+      },
+      "get": {
+        "operationId": "soulseek_upload_detail_soulseek_upload__upload_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Upload Detail Soulseek Upload  Upload Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek Upload Detail",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/uploads": {
+      "get": {
+        "operationId": "soulseek_uploads_soulseek_uploads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Uploads Soulseek Uploads Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Uploads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/uploads/all": {
+      "get": {
+        "operationId": "soulseek_all_uploads_soulseek_uploads_all_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek All Uploads Soulseek Uploads All Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek All Uploads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/uploads/completed": {
+      "delete": {
+        "operationId": "soulseek_remove_completed_uploads_soulseek_uploads_completed_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek Remove Completed Uploads Soulseek Uploads Completed Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Soulseek Remove Completed Uploads",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/address": {
+      "get": {
+        "operationId": "soulseek_user_address_soulseek_user__username__address_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Address Soulseek User  Username  Address Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Address",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/browse": {
+      "get": {
+        "operationId": "soulseek_user_browse_soulseek_user__username__browse_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Browse Soulseek User  Username  Browse Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Browse",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/browsing_status": {
+      "get": {
+        "operationId": "soulseek_user_browsing_status_soulseek_user__username__browsing_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Browsing Status Soulseek User  Username  Browsing Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Browsing Status",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/directory": {
+      "get": {
+        "operationId": "soulseek_user_directory_soulseek_user__username__directory_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Directory path to browse",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "Directory path to browse",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Directory Soulseek User  Username  Directory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Directory",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/info": {
+      "get": {
+        "operationId": "soulseek_user_info_soulseek_user__username__info_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Info Soulseek User  Username  Info Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Info",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/soulseek/user/{username}/status": {
+      "get": {
+        "operationId": "soulseek_user_status_soulseek_user__username__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Soulseek User Status Soulseek User  Username  Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Soulseek User Status",
+        "tags": [
+          "Soulseek"
+        ]
+      }
+    },
+    "/spotify/artist/{artist_id}/discography": {
+      "get": {
+        "operationId": "get_artist_discography_spotify_artist__artist_id__discography_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_id",
+            "required": true,
+            "schema": {
+              "title": "Artist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscographyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Artist Discography",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/artist/{artist_id}/releases": {
+      "get": {
+        "operationId": "get_artist_releases_spotify_artist__artist_id__releases_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_id",
+            "required": true,
+            "schema": {
+              "title": "Artist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtistReleasesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Artist Releases",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/artists/followed": {
+      "get": {
+        "operationId": "get_followed_artists_spotify_artists_followed_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowedArtistsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Followed Artists",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/audio-features": {
+      "get": {
+        "operationId": "get_multiple_audio_features_spotify_audio_features_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Ids",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioFeaturesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Multiple Audio Features",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/audio-features/{track_id}": {
+      "get": {
+        "operationId": "get_audio_features_spotify_audio_features__track_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "track_id",
+            "required": true,
+            "schema": {
+              "title": "Track Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioFeaturesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audio Features",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/me": {
+      "get": {
+        "operationId": "get_current_user_spotify_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Current User",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/me/top/artists": {
+      "get": {
+        "operationId": "get_top_artists_spotify_me_top_artists_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Top Artists",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/me/top/tracks": {
+      "get": {
+        "operationId": "get_top_tracks_spotify_me_top_tracks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Top Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/me/tracks": {
+      "delete": {
+        "operationId": "remove_saved_tracks_spotify_me_tracks_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackIdsPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Saved Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      },
+      "get": {
+        "operationId": "get_saved_tracks_spotify_me_tracks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTracksResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Saved Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      },
+      "put": {
+        "operationId": "save_tracks_spotify_me_tracks_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackIdsPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/playlists": {
+      "get": {
+        "operationId": "list_playlists_spotify_playlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Playlists",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/playlists/{playlist_id}/reorder": {
+      "put": {
+        "operationId": "reorder_playlist_spotify_playlists__playlist_id__reorder_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaylistReorderPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reorder Playlist",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/playlists/{playlist_id}/tracks": {
+      "delete": {
+        "operationId": "remove_tracks_from_playlist_spotify_playlists__playlist_id__tracks_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaylistTracksPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Tracks From Playlist",
+        "tags": [
+          "Spotify"
+        ]
+      },
+      "get": {
+        "operationId": "get_playlist_items_spotify_playlists__playlist_id__tracks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistItemsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Playlist Items",
+        "tags": [
+          "Spotify"
+        ]
+      },
+      "post": {
+        "operationId": "add_tracks_to_playlist_spotify_playlists__playlist_id__tracks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaylistTracksPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Tracks To Playlist",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/recommendations": {
+      "get": {
+        "operationId": "get_recommendations_spotify_recommendations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "seed_tracks",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed Tracks"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seed_artists",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed Artists"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seed_genres",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed Genres"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Recommendations",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/search/albums": {
+      "get": {
+        "operationId": "search_albums_spotify_search_albums_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Albums",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/search/artists": {
+      "get": {
+        "operationId": "search_artists_spotify_search_artists_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Artists",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/search/tracks": {
+      "get": {
+        "operationId": "search_tracks_spotify_search_tracks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Tracks",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/status": {
+      "get": {
+        "operationId": "spotify_status_spotify_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Spotify Status",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/spotify/track/{track_id}": {
+      "get": {
+        "operationId": "get_track_details_spotify_track__track_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "track_id",
+            "required": true,
+            "schema": {
+              "title": "Track Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Track Details",
+        "tags": [
+          "Spotify"
+        ]
+      }
+    },
+    "/status": {
+      "get": {
+        "description": "Return general application status data for the dashboard.",
+        "operationId": "get_status_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Status Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "System",
+          "System"
+        ]
+      }
+    },
+    "/watchlist": {
+      "get": {
+        "description": "Return all registered watchlist artists.",
+        "operationId": "list_watchlist_watchlist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Watchlist",
+        "tags": [
+          "Watchlist",
+          "Watchlist"
+        ]
+      },
+      "post": {
+        "description": "Add a new artist to the automated release watchlist.",
+        "operationId": "add_watchlist_artist_watchlist_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistArtistCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistArtistEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Watchlist Artist",
+        "tags": [
+          "Watchlist",
+          "Watchlist"
+        ]
+      }
+    },
+    "/watchlist/{artist_id}": {
+      "delete": {
+        "description": "Remove an artist from the release watchlist.",
+        "operationId": "remove_watchlist_artist_watchlist__artist_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_id",
+            "required": true,
+            "schema": {
+              "title": "Artist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Watchlist Artist",
+        "tags": [
+          "Watchlist",
+          "Watchlist"
+        ]
+      }
+    }
+  }
+}

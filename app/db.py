@@ -27,9 +27,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _build_engine(database_url: str) -> Engine:
-    connect_args = (
-        {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    )
+    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     return create_engine(database_url, connect_args=connect_args)
 
 
@@ -76,12 +74,7 @@ def _ensure_engine(*, auto_init: bool = True) -> None:
     )
     _configured_database_url = database_url
 
-    if (
-        auto_init
-        and not _initializing_db
-        and sqlite_path is not None
-        and not sqlite_path.exists()
-    ):
+    if auto_init and not _initializing_db and sqlite_path is not None and not sqlite_path.exists():
         init_db()
 
 

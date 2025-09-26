@@ -74,9 +74,7 @@ class TestImportFile:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_called_process_error(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "import"], stderr="boom"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "import"], stderr="boom")
 
         client = BeetsClient()
 
@@ -150,12 +148,15 @@ class TestListAlbums:
 class TestListTracks:
     @patch("app.core.beets_client.subprocess.run")
     def test_success(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed([
-            "beet",
-            "ls",
-            "-f",
-            "$title",
-        ], "Foo\nBar\n")
+        mock_run.return_value = _completed(
+            [
+                "beet",
+                "ls",
+                "-f",
+                "$title",
+            ],
+            "Foo\nBar\n",
+        )
 
         client = BeetsClient()
 
@@ -166,9 +167,7 @@ class TestListTracks:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_failure(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "ls", "-f", "$title"]
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "ls", "-f", "$title"])
 
         client = BeetsClient()
 
@@ -199,9 +198,7 @@ class TestStats:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "stats"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "stats"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -233,9 +230,7 @@ class TestAvailability:
 class TestRemove:
     @patch("app.core.beets_client.subprocess.run")
     def test_success(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed(
-            ["beet", "remove", "genre:rock"], "Removed 2 items\n"
-        )
+        mock_run.return_value = _completed(["beet", "remove", "genre:rock"], "Removed 2 items\n")
 
         client = BeetsClient()
 
@@ -246,13 +241,16 @@ class TestRemove:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_force(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed([
-            "beet",
-            "remove",
-            "-f",
-            "genre:rock",
-            "year:2020",
-        ], "Removed 10 items\n")
+        mock_run.return_value = _completed(
+            [
+                "beet",
+                "remove",
+                "-f",
+                "genre:rock",
+                "year:2020",
+            ],
+            "Removed 10 items\n",
+        )
 
         client = BeetsClient()
 
@@ -277,9 +275,7 @@ class TestRemove:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "remove"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "remove"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -309,9 +305,7 @@ class TestMove:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_with_query(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed(
-            ["beet", "move", "artist:Radiohead"], "Moved 1 items\n"
-        )
+        mock_run.return_value = _completed(["beet", "move", "artist:Radiohead"], "Moved 1 items\n")
 
         client = BeetsClient()
 
@@ -322,9 +316,7 @@ class TestMove:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_failure(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "move"], stderr="fail"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "move"], stderr="fail")
 
         client = BeetsClient()
 
@@ -333,9 +325,7 @@ class TestMove:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "move"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "move"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -359,9 +349,7 @@ class TestWrite:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_with_query(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed(
-            ["beet", "write", "year:2020"], "No changes"
-        )
+        mock_run.return_value = _completed(["beet", "write", "year:2020"], "No changes")
 
         client = BeetsClient()
 
@@ -372,9 +360,7 @@ class TestWrite:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_failure(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "write"], stderr="fail"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "write"], stderr="fail")
 
         client = BeetsClient()
 
@@ -383,9 +369,7 @@ class TestWrite:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "write"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "write"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -398,10 +382,13 @@ class TestWrite:
 class TestFields:
     @patch("app.core.beets_client.subprocess.run")
     def test_fields(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed([
-            "beet",
-            "fields",
-        ], "artist\nalbum\n")
+        mock_run.return_value = _completed(
+            [
+                "beet",
+                "fields",
+            ],
+            "artist\nalbum\n",
+        )
 
         client = BeetsClient()
 
@@ -412,9 +399,7 @@ class TestFields:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_failure(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "fields"], stderr="oops"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "fields"], stderr="oops")
 
         client = BeetsClient()
 
@@ -423,9 +408,7 @@ class TestFields:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "fields"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "fields"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -438,14 +421,17 @@ class TestFields:
 class TestQuery:
     @patch("app.core.beets_client.subprocess.run")
     def test_query(self, mock_run: MagicMock) -> None:
-        mock_run.return_value = _completed([
-            "beet",
-            "ls",
-            "-f",
-            "$artist - $title",
-            "genre:rock",
-            "year:1990",
-        ], "Artist - Song\n")
+        mock_run.return_value = _completed(
+            [
+                "beet",
+                "ls",
+                "-f",
+                "$artist - $title",
+                "genre:rock",
+                "year:1990",
+            ],
+            "Artist - Song\n",
+        )
 
         client = BeetsClient()
 
@@ -468,13 +454,11 @@ class TestQuery:
         client = BeetsClient()
 
         with pytest.raises(BeetsClientError):
-            client.query("\"")
+            client.query('"')
 
     @patch("app.core.beets_client.subprocess.run")
     def test_failure(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, ["beet", "ls"], stderr="boom"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["beet", "ls"], stderr="boom")
 
         client = BeetsClient()
 
@@ -483,9 +467,7 @@ class TestQuery:
 
     @patch("app.core.beets_client.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["beet", "ls"], timeout=60.0
-        )
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["beet", "ls"], timeout=60.0)
 
         client = BeetsClient()
 
@@ -549,9 +531,7 @@ class TestRouterUpdate:
         assert call_args.kwargs == {}
 
     @patch("app.routers.beets_router.run_in_threadpool", new_callable=AsyncMock)
-    def test_update_without_path(
-        self, mock_pool: AsyncMock, api_client: TestClient
-    ) -> None:
+    def test_update_without_path(self, mock_pool: AsyncMock, api_client: TestClient) -> None:
         mock_pool.return_value = ""
 
         response = api_client.post("/beets/update", json={})
@@ -794,4 +774,3 @@ class TestRouterQuery:
 
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid query syntax"
-

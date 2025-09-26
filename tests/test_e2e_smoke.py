@@ -50,7 +50,4 @@ def test_e2e_download_smoke(client) -> None:
     activity_response = client.get("/api/activity")
     assert activity_response.status_code == 200
     activity_items = activity_response.json()["items"]
-    assert any(
-        item["type"] == "download" and item["status"] == "queued"
-        for item in activity_items
-    )
+    assert any(item["type"] == "download" and item["status"] == "queued" for item in activity_items)

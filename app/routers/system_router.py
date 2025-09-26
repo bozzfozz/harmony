@@ -1,4 +1,5 @@
 """System status endpoints exposed for the dashboard."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -135,8 +136,7 @@ async def get_status(request: Request) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     uptime_seconds = (now - _START_TIME).total_seconds()
     workers = {
-        name: _worker_payload(name, descriptor, request)
-        for name, descriptor in _WORKERS.items()
+        name: _worker_payload(name, descriptor, request) for name, descriptor in _WORKERS.items()
     }
 
     with session_scope() as session:
@@ -201,4 +201,3 @@ async def get_system_stats() -> Dict[str, Any]:
 
     logger.debug("Collected system statistics: %s", stats)
     return stats
-

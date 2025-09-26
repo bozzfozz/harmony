@@ -24,11 +24,7 @@ def test_download_endpoint_blocks_without_soulseek_credentials(client) -> None:
     with session_scope() as session:
         downloads = session.query(Download).all()
         assert downloads == []
-        event = (
-            session.query(ActivityEvent)
-            .order_by(ActivityEvent.id.desc())
-            .first()
-        )
+        event = session.query(ActivityEvent).order_by(ActivityEvent.id.desc()).first()
 
     assert event is not None
     assert event.type == "download"

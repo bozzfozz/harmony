@@ -1,4 +1,5 @@
 """Static configuration defaults for Harmony settings."""
+
 from __future__ import annotations
 
 from typing import Mapping

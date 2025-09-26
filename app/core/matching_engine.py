@@ -50,8 +50,7 @@ class MusicMatchingEngine:
         duration_score = 0.0
         if duration_spotify and duration_plex:
             duration_score = 1.0 - min(
-                abs(duration_spotify - duration_plex)
-                / max(duration_spotify, duration_plex),
+                abs(duration_spotify - duration_plex) / max(duration_spotify, duration_plex),
                 1,
             )
 
@@ -131,9 +130,7 @@ class MusicMatchingEngine:
     def calculate_slskd_match_confidence(
         self, spotify_track: Dict[str, str], soulseek_entry: Dict[str, str]
     ) -> float:
-        title_score = self._ratio(
-            spotify_track.get("name"), soulseek_entry.get("filename")
-        )
+        title_score = self._ratio(spotify_track.get("name"), soulseek_entry.get("filename"))
         artist = (
             (spotify_track.get("artists") or [{}])[0].get("name")
             if isinstance(spotify_track.get("artists"), list)
@@ -141,9 +138,7 @@ class MusicMatchingEngine:
         )
         artist_score = self._ratio(artist, soulseek_entry.get("username"))
         bitrate_score = 1.0 if soulseek_entry.get("bitrate", 0) >= 256 else 0.5
-        return round(
-            (title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4
-        )
+        return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)
 
     def _extract_album_artist(self, album: Dict[str, str]) -> Optional[str]:
         artists = album.get("artists")
@@ -200,9 +195,7 @@ class MusicMatchingEngine:
 
         name_score = self._ratio(spotify_album.get("name"), plex_album.get("title"))
         spotify_artist = self._extract_album_artist(spotify_album)
-        plex_artist = self._extract_album_artist(plex_album) or plex_album.get(
-            "parentTitle"
-        )
+        plex_artist = self._extract_album_artist(plex_album) or plex_album.get("parentTitle")
         artist_score = self._ratio(spotify_artist, plex_artist)
 
         spotify_tracks = self._album_track_count(spotify_album)

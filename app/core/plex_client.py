@@ -133,9 +133,7 @@ class PlexClient:
         data: Dict[str, Any] | None = None,
         json_body: Dict[str, Any] | None = None,
     ) -> Any:
-        return await self._request(
-            "PUT", path, params=params, data=data, json_body=json_body
-        )
+        return await self._request("PUT", path, params=params, data=data, json_body=json_body)
 
     async def _delete(self, path: str, params: Dict[str, Any] | None = None) -> Any:
         return await self._request("DELETE", path, params=params)
@@ -145,16 +143,12 @@ class PlexClient:
 
         return await self._get("/library/sections", params=params)
 
-    async def get_library_items(
-        self, section_id: str, params: Dict[str, Any] | None = None
-    ) -> Any:
+    async def get_library_items(self, section_id: str, params: Dict[str, Any] | None = None) -> Any:
         """Return items for a given library section."""
 
         return await self._get(f"/library/sections/{section_id}/all", params=params)
 
-    async def refresh_library_section(
-        self, section_id: str, *, full: bool = False
-    ) -> None:
+    async def refresh_library_section(self, section_id: str, *, full: bool = False) -> None:
         """Trigger a Plex library scan for the given section."""
 
         params = {"force": int(bool(full))}
@@ -332,9 +326,7 @@ class PlexClient:
                     bitrate = int(bitrate_value)
                 elif isinstance(bitrate_value, str) and bitrate_value.isdigit():
                     bitrate = int(bitrate_value)
-                codec_value = primary_media.get("audioCodec") or primary_media.get(
-                    "container"
-                )
+                codec_value = primary_media.get("audioCodec") or primary_media.get("container")
                 if codec_value:
                     audio_codec = str(codec_value).lower()
 
@@ -414,9 +406,7 @@ class PlexClient:
 
         stats = {"artists": 0, "albums": 0, "tracks": 0}
         libraries = await self.get_libraries()
-        container = (
-            libraries.get("MediaContainer", {}) if isinstance(libraries, dict) else {}
-        )
+        container = libraries.get("MediaContainer", {}) if isinstance(libraries, dict) else {}
         for section in container.get("Directory", []):
             if section.get("type") != "artist":
                 continue
@@ -424,21 +414,15 @@ class PlexClient:
             if not section_id:
                 continue
             items = await self.get_library_items(section_id, params={"type": "10"})
-            section_container = (
-                items.get("MediaContainer", {}) if isinstance(items, dict) else {}
-            )
+            section_container = items.get("MediaContainer", {}) if isinstance(items, dict) else {}
             stats["artists"] += int(section_container.get("totalSize", 0))
 
             albums = await self.get_library_items(section_id, params={"type": "9"})
-            album_container = (
-                albums.get("MediaContainer", {}) if isinstance(albums, dict) else {}
-            )
+            album_container = albums.get("MediaContainer", {}) if isinstance(albums, dict) else {}
             stats["albums"] += int(album_container.get("totalSize", 0))
 
             tracks = await self.get_library_items(section_id, params={"type": "8"})
-            track_container = (
-                tracks.get("MediaContainer", {}) if isinstance(tracks, dict) else {}
-            )
+            track_container = tracks.get("MediaContainer", {}) if isinstance(tracks, dict) else {}
             stats["tracks"] += int(track_container.get("totalSize", 0))
         return stats
 

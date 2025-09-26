@@ -173,9 +173,7 @@ async def test_autosync_worker_quality_and_skip_behaviour() -> None:
 
     soulseek.results = {
         "Artist A Track A": {
-            "results": [
-                {"username": "low", "files": [{"filename": "a.mp3", "bitrate": 128}]}
-            ]
+            "results": [{"username": "low", "files": [{"filename": "a.mp3", "bitrate": 128}]}]
         },
         "Artist B Track B": {
             "results": [

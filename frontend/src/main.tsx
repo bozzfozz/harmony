@@ -5,6 +5,16 @@ import App from './App';
 import './styles/index.css';
 import { QueryClient, QueryClientProvider } from './lib/query';
 
+declare global {
+  interface Window {
+    __HARMONY_API_URL__?: string;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.__HARMONY_API_URL__ = import.meta.env?.VITE_API_URL;
+}
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

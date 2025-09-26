@@ -145,7 +145,9 @@ async def test_discography_worker_downloads_only_missing_tracks() -> None:
         assert job.status == "done"
 
     assert len(soulseek.download_payloads) == 1
-    assert soulseek.download_payloads[0]["files"][0]["filename"].startswith("Another Artist Track Two")
+    assert soulseek.download_payloads[0]["files"][0]["filename"].startswith(
+        "Another Artist Track Two"
+    )
 
 
 def test_discography_download_endpoint_persists_job(client) -> None:

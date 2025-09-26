@@ -143,9 +143,7 @@ async def update_library(req: UpdateRequest) -> UpdateResponse:
     return UpdateResponse(success=True, message=output or "Library updated")
 
 
-@router.delete(
-    "/remove", response_model=RemoveResponse, response_model_exclude_none=True
-)
+@router.delete("/remove", response_model=RemoveResponse, response_model_exclude_none=True)
 async def remove_items(req: RemoveRequest) -> RemoveResponse:
     """Remove library items that match a query."""
 
@@ -153,9 +151,7 @@ async def remove_items(req: RemoveRequest) -> RemoveResponse:
     return RemoveResponse(**result)
 
 
-@router.post(
-    "/move", response_model=MoveResponse, response_model_exclude_none=True
-)
+@router.post("/move", response_model=MoveResponse, response_model_exclude_none=True)
 async def move_items(req: MoveRequest) -> MoveResponse:
     """Move files in the Beets library, optionally filtering by a query."""
 
@@ -163,9 +159,7 @@ async def move_items(req: MoveRequest) -> MoveResponse:
     return MoveResponse(**result)
 
 
-@router.post(
-    "/write", response_model=WriteResponse, response_model_exclude_none=True
-)
+@router.post("/write", response_model=WriteResponse, response_model_exclude_none=True)
 async def write_tags(req: WriteRequest) -> WriteResponse:
     """Write tags to files, optionally filtering by a query."""
 
@@ -209,7 +203,5 @@ async def list_fields() -> FieldsResponse:
 async def run_query(req: QueryRequest) -> QueryResponse:
     """Execute a formatted Beets query."""
 
-    results = await _call_client(
-        beets_client.query, req.query, fmt=req.format
-    )
+    results = await _call_client(beets_client.query, req.query, fmt=req.format)
     return QueryResponse(results=results)

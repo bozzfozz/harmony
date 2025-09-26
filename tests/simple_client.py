@@ -110,7 +110,9 @@ class SimpleTestClient:
             nonlocal status_code, response_headers
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                response_headers = {key.decode(): value.decode() for key, value in message.get("headers", [])}
+                response_headers = {
+                    key.decode(): value.decode() for key, value in message.get("headers", [])
+                }
             elif message["type"] == "http.response.body":
                 response_body.extend(message.get("body", b""))
 

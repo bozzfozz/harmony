@@ -1,4 +1,5 @@
 """Background worker handling deferred matching operations."""
+
 from __future__ import annotations
 
 import asyncio
@@ -132,9 +133,7 @@ class MatchingWorker:
             batch = [first_job]
             while len(batch) < self._batch_size:
                 try:
-                    job = await asyncio.wait_for(
-                        self._queue.get(), timeout=self._batch_wait
-                    )
+                    job = await asyncio.wait_for(self._queue.get(), timeout=self._batch_wait)
                 except asyncio.TimeoutError:
                     break
                 if job is None:
@@ -203,7 +202,10 @@ class MatchingWorker:
         return matches, discarded
 
     def _evaluate_candidates(
-        self, job_type: str | None, spotify_track: Dict[str, Any], candidates: Iterable[Dict[str, Any]]
+        self,
+        job_type: str | None,
+        spotify_track: Dict[str, Any],
+        candidates: Iterable[Dict[str, Any]],
     ) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
         matches: List[Tuple[Dict[str, Any], float]] = []
         rejected = 0

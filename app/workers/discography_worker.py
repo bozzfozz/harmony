@@ -1,4 +1,5 @@
 """Discography download worker."""
+
 from __future__ import annotations
 
 import asyncio
@@ -224,9 +225,7 @@ class DiscographyWorker:
             return
 
         file_path = (
-            file_info.get("local_path")
-            or file_info.get("path")
-            or file_info.get("filename")
+            file_info.get("local_path") or file_info.get("path") or file_info.get("filename")
         )
         if not file_path:
             return
@@ -262,11 +261,7 @@ class DiscographyWorker:
             if isinstance(album_name, str) and album_name.strip():
                 track_info["album"] = album_name.strip()
 
-        duration = (
-            track.get("duration_ms")
-            or track.get("duration")
-            or track.get("durationMs")
-        )
+        duration = track.get("duration_ms") or track.get("duration") or track.get("durationMs")
         if duration is not None:
             track_info["duration"] = duration
 
@@ -289,9 +284,7 @@ class DiscographyWorker:
             return
 
         file_path = (
-            file_info.get("local_path")
-            or file_info.get("path")
-            or file_info.get("filename")
+            file_info.get("local_path") or file_info.get("path") or file_info.get("filename")
         )
         if not file_path:
             return

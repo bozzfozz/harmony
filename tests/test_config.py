@@ -12,9 +12,9 @@ from app.models import Setting
 def _insert_settings(entries: dict[str, str | None]) -> None:
     with session_scope() as session:
         for key, value in entries.items():
-            setting = (
-                session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
-            )
+            setting = session.execute(
+                select(Setting).where(Setting.key == key)
+            ).scalar_one_or_none()
             if setting is None:
                 session.add(Setting(key=key, value=value))
             else:
@@ -38,7 +38,9 @@ def _insert_settings(entries: dict[str, str | None]) -> None:
         ),
     ],
 )
-def test_spotify_configuration_from_database(monkeypatch: pytest.MonkeyPatch, entries, expected) -> None:
+def test_spotify_configuration_from_database(
+    monkeypatch: pytest.MonkeyPatch, entries, expected
+) -> None:
     for key in ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"):
         monkeypatch.delenv(key, raising=False)
 
@@ -95,9 +97,7 @@ def test_configuration_falls_back_to_environment(monkeypatch: pytest.MonkeyPatch
     with session_scope() as session:
         session.execute(
             delete(Setting).where(
-                Setting.key.in_(
-                    ["SPOTIFY_CLIENT_ID", "PLEX_BASE_URL", "SLSKD_URL"]
-                )
+                Setting.key.in_(["SPOTIFY_CLIENT_ID", "PLEX_BASE_URL", "SLSKD_URL"])
             )
         )
         session.commit()

@@ -1,4 +1,5 @@
 """Background worker that synchronises Spotify playlists into the database."""
+
 from __future__ import annotations
 
 import asyncio

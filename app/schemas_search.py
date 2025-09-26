@@ -51,9 +51,7 @@ class SearchFilters(BaseModel):
 
     @field_validator("types", mode="before")
     @classmethod
-    def _normalise_types(
-        cls, value: Optional[Sequence[str]]
-    ) -> Optional[List[ItemTypeLiteral]]:
+    def _normalise_types(cls, value: Optional[Sequence[str]]) -> Optional[List[ItemTypeLiteral]]:
         if value in (None, "", []):
             return None
         filtered: list[ItemTypeLiteral] = []
@@ -134,9 +132,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def _normalise_sources(
-        cls, value: Optional[Sequence[str]]
-    ) -> Optional[List[SourceLiteral]]:
+    def _normalise_sources(cls, value: Optional[Sequence[str]]) -> Optional[List[SourceLiteral]]:
         if value in (None, "", []):
             return None
         normalised: list[SourceLiteral] = []

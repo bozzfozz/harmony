@@ -193,9 +193,7 @@ async def _search_plex(
     try:
         entries = await client.search_music(query, mediatypes=search_types, limit=60)
     except Exception as exc:
-        logger.warning(
-            "Plex search failed directly, falling back to manual lookup: %s", exc
-        )
+        logger.warning("Plex search failed directly, falling back to manual lookup: %s", exc)
         return [], "Plex source unavailable"
 
     results: list[SearchItem] = []
@@ -346,9 +344,7 @@ def _build_spotify_item(
         artists = []
         artist_ids = []
 
-    album_info = (
-        payload.get("album") if isinstance(payload.get("album"), dict) else None
-    )
+    album_info = payload.get("album") if isinstance(payload.get("album"), dict) else None
     album_title = None
     release_date = None
     if album_info:
@@ -441,9 +437,7 @@ def _calculate_score(
     return min(score, 1.0)
 
 
-def _filter_items(
-    items: Iterable[SearchItem], filters: SearchFilters
-) -> List[SearchItem]:
+def _filter_items(items: Iterable[SearchItem], filters: SearchFilters) -> List[SearchItem]:
     type_set = set(filters.types or []) or None
     genre_set = {genre.lower() for genre in (filters.genres or [])} or None
     year_range = filters.year_range
@@ -490,9 +484,7 @@ def _filter_items(
     return filtered
 
 
-def _sort_items(
-    items: List[SearchItem], sort_by: SortByLiteral, order: str
-) -> List[SearchItem]:
+def _sort_items(items: List[SearchItem], sort_by: SortByLiteral, order: str) -> List[SearchItem]:
     reverse = order.lower() == "desc"
 
     def _primary(item: SearchItem) -> float:

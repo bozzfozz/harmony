@@ -7,7 +7,9 @@ from app.models import Setting
 def _insert_settings(values: dict[str, str | None]) -> None:
     with session_scope() as session:
         for key, value in values.items():
-            existing = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
+            existing = session.execute(
+                select(Setting).where(Setting.key == key)
+            ).scalar_one_or_none()
             if existing is not None:
                 existing.value = value
                 continue

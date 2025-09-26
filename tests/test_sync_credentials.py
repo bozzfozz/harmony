@@ -33,11 +33,7 @@ def test_manual_sync_blocks_without_credentials(client) -> None:
     assert set(missing) == {"spotify", "plex", "soulseek"}
 
     with session_scope() as session:
-        event = (
-            session.query(ActivityEvent)
-            .order_by(ActivityEvent.id.desc())
-            .first()
-        )
+        event = session.query(ActivityEvent).order_by(ActivityEvent.id.desc()).first()
 
     assert event is not None
     assert event.type == "sync"

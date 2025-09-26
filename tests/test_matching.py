@@ -49,7 +49,13 @@ def test_matching_api_plex(client: SimpleTestClient) -> None:
             "duration_ms": 200000,
         },
         "candidates": [
-            {"id": "100", "title": "Test Song", "artist": "Tester", "album": "Album", "duration": 200000}
+            {
+                "id": "100",
+                "title": "Test Song",
+                "artist": "Tester",
+                "album": "Album",
+                "duration": 200000,
+            }
         ],
     }
     response = client.post("/matching/spotify-to-plex", json=payload)

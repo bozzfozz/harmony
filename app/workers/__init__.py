@@ -1,4 +1,5 @@
 """Background worker exports."""
+
 from .artwork_worker import ArtworkWorker
 from .auto_sync_worker import AutoSyncWorker
 from .discography_worker import DiscographyWorker

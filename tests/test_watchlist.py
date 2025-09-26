@@ -46,7 +46,9 @@ def _prepare_watchlist_artist(artist_id: str, name: str, *, days_ago: int = 2) -
         session.add(record)
 
 
-def _configure_stub_data(client, *, track_id: str, album_id: str, track_name: str, album_name: str) -> None:
+def _configure_stub_data(
+    client, *, track_id: str, album_id: str, track_name: str, album_name: str
+) -> None:
     spotify_stub = client.app.state.spotify_stub
     soulseek_stub = client.app.state.soulseek_stub
 
@@ -117,8 +119,7 @@ def test_worker_detects_new_release(client) -> None:
 
     queued = client.app.state.soulseek_stub.downloads
     assert any(
-        entry.get("filename") == "Watcher - Fresh Cut - Brand New.flac"
-        for entry in queued.values()
+        entry.get("filename") == "Watcher - Fresh Cut - Brand New.flac" for entry in queued.values()
     )
 
 
@@ -128,7 +129,7 @@ def test_worker_no_duplicates(client) -> None:
         client,
         track_id="track-dupe",
         album_id="album-dupe",
-        track_name="Repeat", 
+        track_name="Repeat",
         album_name="Same Again",
     )
 

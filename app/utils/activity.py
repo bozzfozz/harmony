@@ -1,4 +1,5 @@
 """Activity feed management for recent Harmony backend events."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -141,11 +142,7 @@ class ActivityManager:
             filters.append(ActivityEvent.status == status_filter)
 
         with session_scope() as session:
-            total = (
-                session.query(func.count(ActivityEvent.id))
-                .filter(*filters)
-                .scalar()
-            ) or 0
+            total = (session.query(func.count(ActivityEvent.id)).filter(*filters).scalar()) or 0
 
             events = (
                 session.query(ActivityEvent)
@@ -180,7 +177,9 @@ class ActivityManager:
         return self._entry_from_event(event).as_dict()
 
 
-def _serialise_details(details: Optional[MutableMapping[str, object]] | None) -> MutableMapping[str, object]:
+def _serialise_details(
+    details: Optional[MutableMapping[str, object]] | None,
+) -> MutableMapping[str, object]:
     """Normalise detail payloads so they can be stored as JSON."""
 
     def _convert(value: Any) -> Any:

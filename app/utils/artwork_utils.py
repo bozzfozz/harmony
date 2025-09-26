@@ -1,4 +1,5 @@
 """Helper utilities for fetching, caching and embedding album artwork."""
+
 from __future__ import annotations
 
 import mimetypes
@@ -149,9 +150,7 @@ def embed_artwork(audio_file: Path, artwork_file: Path) -> None:
             return
 
         if suffix in {".m4a", ".mp4", ".aac", ".m4b"}:
-            cover_format = (
-                MP4Cover.FORMAT_PNG if mime_type == "image/png" else MP4Cover.FORMAT_JPEG
-            )
+            cover_format = MP4Cover.FORMAT_PNG if mime_type == "image/png" else MP4Cover.FORMAT_JPEG
             mp4 = MP4(audio_path)
             mp4.tags["covr"] = [MP4Cover(image_data, imageformat=cover_format)]
             mp4.save()

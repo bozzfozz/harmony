@@ -148,9 +148,7 @@ async def startup_event() -> None:
             with session_scope() as session:
                 records = session.execute(select(ArtistPreference)).scalars().all()
                 return {
-                    record.release_id: record.selected
-                    for record in records
-                    if record.release_id
+                    record.release_id: record.selected for record in records if record.release_id
                 }
 
         app.state.auto_sync_worker = AutoSyncWorker(

@@ -1,4 +1,5 @@
 """Helper utilities for tracking worker heartbeat information."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -100,4 +101,3 @@ __all__ = [
     "parse_timestamp",
     "resolve_status",
 ]
-

@@ -1,4 +1,5 @@
 """Background worker that generates LRC lyric files for completed downloads."""
+
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,9 @@ from app.utils.lyrics_utils import (
 logger = get_logger(__name__)
 
 LyricsPayload = Dict[str, Any]
-LyricsProvider = Callable[[Dict[str, Any]], Awaitable[Optional[LyricsPayload]] | Optional[LyricsPayload]]
+LyricsProvider = Callable[
+    [Dict[str, Any]], Awaitable[Optional[LyricsPayload]] | Optional[LyricsPayload]
+]
 
 
 @dataclass(slots=True)
@@ -49,17 +52,13 @@ async def default_fallback_provider(track_info: Mapping[str, Any]) -> Optional[L
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            response = await client.get(
-                f"https://api.lyrics.ovh/v1/{quote(artist)}/{quote(title)}"
-            )
+            response = await client.get(f"https://api.lyrics.ovh/v1/{quote(artist)}/{quote(title)}")
         except httpx.HTTPError as exc:  # pragma: no cover - network failure
             logger.debug("Lyrics API request failed for %s - %s: %s", artist, title, exc)
             return None
 
     if response.status_code != 200:  # pragma: no cover - API error path
-        logger.debug(
-            "Lyrics API returned %s for %s - %s", response.status_code, artist, title
-        )
+        logger.debug("Lyrics API returned %s for %s - %s", response.status_code, artist, title)
         return None
 
     try:

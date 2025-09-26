@@ -16,9 +16,7 @@ from tests.conftest import StubSoulseekClient
 
 
 @pytest.mark.asyncio
-async def test_spotify_artwork_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     audio_path = tmp_path / "track.mp3"
     audio_path.write_bytes(b"audio-bytes")
 
@@ -77,9 +75,7 @@ async def test_spotify_artwork_success(
             self.track_calls.append(track_id)
             return {"album": {"id": "album-123"}}
 
-    worker = ArtworkWorker(
-        spotify_client=StubSpotify(), storage_directory=tmp_path / "artwork"
-    )
+    worker = ArtworkWorker(spotify_client=StubSpotify(), storage_directory=tmp_path / "artwork")
     await worker.start()
     try:
         await worker.enqueue(
@@ -106,9 +102,7 @@ async def test_spotify_artwork_success(
         assert Path(refreshed.artwork_path or "") == stored_path
 
 
-def _install_mutagen_stubs(
-    monkeypatch: pytest.MonkeyPatch, tracker: Dict[str, Any]
-) -> None:
+def _install_mutagen_stubs(monkeypatch: pytest.MonkeyPatch, tracker: Dict[str, Any]) -> None:
     module_mutagen = types.ModuleType("mutagen")
 
     class DummyID3NoHeaderError(Exception):
@@ -286,9 +280,7 @@ def test_no_artwork_found(
     assert response.status_code == 404
 
 
-def test_refresh_endpoint(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client
-) -> None:
+def test_refresh_endpoint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client) -> None:
     audio_path = tmp_path / "refresh.mp3"
     audio_path.write_bytes(b"audio")
 

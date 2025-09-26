@@ -42,11 +42,7 @@ async def test_autosync_worker_blocks_when_credentials_missing(client) -> None:
     await worker.run_once(source="manual")
 
     with session_scope() as session:
-        event = (
-            session.query(ActivityEvent)
-            .order_by(ActivityEvent.id.desc())
-            .first()
-        )
+        event = session.query(ActivityEvent).order_by(ActivityEvent.id.desc()).first()
 
     assert event is not None
     assert event.type == "autosync"
