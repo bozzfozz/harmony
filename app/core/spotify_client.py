@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import re
 from typing import Any, Dict, List, Optional
 
 from app.config import SpotifyConfig
@@ -118,6 +119,104 @@ class SpotifyClient:
                 terms.append(f"year:-{year_to}")
         return " ".join(term for term in terms if term)
 
+    @staticmethod
+    def _normalise_text(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        text = re.sub(r"[^\w\s]", " ", str(value).lower())
+        return " ".join(text.split())
+
+    @staticmethod
+    def _format_query_field(field: str, value: Optional[str]) -> str:
+        if not value:
+            return ""
+        value = str(value).strip()
+        if not value:
+            return ""
+        if " " in value:
+            return f'{field}:"{value}"'
+        return f"{field}:{value}"
+
+    @staticmethod
+    def _extract_artist_names(payload: Any) -> str:
+        if not isinstance(payload, list):
+            return ""
+        names: List[str] = []
+        for entry in payload:
+            if isinstance(entry, dict):
+                name = entry.get("name")
+                if name:
+                    names.append(str(name))
+            elif isinstance(entry, str):
+                names.append(entry)
+        return ", ".join(names)
+
+    @staticmethod
+    def _score_track_candidate(
+        candidate: Dict[str, Any],
+        *,
+        artist: str,
+        title: str,
+        album: Optional[str],
+        duration_ms: Optional[int],
+        isrc: Optional[str],
+    ) -> float:
+        score = 0.0
+        target_artist = SpotifyClient._normalise_text(artist)
+        target_title = SpotifyClient._normalise_text(title)
+        target_album = SpotifyClient._normalise_text(album)
+
+        candidate_title = SpotifyClient._normalise_text(candidate.get("name"))
+        candidate_artist = SpotifyClient._normalise_text(
+            SpotifyClient._extract_artist_names(candidate.get("artists"))
+        )
+        candidate_album = ""
+        album_payload = candidate.get("album")
+        if isinstance(album_payload, dict):
+            candidate_album = SpotifyClient._normalise_text(album_payload.get("name"))
+        elif isinstance(album_payload, str):
+            candidate_album = SpotifyClient._normalise_text(album_payload)
+
+        candidate_isrc = None
+        external_ids = candidate.get("external_ids")
+        if isinstance(external_ids, dict):
+            value = external_ids.get("isrc")
+            if value:
+                candidate_isrc = str(value).lower()
+
+        if isrc and candidate_isrc and candidate_isrc == isrc.lower():
+            score += 120.0
+
+        if target_title and candidate_title:
+            if target_title == candidate_title:
+                score += 40.0
+            elif target_title in candidate_title or candidate_title in target_title:
+                score += 12.0
+
+        if target_artist and candidate_artist:
+            if target_artist == candidate_artist:
+                score += 35.0
+            elif target_artist in candidate_artist or candidate_artist in target_artist:
+                score += 15.0
+
+        if target_album and candidate_album:
+            if target_album == candidate_album:
+                score += 10.0
+            elif target_album in candidate_album or candidate_album in target_album:
+                score += 4.0
+
+        candidate_duration = candidate.get("duration_ms")
+        if duration_ms and isinstance(candidate_duration, (int, float)):
+            difference = abs(int(candidate_duration) - int(duration_ms))
+            if difference <= 2000:
+                score += 25.0
+            elif difference <= 5000:
+                score += 8.0
+            else:
+                score -= difference / 1000.0
+
+        return score
+
     def search_tracks(
         self,
         query: str,
@@ -177,8 +276,66 @@ class SpotifyClient:
         features = self._execute(self._client.audio_features, track_ids)
         return {"audio_features": features or []}
 
-    def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
-        return self._execute(self._client.playlist_items, playlist_id, limit=limit)
+    def get_playlist_items(
+        self, playlist_id: str, limit: int = 100, *, offset: int = 0
+    ) -> Dict[str, Any]:
+        return self._execute(self._client.playlist_items, playlist_id, limit=limit, offset=offset)
+
+    def find_track_match(
+        self,
+        *,
+        artist: str,
+        title: str,
+        album: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+        isrc: Optional[str] = None,
+        limit: int = 20,
+    ) -> Optional[Dict[str, Any]]:
+        artist = artist or ""
+        title = title or ""
+        if not artist.strip() or not title.strip():
+            return None
+
+        query_parts = [
+            self._format_query_field("track", title),
+            self._format_query_field("artist", artist),
+        ]
+        if album:
+            query_parts.append(self._format_query_field("album", album))
+
+        query = " ".join(part for part in query_parts if part)
+        if not query:
+            query = f"{artist} {title}".strip()
+
+        response = self.search_tracks(query, limit=limit)
+        tracks_payload = response.get("tracks") if isinstance(response, dict) else None
+        items = tracks_payload.get("items") if isinstance(tracks_payload, dict) else None
+        if not isinstance(items, list):
+            return None
+
+        best_score = float("-inf")
+        best_track: Optional[Dict[str, Any]] = None
+
+        for candidate in items:
+            if not isinstance(candidate, dict):
+                continue
+            score = self._score_track_candidate(
+                candidate,
+                artist=artist,
+                title=title,
+                album=album,
+                duration_ms=duration_ms,
+                isrc=isrc,
+            )
+            if score > best_score:
+                best_score = score
+                best_track = candidate
+
+        if best_track is None or best_score < 1.0:
+            logger.debug("No suitable Spotify track match found", extra={"query": query})
+            return None
+
+        return best_track
 
     def add_tracks_to_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
         return self._execute(self._client.playlist_add_items, playlist_id, track_uris)

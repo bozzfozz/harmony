@@ -23,6 +23,8 @@ class SpotifyConfig:
     free_import_max_playlist_links: int
     free_import_hard_cap_multiplier: int
     free_accept_user_urls: bool
+    backfill_max_items: int
+    backfill_cache_ttl_seconds: int
 
 
 @dataclass(slots=True)
@@ -106,6 +108,8 @@ DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER = 10
 DEFAULT_FREE_INGEST_MAX_PLAYLISTS = 100
 DEFAULT_FREE_INGEST_MAX_TRACKS = 5_000
 DEFAULT_FREE_INGEST_BATCH_SIZE = 500
+DEFAULT_BACKFILL_MAX_ITEMS = 2_000
+DEFAULT_BACKFILL_CACHE_TTL = 604_800
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -287,6 +291,20 @@ def load_config() -> AppConfig:
         free_accept_user_urls=_as_bool(
             os.getenv("FREE_ACCEPT_USER_URLS"),
             default=False,
+        ),
+        backfill_max_items=max(
+            1,
+            _as_int(
+                os.getenv("BACKFILL_MAX_ITEMS"),
+                default=DEFAULT_BACKFILL_MAX_ITEMS,
+            ),
+        ),
+        backfill_cache_ttl_seconds=max(
+            60,
+            _as_int(
+                os.getenv("BACKFILL_CACHE_TTL_SEC"),
+                default=DEFAULT_BACKFILL_CACHE_TTL,
+            ),
         ),
     )
 

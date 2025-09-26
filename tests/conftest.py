@@ -22,10 +22,11 @@ from app.dependencies import (
     get_spotify_client as dependency_spotify_client,
     get_transfers_api as dependency_transfers_api,
 )
+from app.services.backfill_service import BackfillService
 from app.main import app
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers import MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
+from app.workers import BackfillWorker, MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
 from app.workers.retry_scheduler import RetryScheduler
 from tests.simple_client import SimpleTestClient
 
@@ -38,12 +39,14 @@ class StubSpotifyClient:
                 "name": "Test Song",
                 "artists": [{"name": "Tester"}],
                 "album": {
+                    "id": "album-1",
                     "name": "Test Album",
                     "release_date": "1969-01-01",
                     "artists": [{"name": "Tester"}],
                 },
                 "genre": "rock",
                 "duration_ms": 200000,
+                "external_ids": {"isrc": "TEST00000001"},
             },
         }
         self.playlists = [
@@ -107,6 +110,20 @@ class StubSpotifyClient:
             "year_to": year_to,
         }
         return {"tracks": {"items": list(self.tracks.values())}}
+
+    def find_track_match(
+        self,
+        *,
+        artist: str,
+        title: str,
+        album: str | None = None,
+        duration_ms: int | None = None,
+        isrc: str | None = None,
+        limit: int = 20,
+    ) -> Dict[str, Any] | None:
+        for track in self.tracks.values():
+            return dict(track)
+        return None
 
     def search_artists(
         self,
@@ -191,8 +208,14 @@ class StubSpotifyClient:
             ]
         }
 
-    def get_playlist_items(self, playlist_id: str, limit: int = 100) -> Dict[str, Any]:
-        return self.playlist_items.get(playlist_id, {"items": [], "total": 0})
+    def get_playlist_items(
+        self, playlist_id: str, limit: int = 100, offset: int = 0
+    ) -> Dict[str, Any]:
+        payload = self.playlist_items.get(playlist_id, {"items": [], "total": 0})
+        items = list(payload.get("items", []))
+        start = max(0, offset)
+        end = start + max(1, limit)
+        return {"items": items[start:end], "total": payload.get("total", len(items))}
 
     def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
         playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
@@ -840,6 +863,15 @@ class StubLyricsWorker:
 
 @pytest.fixture(autouse=True)
 def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> None:
+    from app import dependencies as deps
+
+    deps.get_app_config.cache_clear()
+    deps.get_spotify_client.cache_clear()
+    deps.get_plex_client.cache_clear()
+    deps.get_soulseek_client.cache_clear()
+    deps.get_transfers_api.cache_clear()
+    deps.get_matching_engine.cache_clear()
+
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
     db_dir = tmp_path_factory.mktemp("db")
     db_path = db_dir / "test.db"
@@ -925,3 +957,23 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def backfill_runtime(client: SimpleTestClient):
+    from app import dependencies as deps
+
+    config = deps.get_app_config()
+    spotify_client = client.app.state.spotify_stub
+    service = BackfillService(config.spotify, spotify_client)
+    worker = BackfillWorker(service)
+    client.app.state.backfill_service = service
+    client.app.state.backfill_worker = worker
+    client._loop.run_until_complete(worker.start())
+    try:
+        yield service, worker
+        client._loop.run_until_complete(worker.wait_until_idle())
+    finally:
+        client._loop.run_until_complete(worker.stop())
+        client.app.state.backfill_worker = None
+        client.app.state.backfill_service = None

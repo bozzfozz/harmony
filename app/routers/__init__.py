@@ -1,4 +1,5 @@
 from .activity_router import router as activity_router
+from .backfill_router import router as backfill_router
 from .beets_router import router as beets_router
 from .download_router import router as download_router
 from .free_ingest_router import router as free_ingest_router
@@ -18,6 +19,7 @@ from .system_router import router as system_router
 
 __all__ = [
     "activity_router",
+    "backfill_router",
     "beets_router",
     "download_router",
     "free_ingest_router",
