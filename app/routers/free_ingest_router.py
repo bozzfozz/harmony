@@ -129,12 +129,7 @@ def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
 
 
 def _submission_status_code(result: IngestSubmission) -> int:
-    if (
-        result.error
-        or result.skipped.reason
-        or result.skipped.playlists
-        or result.skipped.tracks
-    ):
+    if result.error or result.skipped.reason or result.skipped.playlists or result.skipped.tracks:
         return status.HTTP_207_MULTI_STATUS
     return status.HTTP_202_ACCEPTED
 
