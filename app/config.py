@@ -78,6 +78,12 @@ class FreeIngestConfig:
 
 
 @dataclass(slots=True)
+class IngestConfig:
+    batch_size: int
+    max_pending_jobs: int
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     plex: PlexConfig
@@ -85,6 +91,7 @@ class AppConfig:
     logging: LoggingConfig
     database: DatabaseConfig
     artwork: ArtworkConfig
+    ingest: IngestConfig
     free_ingest: FreeIngestConfig
 
 
@@ -108,6 +115,8 @@ DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER = 10
 DEFAULT_FREE_INGEST_MAX_PLAYLISTS = 100
 DEFAULT_FREE_INGEST_MAX_TRACKS = 5_000
 DEFAULT_FREE_INGEST_BATCH_SIZE = 500
+DEFAULT_INGEST_BATCH_SIZE = 500
+DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 
@@ -386,6 +395,23 @@ def load_config() -> AppConfig:
         poststep_enabled=beets_poststep_enabled,
     )
 
+    ingest = IngestConfig(
+        batch_size=max(
+            1,
+            _as_int(
+                os.getenv("INGEST_BATCH_SIZE"),
+                default=DEFAULT_INGEST_BATCH_SIZE,
+            ),
+        ),
+        max_pending_jobs=max(
+            1,
+            _as_int(
+                os.getenv("INGEST_MAX_PENDING_JOBS"),
+                default=DEFAULT_INGEST_MAX_PENDING_JOBS,
+            ),
+        ),
+    )
+
     free_ingest = FreeIngestConfig(
         max_playlists=max(
             1,
@@ -417,5 +443,6 @@ def load_config() -> AppConfig:
         logging=logging,
         database=database,
         artwork=artwork_config,
+        ingest=ingest,
         free_ingest=free_ingest,
     )

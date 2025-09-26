@@ -17,7 +17,7 @@ from app.config import SpotifyConfig
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import BackfillJob, IngestItem, SpotifyCache
+from app.models import BackfillJob, IngestItem, IngestItemState, SpotifyCache
 
 logger = get_logger(__name__)
 
@@ -346,7 +346,12 @@ class BackfillService:
             .where(
                 IngestItem.source_type == "LINK",
                 IngestItem.playlist_url.isnot(None),
-                IngestItem.state.in_(["registered", "normalized"]),
+                IngestItem.state.in_(
+                    [
+                        IngestItemState.REGISTERED.value,
+                        IngestItemState.NORMALIZED.value,
+                    ]
+                ),
             )
             .order_by(IngestItem.created_at.asc())
         )
@@ -442,7 +447,7 @@ class BackfillService:
                     isrc=isrc,
                     dedupe_hash=dedupe_hash,
                     source_fingerprint=fingerprint,
-                    state="registered",
+                    state=IngestItemState.REGISTERED.value,
                     error=None,
                     created_at=now,
                 )
@@ -451,7 +456,7 @@ class BackfillService:
 
             playlist_item = session.get(IngestItem, playlist.item_id)
             if playlist_item is not None:
-                playlist_item.state = "completed"
+                playlist_item.state = IngestItemState.COMPLETED.value
                 playlist_item.error = None
                 session.add(playlist_item)
 
@@ -561,7 +566,7 @@ class BackfillService:
             item = session.get(IngestItem, item_id)
             if item is None:
                 return
-            item.state = "completed"
+            item.state = IngestItemState.COMPLETED.value
             item.error = error
             session.add(item)
 

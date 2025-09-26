@@ -25,6 +25,7 @@ def test_free_ingest_accepts_tracks_and_links(client: SimpleTestClient) -> None:
     assert response.status_code == 202
     payload = response.json()
     assert payload["ok"] is True
+    assert payload["error"] is None
     job_id = payload["job_id"]
     assert isinstance(job_id, str) and job_id.startswith("job_")
     accepted = payload["accepted"]
@@ -43,8 +44,10 @@ def test_free_ingest_accepts_tracks_and_links(client: SimpleTestClient) -> None:
     assert job_data["state"] == "completed"
     counts = job_data["counts"]
     assert counts["queued"] == 2
-    assert counts["registered"] == 1
+    assert counts["normalized"] >= 1
     assert counts["failed"] == 0
+    accepted_status = job_data["accepted"]
+    assert accepted_status["tracks"] == 2
 
     with session_scope() as session:
         job_record = session.get(IngestJob, job_id)
@@ -57,7 +60,7 @@ def test_free_ingest_accepts_tracks_and_links(client: SimpleTestClient) -> None:
         )
         assert len(items) == 3  # 1 playlist + 2 tracks
         states = {item.state for item in items}
-        assert states == {"registered", "queued"}
+        assert states == {"normalized", "queued"}
 
 
 def test_free_ingest_rejects_invalid_playlist_host(client: SimpleTestClient) -> None:
@@ -91,6 +94,7 @@ def test_free_ingest_enforces_track_limit(
     payload = response.json()
     assert payload["accepted"]["tracks"] == 3
     assert payload["skipped"]["reason"] == "limit"
+    assert payload["error"] is None
 
 
 def test_free_ingest_file_upload(client: SimpleTestClient) -> None:
