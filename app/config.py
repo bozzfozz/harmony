@@ -69,6 +69,13 @@ class ArtworkConfig:
 
 
 @dataclass(slots=True)
+class FreeIngestConfig:
+    max_playlists: int
+    max_tracks: int
+    batch_size: int
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     plex: PlexConfig
@@ -76,6 +83,7 @@ class AppConfig:
     logging: LoggingConfig
     database: DatabaseConfig
     artwork: ArtworkConfig
+    free_ingest: FreeIngestConfig
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -95,6 +103,9 @@ DEFAULT_FREE_IMPORT_MAX_LINES = 200
 DEFAULT_FREE_IMPORT_MAX_FILE_BYTES = 1_048_576
 DEFAULT_FREE_IMPORT_MAX_PLAYLIST_LINKS = 1_000
 DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER = 10
+DEFAULT_FREE_INGEST_MAX_PLAYLISTS = 100
+DEFAULT_FREE_INGEST_MAX_TRACKS = 5_000
+DEFAULT_FREE_INGEST_BATCH_SIZE = 500
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -357,6 +368,30 @@ def load_config() -> AppConfig:
         poststep_enabled=beets_poststep_enabled,
     )
 
+    free_ingest = FreeIngestConfig(
+        max_playlists=max(
+            1,
+            _as_int(
+                os.getenv("FREE_MAX_PLAYLISTS"),
+                default=DEFAULT_FREE_INGEST_MAX_PLAYLISTS,
+            ),
+        ),
+        max_tracks=max(
+            1,
+            _as_int(
+                os.getenv("FREE_MAX_TRACKS_PER_REQUEST"),
+                default=DEFAULT_FREE_INGEST_MAX_TRACKS,
+            ),
+        ),
+        batch_size=max(
+            1,
+            _as_int(
+                os.getenv("FREE_BATCH_SIZE"),
+                default=DEFAULT_FREE_INGEST_BATCH_SIZE,
+            ),
+        ),
+    )
+
     return AppConfig(
         spotify=spotify,
         plex=plex,
@@ -364,4 +399,5 @@ def load_config() -> AppConfig:
         logging=logging,
         database=database,
         artwork=artwork_config,
+        free_ingest=free_ingest,
     )

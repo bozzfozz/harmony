@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, 
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import Download
+from app.models import Download, IngestItem
 from app.utils.activity import (
     record_activity,
     record_worker_started,
@@ -448,6 +448,13 @@ class SyncWorker:
                         download_id,
                         download.retry_count,
                     )
+                    ingest_item_id = self._extract_ingest_item_id(download.request_payload)
+                    if ingest_item_id is not None:
+                        self._update_ingest_item_state(
+                            ingest_item_id,
+                            "failed",
+                            error=error_message or None,
+                        )
                 else:
                     delay_seconds = _calculate_backoff_seconds(
                         download.retry_count, self._retry_config, self._retry_rng
@@ -634,6 +641,8 @@ class SyncWorker:
             request_payload = dict(download.request_payload or {})
             filename = download.filename
 
+        ingest_item_id = self._extract_ingest_item_id(request_payload, payload)
+
         file_path = self._resolve_download_path(payload, request_payload) or filename
         metadata: Dict[str, Any] = {}
         artwork_url: Optional[str] = None
@@ -805,6 +814,9 @@ class SyncWorker:
                     exc,
                 )
 
+        if ingest_item_id is not None:
+            self._update_ingest_item_state(ingest_item_id, "completed", error=None)
+
         if self._scan_worker is not None:
             try:
                 await self._scan_worker.request_scan()
@@ -814,6 +826,31 @@ class SyncWorker:
                     download_id,
                     exc,
                 )
+
+    @staticmethod
+    def _extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> Optional[int]:
+        for payload in payloads:
+            if not isinstance(payload, Mapping):
+                continue
+            candidate = payload.get("ingest_item_id")
+            if candidate is None:
+                continue
+            try:
+                return int(candidate)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _update_ingest_item_state(item_id: int, state: str, *, error: Optional[str]) -> None:
+        with session_scope() as session:
+            item = session.get(IngestItem, item_id)
+            if item is None:
+                return
+            item.state = state
+            if error is not None:
+                item.error = error
+            session.add(item)
 
     @staticmethod
     def _extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:

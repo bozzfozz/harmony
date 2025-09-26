@@ -23,6 +23,7 @@ from app.routers import (
     activity_router,
     beets_router,
     download_router,
+    free_ingest_router,
     imports_router,
     health_router,
     matching_router,
@@ -61,6 +62,7 @@ logger = get_logger(__name__)
 
 app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
 app.include_router(spotify_free_router)
+app.include_router(free_ingest_router)
 app.include_router(imports_router)
 app.include_router(plex_router, prefix="/plex", tags=["Plex"])
 app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
