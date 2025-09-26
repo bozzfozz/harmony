@@ -140,3 +140,27 @@ def test_worker_no_duplicates(client) -> None:
         downloads = session.execute(select(Download)).scalars().all()
         matching = [d for d in downloads if d.spotify_track_id == "track-dupe"]
         assert len(matching) == 1
+
+
+def test_watchlist_worker_offloads_spotify_calls(client, monkeypatch) -> None:
+    _prepare_watchlist_artist("artist-watch", "Watcher")
+    _configure_stub_data(
+        client,
+        track_id="track-offload",
+        album_id="album-offload",
+        track_name="Thread Safe",
+        album_name="Offload",
+    )
+
+    calls: list[str] = []
+
+    async def _fake_to_thread(func, /, *args, **kwargs):
+        calls.append(getattr(func, "__name__", repr(func)))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("app.workers.watchlist_worker.asyncio.to_thread", _fake_to_thread)
+
+    _run_worker(client)
+
+    assert any(name == "get_artist_albums" for name in calls)
+    assert any(name == "get_album_tracks" for name in calls)
