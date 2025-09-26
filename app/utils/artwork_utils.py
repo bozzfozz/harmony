@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import importlib.util
 import mimetypes
 import os
 import re
 import tempfile
+
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
@@ -26,6 +28,250 @@ FALLBACK_HOST_ALLOWLIST: tuple[str, ...] = (
     "coverartarchive.org",
 )
 USER_AGENT = "Harmony/1.0"
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def _select_picture(pictures: Sequence[Any]) -> Any | None:
+    for picture in pictures:
+        if getattr(picture, "type", None) == 3:
+            return picture
+    return pictures[0] if pictures else None
+
+
+def _detect_image_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+    if not image_data:
+        return None, None
+    if image_data.startswith(b"\x89PNG\r\n\x1a\n") and len(image_data) >= 24:
+        width = int.from_bytes(image_data[16:20], "big")
+        height = int.from_bytes(image_data[20:24], "big")
+        return width or None, height or None
+    if image_data[:2] == b"\xff\xd8":
+        return _parse_jpeg_dimensions(image_data)
+    if image_data[:4] == b"RIFF" and image_data[8:12] == b"WEBP":
+        return _parse_webp_dimensions(image_data)
+    return None, None
+
+
+def _parse_jpeg_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+    index = 2
+    length = len(image_data)
+    while index + 1 < length:
+        if image_data[index] != 0xFF:
+            index += 1
+            continue
+        while index < length and image_data[index] == 0xFF:
+            index += 1
+        if index >= length:
+            break
+        marker = image_data[index]
+        index += 1
+        if marker in {0xD8, 0xD9}:
+            continue
+        if index + 2 > length:
+            break
+        segment_length = int.from_bytes(image_data[index : index + 2], "big")
+        if segment_length < 2:
+            break
+        if marker in {
+            0xC0,
+            0xC1,
+            0xC2,
+            0xC3,
+            0xC5,
+            0xC6,
+            0xC7,
+            0xC9,
+            0xCA,
+            0xCB,
+            0xCD,
+            0xCE,
+            0xCF,
+        }:
+            if index + segment_length > length:
+                break
+            height = int.from_bytes(image_data[index + 3 : index + 5], "big")
+            width = int.from_bytes(image_data[index + 5 : index + 7], "big")
+            return width or None, height or None
+        index += segment_length
+    return None, None
+
+
+def _parse_webp_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+    if len(image_data) < 30:
+        return None, None
+    chunk_type = image_data[12:16]
+    if chunk_type == b"VP8X" and len(image_data) >= 30:
+        width = 1 + int.from_bytes(image_data[24:27], "little")
+        height = 1 + int.from_bytes(image_data[27:30], "little")
+        return width or None, height or None
+    if chunk_type == b"VP8L" and len(image_data) >= 25:
+        data = int.from_bytes(image_data[21:25], "little")
+        width = (data & 0x3FFF) + 1
+        height = ((data >> 14) & 0x3FFF) + 1
+        return width or None, height or None
+    if chunk_type == b"VP8 " and len(image_data) >= 30:
+        frame = image_data[20:]
+        if len(frame) >= 10:
+            width = int.from_bytes(frame[6:8], "little") & 0x3FFF
+            height = int.from_bytes(frame[8:10], "little") & 0x3FFF
+            return width or None, height or None
+    return None, None
+
+
+def extract_embed_info(audio_path: Path) -> Optional[dict[str, int | str]]:
+    """Return information about the embedded artwork for ``audio_path``."""
+
+    audio_path = Path(audio_path)
+    if not audio_path.exists():
+        return None
+
+    try:  # pragma: no cover - dependency import path
+        if importlib.util.find_spec("mutagen") is None:
+            raise ImportError("mutagen")
+    except ImportError as exc:  # pragma: no cover - mutagen required at runtime
+        raise RuntimeError("mutagen is required to inspect embedded artwork") from exc
+
+    suffix = audio_path.suffix.lower()
+
+    if suffix == ".flac":
+        info = _extract_flac_picture(audio_path)
+    elif suffix in {".m4a", ".mp4", ".aac", ".m4b"}:
+        info = _extract_mp4_cover(audio_path)
+    else:
+        info = _extract_id3_cover(audio_path)
+
+    if info is None:
+        # Fallback to ID3 parsing for other formats that may contain APIC frames
+        info = _extract_id3_cover(audio_path)
+    if info is None and suffix != ".flac":
+        info = _extract_flac_picture(audio_path)
+
+    return info
+
+
+def is_low_res(
+    info: Mapping[str, Any] | None,
+    min_edge: int,
+    min_bytes: int,
+) -> bool:
+    """Return ``True`` if ``info`` represents a low resolution artwork embed."""
+
+    if info is None:
+        return True
+
+    width = _safe_int(info.get("width"))
+    height = _safe_int(info.get("height"))
+    threshold = max(1, int(min_edge))
+
+    if width > 0 and height > 0:
+        return min(width, height) < threshold
+
+    size_bytes = _safe_int(info.get("bytes"))
+    return size_bytes < max(1, int(min_bytes))
+
+
+def _extract_flac_picture(audio_path: Path) -> Optional[dict[str, int | str]]:
+    try:
+        from mutagen.flac import FLAC
+    except ImportError:  # pragma: no cover - handled by caller
+        return None
+
+    try:
+        flac = FLAC(audio_path)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.debug("Failed to load FLAC file for artwork inspection: %s", exc)
+        return None
+
+    picture = _select_picture(flac.pictures)
+    if picture is None or not getattr(picture, "data", b""):
+        return None
+
+    data: bytes = picture.data  # type: ignore[assignment]
+    width = _safe_int(getattr(picture, "width", 0))
+    height = _safe_int(getattr(picture, "height", 0))
+    if width <= 0 or height <= 0:
+        detected_width, detected_height = _detect_image_dimensions(data)
+        width = width or (detected_width or 0)
+        height = height or (detected_height or 0)
+
+    mime = getattr(picture, "mime", None) or "image/jpeg"
+    return {
+        "width": width,
+        "height": height,
+        "mime": mime,
+        "bytes": len(data),
+    }
+
+
+def _extract_mp4_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
+    try:
+        from mutagen.mp4 import MP4, MP4Cover
+    except ImportError:  # pragma: no cover - handled by caller
+        return None
+
+    try:
+        mp4 = MP4(audio_path)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.debug("Failed to load MP4 file for artwork inspection: %s", exc)
+        return None
+
+    tags = mp4.tags or {}
+    covers = tags.get("covr")
+    if not covers:
+        return None
+
+    cover = covers[0]
+    data = bytes(cover)
+    imageformat = getattr(cover, "imageformat", None)
+    mime = "image/png" if imageformat == MP4Cover.FORMAT_PNG else "image/jpeg"
+    width, height = _detect_image_dimensions(data)
+    return {
+        "width": width or 0,
+        "height": height or 0,
+        "mime": mime,
+        "bytes": len(data),
+    }
+
+
+def _extract_id3_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
+    try:
+        from mutagen.id3 import APIC, ID3, ID3NoHeaderError
+    except ImportError:  # pragma: no cover - handled by caller
+        return None
+
+    try:
+        tags = ID3(audio_path)
+    except ID3NoHeaderError:
+        return None
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.debug("Failed to load ID3 tags for artwork inspection: %s", exc)
+        return None
+
+    frame: Optional[APIC] = None
+    for value in tags.values():
+        if isinstance(value, APIC):
+            frame = value
+            break
+
+    if frame is None or not getattr(frame, "data", b""):
+        return None
+
+    data: bytes = frame.data
+    width, height = _detect_image_dimensions(data)
+    mime = frame.mime or "image/jpeg"
+    return {
+        "width": width or 0,
+        "height": height or 0,
+        "mime": mime,
+        "bytes": len(data),
+    }
 
 
 def fetch_spotify_artwork(album_id: str) -> Optional[str]:
@@ -124,7 +370,7 @@ def download_artwork(
     return destination
 
 
-def fetch_fallback_artwork(
+def fetch_caa_artwork(
     artist: str,
     album: str,
     *,
@@ -171,6 +417,10 @@ def fetch_fallback_artwork(
         return None
 
     return None
+
+
+# Backwards compatibility for older imports
+fetch_fallback_artwork = fetch_caa_artwork
 
 
 def embed_artwork(audio_file: Path, artwork_file: Path) -> None:

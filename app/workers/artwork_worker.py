@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
-from app.config import ArtworkConfig, load_config
+from app.config import ArtworkConfig, get_setting, load_config
+from app.core.beets_client import BeetsClient
 from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -33,6 +34,7 @@ class ArtworkJob:
     spotify_album_id: Optional[str]
     artwork_url: Optional[str]
     cache_key: Optional[str] = None
+    refresh: bool = False
 
 
 @dataclass(slots=True)
@@ -42,6 +44,17 @@ class DownloadContext:
     spotify_track_id: Optional[str]
     spotify_album_id: Optional[str]
     request_payload: Mapping[str, Any] | None
+    artwork_path: Optional[str]
+    has_artwork: bool
+
+
+@dataclass(slots=True)
+class ArtworkProcessingResult:
+    status: str
+    artwork_path: Path | None
+    replaced: bool
+    was_low_res: bool
+    has_artwork: bool
 
 
 class ArtworkWorker:
@@ -52,6 +65,7 @@ class ArtworkWorker:
         spotify_client: SpotifyClient | None = None,
         plex_client: PlexClient | None = None,
         soulseek_client: SoulseekClient | None = None,
+        beets_client: BeetsClient | None = None,
         *,
         storage_directory: Path | None = None,
         config: ArtworkConfig | None = None,
@@ -59,6 +73,7 @@ class ArtworkWorker:
         self._spotify = spotify_client
         self._plex = plex_client
         self._soulseek = soulseek_client
+        self._beets = beets_client
         artwork_utils.SPOTIFY_CLIENT = spotify_client
 
         if config is None:
@@ -73,6 +88,9 @@ class ArtworkWorker:
         self._timeout = float(config.timeout_seconds)
         self._max_bytes = int(config.max_bytes)
         self._concurrency = max(1, int(config.concurrency))
+        self._min_edge = max(1, int(config.min_edge))
+        self._min_bytes = max(1, int(config.min_bytes))
+        self._poststep_default = bool(config.poststep_enabled)
 
         fallback_provider = (config.fallback.provider or "").strip().lower()
         self._fallback_enabled = config.fallback.enabled and fallback_provider not in {"", "none"}
@@ -116,6 +134,7 @@ class ArtworkWorker:
         spotify_track_id: str | None = None,
         spotify_album_id: str | None = None,
         artwork_url: str | None = None,
+        refresh: bool = False,
     ) -> None:
         job = ArtworkJob(
             download_id=int(download_id) if download_id is not None else None,
@@ -124,6 +143,7 @@ class ArtworkWorker:
             spotify_track_id=spotify_track_id,
             spotify_album_id=spotify_album_id,
             artwork_url=artwork_url,
+            refresh=bool(refresh),
         )
         if not self._running:
             await self._process_job(job)
@@ -158,6 +178,8 @@ class ArtworkWorker:
                         spotify_track_id=record.spotify_track_id,
                         spotify_album_id=record.spotify_album_id,
                         request_payload=payload_mapping,
+                        artwork_path=record.artwork_path,
+                        has_artwork=bool(record.has_artwork),
                     )
                     if not job.spotify_track_id and record.spotify_track_id:
                         job.spotify_track_id = record.spotify_track_id
@@ -174,11 +196,12 @@ class ArtworkWorker:
                 spotify_track_id=job.spotify_track_id,
                 spotify_album_id=job.spotify_album_id,
                 artwork_url=job.artwork_url,
+                has_artwork=False,
             )
 
         start_time = time.monotonic()
         try:
-            artwork_path = await self._handle_job(job, download_context)
+            result = await self._handle_job(job, download_context)
         except Exception as exc:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             if download_id is not None:
@@ -188,6 +211,7 @@ class ArtworkWorker:
                     path=None,
                     spotify_track_id=job.spotify_track_id,
                     spotify_album_id=job.spotify_album_id,
+                    has_artwork=False,
                 )
             logger.info(
                 "Artwork processing failed",
@@ -197,30 +221,47 @@ class ArtworkWorker:
                     "album_id": job.spotify_album_id or job.cache_key,
                     "status": "failed",
                     "duration_ms": duration_ms,
+                    "was_low_res": None,
+                    "refresh": job.refresh,
                 },
             )
             logger.debug("Artwork processing exception: %s", exc)
             return
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
+        stored_path: Optional[str] = None
+        if result.artwork_path is not None:
+            stored_path = str(result.artwork_path)
+        elif download_context and download_context.artwork_path:
+            stored_path = download_context.artwork_path
+
         if download_id is not None:
             self._update_download(
                 download_id,
                 status="done",
-                path=str(artwork_path),
+                path=stored_path,
                 spotify_track_id=job.spotify_track_id,
                 spotify_album_id=job.spotify_album_id,
                 artwork_url=job.artwork_url,
+                has_artwork=result.has_artwork,
             )
 
+        outcome = (
+            "replaced"
+            if result.replaced
+            else ("embedded" if result.status != "skipped" else "skipped")
+        )
+
         logger.info(
-            "Artwork processed successfully",
+            "Artwork processing completed",
             extra={
-                "event": "artwork_fetch",
+                "event": "artwork_replace",
                 "download_id": download_id,
                 "album_id": job.spotify_album_id or job.cache_key,
-                "status": "success",
+                "result": outcome,
                 "duration_ms": duration_ms,
+                "was_low_res": result.was_low_res,
+                "refresh": job.refresh,
             },
         )
 
@@ -228,10 +269,36 @@ class ArtworkWorker:
         self,
         job: ArtworkJob,
         download: DownloadContext | None,
-    ) -> Path:
+    ) -> ArtworkProcessingResult:
         audio_path = Path(job.file_path)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+        existing_artwork_path: Path | None = None
+        if download and download.artwork_path:
+            existing_artwork_path = Path(download.artwork_path)
+
+        existing_info = await asyncio.to_thread(artwork_utils.extract_embed_info, audio_path)
+        has_existing = existing_info is not None
+        was_low_res = bool(
+            existing_info
+            and artwork_utils.is_low_res(
+                existing_info,
+                self._min_edge,
+                self._min_bytes,
+            )
+        )
+
+        should_replace = job.refresh or not has_existing or was_low_res
+
+        if not should_replace:
+            return ArtworkProcessingResult(
+                status="skipped",
+                artwork_path=existing_artwork_path,
+                replaced=False,
+                was_low_res=False,
+                has_artwork=has_existing or bool(existing_artwork_path),
+            )
 
         candidates = await self._collect_candidate_urls(job, download)
         if not candidates:
@@ -240,7 +307,7 @@ class ArtworkWorker:
         target_base = self._storage_dir / self._generate_storage_name(job, audio_path)
         artwork_file: Path | None = None
 
-        cached_file = self._find_cached_artwork(target_base)
+        cached_file = None if job.refresh else self._find_cached_artwork(target_base)
         if cached_file is not None:
             logger.info(
                 "Artwork cache hit",
@@ -284,7 +351,94 @@ class ArtworkWorker:
             raise ValueError("Unable to retrieve artwork image")
 
         await asyncio.to_thread(artwork_utils.embed_artwork, audio_path, artwork_file)
-        return artwork_file
+        logger.info(
+            "Embedded artwork into file",
+            extra={
+                "event": "artwork_embed",
+                "download_id": job.download_id,
+                "album_id": job.spotify_album_id or job.cache_key,
+                "source_url": job.artwork_url,
+            },
+        )
+
+        if self._beets is not None and self._should_run_poststep():
+            await asyncio.to_thread(self._execute_beets_poststep, audio_path, job)
+
+        return ArtworkProcessingResult(
+            status="done",
+            artwork_path=artwork_file,
+            replaced=has_existing,
+            was_low_res=was_low_res,
+            has_artwork=True,
+        )
+
+    @staticmethod
+    def _coerce_setting_bool(value: Optional[str], default: bool) -> bool:
+        if value is None:
+            return default
+        normalised = value.strip().lower()
+        if not normalised:
+            return default
+        if normalised in {"1", "true", "yes", "on"}:
+            return True
+        if normalised in {"0", "false", "no", "off"}:
+            return False
+        return default
+
+    def _should_run_poststep(self) -> bool:
+        if self._beets is None:
+            return False
+        try:
+            setting_value = get_setting("BEETS_POSTSTEP_ENABLED")
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Failed to read BEETS_POSTSTEP_ENABLED setting: %s", exc)
+            setting_value = None
+        return self._coerce_setting_bool(setting_value, self._poststep_default)
+
+    def _execute_beets_poststep(self, audio_path: Path, job: ArtworkJob) -> None:
+        if self._beets is None:
+            return
+
+        path = Path(audio_path)
+        query = f'path:"{path}"'
+
+        try:
+            self._beets.write(query)
+        except Exception as exc:  # pragma: no cover - external tool failure
+            logger.warning(
+                "Beets write command failed",
+                extra={
+                    "event": "artwork_poststep",
+                    "download_id": job.download_id,
+                    "album_id": job.spotify_album_id or job.cache_key,
+                    "command": "write",
+                    "error": str(exc),
+                },
+            )
+        try:
+            self._beets.update(path)
+        except Exception as exc:  # pragma: no cover - external tool failure
+            logger.warning(
+                "Beets update command failed",
+                extra={
+                    "event": "artwork_poststep",
+                    "download_id": job.download_id,
+                    "album_id": job.spotify_album_id or job.cache_key,
+                    "command": "update",
+                    "error": str(exc),
+                },
+            )
+        else:
+            logger.info(
+                "Beets poststep executed",
+                extra={
+                    "event": "artwork_poststep",
+                    "download_id": job.download_id,
+                    "album_id": job.spotify_album_id or job.cache_key,
+                    "command": "update",
+                    "path": str(path),
+                },
+            )
 
     async def _collect_candidate_urls(
         self,
@@ -328,7 +482,7 @@ class ArtworkWorker:
             artist, album = self._extract_artist_album(job, download)
             if artist and album:
                 fallback_url = await asyncio.to_thread(
-                    artwork_utils.fetch_fallback_artwork,
+                    artwork_utils.fetch_caa_artwork,
                     artist,
                     album,
                     timeout=self._fallback_timeout,
@@ -384,6 +538,8 @@ class ArtworkWorker:
             or (download.spotify_track_id if download else None),
             spotify_album_id=download.spotify_album_id if download else None,
             request_payload=payload or None,
+            artwork_path=download.artwork_path if download else None,
+            has_artwork=bool(download.has_artwork) if download else False,
         )
 
         try:
@@ -545,14 +701,21 @@ class ArtworkWorker:
         spotify_track_id: str | None = None,
         spotify_album_id: str | None = None,
         artwork_url: str | None = None,
+        has_artwork: bool | None = None,
     ) -> None:
         with session_scope() as session:
             download = session.get(Download, int(download_id))
             if download is None:
                 return
             download.artwork_status = status
-            download.artwork_path = path
-            download.has_artwork = bool(path) and status == "done"
+            if path is not None:
+                download.artwork_path = path
+            elif status in {"failed", "pending"}:
+                download.artwork_path = None
+            if has_artwork is not None:
+                download.has_artwork = has_artwork
+            else:
+                download.has_artwork = bool(download.artwork_path) and status == "done"
             if spotify_track_id:
                 download.spotify_track_id = spotify_track_id
             if spotify_album_id:

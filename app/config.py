@@ -56,7 +56,10 @@ class ArtworkConfig:
     timeout_seconds: float
     max_bytes: int
     concurrency: int
+    min_edge: int
+    min_bytes: int
     fallback: ArtworkFallbackConfig
+    poststep_enabled: bool
 
 
 @dataclass(slots=True)
@@ -77,6 +80,8 @@ DEFAULT_ARTWORK_DIR = "./artwork"
 DEFAULT_ARTWORK_TIMEOUT = 15.0
 DEFAULT_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_ARTWORK_CONCURRENCY = 2
+DEFAULT_ARTWORK_MIN_EDGE = 1000
+DEFAULT_ARTWORK_MIN_BYTES = 150_000
 DEFAULT_ARTWORK_FALLBACK_TIMEOUT = 12.0
 DEFAULT_ARTWORK_FALLBACK_MAX_BYTES = 10 * 1024 * 1024
 
@@ -190,6 +195,7 @@ def load_config() -> AppConfig:
         "PLEX_LIBRARY",
         "SLSKD_URL",
         "SLSKD_API_KEY",
+        "BEETS_POSTSTEP_ENABLED",
     ]
     db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
     legacy_slskd_url = _legacy_slskd_url()
@@ -253,15 +259,31 @@ def load_config() -> AppConfig:
     database = DatabaseConfig(url=database_url)
 
     artwork_dir = os.getenv("ARTWORK_DIR") or os.getenv("HARMONY_ARTWORK_DIR")
+    timeout_value = os.getenv("ARTWORK_HTTP_TIMEOUT") or os.getenv("ARTWORK_TIMEOUT_SEC")
+    concurrency_value = os.getenv("ARTWORK_WORKER_CONCURRENCY") or os.getenv("ARTWORK_CONCURRENCY")
+    min_edge_value = os.getenv("ARTWORK_MIN_EDGE")
+    min_bytes_value = os.getenv("ARTWORK_MIN_BYTES")
+    beets_env_value = os.getenv("BEETS_POSTSTEP_ENABLED")
+    beets_setting_raw = _resolve_setting(
+        "BEETS_POSTSTEP_ENABLED",
+        db_settings=db_settings,
+        fallback=beets_env_value,
+    )
+    beets_default = _as_bool(beets_env_value, default=False)
+    beets_poststep_enabled = _as_bool(beets_setting_raw, default=beets_default)
     artwork_config = ArtworkConfig(
         directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
-        timeout_seconds=_as_float(
-            os.getenv("ARTWORK_TIMEOUT_SEC"), default=DEFAULT_ARTWORK_TIMEOUT
-        ),
+        timeout_seconds=_as_float(timeout_value, default=DEFAULT_ARTWORK_TIMEOUT),
         max_bytes=_as_int(os.getenv("ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES),
         concurrency=max(
-            1, _as_int(os.getenv("ARTWORK_CONCURRENCY"), default=DEFAULT_ARTWORK_CONCURRENCY)
+            1,
+            _as_int(
+                concurrency_value,
+                default=DEFAULT_ARTWORK_CONCURRENCY,
+            ),
         ),
+        min_edge=_as_int(min_edge_value, default=DEFAULT_ARTWORK_MIN_EDGE),
+        min_bytes=_as_int(min_bytes_value, default=DEFAULT_ARTWORK_MIN_BYTES),
         fallback=ArtworkFallbackConfig(
             enabled=_as_bool(os.getenv("ARTWORK_FALLBACK_ENABLED"), default=False),
             provider=(os.getenv("ARTWORK_FALLBACK_PROVIDER") or "musicbrainz"),
@@ -274,6 +296,7 @@ def load_config() -> AppConfig:
                 default=DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
             ),
         ),
+        poststep_enabled=beets_poststep_enabled,
     )
 
     return AppConfig(

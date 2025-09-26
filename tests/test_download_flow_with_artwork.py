@@ -48,6 +48,7 @@ def test_download_flow_with_artwork(
 
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 
     async def process() -> None:
         config = ArtworkConfig(
@@ -55,12 +56,15 @@ def test_download_flow_with_artwork(
             timeout_seconds=5.0,
             max_bytes=5 * 1024 * 1024,
             concurrency=1,
+            min_edge=600,
+            min_bytes=120_000,
             fallback=ArtworkFallbackConfig(
                 enabled=False,
                 provider="none",
                 timeout_seconds=5.0,
                 max_bytes=5 * 1024 * 1024,
             ),
+            poststep_enabled=False,
         )
         worker = ArtworkWorker(storage_directory=tmp_path / "artwork", config=config)
         await worker.start()
