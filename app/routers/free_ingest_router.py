@@ -82,6 +82,10 @@ class JobStatusModel(BaseModel):
     accepted: SubmissionAccepted
     skipped: SubmissionSkipped
     error: Optional[str] = None
+    queued_tracks: int = 0
+    failed_tracks: int = 0
+    skipped_tracks: int = 0
+    skip_reason: Optional[str] = None
 
 
 class JobResponse(BaseModel):
@@ -247,6 +251,10 @@ async def get_free_ingest_job(
         accepted=accepted,
         skipped=skipped,
         error=status_info.error,
+        queued_tracks=status_info.queued_tracks,
+        failed_tracks=status_info.failed_tracks,
+        skipped_tracks=status_info.skipped_tracks,
+        skip_reason=status_info.skip_reason,
     )
     return JobResponse(ok=True, job=payload, error=None)
 

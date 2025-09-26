@@ -6,6 +6,9 @@
 
 ## v1.x.x
 
+- fix: preserve FREE ingest partial failure details when skips occur and surface
+  skip metadata (queued/failed/skipped counts, skip reason) in job status
+  responses.
 - Unified ingest pipeline for Spotify FREE and PRO sources: shared job/item states
   (`registered` → `normalized` → `queued` → `completed`/`failed`), consistent metrics
   (`ingest_normalized`, `ingest_enqueued`, `ingest_skipped`, `ingest_completed`),

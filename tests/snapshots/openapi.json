@@ -1033,12 +1033,38 @@
             ],
             "title": "Error"
           },
+          "failed_tracks": {
+            "default": 0,
+            "title": "Failed Tracks",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
+          "queued_tracks": {
+            "default": 0,
+            "title": "Queued Tracks",
+            "type": "integer"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
           "skipped": {
             "$ref": "#/components/schemas/SubmissionSkipped"
+          },
+          "skipped_tracks": {
+            "default": 0,
+            "title": "Skipped Tracks",
+            "type": "integer"
           },
           "state": {
             "title": "State",
