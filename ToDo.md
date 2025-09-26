@@ -23,6 +23,7 @@
   - Smart Search erhielt strukturierte Filter (Genre, Jahr, Qualität) inkl. Normalisierung, Ranking-Boosts und aktualisierte API-Dokumentation.【F:app/routers/search_router.py†L1-L280】【F:docs/api.md†L130-L233】
 - **Infrastruktur / CI**
   - Die CI auf Push/PR führt `ruff`, `black --check`, `mypy app`, `pytest -q`, `npm test`, `npm run typecheck`, `npm run build` sowie den OpenAPI-Snapshot-Vergleich aus.【F:.github/workflows/ci.yml†L1-L74】
+  - Black ist auf Version 24.8.0 gepinnt und nutzt die gemeinsame `pyproject.toml`-Konfiguration für reproduzierbare Formatierungsläufe.【F:.github/workflows/ci.yml†L26-L36】【F:pyproject.toml†L1-L14】
 
 ## ⬜️ Offen
 - **Backend**

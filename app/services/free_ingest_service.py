@@ -276,9 +276,7 @@ class FreeIngestService:
                 )
             ).scalar_one()
 
-            batches = self._calculate_batches(
-                int(track_total), self._resolve_batch_size(None)
-            )
+            batches = self._calculate_batches(int(track_total), self._resolve_batch_size(None))
             accepted = IngestAccepted(
                 playlists=int(playlist_total),
                 tracks=int(track_total),
