@@ -3768,6 +3768,25 @@
         ]
       }
     },
+    "/imports/free": {
+      "post": {
+        "operationId": "create_free_import_imports_free_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create Free Import",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
     "/matching/discography/plex": {
       "post": {
         "description": "Return missing Spotify tracks for a complete discography.",

@@ -6,7 +6,18 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 
 # JSON is optional depending on database backend; fall back to Text if unavailable
 try:  # pragma: no cover - fallback handling
@@ -193,6 +204,31 @@ class WatchlistArtist(Base):
     name = Column(String(512), nullable=False)
     last_checked = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ImportSession(Base):
+    __tablename__ = "import_sessions"
+    __table_args__ = (CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),)
+
+    id = Column(String(64), primary_key=True)
+    mode = Column(String(10), nullable=False)
+    state = Column(String(32), nullable=False, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    totals_json = Column(Text, nullable=True)
+
+
+class ImportBatch(Base):
+    __tablename__ = "import_batches"
+    __table_args__ = (
+        Index("ix_import_batches_session_playlist", "session_id", "playlist_id", unique=True),
+    )
+
+    id = Column(String(64), primary_key=True)
+    session_id = Column(String(64), ForeignKey("import_sessions.id"), nullable=False, index=True)
+    playlist_id = Column(String(128), nullable=False, index=True)
+    offset = Column(Integer, nullable=False, default=0)
+    limit = Column(Integer, nullable=True)
+    state = Column(String(32), nullable=False, default="pending")
 
 
 class WorkerJob(Base):

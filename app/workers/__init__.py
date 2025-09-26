@@ -3,6 +3,7 @@
 from .artwork_worker import ArtworkWorker
 from .auto_sync_worker import AutoSyncWorker
 from .discography_worker import DiscographyWorker
+from .import_worker import ImportWorker
 from .matching_worker import MatchingWorker
 from .playlist_sync_worker import PlaylistSyncWorker
 from .metadata_worker import MetadataUpdateWorker, MetadataWorker
@@ -15,6 +16,7 @@ __all__ = [
     "ArtworkWorker",
     "AutoSyncWorker",
     "DiscographyWorker",
+    "ImportWorker",
     "MatchingWorker",
     "MetadataWorker",
     "MetadataUpdateWorker",

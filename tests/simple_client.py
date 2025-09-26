@@ -56,10 +56,19 @@ class SimpleTestClient:
         json_body: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
+        data: Optional[bytes | str] = None,
+        content_type: Optional[str] = None,
     ) -> SimpleResponse:
         payload = json_body if json_body is not None else json
         return self._loop.run_until_complete(
-            self._request("POST", path, params=params, json_body=payload)
+            self._request(
+                "POST",
+                path,
+                params=params,
+                json_body=payload,
+                raw_body=data,
+                content_type=content_type,
+            )
         )
 
     def put(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
@@ -77,6 +86,8 @@ class SimpleTestClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         json_body: Optional[Dict[str, Any]] = None,
+        raw_body: Optional[bytes | str] = None,
+        content_type: Optional[str] = None,
     ) -> SimpleResponse:
         query_string = urlencode(params or {})
         scope = {
@@ -93,6 +104,12 @@ class SimpleTestClient:
         if json_body is not None:
             body = json.dumps(json_body).encode("utf-8")
             scope["headers"].append((b"content-type", b"application/json"))
+        elif raw_body is not None:
+            body = raw_body.encode("utf-8") if isinstance(raw_body, str) else raw_body
+            if content_type:
+                scope["headers"].append((b"content-type", content_type.encode("utf-8")))
+        elif content_type:
+            scope["headers"].append((b"content-type", content_type.encode("utf-8")))
 
         response_body = bytearray()
         response_headers: Dict[str, str] = {}

@@ -111,6 +111,7 @@ Die Karten aktualisieren sich alle 10 Sekunden automatisch über den `/status`
 | `POST` | `/spotify/free/upload` | Erwartet `{ "filename": "*.txt", "content": "…" }` (max. 1 MB UTF-8) und liefert ein temporäres Token. |
 | `POST` | `/spotify/free/parse` | Normalisiert Zeilen bzw. Uploads zu `NormalizedTrack[]`. |
 | `POST` | `/spotify/free/enqueue` | Erstellt Soulseek-Downloads aus den normalisierten Tracks, FLAC wird priorisiert. |
+| `POST` | `/imports/free` | Validiert bis zu 1 000 Spotify-Playlist-Links (JSON/CSV/TXT) ohne OAuth, legt eine Import-Session an und gibt akzeptierte, übersprungene und abgelehnte Links zurück. |
 
 **Modus abfragen:**
 
@@ -167,6 +168,41 @@ Content-Type: application/json
 
 Ungültige Zeilen liefern `400` mit `error.details` inklusive Zeilennummer und Fehlermeldung. Die Enqueue-Antwort enthält `queued`
 und `skipped`, sodass doppelte oder unvollständige Einträge nachvollzogen werden können.
+
+**Playlist-Import (FREE-Modus):**
+
+```http
+POST /imports/free HTTP/1.1
+Content-Type: application/json
+
+{
+  "links": [
+    "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=foo",
+    "https://open.spotify.com/user/spotify"
+  ]
+}
+```
+
+```json
+{
+  "ok": true,
+  "data": {
+    "import_session_id": "sess_01H8FZ9X4E0ZQ2H4YJ2CM1X1T4",
+    "accepted_count": 1,
+    "skipped": [],
+    "rejected": [
+      {"url": "https://open.spotify.com/user/spotify", "reason": "NOT_A_PLAYLIST_URL"}
+    ],
+    "limits": {"max_links": 1000, "max_body_bytes": 1048576}
+  },
+  "error": null
+}
+```
+
+- **Content-Types:** `application/json` (Array von Strings), `text/plain` (eine URL pro Zeile) oder `text/csv` (kommaseparierte URLs).
+- **Soft-Limits:** Bis zu 1 000 eindeutige Playlists werden angenommen, zusätzliche Duplikate landen in `skipped`.
+- **Hard-Limits:** Mehr als 10 000 Links oder Bodies > 10 MiB führen zu `413 TOO_MANY_ITEMS`.
+- **Fehler:** `VALIDATION_ERROR` bei ungültigen Payloads oder wenn keine Playlist erkannt wurde, `TOO_MANY_ITEMS` bei Hard-Limit-Verletzung.
 
 ## Metadata (`/api/metadata`)
 
