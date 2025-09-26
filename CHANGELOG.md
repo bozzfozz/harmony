@@ -6,6 +6,7 @@
 
 ## v1.x.x
 
+- Spotify FREE Ingest – neue Endpunkte (`POST /spotify/import/free`, `POST /spotify/import/free/upload`, `GET /spotify/import/jobs/{id}`) erfassen bis zu 100 Spotify-Playlist-Links sowie große Tracklisten ohne OAuth, normalisieren die Einträge (Artist/Titel/Album/Dauer), deduplizieren sie, erzeugen persistente `ingest_jobs`/`ingest_items` Datensätze und übergeben normalisierte Batches direkt an den bestehenden Soulseek-Sync-Worker. File-Uploads (CSV/TXT/JSON) werden serverseitig gestreamt geparst, Limits (`FREE_MAX_PLAYLISTS`, `FREE_MAX_TRACKS_PER_REQUEST`, `FREE_BATCH_SIZE`) sind konfigurierbar, Job-Status liefert registrierte/queued/failed Counts und Skip-Gründe.
 - Smart Search v2 – `/search` bündelt Spotify-, Plex- und Soulseek-Ergebnisse in einem normalisierten Schema inklusive Score, Bitrate/Format, erweiterten Filtern (Typ, Genre, Jahr, Dauer, Explicit, Mindestbitrate, bevorzugte Formate, Soulseek-Username), Sortierung (`relevance`, `bitrate`, `year`, `duration`) und Pagination.
 - Spotify FREE-Modus – neuer Modus-Schalter (`GET/POST /spotify/mode`) plus Parser- und Enqueue-Endpunkte (`/spotify/free/*`) für text- oder dateibasierte Imports ohne OAuth inkl. FLAC-Priorisierung im SyncWorker.
 - Spotify FREE Playlist-Ingest – `/imports/free` akzeptiert bis zu 1 000 Playlist-Links pro Anfrage (JSON, CSV, TXT), validiert ausschließlich echte Playlists, legt `import_sessions`/`import_batches`-Stubjobs an und meldet akzeptierte, übersprungene und abgelehnte Links inkl. Limits (`max_links`, `max_body_bytes`).

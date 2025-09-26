@@ -178,7 +178,12 @@ def _apply_schema_extensions(engine: Engine) -> None:
         _logger.debug("Unable to list tables: %s", exc)
         return
 
-    from app.models import ImportBatch, ImportSession  # Local import to avoid cycles
+    from app.models import (  # Local import to avoid cycles
+        ImportBatch,
+        ImportSession,
+        IngestItem,
+        IngestJob,
+    )
 
     if "import_sessions" not in tables:
         try:
@@ -191,6 +196,18 @@ def _apply_schema_extensions(engine: Engine) -> None:
             ImportBatch.__table__.create(bind=engine, checkfirst=True)
         except Exception as exc:  # pragma: no cover - defensive logging
             _logger.warning("Failed to create import_batches table: %s", exc)
+
+    if "ingest_jobs" not in tables:
+        try:
+            IngestJob.__table__.create(bind=engine, checkfirst=True)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning("Failed to create ingest_jobs table: %s", exc)
+
+    if "ingest_items" not in tables:
+        try:
+            IngestItem.__table__.create(bind=engine, checkfirst=True)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            _logger.warning("Failed to create ingest_items table: %s", exc)
 
 
 __all__ = [

@@ -726,6 +726,39 @@
         "title": "FollowedArtistsResponse",
         "type": "object"
       },
+      "FreeIngestRequest": {
+        "properties": {
+          "batch_hint": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Hint"
+          },
+          "playlist_links": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Playlist Links",
+            "type": "array"
+          },
+          "tracks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "title": "FreeIngestRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -778,6 +811,105 @@
           "message"
         ],
         "title": "ImportResponse",
+        "type": "object"
+      },
+      "JobCountsModel": {
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "normalized": {
+            "title": "Normalized",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "registered": {
+            "title": "Registered",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "registered",
+          "normalized",
+          "queued",
+          "completed",
+          "failed"
+        ],
+        "title": "JobCountsModel",
+        "type": "object"
+      },
+      "JobResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobStatusModel"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "job"
+        ],
+        "title": "JobResponse",
+        "type": "object"
+      },
+      "JobStatusModel": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/JobCountsModel"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/SubmissionSkipped"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "counts",
+          "skipped"
+        ],
+        "title": "JobStatusModel",
         "type": "object"
       },
       "ListAlbumsResponse": {
@@ -2104,6 +2236,110 @@
           "status"
         ],
         "title": "StatusResponse",
+        "type": "object"
+      },
+      "SubmissionAccepted": {
+        "properties": {
+          "batches": {
+            "title": "Batches",
+            "type": "integer"
+          },
+          "playlists": {
+            "title": "Playlists",
+            "type": "integer"
+          },
+          "tracks": {
+            "title": "Tracks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "playlists",
+          "tracks",
+          "batches"
+        ],
+        "title": "SubmissionAccepted",
+        "type": "object"
+      },
+      "SubmissionResponse": {
+        "properties": {
+          "accepted": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionAccepted"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/SubmissionSkipped"
+          }
+        },
+        "required": [
+          "ok",
+          "job_id",
+          "accepted",
+          "skipped"
+        ],
+        "title": "SubmissionResponse",
+        "type": "object"
+      },
+      "SubmissionSkipped": {
+        "properties": {
+          "playlists": {
+            "title": "Playlists",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "tracks": {
+            "title": "Tracks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "playlists",
+          "tracks"
+        ],
+        "title": "SubmissionSkipped",
         "type": "object"
       },
       "TrackDetailResponse": {
@@ -5740,6 +5976,110 @@
         "summary": "Upload Import File",
         "tags": [
           "Spotify FREE"
+        ]
+      }
+    },
+    "/spotify/import/free": {
+      "post": {
+        "operationId": "submit_free_ingest_spotify_import_free_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreeIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Free Ingest",
+        "tags": [
+          "Spotify FREE Ingest"
+        ]
+      }
+    },
+    "/spotify/import/free/upload": {
+      "post": {
+        "operationId": "upload_free_ingest_spotify_import_free_upload_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Upload Free Ingest",
+        "tags": [
+          "Spotify FREE Ingest"
+        ]
+      }
+    },
+    "/spotify/import/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_free_ingest_job_spotify_import_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Free Ingest Job",
+        "tags": [
+          "Spotify FREE Ingest"
         ]
       }
     },

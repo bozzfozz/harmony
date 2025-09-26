@@ -8,7 +8,7 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
-- **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth: Text- oder Datei-Eingaben werden zu Soulseek-Downloads normalisiert.
+- **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
 - **Lean Plex-Client** mit Fokus auf Status, Bibliotheksübersicht, Such- und Track-Lookups sowie schlanke Scan-Trigger.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
@@ -23,8 +23,13 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 
 Harmony kennt zwei Betriebsarten: **PRO** nutzt die vollständige OAuth-/API-Integration, **FREE** erlaubt parserbasierte
 Imports ohne Spotify-Credentials. Der Modus wird per `GET/POST /spotify/mode` verwaltet und in der Settings-Tabelle persistiert.
-Im FREE-Modus stehen die Endpunkte `/spotify/free/parse`, `/spotify/free/enqueue` sowie `/spotify/free/upload` zur Verfügung.
-Die Web-Oberfläche bietet hierfür einen dedizierten Spotify-Screen mit Modus-Schalter und Importkarte.
+Im FREE-Modus stehen neben den Parser-Endpunkten (`/spotify/free/*`) auch die Free-Ingest-Schnittstellen zur Verfügung:
+
+- `POST /spotify/import/free` akzeptiert bis zu 100 Playlist-Links (`open.spotify.com`) sowie umfangreiche Tracklisten aus dem Request-Body, normalisiert Artist/Titel/Album/Dauer und legt persistente `ingest_jobs`/`ingest_items` an.
+- `POST /spotify/import/free/upload` nimmt `multipart/form-data` (CSV/TXT/JSON) entgegen, parst serverseitig in Tracks und ruft intern den Free-Ingest-Service auf.
+- `GET /spotify/import/jobs/{job_id}` liefert den Job-Status inklusive Zählern (`registered`, `normalized`, `queued`, `failed`, `completed`) sowie Skip-Gründen.
+
+Die Web-Oberfläche bietet hierfür einen dedizierten Spotify-Screen mit Modus-Schalter, Importkarte und Job-Übersicht.
 
 ## Smart Search
 
