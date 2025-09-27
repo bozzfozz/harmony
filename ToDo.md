@@ -29,6 +29,7 @@
   - Black ist auf Version 24.8.0 gepinnt und nutzt die gemeinsame `pyproject.toml`-Konfiguration für reproduzierbare Formatierungsläufe.【F:.github/workflows/ci.yml†L26-L35】【F:pyproject.toml†L1-L14】
   - Bandit, Radon, Vulture und pip-audit sind als Dev-Abhängigkeiten verfügbar, per Makefile lokal aufrufbar und in der CI als verpflichtende Gates integriert; Offline-Umgebungen können die Security- und Analyse-Ziele über `CI_OFFLINE=true` gezielt überspringen.【F:requirements-dev.txt†L1-L4】【F:Makefile†L1-L36】【F:.github/workflows/ci.yml†L20-L69】【F:README.md†L196-L205】
   - `scripts/audit_wiring.py` prüft, dass keine Plex/Beets-Referenzen im aktiven Code landen, und läuft als eigener CI-Schritt.【F:scripts/audit_wiring.py†L1-L87】【F:.github/workflows/ci.yml†L20-L38】
+  - Alembic-basierte Migrationen initialisieren das Datenbankschema deterministisch (`init_db` ruft `alembic upgrade head` auf, Docker-Entrypoint und Makefile bieten Upgrade/Revision-Shortcuts, README beschreibt die Workflows).【F:app/db.py†L1-L107】【F:scripts/docker-entrypoint.sh†L1-L11】【F:Makefile†L1-L48】【F:README.md†L189-L202】
 
 ## ⬜️ Offen
 - **Backend**

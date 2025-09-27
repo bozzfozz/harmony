@@ -7,7 +7,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
 
-from sqlalchemy import Engine, create_engine, inspect, text
+try:  # pragma: no cover - optional dependency support for local tooling
+    from alembic import command
+    from alembic.config import Config
+except ImportError:  # pragma: no cover - allow fallback during tests/offline use
+    command = None  # type: ignore[assignment]
+    Config = None  # type: ignore[assignment]
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -24,6 +30,8 @@ _configured_database_url: Optional[str] = None
 _initializing_db: bool = False
 
 _logger = logging.getLogger(__name__)
+_ALEMBIC_INI_PATH = Path(__file__).resolve().parents[1] / "alembic.ini"
+_ALEMBIC_SCRIPT_LOCATION = Path(__file__).resolve().parent / "migrations"
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -108,10 +116,16 @@ def init_db() -> None:
     try:
         _ensure_engine(auto_init=False)
         assert _engine is not None
-        from app import models  # noqa: F401  # Import models for metadata side-effects
+        if command is None or Config is None:
+            _logger.warning(
+                "Alembic is not available; falling back to Base.metadata.create_all()."
+            )
+            from app import models  # noqa: F401  # Import models for metadata side-effects
 
-        Base.metadata.create_all(bind=_engine)
-        _apply_schema_extensions(_engine)
+            Base.metadata.create_all(bind=_engine, checkfirst=True)
+        else:
+            config = _configure_alembic(_configured_database_url or str(_engine.url))
+            command.upgrade(config, "head")
     finally:
         _initializing_db = False
 
@@ -130,124 +144,13 @@ def reset_engine_for_tests() -> None:
     _initializing_db = False
 
 
-def _apply_schema_extensions(engine: Engine) -> None:
-    """Apply small, idempotent schema updates for legacy databases."""
-
-    try:
-        inspector = inspect(engine)
-        columns = {column["name"] for column in inspector.get_columns("downloads")}
-    except Exception as exc:  # pragma: no cover - defensive logging
-        _logger.debug("Unable to inspect downloads table: %s", exc)
-        return
-
-    column_definitions = {
-        "spotify_track_id": "VARCHAR(128)",
-        "spotify_album_id": "VARCHAR(128)",
-        "artwork_path": "VARCHAR(2048)",
-        "artwork_url": "VARCHAR(2048)",
-        "artwork_status": "VARCHAR(32) NOT NULL DEFAULT 'pending'",
-        "has_artwork": "BOOLEAN NOT NULL DEFAULT 0",
-        "genre": "VARCHAR(255)",
-        "composer": "VARCHAR(255)",
-        "producer": "VARCHAR(255)",
-        "isrc": "VARCHAR(64)",
-        "copyright": "VARCHAR(512)",
-        "organized_path": "VARCHAR(2048)",
-        "retry_count": "INTEGER NOT NULL DEFAULT 0",
-        "next_retry_at": "DATETIME",
-        "last_error": "TEXT",
-    }
-
-    for column_name, ddl in column_definitions.items():
-        if column_name in columns:
-            continue
-        statement = text(f"ALTER TABLE downloads ADD COLUMN {column_name} {ddl}")
-        try:
-            with engine.begin() as connection:
-                connection.execute(statement)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning(
-                "Failed to add column %s to downloads table: %s",
-                column_name,
-                exc,
-            )
-
-    try:
-        ingest_columns = {column["name"] for column in inspector.get_columns("ingest_items")}
-    except Exception as exc:  # pragma: no cover - defensive logging
-        _logger.debug("Unable to inspect ingest_items table: %s", exc)
-        ingest_columns = set()
-
-    ingest_column_definitions = {
-        "spotify_track_id": "VARCHAR(128)",
-        "spotify_album_id": "VARCHAR(128)",
-        "isrc": "VARCHAR(64)",
-    }
-
-    for column_name, ddl in ingest_column_definitions.items():
-        if column_name in ingest_columns:
-            continue
-        statement = text(f"ALTER TABLE ingest_items ADD COLUMN {column_name} {ddl}")
-        try:
-            with engine.begin() as connection:
-                connection.execute(statement)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning(
-                "Failed to add column %s to ingest_items table: %s",
-                column_name,
-                exc,
-            )
-
-    try:
-        tables = set(inspector.get_table_names())
-    except Exception as exc:  # pragma: no cover - defensive logging
-        _logger.debug("Unable to list tables: %s", exc)
-        return
-
-    from app.models import (  # Local import to avoid cycles
-        BackfillJob,
-        ImportBatch,
-        ImportSession,
-        IngestItem,
-        IngestJob,
-        SpotifyCache,
-    )
-
-    if "import_sessions" not in tables:
-        try:
-            ImportSession.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create import_sessions table: %s", exc)
-
-    if "import_batches" not in tables:
-        try:
-            ImportBatch.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create import_batches table: %s", exc)
-
-    if "ingest_jobs" not in tables:
-        try:
-            IngestJob.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create ingest_jobs table: %s", exc)
-
-    if "ingest_items" not in tables:
-        try:
-            IngestItem.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create ingest_items table: %s", exc)
-
-    if "backfill_jobs" not in tables:
-        try:
-            BackfillJob.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create backfill_jobs table: %s", exc)
-
-    if "spotify_cache" not in tables:
-        try:
-            SpotifyCache.__table__.create(bind=engine, checkfirst=True)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            _logger.warning("Failed to create spotify_cache table: %s", exc)
+def _configure_alembic(database_url: str) -> Config:
+    assert Config is not None  # For type checkers; guarded by init_db
+    config = Config(str(_ALEMBIC_INI_PATH))
+    config.set_main_option("script_location", str(_ALEMBIC_SCRIPT_LOCATION))
+    config.set_main_option("sqlalchemy.url", database_url)
+    config.attributes["configure_logger"] = False
+    return config
 
 
 __all__ = [
