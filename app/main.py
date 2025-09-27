@@ -60,6 +60,13 @@ def _should_start_workers() -> bool:
     return os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}
 
 
+def _flag_enabled(name: str, *, default: bool = True) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _resolve_watchlist_interval(raw_value: str | None) -> float:
     default = 86_400.0
     if not raw_value:
@@ -82,26 +89,51 @@ def _configure_application(config: AppConfig) -> None:
     activity_manager.refresh_cache()
 
 
-async def _start_background_workers(app: FastAPI, config: AppConfig) -> None:
+async def _start_background_workers(
+    app: FastAPI,
+    config: AppConfig,
+    *,
+    enable_artwork: bool,
+    enable_lyrics: bool,
+) -> dict[str, bool]:
     soulseek_client = get_soulseek_client()
     matching_engine = get_matching_engine()
     spotify_client = get_spotify_client()
 
     state = app.state
-    state.artwork_worker = ArtworkWorker(
-        spotify_client=spotify_client,
-        soulseek_client=soulseek_client,
-        config=config.artwork,
-    )
-    await state.artwork_worker.start()
+    worker_status: dict[str, bool] = {
+        "artwork": False,
+        "lyrics": False,
+        "metadata": False,
+        "sync": False,
+        "retry_scheduler": False,
+        "matching": False,
+        "playlist_sync": False,
+        "backfill": False,
+        "watchlist": False,
+    }
 
-    state.lyrics_worker = LyricsWorker(spotify_client=spotify_client)
-    await state.lyrics_worker.start()
+    state.artwork_worker = None
+    if enable_artwork:
+        state.artwork_worker = ArtworkWorker(
+            spotify_client=spotify_client,
+            soulseek_client=soulseek_client,
+            config=config.artwork,
+        )
+        await state.artwork_worker.start()
+        worker_status["artwork"] = True
+
+    state.lyrics_worker = None
+    if enable_lyrics:
+        state.lyrics_worker = LyricsWorker(spotify_client=spotify_client)
+        await state.lyrics_worker.start()
+        worker_status["lyrics"] = True
 
     state.rich_metadata_worker = MetadataWorker(
         spotify_client=spotify_client,
     )
     await state.rich_metadata_worker.start()
+    worker_status["metadata"] = True
 
     state.sync_worker = SyncWorker(
         soulseek_client,
@@ -110,19 +142,24 @@ async def _start_background_workers(app: FastAPI, config: AppConfig) -> None:
         lyrics_worker=state.lyrics_worker,
     )
     await state.sync_worker.start()
+    worker_status["sync"] = True
 
     state.retry_scheduler = RetryScheduler(state.sync_worker)
     await state.retry_scheduler.start()
+    worker_status["retry_scheduler"] = True
 
     state.matching_worker = MatchingWorker(matching_engine)
     await state.matching_worker.start()
+    worker_status["matching"] = True
 
     state.playlist_worker = PlaylistSyncWorker(spotify_client)
     await state.playlist_worker.start()
+    worker_status["playlist_sync"] = True
 
     state.backfill_service = BackfillService(config.spotify, spotify_client)
     state.backfill_worker = BackfillWorker(state.backfill_service)
     await state.backfill_worker.start()
+    worker_status["backfill"] = True
 
     interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
     state.watchlist_worker = WatchlistWorker(
@@ -132,8 +169,10 @@ async def _start_background_workers(app: FastAPI, config: AppConfig) -> None:
         interval_seconds=interval_seconds,
     )
     await state.watchlist_worker.start()
+    worker_status["watchlist"] = True
 
     state.metadata_worker = None
+    return worker_status
 
 
 async def _stop_worker(worker: Any) -> None:
@@ -171,23 +210,56 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
     _configure_application(config)
 
-    logger.info(
-        "Integration flags resolved: plex=%s (%s) beets=%s (%s)",
-        "enabled" if config.enable_plex else "disabled",
-        config.enable_plex,
-        "enabled" if config.enable_beets else "disabled",
-        config.enable_beets,
-        extra={
-            "event": "integrations",
-            "plex_enabled": config.enable_plex,
-            "beets_enabled": config.enable_beets,
-        },
-    )
+    enable_artwork = _flag_enabled("ENABLE_ARTWORK", default=True)
+    enable_lyrics = _flag_enabled("ENABLE_LYRICS", default=True)
+
+    worker_status: dict[str, bool] = {}
 
     if _should_start_workers():
-        await _start_background_workers(app, config)
+        worker_status = await _start_background_workers(
+            app,
+            config,
+            enable_artwork=enable_artwork,
+            enable_lyrics=enable_lyrics,
+        )
     else:
         logger.info("Background workers disabled via HARMONY_DISABLE_WORKERS")
+
+    router_status = {
+        "spotify": True,
+        "spotify_backfill": True,
+        "spotify_free": True,
+        "free_ingest": True,
+        "imports": True,
+        "soulseek": True,
+        "matching": True,
+        "settings": True,
+        "metadata": True,
+        "search": True,
+        "sync": True,
+        "system": True,
+        "downloads": True,
+        "activity": True,
+        "health": True,
+        "watchlist": True,
+    }
+
+    logger.info(
+        "wiring_summary routers=%s workers=%s integrations=spotify=true soulseek=true plex=false beets=false",
+        router_status,
+        worker_status,
+        extra={
+            "event": "wiring_summary",
+            "routers": router_status,
+            "workers": worker_status,
+            "integrations": {
+                "spotify": True,
+                "soulseek": True,
+                "plex": False,
+                "beets": False,
+            },
+        },
+    )
 
     logger.info("Harmony application started")
     try:

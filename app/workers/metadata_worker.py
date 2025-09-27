@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
@@ -35,12 +35,9 @@ class MetadataWorker:
         self,
         *,
         spotify_client: SpotifyClient | None = None,
-        plex_client: Any | None = None,
     ) -> None:
         self._spotify = spotify_client
-        self._plex = plex_client
         metadata_utils.SPOTIFY_CLIENT = spotify_client
-        metadata_utils.PLEX_CLIENT = plex_client
         self._queue: asyncio.Queue[MetadataJob | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -149,23 +146,6 @@ class MetadataWorker:
                 if text:
                     metadata[key] = text
 
-        plex_id = self._extract_plex_id(job.request_payload)
-        if not plex_id:
-            plex_id = self._extract_plex_id(job.payload)
-        if plex_id and self._plex is not None:
-            try:
-                plex_payload = await self._plex.get_track_metadata(str(plex_id))
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug("Plex metadata lookup failed for %s: %s", plex_id, exc)
-            else:
-                plex_metadata = metadata_utils.extract_metadata_from_plex(plex_payload)
-                for key, value in plex_metadata.items():
-                    if value is None:
-                        continue
-                    text = str(value).strip()
-                    if text:
-                        metadata.setdefault(key, text)
-
         return metadata
 
     def _persist_metadata(self, download_id: int, metadata: Mapping[str, Any]) -> None:
@@ -237,140 +217,42 @@ class MetadataWorker:
                 return candidate.strip()
         return None
 
-    @staticmethod
-    def _extract_plex_id(payload: Mapping[str, Any] | None) -> Optional[str]:
-        if not isinstance(payload, Mapping):
-            return None
-        for key in ("plex_id", "plexId", "plex_rating_key", "ratingKey", "rating_key"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        nested = payload.get("metadata")
-        if isinstance(nested, Mapping):
-            candidate = nested.get("ratingKey") or nested.get("id")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        return None
-
-
-class MetadataUpdateRunningError(RuntimeError):
-    """Raised when a metadata update is already running."""
-
 
 class MetadataUpdateWorker:
-    """Trigger on-demand metadata refreshes using existing workers."""
+    """Placeholder worker while the legacy metadata refresh is archived."""
 
-    def __init__(
-        self,
-        scan_worker: Any | None,
-        matching_worker: Any | None = None,
-    ) -> None:
-        self._scan_worker = scan_worker
+    def __init__(self, matching_worker: Any | None = None) -> None:
         self._matching_worker = matching_worker
-        self._task: asyncio.Task[None] | None = None
-        self._lock = asyncio.Lock()
-        self._stop_requested = False
-        self._state: Dict[str, Any] = {
-            "status": "idle",
-            "phase": "Idle",
-            "processed": 0,
-            "matching_queue": 0,
-            "started_at": None,
-            "completed_at": None,
-            "error": None,
-        }
 
     async def start(self) -> Dict[str, Any]:
-        """Begin a new metadata update cycle."""
+        """Return the disabled status for compatibility with old callers."""
 
-        async with self._lock:
-            if self._task and not self._task.done():
-                raise MetadataUpdateRunningError()
-
-            self._stop_requested = False
-            self._state.update(
-                status="running",
-                phase="Preparing",
-                processed=0,
-                error=None,
-                started_at=datetime.now(timezone.utc),
-                completed_at=None,
-            )
-            logger.info("Metadata update started")
-            loop = asyncio.get_running_loop()
-            self._task = loop.create_task(self._run())
-            return self._snapshot()
+        logger.info("Metadata update requested but legacy integration is disabled")
+        return self.status()
 
     async def stop(self) -> Dict[str, Any]:
-        """Request graceful shutdown of the current metadata update."""
+        """Return the disabled status for compatibility with old callers."""
 
-        if self._task and not self._task.done():
-            self._stop_requested = True
-            self._state.update(status="stopping", phase="Stopping current task")
-            logger.info("Stop requested for metadata update")
-        return self._snapshot()
+        logger.info("Metadata update stop requested but legacy integration is disabled")
+        return self.status()
 
     def status(self) -> Dict[str, Any]:
-        """Return a serialisable view of the current state."""
+        """Expose a stable payload indicating that the worker is disabled."""
 
-        return self._snapshot()
-
-    async def _run(self) -> None:
-        try:
-            await self._scan_phase()
-            if self._stop_requested:
-                self._finish("stopped", "Stopped by user")
-                return
-            await self._matching_phase()
-            if self._stop_requested:
-                self._finish("stopped", "Stopped by user")
-                return
-            self._finish("completed", "Completed")
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.exception("Metadata update failed: %s", exc)
-            self._state.update(
-                status="error",
-                phase="Error",
-                error=str(exc),
-                completed_at=datetime.now(timezone.utc),
-            )
-        finally:
-            self._task = None
-            self._stop_requested = False
-
-    async def _scan_phase(self) -> None:
-        if self._scan_worker is None:
-            raise RuntimeError("Scan worker is not available; metadata update disabled")
-        self._state.update(phase="Scanning library")
-        await self._scan_worker.run_once()
-        self._state["processed"] += 1
-
-    async def _matching_phase(self) -> None:
-        self._state.update(phase="Reconciling matches")
-        queue = getattr(self._matching_worker, "queue", None)
         queue_size = 0
+        queue = getattr(self._matching_worker, "queue", None)
         if queue is not None and hasattr(queue, "qsize"):
             try:
                 queue_size = int(queue.qsize())
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug("Unable to inspect matching queue: %s", exc)
-        self._state["matching_queue"] = max(queue_size, 0)
-        await asyncio.sleep(0)
+                logger.debug("Unable to inspect matching queue while disabled: %s", exc)
 
-    def _finish(self, status: str, phase: str) -> None:
-        self._state.update(
-            status=status,
-            phase=phase,
-            completed_at=datetime.now(timezone.utc),
-        )
-        logger.info("Metadata update finished with status %s", status)
-
-    def _snapshot(self) -> Dict[str, Any]:
-        state = dict(self._state)
-        for key in ("started_at", "completed_at"):
-            value = state.get(key)
-            if isinstance(value, datetime):
-                state[key] = value.isoformat()
-            elif value is None:
-                state[key] = None
-        return state
+        return {
+            "status": "disabled",
+            "phase": "Legacy integration archived",
+            "processed": 0,
+            "matching_queue": max(queue_size, 0),
+            "started_at": None,
+            "completed_at": None,
+            "error": "metadata update disabled",
+        }

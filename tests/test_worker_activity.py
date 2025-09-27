@@ -32,14 +32,14 @@ def test_worker_start_records_activity(client) -> None:
 
 
 def test_worker_stop_records_activity(client) -> None:
-    record_worker_stopped("scan")
+    record_worker_stopped("artwork")
 
     entries = activity_manager.list()
     assert len(entries) == 1
     entry = entries[0]
     assert entry["type"] == "worker"
     assert entry["status"] == WORKER_STOPPED
-    assert entry["details"]["worker"] == "scan"
+    assert entry["details"]["worker"] == "artwork"
 
 
 def test_worker_stale_event_emitted_on_health_check(client) -> None:

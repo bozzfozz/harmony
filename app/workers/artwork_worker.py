@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
-from app.config import ArtworkConfig, get_setting, load_config
+from app.config import ArtworkConfig, load_config
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -61,17 +61,13 @@ class ArtworkWorker:
     def __init__(
         self,
         spotify_client: SpotifyClient | None = None,
-        plex_client: Any | None = None,
         soulseek_client: SoulseekClient | None = None,
-        beets_client: Any | None = None,
         *,
         storage_directory: Path | None = None,
         config: ArtworkConfig | None = None,
     ) -> None:
         self._spotify = spotify_client
-        self._plex = plex_client
         self._soulseek = soulseek_client
-        self._beets = beets_client
         artwork_utils.SPOTIFY_CLIENT = spotify_client
 
         if config is None:
@@ -88,8 +84,6 @@ class ArtworkWorker:
         self._concurrency = max(1, int(config.concurrency))
         self._min_edge = max(1, int(config.min_edge))
         self._min_bytes = max(1, int(config.min_bytes))
-        self._poststep_default = bool(config.poststep_enabled)
-
         fallback_provider = (config.fallback.provider or "").strip().lower()
         self._fallback_enabled = config.fallback.enabled and fallback_provider not in {"", "none"}
         self._fallback_provider = fallback_provider or "musicbrainz"
@@ -359,8 +353,7 @@ class ArtworkWorker:
             },
         )
 
-        if self._beets is not None and self._should_run_poststep():
-            await asyncio.to_thread(self._execute_beets_poststep, audio_path, job)
+        # Post-processing hooks are disabled in the slim MVP build.
 
         return ArtworkProcessingResult(
             status="done",
@@ -369,74 +362,6 @@ class ArtworkWorker:
             was_low_res=was_low_res,
             has_artwork=True,
         )
-
-    @staticmethod
-    def _coerce_setting_bool(value: Optional[str], default: bool) -> bool:
-        if value is None:
-            return default
-        normalised = value.strip().lower()
-        if not normalised:
-            return default
-        if normalised in {"1", "true", "yes", "on"}:
-            return True
-        if normalised in {"0", "false", "no", "off"}:
-            return False
-        return default
-
-    def _should_run_poststep(self) -> bool:
-        if self._beets is None:
-            return False
-        try:
-            setting_value = get_setting("BEETS_POSTSTEP_ENABLED")
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug("Failed to read BEETS_POSTSTEP_ENABLED setting: %s", exc)
-            setting_value = None
-        return self._coerce_setting_bool(setting_value, self._poststep_default)
-
-    def _execute_beets_poststep(self, audio_path: Path, job: ArtworkJob) -> None:
-        if self._beets is None:
-            return
-
-        path = Path(audio_path)
-        query = f'path:"{path}"'
-
-        try:
-            self._beets.write(query)
-        except Exception as exc:  # pragma: no cover - external tool failure
-            logger.warning(
-                "Beets write command failed",
-                extra={
-                    "event": "artwork_poststep",
-                    "download_id": job.download_id,
-                    "album_id": job.spotify_album_id or job.cache_key,
-                    "command": "write",
-                    "error": str(exc),
-                },
-            )
-        try:
-            self._beets.update(path)
-        except Exception as exc:  # pragma: no cover - external tool failure
-            logger.warning(
-                "Beets update command failed",
-                extra={
-                    "event": "artwork_poststep",
-                    "download_id": job.download_id,
-                    "album_id": job.spotify_album_id or job.cache_key,
-                    "command": "update",
-                    "error": str(exc),
-                },
-            )
-        else:
-            logger.info(
-                "Beets poststep executed",
-                extra={
-                    "event": "artwork_poststep",
-                    "download_id": job.download_id,
-                    "album_id": job.spotify_album_id or job.cache_key,
-                    "command": "update",
-                    "path": str(path),
-                },
-            )
 
     async def _collect_candidate_urls(
         self,
@@ -631,10 +556,6 @@ class ArtworkWorker:
                     url = entry.get("url")
                     if isinstance(url, str) and url.strip():
                         urls.append(url.strip())
-
-        plex_thumb = metadata.get("plex_thumb") or metadata.get("plex_artwork")
-        if isinstance(plex_thumb, str) and plex_thumb.strip():
-            urls.append(plex_thumb.strip())
 
         soulseek_url = metadata.get("soulseek_artwork")
         if isinstance(soulseek_url, str) and soulseek_url.strip():

@@ -135,7 +135,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     else:
         errors["playlists"] = "Playlist worker unavailable"
 
-    errors["library_scan"] = "Plex integration disabled"
+    errors["library_scan"] = "Library scan disabled"
     errors["auto_sync"] = "AutoSync worker disabled"
 
     response: Dict[str, Any] = {"message": "Sync triggered", "results": results}
@@ -175,7 +175,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
 
 @router.post("/search")
 async def global_search(request: Request, payload: SearchRequest) -> dict[str, Any]:
-    """Perform a combined search across Spotify, Plex and Soulseek."""
+    """Perform a combined search across Spotify and Soulseek."""
 
     query = payload.query
     filter_payload = payload.filters or SearchFilterPayload()

@@ -28,13 +28,6 @@ class SpotifyConfig:
 
 
 @dataclass(slots=True)
-class PlexConfig:
-    base_url: Optional[str]
-    token: Optional[str]
-    library_name: Optional[str]
-
-
-@dataclass(slots=True)
 class SoulseekConfig:
     base_url: str
     api_key: Optional[str]
@@ -67,7 +60,6 @@ class ArtworkConfig:
     min_edge: int
     min_bytes: int
     fallback: ArtworkFallbackConfig
-    poststep_enabled: bool
 
 
 @dataclass(slots=True)
@@ -86,15 +78,12 @@ class IngestConfig:
 @dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
-    plex: PlexConfig
     soulseek: SoulseekConfig
     logging: LoggingConfig
     database: DatabaseConfig
     artwork: ArtworkConfig
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
-    enable_plex: bool
-    enable_beets: bool
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -234,12 +223,8 @@ def load_config() -> AppConfig:
         "SPOTIFY_CLIENT_ID",
         "SPOTIFY_CLIENT_SECRET",
         "SPOTIFY_REDIRECT_URI",
-        "PLEX_BASE_URL",
-        "PLEX_TOKEN",
-        "PLEX_LIBRARY",
         "SLSKD_URL",
         "SLSKD_API_KEY",
-        "BEETS_POSTSTEP_ENABLED",
         "SPOTIFY_MODE",
     ]
     db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
@@ -319,25 +304,6 @@ def load_config() -> AppConfig:
         ),
     )
 
-    plex_base_url_env = os.getenv("PLEX_BASE_URL") or os.getenv("PLEX_URL")
-    plex = PlexConfig(
-        base_url=_resolve_setting(
-            "PLEX_BASE_URL",
-            db_settings=db_settings,
-            fallback=plex_base_url_env,
-        ),
-        token=_resolve_setting(
-            "PLEX_TOKEN",
-            db_settings=db_settings,
-            fallback=os.getenv("PLEX_TOKEN"),
-        ),
-        library_name=_resolve_setting(
-            "PLEX_LIBRARY",
-            db_settings=db_settings,
-            fallback=os.getenv("PLEX_LIBRARY"),
-        ),
-    )
-
     soulseek_base_env = os.getenv("SLSKD_URL") or legacy_slskd_url or DEFAULT_SOULSEEK_URL
     soulseek = SoulseekConfig(
         base_url=_resolve_setting(
@@ -361,14 +327,6 @@ def load_config() -> AppConfig:
     concurrency_value = os.getenv("ARTWORK_WORKER_CONCURRENCY") or os.getenv("ARTWORK_CONCURRENCY")
     min_edge_value = os.getenv("ARTWORK_MIN_EDGE")
     min_bytes_value = os.getenv("ARTWORK_MIN_BYTES")
-    beets_env_value = os.getenv("BEETS_POSTSTEP_ENABLED")
-    beets_setting_raw = _resolve_setting(
-        "BEETS_POSTSTEP_ENABLED",
-        db_settings=db_settings,
-        fallback=beets_env_value,
-    )
-    beets_default = _as_bool(beets_env_value, default=False)
-    beets_poststep_enabled = _as_bool(beets_setting_raw, default=beets_default)
     artwork_config = ArtworkConfig(
         directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
         timeout_seconds=_as_float(timeout_value, default=DEFAULT_ARTWORK_TIMEOUT),
@@ -394,7 +352,6 @@ def load_config() -> AppConfig:
                 default=DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
             ),
         ),
-        poststep_enabled=beets_poststep_enabled,
     )
 
     ingest = IngestConfig(
@@ -438,18 +395,12 @@ def load_config() -> AppConfig:
         ),
     )
 
-    enable_plex = _as_bool(os.getenv("ENABLE_PLEX"), default=False)
-    enable_beets = _as_bool(os.getenv("ENABLE_BEETS"), default=False)
-
     return AppConfig(
         spotify=spotify,
-        plex=plex,
         soulseek=soulseek,
         logging=logging,
         database=database,
         artwork=artwork_config,
         ingest=ingest,
         free_ingest=free_ingest,
-        enable_plex=enable_plex,
-        enable_beets=enable_beets,
     )

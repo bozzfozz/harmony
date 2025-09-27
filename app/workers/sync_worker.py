@@ -119,13 +119,11 @@ class SyncWorker:
         metadata_worker: MetadataWorker | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
-        scan_worker: Any | None = None,
     ) -> None:
         self._client = soulseek_client
         self._metadata_worker = metadata_worker
         self._artwork = artwork_worker
         self._lyrics = lyrics_worker
-        self._scan_worker = scan_worker
         self._job_store = PersistentJobQueue("sync")
         self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]] = (
             asyncio.PriorityQueue()
@@ -813,16 +811,6 @@ class SyncWorker:
 
         if ingest_item_id is not None:
             self._update_ingest_item_state(ingest_item_id, IngestItemState.COMPLETED, error=None)
-
-        if self._scan_worker is not None:
-            try:
-                await self._scan_worker.request_scan()
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug(
-                    "Unable to enqueue Plex scan after download %s: %s",
-                    download_id,
-                    exc,
-                )
 
     @staticmethod
     def _extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> Optional[int]:

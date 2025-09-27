@@ -1,29 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AlbumMatchingRequest": {
-        "properties": {
-          "candidates": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Candidates",
-            "type": "array"
-          },
-          "spotify_album": {
-            "additionalProperties": true,
-            "title": "Spotify Album",
-            "type": "object"
-          }
-        },
-        "required": [
-          "spotify_album",
-          "candidates"
-        ],
-        "title": "AlbumMatchingRequest",
-        "type": "object"
-      },
       "ArtistPreferenceEntry": {
         "properties": {
           "artist_id": {
@@ -324,97 +301,6 @@
           "status"
         ],
         "title": "DiscographyJobResponse",
-        "type": "object"
-      },
-      "DiscographyMatchingRequest": {
-        "properties": {
-          "albums": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Albums",
-            "type": "array"
-          },
-          "artist_id": {
-            "title": "Artist Id",
-            "type": "string"
-          },
-          "plex_items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Plex Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "artist_id"
-        ],
-        "title": "DiscographyMatchingRequest",
-        "type": "object"
-      },
-      "DiscographyMatchingResponse": {
-        "properties": {
-          "missing_albums": {
-            "items": {
-              "$ref": "#/components/schemas/DiscographyMissingAlbum"
-            },
-            "title": "Missing Albums",
-            "type": "array"
-          },
-          "missing_tracks": {
-            "items": {
-              "$ref": "#/components/schemas/DiscographyMissingTrack"
-            },
-            "title": "Missing Tracks",
-            "type": "array"
-          }
-        },
-        "title": "DiscographyMatchingResponse",
-        "type": "object"
-      },
-      "DiscographyMissingAlbum": {
-        "properties": {
-          "album": {
-            "additionalProperties": true,
-            "title": "Album",
-            "type": "object"
-          },
-          "missing_tracks": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Missing Tracks",
-            "type": "array"
-          }
-        },
-        "required": [
-          "album"
-        ],
-        "title": "DiscographyMissingAlbum",
-        "type": "object"
-      },
-      "DiscographyMissingTrack": {
-        "properties": {
-          "album": {
-            "additionalProperties": true,
-            "title": "Album",
-            "type": "object"
-          },
-          "track": {
-            "additionalProperties": true,
-            "title": "Track",
-            "type": "object"
-          }
-        },
-        "required": [
-          "album",
-          "track"
-        ],
-        "title": "DiscographyMissingTrack",
         "type": "object"
       },
       "DiscographyResponse": {
@@ -1456,7 +1342,6 @@
           "source": {
             "enum": [
               "spotify",
-              "plex",
               "soulseek"
             ],
             "title": "Source",
@@ -2557,7 +2442,6 @@
             "items": {
               "enum": [
                 "spotify",
-                "plex",
                 "soulseek"
               ],
               "type": "string"
@@ -3263,27 +3147,6 @@
         ]
       }
     },
-    "/api/health/plex": {
-      "get": {
-        "operationId": "plex_health_api_health_plex_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceHealthResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Plex Health",
-        "tags": [
-          "Health"
-        ]
-      }
-    },
     "/api/health/soulseek": {
       "get": {
         "operationId": "soulseek_health_api_health_soulseek_get",
@@ -3403,7 +3266,7 @@
     },
     "/api/search": {
       "post": {
-        "description": "Perform a combined search across Spotify, Plex and Soulseek.",
+        "description": "Perform a combined search across Spotify and Soulseek.",
         "operationId": "global_search_api_search_post",
         "requestBody": {
           "content": {
@@ -3512,146 +3375,6 @@
         "summary": "Create Free Import",
         "tags": [
           "Imports"
-        ]
-      }
-    },
-    "/matching/discography/plex": {
-      "post": {
-        "description": "Return missing Spotify tracks for a complete discography.",
-        "operationId": "discography_to_plex_matching_discography_plex_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DiscographyMatchingRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscographyMatchingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Discography To Plex",
-        "tags": [
-          "Matching"
-        ]
-      }
-    },
-    "/matching/spotify-to-plex": {
-      "post": {
-        "description": "Match a Spotify track against Plex candidates and persist the result.",
-        "operationId": "spotify_to_plex_matching_spotify_to_plex_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MatchingRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Spotify To Plex",
-        "tags": [
-          "Matching"
-        ]
-      }
-    },
-    "/matching/spotify-to-plex-album": {
-      "post": {
-        "description": "Return the best matching Plex album for the provided Spotify album.",
-        "operationId": "spotify_to_plex_album_matching_spotify_to_plex_album_post",
-        "parameters": [
-          {
-            "description": "Persist album matches for individual tracks",
-            "in": "query",
-            "name": "persist",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Persist album matches for individual tracks",
-              "title": "Persist",
-              "type": "boolean"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlbumMatchingRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchingResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Spotify To Plex Album",
-        "tags": [
-          "Matching"
         ]
       }
     },

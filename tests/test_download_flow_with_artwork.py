@@ -64,7 +64,6 @@ def test_download_flow_with_artwork(
                 timeout_seconds=5.0,
                 max_bytes=5 * 1024 * 1024,
             ),
-            poststep_enabled=False,
         )
         worker = ArtworkWorker(storage_directory=tmp_path / "artwork", config=config)
         await worker.start()

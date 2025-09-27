@@ -213,10 +213,7 @@ class MatchingWorker:
             if not isinstance(candidate, dict):
                 rejected += 1
                 continue
-            if job_type == "spotify-to-plex":
-                score = self._engine.calculate_match_confidence(spotify_track, candidate)
-            else:
-                score = self._engine.calculate_slskd_match_confidence(spotify_track, candidate)
+            score = self._engine.calculate_slskd_match_confidence(spotify_track, candidate)
             if score >= self._confidence_threshold:
                 matches.append((candidate, score))
             else:

@@ -1,72 +1,33 @@
-# Hintergrund-Worker
+# Hintergrund-Worker (MVP-Slim)
 
-Harmony startet beim FastAPI-Startup mehrere Hintergrundprozesse, um langlaufende Aufgaben außerhalb des Request-Kontexts zu bearbeiten. Die Worker verwenden asynchrone Tasks (`asyncio`) und greifen über `session_scope()` auf die Datenbank zu. Sämtliche Worker schreiben ihre Status- und Fortschrittsmeldungen als persistente Events in die Tabelle `activity_events`, sodass die Activity History auch nach Neustarts vollständig nachvollzogen werden kann.
+Harmony startet mehrere asynchrone Worker, sobald die Anwendung initialisiert ist (`app/main.py`). Plex- und Beets-Worker sind archiviert und werden nicht geladen. Dieses Dokument fasst die aktiven Komponenten zusammen.
 
-Alle workerrelevanten Settings werden beim Application-Startup automatisch mit Default-Werten befüllt (`sync_worker_concurrency`, `matching_worker_batch_size`, `autosync_min_bitrate`, `autosync_preferred_formats`). Dadurch stehen sinnvolle Parameter bereit, selbst wenn noch keine manuelle Konfiguration stattgefunden hat.
+## Übersicht
 
-## SyncWorker
+| Worker | Datei | Aufgabe |
+| ------ | ----- | ------- |
+| SyncWorker | `app/workers/sync_worker.py` | Verarbeitet Soulseek-Downloads, führt Datei-Organisation aus und aktualisiert Retry-Informationen. |
+| MatchingWorker | `app/workers/matching_worker.py` | Persistiert Matching-Jobs aus der Queue (`WorkerJob`). |
+| PlaylistSyncWorker | `app/workers/playlist_sync_worker.py` | Synchronisiert Spotify-Playlists mit der Datenbank. |
+| ArtworkWorker | `app/workers/artwork_worker.py` | Lädt Cover in höchster Auflösung, cached Dateien und bettet sie in Downloads ein. |
+| LyricsWorker | `app/workers/lyrics_worker.py` | Erstellt `.lrc`-Dateien aus Spotify-Lyrics oder externen Quellen. |
+| MetadataWorker | `app/workers/metadata_worker.py` | Ergänzt Metadaten (Genre, Komponist, Produzent, ISRC, Copyright). |
+| BackfillWorker | `app/workers/backfill_worker.py` | Reichert FREE-Ingest-Daten mit Spotify-Informationen an. |
+| WatchlistWorker | `app/workers/watchlist_worker.py` | Überwacht gespeicherte Artists auf neue Releases und stößt Downloads an. |
+| RetryScheduler | `app/workers/retry_scheduler.py` | Plant fehlgeschlagene Downloads mit Backoff neu ein. |
 
-- **Pfad:** `app/workers/sync_worker.py`
-- **Aufgabe:** Verarbeitet Soulseek-Downloadjobs, startet Downloads über den `SoulseekClient` und aktualisiert den Fortschritt.
-- **Arbeitsweise:**
-  - Jobs werden in der Tabelle `worker_jobs` persistiert und beim Start wieder eingereiht. Angefangene Downloads überstehen dadurch Neustarts.
-  - Mehrere Worker-Tasks ziehen parallel Jobs aus der Queue. Die Parallelität ist über Setting/ENV (`sync_worker_concurrency` bzw. `SYNC_WORKER_CONCURRENCY`) konfigurierbar.
-  - Die Queue ist priorisiert: höhere `Download.priority`-Werte werden zuerst abgearbeitet (automatisch vergeben für Spotify-Likes, manuell via API/UI anpassbar).
-  - Änderungen über `PATCH /api/download/{id}/priority` aktualisieren nun auch die persistierten Worker-Jobs. Befindet sich ein Job noch im Zustand `queued` oder `retrying`, wird er mit der neuen Priorität erneut eingereiht – inklusive geplanter Retries.
-  - Ein separater Poll-Loop ruft `refresh_downloads()` auf. Läuft kein aktiver Download, wird das Polling-Intervall automatisch auf den Idle-Wert hochgesetzt.
-  - Health-/Monitoring-Informationen landen in der Settings-Tabelle (`worker:sync:last_seen`, `worker:sync:status`, `metrics.sync.*`).
-- **Fehlerhandling:**
-  - Fehlschläge werden automatisch mit Backoff (5 s → 15 s → 30 s) bis zu drei Mal erneut eingeplant. Erst nach dem letzten Versuch markiert der Worker den Download als `failed`.
-  - Unerwartete Statuswerte oder Fortschritte werden korrigiert; Netzwerkfehler beim Status-Polling erzeugen Warnungen, der Worker bleibt aktiv.
-- **Activity Feed / Eventtypen:** Persistiert `download`-Events wie `queued`, `failed`, `download_cancelled` (inkl. Fehlergründen) sowie `sync_job_failed` aus dem Worker. Details enthalten Job-IDs oder beteiligte Nutzer:innen.
+## Lebenszyklus
 
-## MatchingWorker
+- `HARMONY_DISABLE_WORKERS=1` deaktiviert alle Worker (nützlich für Tests oder read-only-Demos).
+- Einzelne Feature-Flags: `ENABLE_ARTWORK` und `ENABLE_LYRICS` können gesetzt werden, um Artwork-/Lyrics-Worker zu deaktivieren (Default: `true`).
+- Beim Shutdown ruft Harmony `stop()` auf allen Worker-Instanzen auf (`app/main.py::_stop_background_workers`).
 
-- **Pfad:** `app/workers/matching_worker.py`
-- **Aufgabe:** Nimmt Matching-Jobs (`spotify_track` + Kandidatenliste) entgegen und persistiert die besten Treffer.
-- **Arbeitsweise:**
-  - Jobs werden persistent in `worker_jobs` gespeichert. Beim Start lädt der Worker offene Jobs nach und verarbeitet sie in konfigurierbaren Batches (`matching_worker_batch_size`).
-  - Jeder Kandidat wird gescored; alle Treffer oberhalb des Confidence-Thresholds (`matching_confidence_threshold`/`MATCHING_CONFIDENCE_THRESHOLD`) werden als `Match` gespeichert.
-  - Nach jeder Charge entstehen Kennzahlen in der Settings-Tabelle (`metrics.matching.*`) sowie Activity-Einträge (`matching_batch`). Heartbeats stehen in `worker:matching:last_seen`, der Status in `worker:matching:status`.
-- **API-Integration:** Neben den Worker-Jobs kann das Album-Matching (`POST /matching/spotify-to-plex-album?persist=true`) die berechneten Treffer je Track direkt in der `matches`-Tabelle ablegen und dabei die Spotify-Album-ID als Kontext speichern.
-- **Fehlerhandling:**
-  - Ungültige Jobs werden mit `invalid_payload` markiert. Laufzeitfehler erzeugen Activity-Logs und setzen den Jobstatus in der DB auf `failed`.
-- **Activity Feed / Eventtypen:** Nutzt den Typ `metadata` mit Statusmeldungen wie `matching_batch` (inkl. Batch-Größe, Treffer, Confidence) oder `matching_job_failed` bei Ausnahmen.
+## Systemstatus & Observability
 
-## ScanWorker
+- `GET /status` zeigt Worker-Zustände (`running`, `stale`, `unavailable`) inklusive Queue-Größe für Matching und Sync.
+- Der `wiring_summary`-Logeintrag beim Start listet aktive Worker auf.
+- Activity-Events (`record_activity`) spiegeln wichtige Phasen wider (`sync_started`, `sync_completed`, `soulseek_no_results`, `artwork_embedded`, `lyrics_generated`).
 
-- **Pfad:** `app/workers/scan_worker.py`
-- **Aufgabe:** Pollt regelmäßig Plex-Statistiken und hält aggregierte Werte in den Settings aktuell.
-- **Arbeitsweise:**
-  - Intervall und Inkrementalscan lassen sich zur Laufzeit über Settings/ENV (`scan_worker_interval_seconds`, `scan_worker_incremental`) steuern.
-  - Vor dem Statistikenlesen wird optional ein inkrementeller Plex-Scan per `refresh_library_section` ausgelöst.
-  - Ergebnisse werden als Settings aktualisiert (`plex_*`) und mit Metriken versehen (`metrics.scan.interval`, `metrics.scan.duration_ms`). Heartbeats sowie Start/Stop-Zeitpunkte landen ebenfalls in der Settings-Tabelle (`worker:scan:last_seen`, `worker:scan:status`).
-- **Fehlerhandling:**
-  - Wiederholte Scan-Fehler werden gezählt; nach drei Versuchen erzeugt der Worker einen Activity-Eintrag `scan_failed`. Netzwerkfehler verhindern keine späteren Läufe.
-- **Activity Feed / Eventtypen:** Meldet über den Typ `metadata` kritische Zustände (`scan_failed`) inklusive Fehlermeldung und Fehlerzähler.
+## Archiv
 
-## AutoSyncWorker
-
-- **Pfad:** `app/workers/auto_sync_worker.py`
-- **Aufgabe:** Vergleicht täglich alle Spotify-Playlists und gespeicherten Tracks mit der Plex-Bibliothek, lädt fehlende Songs über Soulseek und importiert sie via Beets.
-- **Arbeitsweise:**
-  - Artist-Filter greifen weiterhin auf `artist_preferences` zurück. Tracks erhalten Prioritäten (Saved-Tracks/Favoriten, Popularität), womit Downloads bevorzugt nach Wichtigkeit gestartet werden.
-  - Qualitätsregeln sind konfigurierbar (`autosync_min_bitrate`, `autosync_preferred_formats`). Nur Kandidaten, die diese Kriterien erfüllen, werden heruntergeladen – anderenfalls entsteht ein Activity-Eintrag `soulseek_low_quality`.
-  - Fehlgeschlagene Soulseek-Suchen werden in `auto_sync_skipped_tracks` persistiert. Ab einer konfigurierbaren Anzahl (`skip_threshold`) werden Titel automatisch übersprungen.
-  - Während des Laufs werden Teilfortschritte als Status zusammengefasst (z. B. Spotify ok, Plex ok, Soulseek failed). Metriken (`metrics.autosync.*`) sowie Heartbeats (`worker:autosync:last_seen`) und Status (`worker:autosync:status`) landen in der Settings-Tabelle.
-- **Fehlerhandling & Logging:**
-  - Spotify/Plex-Ausfälle beenden den Lauf mit `status="partial"`; Soulseek-Probleme werden granular unterschieden (Suchfehler, Qualitätsfilter, Download-/Importfehler) und im Activity Feed protokolliert.
-  - Erfolgreiche Downloads löschen den Skip-State, damit spätere Läufe nicht hängen bleiben.
-  - Fehlen Credentials für Spotify, Plex oder Soulseek, überspringt der Worker den gesamten Lauf, markiert sich als `blocked` und erzeugt das Activity-Event `autosync_blocked`.
-- **Activity Feed / Eventtypen:** Dokumentiert jeden Lauf mit `sync_started` → `sync_completed` (inkl. `counters` für synchronisierte/übersprungene Tracks). Zwischenstände kommen als `spotify_loaded`, `plex_checked`, `downloads_requested` und `beets_imported`. Bei Fehlern erscheint zusätzlich `sync_partial` mit Fehlerliste; Soulseek-/Plex-Sonderfälle werden weiterhin separat geloggt (`soulseek_no_results`, `plex_update_failed`, ...).
-
-## Zusammenspiel der Worker
-
-- **Heartbeats & Monitoring:** Jeder Worker aktualisiert `worker:<name>:last_seen` und `worker:<name>:status` sowie Start-/Stop-Timestamps. Zusätzlich entstehen Activity-Feed-Ereignisse vom Typ `worker` (`started`, `stopped`, `stale`, `restarted`). Der `/status`-Endpoint markiert Worker automatisch als `stale`, sobald der letzte Heartbeat länger als 60 Sekunden zurückliegt, und erzeugt dabei ein passendes Activity-Event. Ergänzende Kennzahlen (z. B. `metrics.sync.jobs_completed`, `metrics.matching.saved_total`, `metrics.autosync.duration_ms`) dienen als Einstiegspunkt für externe Monitoring-Lösungen.
-- **Queue-Transparenz:**
-  - `SyncWorker`: Queue-Größe basiert auf Downloads mit Status `queued` oder `downloading`.
-  - `MatchingWorker`: Zählt Jobs in `worker_jobs` mit Status `queued` oder `running`.
-  - `AutoSyncWorker`: Meldet geplante Zyklen (`scheduled`) und aktuell laufende (`running`).
-  - `ScanWorker` und `PlaylistSyncWorker` liefern `"n/a"`, da keine klassische Queue existiert.
-- **Graceful Restart:** Persistente Job-Queues (`worker_jobs`) gewährleisten, dass laufende Matching-/Sync-Aufgaben bei einem Neustart fortgesetzt werden.
-- **Konfiguration:** Neue Settings erlauben Laufzeit-Tuning ohne Codeänderungen (z. B. Polling-Intervalle, Quality Rules, Confidence-Thresholds). Änderungen greifen unmittelbar bei den nächsten Worker-Zyklen.
+Frühere Worker (`ScanWorker`, `AutoSyncWorker`, `DiscographyWorker`, Beets-Poststeps) liegen unter [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/). Die neue Wiring-Audit (`scripts/audit_wiring.py`) stellt sicher, dass sie nicht versehentlich erneut importiert werden.

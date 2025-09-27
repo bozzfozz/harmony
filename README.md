@@ -50,14 +50,14 @@ Das Verhalten lässt sich über zwei Umgebungsvariablen konfigurieren:
 
 ## Smart Search
 
-Die globale Suche (`POST /search`) aggregiert Spotify-, Plex- und Soulseek-Ergebnisse in einer gemeinsamen Trefferliste mit einheitlichem Schema (`id`, `source`, `type`, `title`, `artists`, `album`, `year`, `duration_ms`, `bitrate`, `format`, `score`). Serverseitige Filter greifen nach der Aggregation und unterstützen folgende Kriterien:
+Die globale Suche (`POST /search`) aggregiert Spotify- und Soulseek-Ergebnisse in einer gemeinsamen Trefferliste mit einheitlichem Schema (`id`, `source`, `type`, `title`, `artists`, `album`, `year`, `duration_ms`, `bitrate`, `format`, `score`). Serverseitige Filter greifen nach der Aggregation und unterstützen folgende Kriterien:
 
 - `types`: Liste der gewünschten Entitätstypen (`track`, `album`, `artist`).
 - `genres`: Mehrere Genres, case-insensitiv verglichen.
 - `year_range`: Bereich `[min, max]` für Veröffentlichungsjahre.
 - `duration_ms`: Bereich `[min, max]` für die Laufzeit in Millisekunden.
 - `explicit`: `true`/`false` zur Einschränkung auf Spotify-Tracks mit oder ohne Explicit-Flag.
-- `min_bitrate`: Mindestbitrate in kbps (wirkt auf Plex- und Soulseek-Dateien).
+- `min_bitrate`: Mindestbitrate in kbps (wirkt auf Soulseek-Dateien).
 - `preferred_formats`: Liste bevorzugter Audioformate, die das Ranking beeinflusst.
 - `username`: Soulseek-spezifischer Filter auf einen bestimmten Benutzer.
 
@@ -96,7 +96,7 @@ Beispiel einer erzeugten `.lrc`-Datei:
 
 ## Rich Metadata
 
-Der neue Metadata-Worker lauscht auf abgeschlossene Downloads und reichert jede Audiodatei mit zusätzlichen Tags an. Die Informationen stammen primär aus der Spotify-API (Track-, Album- und Künstlerdaten), fehlende Felder werden über Plex ergänzt. Harmony schreibt Genre, Komponist, Produzent, ISRC und Copyright direkt in die Mediendatei, persistiert die Werte in der `downloads`-Tabelle und stellt sie über `GET /soulseek/download/{id}/metadata` als JSON zur Verfügung. Über `POST /soulseek/download/{id}/metadata/refresh` kann jederzeit ein erneuter Enrichment-Lauf angestoßen werden – die API antwortet sofort mit `202`, während der Worker im Hintergrund Spotify- und Plex-Daten abgleicht und die Tags neu schreibt.
+Der Metadata-Worker lauscht auf abgeschlossene Downloads und reichert jede Audiodatei mit zusätzlichen Tags an. Die Informationen stammen vollständig aus der Spotify-API (Track-, Album- und Künstlerdaten); die frühere Plex-Anreicherung wurde archiviert. Harmony schreibt Genre, Komponist, Produzent, ISRC und Copyright direkt in die Mediendatei, persistiert die Werte in der `downloads`-Tabelle und stellt sie über `GET /soulseek/download/{id}/metadata` als JSON zur Verfügung. Über `POST /soulseek/download/{id}/metadata/refresh` lässt sich jederzeit ein erneuter Enrichment-Lauf anstoßen.
 
 Beispielantwort:
 
@@ -114,7 +114,7 @@ Beispielantwort:
 
 ## High-Quality Artwork
 
-Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in Originalauflösung. Primärquelle ist die Spotify-API; das größte verfügbare Bild landet im lokalen Cache-Verzeichnis (`ARTWORK_DIR`, Default `./artwork`). Für jede Spotify-Album-ID bzw. Fallback-MBID wird exakt eine Datei (`<id>_original.<ext>`) vorgehalten und für nachfolgende Titel wiederverwendet. Vor dem Einbetten prüft der Worker vorhandene Cover: nur fehlende oder als „low-res“ eingestufte Embeds werden ersetzt (`ARTWORK_MIN_EDGE`, `ARTWORK_MIN_BYTES`). Optional lässt sich ein Fallback auf MusicBrainz + Cover Art Archive aktivieren (`ARTWORK_FALLBACK_ENABLED=true`, `ARTWORK_FALLBACK_PROVIDER=musicbrainz`). Dabei sind nur die Hosts `musicbrainz.org` und `coverartarchive.org` erlaubt; Timeouts und Download-Größen lassen sich getrennt konfigurieren (`ARTWORK_HTTP_TIMEOUT`, `ARTWORK_MAX_BYTES`, `ARTWORK_FALLBACK_TIMEOUT_SEC`, `ARTWORK_FALLBACK_MAX_BYTES`, `ARTWORK_WORKER_CONCURRENCY`). Nach erfolgreichem Einbetten kann Harmony – gesteuert über `BEETS_POSTSTEP_ENABLED` (DB-Setting oder ENV) – automatisch `beet write`/`beet update` aufrufen. Der Download-Datensatz speichert neben Pfad (`artwork_path`), Status (`has_artwork`) und Cache-Hits (`artwork_status`) auch die Spotify-IDs (`spotify_track_id`, `spotify_album_id`) für spätere Aktualisierungen.
+Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in Originalauflösung. Primärquelle ist die Spotify-API; das größte verfügbare Bild landet im lokalen Cache-Verzeichnis (`ARTWORK_DIR`, Default `./artwork`). Für jede Spotify-Album-ID bzw. Fallback-MBID wird exakt eine Datei (`<id>_original.<ext>`) vorgehalten und für nachfolgende Titel wiederverwendet. Vor dem Einbetten prüft der Worker vorhandene Cover: nur fehlende oder als „low-res“ eingestufte Embeds werden ersetzt (`ARTWORK_MIN_EDGE`, `ARTWORK_MIN_BYTES`). Optional lässt sich ein Fallback auf MusicBrainz + Cover Art Archive aktivieren (`ARTWORK_FALLBACK_ENABLED=true`, `ARTWORK_FALLBACK_PROVIDER=musicbrainz`). Dabei sind nur die Hosts `musicbrainz.org` und `coverartarchive.org` erlaubt; Timeouts und Download-Größen lassen sich getrennt konfigurieren (`ARTWORK_HTTP_TIMEOUT`, `ARTWORK_MAX_BYTES`, `ARTWORK_FALLBACK_TIMEOUT_SEC`, `ARTWORK_FALLBACK_MAX_BYTES`, `ARTWORK_WORKER_CONCURRENCY`). Nach erfolgreichem Einbetten aktualisiert Harmony den Download-Datensatz (Pfad `artwork_path`, Status `has_artwork`, Cache-Hits `artwork_status`) und speichert die zugehörigen Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Der frühere Beets-Poststep ist archiviert und im MVP deaktiviert.
 
 Über den Endpoint `GET /soulseek/download/{id}/artwork` liefert die API das eingebettete Cover direkt als `image/jpeg` (inkl. korrektem MIME-Type). Ist noch kein Artwork verfügbar, antwortet der Server mit `404`. Mit `POST /soulseek/download/{id}/artwork/refresh` lässt sich jederzeit ein erneuter Abruf auslösen, etwa wenn bessere Quellen verfügbar geworden sind; das Cover wird dabei neu heruntergeladen, zwischengespeichert und erneut eingebettet.
 
@@ -169,6 +169,7 @@ ruff check .
 black --check .
 mypy app
 pytest -q
+python scripts/audit_wiring.py
 
 cd frontend
 npm ci
@@ -258,9 +259,6 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SPOTIFY_CLIENT_SECRET` | Spotify OAuth Client Secret |
 | `SPOTIFY_REDIRECT_URI` | Redirect URI für den OAuth-Flow |
 | `SPOTIFY_SCOPE` | Optionaler Scope für Spotify Berechtigungen |
-| `PLEX_BASE_URL` | Basis-URL des Plex-Servers |
-| `PLEX_TOKEN` | Plex Auth Token |
-| `PLEX_LIBRARY` | Name der Plex-Musikbibliothek |
 | `SLSKD_URL` | Basis-URL des Soulseek-Daemons |
 | `SLSKD_API_KEY` | API-Key für slskd (falls gesetzt) |
 | `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
@@ -272,7 +270,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `RETRY_SCAN_INTERVAL_SEC` | Intervall des Retry-Schedulers in Sekunden (Default: `60`) |
 | `RETRY_SCAN_BATCH_LIMIT` | Maximale Anzahl neu eingeplanter Downloads pro Scheduler-Lauf (Default: `100`) |
 
-> **Hinweis:** Spotify-, Plex- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
+> **Hinweis:** Spotify- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
 
 ## API-Endpoints
 
@@ -280,47 +278,11 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 
 - **Spotify** (`/spotify`): Status, Suche, Track-Details, Audio-Features, Benutzerbibliothek, Playlists, Empfehlungen.
 - **Spotify FREE** (`/spotify/free`): Parser- und Enqueue-Endpunkte für importierte Titel ohne OAuth-Integration.
-- **Plex** (`/plex`): Status, Bibliotheken, Scan-Trigger, Suche und kompakte Tracklisten.
 - **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos. Enthält `/soulseek/downloads/{id}/requeue` für manuelle Neuversuche und liefert Retry-Metadaten (`state`, `retry_count`, `next_retry_at`, `last_error`).
-- **Matching** (`/matching`): Spotify→Plex, Spotify→Soulseek sowie Album-Matching.
+- **Matching** (`/matching`): Spotify↔Soulseek-Matching sowie Album-Matching (Legacy-Plex-Routen liefern `404`).
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
-- **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.
 
-### Beets-Integration
-
-> _Archiviert_: Die folgenden Informationen dokumentieren die frühere Beets-Bridge. Im MVP sind die Endpunkte deaktiviert; der Code liegt unter `archive/integrations/plex_beets/`.
-
-Die Harmony-Instanz nutzt die [`beet` CLI](https://beets.io/) für alle Operationen rund um die lokale Musikbibliothek. Stelle
- sicher, dass `beet` auf dem Host oder im Container installiert und über den `PATH` erreichbar ist, bevor du die Beets-Endpunk
- te aufrufst.
-
-Beispiele für typische Aufrufe:
-
-```bash
-# Neuen Ordner importieren
-curl -X POST http://localhost:8000/beets/import \
-  -H 'Content-Type: application/json' \
-  -d '{"path": "/music/new", "quiet": true, "autotag": true}'
-
-# Bibliothek aktualisieren (optional mit Pfad)
-http POST http://localhost:8000/beets/update path=/music/library
-
-# Treffer suchen und formatiert ausgeben
-curl -X POST http://localhost:8000/beets/query \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "artist:Radiohead", "format": "$artist - $album - $title"}'
-
-# Einträge löschen (force löscht ohne Rückfrage)
-http DELETE http://localhost:8000/beets/remove query=='artist:Radiohead' force:=true
-```
-
-Weitere Endpunkte:
-
-- `GET /beets/albums` – listet alle Alben.
-- `GET /beets/tracks` – listet alle Titel.
-- `GET /beets/stats` – liefert Beets-Statistiken.
-- `GET /beets/fields` – zeigt verfügbare Metadatenfelder.
-- `POST /beets/move` & `POST /beets/write` – verschiebt Dateien bzw. schreibt Tags.
+Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.
 
 ## Contributing
 

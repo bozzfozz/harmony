@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
@@ -14,10 +13,9 @@ if str(ROOT) not in sys.path:
 
 import pytest
 from app.core.transfers_api import TransfersApiError
-from app.db import init_db, reset_engine_for_tests
+from app.db import init_db, reset_engine_for_tests, session_scope
 from app.dependencies import (
     get_matching_engine as dependency_matching_engine,
-    get_plex_client as dependency_plex_client,
     get_soulseek_client as dependency_soulseek_client,
     get_spotify_client as dependency_spotify_client,
     get_transfers_api as dependency_transfers_api,
@@ -284,303 +282,6 @@ class StubSpotifyClient:
         payload.setdefault("tracks", [])
         payload.setdefault("seeds", [])
         return payload
-
-
-class StubPlexClient:
-    def __init__(self) -> None:
-        self.libraries = {
-            "MediaContainer": {
-                "Directory": [
-                    {"key": "1", "type": "artist", "title": "Music"},
-                ]
-            }
-        }
-        self.library_items = {
-            (
-                "1",
-                "10",
-            ): {
-                "MediaContainer": {
-                    "totalSize": 2,
-                    "Metadata": [
-                        {
-                            "ratingKey": "plex-1",
-                            "title": "Test Track One",
-                            "parentTitle": "Test Album",
-                            "grandparentTitle": "Plex Artist",
-                            "year": 1969,
-                            "Genre": [{"tag": "rock"}],
-                            "Media": [
-                                {
-                                    "bitrate": 1000,
-                                    "audioCodec": "flac",
-                                }
-                            ],
-                        },
-                        {
-                            "ratingKey": "plex-2",
-                            "title": "Other Track",
-                            "parentTitle": "Other Album",
-                            "grandparentTitle": "Plex Artist",
-                            "year": 2005,
-                            "Genre": [{"tag": "electronic"}],
-                            "Media": [
-                                {
-                                    "bitrate": 320,
-                                    "audioCodec": "mp3",
-                                }
-                            ],
-                        },
-                    ],
-                }
-            },
-            ("1", "9"): {"MediaContainer": {"totalSize": 3, "Metadata": [{"ratingKey": "a"}]}},
-            ("1", "8"): {"MediaContainer": {"totalSize": 5, "Metadata": [{"ratingKey": "t"}]}},
-        }
-        self.metadata = {
-            "100": {
-                "MediaContainer": {
-                    "Metadata": [
-                        {
-                            "ratingKey": "100",
-                            "title": "Test Item",
-                            "parentTitle": "Test Album",
-                            "grandparentTitle": "Test Artist",
-                            "year": 2020,
-                        }
-                    ]
-                }
-            }
-        }
-        self.sessions = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Session"}]}}
-        self.session_history = {"MediaContainer": {"size": 1, "Metadata": [{"title": "History"}]}}
-        self.playlists = {"MediaContainer": {"size": 1, "Metadata": [{"title": "Playlist"}]}}
-        self.created_playlists: list[dict[str, Any]] = []
-        self.playqueues: Dict[str, Any] = {}
-        self.timeline_updates: list[dict[str, Any]] = []
-        self.scrobbles: list[dict[str, Any]] = []
-        self.unscrobbles: list[dict[str, Any]] = []
-        self.ratings: list[dict[str, Any]] = []
-        self.tags: Dict[str, Dict[str, list[str]]] = {}
-        self.devices = {"MediaContainer": {"Device": [{"name": "Player"}]}}
-        self.dvr = {"MediaContainer": {"Directory": [{"name": "DVR"}]}}
-        self.livetv = {"MediaContainer": {"Directory": [{"name": "Channel"}]}}
-        self.last_library_params: Dict[tuple[str, str], Dict[str, Any]] = {}
-        self.refresh_calls: list[tuple[str, bool]] = []
-        self.status_payload = {"server": {"name": "Stub Plex", "version": "1.0"}, "libraries": 1}
-
-    async def get_sessions(self) -> Dict[str, Any]:
-        return self.sessions
-
-    async def get_library_statistics(self) -> Dict[str, int]:
-        return {"artists": 2, "albums": 3, "tracks": 5}
-
-    async def get_status(self) -> Dict[str, Any]:
-        return dict(self.status_payload)
-
-    async def get_libraries(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        return self.libraries
-
-    async def get_library_items(
-        self, section_id: str, params: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
-        type_value = (params or {}).get("type", "")
-        self.last_library_params[(section_id, type_value)] = dict(params or {})
-        return self.library_items.get(
-            (section_id, type_value), {"MediaContainer": {"Metadata": []}}
-        )
-
-    async def get_metadata(self, item_id: str) -> Dict[str, Any]:
-        return self.metadata[item_id]
-
-    async def get_session_history(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        return self.session_history
-
-    async def get_timeline(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        return {"timeline": params or {}}
-
-    async def update_timeline(self, data: Dict[str, Any]) -> str:
-        self.timeline_updates.append(data)
-        return "ok"
-
-    async def scrobble(self, data: Dict[str, Any]) -> str:
-        self.scrobbles.append(data)
-        return "ok"
-
-    async def unscrobble(self, data: Dict[str, Any]) -> str:
-        self.unscrobbles.append(data)
-        return "ok"
-
-    async def get_playlists(self) -> Dict[str, Any]:
-        return self.playlists
-
-    async def create_playlist(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        self.created_playlists.append(payload)
-        return {"status": "created", "payload": payload}
-
-    async def update_playlist(self, playlist_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        return {"status": "updated", "id": playlist_id, "payload": payload}
-
-    async def delete_playlist(self, playlist_id: str) -> Dict[str, Any]:
-        return {"status": "deleted", "id": playlist_id}
-
-    async def create_playqueue(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        identifier = str(len(self.playqueues) + 1)
-        self.playqueues[identifier] = payload
-        return {"playQueueID": identifier, "payload": payload}
-
-    async def get_playqueue(self, playqueue_id: str) -> Dict[str, Any]:
-        return self.playqueues.get(playqueue_id, {})
-
-    async def rate_item(self, item_id: str, rating: int) -> str:
-        self.ratings.append({"key": item_id, "rating": rating})
-        return "ok"
-
-    async def sync_tags(self, item_id: str, tags: Dict[str, list[str]]) -> Dict[str, Any]:
-        self.tags[item_id] = tags
-        return {"status": "tags-updated", "id": item_id, "tags": tags}
-
-    async def refresh_library_section(self, section_id: str, *, full: bool = False) -> None:
-        self.refresh_calls.append((section_id, full))
-
-    async def list_tracks(
-        self,
-        *,
-        artist: str | None = None,
-        album: str | None = None,
-        section_id: str | None = None,
-    ) -> list[Dict[str, Any]]:
-        section = section_id or "1"
-        payload = await self.get_library_items(section, params={"type": "10"})
-        metadata = self._extract_search_entries(payload)
-        results: list[Dict[str, Any]] = []
-        for entry in metadata:
-            if artist and entry.get("grandparentTitle") != artist:
-                continue
-            if album and entry.get("parentTitle") != album:
-                continue
-            guid_list = entry.get("Guid") or [{}]
-            guid = ""
-            if isinstance(guid_list, list) and guid_list:
-                first = guid_list[0]
-                if isinstance(first, dict):
-                    guid = first.get("id", "")
-            results.append(
-                {
-                    "title": entry.get("title"),
-                    "track": entry.get("index", 0),
-                    "guid": guid,
-                    "ratingKey": entry.get("ratingKey"),
-                    "section_id": section,
-                }
-            )
-        return results
-
-    async def get_devices(self) -> Dict[str, Any]:
-        return self.devices
-
-    async def get_dvr(self) -> Dict[str, Any]:
-        return self.dvr
-
-    async def get_live_tv(self, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        return self.livetv
-
-    async def _default_music_section(self) -> str:
-        return "1"
-
-    async def default_music_section(self) -> str:
-        return "1"
-
-    @staticmethod
-    def _map_media_type(mediatype: str | None) -> str:
-        mapping = {"track": "10", "album": "9", "artist": "8"}
-        if not mediatype:
-            return "10"
-        lowered = str(mediatype).lower()
-        return mapping.get(lowered, lowered)
-
-    @staticmethod
-    def _extract_search_entries(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
-        container = payload.get("MediaContainer", {}) if isinstance(payload, dict) else {}
-        metadata = container.get("Metadata", []) if isinstance(container, dict) else []
-        return [entry for entry in metadata if isinstance(entry, dict)]
-
-    @staticmethod
-    def normalise_music_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
-        media = entry.get("Media") or []
-        bitrate = None
-        audio_codec = None
-        if isinstance(media, list) and media:
-            first = media[0]
-            if isinstance(first, dict):
-                bitrate_value = first.get("bitrate")
-                if isinstance(bitrate_value, int):
-                    bitrate = bitrate_value
-                audio_codec = first.get("audioCodec")
-        genres = []
-        for genre in entry.get("Genre", []) or []:
-            if isinstance(genre, dict) and genre.get("tag"):
-                genres.append(str(genre.get("tag")))
-        return {
-            "id": entry.get("ratingKey"),
-            "type": "track",
-            "title": entry.get("title"),
-            "album": entry.get("parentTitle"),
-            "artists": ([entry.get("grandparentTitle")] if entry.get("grandparentTitle") else []),
-            "year": entry.get("year"),
-            "duration_ms": entry.get("duration"),
-            "bitrate": bitrate,
-            "format": str(audio_codec).lower() if audio_codec else None,
-            "genres": genres,
-            "extra": {"ratingKey": entry.get("ratingKey")},
-        }
-
-    async def search_music(
-        self,
-        query: str,
-        *,
-        section_id: str | None = None,
-        mediatypes: Sequence[str] | None = None,
-        limit: int = 50,
-        genre: str | None = None,
-        year_from: int | None = None,
-        year_to: int | None = None,
-    ) -> list[Dict[str, Any]]:
-        del query, limit, genre, year_from, year_to
-        section = section_id or "1"
-        types = mediatypes or ("track", "album", "artist")
-        results: list[Dict[str, Any]] = []
-        for mediatype in types:
-            mapped = self._map_media_type(mediatype)
-            params = {"type": mapped}
-            payload = await self.get_library_items(section, params=params)
-            results.extend(self._extract_search_entries(payload))
-        return results
-
-    @asynccontextmanager
-    async def listen_notifications(self):  # pragma: no cover - exercised via tests
-        class _Message:
-            def __init__(self) -> None:
-                self.type = type("Type", (), {"name": "TEXT"})
-                self.data = "event"
-
-        class _Websocket:
-            def __init__(self) -> None:
-                self._sent = False
-
-            def exception(self):
-                return None
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self._sent:
-                    raise StopAsyncIteration
-                self._sent = True
-                return _Message()
-
-        yield _Websocket()
 
 
 class StubSoulseekClient:
@@ -867,7 +568,6 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> 
 
     deps.get_app_config.cache_clear()
     deps.get_spotify_client.cache_clear()
-    deps.get_plex_client.cache_clear()
     deps.get_soulseek_client.cache_clear()
     deps.get_transfers_api.cache_clear()
     deps.get_matching_engine.cache_clear()
@@ -885,8 +585,6 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> 
     write_setting("SPOTIFY_CLIENT_ID", "stub-client")
     write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
     write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
-    write_setting("PLEX_BASE_URL", "http://plex.local")
-    write_setting("PLEX_TOKEN", "token")
     write_setting("SLSKD_URL", "http://localhost:5030")
     yield
     reset_engine_for_tests()
@@ -904,9 +602,14 @@ def reset_activity_manager() -> None:
 
 
 @pytest.fixture
+def db_session():
+    with session_scope() as session:
+        yield session
+
+
+@pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     stub_spotify = StubSpotifyClient()
-    stub_plex = StubPlexClient()
     stub_soulseek = StubSoulseekClient()
     stub_transfers = StubTransfersApi(stub_soulseek)
     stub_lyrics = StubLyricsWorker()
@@ -931,20 +634,17 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     from app import dependencies as deps
 
     monkeypatch.setattr(deps, "get_spotify_client", lambda: stub_spotify)
-    monkeypatch.setattr(deps, "get_plex_client", lambda: stub_plex)
     monkeypatch.setattr(deps, "get_soulseek_client", lambda: stub_soulseek)
     monkeypatch.setattr(deps, "get_transfers_api", lambda: stub_transfers)
     monkeypatch.setattr(deps, "get_matching_engine", lambda: engine)
 
     app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
-    app.dependency_overrides[dependency_plex_client] = lambda: stub_plex
     app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
     app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
     app.dependency_overrides[dependency_matching_engine] = lambda: engine
 
     app.state.soulseek_stub = stub_soulseek
     app.state.transfers_stub = stub_transfers
-    app.state.plex_stub = stub_plex
     app.state.spotify_stub = stub_spotify
     app.state.lyrics_worker = stub_lyrics
     app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)

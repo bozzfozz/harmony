@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Optional, Sequence
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
-SourceLiteral = Literal["spotify", "plex", "soulseek"]
+SourceLiteral = Literal["spotify", "soulseek"]
 ItemTypeLiteral = Literal["track", "album", "artist"]
 SearchTypeLiteral = Literal["track", "album", "artist", "mixed"]
 
@@ -20,7 +20,7 @@ class SearchRequest(BaseModel):
         default="mixed", description="Result type filter (artist/album/track/mixed)"
     )
     sources: List[SourceLiteral] = Field(
-        default_factory=lambda: ["spotify", "plex", "soulseek"],
+        default_factory=lambda: ["spotify", "soulseek"],
         description="Sources to query",
     )
     genre: Optional[str] = Field(
@@ -61,15 +61,15 @@ class SearchRequest(BaseModel):
     @classmethod
     def _normalise_sources(cls, value: Optional[Sequence[str]]) -> List[SourceLiteral]:
         if value in (None, "", []):
-            return ["spotify", "plex", "soulseek"]
+            return ["spotify", "soulseek"]
         normalised: list[SourceLiteral] = []
         for entry in value:
             if not entry:
                 continue
             lowered = str(entry).strip().lower()
-            if lowered in {"spotify", "plex", "soulseek"} and lowered not in normalised:
+            if lowered in {"spotify", "soulseek"} and lowered not in normalised:
                 normalised.append(lowered)  # type: ignore[arg-type]
-        return normalised or ["spotify", "plex", "soulseek"]
+        return normalised or ["spotify", "soulseek"]
 
     @field_validator("genre")
     @classmethod
