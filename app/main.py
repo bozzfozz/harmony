@@ -60,13 +60,6 @@ def _should_start_workers() -> bool:
     return os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}
 
 
-def _flag_enabled(name: str, *, default: bool = True) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
 def _resolve_watchlist_interval(raw_value: str | None) -> float:
     default = 86_400.0
     if not raw_value:
@@ -210,8 +203,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
     _configure_application(config)
 
-    enable_artwork = _flag_enabled("ENABLE_ARTWORK", default=True)
-    enable_lyrics = _flag_enabled("ENABLE_LYRICS", default=True)
+    feature_flags = config.features
+    app.state.feature_flags = feature_flags
+
+    enable_artwork = feature_flags.enable_artwork
+    enable_lyrics = feature_flags.enable_lyrics
 
     worker_status: dict[str, bool] = {}
 
@@ -244,14 +240,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "watchlist": True,
     }
 
+    flag_status = {
+        "artwork": enable_artwork,
+        "lyrics": enable_lyrics,
+    }
+
     logger.info(
-        "wiring_summary routers=%s workers=%s integrations=spotify=true soulseek=true plex=false beets=false",
+        "wiring_summary routers=%s workers=%s flags=%s integrations=spotify=true soulseek=true plex=false beets=false",
         router_status,
         worker_status,
+        flag_status,
         extra={
             "event": "wiring_summary",
             "routers": router_status,
             "workers": worker_status,
+            "flags": flag_status,
             "integrations": {
                 "spotify": True,
                 "soulseek": True,

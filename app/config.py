@@ -76,6 +76,12 @@ class IngestConfig:
 
 
 @dataclass(slots=True)
+class FeatureFlags:
+    enable_artwork: bool
+    enable_lyrics: bool
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     soulseek: SoulseekConfig
@@ -84,6 +90,7 @@ class AppConfig:
     artwork: ArtworkConfig
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
+    features: FeatureFlags
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -226,6 +233,8 @@ def load_config() -> AppConfig:
         "SLSKD_URL",
         "SLSKD_API_KEY",
         "SPOTIFY_MODE",
+        "ENABLE_ARTWORK",
+        "ENABLE_LYRICS",
     ]
     db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
     legacy_slskd_url = _legacy_slskd_url()
@@ -395,6 +404,25 @@ def load_config() -> AppConfig:
         ),
     )
 
+    features = FeatureFlags(
+        enable_artwork=_as_bool(
+            _resolve_setting(
+                "ENABLE_ARTWORK",
+                db_settings=db_settings,
+                fallback=os.getenv("ENABLE_ARTWORK"),
+            ),
+            default=False,
+        ),
+        enable_lyrics=_as_bool(
+            _resolve_setting(
+                "ENABLE_LYRICS",
+                db_settings=db_settings,
+                fallback=os.getenv("ENABLE_LYRICS"),
+            ),
+            default=False,
+        ),
+    )
+
     return AppConfig(
         spotify=spotify,
         soulseek=soulseek,
@@ -403,4 +431,37 @@ def load_config() -> AppConfig:
         artwork=artwork_config,
         ingest=ingest,
         free_ingest=free_ingest,
+        features=features,
     )
+
+
+def is_feature_enabled(
+    name: str,
+    *,
+    config: AppConfig | None = None,
+    database_url: Optional[str] = None,
+) -> bool:
+    """Return the enabled state for the requested feature flag."""
+
+    normalized = name.strip().lower()
+    feature_key_map = {
+        "artwork": "ENABLE_ARTWORK",
+        "lyrics": "ENABLE_LYRICS",
+    }
+    try:
+        key = feature_key_map[normalized]
+    except KeyError as exc:  # pragma: no cover - defensive guard
+        raise ValueError(f"Unknown feature flag: {name}") from exc
+
+    if config is not None:
+        features = config.features
+        if normalized == "artwork":
+            return features.enable_artwork
+        if normalized == "lyrics":
+            return features.enable_lyrics
+
+    db_value = get_setting(key, database_url=database_url)
+    if db_value is not None:
+        return _as_bool(db_value, default=False)
+
+    return _as_bool(os.getenv(key), default=False)

@@ -6,6 +6,7 @@
 
 ## v1.x.x
 
+- feat: add feature flags for artwork and lyrics (default disabled) with conditional worker wiring, 503 guards, and refreshed documentation/tests.
 - refactor: purge remaining Plex/Beets wiring, ensure routers/workers only load Spotify & Soulseek, add wiring audit guard, and refresh docs/tests.
 - fix: offload Spotify lookups in the watchlist worker to executor threads to
   prevent event-loop starvation and add regression coverage around the
