@@ -35,10 +35,10 @@ def test_e2e_download_smoke(client) -> None:
         "files": [{"filename": "smoke.mp3"}],
     }
 
-    response = client.post("/api/download", json=payload)
+    response = client.post("/download", json=payload)
     assert response.status_code == 202
 
-    downloads_response = client.get("/api/downloads", params={"all": "true"})
+    downloads_response = client.get("/downloads", params={"all": "true"})
     assert downloads_response.status_code == 200
     downloads_payload = downloads_response.json()["downloads"]
     assert downloads_payload
@@ -47,7 +47,7 @@ def test_e2e_download_smoke(client) -> None:
     assert download_entry["progress"] == 100.0
     assert download_entry["username"] == "smoke-user"
 
-    activity_response = client.get("/api/activity")
+    activity_response = client.get("/activity")
     assert activity_response.status_code == 200
     activity_items = activity_response.json()["items"]
     assert any(item["type"] == "download" and item["status"] == "queued" for item in activity_items)

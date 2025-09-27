@@ -64,7 +64,7 @@ def test_search_filters_by_year_range(client) -> None:
         "offset": 0,
     }
 
-    response = client.post("/api/search", json=payload)
+    response = client.post("/search", json=payload)
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
@@ -98,7 +98,7 @@ def test_search_filters_by_genre(client) -> None:
         "offset": 0,
     }
 
-    response = client.post("/api/search", json=payload)
+    response = client.post("/search", json=payload)
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
@@ -121,7 +121,7 @@ def test_search_respects_min_bitrate_and_format_priority(client) -> None:
         "offset": 0,
     }
 
-    response = client.post("/api/search", json=payload)
+    response = client.post("/search", json=payload)
     assert response.status_code == 200
     body = response.json()
     formats = [item.get("format") for item in body["items"]]
@@ -146,7 +146,7 @@ def test_search_ranking_boosts_format_and_type(monkeypatch: pytest.MonkeyPatch, 
         "offset": 0,
     }
 
-    response = client.post("/api/search", json=payload)
+    response = client.post("/search", json=payload)
     assert response.status_code == 200
     body = response.json()
     assert body["items"], "Expected ranked results"
@@ -162,5 +162,5 @@ def test_search_validation_errors(client) -> None:
         "year_from": 2030,
         "year_to": 2010,
     }
-    response = client.post("/api/search", json=payload)
+    response = client.post("/search", json=payload)
     assert response.status_code == 422

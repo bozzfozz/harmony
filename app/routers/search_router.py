@@ -69,7 +69,7 @@ class Candidate:
         return self.artists[0] if self.artists else None
 
 
-router = APIRouter(prefix="/api", tags=["Search"])
+router = APIRouter(tags=["Search"])
 
 
 @router.post("/search", response_model=SearchResponse, status_code=status.HTTP_200_OK)

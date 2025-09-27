@@ -56,7 +56,7 @@ def test_system_stats_endpoint_uses_psutil(monkeypatch, client) -> None:
 
     monkeypatch.setattr(system_router_module, "psutil", DummyPsutil)
 
-    response = client.get("/api/system/stats")
+    response = client.get("/system/stats")
     assert response.status_code == 200
 
     stats = response.json()

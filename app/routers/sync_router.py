@@ -17,7 +17,7 @@ from app.utils.events import SYNC_BLOCKED
 from app.utils.service_health import collect_missing_credentials
 from app.workers import PlaylistSyncWorker
 
-router = APIRouter(prefix="/api", tags=["Sync"])
+router = APIRouter(tags=["Sync"])
 logger = get_logger(__name__)
 
 

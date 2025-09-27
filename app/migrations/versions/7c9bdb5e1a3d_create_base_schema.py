@@ -20,12 +20,8 @@ depends_on = None
 
 def _download_column_definitions() -> Dict[str, sa.Column[Any]]:
     return {
-        "spotify_track_id": sa.Column(
-            "spotify_track_id", sa.String(length=128), nullable=True
-        ),
-        "spotify_album_id": sa.Column(
-            "spotify_album_id", sa.String(length=128), nullable=True
-        ),
+        "spotify_track_id": sa.Column("spotify_track_id", sa.String(length=128), nullable=True),
+        "spotify_album_id": sa.Column("spotify_album_id", sa.String(length=128), nullable=True),
         "artwork_path": sa.Column("artwork_path", sa.String(length=2048), nullable=True),
         "artwork_url": sa.Column("artwork_url", sa.String(length=2048), nullable=True),
         "artwork_status": sa.Column(
@@ -45,9 +41,7 @@ def _download_column_definitions() -> Dict[str, sa.Column[Any]]:
         "producer": sa.Column("producer", sa.String(length=255), nullable=True),
         "isrc": sa.Column("isrc", sa.String(length=64), nullable=True),
         "copyright": sa.Column("copyright", sa.String(length=512), nullable=True),
-        "organized_path": sa.Column(
-            "organized_path", sa.String(length=2048), nullable=True
-        ),
+        "organized_path": sa.Column("organized_path", sa.String(length=2048), nullable=True),
         "retry_count": sa.Column(
             "retry_count", sa.Integer(), nullable=False, server_default=sa.text("0")
         ),
@@ -58,12 +52,8 @@ def _download_column_definitions() -> Dict[str, sa.Column[Any]]:
 
 def _ingest_item_column_definitions() -> Dict[str, sa.Column[Any]]:
     return {
-        "spotify_track_id": sa.Column(
-            "spotify_track_id", sa.String(length=128), nullable=True
-        ),
-        "spotify_album_id": sa.Column(
-            "spotify_album_id", sa.String(length=128), nullable=True
-        ),
+        "spotify_track_id": sa.Column("spotify_track_id", sa.String(length=128), nullable=True),
+        "spotify_album_id": sa.Column("spotify_album_id", sa.String(length=128), nullable=True),
         "isrc": sa.Column("isrc", sa.String(length=64), nullable=True),
     }
 
@@ -83,16 +73,12 @@ def upgrade() -> None:
 
     inspector = inspect(bind)
 
-    downloads_columns = {
-        column["name"] for column in inspector.get_columns("downloads")
-    }
+    downloads_columns = {column["name"] for column in inspector.get_columns("downloads")}
     for name, column in _download_column_definitions().items():
         if name not in downloads_columns:
             op.add_column("downloads", column)
 
-    ingest_columns = {
-        column["name"] for column in inspector.get_columns("ingest_items")
-    }
+    ingest_columns = {column["name"] for column in inspector.get_columns("ingest_items")}
     for name, column in _ingest_item_column_definitions().items():
         if name not in ingest_columns:
             op.add_column("ingest_items", column)

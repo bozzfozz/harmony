@@ -2,13 +2,13 @@
 
 Diese Datei beschreibt die aktiven REST-Endpunkte des Harmony-Backends im Spotify/Soulseek-MVP. Legacy-Routen für Plex/Beets sind deaktiviert und werden in der OpenAPI-Spezifikation nicht mehr generiert. Der entsprechende Code liegt unter [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/).
 
-Alle Endpunkte folgen dem Schema `https://<host>/<route>` und liefern JSON, sofern nicht anders angegeben.
+Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSON, sofern nicht anders angegeben. Der Basispräfix kann über die Umgebungsvariable `API_BASE_PATH` angepasst werden.
 
 ## Authentifizierung
 
 - Alle produktiven Endpunkte erfordern einen gültigen API-Key im Header `X-API-Key`. Alternativ wird `Authorization: Bearer <key>` akzeptiert.
 - Die Liste gültiger Schlüssel wird über `HARMONY_API_KEYS` (kommagetrennt) oder `HARMONY_API_KEYS_FILE` gepflegt. Mehrere Schlüssel können parallel aktiv bleiben.
-- Öffentliche Routen (z. B. `/api/health`) lassen sich via `AUTH_ALLOWLIST` freischalten. Die Angabe erfolgt als kommagetrennte Pfadpräfix-Liste.
+- Öffentliche Routen (z. B. `/api/v1/health`) lassen sich via `AUTH_ALLOWLIST` freischalten. Die Angabe erfolgt als kommagetrennte Pfadpräfix-Liste inklusive Versionierung.
 - CORS ist standardmäßig restriktiv (`ALLOWED_ORIGINS`). Für Tests und lokale Entwicklung kann `HARMONY_DISABLE_WORKERS=1` gesetzt werden, um Hintergrundprozesse auszuschalten.
 - Spotify-Routen mit OAuth benötigen weiterhin gültige Credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`).
 - Soulseek-Routen verwenden slskd (`SLSKD_URL`, optional `SLSKD_API_KEY`).
@@ -47,7 +47,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/<route>` und liefern JSON, sofe
 
 | Methode | Route | Beschreibung |
 | ------- | ----- | ------------ |
-| `POST` | `/api/search` | Aggregierte Suche über Spotify & Soulseek. Unterstützt Filter (`types`, `genres`, `year_range`, `duration_ms`, `explicit`, `min_bitrate`, `preferred_formats`, `username`). |
+| `POST` | `/search` | Aggregierte Suche über Spotify & Soulseek. Unterstützt Filter (`types`, `genres`, `year_range`, `duration_ms`, `explicit`, `min_bitrate`, `preferred_formats`, `username`). |
 | `POST` | `/matching/spotify-to-soulseek` | Bewertet Spotify-Track vs. Soulseek-Kandidaten, persistiert das Ergebnis. |
 | `POST` | `/matching/spotify-to-soulseek/preview` | Liefert nur berechneten Score ohne Persistenz. |
 | `GET` | `/matching/jobs` | Queue-Status des Matching-Workers. |
@@ -61,9 +61,9 @@ Alle Endpunkte folgen dem Schema `https://<host>/<route>` und liefern JSON, sofe
 | ------- | ----- | ------------ |
 | `GET` | `/soulseek/download/{id}/metadata` | Liefert angereicherte Metadaten. |
 | `POST` | `/soulseek/download/{id}/metadata/refresh` | Erstellt einen neuen Metadaten-Job (Spotify-Quelle). |
-| `POST` | `/api/metadata/update` | Antwortet mit `503`, solange Plex/Beets archiviert bleiben. |
-| `POST` | `/api/metadata/stop` | Ebenfalls `503` – nur als Legacy-Platzhalter. |
-| `GET` | `/api/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
+| `POST` | `/metadata/update` | Antwortet mit `503`, solange Plex/Beets archiviert bleiben. |
+| `POST` | `/metadata/stop` | Ebenfalls `503` – nur als Legacy-Platzhalter. |
+| `GET` | `/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
 | `POST` | `/watchlist` | Fügt Artist zur Watchlist hinzu. |
 | `GET` | `/watchlist` | Listet alle Watchlist-Einträge. |
 | `DELETE` | `/watchlist/{spotify_artist_id}` | Entfernt Eintrag. |
@@ -76,14 +76,14 @@ Alle Endpunkte folgen dem Schema `https://<host>/<route>` und liefern JSON, sofe
 | `POST` | `/settings` | Setzt/aktualisiert einen Setting-Wert. |
 | `GET` | `/settings/history/{key}` | Versionsverlauf eines Settings. |
 | `GET` | `/status` | Dashboard-Daten (Version, Uptime, Worker-/Connection-Status). |
-| `GET` | `/api/system/stats` | Systemmetriken (CPU, RAM, Disk). |
+| `GET` | `/system/stats` | Systemmetriken (CPU, RAM, Disk). |
 
 ## Health & Activity
 
 | Methode | Route | Beschreibung |
 | ------- | ----- | ------------ |
-| `GET` | `/api/health/spotify` | Prüft Spotify-Credentials und optional fehlende Felder. |
-| `GET` | `/api/health/soulseek` | Prüft slskd-Erreichbarkeit. |
+| `GET` | `/health/spotify` | Prüft Spotify-Credentials und optional fehlende Felder. |
+| `GET` | `/health/soulseek` | Prüft slskd-Erreichbarkeit. |
 | `GET` | `/activity` | Liefert Activity-Feed (Sync-, Watchlist-, Download-Events). |
 
 ## OpenAPI

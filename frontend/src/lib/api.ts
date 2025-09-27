@@ -1,6 +1,19 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
-import { API_BASE_URL } from './runtime-config';
+import { API_BASE_PATH, API_BASE_URL } from './runtime-config';
+
+const ensureLeadingSlash = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
+
+const apiUrl = (path: string): string => {
+  const normalizedPath = ensureLeadingSlash(path);
+  if (!API_BASE_PATH) {
+    return normalizedPath;
+  }
+  if (normalizedPath === '/') {
+    return API_BASE_PATH || '/';
+  }
+  return `${API_BASE_PATH}${normalizedPath}`;
+};
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -179,7 +192,7 @@ export interface SystemStatusResponse {
 export const getSystemStatus = async (): Promise<SystemStatusResponse> =>
   request<SystemStatusResponse>({
     method: 'GET',
-    url: '/status'
+    url: apiUrl('/status')
   });
 
 export interface SettingsResponse {
@@ -190,7 +203,7 @@ export interface SettingsResponse {
 export const getSettings = async (): Promise<SettingsResponse> =>
   request<SettingsResponse>({
     method: 'GET',
-    url: '/settings'
+    url: apiUrl('/settings')
   });
 
 export interface UpdateSettingPayload {
@@ -201,7 +214,7 @@ export interface UpdateSettingPayload {
 export const updateSetting = async (payload: UpdateSettingPayload) =>
   request<void>({
     method: 'POST',
-    url: '/settings',
+    url: apiUrl('/settings'),
     data: payload
   });
 
@@ -224,7 +237,7 @@ export type ServiceIdentifier = 'spotify' | 'plex' | 'soulseek';
 export const testServiceConnection = async (service: ServiceIdentifier) =>
   request<ServiceHealthResponse>({
     method: 'GET',
-    url: `/api/health/${service}`
+    url: apiUrl(`/health/${service}`)
   });
 
 export interface ArtistPreferenceEntry {
@@ -240,13 +253,13 @@ export interface ArtistPreferencesResponse {
 export const getArtistPreferences = async (): Promise<ArtistPreferenceEntry[]> =>
   request<ArtistPreferencesResponse>({
     method: 'GET',
-    url: '/settings/artist-preferences'
+    url: apiUrl('/settings/artist-preferences')
   }).then((response) => response.preferences ?? []);
 
 export const saveArtistPreferences = async (preferences: ArtistPreferenceEntry[]) =>
   request<ArtistPreferencesResponse>({
     method: 'POST',
-    url: '/settings/artist-preferences',
+    url: apiUrl('/settings/artist-preferences'),
     data: { preferences }
   }).then((response) => response.preferences ?? []);
 
@@ -270,7 +283,7 @@ export interface FollowedArtistsResponse {
 export const getFollowedArtists = async (): Promise<SpotifyArtist[]> =>
   request<FollowedArtistsResponse>({
     method: 'GET',
-    url: '/spotify/artists/followed'
+    url: apiUrl('/spotify/artists/followed')
   }).then((response) => response.artists ?? []);
 
 export interface SpotifyArtistRelease {
@@ -290,7 +303,7 @@ export interface ArtistReleasesResponse {
 export const getArtistReleases = async (artistId: string): Promise<SpotifyArtistRelease[]> =>
   request<ArtistReleasesResponse>({
     method: 'GET',
-    url: `/spotify/artist/${artistId}/releases`
+    url: apiUrl(`/spotify/artist/${artistId}/releases`)
   }).then((response) => response.releases ?? []);
 
 export type SpotifyMode = 'FREE' | 'PRO';
@@ -302,13 +315,13 @@ export interface SpotifyModeResponse {
 export const getSpotifyMode = async (): Promise<SpotifyModeResponse> =>
   request<SpotifyModeResponse>({
     method: 'GET',
-    url: '/spotify/mode'
+    url: apiUrl('/spotify/mode')
   });
 
 export const setSpotifyMode = async (mode: SpotifyMode): Promise<{ ok: boolean }> =>
   request<{ ok: boolean }>({
     method: 'POST',
-    url: '/spotify/mode',
+    url: apiUrl('/spotify/mode'),
     data: { mode }
   });
 
@@ -338,7 +351,7 @@ export const parseSpotifyFreeInput = async (
 ): Promise<SpotifyFreeParseResponse> =>
   request<SpotifyFreeParseResponse>({
     method: 'POST',
-    url: '/spotify/free/parse',
+    url: apiUrl('/spotify/free/parse'),
     data: payload
   });
 
@@ -356,7 +369,7 @@ export const enqueueSpotifyFreeTracks = async (
 ): Promise<SpotifyFreeEnqueueResponse> =>
   request<SpotifyFreeEnqueueResponse>({
     method: 'POST',
-    url: '/spotify/free/enqueue',
+    url: apiUrl('/spotify/free/enqueue'),
     data: payload
   });
 
@@ -374,7 +387,7 @@ export const uploadSpotifyFreeFile = async (
 ): Promise<SpotifyFreeUploadResponse> =>
   request<SpotifyFreeUploadResponse>({
     method: 'POST',
-    url: '/spotify/free/upload',
+    url: apiUrl('/spotify/free/upload'),
     data: payload
   });
 
@@ -445,7 +458,7 @@ export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise
 
   const payload = await request<unknown>({
     method: 'GET',
-    url: '/api/downloads',
+    url: apiUrl('/downloads'),
     params: Object.keys(params).length > 0 ? params : undefined
   });
   return extractDownloadArray(payload).map(normalizeDownloadEntry);
@@ -454,13 +467,13 @@ export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise
 export const cancelDownload = async (id: string | number) =>
   request<void>({
     method: 'DELETE',
-    url: `/api/download/${id}`
+    url: apiUrl(`/download/${id}`)
   });
 
 export const retryDownload = async (id: string | number): Promise<DownloadEntry> =>
   request<unknown>({
     method: 'POST',
-    url: `/api/download/${id}/retry`
+    url: apiUrl(`/download/${id}/retry`)
   }).then((payload) => {
     const downloads = extractDownloadArray(payload).map(normalizeDownloadEntry);
     return (
@@ -478,7 +491,7 @@ export const retryDownload = async (id: string | number): Promise<DownloadEntry>
 export const updateDownloadPriority = async (id: string | number, priority: number) =>
   request<DownloadEntry>({
     method: 'PATCH',
-    url: `/api/download/${id}/priority`,
+    url: apiUrl(`/download/${id}/priority`),
     data: { priority }
   }).then(normalizeDownloadEntry);
 
@@ -489,7 +502,7 @@ export interface StartDownloadPayload {
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> =>
   request<unknown>({
     method: 'POST',
-    url: '/api/download',
+    url: apiUrl('/download'),
     data: payload
   }).then((response) => {
     const downloads = extractDownloadArray(response).map(normalizeDownloadEntry);
@@ -524,7 +537,7 @@ export const exportDownloads = async (format: 'csv' | 'json', filters: DownloadE
   }
   return request<Blob>({
     method: 'GET',
-    url: '/api/downloads/export',
+    url: apiUrl('/downloads/export'),
     params,
     responseType: 'blob'
   });
@@ -605,7 +618,7 @@ const normalizeActivityItem = (entry: unknown): ActivityItem | null => {
 export const getActivityFeed = async (): Promise<ActivityItem[]> => {
   const payload = await request<unknown>({
     method: 'GET',
-    url: '/api/activity'
+    url: apiUrl('/activity')
   });
   if (Array.isArray(payload)) {
     return payload.map(normalizeActivityItem).filter((item): item is ActivityItem => item !== null);
@@ -621,5 +634,5 @@ export const getActivityFeed = async (): Promise<ActivityItem[]> => {
 export const triggerManualSync = async () =>
   request<void>({
     method: 'POST',
-    url: '/api/sync'
+    url: apiUrl('/sync')
   });

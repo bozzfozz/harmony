@@ -50,7 +50,7 @@ def test_download_endpoint_returns_id_and_status(client) -> None:
         ],
     }
 
-    response = client.post("/api/download", json=payload)
+    response = client.post("/download", json=payload)
     assert response.status_code == 202
 
     body = response.json()
@@ -76,7 +76,7 @@ def test_download_returns_503_when_worker_missing(client) -> None:
         "files": [{"filename": "song.mp3"}],
     }
 
-    response = client.post("/api/download", json=payload)
+    response = client.post("/download", json=payload)
     assert response.status_code == 503
 
     entries = activity_manager.list()
@@ -89,7 +89,7 @@ def test_download_returns_503_when_worker_missing(client) -> None:
 def test_get_downloads_returns_only_active_by_default(client) -> None:
     ids = create_download_samples()
 
-    response = client.get("/api/downloads")
+    response = client.get("/downloads")
     assert response.status_code == 200
 
     payload = response.json()
@@ -106,7 +106,7 @@ def test_get_downloads_returns_only_active_by_default(client) -> None:
 def test_get_downloads_can_include_completed_entries(client) -> None:
     ids = create_download_samples()
 
-    response = client.get("/api/downloads", params={"all": "true"})
+    response = client.get("/downloads", params={"all": "true"})
     assert response.status_code == 200
 
     payload = response.json()
@@ -123,7 +123,7 @@ def test_get_downloads_can_include_completed_entries(client) -> None:
 def test_get_downloads_uses_default_limit(client) -> None:
     ids = create_many_downloads(30)
 
-    response = client.get("/api/downloads")
+    response = client.get("/downloads")
     assert response.status_code == 200
 
     downloads = response.json()["downloads"]
@@ -141,7 +141,7 @@ def test_get_downloads_uses_default_limit(client) -> None:
 def test_get_downloads_supports_limit_and_offset(client) -> None:
     ids = create_many_downloads(15)
 
-    response = client.get("/api/downloads", params={"limit": 5, "offset": 5})
+    response = client.get("/downloads", params={"limit": 5, "offset": 5})
     assert response.status_code == 200
 
     downloads = response.json()["downloads"]
@@ -153,14 +153,14 @@ def test_get_downloads_supports_limit_and_offset(client) -> None:
 
 
 def test_get_downloads_rejects_invalid_limit(client) -> None:
-    response = client.get("/api/downloads", params={"limit": -1})
+    response = client.get("/downloads", params={"limit": -1})
     assert response.status_code == 422
 
 
 def test_get_download_detail_returns_entry(client) -> None:
     ids = create_download_samples()
 
-    response = client.get(f"/api/download/{ids['running']}")
+    response = client.get(f"/download/{ids['running']}")
     assert response.status_code == 200
 
     payload = response.json()
@@ -175,7 +175,7 @@ def test_get_download_detail_returns_404_for_unknown_id(client) -> None:
     with session_scope() as session:
         session.query(Download).delete()
 
-    response = client.get("/api/download/9999")
+    response = client.get("/download/9999")
     assert response.status_code == 404
 
     assert activity_manager.list() == []
@@ -189,11 +189,11 @@ def test_cancel_download_sets_state_and_activity(client) -> None:
         ],
     }
 
-    start_response = client.post("/api/download", json=payload)
+    start_response = client.post("/download", json=payload)
     assert start_response.status_code == 202
     original_id = start_response.json()["download_id"]
 
-    response = client.delete(f"/api/download/{original_id}")
+    response = client.delete(f"/download/{original_id}")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "cancelled"
@@ -220,14 +220,14 @@ def test_cancel_download_returns_502_when_transfers_unavailable(client) -> None:
         ],
     }
 
-    start_response = client.post("/api/download", json=payload)
+    start_response = client.post("/download", json=payload)
     assert start_response.status_code == 202
     original_id = start_response.json()["download_id"]
 
     transfers_stub = client.app.state.transfers_stub
     transfers_stub.raise_cancel = TransfersApiError("offline")
 
-    response = client.delete(f"/api/download/{original_id}")
+    response = client.delete(f"/download/{original_id}")
     assert response.status_code == 502
 
     with session_scope() as session:
@@ -250,14 +250,14 @@ def test_retry_download_creates_new_entry(client) -> None:
         ],
     }
 
-    start_response = client.post("/api/download", json=payload)
+    start_response = client.post("/download", json=payload)
     assert start_response.status_code == 202
     original_id = start_response.json()["download_id"]
 
-    cancel_response = client.delete(f"/api/download/{original_id}")
+    cancel_response = client.delete(f"/download/{original_id}")
     assert cancel_response.status_code == 200
 
-    response = client.post(f"/api/download/{original_id}/retry")
+    response = client.post(f"/download/{original_id}/retry")
     assert response.status_code == 202
 
     body = response.json()
@@ -291,17 +291,17 @@ def test_retry_download_returns_502_when_enqueue_fails(client) -> None:
         ],
     }
 
-    start_response = client.post("/api/download", json=payload)
+    start_response = client.post("/download", json=payload)
     assert start_response.status_code == 202
     original_id = start_response.json()["download_id"]
 
-    cancel_response = client.delete(f"/api/download/{original_id}")
+    cancel_response = client.delete(f"/download/{original_id}")
     assert cancel_response.status_code == 200
 
     transfers_stub = client.app.state.transfers_stub
     transfers_stub.raise_enqueue = TransfersApiError("offline")
 
-    response = client.post(f"/api/download/{original_id}/retry")
+    response = client.post(f"/download/{original_id}/retry")
     assert response.status_code == 502
 
     with session_scope() as session:
@@ -325,7 +325,7 @@ def test_retry_download_returns_502_when_cancel_fails(client) -> None:
         ],
     }
 
-    start_response = client.post("/api/download", json=payload)
+    start_response = client.post("/download", json=payload)
     assert start_response.status_code == 202
     original_id = start_response.json()["download_id"]
 
@@ -338,7 +338,7 @@ def test_retry_download_returns_502_when_cancel_fails(client) -> None:
     transfers_stub = client.app.state.transfers_stub
     transfers_stub.raise_cancel = TransfersApiError("offline")
 
-    response = client.post(f"/api/download/{original_id}/retry")
+    response = client.post(f"/download/{original_id}/retry")
     assert response.status_code == 502
 
     with session_scope() as session:
@@ -362,7 +362,7 @@ def test_cancel_download_rejects_invalid_state(client) -> None:
         session.commit()
         download_id = completed.id
 
-    response = client.delete(f"/api/download/{download_id}")
+    response = client.delete(f"/download/{download_id}")
     assert response.status_code == 409
 
 
@@ -374,7 +374,7 @@ def test_retry_download_rejects_invalid_state(client) -> None:
         session.commit()
         download_id = queued.id
 
-    response = client.post(f"/api/download/{download_id}/retry")
+    response = client.post(f"/download/{download_id}/retry")
     assert response.status_code == 409
 
 
@@ -386,5 +386,5 @@ def test_retry_download_requires_payload(client) -> None:
         session.commit()
         download_id = failed.id
 
-    response = client.post(f"/api/download/{download_id}/retry")
+    response = client.post(f"/download/{download_id}/retry")
     assert response.status_code == 400
