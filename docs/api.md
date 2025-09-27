@@ -6,9 +6,12 @@ Alle Endpunkte folgen dem Schema `https://<host>/<route>` und liefern JSON, sofe
 
 ## Authentifizierung
 
-- Spotify-Routen mit OAuth benötigen gültige Credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`).
+- Alle produktiven Endpunkte erfordern einen gültigen API-Key im Header `X-API-Key`. Alternativ wird `Authorization: Bearer <key>` akzeptiert.
+- Die Liste gültiger Schlüssel wird über `HARMONY_API_KEYS` (kommagetrennt) oder `HARMONY_API_KEYS_FILE` gepflegt. Mehrere Schlüssel können parallel aktiv bleiben.
+- Öffentliche Routen (z. B. `/api/health`) lassen sich via `AUTH_ALLOWLIST` freischalten. Die Angabe erfolgt als kommagetrennte Pfadpräfix-Liste.
+- CORS ist standardmäßig restriktiv (`ALLOWED_ORIGINS`). Für Tests und lokale Entwicklung kann `HARMONY_DISABLE_WORKERS=1` gesetzt werden, um Hintergrundprozesse auszuschalten.
+- Spotify-Routen mit OAuth benötigen weiterhin gültige Credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`).
 - Soulseek-Routen verwenden slskd (`SLSKD_URL`, optional `SLSKD_API_KEY`).
-- Für Tests und lokale Entwicklung kann `HARMONY_DISABLE_WORKERS=1` gesetzt werden, um Hintergrundprozesse auszuschalten.
 
 ## Spotify
 

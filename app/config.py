@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, Mapping, Optional
 from urllib.parse import urlparse
 
@@ -91,6 +92,15 @@ class AppConfig:
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
     features: FeatureFlags
+    security: "SecurityConfig"
+
+
+@dataclass(slots=True)
+class SecurityConfig:
+    require_auth: bool
+    api_keys: tuple[str, ...]
+    allowlist: tuple[str, ...]
+    allowed_origins: tuple[str, ...]
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -117,6 +127,7 @@ DEFAULT_INGEST_BATCH_SIZE = 500
 DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
+DEFAULT_ALLOWLIST = ("/api/health", "/docs", "/redoc", "/openapi.json")
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -132,6 +143,44 @@ def _as_int(value: Optional[str], *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _parse_list(value: Optional[str]) -> list[str]:
+    if value is None:
+        return []
+    candidates = value.replace("\n", ",").split(",")
+    return [item.strip() for item in candidates if item.strip()]
+
+
+def _read_api_keys_from_file(path: str) -> list[str]:
+    if not path:
+        return []
+    try:
+        contents = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return [line.strip() for line in contents.splitlines() if line.strip()]
+
+
+def _deduplicate_preserve_order(values: Iterable[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return tuple(result)
+
+
+def _normalise_prefix(value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    if not cleaned.startswith("/"):
+        cleaned = f"/{cleaned}"
+    if cleaned != "/":
+        cleaned = cleaned.rstrip("/")
+    return cleaned
 
 
 def _as_float(value: Optional[str], *, default: float) -> float:
@@ -423,6 +472,23 @@ def load_config() -> AppConfig:
         ),
     )
 
+    raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
+    file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
+    api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
+
+    allowlist_entries = _deduplicate_preserve_order(
+        _normalise_prefix(entry)
+        for entry in [*DEFAULT_ALLOWLIST, *_parse_list(os.getenv("AUTH_ALLOWLIST"))]
+    )
+    allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
+
+    security = SecurityConfig(
+        require_auth=_as_bool(os.getenv("FEATURE_REQUIRE_AUTH"), default=True),
+        api_keys=api_keys,
+        allowlist=allowlist_entries,
+        allowed_origins=allowed_origins,
+    )
+
     return AppConfig(
         spotify=spotify,
         soulseek=soulseek,
@@ -432,6 +498,7 @@ def load_config() -> AppConfig:
         ingest=ingest,
         free_ingest=free_ingest,
         features=features,
+        security=security,
     )
 
 

@@ -8,7 +8,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 
 from app.config import AppConfig
 from app.core.config import DEFAULT_SETTINGS
@@ -17,6 +20,7 @@ from app.dependencies import (
     get_matching_engine,
     get_soulseek_client,
     get_spotify_client,
+    require_api_key,
 )
 from app.db import init_db
 from app.logging import configure_logging, get_logger
@@ -39,6 +43,7 @@ from app.routers import (
     watchlist_router,
 )
 from app.services.backfill_service import BackfillService
+from app.problem_details import ProblemDetailException
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.workers import (
@@ -272,7 +277,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Harmony application stopped")
 
 
-app = FastAPI(title="Harmony Backend", version="1.4.0", lifespan=lifespan)
+app = FastAPI(
+    title="Harmony Backend",
+    version="1.4.0",
+    lifespan=lifespan,
+    dependencies=[Depends(require_api_key)],
+)
+
+_initial_security = get_app_config().security
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(_initial_security.allowed_origins),
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["X-API-Key", "Authorization", "Content-Type", "Accept"],
+    allow_credentials=False,
+    expose_headers=[],
+)
 
 app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
 app.include_router(backfill_router, prefix="/spotify/backfill", tags=["Spotify Backfill"])
@@ -295,3 +316,64 @@ app.include_router(watchlist_router, tags=["Watchlist"])
 @app.get("/")
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
+
+
+@app.exception_handler(ProblemDetailException)
+async def handle_problem_detail(request: Request, exc: ProblemDetailException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict(),
+        media_type="application/problem+json",
+    )
+
+
+def _is_allowlisted_path(path: str) -> bool:
+    security_config = get_app_config().security
+    return any(
+        prefix
+        and (path == prefix or path.startswith(f"{prefix}/"))
+        or (prefix == "/" and path == "/")
+        for prefix in security_config.allowlist
+    )
+
+
+def custom_openapi() -> dict[str, Any]:
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+        description=app.description,
+    )
+
+    security_scheme_name = "ApiKeyAuth"
+    security_scheme = {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Provide the configured API key via the X-API-Key header. Authorization: Bearer is also supported.",
+    }
+
+    components = openapi_schema.setdefault("components", {})
+    components.setdefault("securitySchemes", {})[security_scheme_name] = security_scheme
+
+    security_config = get_app_config().security
+
+    if security_config.require_auth and security_config.api_keys:
+        openapi_schema["security"] = [{security_scheme_name: []}]
+
+        for path, methods in openapi_schema.get("paths", {}).items():
+            if _is_allowlisted_path(path):
+                for operation in methods.values():
+                    if isinstance(operation, dict):
+                        operation.pop("security", None)
+    else:
+        openapi_schema["security"] = []
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import OrderedDict
 from types import TracebackType
-from typing import Any, AsyncContextManager, Dict, Optional, Type
+from typing import Any, AsyncContextManager, Dict, Mapping, Optional, Type
+
+import os
+
+os.environ.setdefault("HARMONY_API_KEYS", "test-key")
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
@@ -22,11 +27,21 @@ class SimpleResponse:
 
 
 class SimpleTestClient:
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(
+        self,
+        app: FastAPI,
+        *,
+        default_headers: Optional[Mapping[str, str]] = None,
+        include_env_api_key: bool = True,
+    ) -> None:
         self.app = app
         self._loop = asyncio.new_event_loop()
         self._previous_loop: Optional[asyncio.AbstractEventLoop] = None
         self._lifespan_context: Optional[AsyncContextManager[None]] = None
+        headers = {k.lower(): v for k, v in (default_headers or {}).items()}
+        if include_env_api_key and "x-api-key" not in headers:
+            headers.update(_resolve_default_headers())
+        self._default_headers = headers
 
     def __enter__(self) -> "SimpleTestClient":
         try:
@@ -57,8 +72,15 @@ class SimpleTestClient:
         if self._previous_loop is not None:
             asyncio.get_event_loop_policy().set_event_loop(self._previous_loop)
 
-    def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> SimpleResponse:
-        return self._loop.run_until_complete(self._request("GET", path, params=params))
+    def get(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(
+            self._request("GET", path, params=params, headers=headers)
+        )
 
     def post(
         self,
@@ -68,6 +90,7 @@ class SimpleTestClient:
         params: Optional[Dict[str, Any]] = None,
         data: Optional[bytes | str] = None,
         content_type: Optional[str] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> SimpleResponse:
         payload = json_body if json_body is not None else json
         return self._loop.run_until_complete(
@@ -78,17 +101,46 @@ class SimpleTestClient:
                 json_body=payload,
                 raw_body=data,
                 content_type=content_type,
+                headers=headers,
             )
         )
 
-    def put(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
-        return self._loop.run_until_complete(self._request("PUT", path, json_body=json))
+    def put(
+        self,
+        path: str,
+        json: Optional[Dict[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(
+            self._request("PUT", path, json_body=json, headers=headers)
+        )
 
-    def patch(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
-        return self._loop.run_until_complete(self._request("PATCH", path, json_body=json))
+    def patch(
+        self,
+        path: str,
+        json: Optional[Dict[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(
+            self._request("PATCH", path, json_body=json, headers=headers)
+        )
 
-    def delete(self, path: str, json: Optional[Dict[str, Any]] = None) -> SimpleResponse:
-        return self._loop.run_until_complete(self._request("DELETE", path, json_body=json))
+    def delete(
+        self,
+        path: str,
+        json: Optional[Dict[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(
+            self._request("DELETE", path, json_body=json, headers=headers)
+        )
+
+    def options(
+        self,
+        path: str,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(self._request("OPTIONS", path, headers=headers))
 
     async def _request(
         self,
@@ -98,6 +150,7 @@ class SimpleTestClient:
         json_body: Optional[Dict[str, Any]] = None,
         raw_body: Optional[bytes | str] = None,
         content_type: Optional[str] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> SimpleResponse:
         query_string = urlencode(params or {})
         scope = {
@@ -109,6 +162,14 @@ class SimpleTestClient:
             "query_string": query_string.encode("utf-8"),
             "headers": [],
         }
+
+        header_items: OrderedDict[bytes, bytes] = OrderedDict()
+        for source in (self._default_headers, {k.lower(): v for k, v in (headers or {}).items()}):
+            for key, value in source.items():
+                header_items[key.encode("latin-1")] = value.encode("utf-8")
+
+        if header_items:
+            scope["headers"] = list(header_items.items())
 
         body = b""
         if json_body is not None:
@@ -145,3 +206,15 @@ class SimpleTestClient:
 
         await self.app(scope, receive, send)
         return SimpleResponse(status_code, bytes(response_body), response_headers)
+
+
+def _resolve_default_headers() -> Dict[str, str]:
+    try:
+        from app import dependencies as deps
+    except Exception:
+        return {}
+
+    config = deps.get_app_config()
+    if config.security.api_keys:
+        return {"x-api-key": config.security.api_keys[0]}
+    return {}
