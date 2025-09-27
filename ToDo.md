@@ -2,6 +2,7 @@
 
 ## ✅ Erledigt
 - **Backend**
+  - Globale API-Key-Authentifizierung sichert alle Router per Dependency, nutzt Problem-Details für 401/403 und respektiert konfigurierbare Allowlists; CORS akzeptiert nur definierte Origins.【F:app/dependencies.py†L1-L114】【F:app/main.py†L220-L315】【F:app/config.py†L79-L136】
   - FastAPI bindet die aktiven Router (`/spotify`, `/soulseek`, `/matching`, `/settings`, `/search`, `/sync`, `/system`, `/download`, `/activity`, `/health`, `/watchlist`) ein, initialisiert die Datenbank und setzt Default-Settings im Lifespan-Hook. Archivierte Plex/Beets-Routen werden nicht registriert.【F:app/main.py†L248-L268】
   - Der Lifespan-Handler startet Artwork-, Lyrics-, Metadata-, Sync-, Matching-, Playlist-, Watchlist- und Retry-Worker und stoppt sie über die zentralisierte Shutdown-Routine wieder sauber. Plex/Beets-abhängige Worker bleiben deaktiviert.【F:app/main.py†L94-L214】
   - Artwork- und Lyrics-Funktionalität sind per Feature-Flags (`ENABLE_ARTWORK`, `ENABLE_LYRICS`) standardmäßig deaktiviert; Lifespan und Router aktivieren Worker sowie Endpunkte nur bei gesetzten Flags und liefern ansonsten `503 FEATURE_DISABLED`.【F:app/config.py†L79-L143】【F:app/main.py†L107-L165】【F:app/routers/soulseek_router.py†L24-L133】【F:README.md†L8-L116】

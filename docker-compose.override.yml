@@ -6,3 +6,5 @@ services:
     environment:
       - DATABASE_URL=sqlite:///./harmony.db
       - HARMONY_LOG_LEVEL=DEBUG
+      - HARMONY_API_KEYS=dev-key
+      - ALLOWED_ORIGINS=http://localhost:5173

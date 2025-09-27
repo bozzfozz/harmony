@@ -2496,6 +2496,14 @@
         "title": "SearchRequest",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "description": "Provide the configured API key via the X-API-Key header. Authorization: Bearer is also supported.",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -6104,5 +6112,10 @@
         ]
       }
     }
-  }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ]
 }

@@ -5,11 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+import os
+
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+os.environ.setdefault("HARMONY_API_KEYS", "test-key")
+os.environ.setdefault("ALLOWED_ORIGINS", "https://app.local")
 
 import pytest
 from app.core.transfers_api import TransfersApiError

@@ -6,6 +6,7 @@
 
 ## v1.x.x
 
+- sec: enforce global API-Key authentication for all routers, return RFC 7807 problem-details for 401/403, document the scheme in OpenAPI, add configurable allowlist and restrictive CORS via env (`HARMONY_API_KEYS`, `AUTH_ALLOWLIST`, `ALLOWED_ORIGINS`).
 - feat: add feature flags for artwork and lyrics (default disabled) with conditional worker wiring, 503 guards, and refreshed documentation/tests.
 - refactor: purge remaining Plex/Beets wiring, ensure routers/workers only load Spotify & Soulseek, add wiring audit guard, and refresh docs/tests.
 - fix: offload Spotify lookups in the watchlist worker to executor threads to
