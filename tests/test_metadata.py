@@ -4,13 +4,15 @@ from types import SimpleNamespace
 from typing import Any, Dict
 
 import pytest
-
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.main import app
 from app.models import Download
 from app.utils import metadata_utils
 from app.workers.metadata_worker import MetadataWorker
 from tests.simple_client import SimpleTestClient
+
+
+pytestmark = pytest.mark.skip(reason="Metadata worker tests rely on archived Plex integration")
 
 
 class StubPlexClient:

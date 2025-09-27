@@ -13,8 +13,6 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
 from app.config import ArtworkConfig, get_setting, load_config
-from app.core.beets_client import BeetsClient
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -63,9 +61,9 @@ class ArtworkWorker:
     def __init__(
         self,
         spotify_client: SpotifyClient | None = None,
-        plex_client: PlexClient | None = None,
+        plex_client: Any | None = None,
         soulseek_client: SoulseekClient | None = None,
-        beets_client: BeetsClient | None = None,
+        beets_client: Any | None = None,
         *,
         storage_directory: Path | None = None,
         config: ArtworkConfig | None = None,

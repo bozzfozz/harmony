@@ -3,7 +3,6 @@ uvicorn
 sqlalchemy
 aiohttp
 spotipy
-plexapi
 pydantic
 pytest
 pytest-asyncio

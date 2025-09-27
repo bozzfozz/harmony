@@ -8,12 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+try:
+    from app.core.beets_client import BeetsClient, BeetsClientError
+
+    beets_router = import_module("app.routers.beets_router")
+except ModuleNotFoundError:  # pragma: no cover - archived integration
+    pytest.skip("Beets integration archived in MVP", allow_module_level=True)
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from app.core.beets_client import BeetsClient, BeetsClientError
-
-beets_router = import_module("app.routers.beets_router")
 
 
 @pytest.fixture()

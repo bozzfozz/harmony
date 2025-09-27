@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from app.core.beets_client import BeetsClient
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -33,8 +31,8 @@ class DiscographyWorker:
         spotify_client: SpotifyClient,
         soulseek_client: SoulseekClient,
         *,
-        plex_client: PlexClient | None = None,
-        beets_client: BeetsClient | None = None,
+        plex_client: Any | None = None,
+        beets_client: Any | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
     ) -> None:

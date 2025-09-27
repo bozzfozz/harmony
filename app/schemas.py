@@ -19,7 +19,7 @@ class StatusResponse(BaseModel):
 
 class ServiceHealthResponse(BaseModel):
     service: str
-    status: Literal["ok", "fail"]
+    status: Literal["ok", "fail", "disabled"]
     missing: List[str] = Field(default_factory=list)
     optional_missing: List[str] = Field(default_factory=list)
 

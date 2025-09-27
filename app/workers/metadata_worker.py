@@ -8,13 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from app.core.plex_client import PlexClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
 from app.utils import metadata_utils
-from app.workers.scan_worker import ScanWorker
 
 logger = get_logger(__name__)
 
@@ -37,7 +35,7 @@ class MetadataWorker:
         self,
         *,
         spotify_client: SpotifyClient | None = None,
-        plex_client: PlexClient | None = None,
+        plex_client: Any | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._plex = plex_client
@@ -264,7 +262,7 @@ class MetadataUpdateWorker:
 
     def __init__(
         self,
-        scan_worker: ScanWorker,
+        scan_worker: Any | None,
         matching_worker: Any | None = None,
     ) -> None:
         self._scan_worker = scan_worker
@@ -341,6 +339,8 @@ class MetadataUpdateWorker:
             self._stop_requested = False
 
     async def _scan_phase(self) -> None:
+        if self._scan_worker is None:
+            raise RuntimeError("Scan worker is not available; metadata update disabled")
         self._state.update(phase="Scanning library")
         await self._scan_worker.run_once()
         self._state["processed"] += 1

@@ -10,6 +10,9 @@ from app.utils.activity import activity_manager
 from app.workers.auto_sync_worker import AutoSyncWorker, TrackInfo
 
 
+pytestmark = pytest.mark.skip(reason="AutoSync worker archived in MVP")
+
+
 def _create_track(
     name: str,
     artist: str,

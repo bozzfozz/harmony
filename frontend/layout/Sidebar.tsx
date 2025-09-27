@@ -15,9 +15,7 @@ import {
 const navigationItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/spotify', label: 'Spotify', icon: Music },
-  { to: '/plex', label: 'Plex', icon: PlaySquare },
   { to: '/soulseek', label: 'Soulseek', icon: Radio },
-  { to: '/beets', label: 'Beets', icon: Library },
   { to: '/matching', label: 'Matching', icon: Sparkles },
   { to: '/settings', label: 'Settings', icon: Settings }
 ] as const;

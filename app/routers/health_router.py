@@ -25,12 +25,11 @@ def spotify_health(session: Session = Depends(get_db)) -> ServiceHealthResponse:
 
 @router.get("/plex", response_model=ServiceHealthResponse)
 def plex_health(session: Session = Depends(get_db)) -> ServiceHealthResponse:
-    result = evaluate_service_health(session, "plex")
     return ServiceHealthResponse(
-        service=result.service,
-        status=result.status,
-        missing=list(result.missing),
-        optional_missing=list(result.optional_missing),
+        service="plex",
+        status="disabled",
+        missing=[],
+        optional_missing=[],
     )
 
 

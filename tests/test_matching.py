@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Generator, List
 
+import pytest
+
 from app import db as app_db
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db
@@ -39,6 +41,7 @@ def test_match_confidence() -> None:
     assert score > 0.8
 
 
+@pytest.mark.skip(reason="Plex matching archived in MVP")
 def test_matching_api_plex(client: SimpleTestClient) -> None:
     payload = {
         "spotify_track": {
@@ -112,6 +115,7 @@ def test_album_matching_engine() -> None:
     assert score > 0.8
 
 
+@pytest.mark.skip(reason="Plex matching archived in MVP")
 def test_matching_api_album(client: SimpleTestClient) -> None:
     payload = {
         "spotify_album": {
@@ -146,6 +150,7 @@ def test_matching_api_album(client: SimpleTestClient) -> None:
     assert _fetch_album_matches() == []
 
 
+@pytest.mark.skip(reason="Plex matching archived in MVP")
 def test_matching_api_album_with_persist(client: SimpleTestClient) -> None:
     payload = {
         "spotify_album": {
@@ -185,6 +190,7 @@ def test_matching_api_album_with_persist(client: SimpleTestClient) -> None:
     assert all(match.context_id == "album-1" for match in matches)
 
 
+@pytest.mark.skip(reason="Plex matching archived in MVP")
 def test_matching_api_album_persist_failure(client: SimpleTestClient) -> None:
     class BrokenSession:
         def add(self, _obj: Match) -> None:

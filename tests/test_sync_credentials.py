@@ -30,7 +30,7 @@ def test_manual_sync_blocks_without_credentials(client) -> None:
     detail = payload.get("detail", {}) if isinstance(payload, dict) else {}
     assert detail.get("message") == "Sync blocked"
     missing = detail.get("missing", {})
-    assert set(missing) == {"spotify", "plex", "soulseek"}
+    assert set(missing) == {"spotify", "soulseek"}
 
     with session_scope() as session:
         event = session.query(ActivityEvent).order_by(ActivityEvent.id.desc()).first()

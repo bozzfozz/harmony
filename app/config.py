@@ -93,6 +93,8 @@ class AppConfig:
     artwork: ArtworkConfig
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
+    enable_plex: bool
+    enable_beets: bool
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -436,6 +438,9 @@ def load_config() -> AppConfig:
         ),
     )
 
+    enable_plex = _as_bool(os.getenv("ENABLE_PLEX"), default=False)
+    enable_beets = _as_bool(os.getenv("ENABLE_BEETS"), default=False)
+
     return AppConfig(
         spotify=spotify,
         plex=plex,
@@ -445,4 +450,6 @@ def load_config() -> AppConfig:
         artwork=artwork_config,
         ingest=ingest,
         free_ingest=free_ingest,
+        enable_plex=enable_plex,
+        enable_beets=enable_beets,
     )
