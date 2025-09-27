@@ -183,6 +183,12 @@ npm run typecheck
 npm run build
 ```
 
+## Datenbank-Migrationen
+
+- `make db.upgrade` führt `alembic upgrade head` aus und wendet alle offenen Migrationen auf die konfigurierte Datenbank an.
+- `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision.
+- Der Docker-Entrypoint führt Migrationen beim Start automatisch aus; setze `FEATURE_RUN_MIGRATIONS=off`, um dies temporär zu deaktivieren (z. B. für lokale Debug-Sessions).
+
 ### Code-Qualität lokal (optional offline)
 
 ```bash

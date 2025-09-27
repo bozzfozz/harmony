@@ -9,6 +9,7 @@
 - sec: enforce global API-Key authentication for all routers, return RFC 7807 problem-details for 401/403, document the scheme in OpenAPI, add configurable allowlist and restrictive CORS via env (`HARMONY_API_KEYS`, `AUTH_ALLOWLIST`, `ALLOWED_ORIGINS`).
 - feat: add feature flags for artwork and lyrics (default disabled) with conditional worker wiring, 503 guards, and refreshed documentation/tests.
 - refactor: purge remaining Plex/Beets wiring, ensure routers/workers only load Spotify & Soulseek, add wiring audit guard, and refresh docs/tests.
+- infra: replace ad-hoc schema management with Alembic migrations (`init_db` runs `alembic upgrade head`, Docker entrypoint applies migrations automatically, Makefile gains `db.upgrade`/`db.revision`, README documents the flow, and the initial revision seeds missing columns/indexes).【F:app/db.py†L1-L107】【F:scripts/docker-entrypoint.sh†L1-L11】【F:Makefile†L1-L48】【F:README.md†L189-L202】【F:alembic.ini†L1-L29】【F:app/migrations/versions/7c9bdb5e1a3d_create_base_schema.py†L1-L111】
 - fix: offload Spotify lookups in the watchlist worker to executor threads to
   prevent event-loop starvation and add regression coverage around the
   cancellation-safe path.
