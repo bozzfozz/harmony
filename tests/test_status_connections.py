@@ -23,8 +23,6 @@ def test_status_connections_reports_health(client) -> None:
             "SPOTIFY_CLIENT_SECRET": None,
             "SPOTIFY_REDIRECT_URI": "http://localhost/callback",
             # Intentionally omit secret to trigger fail state
-            "PLEX_BASE_URL": "http://plex",
-            "PLEX_TOKEN": "token",
             "SLSKD_URL": "http://slskd",
         }
     )
@@ -35,5 +33,5 @@ def test_status_connections_reports_health(client) -> None:
     payload = response.json()
     assert "connections" in payload
     assert payload["connections"]["spotify"] == "fail"
-    assert payload["connections"]["plex"] == "ok"
     assert payload["connections"]["soulseek"] == "ok"
+    assert set(payload["connections"].keys()) == {"spotify", "soulseek"}

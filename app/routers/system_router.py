@@ -68,22 +68,15 @@ def _matching_queue_size(_: Request) -> int:
     return int(count or 0)
 
 
-def _autosync_queue_status(request: Request) -> Dict[str, int]:
-    worker = getattr(request.app.state, "auto_sync_worker", None)
-    running = bool(getattr(worker, "_running", False))
-    in_progress = bool(getattr(worker, "_in_progress", False))
-    return {
-        "scheduled": 1 if running else 0,
-        "running": 1 if in_progress else 0,
-    }
-
-
 _WORKERS: Dict[str, WorkerDescriptor] = {
     "sync": WorkerDescriptor(attr="sync_worker", queue_fetcher=_sync_queue_size),
     "matching": WorkerDescriptor(attr="matching_worker", queue_fetcher=_matching_queue_size),
-    "scan": WorkerDescriptor(attr="scan_worker", queue_literal="n/a"),
     "playlist": WorkerDescriptor(attr="playlist_worker", queue_literal="n/a"),
-    "autosync": WorkerDescriptor(attr="auto_sync_worker", queue_fetcher=_autosync_queue_status),
+    "backfill": WorkerDescriptor(attr="backfill_worker", queue_literal="n/a"),
+    "watchlist": WorkerDescriptor(attr="watchlist_worker", queue_literal="n/a"),
+    "artwork": WorkerDescriptor(attr="artwork_worker", queue_literal="n/a"),
+    "lyrics": WorkerDescriptor(attr="lyrics_worker", queue_literal="n/a"),
+    "retry_scheduler": WorkerDescriptor(attr="retry_scheduler", queue_literal="n/a"),
 }
 
 

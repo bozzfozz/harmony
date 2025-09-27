@@ -1,4 +1,4 @@
-"""Smart search endpoint aggregating Spotify, Plex and Soulseek."""
+"""Smart search endpoint aggregating Spotify and Soulseek."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ async def smart_search(
     soulseek_client: SoulseekClient = Depends(get_soulseek_client),
     matching_engine: MusicMatchingEngine = Depends(get_matching_engine),
 ) -> SearchResponse:
-    """Aggregate search results from Spotify, Plex and Soulseek with ranking."""
+    """Aggregate search results from Spotify and Soulseek with ranking."""
 
     resolved_sources = request.sources or list(DEFAULT_SOURCES)
     limit = min(request.limit, SEARCH_MAX_LIMIT)

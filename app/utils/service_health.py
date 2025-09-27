@@ -37,11 +37,6 @@ _SERVICE_DEFINITIONS: tuple[ServiceDefinition, ...] = (
         required_keys=("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"),
     ),
     ServiceDefinition(
-        name="plex",
-        required_keys=("PLEX_BASE_URL", "PLEX_TOKEN"),
-        optional_keys=("PLEX_LIBRARY",),
-    ),
-    ServiceDefinition(
         name="soulseek",
         required_keys=("SLSKD_URL",),
         optional_keys=("SLSKD_API_KEY",),

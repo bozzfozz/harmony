@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Generator
+from typing import Generator
 
 from sqlalchemy.orm import Session
 
@@ -23,11 +23,6 @@ def get_app_config() -> AppConfig:
 @lru_cache()
 def get_spotify_client() -> SpotifyClient:
     return SpotifyClient(get_app_config().spotify)
-
-
-@lru_cache()
-def get_plex_client() -> Any:
-    raise ValueError("Plex integration is disabled in the MVP build")
 
 
 @lru_cache()

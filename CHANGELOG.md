@@ -6,7 +6,7 @@
 
 ## v1.x.x
 
-- refactor: archive Plex/Beets integrations, remove runtime hooks, add `ENABLE_PLEX`/`ENABLE_BEETS` flags and update docs/health.
+- refactor: purge remaining Plex/Beets wiring, ensure routers/workers only load Spotify & Soulseek, add wiring audit guard, and refresh docs/tests.
 - fix: offload Spotify lookups in the watchlist worker to executor threads to
   prevent event-loop starvation and add regression coverage around the
   cancellation-safe path.

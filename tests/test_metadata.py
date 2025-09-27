@@ -12,18 +12,6 @@ from app.workers.metadata_worker import MetadataWorker
 from tests.simple_client import SimpleTestClient
 
 
-pytestmark = pytest.mark.skip(reason="Metadata worker tests rely on archived Plex integration")
-
-
-class StubPlexClient:
-    def __init__(self) -> None:
-        self.requests: list[str] = []
-
-    async def get_track_metadata(self, item_id: str) -> Dict[str, Any]:
-        self.requests.append(item_id)
-        return {"producer": "Producer B"}
-
-
 class StubMetadataWorker:
     def __init__(self) -> None:
         self.calls: list[tuple[int, Path, Dict[str, Any], Dict[str, Any]]] = []
@@ -64,10 +52,7 @@ async def test_metadata_worker_enriches_download(monkeypatch, tmp_path) -> None:
             filename=str(audio_file),
             state="completed",
             progress=100.0,
-            request_payload={
-                "spotify_id": "track-1",
-                "plex_id": "42",
-            },
+            request_payload={"spotify_id": "track-1"},
         )
         session.add(download)
         session.flush()
@@ -91,29 +76,25 @@ async def test_metadata_worker_enriches_download(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(metadata_utils, "write_metadata_tags", fake_write_metadata)
     monkeypatch.setattr(metadata_utils, "extract_metadata_from_spotify", fake_extract_metadata)
 
-    plex = StubPlexClient()
-    worker = MetadataWorker(plex_client=plex)
+    worker = MetadataWorker()
 
     metadata = await worker.enqueue(
         download_id,
         audio_file,
         payload={"state": "completed"},
-        request_payload={"spotify_id": "track-1", "plex_id": "42"},
+        request_payload={"spotify_id": "track-1"},
     )
 
     assert metadata["genre"] == "House"
     assert metadata["composer"] == "Composer A"
-    assert metadata["producer"] == "Producer B"
     assert metadata["isrc"] == "ISRC123"
     assert metadata["copyright"] == "2024 Example Records"
 
-    assert plex.requests == ["42"]
     assert recorded_writes
     path_record, metadata_record = recorded_writes[0]
     assert path_record == audio_file
     assert metadata_record["genre"] == "House"
     assert metadata_record["composer"] == "Composer A"
-    assert metadata_record["producer"] == "Producer B"
     assert metadata_record["isrc"] == "ISRC123"
     assert metadata_record["copyright"] == "2024 Example Records"
 
@@ -122,7 +103,6 @@ async def test_metadata_worker_enriches_download(monkeypatch, tmp_path) -> None:
         assert refreshed is not None
         assert refreshed.genre == "House"
         assert refreshed.composer == "Composer A"
-        assert refreshed.producer == "Producer B"
         assert refreshed.isrc == "ISRC123"
         assert refreshed.copyright == "2024 Example Records"
 
@@ -164,30 +144,6 @@ def test_extract_metadata_from_spotify(monkeypatch) -> None:
     assert metadata["artwork_url"] == "https://example.com/art.jpg"
 
     monkeypatch.setattr(metadata_utils, "SPOTIFY_CLIENT", None)
-
-
-def test_extract_metadata_from_plex() -> None:
-    payload = {
-        "MediaContainer": {
-            "Metadata": [
-                {
-                    "composers": [{"tag": "Composer X"}],
-                    "producers": "Producer Y",
-                    "genre": [{"tag": "House"}],
-                    "Guid": [{"id": "isrc://ISRC321"}],
-                    "copyright": "2023 Example Records",
-                }
-            ]
-        }
-    }
-
-    metadata = metadata_utils.extract_metadata_from_plex(payload)
-
-    assert metadata["composer"] == "Composer X"
-    assert metadata["producer"] == "Producer Y"
-    assert metadata["genre"] == "House"
-    assert metadata["isrc"] == "ISRC321"
-    assert metadata["copyright"] == "2023 Example Records"
 
 
 def test_write_metadata_tags(monkeypatch, tmp_path) -> None:

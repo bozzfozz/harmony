@@ -14,10 +14,10 @@ logger = get_logger(__name__)
 async def start_metadata_update(request: Request) -> dict[str, object]:
     """Kick off a metadata update job."""
 
-    logger.info("Metadata update requested but Plex integration is disabled")
+    logger.info("Metadata update requested but legacy integration is disabled")
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Metadata update disabled while Plex integration is archived",
+        detail="Metadata update disabled while legacy integration is archived",
     )
 
 
@@ -25,10 +25,10 @@ async def start_metadata_update(request: Request) -> dict[str, object]:
 async def get_metadata_status(request: Request) -> dict[str, object]:
     """Return the current metadata job status."""
 
-    logger.info("Metadata status requested but Plex integration is disabled")
+    logger.info("Metadata status requested but legacy integration is disabled")
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Metadata update disabled while Plex integration is archived",
+        detail="Metadata update disabled while legacy integration is archived",
     )
 
 
@@ -36,8 +36,8 @@ async def get_metadata_status(request: Request) -> dict[str, object]:
 async def stop_metadata_update(request: Request) -> dict[str, object]:
     """Request to stop the running metadata job."""
 
-    logger.info("Metadata stop requested but Plex integration is disabled")
+    logger.info("Metadata stop requested but legacy integration is disabled")
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Metadata update disabled while Plex integration is archived",
+        detail="Metadata update disabled while legacy integration is archived",
     )

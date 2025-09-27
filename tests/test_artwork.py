@@ -38,7 +38,6 @@ def _make_artwork_config(
             timeout_seconds=fallback_timeout,
             max_bytes=5 * 1024 * 1024,
         ),
-        poststep_enabled=False,
     )
 
 
@@ -819,89 +818,3 @@ async def test_musicbrainz_fallback_fail(
         assert refreshed is not None
         assert refreshed.has_artwork is False
         assert refreshed.artwork_status == "failed"
-
-
-@pytest.mark.asyncio
-async def test_beets_poststep_guarded_by_setting(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    class StubBeets:
-        def __init__(self) -> None:
-            self.commands: list[tuple[str, str]] = []
-
-        def write(self, query: str) -> dict[str, object]:
-            self.commands.append(("write", query))
-            return {"success": True}
-
-        def update(self, path: str | Path) -> str:
-            self.commands.append(("update", str(path)))
-            return ""
-
-    monkeypatch.setattr(
-        artwork_utils, "fetch_spotify_artwork", lambda *_: "http://img/poststep.jpg"
-    )
-
-    def fake_download(_url: str, target: Path, **_: Any) -> Path:
-        destination = target.with_suffix(".jpg")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(b"art")
-        return destination
-
-    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
-    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
-    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
-
-    async def run(setting_value: str | None) -> list[tuple[str, str]]:
-        stub = StubBeets()
-        monkeypatch.setattr("app.workers.artwork_worker.get_setting", lambda *_: setting_value)
-        audio_path = tmp_path / f"poststep-{setting_value or 'none'}.mp3"
-        audio_path.write_bytes(b"audio")
-
-        with session_scope() as session:
-            download = Download(
-                filename=str(audio_path),
-                state="completed",
-                progress=100.0,
-            )
-            session.add(download)
-            session.commit()
-            session.refresh(download)
-            download_id = download.id
-
-        worker = ArtworkWorker(
-            storage_directory=tmp_path / "artwork",
-            config=_make_artwork_config(tmp_path / "artwork"),
-            beets_client=stub,
-        )
-        await worker.start()
-        try:
-            await worker.enqueue(
-                download_id,
-                str(audio_path),
-                metadata={"spotify_album_id": "album-poststep"},
-            )
-            await worker.wait_for_pending()
-        finally:
-            await worker.stop()
-
-        return stub.commands
-
-    disabled_commands = await run(None)
-    assert disabled_commands == []
-
-    enabled_commands = await run("true")
-    assert any(cmd[0] == "write" for cmd in enabled_commands)
-    assert any(cmd[0] == "update" for cmd in enabled_commands)
-
-
-def test_host_allowlist_enforced(tmp_path: Path) -> None:
-    target = tmp_path / "blocked.jpg"
-    with pytest.raises(ValueError):
-        artwork_utils.download_artwork(
-            "https://untrusted.example.com/image.jpg",
-            target,
-            allowed_hosts=("coverartarchive.org",),
-        )
-
-    assert not target.exists()

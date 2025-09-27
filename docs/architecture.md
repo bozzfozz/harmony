@@ -1,13 +1,11 @@
 # Architekturübersicht
 
-Die Harmony-Anwendung folgt einer modularen FastAPI-Architektur, die interne und externe Komponenten klar voneinander trennt.
-Das folgende textuelle Diagramm beschreibt den Aufbau:
+Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Plex- und Beets-spezifische Module liegen im Verzeichnis [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/) und werden zur Laufzeit nicht geladen. Der aktive Codepfad besteht aus folgenden Bausteinen:
 
-```
+```text
 +----------------------------+
 |          Clients           |
-| SpotifyClient, PlexClient, |
-| SoulseekClient, BeetsClient|
+| SpotifyClient, SoulseekClient |
 +-------------+--------------+
               |
               v
@@ -19,18 +17,23 @@ Das folgende textuelle Diagramm beschreibt den Aufbau:
               v
 +-------------+--------------+
 |           Routers          |
-| Spotify / Plex / Soulseek  |
-| Matching / Settings / Beets|
-+------+------+-------------+
-       |      |
-       |      v
-       |   Background Workers
-       |   (Sync, Matching,   
-       |    Scan, Playlist)   
-       v                      
-+------+------+-------------+
-|        Datenbank           |
-| SQLAlchemy Modelle         |
+| Spotify / Soulseek / Search|
+| Matching / Settings / Sync |
+| Activity / Downloads / API |
++-------------+--------------+
+              |
+              v
++-------------+--------------+
+|       Hintergrund-Worker   |
+| Sync / Matching / Playlist |
+| Artwork / Lyrics / Retry   |
+| Watchlist / Metadata       |
++-------------+--------------+
+              |
+              v
++-------------+--------------+
+|          Datenbank         |
+| SQLAlchemy + SQLite        |
 +----------------------------+
 ```
 
@@ -38,63 +41,57 @@ Das folgende textuelle Diagramm beschreibt den Aufbau:
 
 ### Core
 
-- **SpotifyClient** (`app/core/spotify_client.py`): Kapselt die Spotify Web API (Suche, Audio Features, Playlists, Empfehlungen).
-- **PlexClient** (`app/core/plex_client.py`): Async-Client für Bibliotheken, Sessions, Timeline und Live-TV.
-- **SoulseekClient** (`app/core/soulseek_client.py`): Bindet den slskd-Daemon an und stellt Download-/Upload-Operationen bereit.
-- **BeetsClient** (`app/core/beets_client.py`): Führt Beets CLI-Kommandos innerhalb eines Threadpools aus.
-- **MusicMatchingEngine** (`app/core/matching_engine.py`): Berechnet Ähnlichkeitsscores und liefert Best-Match-Kandidaten.
+- **SpotifyClient** (`app/core/spotify_client.py`): kapselt OAuth, Suche, Audio-Features, Playlists und Nutzerinformationen.
+- **SoulseekClient** (`app/core/soulseek_client.py`): kommuniziert mit slskd (Downloads, Uploads, Userinfos, Warteschlangen).
+- **MusicMatchingEngine** (`app/core/matching_engine.py`): berechnet Scores für Spotify↔Soulseek-Kandidaten.
+- **Utilities** (`app/utils/*`): Normalisierung, Metadaten, Activity-Logging, Service-Health.
 
 ### Routers
 
-FastAPI-Router bilden die öffentliche REST-API. Jeder Router importiert die benötigten Clients als Dependencies (`app/dependencies.py`).
-Beispiele:
+FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registriert. Aktiv sind u. a.:
 
-- `app/routers/spotify_router.py` für `/spotify`-Endpunkte (Suche, Audio Features, Playlists, Benutzerprofil).
-- `app/routers/plex_router.py` für `/plex`-Endpunkte (Bibliotheken, PlayQueues, Benachrichtigungen).
-- `app/routers/soulseek_router.py` für `/soulseek`-Endpunkte (Downloads, Uploads, Benutzerinformationen).
-- `app/routers/matching_router.py` für `/matching` (Spotify→Plex/Soulseek, Album-Matching).
-- `app/routers/settings_router.py` für `/settings` (Key-Value Settings + Historie).
-- `app/routers/beets_router.py` für `/beets` (Import, Query, Stats, Dateimanipulation).
-
-### Datenbank
-
-- `app/db.py` initialisiert SQLite und stellt `session_scope()` sowie `get_session()` bereit.
-- `app/models.py` definiert SQLAlchemy-Modelle wie `Playlist`, `Download`, `Match`, `Setting`, `SettingHistory`.
-- `app/schemas.py` enthält die Pydantic-Modelle für Anfragen und Antworten.
-
-### Artist-Konfiguration
-
-- Die Tabelle `artist_preferences` speichert pro Spotify-Artist die gewählten Releases (`artist_id`, `release_id`, `selected`).
-- Der `settings_router` stellt `GET/POST /settings/artist-preferences` bereit, um diese Auswahl abzurufen bzw. zu persistieren.
-- Der `spotify_router` liefert mit `GET /spotify/artists/followed` und `GET /spotify/artist/{id}/releases` die Grundlage für die Konfiguration.
-- Der `AutoSyncWorker` lädt die markierten Releases beim Sync und filtert Spotify-Tracks, sodass nur gewünschte Veröffentlichungen gegen Plex abgeglichen werden.
+- `app/routers/spotify_router.py` & `app/routers/spotify_free_router.py`: Suche, Backfill, Free-Ingest, Playlist-APIs.
+- `app/routers/soulseek_router.py`: Download- und Upload-Management, Warteschlangen, Status und Artefakt-Endpunkte.
+- `app/routers/search_router.py`: Aggregierte Suche über Spotify und Soulseek.
+- `app/routers/matching_router.py`: Persistiertes Matching (`/matching/spotify-to-soulseek`) inkl. Legacy-404-Checks für Plex.
+- `app/routers/metadata_router.py`: Metadata-Refresh-Routen geben 503 zurück, solange die archivierten Integrationen deaktiviert bleiben.
+- `app/routers/settings_router.py`, `app/routers/system_router.py`, `app/routers/health_router.py`, `app/routers/watchlist_router.py` und `app/routers/activity_router.py` decken Settings, Systemstatus, Health-Checks, Watchlist und Activity-Feed ab.
 
 ### Hintergrund-Worker
 
-Während des Startup-Events (`app/main.py`) werden – sofern `HARMONY_DISABLE_WORKERS` nicht gesetzt ist – folgende Worker gestartet:
+`app/main.py` initialisiert beim Lifespan folgende Worker (deaktivierbar via `HARMONY_DISABLE_WORKERS=1`):
 
-- **SyncWorker** (`app/workers/sync_worker.py`): Verarbeitet Soulseek-Downloadjobs und aktualisiert Fortschritte.
-- **MatchingWorker** (`app/workers/matching_worker.py`): Persistiert berechnete Matches asynchron.
-- **ScanWorker** (`app/workers/scan_worker.py`): Pollt Plex in Intervallen und aktualisiert Statistik-Settings.
-- **PlaylistSyncWorker** (`app/workers/playlist_sync_worker.py`): Synchronisiert Spotify-Playlists in die Datenbank.
+- **SyncWorker** (`app/workers/sync_worker.py`): Steuert Soulseek-Downloads inkl. Retry-Strategie und Datei-Organisation.
+- **MatchingWorker** (`app/workers/matching_worker.py`): Persistiert Matching-Jobs aus der Queue.
+- **PlaylistSyncWorker** (`app/workers/playlist_sync_worker.py`): Aktualisiert Spotify-Playlists.
+- **ArtworkWorker** (`app/workers/artwork_worker.py`): Lädt Cover in Originalauflösung und bettet sie ein.
+- **LyricsWorker** (`app/workers/lyrics_worker.py`): Erstellt LRC-Dateien mit synchronisierten Lyrics.
+- **MetadataWorker** (`app/workers/metadata_worker.py`): Reichert Downloads mit Spotify-Metadaten an.
+- **BackfillWorker** (`app/workers/backfill_worker.py`): Ergänzt Free-Ingest-Items über Spotify-APIs.
+- **WatchlistWorker** (`app/workers/watchlist_worker.py`): Überwacht gespeicherte Artists auf neue Releases.
+- **RetryScheduler** (`app/workers/retry_scheduler.py`): Plant fehlgeschlagene Downloads erneut ein.
 
-Alle Worker greifen über `session_scope()` auf die Datenbank zu und protokollieren Abläufe über `app/logging.py`.
+Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Systemstatus nicht mehr angezeigt.
 
-## Synchronisations- & Matching-Prozesse
+### Datenbank & Persistenz
 
-1. **Soulseek-Downloads**: REST-Aufrufe gegen `/soulseek/download` persistieren Downloads in der Datenbank und übergeben Jobs an den
-   `SyncWorker`. Dieser startet Downloads über den `SoulseekClient` und pollt `get_download_status()`, um Fortschritt, Status und
-   Zeitstempel (`Download.updated_at`) zu aktualisieren.
-2. **Spotify-Playlist-Sync**: Der `PlaylistSyncWorker` ruft periodisch `SpotifyClient.get_user_playlists()` auf, normalisiert die
-   Daten und speichert sie in der `Playlist`-Tabelle. Änderungen werden über `updated_at` erfasst.
-3. **Plex-Scans**: Der `ScanWorker` pollt `PlexClient.get_library_statistics()` und schreibt aggregierte Werte in `Setting`-Einträge.
-4. **Matching**: Der Matching-Router kann Ergebnisse direkt persistieren. Zusätzlich verarbeitet der `MatchingWorker` Jobs aus seiner
-   Queue und speichert `Match`-Objekte. Die Matching-Engine vergleicht Spotify-Tracks mit Plex- oder Soulseek-Kandidaten und liefert
-   Konfidenzwerte zurück.
+- **`app/db.py`** initialisiert SQLite und liefert `session_scope()` / `get_session()`.
+- **`app/models.py`** definiert Tabellen wie `Playlist`, `Download`, `Match`, `Setting`, `SettingHistory`, `WatchlistArtist`.
+- **`app/schemas.py` & `app/schemas_search.py`** beschreiben Pydantic-Modelle für Requests/Responses und Suchresultate.
 
-## Interaktion der Komponenten
+### Datenfluss (vereinfacht)
 
-- Router lösen Aktionen aus und rufen über Dependencies die passenden Core-Clients auf.
-- Core-Clients kommunizieren mit externen Diensten und liefern strukturierte Antworten.
-- Worker laufen asynchron und nutzen dieselben Clients, um Automatisierungen im Hintergrund auszuführen.
-- Alle Schreiboperationen gehen über SQLAlchemy-Sessions, sodass API-Aufrufe und Worker auf denselben Datenbestand zugreifen.
+1. **Ingest**: Spotify-Free-Uploads und API-Aufrufe landen als `ingest_jobs`/`ingest_items` in der Datenbank.
+2. **Backfill**: Der Backfill-Worker reichert FREE-Daten mit Spotify-IDs, ISRC, Laufzeiten und Playlist-Expansion an.
+3. **Soulseek Matching & Downloads**: MatchingWorker bewertet Kandidaten, SyncWorker lädt Dateien und aktualisiert Status.
+4. **Postprocessing**: Artwork-, Lyrics- und Metadata-Worker ergänzen Metadaten und Artefakte; Datei-Organisation läuft im SyncWorker.
+5. **Watchlist & Activity**: WatchlistWorker triggert neue Downloads, `activity_manager` zeichnet Events für UI/Automatisierungen auf.
+
+### Observability & Wiring Guard
+
+- Beim Start protokolliert `app/main.py` ein `wiring_summary` mit aktiven Routern, Workern und Integrationen (`plex=false`, `beets=false`).
+- `scripts/audit_wiring.py` stellt sicher, dass keine Plex-/Beets-Referenzen außerhalb des Archivs in `app/` oder `tests/` landen und ist in der CI eingebunden.
+
+### Archivierte Module
+
+Legacy-Code (Plex-Router, Scan-Worker, AutoSync, Beets-CLI) befindet sich unter [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/) und kann separat wiederbelebt werden. Die aktiven Tests (`tests/test_matching.py`) verifizieren, dass entsprechende Endpunkte `404` liefern.

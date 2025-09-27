@@ -277,32 +277,6 @@ class MatchingResponse(BaseModel):
     confidence: float
 
 
-class DiscographyMatchingRequest(BaseModel):
-    artist_id: str
-    albums: List[Dict[str, Any]] = Field(default_factory=list)
-    plex_items: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class DiscographyMissingAlbum(BaseModel):
-    album: Dict[str, Any]
-    missing_tracks: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class DiscographyMissingTrack(BaseModel):
-    album: Dict[str, Any]
-    track: Dict[str, Any]
-
-
-class DiscographyMatchingResponse(BaseModel):
-    missing_albums: List[DiscographyMissingAlbum] = Field(default_factory=list)
-    missing_tracks: List[DiscographyMissingTrack] = Field(default_factory=list)
-
-
-class AlbumMatchingRequest(BaseModel):
-    spotify_album: Dict[str, Any]
-    candidates: List[Dict[str, Any]]
-
-
 class SettingsPayload(BaseModel):
     key: str
     value: Optional[str]

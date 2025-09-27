@@ -20,7 +20,7 @@ def test_worker_heartbeat_persists_setting(client) -> None:
 def test_status_endpoint_reports_worker_health(client) -> None:
     record_worker_heartbeat("sync")
     record_worker_heartbeat("matching")
-    mark_worker_status("scan", "running")
+    mark_worker_status("artwork", "running")
 
     response = client.get("/status")
     assert response.status_code == 200
@@ -35,8 +35,8 @@ def test_status_endpoint_reports_worker_health(client) -> None:
     assert matching_info["status"] == "running"
     assert matching_info["queue_size"] == 0
 
-    scan_info = workers["scan"]
-    assert scan_info["queue_size"] == "n/a"
+    artwork_info = workers["artwork"]
+    assert artwork_info["queue_size"] == "n/a"
 
 
 def test_worker_stop_sets_status_stopped(client) -> None:
