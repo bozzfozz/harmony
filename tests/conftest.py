@@ -573,6 +573,8 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> 
     deps.get_matching_engine.cache_clear()
 
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
+    monkeypatch.setenv("ENABLE_ARTWORK", "1")
+    monkeypatch.setenv("ENABLE_LYRICS", "1")
     db_dir = tmp_path_factory.mktemp("db")
     db_path = db_dir / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")

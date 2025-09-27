@@ -34,6 +34,32 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from app.workers.sync_worker import SyncWorker
 from app.utils import artwork_utils
 
+
+def _feature_disabled_response(feature: str) -> JSONResponse:
+    capitalised = feature.capitalize()
+    return JSONResponse(
+        status_code=503,
+        content={
+            "ok": False,
+            "error": {
+                "code": "FEATURE_DISABLED",
+                "message": f"{capitalised} feature is disabled by configuration.",
+            },
+        },
+    )
+
+
+def _feature_enabled(request: Request, feature: str) -> bool:
+    flags = getattr(request.app.state, "feature_flags", None)
+    if flags is None:
+        return False
+    if feature == "artwork":
+        return getattr(flags, "enable_artwork", False)
+    if feature == "lyrics":
+        return getattr(flags, "enable_lyrics", False)
+    return False
+
+
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -185,9 +211,13 @@ async def soulseek_download(
 @router.get("/download/{download_id}/lyrics")
 def soulseek_download_lyrics(
     download_id: int,
+    request: Request,
     session: Session = Depends(get_db),
 ) -> Response:
     """Return the generated LRC lyrics for a completed download."""
+
+    if not _feature_enabled(request, "lyrics"):
+        return _feature_disabled_response("lyrics")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -225,6 +255,9 @@ async def refresh_download_lyrics(
     session: Session = Depends(get_db),
 ) -> JSONResponse:
     """Force a new lyrics lookup for the given download."""
+
+    if not _feature_enabled(request, "lyrics"):
+        return _feature_disabled_response("lyrics")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -399,9 +432,13 @@ def _resolve_numeric_field(
 @router.get("/download/{download_id}/artwork")
 def soulseek_download_artwork(
     download_id: int,
+    request: Request,
     session: Session = Depends(get_db),
 ) -> Response:
     """Return the stored artwork as an image file."""
+
+    if not _feature_enabled(request, "artwork"):
+        return _feature_disabled_response("artwork")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -425,6 +462,9 @@ async def soulseek_refresh_artwork(
     session: Session = Depends(get_db),
 ) -> JSONResponse:
     """Force an artwork refresh for a completed download."""
+
+    if not _feature_enabled(request, "artwork"):
+        return _feature_disabled_response("artwork")
 
     download = session.get(Download, download_id)
     if download is None:

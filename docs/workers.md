@@ -19,7 +19,7 @@ Harmony startet mehrere asynchrone Worker, sobald die Anwendung initialisiert is
 ## Lebenszyklus
 
 - `HARMONY_DISABLE_WORKERS=1` deaktiviert alle Worker (nützlich für Tests oder read-only-Demos).
-- Einzelne Feature-Flags: `ENABLE_ARTWORK` und `ENABLE_LYRICS` können gesetzt werden, um Artwork-/Lyrics-Worker zu deaktivieren (Default: `true`).
+- Einzelne Feature-Flags: `ENABLE_ARTWORK` und `ENABLE_LYRICS` aktivieren Artwork-/Lyrics-Worker und zugehörige Endpunkte (Default: `false`).
 - Beim Shutdown ruft Harmony `stop()` auf allen Worker-Instanzen auf (`app/main.py::_stop_background_workers`).
 
 ## Systemstatus & Observability
