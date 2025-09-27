@@ -80,6 +80,7 @@ class IngestConfig:
 class FeatureFlags:
     enable_artwork: bool
     enable_lyrics: bool
+    enable_legacy_routes: bool
 
 
 @dataclass(slots=True)
@@ -93,6 +94,7 @@ class AppConfig:
     free_ingest: FreeIngestConfig
     features: FeatureFlags
     security: "SecurityConfig"
+    api_base_path: str
 
 
 @dataclass(slots=True)
@@ -127,7 +129,8 @@ DEFAULT_INGEST_BATCH_SIZE = 500
 DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
-DEFAULT_ALLOWLIST = ("/api/health", "/docs", "/redoc", "/openapi.json")
+DEFAULT_API_BASE_PATH = "/api/v1"
+DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/docs", "/redoc", "/openapi.json")
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -181,6 +184,23 @@ def _normalise_prefix(value: str) -> str:
     if cleaned != "/":
         cleaned = cleaned.rstrip("/")
     return cleaned
+
+
+def _normalise_base_path(value: Optional[str]) -> str:
+    candidate = value if value is not None else DEFAULT_API_BASE_PATH
+    normalized = _normalise_prefix(candidate)
+    if normalized == "":
+        return ""
+    return normalized
+
+
+def _compose_allowlist_entry(base_path: str, suffix: str) -> str:
+    normalized_suffix = _normalise_prefix(suffix)
+    if not normalized_suffix or normalized_suffix == "/":
+        return base_path or "/"
+    if not base_path or base_path == "/":
+        return normalized_suffix
+    return f"{base_path}{normalized_suffix}"
 
 
 def _as_float(value: Optional[str], *, default: float) -> float:
@@ -453,6 +473,8 @@ def load_config() -> AppConfig:
         ),
     )
 
+    api_base_path = _normalise_base_path(os.getenv("API_BASE_PATH"))
+
     features = FeatureFlags(
         enable_artwork=_as_bool(
             _resolve_setting(
@@ -470,15 +492,24 @@ def load_config() -> AppConfig:
             ),
             default=False,
         ),
+        enable_legacy_routes=_as_bool(
+            os.getenv("FEATURE_ENABLE_LEGACY_ROUTES"),
+            default=False,
+        ),
     )
 
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
 
+    default_allowlist = [
+        _compose_allowlist_entry(api_base_path, suffix) for suffix in DEFAULT_ALLOWLIST_SUFFIXES
+    ]
+    allowlist_override_entries = [
+        _normalise_prefix(entry) for entry in _parse_list(os.getenv("AUTH_ALLOWLIST"))
+    ]
     allowlist_entries = _deduplicate_preserve_order(
-        _normalise_prefix(entry)
-        for entry in [*DEFAULT_ALLOWLIST, *_parse_list(os.getenv("AUTH_ALLOWLIST"))]
+        entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
     )
     allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
 
@@ -499,6 +530,7 @@ def load_config() -> AppConfig:
         free_ingest=free_ingest,
         features=features,
         security=security,
+        api_base_path=api_base_path,
     )
 
 

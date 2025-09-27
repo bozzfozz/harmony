@@ -2512,9 +2512,9 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
+    "/api/v1/": {
       "get": {
-        "operationId": "root__get",
+        "operationId": "root_api_v1__get",
         "responses": {
           "200": {
             "content": {
@@ -2523,7 +2523,7 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Root  Get",
+                  "title": "Response Root Api V1  Get",
                   "type": "object"
                 }
               }
@@ -2531,13 +2531,16 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Root"
+        "summary": "Root",
+        "tags": [
+          "System"
+        ]
       }
     },
-    "/api/activity": {
+    "/api/v1/activity": {
       "get": {
         "description": "Return the most recent activity entries from persistent storage.",
-        "operationId": "list_activity_api_activity_get",
+        "operationId": "list_activity_api_v1_activity_get",
         "parameters": [
           {
             "in": "query",
@@ -2601,7 +2604,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response List Activity Api Activity Get",
+                  "title": "Response List Activity Api V1 Activity Get",
                   "type": "object"
                 }
               }
@@ -2625,10 +2628,10 @@
         ]
       }
     },
-    "/api/activity/export": {
+    "/api/v1/activity/export": {
       "get": {
         "description": "Export activity history entries either as JSON or CSV.",
-        "operationId": "export_activity_history_api_activity_export_get",
+        "operationId": "export_activity_history_api_v1_activity_export_get",
         "parameters": [
           {
             "in": "query",
@@ -2754,10 +2757,10 @@
         ]
       }
     },
-    "/api/download": {
+    "/api/v1/download": {
       "post": {
         "description": "Persist requested downloads and enqueue them for the SyncWorker.",
-        "operationId": "start_download_api_download_post",
+        "operationId": "start_download_api_v1_download_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2774,7 +2777,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Start Download Api Download Post",
+                  "title": "Response Start Download Api V1 Download Post",
                   "type": "object"
                 }
               }
@@ -2798,10 +2801,10 @@
         ]
       }
     },
-    "/api/download/{download_id}": {
+    "/api/v1/download/{download_id}": {
       "delete": {
         "description": "Cancel a queued or running download.",
-        "operationId": "cancel_download_api_download__download_id__delete",
+        "operationId": "cancel_download_api_v1_download__download_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -2819,7 +2822,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Cancel Download Api Download  Download Id  Delete",
+                  "title": "Response Cancel Download Api V1 Download  Download Id  Delete",
                   "type": "object"
                 }
               }
@@ -2844,7 +2847,7 @@
       },
       "get": {
         "description": "Return the persisted state of a single download.",
-        "operationId": "get_download_api_download__download_id__get",
+        "operationId": "get_download_api_v1_download__download_id__get",
         "parameters": [
           {
             "in": "path",
@@ -2884,10 +2887,10 @@
         ]
       }
     },
-    "/api/download/{download_id}/priority": {
+    "/api/v1/download/{download_id}/priority": {
       "patch": {
         "description": "Update the priority of a persisted download.",
-        "operationId": "update_download_priority_api_download__download_id__priority_patch",
+        "operationId": "update_download_priority_api_v1_download__download_id__priority_patch",
         "parameters": [
           {
             "in": "path",
@@ -2937,10 +2940,10 @@
         ]
       }
     },
-    "/api/download/{download_id}/retry": {
+    "/api/v1/download/{download_id}/retry": {
       "post": {
         "description": "Retry a failed or cancelled download by creating a new entry.",
-        "operationId": "retry_download_api_download__download_id__retry_post",
+        "operationId": "retry_download_api_v1_download__download_id__retry_post",
         "parameters": [
           {
             "in": "path",
@@ -2958,7 +2961,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Retry Download Api Download  Download Id  Retry Post",
+                  "title": "Response Retry Download Api V1 Download  Download Id  Retry Post",
                   "type": "object"
                 }
               }
@@ -2982,10 +2985,10 @@
         ]
       }
     },
-    "/api/downloads": {
+    "/api/v1/downloads": {
       "get": {
         "description": "Return downloads with optional status filtering.",
-        "operationId": "list_downloads_api_downloads_get",
+        "operationId": "list_downloads_api_v1_downloads_get",
         "parameters": [
           {
             "in": "query",
@@ -3065,10 +3068,10 @@
         ]
       }
     },
-    "/api/downloads/export": {
+    "/api/v1/downloads/export": {
       "get": {
         "description": "Export downloads as JSON or CSV without paging limits.",
-        "operationId": "export_downloads_api_downloads_export_get",
+        "operationId": "export_downloads_api_v1_downloads_export_get",
         "parameters": [
           {
             "in": "query",
@@ -3155,9 +3158,9 @@
         ]
       }
     },
-    "/api/health/soulseek": {
+    "/api/v1/health/soulseek": {
       "get": {
-        "operationId": "soulseek_health_api_health_soulseek_get",
+        "operationId": "soulseek_health_api_v1_health_soulseek_get",
         "responses": {
           "200": {
             "content": {
@@ -3176,9 +3179,9 @@
         ]
       }
     },
-    "/api/health/spotify": {
+    "/api/v1/health/spotify": {
       "get": {
-        "operationId": "spotify_health_api_health_spotify_get",
+        "operationId": "spotify_health_api_v1_health_spotify_get",
         "responses": {
           "200": {
             "content": {
@@ -3197,179 +3200,9 @@
         ]
       }
     },
-    "/api/metadata/status": {
-      "get": {
-        "description": "Return the current metadata job status.",
-        "operationId": "get_metadata_status_api_metadata_status_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Metadata Status Api Metadata Status Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Metadata Status",
-        "tags": [
-          "Metadata",
-          "Metadata"
-        ]
-      }
-    },
-    "/api/metadata/stop": {
+    "/api/v1/imports/free": {
       "post": {
-        "description": "Request to stop the running metadata job.",
-        "operationId": "stop_metadata_update_api_metadata_stop_post",
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Stop Metadata Update Api Metadata Stop Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Stop Metadata Update",
-        "tags": [
-          "Metadata",
-          "Metadata"
-        ]
-      }
-    },
-    "/api/metadata/update": {
-      "post": {
-        "description": "Kick off a metadata update job.",
-        "operationId": "start_metadata_update_api_metadata_update_post",
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Start Metadata Update Api Metadata Update Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Start Metadata Update",
-        "tags": [
-          "Metadata",
-          "Metadata"
-        ]
-      }
-    },
-    "/api/search": {
-      "post": {
-        "description": "Perform a combined search across Spotify and Soulseek.",
-        "operationId": "global_search_api_search_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/app__routers__sync_router__SearchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Global Search Api Search Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Global Search",
-        "tags": [
-          "Sync",
-          "Sync"
-        ]
-      }
-    },
-    "/api/sync": {
-      "post": {
-        "description": "Run playlist and library synchronisation tasks on demand.",
-        "operationId": "trigger_manual_sync_api_sync_post",
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Trigger Manual Sync Api Sync Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Trigger Manual Sync",
-        "tags": [
-          "Sync",
-          "Sync"
-        ]
-      }
-    },
-    "/api/system/stats": {
-      "get": {
-        "description": "Return system statistics such as CPU, memory and disk usage.",
-        "operationId": "get_system_stats_api_system_stats_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get System Stats Api System Stats Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get System Stats",
-        "tags": [
-          "System",
-          "System"
-        ]
-      }
-    },
-    "/imports/free": {
-      "post": {
-        "operationId": "create_free_import_imports_free_post",
+        "operationId": "create_free_import_api_v1_imports_free_post",
         "responses": {
           "200": {
             "content": {
@@ -3386,10 +3219,10 @@
         ]
       }
     },
-    "/matching/spotify-to-soulseek": {
+    "/api/v1/matching/spotify-to-soulseek": {
       "post": {
         "description": "Match a Spotify track against Soulseek candidates and persist the result.",
-        "operationId": "spotify_to_soulseek_matching_spotify_to_soulseek_post",
+        "operationId": "spotify_to_soulseek_api_v1_matching_spotify_to_soulseek_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3428,9 +3261,125 @@
         ]
       }
     },
-    "/settings": {
+    "/api/v1/metadata/status": {
       "get": {
-        "operationId": "get_settings_settings_get",
+        "description": "Return the current metadata job status.",
+        "operationId": "get_metadata_status_api_v1_metadata_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Metadata Status Api V1 Metadata Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Metadata Status",
+        "tags": [
+          "Metadata"
+        ]
+      }
+    },
+    "/api/v1/metadata/stop": {
+      "post": {
+        "description": "Request to stop the running metadata job.",
+        "operationId": "stop_metadata_update_api_v1_metadata_stop_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Metadata Update Api V1 Metadata Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop Metadata Update",
+        "tags": [
+          "Metadata"
+        ]
+      }
+    },
+    "/api/v1/metadata/update": {
+      "post": {
+        "description": "Kick off a metadata update job.",
+        "operationId": "start_metadata_update_api_v1_metadata_update_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Metadata Update Api V1 Metadata Update Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start Metadata Update",
+        "tags": [
+          "Metadata"
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "post": {
+        "description": "Perform a combined search across Spotify and Soulseek.",
+        "operationId": "global_search_api_v1_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__routers__sync_router__SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Search Api V1 Search Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Search",
+        "tags": [
+          "Sync"
+        ]
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "get_settings_api_v1_settings_get",
         "responses": {
           "200": {
             "content": {
@@ -3449,7 +3398,7 @@
         ]
       },
       "post": {
-        "operationId": "update_setting_settings_post",
+        "operationId": "update_setting_api_v1_settings_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3488,9 +3437,9 @@
         ]
       }
     },
-    "/settings/artist-preferences": {
+    "/api/v1/settings/artist-preferences": {
       "get": {
-        "operationId": "get_artist_preferences_settings_artist_preferences_get",
+        "operationId": "get_artist_preferences_api_v1_settings_artist_preferences_get",
         "responses": {
           "200": {
             "content": {
@@ -3509,7 +3458,7 @@
         ]
       },
       "post": {
-        "operationId": "save_artist_preferences_settings_artist_preferences_post",
+        "operationId": "save_artist_preferences_api_v1_settings_artist_preferences_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3548,9 +3497,9 @@
         ]
       }
     },
-    "/settings/history": {
+    "/api/v1/settings/history": {
       "get": {
-        "operationId": "get_settings_history_settings_history_get",
+        "operationId": "get_settings_history_api_v1_settings_history_get",
         "responses": {
           "200": {
             "content": {
@@ -3569,10 +3518,10 @@
         ]
       }
     },
-    "/soulseek/discography/download": {
+    "/api/v1/soulseek/discography/download": {
       "post": {
         "description": "Persist and enqueue a complete discography download job.",
-        "operationId": "soulseek_discography_download_soulseek_discography_download_post",
+        "operationId": "soulseek_discography_download_api_v1_soulseek_discography_download_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3611,10 +3560,10 @@
         ]
       }
     },
-    "/soulseek/download": {
+    "/api/v1/soulseek/download": {
       "post": {
         "description": "Queue a Soulseek download job and persist queued entries.",
-        "operationId": "soulseek_download_soulseek_download_post",
+        "operationId": "soulseek_download_api_v1_soulseek_download_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3653,10 +3602,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}": {
+    "/api/v1/soulseek/download/{download_id}": {
       "delete": {
         "description": "Cancel a Soulseek download by identifier.",
-        "operationId": "soulseek_cancel_soulseek_download__download_id__delete",
+        "operationId": "soulseek_cancel_api_v1_soulseek_download__download_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -3696,7 +3645,7 @@
         ]
       },
       "get": {
-        "operationId": "soulseek_download_detail_soulseek_download__download_id__get",
+        "operationId": "soulseek_download_detail_api_v1_soulseek_download__download_id__get",
         "parameters": [
           {
             "in": "path",
@@ -3714,7 +3663,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Download Detail Soulseek Download  Download Id  Get",
+                  "title": "Response Soulseek Download Detail Api V1 Soulseek Download  Download Id  Get",
                   "type": "object"
                 }
               }
@@ -3738,10 +3687,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/artwork": {
+    "/api/v1/soulseek/download/{download_id}/artwork": {
       "get": {
         "description": "Return the stored artwork as an image file.",
-        "operationId": "soulseek_download_artwork_soulseek_download__download_id__artwork_get",
+        "operationId": "soulseek_download_artwork_api_v1_soulseek_download__download_id__artwork_get",
         "parameters": [
           {
             "in": "path",
@@ -3779,10 +3728,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/artwork/refresh": {
+    "/api/v1/soulseek/download/{download_id}/artwork/refresh": {
       "post": {
         "description": "Force an artwork refresh for a completed download.",
-        "operationId": "soulseek_refresh_artwork_soulseek_download__download_id__artwork_refresh_post",
+        "operationId": "soulseek_refresh_artwork_api_v1_soulseek_download__download_id__artwork_refresh_post",
         "parameters": [
           {
             "in": "path",
@@ -3820,10 +3769,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/lyrics": {
+    "/api/v1/soulseek/download/{download_id}/lyrics": {
       "get": {
         "description": "Return the generated LRC lyrics for a completed download.",
-        "operationId": "soulseek_download_lyrics_soulseek_download__download_id__lyrics_get",
+        "operationId": "soulseek_download_lyrics_api_v1_soulseek_download__download_id__lyrics_get",
         "parameters": [
           {
             "in": "path",
@@ -3861,10 +3810,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/lyrics/refresh": {
+    "/api/v1/soulseek/download/{download_id}/lyrics/refresh": {
       "post": {
         "description": "Force a new lyrics lookup for the given download.",
-        "operationId": "refresh_download_lyrics_soulseek_download__download_id__lyrics_refresh_post",
+        "operationId": "refresh_download_lyrics_api_v1_soulseek_download__download_id__lyrics_refresh_post",
         "parameters": [
           {
             "in": "path",
@@ -3902,10 +3851,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/metadata": {
+    "/api/v1/soulseek/download/{download_id}/metadata": {
       "get": {
         "description": "Return the stored metadata for a completed download.",
-        "operationId": "soulseek_download_metadata_soulseek_download__download_id__metadata_get",
+        "operationId": "soulseek_download_metadata_api_v1_soulseek_download__download_id__metadata_get",
         "parameters": [
           {
             "in": "path",
@@ -3945,10 +3894,10 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/metadata/refresh": {
+    "/api/v1/soulseek/download/{download_id}/metadata/refresh": {
       "post": {
         "description": "Trigger a metadata refresh for the given download.",
-        "operationId": "refresh_download_metadata_soulseek_download__download_id__metadata_refresh_post",
+        "operationId": "refresh_download_metadata_api_v1_soulseek_download__download_id__metadata_refresh_post",
         "parameters": [
           {
             "in": "path",
@@ -3986,9 +3935,9 @@
         ]
       }
     },
-    "/soulseek/download/{download_id}/queue": {
+    "/api/v1/soulseek/download/{download_id}/queue": {
       "get": {
-        "operationId": "soulseek_download_queue_soulseek_download__download_id__queue_get",
+        "operationId": "soulseek_download_queue_api_v1_soulseek_download__download_id__queue_get",
         "parameters": [
           {
             "in": "path",
@@ -4006,7 +3955,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Download Queue Soulseek Download  Download Id  Queue Get",
+                  "title": "Response Soulseek Download Queue Api V1 Soulseek Download  Download Id  Queue Get",
                   "type": "object"
                 }
               }
@@ -4030,10 +3979,10 @@
         ]
       }
     },
-    "/soulseek/downloads": {
+    "/api/v1/soulseek/downloads": {
       "get": {
         "description": "Return persisted download progress from the database.",
-        "operationId": "soulseek_downloads_soulseek_downloads_get",
+        "operationId": "soulseek_downloads_api_v1_soulseek_downloads_get",
         "responses": {
           "200": {
             "content": {
@@ -4052,16 +4001,16 @@
         ]
       }
     },
-    "/soulseek/downloads/all": {
+    "/api/v1/soulseek/downloads/all": {
       "get": {
-        "operationId": "soulseek_all_downloads_soulseek_downloads_all_get",
+        "operationId": "soulseek_all_downloads_api_v1_soulseek_downloads_all_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek All Downloads Soulseek Downloads All Get",
+                  "title": "Response Soulseek All Downloads Api V1 Soulseek Downloads All Get",
                   "type": "object"
                 }
               }
@@ -4075,16 +4024,16 @@
         ]
       }
     },
-    "/soulseek/downloads/completed": {
+    "/api/v1/soulseek/downloads/completed": {
       "delete": {
-        "operationId": "soulseek_remove_completed_downloads_soulseek_downloads_completed_delete",
+        "operationId": "soulseek_remove_completed_downloads_api_v1_soulseek_downloads_completed_delete",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Remove Completed Downloads Soulseek Downloads Completed Delete",
+                  "title": "Response Soulseek Remove Completed Downloads Api V1 Soulseek Downloads Completed Delete",
                   "type": "object"
                 }
               }
@@ -4098,10 +4047,10 @@
         ]
       }
     },
-    "/soulseek/downloads/{download_id}/requeue": {
+    "/api/v1/soulseek/downloads/{download_id}/requeue": {
       "post": {
         "description": "Manually requeue a download unless it resides in the dead-letter queue.",
-        "operationId": "soulseek_requeue_download_soulseek_downloads__download_id__requeue_post",
+        "operationId": "soulseek_requeue_download_api_v1_soulseek_downloads__download_id__requeue_post",
         "parameters": [
           {
             "in": "path",
@@ -4139,9 +4088,9 @@
         ]
       }
     },
-    "/soulseek/enqueue": {
+    "/api/v1/soulseek/enqueue": {
       "post": {
-        "operationId": "soulseek_enqueue_soulseek_enqueue_post",
+        "operationId": "soulseek_enqueue_api_v1_soulseek_enqueue_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4158,7 +4107,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Enqueue Soulseek Enqueue Post",
+                  "title": "Response Soulseek Enqueue Api V1 Soulseek Enqueue Post",
                   "type": "object"
                 }
               }
@@ -4182,10 +4131,10 @@
         ]
       }
     },
-    "/soulseek/search": {
+    "/api/v1/soulseek/search": {
       "post": {
         "description": "Perform a Soulseek search and normalise the JSON response.",
-        "operationId": "soulseek_search_soulseek_search_post",
+        "operationId": "soulseek_search_api_v1_soulseek_search_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4224,10 +4173,10 @@
         ]
       }
     },
-    "/soulseek/status": {
+    "/api/v1/soulseek/status": {
       "get": {
         "description": "Return connectivity status for the Soulseek daemon.",
-        "operationId": "soulseek_status_soulseek_status_get",
+        "operationId": "soulseek_status_api_v1_soulseek_status_get",
         "responses": {
           "200": {
             "content": {
@@ -4246,9 +4195,9 @@
         ]
       }
     },
-    "/soulseek/upload/{upload_id}": {
+    "/api/v1/soulseek/upload/{upload_id}": {
       "delete": {
-        "operationId": "soulseek_cancel_upload_soulseek_upload__upload_id__delete",
+        "operationId": "soulseek_cancel_upload_api_v1_soulseek_upload__upload_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4266,7 +4215,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Cancel Upload Soulseek Upload  Upload Id  Delete",
+                  "title": "Response Soulseek Cancel Upload Api V1 Soulseek Upload  Upload Id  Delete",
                   "type": "object"
                 }
               }
@@ -4290,7 +4239,7 @@
         ]
       },
       "get": {
-        "operationId": "soulseek_upload_detail_soulseek_upload__upload_id__get",
+        "operationId": "soulseek_upload_detail_api_v1_soulseek_upload__upload_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4308,7 +4257,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Upload Detail Soulseek Upload  Upload Id  Get",
+                  "title": "Response Soulseek Upload Detail Api V1 Soulseek Upload  Upload Id  Get",
                   "type": "object"
                 }
               }
@@ -4332,16 +4281,16 @@
         ]
       }
     },
-    "/soulseek/uploads": {
+    "/api/v1/soulseek/uploads": {
       "get": {
-        "operationId": "soulseek_uploads_soulseek_uploads_get",
+        "operationId": "soulseek_uploads_api_v1_soulseek_uploads_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Uploads Soulseek Uploads Get",
+                  "title": "Response Soulseek Uploads Api V1 Soulseek Uploads Get",
                   "type": "object"
                 }
               }
@@ -4355,16 +4304,16 @@
         ]
       }
     },
-    "/soulseek/uploads/all": {
+    "/api/v1/soulseek/uploads/all": {
       "get": {
-        "operationId": "soulseek_all_uploads_soulseek_uploads_all_get",
+        "operationId": "soulseek_all_uploads_api_v1_soulseek_uploads_all_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek All Uploads Soulseek Uploads All Get",
+                  "title": "Response Soulseek All Uploads Api V1 Soulseek Uploads All Get",
                   "type": "object"
                 }
               }
@@ -4378,16 +4327,16 @@
         ]
       }
     },
-    "/soulseek/uploads/completed": {
+    "/api/v1/soulseek/uploads/completed": {
       "delete": {
-        "operationId": "soulseek_remove_completed_uploads_soulseek_uploads_completed_delete",
+        "operationId": "soulseek_remove_completed_uploads_api_v1_soulseek_uploads_completed_delete",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek Remove Completed Uploads Soulseek Uploads Completed Delete",
+                  "title": "Response Soulseek Remove Completed Uploads Api V1 Soulseek Uploads Completed Delete",
                   "type": "object"
                 }
               }
@@ -4401,9 +4350,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/address": {
+    "/api/v1/soulseek/user/{username}/address": {
       "get": {
-        "operationId": "soulseek_user_address_soulseek_user__username__address_get",
+        "operationId": "soulseek_user_address_api_v1_soulseek_user__username__address_get",
         "parameters": [
           {
             "in": "path",
@@ -4421,7 +4370,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Address Soulseek User  Username  Address Get",
+                  "title": "Response Soulseek User Address Api V1 Soulseek User  Username  Address Get",
                   "type": "object"
                 }
               }
@@ -4445,9 +4394,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/browse": {
+    "/api/v1/soulseek/user/{username}/browse": {
       "get": {
-        "operationId": "soulseek_user_browse_soulseek_user__username__browse_get",
+        "operationId": "soulseek_user_browse_api_v1_soulseek_user__username__browse_get",
         "parameters": [
           {
             "in": "path",
@@ -4465,7 +4414,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Browse Soulseek User  Username  Browse Get",
+                  "title": "Response Soulseek User Browse Api V1 Soulseek User  Username  Browse Get",
                   "type": "object"
                 }
               }
@@ -4489,9 +4438,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/browsing_status": {
+    "/api/v1/soulseek/user/{username}/browsing_status": {
       "get": {
-        "operationId": "soulseek_user_browsing_status_soulseek_user__username__browsing_status_get",
+        "operationId": "soulseek_user_browsing_status_api_v1_soulseek_user__username__browsing_status_get",
         "parameters": [
           {
             "in": "path",
@@ -4509,7 +4458,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Browsing Status Soulseek User  Username  Browsing Status Get",
+                  "title": "Response Soulseek User Browsing Status Api V1 Soulseek User  Username  Browsing Status Get",
                   "type": "object"
                 }
               }
@@ -4533,9 +4482,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/directory": {
+    "/api/v1/soulseek/user/{username}/directory": {
       "get": {
-        "operationId": "soulseek_user_directory_soulseek_user__username__directory_get",
+        "operationId": "soulseek_user_directory_api_v1_soulseek_user__username__directory_get",
         "parameters": [
           {
             "in": "path",
@@ -4564,7 +4513,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Directory Soulseek User  Username  Directory Get",
+                  "title": "Response Soulseek User Directory Api V1 Soulseek User  Username  Directory Get",
                   "type": "object"
                 }
               }
@@ -4588,9 +4537,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/info": {
+    "/api/v1/soulseek/user/{username}/info": {
       "get": {
-        "operationId": "soulseek_user_info_soulseek_user__username__info_get",
+        "operationId": "soulseek_user_info_api_v1_soulseek_user__username__info_get",
         "parameters": [
           {
             "in": "path",
@@ -4608,7 +4557,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Info Soulseek User  Username  Info Get",
+                  "title": "Response Soulseek User Info Api V1 Soulseek User  Username  Info Get",
                   "type": "object"
                 }
               }
@@ -4632,9 +4581,9 @@
         ]
       }
     },
-    "/soulseek/user/{username}/status": {
+    "/api/v1/soulseek/user/{username}/status": {
       "get": {
-        "operationId": "soulseek_user_status_soulseek_user__username__status_get",
+        "operationId": "soulseek_user_status_api_v1_soulseek_user__username__status_get",
         "parameters": [
           {
             "in": "path",
@@ -4652,7 +4601,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Soulseek User Status Soulseek User  Username  Status Get",
+                  "title": "Response Soulseek User Status Api V1 Soulseek User  Username  Status Get",
                   "type": "object"
                 }
               }
@@ -4676,9 +4625,9 @@
         ]
       }
     },
-    "/spotify/artist/{artist_id}/discography": {
+    "/api/v1/spotify/artist/{artist_id}/discography": {
       "get": {
-        "operationId": "get_artist_discography_spotify_artist__artist_id__discography_get",
+        "operationId": "get_artist_discography_api_v1_spotify_artist__artist_id__discography_get",
         "parameters": [
           {
             "in": "path",
@@ -4718,9 +4667,9 @@
         ]
       }
     },
-    "/spotify/artist/{artist_id}/releases": {
+    "/api/v1/spotify/artist/{artist_id}/releases": {
       "get": {
-        "operationId": "get_artist_releases_spotify_artist__artist_id__releases_get",
+        "operationId": "get_artist_releases_api_v1_spotify_artist__artist_id__releases_get",
         "parameters": [
           {
             "in": "path",
@@ -4760,9 +4709,9 @@
         ]
       }
     },
-    "/spotify/artists/followed": {
+    "/api/v1/spotify/artists/followed": {
       "get": {
-        "operationId": "get_followed_artists_spotify_artists_followed_get",
+        "operationId": "get_followed_artists_api_v1_spotify_artists_followed_get",
         "responses": {
           "200": {
             "content": {
@@ -4781,9 +4730,9 @@
         ]
       }
     },
-    "/spotify/audio-features": {
+    "/api/v1/spotify/audio-features": {
       "get": {
-        "operationId": "get_multiple_audio_features_spotify_audio_features_get",
+        "operationId": "get_multiple_audio_features_api_v1_spotify_audio_features_get",
         "parameters": [
           {
             "in": "query",
@@ -4824,9 +4773,9 @@
         ]
       }
     },
-    "/spotify/audio-features/{track_id}": {
+    "/api/v1/spotify/audio-features/{track_id}": {
       "get": {
-        "operationId": "get_audio_features_spotify_audio_features__track_id__get",
+        "operationId": "get_audio_features_api_v1_spotify_audio_features__track_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4866,9 +4815,9 @@
         ]
       }
     },
-    "/spotify/backfill/jobs/{job_id}": {
+    "/api/v1/spotify/backfill/jobs/{job_id}": {
       "get": {
-        "operationId": "get_backfill_job_spotify_backfill_jobs__job_id__get",
+        "operationId": "get_backfill_job_api_v1_spotify_backfill_jobs__job_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4908,9 +4857,9 @@
         ]
       }
     },
-    "/spotify/backfill/run": {
+    "/api/v1/spotify/backfill/run": {
       "post": {
-        "operationId": "run_backfill_spotify_backfill_run_post",
+        "operationId": "run_backfill_api_v1_spotify_backfill_run_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4949,9 +4898,9 @@
         ]
       }
     },
-    "/spotify/free/enqueue": {
+    "/api/v1/spotify/free/enqueue": {
       "post": {
-        "operationId": "enqueue_tracks_spotify_free_enqueue_post",
+        "operationId": "enqueue_tracks_api_v1_spotify_free_enqueue_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4990,9 +4939,9 @@
         ]
       }
     },
-    "/spotify/free/parse": {
+    "/api/v1/spotify/free/parse": {
       "post": {
-        "operationId": "parse_import_lines_spotify_free_parse_post",
+        "operationId": "parse_import_lines_api_v1_spotify_free_parse_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5031,9 +4980,9 @@
         ]
       }
     },
-    "/spotify/free/upload": {
+    "/api/v1/spotify/free/upload": {
       "post": {
-        "operationId": "upload_import_file_spotify_free_upload_post",
+        "operationId": "upload_import_file_api_v1_spotify_free_upload_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5072,9 +5021,9 @@
         ]
       }
     },
-    "/spotify/import/free": {
+    "/api/v1/spotify/import/free": {
       "post": {
-        "operationId": "submit_free_ingest_spotify_import_free_post",
+        "operationId": "submit_free_ingest_api_v1_spotify_import_free_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5113,9 +5062,9 @@
         ]
       }
     },
-    "/spotify/import/free/upload": {
+    "/api/v1/spotify/import/free/upload": {
       "post": {
-        "operationId": "upload_free_ingest_spotify_import_free_upload_post",
+        "operationId": "upload_free_ingest_api_v1_spotify_import_free_upload_post",
         "responses": {
           "200": {
             "content": {
@@ -5134,9 +5083,9 @@
         ]
       }
     },
-    "/spotify/import/jobs/{job_id}": {
+    "/api/v1/spotify/import/jobs/{job_id}": {
       "get": {
-        "operationId": "get_free_ingest_job_spotify_import_jobs__job_id__get",
+        "operationId": "get_free_ingest_job_api_v1_spotify_import_jobs__job_id__get",
         "parameters": [
           {
             "in": "path",
@@ -5176,9 +5125,9 @@
         ]
       }
     },
-    "/spotify/me": {
+    "/api/v1/spotify/me": {
       "get": {
-        "operationId": "get_current_user_spotify_me_get",
+        "operationId": "get_current_user_api_v1_spotify_me_get",
         "responses": {
           "200": {
             "content": {
@@ -5197,9 +5146,9 @@
         ]
       }
     },
-    "/spotify/me/top/artists": {
+    "/api/v1/spotify/me/top/artists": {
       "get": {
-        "operationId": "get_top_artists_spotify_me_top_artists_get",
+        "operationId": "get_top_artists_api_v1_spotify_me_top_artists_get",
         "parameters": [
           {
             "in": "query",
@@ -5242,9 +5191,9 @@
         ]
       }
     },
-    "/spotify/me/top/tracks": {
+    "/api/v1/spotify/me/top/tracks": {
       "get": {
-        "operationId": "get_top_tracks_spotify_me_top_tracks_get",
+        "operationId": "get_top_tracks_api_v1_spotify_me_top_tracks_get",
         "parameters": [
           {
             "in": "query",
@@ -5287,9 +5236,9 @@
         ]
       }
     },
-    "/spotify/me/tracks": {
+    "/api/v1/spotify/me/tracks": {
       "delete": {
-        "operationId": "remove_saved_tracks_spotify_me_tracks_delete",
+        "operationId": "remove_saved_tracks_api_v1_spotify_me_tracks_delete",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5328,7 +5277,7 @@
         ]
       },
       "get": {
-        "operationId": "get_saved_tracks_spotify_me_tracks_get",
+        "operationId": "get_saved_tracks_api_v1_spotify_me_tracks_get",
         "parameters": [
           {
             "in": "query",
@@ -5371,7 +5320,7 @@
         ]
       },
       "put": {
-        "operationId": "save_tracks_spotify_me_tracks_put",
+        "operationId": "save_tracks_api_v1_spotify_me_tracks_put",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5410,9 +5359,9 @@
         ]
       }
     },
-    "/spotify/mode": {
+    "/api/v1/spotify/mode": {
       "get": {
-        "operationId": "get_spotify_mode_spotify_mode_get",
+        "operationId": "get_spotify_mode_api_v1_spotify_mode_get",
         "responses": {
           "200": {
             "content": {
@@ -5431,7 +5380,7 @@
         ]
       },
       "post": {
-        "operationId": "update_spotify_mode_spotify_mode_post",
+        "operationId": "update_spotify_mode_api_v1_spotify_mode_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -5450,7 +5399,7 @@
                   "additionalProperties": {
                     "type": "boolean"
                   },
-                  "title": "Response Update Spotify Mode Spotify Mode Post",
+                  "title": "Response Update Spotify Mode Api V1 Spotify Mode Post",
                   "type": "object"
                 }
               }
@@ -5474,9 +5423,9 @@
         ]
       }
     },
-    "/spotify/playlists": {
+    "/api/v1/spotify/playlists": {
       "get": {
-        "operationId": "list_playlists_spotify_playlists_get",
+        "operationId": "list_playlists_api_v1_spotify_playlists_get",
         "responses": {
           "200": {
             "content": {
@@ -5495,9 +5444,9 @@
         ]
       }
     },
-    "/spotify/playlists/{playlist_id}/reorder": {
+    "/api/v1/spotify/playlists/{playlist_id}/reorder": {
       "put": {
-        "operationId": "reorder_playlist_spotify_playlists__playlist_id__reorder_put",
+        "operationId": "reorder_playlist_api_v1_spotify_playlists__playlist_id__reorder_put",
         "parameters": [
           {
             "in": "path",
@@ -5547,9 +5496,9 @@
         ]
       }
     },
-    "/spotify/playlists/{playlist_id}/tracks": {
+    "/api/v1/spotify/playlists/{playlist_id}/tracks": {
       "delete": {
-        "operationId": "remove_tracks_from_playlist_spotify_playlists__playlist_id__tracks_delete",
+        "operationId": "remove_tracks_from_playlist_api_v1_spotify_playlists__playlist_id__tracks_delete",
         "parameters": [
           {
             "in": "path",
@@ -5599,7 +5548,7 @@
         ]
       },
       "get": {
-        "operationId": "get_playlist_items_spotify_playlists__playlist_id__tracks_get",
+        "operationId": "get_playlist_items_api_v1_spotify_playlists__playlist_id__tracks_get",
         "parameters": [
           {
             "in": "path",
@@ -5651,7 +5600,7 @@
         ]
       },
       "post": {
-        "operationId": "add_tracks_to_playlist_spotify_playlists__playlist_id__tracks_post",
+        "operationId": "add_tracks_to_playlist_api_v1_spotify_playlists__playlist_id__tracks_post",
         "parameters": [
           {
             "in": "path",
@@ -5701,9 +5650,9 @@
         ]
       }
     },
-    "/spotify/recommendations": {
+    "/api/v1/spotify/recommendations": {
       "get": {
-        "operationId": "get_recommendations_spotify_recommendations_get",
+        "operationId": "get_recommendations_api_v1_spotify_recommendations_get",
         "parameters": [
           {
             "in": "query",
@@ -5794,9 +5743,9 @@
         ]
       }
     },
-    "/spotify/search/albums": {
+    "/api/v1/spotify/search/albums": {
       "get": {
-        "operationId": "search_albums_spotify_search_albums_get",
+        "operationId": "search_albums_api_v1_spotify_search_albums_get",
         "parameters": [
           {
             "in": "query",
@@ -5837,9 +5786,9 @@
         ]
       }
     },
-    "/spotify/search/artists": {
+    "/api/v1/spotify/search/artists": {
       "get": {
-        "operationId": "search_artists_spotify_search_artists_get",
+        "operationId": "search_artists_api_v1_spotify_search_artists_get",
         "parameters": [
           {
             "in": "query",
@@ -5880,9 +5829,9 @@
         ]
       }
     },
-    "/spotify/search/tracks": {
+    "/api/v1/spotify/search/tracks": {
       "get": {
-        "operationId": "search_tracks_spotify_search_tracks_get",
+        "operationId": "search_tracks_api_v1_spotify_search_tracks_get",
         "parameters": [
           {
             "in": "query",
@@ -5923,9 +5872,9 @@
         ]
       }
     },
-    "/spotify/status": {
+    "/api/v1/spotify/status": {
       "get": {
-        "operationId": "spotify_status_spotify_status_get",
+        "operationId": "spotify_status_api_v1_spotify_status_get",
         "responses": {
           "200": {
             "content": {
@@ -5944,9 +5893,9 @@
         ]
       }
     },
-    "/spotify/track/{track_id}": {
+    "/api/v1/spotify/track/{track_id}": {
       "get": {
-        "operationId": "get_track_details_spotify_track__track_id__get",
+        "operationId": "get_track_details_api_v1_spotify_track__track_id__get",
         "parameters": [
           {
             "in": "path",
@@ -5986,17 +5935,17 @@
         ]
       }
     },
-    "/status": {
+    "/api/v1/status": {
       "get": {
         "description": "Return general application status data for the dashboard.",
-        "operationId": "get_status_status_get",
+        "operationId": "get_status_api_v1_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Get Status Status Get",
+                  "title": "Response Get Status Api V1 Status Get",
                   "type": "object"
                 }
               }
@@ -6006,15 +5955,62 @@
         },
         "summary": "Get Status",
         "tags": [
-          "System",
           "System"
         ]
       }
     },
-    "/watchlist": {
+    "/api/v1/sync": {
+      "post": {
+        "description": "Run playlist and library synchronisation tasks on demand.",
+        "operationId": "trigger_manual_sync_api_v1_sync_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Trigger Manual Sync Api V1 Sync Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Trigger Manual Sync",
+        "tags": [
+          "Sync"
+        ]
+      }
+    },
+    "/api/v1/system/stats": {
+      "get": {
+        "description": "Return system statistics such as CPU, memory and disk usage.",
+        "operationId": "get_system_stats_api_v1_system_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get System Stats Api V1 System Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get System Stats",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/watchlist": {
       "get": {
         "description": "Return all registered watchlist artists.",
-        "operationId": "list_watchlist_watchlist_get",
+        "operationId": "list_watchlist_api_v1_watchlist_get",
         "responses": {
           "200": {
             "content": {
@@ -6029,13 +6025,12 @@
         },
         "summary": "List Watchlist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       },
       "post": {
         "description": "Add a new artist to the automated release watchlist.",
-        "operationId": "add_watchlist_artist_watchlist_post",
+        "operationId": "add_watchlist_artist_api_v1_watchlist_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6070,15 +6065,14 @@
         },
         "summary": "Add Watchlist Artist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       }
     },
-    "/watchlist/{artist_id}": {
+    "/api/v1/watchlist/{artist_id}": {
       "delete": {
         "description": "Remove an artist from the release watchlist.",
-        "operationId": "remove_watchlist_artist_watchlist__artist_id__delete",
+        "operationId": "remove_watchlist_artist_api_v1_watchlist__artist_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -6107,7 +6101,6 @@
         },
         "summary": "Remove Watchlist Artist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       }
@@ -6116,6 +6109,11 @@
   "security": [
     {
       "ApiKeyAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "/api/v1"
     }
   ]
 }

@@ -152,7 +152,7 @@ npm install
 npm run dev
 ```
 
-Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariable `VITE_API_BASE_URL` angebunden werden (z. B. `http://localhost:8000`).
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_URL` (Host, z. B. `http://localhost:8000`) und optional `VITE_API_BASE_PATH` (Default: `/api/v1`) angebunden werden.
 
 ### Tests & Builds
 
@@ -275,6 +275,8 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
 | `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
 | `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
+| `API_BASE_PATH` | Basispräfix für alle API-Routen (Default: `/api/v1`) |
+| `FEATURE_ENABLE_LEGACY_ROUTES` | Aktiviert zusätzliche Legacy-Pfade ohne Versionierung (`true`/`false`, Default: `false`) |
 | `ENABLE_ARTWORK` | Aktiviert Artwork-Worker und -Endpoints (`true`/`false`, Default: `false`) |
 | `ENABLE_LYRICS` | Aktiviert Lyrics-Worker und -Endpoints (`true`/`false`, Default: `false`) |
 | `RETRY_MAX_ATTEMPTS` | Maximale Anzahl an Download-Versuchen (Default: `10`) |

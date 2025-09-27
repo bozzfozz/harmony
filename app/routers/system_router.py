@@ -146,7 +146,7 @@ async def get_status(request: Request) -> Dict[str, Any]:
     }
 
 
-@router.get("/api/system/stats", tags=["System"])
+@router.get("/system/stats", tags=["System"])
 async def get_system_stats() -> Dict[str, Any]:
     """Return system statistics such as CPU, memory and disk usage."""
 

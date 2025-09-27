@@ -13,6 +13,8 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI
 
+from tests.helpers import api_path
+
 
 class SimpleResponse:
     def __init__(self, status_code: int, body: bytes, headers: Dict[str, str]) -> None:
@@ -77,9 +79,17 @@ class SimpleTestClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
         return self._loop.run_until_complete(
-            self._request("GET", path, params=params, headers=headers)
+            self._request(
+                "GET",
+                path,
+                params=params,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
         )
 
     def post(
@@ -91,6 +101,8 @@ class SimpleTestClient:
         data: Optional[bytes | str] = None,
         content_type: Optional[str] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
         payload = json_body if json_body is not None else json
         return self._loop.run_until_complete(
@@ -102,6 +114,7 @@ class SimpleTestClient:
                 raw_body=data,
                 content_type=content_type,
                 headers=headers,
+                use_raw_path=use_raw_path,
             )
         )
 
@@ -110,9 +123,17 @@ class SimpleTestClient:
         path: str,
         json: Optional[Dict[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
         return self._loop.run_until_complete(
-            self._request("PUT", path, json_body=json, headers=headers)
+            self._request(
+                "PUT",
+                path,
+                json_body=json,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
         )
 
     def patch(
@@ -120,9 +141,17 @@ class SimpleTestClient:
         path: str,
         json: Optional[Dict[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
         return self._loop.run_until_complete(
-            self._request("PATCH", path, json_body=json, headers=headers)
+            self._request(
+                "PATCH",
+                path,
+                json_body=json,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
         )
 
     def delete(
@@ -130,17 +159,34 @@ class SimpleTestClient:
         path: str,
         json: Optional[Dict[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
         return self._loop.run_until_complete(
-            self._request("DELETE", path, json_body=json, headers=headers)
+            self._request(
+                "DELETE",
+                path,
+                json_body=json,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
         )
 
     def options(
         self,
         path: str,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
-        return self._loop.run_until_complete(self._request("OPTIONS", path, headers=headers))
+        return self._loop.run_until_complete(
+            self._request(
+                "OPTIONS",
+                path,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
+        )
 
     async def _request(
         self,
@@ -151,14 +197,22 @@ class SimpleTestClient:
         raw_body: Optional[bytes | str] = None,
         content_type: Optional[str] = None,
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
     ) -> SimpleResponse:
+        resolved_path = path
+        if not use_raw_path and not path.startswith("http"):
+            resolved_path = api_path(path)
+        if not resolved_path.startswith("/"):
+            resolved_path = f"/{resolved_path}"
+
         query_string = urlencode(params or {})
         scope = {
             "type": "http",
             "http_version": "1.1",
             "method": method,
-            "path": path,
-            "raw_path": path.encode("utf-8"),
+            "path": resolved_path,
+            "raw_path": resolved_path.encode("utf-8"),
             "query_string": query_string.encode("utf-8"),
             "headers": [],
         }

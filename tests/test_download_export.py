@@ -38,7 +38,7 @@ def seed_downloads() -> dict[str, int]:
 def test_json_export_returns_full_payload(client) -> None:
     ids = seed_downloads()
 
-    response = client.get("/api/downloads/export", params={"format": "json"})
+    response = client.get("/downloads/export", params={"format": "json"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
 
@@ -53,7 +53,7 @@ def test_json_export_returns_full_payload(client) -> None:
 def test_csv_export_contains_expected_header(client) -> None:
     seed_downloads()
 
-    response = client.get("/api/downloads/export", params={"format": "csv"})
+    response = client.get("/downloads/export", params={"format": "csv"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
 
@@ -67,7 +67,7 @@ def test_status_filter_limits_export(client) -> None:
     ids = seed_downloads()
 
     response = client.get(
-        "/api/downloads/export",
+        "/downloads/export",
         params={"format": "json", "status": "failed"},
     )
     assert response.status_code == 200
@@ -80,7 +80,7 @@ def test_date_filters_apply_to_export(client) -> None:
     cutoff = datetime.utcnow() - timedelta(days=1)
 
     response = client.get(
-        "/api/downloads/export",
+        "/downloads/export",
         params={"format": "json", "from": cutoff.isoformat()},
     )
     assert response.status_code == 200
@@ -89,10 +89,10 @@ def test_date_filters_apply_to_export(client) -> None:
 
 
 def test_invalid_format_returns_422(client) -> None:
-    response = client.get("/api/downloads/export", params={"format": "xml"})
+    response = client.get("/downloads/export", params={"format": "xml"})
     assert response.status_code == 422
 
 
 def test_invalid_date_returns_422(client) -> None:
-    response = client.get("/api/downloads/export", params={"from": "invalid"})
+    response = client.get("/downloads/export", params={"from": "invalid"})
     assert response.status_code == 422

@@ -8,11 +8,13 @@ import { QueryClient, QueryClientProvider } from './lib/query';
 declare global {
   interface Window {
     __HARMONY_API_URL__?: string;
+    __HARMONY_API_BASE_PATH__?: string;
   }
 }
 
 if (typeof window !== 'undefined') {
   window.__HARMONY_API_URL__ = import.meta.env?.VITE_API_URL;
+  window.__HARMONY_API_BASE_PATH__ = import.meta.env?.VITE_API_BASE_PATH;
 }
 
 const queryClient = new QueryClient();

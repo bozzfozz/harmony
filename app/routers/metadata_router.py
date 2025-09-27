@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app.logging import get_logger
 
-router = APIRouter(prefix="/api/metadata", tags=["Metadata"])
+router = APIRouter(prefix="/metadata", tags=["Metadata"])
 logger = get_logger(__name__)
 
 

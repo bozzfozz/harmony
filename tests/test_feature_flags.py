@@ -27,6 +27,7 @@ def test_flags_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
         flags = client.app.state.feature_flags
         assert flags.enable_artwork is False
         assert flags.enable_lyrics is False
+        assert flags.enable_legacy_routes is False
 
         artwork_response = client.get("/soulseek/download/999/artwork")
         assert artwork_response.status_code == 503
@@ -48,6 +49,18 @@ def test_flags_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
             },
         }
 
+    _reset_config_cache()
+
+
+def test_enable_legacy_routes_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FEATURE_ENABLE_LEGACY_ROUTES", "1")
+    _reset_config_cache()
+
+    with SimpleTestClient(app) as client:
+        flags = client.app.state.feature_flags
+        assert flags.enable_legacy_routes is True
+
+    monkeypatch.delenv("FEATURE_ENABLE_LEGACY_ROUTES", raising=False)
     _reset_config_cache()
 
 

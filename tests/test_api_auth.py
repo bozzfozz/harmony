@@ -4,6 +4,7 @@ import pytest
 
 from app import dependencies as deps
 from app.main import app
+from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
 
 
@@ -54,12 +55,12 @@ def test_invalid_key_returns_403() -> None:
 
 
 def test_allowlist_path_bypasses_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AUTH_ALLOWLIST", "/api/health")
+    monkeypatch.setenv("AUTH_ALLOWLIST", api_path("/health"))
     deps.get_app_config.cache_clear()
     app.openapi_schema = None
 
     with SimpleTestClient(app, include_env_api_key=False) as client:
-        response = client.get("/api/health/spotify")
+        response = client.get("/health/spotify")
 
     assert response.status_code == 200
 
@@ -91,5 +92,5 @@ def test_openapi_declares_api_key_security() -> None:
 
     assert "ApiKeyAuth" in schema["components"]["securitySchemes"]
     assert schema["security"] == [{"ApiKeyAuth": []}]
-    health_get = schema["paths"]["/api/health/spotify"]["get"]
+    health_get = schema["paths"][api_path("/health/spotify")]["get"]
     assert "security" not in health_get

@@ -4,6 +4,7 @@ const globalProcess = (globalThis as { process?: { env?: Record<string, string |
 if (globalProcess) {
   globalProcess.env = {
     ...globalProcess.env,
-    VITE_API_URL: globalProcess.env?.VITE_API_URL ?? 'http://localhost:8000'
+    VITE_API_URL: globalProcess.env?.VITE_API_URL ?? 'http://localhost:8000',
+    VITE_API_BASE_PATH: globalProcess.env?.VITE_API_BASE_PATH ?? '/api/v1'
   };
 }

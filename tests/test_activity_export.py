@@ -26,7 +26,7 @@ def _create_events() -> None:
 def test_activity_export_json(client) -> None:
     _create_events()
 
-    response = client.get("/api/activity/export", params={"format": "json"})
+    response = client.get("/activity/export", params={"format": "json"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
 
@@ -42,7 +42,7 @@ def test_activity_export_json(client) -> None:
 def test_activity_export_csv(client) -> None:
     _create_events()
 
-    response = client.get("/api/activity/export", params={"format": "csv"})
+    response = client.get("/activity/export", params={"format": "csv"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
 
@@ -61,7 +61,7 @@ def test_activity_export_filters(client) -> None:
     record_activity("sync", "failed")
 
     response = client.get(
-        "/api/activity/export",
+        "/activity/export",
         params={"format": "json", "type": "download", "status": "failed"},
     )
     assert response.status_code == 200
@@ -73,13 +73,13 @@ def test_activity_export_filters(client) -> None:
 
 
 def test_activity_export_invalid_format(client) -> None:
-    response = client.get("/api/activity/export", params={"format": "xml"})
+    response = client.get("/activity/export", params={"format": "xml"})
     assert response.status_code == 422
 
 
 def test_activity_export_invalid_range(client) -> None:
     response = client.get(
-        "/api/activity/export",
+        "/activity/export",
         params={"from": "2024-03-19T12:00:00", "to": "2024-03-18T12:00:00"},
     )
     assert response.status_code == 422

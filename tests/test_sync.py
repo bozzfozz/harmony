@@ -13,7 +13,7 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
 
     monkeypatch.setattr(PlaylistSyncWorker, "sync_once", fake_sync_once, raising=False)
 
-    response = client.post("/api/sync")
+    response = client.post("/sync")
     assert response.status_code == 202
     body = response.json()
     assert body["results"]["playlists"] == "completed"
@@ -46,12 +46,12 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
 
 
 def test_search_requires_query(client) -> None:
-    response = client.post("/api/search", json={})
+    response = client.post("/search", json={})
     assert response.status_code == 422
 
 
 def test_search_aggregates_sources(client) -> None:
-    response = client.post("/api/search", json={"query": "Test"})
+    response = client.post("/search", json={"query": "Test"})
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
@@ -62,7 +62,7 @@ def test_search_aggregates_sources(client) -> None:
 
 
 def test_search_allows_source_filter(client) -> None:
-    response = client.post("/api/search", json={"query": "Test", "sources": ["spotify"]})
+    response = client.post("/search", json={"query": "Test", "sources": ["spotify"]})
     assert response.status_code == 200
     payload = response.json()
     assert payload["items"]

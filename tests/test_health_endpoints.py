@@ -17,7 +17,7 @@ def _insert_settings(values: dict[str, str | None]) -> None:
 
 
 def test_spotify_health_reports_missing_credentials(client) -> None:
-    response = client.get("/api/health/spotify")
+    response = client.get("/health/spotify")
 
     assert response.status_code == 200
     payload = response.json()
@@ -37,7 +37,7 @@ def test_spotify_health_ok_when_all_values_present(client) -> None:
         }
     )
 
-    response = client.get("/api/health/spotify")
+    response = client.get("/health/spotify")
 
     assert response.status_code == 200
     payload = response.json()
@@ -49,7 +49,7 @@ def test_spotify_health_ok_when_all_values_present(client) -> None:
 def test_soulseek_health_accepts_missing_api_key(client) -> None:
     _insert_settings({"SLSKD_URL": "http://slskd"})
 
-    response = client.get("/api/health/soulseek")
+    response = client.get("/health/soulseek")
 
     assert response.status_code == 200
     payload = response.json()
@@ -60,7 +60,7 @@ def test_soulseek_health_accepts_missing_api_key(client) -> None:
 
 
 def test_soulseek_health_requires_base_url(client) -> None:
-    response = client.get("/api/health/soulseek")
+    response = client.get("/health/soulseek")
 
     assert response.status_code == 200
     payload = response.json()

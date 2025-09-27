@@ -112,14 +112,14 @@ def test_priority_can_be_updated_via_api(client) -> None:
         job_id = job.id
 
     response = client.patch(
-        f"/api/download/{download_id}/priority",
+        f"/download/{download_id}/priority",
         json={"priority": 7},
     )
     assert response.status_code == 200
     payload = response.json()
     assert payload["priority"] == 7
 
-    detail_response = client.get(f"/api/download/{download_id}")
+    detail_response = client.get(f"/download/{download_id}")
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["priority"] == 7

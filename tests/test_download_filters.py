@@ -29,24 +29,24 @@ def test_status_filter_returns_expected_entries(client) -> None:
     failed_id = create_download("failed.mp3", "failed")
     create_download("completed.mp3", "completed")
 
-    response = client.get("/api/downloads", params={"status": "failed"})
+    response = client.get("/downloads", params={"status": "failed"})
     assert response.status_code == 200
     payload = response.json()["downloads"]
     assert {entry["id"] for entry in payload} == {failed_id}
 
-    running_response = client.get("/api/downloads", params={"status": "running"})
+    running_response = client.get("/downloads", params={"status": "running"})
     assert running_response.status_code == 200
     running_payload = running_response.json()["downloads"]
     running_ids = {entry["id"] for entry in running_payload}
     assert running_id in running_ids
     assert downloading_id in running_ids
 
-    queued_response = client.get("/api/downloads", params={"status": "queued"})
+    queued_response = client.get("/downloads", params={"status": "queued"})
     assert queued_response.status_code == 200
     queued_payload = queued_response.json()["downloads"]
     assert {entry["id"] for entry in queued_payload} == {queued_id}
 
 
 def test_invalid_status_filter_returns_422(client) -> None:
-    response = client.get("/api/downloads", params={"status": "unknown"})
+    response = client.get("/downloads", params={"status": "unknown"})
     assert response.status_code == 422

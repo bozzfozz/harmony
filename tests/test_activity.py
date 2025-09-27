@@ -7,7 +7,7 @@ def test_activity_endpoint_returns_latest_entries(client) -> None:
     record_activity("sync", "completed", details={"runs": 1})
     record_activity("search", "completed", details={"query": "test"})
 
-    response = client.get("/api/activity")
+    response = client.get("/activity")
     assert response.status_code == 200
 
     payload = response.json()
@@ -24,7 +24,7 @@ def test_activity_endpoint_limits_to_fifty_entries(client) -> None:
     for index in range(60):
         record_activity("download", "queued", details={"index": index})
 
-    response = client.get("/api/activity")
+    response = client.get("/activity")
     assert response.status_code == 200
 
     payload = response.json()

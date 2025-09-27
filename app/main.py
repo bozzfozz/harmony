@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import inspect
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from app.config import AppConfig
 from app.core.config import DEFAULT_SETTINGS
@@ -59,6 +60,68 @@ from app.workers import (
 from app.workers.retry_scheduler import RetryScheduler
 
 logger = get_logger(__name__)
+
+
+def _compose_subpath(base_path: str, suffix: str) -> str:
+    cleaned_suffix = suffix if suffix.startswith("/") else f"/{suffix}"
+    if not base_path or base_path == "/":
+        return cleaned_suffix
+    return f"{base_path.rstrip('/')}{cleaned_suffix}"
+
+
+def _format_router_prefix(base_path: str) -> str:
+    if not base_path or base_path == "/":
+        return ""
+    return base_path
+
+
+class LegacyLoggingRoute(APIRoute):
+    """Route implementation that records access to legacy API endpoints."""
+
+    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+        original_handler = super().get_route_handler()
+
+        async def logging_route_handler(request: Request) -> Response:
+            response = await original_handler(request)
+            logger.info(
+                "Legacy API route accessed",
+                extra={
+                    "event": "api.legacy.hit",
+                    "path": request.url.path,
+                    "status": response.status_code,
+                },
+            )
+            return response
+
+        return logging_route_handler
+
+
+def _register_api_routes(
+    router: APIRouter,
+    root_handler: Callable[[], Awaitable[dict[str, str]]],
+) -> None:
+    router.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
+    router.include_router(backfill_router, prefix="/spotify/backfill", tags=["Spotify Backfill"])
+    router.include_router(spotify_free_router)
+    router.include_router(free_ingest_router)
+    router.include_router(imports_router)
+    router.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
+    router.include_router(matching_router, prefix="/matching", tags=["Matching"])
+    router.include_router(settings_router, prefix="/settings", tags=["Settings"])
+    router.include_router(metadata_router)
+    router.include_router(search_router)
+    router.include_router(sync_router)
+    router.include_router(system_router)
+    router.include_router(download_router)
+    router.include_router(activity_router)
+    router.include_router(health_router, prefix="/health", tags=["Health"])
+    router.include_router(watchlist_router)
+    router.add_api_route("/", root_handler, methods=["GET"], tags=["System"])
+
+
+_config_snapshot = get_app_config()
+_API_BASE_PATH = _config_snapshot.api_base_path
+_LEGACY_ROUTES_ENABLED = _config_snapshot.features.enable_legacy_routes
 
 
 def _should_start_workers() -> bool:
@@ -210,9 +273,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     feature_flags = config.features
     app.state.feature_flags = feature_flags
+    app.state.api_base_path = config.api_base_path
+    app.state.legacy_routes_enabled = feature_flags.enable_legacy_routes
 
     enable_artwork = feature_flags.enable_artwork
     enable_lyrics = feature_flags.enable_lyrics
+    legacy_routes_enabled = feature_flags.enable_legacy_routes
 
     worker_status: dict[str, bool] = {}
 
@@ -243,11 +309,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "activity": True,
         "health": True,
         "watchlist": True,
+        "legacy_alias": legacy_routes_enabled,
     }
 
     flag_status = {
         "artwork": enable_artwork,
         "lyrics": enable_lyrics,
+        "legacy_routes": legacy_routes_enabled,
     }
 
     logger.info(
@@ -266,6 +334,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "plex": False,
                 "beets": False,
             },
+            "api_base_path": config.api_base_path,
         },
     )
 
@@ -277,14 +346,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Harmony application stopped")
 
 
+_docs_url = _compose_subpath(_API_BASE_PATH, "/docs")
+_redoc_url = _compose_subpath(_API_BASE_PATH, "/redoc")
+_openapi_url = _compose_subpath(_API_BASE_PATH, "/openapi.json")
+
 app = FastAPI(
     title="Harmony Backend",
     version="1.4.0",
     lifespan=lifespan,
     dependencies=[Depends(require_api_key)],
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
 )
 
-_initial_security = get_app_config().security
+_initial_security = _config_snapshot.security
 
 app.add_middleware(
     CORSMiddleware,
@@ -295,27 +371,19 @@ app.add_middleware(
     expose_headers=[],
 )
 
-app.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
-app.include_router(backfill_router, prefix="/spotify/backfill", tags=["Spotify Backfill"])
-app.include_router(spotify_free_router)
-app.include_router(free_ingest_router)
-app.include_router(imports_router)
-app.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
-app.include_router(matching_router, prefix="/matching", tags=["Matching"])
-app.include_router(settings_router, prefix="/settings", tags=["Settings"])
-app.include_router(metadata_router, tags=["Metadata"])
-app.include_router(search_router, tags=["Search"])
-app.include_router(sync_router, tags=["Sync"])
-app.include_router(system_router, tags=["System"])
-app.include_router(download_router)
-app.include_router(activity_router)
-app.include_router(health_router, prefix="/api/health", tags=["Health"])
-app.include_router(watchlist_router, tags=["Watchlist"])
 
-
-@app.get("/")
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
+
+
+_versioned_router = APIRouter()
+_register_api_routes(_versioned_router, root)
+app.include_router(_versioned_router, prefix=_format_router_prefix(_API_BASE_PATH))
+
+if _LEGACY_ROUTES_ENABLED:
+    legacy_router = APIRouter(route_class=LegacyLoggingRoute)
+    _register_api_routes(legacy_router, root)
+    app.include_router(legacy_router)
 
 
 @app.exception_handler(ProblemDetailException)
@@ -348,6 +416,12 @@ def custom_openapi() -> dict[str, Any]:
         description=app.description,
     )
 
+    config = get_app_config()
+    server_url = config.api_base_path or "/"
+    if server_url != "/" and not server_url.startswith("/"):
+        server_url = f"/{server_url}"
+    openapi_schema["servers"] = [{"url": server_url}]
+
     security_scheme_name = "ApiKeyAuth"
     security_scheme = {
         "type": "apiKey",
@@ -359,7 +433,7 @@ def custom_openapi() -> dict[str, Any]:
     components = openapi_schema.setdefault("components", {})
     components.setdefault("securitySchemes", {})[security_scheme_name] = security_scheme
 
-    security_config = get_app_config().security
+    security_config = config.security
 
     if security_config.require_auth and security_config.api_keys:
         openapi_schema["security"] = [{security_scheme_name: []}]

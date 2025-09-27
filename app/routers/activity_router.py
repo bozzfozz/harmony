@@ -17,7 +17,7 @@ from app.db import session_scope
 from app.models import ActivityEvent
 from app.utils.activity import activity_manager
 
-router = APIRouter(prefix="/api", tags=["Activity"])
+router = APIRouter(tags=["Activity"])
 logger = get_logger(__name__)
 
 

@@ -33,7 +33,7 @@ def test_activity_endpoint_supports_paging(client) -> None:
     for index in range(30):
         record_activity("download", "queued", details={"index": index})
 
-    response = client.get("/api/activity", params={"limit": 10, "offset": 5})
+    response = client.get("/activity", params={"limit": 10, "offset": 5})
     assert response.status_code == 200
 
     payload = response.json()
@@ -49,7 +49,7 @@ def test_activity_endpoint_supports_paging(client) -> None:
 def test_activity_accepts_flexible_types(client) -> None:
     record_activity("autosync", "started", details={"source": "playlist"})
 
-    response = client.get("/api/activity")
+    response = client.get("/activity")
     assert response.status_code == 200
 
     payload = response.json()

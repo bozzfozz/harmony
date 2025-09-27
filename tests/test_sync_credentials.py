@@ -23,7 +23,7 @@ def test_manual_sync_blocks_without_credentials(client) -> None:
         )
         session.commit()
 
-    response = client.post("/api/sync")
+    response = client.post("/sync")
 
     assert response.status_code == 503
     payload = response.json()

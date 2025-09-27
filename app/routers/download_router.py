@@ -35,7 +35,7 @@ from app.utils.events import (
 from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import PersistentJobQueue
 
-router = APIRouter(prefix="/api", tags=["Download"])
+router = APIRouter(tags=["Download"])
 logger = get_logger(__name__)
 
 

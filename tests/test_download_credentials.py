@@ -12,7 +12,7 @@ def test_download_endpoint_blocks_without_soulseek_credentials(client) -> None:
 
     payload = {"username": "tester", "files": [{"filename": "Track.mp3"}]}
 
-    response = client.post("/api/download", json=payload)
+    response = client.post("/download", json=payload)
 
     assert response.status_code == 503
     body = response.json()

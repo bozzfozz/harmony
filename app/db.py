@@ -117,9 +117,7 @@ def init_db() -> None:
         _ensure_engine(auto_init=False)
         assert _engine is not None
         if command is None or Config is None:
-            _logger.warning(
-                "Alembic is not available; falling back to Base.metadata.create_all()."
-            )
+            _logger.warning("Alembic is not available; falling back to Base.metadata.create_all().")
             from app import models  # noqa: F401  # Import models for metadata side-effects
 
             Base.metadata.create_all(bind=_engine, checkfirst=True)
