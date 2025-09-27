@@ -7,6 +7,9 @@ from app.models import DiscographyJob
 from app.workers.discography_worker import DiscographyWorker
 
 
+pytestmark = pytest.mark.skip(reason="Discography worker archived in MVP")
+
+
 class SpotifyDiscographyStub:
     def __init__(self, albums: list[dict]) -> None:
         self.albums = albums

@@ -8,7 +8,6 @@ from .import_worker import ImportWorker
 from .matching_worker import MatchingWorker
 from .playlist_sync_worker import PlaylistSyncWorker
 from .metadata_worker import MetadataUpdateWorker, MetadataWorker
-from .scan_worker import ScanWorker
 from .sync_worker import SyncWorker
 from .lyrics_worker import LyricsWorker
 from .watchlist_worker import WatchlistWorker
@@ -23,7 +22,6 @@ __all__ = [
     "MetadataWorker",
     "MetadataUpdateWorker",
     "PlaylistSyncWorker",
-    "ScanWorker",
     "SyncWorker",
     "LyricsWorker",
     "WatchlistWorker",

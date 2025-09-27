@@ -26,7 +26,7 @@ from app.services.backfill_service import BackfillService
 from app.main import app
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers import BackfillWorker, MatchingWorker, PlaylistSyncWorker, ScanWorker, SyncWorker
+from app.workers import BackfillWorker, MatchingWorker, PlaylistSyncWorker, SyncWorker
 from app.workers.retry_scheduler import RetryScheduler
 from tests.simple_client import SimpleTestClient
 
@@ -921,12 +921,10 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     # Prevent worker tasks during tests
     monkeypatch.setattr(SyncWorker, "start", noop_start)
     monkeypatch.setattr(MatchingWorker, "start", noop_start)
-    monkeypatch.setattr(ScanWorker, "start", noop_start)
     monkeypatch.setattr(PlaylistSyncWorker, "start", noop_start)
     monkeypatch.setattr(RetryScheduler, "start", noop_start)
     monkeypatch.setattr(SyncWorker, "stop", noop_stop)
     monkeypatch.setattr(MatchingWorker, "stop", noop_stop)
-    monkeypatch.setattr(ScanWorker, "stop", noop_stop)
     monkeypatch.setattr(PlaylistSyncWorker, "stop", noop_stop)
     monkeypatch.setattr(RetryScheduler, "stop", noop_stop)
 

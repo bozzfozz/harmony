@@ -1,8 +1,8 @@
 # Harmony Backend
 
-Harmony ist ein FastAPI-Backend, das Spotify, Plex, Soulseek (slskd), Beets sowie eine eigene Matching-Engine und Hintergrund-Worker
-zu einem gemeinsamen Musik-Hub kombiniert. Die Anwendung bündelt Bibliotheken, Downloads und Metadaten, synchronisiert sie zyklisch
-und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients bereit.
+Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene Matching-Engine und Hintergrund-Worker zu einem gemeinsamen Musik-Hub kombiniert. Die Anwendung bündelt Bibliotheken, Downloads und Metadaten, synchronisiert sie zyklisch und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients bereit.
+
+> **MVP-Hinweis:** Die früheren Plex- und Beets-Integrationen sind vorübergehend deaktiviert und der Quellcode wurde unter `archive/integrations/plex_beets/` abgelegt. Markierte Abschnitte in diesem Dokument beschreiben archivierte Funktionen.
 
 ## Features
 
@@ -10,14 +10,12 @@ und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients be
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
 - **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.
-- **Lean Plex-Client** mit Fokus auf Status, Bibliotheksübersicht, Such- und Track-Lookups sowie schlanke Scan-Trigger.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
-- **Beets CLI Bridge** zum Importieren, Aktualisieren, Verschieben und Abfragen der lokalen Musikbibliothek.
 - **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und Copyright, bettet Cover in höchster verfügbarer Auflösung ein und stellt die Tags per API bereit.
 - **Automatic Lyrics**: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten. Die Lyrics stammen vorrangig aus der Spotify-API; falls dort keine Texte verfügbar sind, greift Harmony auf externe Provider wie Musixmatch oder lyrics.ovh zurück.
-- **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Plex/Soulseek inklusive Persistierung.
+- **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Soulseek inklusive Persistierung (Plex-Matching archiviert).
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
-- **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue, Plex-Scans und Spotify-Playlist-Sync.
+- **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
 ## Spotify Modi
@@ -65,27 +63,13 @@ Die globale Suche (`POST /search`) aggregiert Spotify-, Plex- und Soulseek-Ergeb
 
 Die Ergebnisse lassen sich über `sort` nach `relevance`, `bitrate`, `year` oder `duration` (auf- oder absteigend) ordnen und per `pagination` (`page`, `size`, max. 100) seitenweise abrufen. Teilfehler einzelner Quellen werden als `errors` ausgewiesen, ohne den Gesamtabruf zu blockieren.
 
-## Complete Discographies
+## Complete Discographies _(archiviert)_
 
-Harmony kann komplette Künstler-Diskografien automatisiert herunterladen. Für einen Spotify-Artist werden alle Alben samt Tracks
-ermittelt, mit der Plex-Bibliothek abgeglichen und fehlende Titel über Soulseek nachgeladen. Nach dem Download übernimmt Beets die
-Kategorisierung.
-
-Beispiel-API-Aufruf:
-
-```bash
-curl -X POST \
-  http://localhost:8000/soulseek/discography/download \
-  -H 'Content-Type: application/json' \
-  -d '{"artist_id": "123"}'
-```
-
-Der Status der Discography-Jobs wird in der Datenbank protokolliert und kann über die Soulseek- und Matching-Endpunkte
-nachverfolgt werden.
+Die Discography-Funktion benötigte Plex- und Beets-Integrationen und ist im MVP deaktiviert. Der historische Code liegt im Archiv (`archive/integrations/plex_beets/`).
 
 ## Artist Watchlist
 
-Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Releases. Ein periodischer Worker fragt die Spotify-API (Default alle 24 Stunden) nach frischen Alben und Singles ab, gleicht die enthaltenen Tracks mit der Download-Datenbank ab und stößt nur für fehlende Songs einen Soulseek-Download über den bestehenden `SyncWorker` an. Der Import in die Bibliothek erfolgt anschließend wie gewohnt über Beets.
+Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Releases. Ein periodischer Worker fragt die Spotify-API (Default alle 24 Stunden) nach frischen Alben und Singles ab, gleicht die enthaltenen Tracks mit der Download-Datenbank ab und stößt nur für fehlende Songs einen Soulseek-Download über den bestehenden `SyncWorker` an.
 
 - `POST /watchlist` registriert einen Artist anhand der Spotify-ID. Beim Anlegen wird `last_checked` auf „jetzt“ gesetzt, sodass nur zukünftige Veröffentlichungen berücksichtigt werden.
 - `GET /watchlist` liefert alle eingetragenen Artists inklusive Zeitstempel des letzten Checks.
@@ -207,20 +191,20 @@ CI_OFFLINE=true make all
 ### Features der UI
 
 - Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
-- Detailseiten für Spotify, Plex, Soulseek und Beets inkl. Tabs für Übersicht und Einstellungen.
+- Detailseiten für Spotify und Soulseek inkl. Tabs für Übersicht und Einstellungen (Plex/Beets-Ansichten archiviert).
 - Matching-Ansicht mit Fortschrittsanzeigen.
 - Settings-Bereich mit Formularen für sämtliche Integrationen.
 - Dark-/Light-Mode Switch (Radix Switch) und globale Toast-Benachrichtigungen.
 
-Alle REST-Aufrufe nutzen die bestehenden Endpunkte (`/spotify`, `/plex`, `/soulseek`, `/matching`, `/settings`, `/beets`) und werden alle 30 Sekunden automatisch aktualisiert.
+Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/matching`, `/settings`). Archivierte Routen (`/plex`, `/beets`) werden nicht mehr ausgeliefert.
 
 ## Architekturüberblick
 
 Harmony folgt einer klar getrennten Schichten-Architektur:
 
-- **Core**: Enthält API-Clients (`spotify_client.py`, `plex_client.py`, `soulseek_client.py`, `beets_client.py`) und die Matching-Engine.
-- **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Plex, Soulseek, Matching, Settings, Beets).
-- **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads, Plex-Statistiken und Matching-Jobs. Ein zusätzlicher Retry-Scheduler prüft fällige Downloads und sorgt für persistente Neuversuche mit exponentiellem Backoff.
+- **Core**: Enthält API-Clients (`spotify_client.py`, `soulseek_client.py`) und die Matching-Engine. Die früheren Plex-/Beets-Clients liegen im Archiv.
+- **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Soulseek, Matching, Settings). Archivierte Router (`/plex`, `/beets`) bleiben im Repository erhalten, sind aber nicht eingebunden.
+- **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads und Matching-Jobs. Ein zusätzlicher Retry-Scheduler prüft fällige Downloads und sorgt für persistente Neuversuche mit exponentiellem Backoff.
 - **Datenbank-Layer**: `app/db.py`, SQLAlchemy-Modelle und -Schemas verwalten persistente Zustände.
 
 Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architecture.md`](docs/architecture.md).
@@ -303,6 +287,8 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - **Beets** (`/beets`): Import, Update, Query, Stats und Dateimanipulation via CLI.
 
 ### Beets-Integration
+
+> _Archiviert_: Die folgenden Informationen dokumentieren die frühere Beets-Bridge. Im MVP sind die Endpunkte deaktiviert; der Code liegt unter `archive/integrations/plex_beets/`.
 
 Die Harmony-Instanz nutzt die [`beet` CLI](https://beets.io/) für alle Operationen rund um die lokale Musikbibliothek. Stelle
  sicher, dass `beet` auf dem Host oder im Container installiert und über den `PATH` erreichbar ist, bevor du die Beets-Endpunk

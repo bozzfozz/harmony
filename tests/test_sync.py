@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from app.utils.activity import activity_manager
-from app.workers import PlaylistSyncWorker, ScanWorker
+
+try:
+    from app.workers import PlaylistSyncWorker, ScanWorker
+except ImportError:  # pragma: no cover - archived integration
+    pytest.skip("Plex sync worker archived in MVP", allow_module_level=True)
 
 
 def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:

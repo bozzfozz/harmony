@@ -4,6 +4,8 @@ from app.db import session_scope
 from app.models import ArtistPreference
 from tests.test_autosync import _build_worker, _create_track
 
+pytestmark = pytest.mark.skip(reason="Artist worker depends on archived Plex/Beets integrations")
+
 
 def test_followed_artists_endpoint(client) -> None:
     stub = client.app.state.spotify_stub

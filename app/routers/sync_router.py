@@ -15,13 +15,13 @@ from app.logging import get_logger
 from app.utils.activity import record_activity
 from app.utils.events import SYNC_BLOCKED
 from app.utils.service_health import collect_missing_credentials
-from app.workers import AutoSyncWorker, PlaylistSyncWorker, ScanWorker
+from app.workers import PlaylistSyncWorker
 
 router = APIRouter(prefix="/api", tags=["Sync"])
 logger = get_logger(__name__)
 
 
-REQUIRED_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")
+REQUIRED_SERVICES: tuple[str, ...] = ("spotify", "soulseek")
 
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., description="Freitext-Suchbegriff")
     sources: List[str] | str | None = Field(
-        default=None, description="Optionale Quellenauswahl (spotify, plex, soulseek)"
+        default=None, description="Optionale Quellenauswahl (spotify, soulseek)"
     )
     filters: SearchFilterPayload | None = Field(
         default=None, description="Optionale Filter für Genre, Jahr und Qualität"
@@ -119,10 +119,7 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
         )
 
     playlist_worker = _get_playlist_worker(request)
-    scan_worker = _get_scan_worker(request)
-    auto_worker = _get_auto_sync_worker(request)
-
-    sources = ["spotify", "plex", "soulseek"]
+    sources = ["spotify", "soulseek"]
     record_activity("sync", "sync_started", details={"mode": "manual", "sources": sources})
 
     results: Dict[str, str] = {}
@@ -138,25 +135,8 @@ async def trigger_manual_sync(request: Request) -> dict[str, Any]:
     else:
         errors["playlists"] = "Playlist worker unavailable"
 
-    if scan_worker is not None:
-        try:
-            await scan_worker.run_once()
-            results["library_scan"] = "completed"
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.exception("Library scan failed: %s", exc)
-            errors["library_scan"] = str(exc)
-    else:
-        errors["library_scan"] = "Scan worker unavailable"
-
-    if auto_worker is not None:
-        try:
-            await auto_worker.run_once(source="manual")
-            results["auto_sync"] = "completed"
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.exception("Auto sync failed: %s", exc)
-            errors["auto_sync"] = str(exc)
-    else:
-        errors["auto_sync"] = "AutoSync worker unavailable"
+    errors["library_scan"] = "Plex integration disabled"
+    errors["auto_sync"] = "AutoSync worker disabled"
 
     response: Dict[str, Any] = {"message": "Sync triggered", "results": results}
     if errors:
@@ -201,11 +181,15 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
     filter_payload = payload.filters or SearchFilterPayload()
     filters = filter_payload.to_filters()
     requested_sources = _normalise_sources(payload.sources)
-    detail_sources = sorted(requested_sources)
+    supported_sources = {"spotify", "soulseek"}
+    disabled_sources = sorted(
+        source for source in requested_sources if source not in supported_sources
+    )
+    active_sources = sorted(requested_sources & supported_sources)
 
     activity_details: Dict[str, Any] = {
         "query": query,
-        "sources": detail_sources,
+        "sources": active_sources,
     }
     filter_details = filter_payload.as_activity_details()
     if filter_details:
@@ -217,7 +201,10 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
     results: Dict[str, List[Dict[str, Any]]] = {}
     errors: Dict[str, str] = {}
 
-    if "spotify" in requested_sources:
+    for source in disabled_sources:
+        errors[source] = "Source disabled"
+
+    if "spotify" in active_sources:
         try:
             spotify_results = _search_spotify(dependencies.get_spotify_client(), query, filters)
             results["spotify"] = spotify_results
@@ -227,15 +214,7 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
             results["spotify"] = []
 
     async_tasks: Dict[str, asyncio.Future[List[Dict[str, Any]]]] = {}
-    if "plex" in requested_sources:
-        plex_client = _ensure_plex_client()
-        if plex_client is not None:
-            async_tasks["plex"] = asyncio.create_task(_search_plex(plex_client, query, filters))
-        else:
-            errors["plex"] = "Plex client unavailable"
-            results["plex"] = []
-
-    if "soulseek" in requested_sources:
+    if "soulseek" in active_sources:
         soulseek_client = _ensure_soulseek_client()
         if soulseek_client is not None:
             async_tasks["soulseek"] = asyncio.create_task(
@@ -255,11 +234,11 @@ async def global_search(request: Request, payload: SearchRequest) -> dict[str, A
             else:
                 results[source] = value
 
-    for source in requested_sources:
+    for source in active_sources:
         results.setdefault(source, [])
 
     combined_results: List[Dict[str, Any]] = []
-    for source in detail_sources:
+    for source in active_sources:
         combined_results.extend(results.get(source, []))
 
     response: Dict[str, Any] = {"query": query, "results": combined_results}
@@ -292,43 +271,6 @@ def _get_playlist_worker(request: Request) -> PlaylistSyncWorker | None:
         return None
     worker = PlaylistSyncWorker(spotify_client, interval_seconds=900.0)
     request.app.state.playlist_worker = worker
-    return worker
-
-
-def _get_scan_worker(request: Request) -> ScanWorker | None:
-    worker = getattr(request.app.state, "scan_worker", None)
-    if isinstance(worker, ScanWorker):
-        return worker
-    try:
-        plex_client = dependencies.get_plex_client()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Unable to initialise Plex client for scan: %s", exc)
-        return None
-    worker = ScanWorker(plex_client)
-    request.app.state.scan_worker = worker
-    return worker
-
-
-def _get_auto_sync_worker(request: Request) -> AutoSyncWorker | None:
-    worker = getattr(request.app.state, "auto_sync_worker", None)
-    if isinstance(worker, AutoSyncWorker):
-        return worker
-    try:
-        spotify_client = dependencies.get_spotify_client()
-        plex_client = dependencies.get_plex_client()
-        soulseek_client = dependencies.get_soulseek_client()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Unable to initialise clients for auto sync: %s", exc)
-        return None
-    try:
-        from app.core.beets_client import BeetsClient  # local import to avoid heavy startup
-
-        beets_client = BeetsClient()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Unable to initialise Beets client for auto sync: %s", exc)
-        return None
-    worker = AutoSyncWorker(spotify_client, plex_client, soulseek_client, beets_client)
-    request.app.state.auto_sync_worker = worker
     return worker
 
 
@@ -396,44 +338,6 @@ async def _search_soulseek(
 ) -> List[Dict[str, Any]]:
     response = await client.search(query)
     return _normalise_soulseek_results(response, filters)
-
-
-async def _search_plex(
-    client,
-    query: str,
-    filters: SearchFilters,
-) -> list[Dict[str, Any]]:
-    try:
-        libraries = await client.get_libraries()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.warning("Failed to load Plex libraries: %s", exc)
-        return []
-
-    sections = (libraries or {}).get("MediaContainer", {}).get("Directory", [])
-    query_lower = query.lower()
-    matches: list[Dict[str, Any]] = []
-
-    for section in sections or []:
-        section_id = section.get("key")
-        if not section_id:
-            continue
-        try:
-            params = {"type": "10"}
-            if filters.year is not None:
-                params["year"] = filters.year
-            if filters.genre is not None:
-                params["genre"] = filters.genre
-            items = await client.get_library_items(section_id, params=params)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug("Failed to query Plex section %s: %s", section_id, exc)
-            continue
-        metadata = (items or {}).get("MediaContainer", {}).get("Metadata", []) or []
-        for entry in metadata:
-            normalised = _normalise_plex_entry(entry, query_lower, filters)
-            if normalised is None:
-                continue
-            matches.append(normalised)
-    return matches
 
 
 def _summarise_search_results(results: Dict[str, List[Dict[str, Any]]]) -> Dict[str, int]:
@@ -518,92 +422,6 @@ def _normalise_spotify_artist(item: Dict[str, Any]) -> Dict[str, Any] | None:
         "genre": _extract_spotify_genre(item),
         "quality": None,
     }
-
-
-def _normalise_plex_entry(
-    entry: Dict[str, Any],
-    query_lower: str,
-    filters: SearchFilters,
-) -> Dict[str, Any] | None:
-    title = str(entry.get("title") or "").strip()
-    album = str(entry.get("parentTitle") or "").strip()
-    artist = str(entry.get("grandparentTitle") or "").strip()
-    rating_key = entry.get("ratingKey")
-
-    if any([title, album, artist]):
-        haystack = " ".join(filter(None, [title.lower(), album.lower(), artist.lower()]))
-        if query_lower not in haystack:
-            return None
-    else:
-        return None
-
-    year = _parse_year(entry.get("year"))
-    if filters.year is not None and year not in {filters.year, None}:
-        return None
-
-    genres = _extract_plex_genres(entry)
-    if filters.genre and (
-        not genres or not any(_genre_matches(genre, filters.genre) for genre in genres)
-    ):
-        return None
-
-    quality = _extract_plex_quality(entry.get("Media"))
-    if filters.quality and not _quality_matches(quality, filters.quality):
-        return None
-
-    identifier = rating_key or title or album or artist or query_lower
-    return {
-        "id": str(identifier),
-        "source": "plex",
-        "type": "track",
-        "artist": artist or None,
-        "album": album or None,
-        "title": title or str(identifier),
-        "year": year,
-        "genre": genres[0] if genres else None,
-        "quality": quality,
-    }
-
-
-def _extract_plex_genres(entry: Dict[str, Any]) -> list[str]:
-    genres: list[str] = []
-    raw = entry.get("Genre")
-    if isinstance(raw, list):
-        for item in raw:
-            label = _normalise_genre_label(item)
-            if label:
-                genres.append(label)
-    elif raw is not None:
-        label = _normalise_genre_label(raw)
-        if label:
-            genres.append(label)
-    raw_genre = _normalise_genre_label(entry.get("genre"))
-    if raw_genre:
-        genres.append(raw_genre)
-    # preserve order but drop duplicates
-    seen: set[str] = set()
-    unique: list[str] = []
-    for label in genres:
-        lowered = label.lower()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        unique.append(label)
-    return unique
-
-
-def _extract_plex_quality(media_payload: Any) -> str | None:
-    media: Dict[str, Any] = {}
-    if isinstance(media_payload, list) and media_payload:
-        first = media_payload[0]
-        if isinstance(first, dict):
-            media = first
-    elif isinstance(media_payload, dict):
-        media = media_payload
-
-    codec = media.get("audioCodec") or media.get("codec") or media.get("container")
-    bitrate = media.get("bitrate")
-    return _build_quality_label(codec, bitrate)
 
 
 def _normalise_soulseek_results(payload: Any, filters: SearchFilters) -> List[Dict[str, Any]]:
@@ -792,14 +610,6 @@ def _parse_year(value: Any) -> int | None:
     return None
 
 
-def _ensure_plex_client():
-    try:
-        return dependencies.get_plex_client()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        logger.error("Unable to access Plex client: %s", exc)
-        return None
-
-
 def _ensure_soulseek_client():
     try:
         return dependencies.get_soulseek_client()
@@ -810,12 +620,12 @@ def _ensure_soulseek_client():
 
 def _normalise_sources(sources: Any) -> set[str]:
     if not sources:
-        return {"spotify", "plex", "soulseek"}
+        return {"spotify", "soulseek"}
     if isinstance(sources, str):
         return {sources.lower()}
     if isinstance(sources, Iterable):
         return {str(item).lower() for item in sources}
-    return {"spotify", "plex", "soulseek"}
+    return {"spotify", "soulseek"}
 
 
 def _missing_credentials() -> dict[str, tuple[str, ...]]:

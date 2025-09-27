@@ -21,8 +21,6 @@ from typing import (
 
 from sqlalchemy import delete, select
 
-from app.core.beets_client import BeetsClient
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -85,9 +83,9 @@ class AutoSyncWorker:
     def __init__(
         self,
         spotify_client: SpotifyClient,
-        plex_client: PlexClient,
+        plex_client: Any,
         soulseek_client: SoulseekClient,
-        beets_client: BeetsClient,
+        beets_client: Any,
         *,
         interval_seconds: float = 86_400.0,
         retry_attempts: int = 3,
@@ -210,7 +208,7 @@ class AutoSyncWorker:
                         },
                     )
                     return
-                sync_sources = ["spotify", "plex", "soulseek", "beets"]
+                sync_sources = ["spotify", "soulseek"]
                 record_activity(
                     "sync",
                     "sync_started",
@@ -901,4 +899,4 @@ class AutoSyncWorker:
         record_worker_heartbeat("autosync")
 
 
-REQUIRED_CREDENTIAL_SERVICES: tuple[str, ...] = ("spotify", "plex", "soulseek")
+REQUIRED_CREDENTIAL_SERVICES: tuple[str, ...] = ("spotify", "soulseek")

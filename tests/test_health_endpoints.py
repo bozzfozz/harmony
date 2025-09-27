@@ -46,7 +46,7 @@ def test_spotify_health_ok_when_all_values_present(client) -> None:
     assert payload["missing"] == []
 
 
-def test_plex_health_reports_optional_missing(client) -> None:
+def test_plex_health_reports_disabled(client) -> None:
     _insert_settings({"PLEX_BASE_URL": "http://plex", "PLEX_TOKEN": "token"})
 
     response = client.get("/api/health/plex")
@@ -54,20 +54,9 @@ def test_plex_health_reports_optional_missing(client) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["service"] == "plex"
-    assert payload["status"] == "ok"
+    assert payload["status"] == "disabled"
     assert payload["missing"] == []
-    assert payload["optional_missing"] == ["PLEX_LIBRARY"]
-
-
-def test_plex_health_requires_token(client) -> None:
-    _insert_settings({"PLEX_BASE_URL": "http://plex"})
-
-    response = client.get("/api/health/plex")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "fail"
-    assert payload["missing"] == ["PLEX_TOKEN"]
+    assert payload["optional_missing"] == []
 
 
 def test_soulseek_health_accepts_missing_api_key(client) -> None:

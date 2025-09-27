@@ -12,12 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.dependencies import (
     get_matching_engine,
-    get_plex_client,
     get_soulseek_client,
     get_spotify_client,
 )
@@ -42,7 +40,7 @@ from app.utils.normalize import (
 
 logger = get_logger(__name__)
 
-DEFAULT_SOURCES: tuple[SourceLiteral, ...] = ("spotify", "plex", "soulseek")
+DEFAULT_SOURCES: tuple[SourceLiteral, ...] = ("spotify", "soulseek")
 SEARCH_TIMEOUT_MS = int(os.getenv("SEARCH_TIMEOUT_MS", "8000") or "8000")
 SEARCH_TIMEOUT_SECONDS = max(0.1, SEARCH_TIMEOUT_MS / 1000)
 SEARCH_MAX_LIMIT = int(os.getenv("SEARCH_MAX_LIMIT", "100") or "100")
@@ -78,7 +76,6 @@ router = APIRouter(prefix="/api", tags=["Search"])
 async def smart_search(
     request: SearchRequest,
     spotify_client: SpotifyClient = Depends(get_spotify_client),
-    plex_client: PlexClient = Depends(get_plex_client),
     soulseek_client: SoulseekClient = Depends(get_soulseek_client),
     matching_engine: MusicMatchingEngine = Depends(get_matching_engine),
 ) -> SearchResponse:
@@ -98,18 +95,6 @@ async def smart_search(
                     _execute_source(
                         "spotify",
                         _search_spotify(request, spotify_client),
-                    )
-                ),
-            )
-        )
-    if "plex" in resolved_sources:
-        tasks.append(
-            (
-                "plex",
-                asyncio.create_task(
-                    _execute_source(
-                        "plex",
-                        _search_plex(request, plex_client),
                     )
                 ),
             )
@@ -255,49 +240,6 @@ async def _search_spotify(request: SearchRequest, client: SpotifyClient) -> list
         candidates.extend(_extract_spotify_candidates(payload))
     if errors and errors == len(payloads):
         raise RuntimeError("Spotify search failed")
-    return candidates
-
-
-async def _search_plex(request: SearchRequest, client: PlexClient) -> list[Candidate]:
-    mediatypes = tuple(_resolve_types(request.type)) or ("track", "album", "artist")
-    entries = await client.search_music(
-        request.query,
-        mediatypes=mediatypes,
-        limit=PER_SOURCE_FETCH_LIMIT,
-        genre=request.genre,
-        year_from=request.year_from,
-        year_to=request.year_to,
-    )
-    candidates: list[Candidate] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        normalised = client.normalise_music_entry(entry)
-        item_type = str(normalised.get("type") or "track")
-        genres = normalize_genres(normalised.get("genres", []))
-        bitrate = _coerce_int(normalised.get("bitrate"))
-        audio_format = _normalise_format(normalised.get("format"))
-        artists = [str(name) for name in normalised.get("artists", []) if name]
-        identifier = (
-            normalised.get("id") or entry.get("ratingKey") or normalised.get("title") or "unknown"
-        )
-        identifier_str = str(identifier)
-        candidate = Candidate(
-            type=cast(
-                ItemTypeLiteral, item_type if item_type in {"track", "album", "artist"} else "track"
-            ),
-            id=f"plex:{item_type}:{identifier_str}",
-            source="plex",
-            title=str(normalised.get("title") or entry.get("title") or ""),
-            artists=artists,
-            album=normalised.get("album"),
-            year=_coerce_int(normalised.get("year")),
-            genres=genres,
-            bitrate=bitrate,
-            audio_format=audio_format,
-            raw={"entry": entry, "normalised": normalised},
-        )
-        candidates.append(candidate)
     return candidates
 
 

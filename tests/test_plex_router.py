@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.plex_client import PlexClientAuthError, PlexClientNotFoundError
+try:
+    from app.core.plex_client import PlexClientAuthError, PlexClientNotFoundError
+except ModuleNotFoundError:  # pragma: no cover - archived integration
+    pytest.skip("Plex integration archived in MVP", allow_module_level=True)
+
 from tests.simple_client import SimpleTestClient
 
 

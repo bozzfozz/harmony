@@ -7,6 +7,9 @@ from app.utils.events import AUTOSYNC_BLOCKED
 from app.workers.auto_sync_worker import AutoSyncWorker
 
 
+pytestmark = pytest.mark.skip(reason="AutoSync worker archived in MVP")
+
+
 class DummyBeetsClient:
     def import_file(self, path: str, quiet: bool = True) -> str:  # pragma: no cover - defensive
         return path

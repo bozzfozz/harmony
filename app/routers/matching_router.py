@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
@@ -189,6 +189,11 @@ def spotify_to_plex(
 ) -> MatchingResponse:
     """Match a Spotify track against Plex candidates and persist the result."""
 
+    raise HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Plex matching is disabled while the integration is archived",
+    )
+
     best_match, confidence = engine.find_best_match(payload.spotify_track, payload.candidates)
     target_id = _extract_target_id(best_match)
     match = Match(
@@ -238,6 +243,11 @@ def spotify_to_plex_album(
 ) -> MatchingResponse:
     """Return the best matching Plex album for the provided Spotify album."""
 
+    raise HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Plex matching is disabled while the integration is archived",
+    )
+
     best_match, confidence = engine.find_best_album_match(payload.spotify_album, payload.candidates)
     if persist:
         album_id = payload.spotify_album.get("id")
@@ -266,6 +276,11 @@ def discography_to_plex(
     payload: DiscographyMatchingRequest,
 ) -> DiscographyMatchingResponse:
     """Return missing Spotify tracks for a complete discography."""
+
+    raise HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Plex matching is disabled while the integration is archived",
+    )
 
     missing_albums, missing_tracks = calculate_discography_missing(
         payload.artist_id,

@@ -53,36 +53,11 @@ def _prepare_soulseek_results(client) -> None:
 
 def test_search_filters_by_year_range(client) -> None:
     _prepare_soulseek_results(client)
-    plex_stub = client.app.state.plex_stub
-    plex_stub.library_items[("1", "10")] = {
-        "MediaContainer": {
-            "Metadata": [
-                {
-                    "ratingKey": "plex-1",
-                    "title": "Great Track",
-                    "parentTitle": "Test Album",
-                    "grandparentTitle": "Plex Artist",
-                    "year": 1969,
-                    "Media": [{"bitrate": 1000, "audioCodec": "flac"}],
-                    "Genre": [{"tag": "rock"}],
-                },
-                {
-                    "ratingKey": "plex-2",
-                    "title": "Old Song",
-                    "parentTitle": "Other Album",
-                    "grandparentTitle": "Plex Artist",
-                    "year": 1940,
-                    "Media": [{"bitrate": 192, "audioCodec": "mp3"}],
-                    "Genre": [{"tag": "jazz"}],
-                },
-            ]
-        }
-    }
 
     payload: Dict[str, Any] = {
         "query": "Track",
         "type": "track",
-        "sources": ["plex", "soulseek"],
+        "sources": ["soulseek"],
         "year_from": 1960,
         "year_to": 1980,
         "limit": 10,
@@ -93,10 +68,10 @@ def test_search_filters_by_year_range(client) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["total"] >= 2
+    assert body["total"] >= 1
     for item in body["items"]:
         assert 1960 <= item["year"] <= 1980
-        assert item["source"] in {"plex", "soulseek"}
+        assert item["source"] == "soulseek"
 
 
 def test_search_filters_by_genre(client) -> None:

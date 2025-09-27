@@ -8,7 +8,7 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
@@ -32,9 +32,6 @@ from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
 from app.workers.persistence import PersistentJobQueue, QueuedJob
-
-if TYPE_CHECKING:  # pragma: no cover - imported for typing only
-    from app.workers.scan_worker import ScanWorker
 
 logger = get_logger(__name__)
 
@@ -122,7 +119,7 @@ class SyncWorker:
         metadata_worker: MetadataWorker | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
-        scan_worker: "ScanWorker | None" = None,
+        scan_worker: Any | None = None,
     ) -> None:
         self._client = soulseek_client
         self._metadata_worker = metadata_worker

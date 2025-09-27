@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Generator
+from typing import Any, Generator
 
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig, load_config
 from app.core.matching_engine import MusicMatchingEngine
-from app.core.plex_client import PlexClient
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
@@ -27,8 +26,8 @@ def get_spotify_client() -> SpotifyClient:
 
 
 @lru_cache()
-def get_plex_client() -> PlexClient:
-    return PlexClient(get_app_config().plex)
+def get_plex_client() -> Any:
+    raise ValueError("Plex integration is disabled in the MVP build")
 
 
 @lru_cache()
