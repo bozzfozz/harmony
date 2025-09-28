@@ -31,6 +31,7 @@ from app.routers import (
     download_router,
     free_ingest_router,
     health_router,
+    integrations_router,
     imports_router,
     matching_router,
     metadata_router,
@@ -114,6 +115,7 @@ def _register_api_routes(
     router.include_router(system_router)
     router.include_router(download_router)
     router.include_router(activity_router)
+    router.include_router(integrations_router)
     router.include_router(health_router, prefix="/health", tags=["Health"])
     router.include_router(watchlist_router)
     router.add_api_route("/", root_handler, methods=["GET"], tags=["System"])
@@ -318,22 +320,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "legacy_routes": legacy_routes_enabled,
     }
 
+    enabled_providers = {name: True for name in config.integrations.enabled}
     logger.info(
-        "wiring_summary routers=%s workers=%s flags=%s integrations=spotify=true soulseek=true plex=false beets=false",
+        "wiring_summary routers=%s workers=%s flags=%s integrations=%s",
         router_status,
         worker_status,
         flag_status,
+        enabled_providers,
         extra={
             "event": "wiring_summary",
             "routers": router_status,
             "workers": worker_status,
             "flags": flag_status,
-            "integrations": {
-                "spotify": True,
-                "soulseek": True,
-                "plex": False,
-                "beets": False,
-            },
+            "integrations": enabled_providers,
             "api_base_path": config.api_base_path,
         },
     )

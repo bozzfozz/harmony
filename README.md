@@ -11,6 +11,7 @@ Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
 - **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
+- **Integrationen-Adapter** erzwingen ein gemeinsames `MusicProvider`-Interface für Spotify, Plex (Stub) und slskd. Aktivierung erfolgt zentral über `INTEGRATIONS_ENABLED`, Fehler werden vereinheitlicht gemeldet und ein Diagnose-Endpoint listet Health-Status pro Provider.
 - **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und Copyright, bettet Cover in höchster verfügbarer Auflösung ein und stellt die Tags per API bereit.
 - **Globale API-Key-Authentifizierung** schützt sämtliche Produktiv-Endpunkte (`X-API-Key` oder `Authorization: Bearer`). Keys werden über `HARMONY_API_KEYS`/`HARMONY_API_KEYS_FILE` verwaltet, Ausnahmen via `AUTH_ALLOWLIST`, CORS über `ALLOWED_ORIGINS` restriktiv konfiguriert.
 - **Automatic Lyrics** *(Feature-Flag `ENABLE_LYRICS`, Default: deaktiviert)*: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten. Die Lyrics stammen vorrangig aus der Spotify-API; falls dort keine Texte verfügbar sind, greift Harmony auf externe Provider wie Musixmatch oder lyrics.ovh zurück.
@@ -280,6 +281,11 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `FEATURE_ENABLE_LEGACY_ROUTES` | Aktiviert zusätzliche Legacy-Pfade ohne Versionierung (`true`/`false`, Default: `false`) |
 | `ENABLE_ARTWORK` | Aktiviert Artwork-Worker und -Endpoints (`true`/`false`, Default: `false`) |
 | `ENABLE_LYRICS` | Aktiviert Lyrics-Worker und -Endpoints (`true`/`false`, Default: `false`) |
+| `INTEGRATIONS_ENABLED` | Kommagetrennte Liste aktivierter Provider (`spotify`, `plex`, `slskd`; Default: `spotify`) |
+| `SPOTIFY_TIMEOUT_MS` | Timeout in Millisekunden für Spotify-Adapter (Default: `15000`) |
+| `PLEX_TIMEOUT_MS` | Timeout in Millisekunden für Plex-Adapter (Default: `15000`) |
+| `SLSKD_TIMEOUT_MS` | Timeout in Millisekunden für slskd-Adapter (Default: `15000`) |
+| `PROVIDER_MAX_CONCURRENCY` | Maximale parallele Provider-Aufrufe (Default: `4`) |
 | `RETRY_MAX_ATTEMPTS` | Maximale Anzahl an Download-Versuchen (Default: `10`) |
 | `RETRY_BASE_SECONDS` | Basisverzögerung für exponentielles Backoff in Sekunden (Default: `60`) |
 | `RETRY_JITTER_PCT` | Zufälliges Jitter (± Prozent) zur Vermeidung eines Thundering Herd (Default: `0.2`) |
@@ -297,6 +303,7 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - **Soulseek** (`/soulseek`): Status, Suche, Downloads/Uploads, Warteschlangen, Benutzerverzeichnisse und -infos. Enthält `/soulseek/downloads/{id}/requeue` für manuelle Neuversuche und liefert Retry-Metadaten (`state`, `retry_count`, `next_retry_at`, `last_error`).
 - **Matching** (`/matching`): Spotify↔Soulseek-Matching sowie Album-Matching (Legacy-Plex-Routen liefern `404`).
 - **Settings** (`/settings`): Key-Value Einstellungen inkl. History.
+- **Integrationen** (`/integrations`): Diagnose-Endpunkt mit aktivierten Providern und Health-Status.
 
 Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.
 
