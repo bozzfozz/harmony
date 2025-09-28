@@ -204,7 +204,7 @@ CI_OFFLINE=true make all
 ### Features der UI
 
 - Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
-- Library-Seite bündelt Artists, Downloads und Watchlist mit konsistenter Tab-Navigation.
+- Library-Seite bündelt Artists, Downloads und Watchlist mit konsistenter Tab-Navigation; nur der aktive Tab wird lazy geladen und führt Polling aus.
 - Detailseiten für Spotify und Soulseek inkl. Tabs für Übersicht und Einstellungen (Plex/Beets-Ansichten archiviert).
 - Matching-Ansicht mit Fortschrittsanzeigen.
 - Settings-Bereich mit Formularen für sämtliche Integrationen.

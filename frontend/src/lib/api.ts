@@ -15,6 +15,27 @@ const apiUrl = (path: string): string => {
   return `${API_BASE_PATH}${normalizedPath}`;
 };
 
+declare global {
+  interface Window {
+    __HARMONY_LIBRARY_POLL_INTERVAL_MS__?: string;
+  }
+}
+
+const DEFAULT_LIBRARY_POLL_INTERVAL_MS = 15000;
+
+export const LIBRARY_POLL_INTERVAL_MS = (() => {
+  const nodeEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const browserValue = typeof window !== 'undefined' ? window.__HARMONY_LIBRARY_POLL_INTERVAL_MS__ : undefined;
+  const raw = nodeEnv?.VITE_LIBRARY_POLL_INTERVAL_MS ?? browserValue;
+  if (typeof raw === 'string') {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_LIBRARY_POLL_INTERVAL_MS;
+})();
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000

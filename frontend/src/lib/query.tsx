@@ -66,8 +66,9 @@ const useQueryClient = () => {
 interface UseQueryOptions<TData> {
   queryKey: QueryKey;
   queryFn: () => Promise<TData>;
-  refetchInterval?: number;
+  refetchInterval?: number | false;
   onError?: (error: unknown) => void;
+  enabled?: boolean;
 }
 
 interface UseQueryResult<TData> {
@@ -78,12 +79,23 @@ interface UseQueryResult<TData> {
   refetch: () => Promise<void>;
 }
 
-const useQuery = <TData,>({ queryKey, queryFn, refetchInterval, onError }: UseQueryOptions<TData>): UseQueryResult<TData> => {
+const useQuery = <TData,>({
+  queryKey,
+  queryFn,
+  refetchInterval,
+  onError,
+  enabled = true
+}: UseQueryOptions<TData>): UseQueryResult<TData> => {
   const client = useQueryClient();
   const [data, setData] = useState<TData | undefined>(undefined);
   const [error, setError] = useState<unknown>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
   const mountedRef = useRef(true);
+  const errorHandlerRef = useRef(onError);
+
+  useEffect(() => {
+    errorHandlerRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -92,7 +104,16 @@ const useQuery = <TData,>({ queryKey, queryFn, refetchInterval, onError }: UseQu
     };
   }, []);
 
-  const execute = useCallback(async () => {
+  useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+    }
+  }, [enabled]);
+
+  const execute = useCallback(async (force = false) => {
+    if (!enabled && !force) {
+      return;
+    }
     setIsLoading(true);
     setError(undefined);
     try {
@@ -106,31 +127,34 @@ const useQuery = <TData,>({ queryKey, queryFn, refetchInterval, onError }: UseQu
         setError(err);
         setIsLoading(false);
       }
-      onError?.(err);
+      errorHandlerRef.current?.(err);
     }
-  }, [queryFn, onError]);
+  }, [enabled, queryFn, onError]);
 
   useEffect(() => {
-    execute();
+    void execute();
   }, [execute]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const unsubscribe = client.subscribe(queryKey, execute);
     return unsubscribe;
-  }, [client, execute, queryKey]);
+  }, [client, enabled, execute, queryKey]);
 
   useEffect(() => {
-    if (!refetchInterval) {
+    if (!enabled || typeof refetchInterval !== 'number' || Number.isNaN(refetchInterval)) {
       return;
     }
     const timer = window.setInterval(() => {
-      execute();
+      void execute();
     }, refetchInterval);
     return () => window.clearInterval(timer);
-  }, [execute, refetchInterval]);
+  }, [enabled, execute, refetchInterval]);
 
   const refetch = useCallback(async () => {
-    await execute();
+    await execute(true);
   }, [execute]);
 
   return useMemo(

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import {
   Button,
@@ -66,12 +66,22 @@ const areSelectionsEqual = (a: Record<string, boolean>, b: Record<string, boolea
   return true;
 };
 
-const LibraryArtists = () => {
+interface LibraryArtistsProps {
+  isActive?: boolean;
+}
+
+const LibraryArtists = ({ isActive = true }: LibraryArtistsProps = {}) => {
   const { toast } = useToast();
   const [selectedArtistId, setSelectedArtistId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Record<string, boolean>>({});
   const [releaseCounts, setReleaseCounts] = useState<Record<string, number>>({});
   const [releaseFilter, setReleaseFilter] = useState<ReleaseFilterValue>('all');
+
+  const isActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   const {
     data: artists,
@@ -89,12 +99,16 @@ const LibraryArtists = () => {
         }
         error.markHandled();
       }
+      if (!isActiveRef.current) {
+        return;
+      }
       toast({
         title: 'Artists konnten nicht geladen werden',
         description: 'Bitte Backend-Verbindung prüfen.',
         variant: 'destructive'
       });
-    }
+    },
+    enabled: isActive
   });
 
   const {
@@ -113,12 +127,16 @@ const LibraryArtists = () => {
         }
         error.markHandled();
       }
+      if (!isActiveRef.current) {
+        return;
+      }
       toast({
         title: 'Artist-Präferenzen fehlgeschlagen',
         description: 'Die Auswahl konnte nicht geladen werden.',
         variant: 'destructive'
       });
-    }
+    },
+    enabled: isActive
   });
 
   const {
@@ -143,12 +161,16 @@ const LibraryArtists = () => {
         }
         error.markHandled();
       }
+      if (!isActiveRef.current) {
+        return;
+      }
       toast({
         title: 'Releases konnten nicht geladen werden',
         description: 'Bitte versuchen Sie es erneut.',
         variant: 'destructive'
       });
-    }
+    },
+    enabled: isActive && Boolean(selectedArtistId)
   });
 
   const baseSelection = useMemo(() => {
@@ -215,6 +237,9 @@ const LibraryArtists = () => {
           return;
         }
         error.markHandled();
+      }
+      if (!isActiveRef.current) {
+        return;
       }
       toast({
         title: 'Speichern fehlgeschlagen',
