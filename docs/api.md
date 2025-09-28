@@ -77,6 +77,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/settings/history/{key}` | Versionsverlauf eines Settings. |
 | `GET` | `/status` | Dashboard-Daten (Version, Uptime, Worker-/Connection-Status). |
 | `GET` | `/system/stats` | Systemmetriken (CPU, RAM, Disk). |
+| `GET` | `/integrations` | Liste aktiver Provider inkl. Health-Status. |
 
 ## Health & Activity
 

@@ -4,6 +4,7 @@ from .download_router import router as download_router
 from .free_ingest_router import router as free_ingest_router
 from .health_router import router as health_router
 from .imports_router import router as imports_router
+from .integrations import router as integrations_router
 from .matching_router import router as matching_router
 from .metadata_router import router as metadata_router
 from .search_router import router as search_router
@@ -22,6 +23,7 @@ __all__ = [
     "free_ingest_router",
     "health_router",
     "imports_router",
+    "integrations_router",
     "matching_router",
     "metadata_router",
     "search_router",

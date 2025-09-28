@@ -84,6 +84,13 @@ class FeatureFlags:
 
 
 @dataclass(slots=True)
+class IntegrationsConfig:
+    enabled: tuple[str, ...]
+    timeouts_ms: dict[str, int]
+    max_concurrency: int
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     soulseek: SoulseekConfig
@@ -93,6 +100,7 @@ class AppConfig:
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
     features: FeatureFlags
+    integrations: IntegrationsConfig
     security: "SecurityConfig"
     api_base_path: str
 
@@ -131,6 +139,7 @@ DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/docs", "/redoc", "/openapi.json")
+DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -153,6 +162,38 @@ def _parse_list(value: Optional[str]) -> list[str]:
         return []
     candidates = value.replace("\n", ",").split(",")
     return [item.strip() for item in candidates if item.strip()]
+
+
+def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
+    if not value:
+        return ("spotify",)
+    items = [entry.strip().lower() for entry in value.replace("\n", ",").split(",")]
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item:
+            continue
+        if item not in seen:
+            seen.add(item)
+            deduplicated.append(item)
+    return tuple(deduplicated or ("spotify",))
+
+
+def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]:
+    defaults: dict[str, int] = {"spotify": 15000, "plex": 15000, "slskd": 15000}
+    for key, provider in (
+        ("SPOTIFY_TIMEOUT_MS", "spotify"),
+        ("PLEX_TIMEOUT_MS", "plex"),
+        ("SLSKD_TIMEOUT_MS", "slskd"),
+    ):
+        raw = env.get(key)
+        if raw is None:
+            continue
+        try:
+            defaults[provider] = max(1000, int(raw))
+        except (TypeError, ValueError):
+            continue
+    return defaults
 
 
 def _read_api_keys_from_file(path: str) -> list[str]:
@@ -498,6 +539,18 @@ def load_config() -> AppConfig:
         ),
     )
 
+    integrations = IntegrationsConfig(
+        enabled=_parse_enabled_providers(os.getenv("INTEGRATIONS_ENABLED")),
+        timeouts_ms=_parse_provider_timeouts(os.environ),
+        max_concurrency=max(
+            1,
+            _as_int(
+                os.getenv("PROVIDER_MAX_CONCURRENCY"),
+                default=DEFAULT_PROVIDER_MAX_CONCURRENCY,
+            ),
+        ),
+    )
+
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
@@ -529,6 +582,7 @@ def load_config() -> AppConfig:
         ingest=ingest,
         free_ingest=free_ingest,
         features=features,
+        integrations=integrations,
         security=security,
         api_base_path=api_base_path,
     )
