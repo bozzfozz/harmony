@@ -6,8 +6,7 @@ import WorkerHealthCard from '../components/WorkerHealthCard';
 import { useToast } from '../hooks/useToast';
 import { useMutation, useQuery, useQueryClient } from '../lib/query';
 import { getSystemStatus, triggerManualSync, type WorkerHealth } from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from '../components/ui/shadcn';
 
 const DashboardPage = () => {
   const { toast } = useToast();

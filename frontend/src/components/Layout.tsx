@@ -2,7 +2,7 @@ import { ReactNode, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { CircleDot, Download, Menu, Moon, Music, Settings, Sun, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/button';
+import { Button } from './ui/shadcn';
 import { ScrollArea } from './ui/scroll-area';
 import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
