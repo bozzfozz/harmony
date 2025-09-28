@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/shadcn';
 import { Select } from './ui/select';
 import { useToast } from '../hooks/useToast';
 import { ApiError, getActivityFeed, ActivityItem, ActivityStatus, ActivityType } from '../lib/api';

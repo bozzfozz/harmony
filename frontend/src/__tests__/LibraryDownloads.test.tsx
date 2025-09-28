@@ -1,10 +1,9 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import DownloadsPage from '../pages/DownloadsPage';
+import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
 import {
   ApiError,
-  cancelDownload,
   exportDownloads,
   getDownloads,
   retryDownload,
@@ -16,7 +15,6 @@ jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
   getDownloads: jest.fn(),
   startDownload: jest.fn(),
-  cancelDownload: jest.fn(),
   retryDownload: jest.fn(),
   updateDownloadPriority: jest.fn(),
   exportDownloads: jest.fn()
@@ -24,14 +22,13 @@ jest.mock('../lib/api', () => ({
 
 const mockedGetDownloads = getDownloads as jest.MockedFunction<typeof getDownloads>;
 const mockedStartDownload = startDownload as jest.MockedFunction<typeof startDownload>;
-const mockedCancelDownload = cancelDownload as jest.MockedFunction<typeof cancelDownload>;
 const mockedRetryDownload = retryDownload as jest.MockedFunction<typeof retryDownload>;
 const mockedUpdatePriority = updateDownloadPriority as jest.MockedFunction<typeof updateDownloadPriority>;
 const mockedExportDownloads = exportDownloads as jest.MockedFunction<typeof exportDownloads>;
 
 const toastMock = jest.fn();
 
-describe('DownloadsPage', () => {
+describe('LibraryDownloads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -47,7 +44,7 @@ describe('DownloadsPage', () => {
       }
     ]);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
     expect(bulkButton).toBeInTheDocument();
@@ -65,7 +62,7 @@ describe('DownloadsPage', () => {
       }
     ]);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     expect(await screen.findByText('Queued File.mp3')).toBeInTheDocument();
     expect(mockedGetDownloads).toHaveBeenCalledWith({ includeAll: false, status: undefined });
@@ -106,7 +103,7 @@ describe('DownloadsPage', () => {
       priority: 5
     } as never);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const priorityInput = await screen.findByLabelText('Priorität für Priority File.mp3');
     await userEvent.clear(priorityInput);
@@ -128,7 +125,7 @@ describe('DownloadsPage', () => {
       }
     ]);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     expect(await screen.findByText('Retried File.mp3')).toBeInTheDocument();
     expect(screen.getByText('Download Retry Scheduled')).toBeInTheDocument();
@@ -166,7 +163,7 @@ describe('DownloadsPage', () => {
       priority: 1
     } as never);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
     await userEvent.click(bulkButton);
@@ -198,7 +195,7 @@ describe('DownloadsPage', () => {
       })
     );
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
     await userEvent.click(bulkButton);
@@ -229,7 +226,7 @@ describe('DownloadsPage', () => {
       remove: jest.fn()
     } as unknown as HTMLAnchorElement);
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const csvButton = await screen.findByRole('button', { name: 'Export CSV' });
     await userEvent.click(csvButton);
@@ -252,7 +249,7 @@ describe('DownloadsPage', () => {
       originalError: new Error('credentials missing')
     }));
 
-    renderWithProviders(<DownloadsPage />, { toastFn: toastMock, route: '/downloads' });
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
     const input = await screen.findByLabelText('Track-ID');
     await userEvent.type(input, 'Song.mp3');

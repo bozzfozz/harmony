@@ -4,9 +4,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Music,
-  PlaySquare,
   Radio,
-  Library,
   Sparkles,
   Settings,
   X

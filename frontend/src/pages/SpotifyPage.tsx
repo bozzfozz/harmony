@@ -9,14 +9,14 @@ import {
 } from '../lib/api';
 import { ApiError } from '../lib/api';
 import { useToast } from '../hooks/useToast';
-import { Button } from '../components/ui/button';
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle
-} from '../components/ui/card';
+} from '../components/ui/shadcn';
 
 const SpotifyPage = () => {
   const { toast } = useToast();

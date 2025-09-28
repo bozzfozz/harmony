@@ -12,16 +12,16 @@ import {
   uploadSpotifyFreeFile
 } from '../lib/api';
 import { ApiError } from '../lib/api';
-import { Button } from './ui/button';
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle
-} from './ui/card';
-import { Input } from './ui/input';
+  CardTitle,
+  Input
+} from './ui/shadcn';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Textarea } from './ui/textarea';

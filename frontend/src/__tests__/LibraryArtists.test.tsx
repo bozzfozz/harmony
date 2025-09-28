@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
-import ArtistsPage from '../pages/ArtistsPage';
+import LibraryArtists from '../pages/Library/LibraryArtists';
 import { renderWithProviders } from '../test-utils';
 import {
   getArtistPreferences,
@@ -47,7 +47,7 @@ const createPreference = (overrides: Partial<ArtistPreferenceEntry> = {}): Artis
   selected: overrides.selected ?? false
 });
 
-describe('ArtistsPage', () => {
+describe('LibraryArtists', () => {
   const toastMock = jest.fn();
 
   beforeEach(() => {
@@ -60,7 +60,7 @@ describe('ArtistsPage', () => {
   it('lädt gefolgte Artists', async () => {
     mockedGetFollowed.mockResolvedValue([createArtist({ name: 'Daft Punk' })]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     expect(await screen.findByText('Daft Punk')).toBeInTheDocument();
     expect(screen.getByText('Releases unbekannt')).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe('ArtistsPage', () => {
       return [];
     });
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
 
@@ -100,7 +100,7 @@ describe('ArtistsPage', () => {
       createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
     await screen.findByRole('tab', { name: 'Alle' });
@@ -120,7 +120,7 @@ describe('ArtistsPage', () => {
       createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
     await screen.findByRole('tab', { name: 'Alle' });
@@ -140,7 +140,7 @@ describe('ArtistsPage', () => {
       createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
     await screen.findByRole('tab', { name: 'Alle' });
@@ -160,7 +160,7 @@ describe('ArtistsPage', () => {
       createRelease({ id: 'release-ep', name: 'Alive 1997', release_type: 'ep' })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
     await screen.findByRole('tab', { name: 'Alle' });
@@ -180,7 +180,7 @@ describe('ArtistsPage', () => {
       createRelease({ id: 'release-single', name: 'One More Time', release_type: 'single' })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Daft Punk'));
     await screen.findByRole('tab', { name: 'Alle' });
@@ -206,7 +206,7 @@ describe('ArtistsPage', () => {
       createPreference({ artist_id: 'artist-1', release_id: 'release-2', selected: false })
     ]);
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await userEvent.click(await screen.findByText('Hot Chip'));
 
@@ -234,7 +234,7 @@ describe('ArtistsPage', () => {
   it('zeigt einen Fehler-Toast, wenn Artists nicht geladen werden können', async () => {
     mockedGetFollowed.mockRejectedValue(new Error('network error'));
 
-    renderWithProviders(<ArtistsPage />, { toastFn: toastMock, route: '/artists' });
+    renderWithProviders(<LibraryArtists />, { toastFn: toastMock, route: '/library?tab=artists' });
 
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(

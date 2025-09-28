@@ -6,6 +6,7 @@
 
 ## v1.x.x
 
+- feat(frontend): introduce a unified Library page with shadcn/ui tabs for artists, downloads and watchlist while redirecting legacy routes to the new entry point.
 - sec: enforce global API-Key authentication for all routers, return RFC 7807 problem-details for 401/403, document the scheme in OpenAPI, add configurable allowlist and restrictive CORS via env (`HARMONY_API_KEYS`, `AUTH_ALLOWLIST`, `ALLOWED_ORIGINS`).
 - feat: versioniere alle produktiven Endpunkte unter `/api/v1`, dokumentiere die neue Basis in OpenAPI/Docs, führe das Flag `FEATURE_ENABLE_LEGACY_ROUTES` zur temporären Alias-Bereitstellung ein und aktualisiere das Frontend auf den versionierten Pfad (`API_BASE_PATH`, `VITE_API_BASE_PATH`).
 - feat: add feature flags for artwork and lyrics (default disabled) with conditional worker wiring, 503 guards, and refreshed documentation/tests.

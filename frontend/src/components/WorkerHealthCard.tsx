@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/shadcn';
 import { cn } from '../lib/utils';
 import type { WorkerStatus } from '../lib/api';
 

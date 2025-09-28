@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle
-} from '../components/ui/card';
-import { Input } from '../components/ui/input';
+  CardTitle,
+  Input,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from '../components/ui/shadcn';
 import { Label } from '../components/ui/label';
-import { Button } from '../components/ui/button';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 import { useToast } from '../hooks/useToast';
 import {
