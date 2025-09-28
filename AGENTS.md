@@ -157,3 +157,45 @@ Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen.
 - Commits folgen Conventional-Commit-Standards (feat/fix/docs/test/chore).
 - PR-Beschreibung MUSS enthalten: Was/Warum, Dateiänderungen (Neu/Geändert/Gelöscht), Migrationshinweise, Testnachweise (Logs/Screens), Risiken/Limitierungen, Verweis auf AGENTS.md/Template-Konformität sowie den **Nachweis des ToDo-Updates**.
 - Review achtet auf vollständige Template-Erfüllung und Einhaltung aller Completion Gates.
+
+### Initiative Policy
+
+**Zweck:** Repository-Drift überbrücken, ohne Scope/Contracts zu verletzen. Alle Regeln sind **verbindlich**.
+
+#### MAY (ohne Rückfrage, tagge Commits mit `[DRIFT-FIX]`)
+- Build/Lint/Test-Drift beheben, solange **keine** Logik/Contracts verändert werden
+- Defekte Importe/Pfade/Typen/Typos fixen; tote Importe entfernen
+- Snapshots/OpenAPI regenerieren, **nur** wenn der öffentliche Vertrag unverändert bleibt
+- Vorhandene Migrationen ausführen/verdrahten, **wenn** die Aufgabe es verlangt
+- Doku/Kommentare synchronisieren; CI-Pins innerhalb **gleicher Major-Version**
+- Feature-Flag-Defaults setzen, **nur** wenn in der Aufgabe explizit vorgegeben
+
+#### MUST NOT
+- Scope, Public API, DB-Schema, ENV-Variablen, Dependencies verändern
+- Neue Endpunkte/Felder/Metriken hinzufügen
+- Semantik-/Performance-Änderungen mit möglichem Output-Einfluss
+- Tests löschen/abschwächen
+
+### Clarification Request (bei Blockern)
+Wenn der Task ohne Scope-Änderung nicht umsetzbar ist, **abbrechen** und im PR kommentieren:
+1. Titel: `Clarification Request: <TASK_ID>`
+2. Inhalt: **Beobachtung**, **Blocker-Logs/Diffs**, **Minimalvorschlag** (reversibel), **Impact**
+3. Label: `needs-owner-decision`
+Ohne Freigabe **keine** selbständige Abweichung.
+
+### Commit & PR-Regeln
+- Jeder Commit: `<type>(<area>): … [<TASK_ID>][optional: DRIFT-FIX]`
+- PR muss die Task-Sektionen „Scope“, „Änderungen an Dateien“, „Zulässige Initiative“ referenzieren
+- Änderungen dürfen **nur** in der Task-Scope-Guard-Dateimenge stattfinden
+
+### CI-Gates (referenziert)
+- `scope_guard`: Geänderte Pfade ⊆ Task-Scope-Guard
+- `api_guard`: OpenAPI-Diff (oasdiff) blockt Breaking Changes ohne Task-Freigabe
+- `db_guard`: Schema-Diff ohne Alembic-Revision → Fail
+- `deps_guard`: Neue Deps oder Major-Bumps → Fail
+
+### Durchsetzung
+PRs, die gegen „MUST NOT“ verstoßen oder Gates auslösen, werden **nicht** gemerged. Wiederholung nur nach Task/Policy-Update.
+
+### Glossar
+**DRIFT-FIX:** kleinste mechanische Korrekturen, die Build/Lint/Tests wiederherstellen, ohne Public Contracts zu ändern.
