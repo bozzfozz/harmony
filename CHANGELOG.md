@@ -3,6 +3,8 @@
 - Update PR-Template: TASK_ID und Testnachweise verpflichtend.
 
 # Changelog
+- feat(cache): introduce HTTP conditional requests with strong/weak ETag support, Last-Modified propagation, documented 304
+  responses and an in-memory TTL+LRU response cache with automatic invalidation hooks and configuration via `CACHE_*` variables.
 
 ## v1.x.x
 
