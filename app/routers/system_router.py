@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -21,6 +22,8 @@ from app.utils.worker_health import (
     read_worker_status,
     resolve_status,
 )
+from app.errors import DependencyError
+from app.services.health import HealthService
 from sqlalchemy import func, select
 
 try:  # pragma: no cover - import guarded for environments without psutil
@@ -34,6 +37,82 @@ router = APIRouter()
 
 _START_TIME = datetime.now(timezone.utc)
 QueueValue = Any
+
+
+def _get_health_service(request: Request) -> HealthService:
+    service = getattr(request.app.state, "health_service", None)
+    if service is None:  # pragma: no cover - configuration guard
+        raise RuntimeError("Health service is not configured")
+    return cast(HealthService, service)
+
+
+@router.get("/health", tags=["System"])
+async def get_health(request: Request) -> Dict[str, Any]:
+    """Return liveness information without external I/O."""
+
+    service = _get_health_service(request)
+    start = time.perf_counter()
+    summary = service.liveness()
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "Reporting liveness status",  # pragma: no cover - logging string
+        extra={
+            "event": "health.check",
+            "status": summary.status,
+            "duration_ms": round(duration_ms, 2),
+        },
+    )
+    return {
+        "ok": True,
+        "data": {
+            "status": summary.status,
+            "version": summary.version,
+            "uptime_s": summary.uptime_s,
+        },
+        "error": None,
+    }
+
+
+@router.get("/ready", tags=["System"])
+async def get_readiness(request: Request) -> Dict[str, Any]:
+    """Check database connectivity and configured dependencies."""
+
+    service = _get_health_service(request)
+    start = time.perf_counter()
+    result = await service.readiness()
+    duration_ms = (time.perf_counter() - start) * 1000
+    deps = result.dependencies
+    deps_up = sum(1 for status in deps.values() if status == "up")
+    deps_down = sum(1 for status in deps.values() if status != "up")
+    logger.info(
+        "Reporting readiness status",  # pragma: no cover - logging string
+        extra={
+            "event": "ready.check",
+            "db": result.database,
+            "deps_up": deps_up,
+            "deps_down": deps_down,
+            "duration_ms": round(duration_ms, 2),
+        },
+    )
+    if result.ok:
+        return {
+            "ok": True,
+            "data": {
+                "db": result.database,
+                "deps": deps,
+            },
+            "error": None,
+        }
+
+    error = DependencyError(
+        "not ready",
+        meta={
+            "db": result.database,
+            "deps": deps,
+        },
+    )
+    response = error.as_response(request_path=request.url.path, method=request.method)
+    return response
 
 
 @dataclass(frozen=True)
@@ -127,7 +206,10 @@ async def get_status(request: Request) -> Dict[str, Any]:
     """Return general application status data for the dashboard."""
 
     now = datetime.now(timezone.utc)
-    uptime_seconds = (now - _START_TIME).total_seconds()
+    start_time = getattr(request.app.state, "start_time", _START_TIME)
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    uptime_seconds = (now - start_time).total_seconds()
     workers = {
         name: _worker_payload(name, descriptor, request) for name, descriptor in _WORKERS.items()
     }

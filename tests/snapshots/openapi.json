@@ -823,6 +823,48 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HealthData": {
+        "properties": {
+          "status": {
+            "enum": [
+              "up"
+            ],
+            "type": "string"
+          },
+          "uptime_s": {
+            "type": "number"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "uptime_s"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/HealthData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "error"
+        ],
+        "type": "object"
+      },
       "IntegrationsData": {
         "properties": {
           "providers": {
@@ -1291,6 +1333,44 @@
           "health"
         ],
         "title": "ProviderInfo",
+        "type": "object"
+      },
+      "ReadyData": {
+        "properties": {
+          "db": {
+            "type": "string"
+          },
+          "deps": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "db",
+          "deps"
+        ],
+        "type": "object"
+      },
+      "ReadySuccessResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReadyData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "error"
+        ],
         "type": "object"
       },
       "RecommendationsResponse": {
@@ -4416,6 +4496,147 @@
         ]
       }
     },
+    "/api/v1/health": {
+      "get": {
+        "description": "Return liveness information without external I/O.",
+        "operationId": "get_health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "status": "up",
+                    "uptime_s": 1.23,
+                    "version": "1.4.0"
+                  },
+                  "error": null,
+                  "ok": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Liveness status"
+          },
+          "304": {
+            "description": "Not Modified",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache directives for clients and proxies.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Entity tag identifying the cached representation.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Timestamp of the last modification in RFC 1123 format.",
+                "schema": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Headers that affect the cached representation.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Get Health",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/api/v1/health/soulseek": {
       "get": {
         "operationId": "soulseek_health_api_v1_health_soulseek_get",
@@ -5477,6 +5698,159 @@
         "summary": "Start Metadata Update",
         "tags": [
           "Metadata"
+        ]
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "description": "Check database connectivity and configured dependencies.",
+        "operationId": "get_readiness_api_v1_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "db": "up",
+                    "deps": {}
+                  },
+                  "error": null,
+                  "ok": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReadySuccessResponse"
+                }
+              }
+            },
+            "description": "All dependencies ready"
+          },
+          "304": {
+            "description": "Not Modified",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cache directives for clients and proxies.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Entity tag identifying the cached representation.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "Timestamp of the last modification in RFC 1123 format.",
+                "schema": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "description": "Headers that affect the cached representation.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "DEPENDENCY_ERROR",
+                    "message": "not ready",
+                    "meta": {
+                      "db": "down",
+                      "deps": {
+                        "spotify": "down"
+                      }
+                    }
+                  },
+                  "ok": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Dependencies unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Get Readiness",
+        "tags": [
+          "System"
         ]
       }
     },

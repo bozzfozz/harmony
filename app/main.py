@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import inspect
 import os
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 import sys
+from datetime import datetime, timezone
+from threading import Lock
 from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -32,7 +35,7 @@ from app.dependencies import (
     get_spotify_client,
     require_api_key,
 )
-from app.db import init_db
+from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.errors import (
     AppError,
@@ -61,6 +64,7 @@ from app.routers import (
     watchlist_router,
 )
 from app.services.backfill_service import BackfillService
+from app.services.health import HealthService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
 from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
@@ -78,6 +82,7 @@ from app.workers import (
 from app.workers.retry_scheduler import RetryScheduler
 
 logger = get_logger(__name__)
+_APP_START_TIME = datetime.now(timezone.utc)
 
 
 def _compose_subpath(base_path: str, suffix: str) -> str:
@@ -147,6 +152,112 @@ def _parse_cache_policies(
             stale = _env_as_int(parts[2], default=default_stale)
         policies[path] = CachePolicy(path=path, max_age=max_age, stale_while_revalidate=stale)
     return policies
+
+
+def _format_metrics_float(value: float) -> str:
+    if value == 0:
+        return "0"
+    formatted = f"{value:.6f}".rstrip("0").rstrip(".")
+    return formatted or "0"
+
+
+class _MetricsHistogram:
+    def __init__(self, buckets: tuple[float, ...]) -> None:
+        self._buckets = buckets
+        self.counts = [0] * len(buckets)
+        self.count = 0
+        self.sum = 0.0
+
+    def observe(self, value: float) -> None:
+        self.count += 1
+        self.sum += value
+        for index, boundary in enumerate(self._buckets):
+            if value <= boundary:
+                self.counts[index] += 1
+
+
+class MetricsRegistry:
+    """Minimal Prometheus-style metrics registry."""
+
+    def __init__(self, buckets: tuple[float, ...]) -> None:
+        self._buckets = buckets
+        self._lock = Lock()
+        self._counters: dict[tuple[str, str, str], int] = {}
+        self._histograms: dict[tuple[str, str, str], _MetricsHistogram] = {}
+
+    def observe(self, method: str, path: str, status: str, duration: float) -> None:
+        key = (method.upper(), path, status)
+        value = duration if duration >= 0 else 0.0
+        with self._lock:
+            self._counters[key] = self._counters.get(key, 0) + 1
+            histogram = self._histograms.get(key)
+            if histogram is None:
+                histogram = _MetricsHistogram(self._buckets)
+                self._histograms[key] = histogram
+            histogram.observe(value)
+
+    def render(self, *, version: str) -> str:
+        lines: list[str] = [
+            "# HELP app_build_info Build information for the Harmony backend",
+            "# TYPE app_build_info gauge",
+            f'app_build_info{{version="{version}"}} 1',
+        ]
+
+        if self._counters:
+            lines.append("# HELP app_requests_total Total number of processed HTTP requests")
+            lines.append("# TYPE app_requests_total counter")
+            for method, path, status in sorted(self._counters):
+                value = self._counters[(method, path, status)]
+                labels = self._format_labels(method, path, status)
+                lines.append(f"app_requests_total{{{labels}}} {value}")
+
+        lines.append("# HELP app_request_duration_seconds Request duration in seconds")
+        lines.append("# TYPE app_request_duration_seconds histogram")
+        for method, path, status in sorted(self._histograms):
+            histogram = self._histograms[(method, path, status)]
+            labels = self._format_labels(method, path, status)
+            for bucket, count in zip(self._buckets, histogram.counts):
+                bucket_value = _format_metrics_float(bucket)
+                lines.append(
+                    f'app_request_duration_seconds_bucket{{{labels},le="{bucket_value}"}} {count}'
+                )
+            lines.append(
+                f'app_request_duration_seconds_bucket{{{labels},le="+Inf"}} {histogram.count}'
+            )
+            lines.append(f"app_request_duration_seconds_count{{{labels}}} {histogram.count}")
+            lines.append(
+                f"app_request_duration_seconds_sum{{{labels}}} {_format_metrics_float(histogram.sum)}"
+            )
+
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _format_labels(method: str, path: str, status: str) -> str:
+        escaped_path = path.replace("\\", "\\\\").replace('"', '\\"')
+        return f'method="{method}",path="{escaped_path}",status="{status}"'
+
+
+_METRIC_BUCKETS: tuple[float, ...] = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+)
+
+
+def _resolve_route_path(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if isinstance(path, str):
+        return path
+    return request.url.path
 
 
 class LegacyLoggingRoute(APIRoute):
@@ -432,6 +543,16 @@ app = FastAPI(
     openapi_url=_openapi_url,
 )
 
+app.state.start_time = _APP_START_TIME
+app.state.health_service = HealthService(
+    start_time=_APP_START_TIME,
+    version=app.version,
+    config=_config_snapshot.health,
+    session_factory=get_session,
+)
+app.state.metrics_config = _config_snapshot.metrics
+app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
+
 _initial_security = _config_snapshot.security
 
 app.add_middleware(
@@ -483,6 +604,36 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def collect_metrics(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    metrics_config = getattr(request.app.state, "metrics_config", None)
+    registry = getattr(request.app.state, "metrics_registry", None)
+    if not metrics_config or not registry or not metrics_config.enabled:
+        return await call_next(request)
+
+    if request.url.path == metrics_config.path:
+        return await call_next(request)
+
+    route_path = _resolve_route_path(request)
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except HTTPException as exc:
+        duration = time.perf_counter() - start_time
+        registry.observe(request.method, route_path, str(exc.status_code), duration)
+        raise
+    except Exception:
+        duration = time.perf_counter() - start_time
+        registry.observe(request.method, route_path, "500", duration)
+        raise
+
+    duration = time.perf_counter() - start_time
+    registry.observe(request.method, route_path, str(response.status_code), duration)
+    return response
+
+
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
@@ -495,6 +646,26 @@ if _LEGACY_ROUTES_ENABLED:
     legacy_router = APIRouter(route_class=LegacyLoggingRoute)
     _register_api_routes(legacy_router, root)
     app.include_router(legacy_router)
+
+
+@app.get(
+    _config_snapshot.metrics.path,
+    include_in_schema=_config_snapshot.metrics.enabled,
+)
+async def metrics_endpoint(request: Request) -> PlainTextResponse:
+    metrics_config = getattr(request.app.state, "metrics_config", _config_snapshot.metrics)
+    logger.info(
+        "Metrics endpoint requested",  # pragma: no cover - logging string
+        extra={"event": "metrics.expose", "enabled": metrics_config.enabled},
+    )
+    if not metrics_config.enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metrics disabled")
+
+    registry = getattr(request.app.state, "metrics_registry", None)
+    body = ""
+    if registry is not None:
+        body = registry.render(version=request.app.version)
+    return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
 
 
 def _format_validation_field(raw_loc: list[Any]) -> str:
@@ -750,6 +921,56 @@ def custom_openapi() -> dict[str, Any]:
     schemas_section = components.setdefault("schemas", {})
     schemas_section.setdefault("ErrorObject", error_object_schema)
     schemas_section.setdefault("ErrorResponse", error_response_schema)
+    schemas_section.setdefault(
+        "HealthData",
+        {
+            "type": "object",
+            "required": ["status", "version", "uptime_s"],
+            "properties": {
+                "status": {"type": "string", "enum": ["up"]},
+                "version": {"type": "string"},
+                "uptime_s": {"type": "number"},
+            },
+        },
+    )
+    schemas_section.setdefault(
+        "HealthResponse",
+        {
+            "type": "object",
+            "required": ["ok", "data", "error"],
+            "properties": {
+                "ok": {"type": "boolean", "const": True},
+                "data": {"$ref": "#/components/schemas/HealthData"},
+                "error": {"type": "null"},
+            },
+        },
+    )
+    schemas_section.setdefault(
+        "ReadyData",
+        {
+            "type": "object",
+            "required": ["db", "deps"],
+            "properties": {
+                "db": {"type": "string"},
+                "deps": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+        },
+    )
+    schemas_section.setdefault(
+        "ReadySuccessResponse",
+        {
+            "type": "object",
+            "required": ["ok", "data", "error"],
+            "properties": {
+                "ok": {"type": "boolean", "const": True},
+                "data": {"$ref": "#/components/schemas/ReadyData"},
+                "error": {"type": "null"},
+            },
+        },
+    )
 
     security_config = config.security
 
@@ -834,6 +1055,99 @@ def custom_openapi() -> dict[str, Any]:
                 existing.setdefault("description", description)
                 content = existing.setdefault("content", {})
                 content.setdefault("application/json", {"schema": error_ref})
+
+    health_path = _compose_subpath(config.api_base_path, "/health")
+    ready_path = _compose_subpath(config.api_base_path, "/ready")
+    health_item = paths.get(health_path)
+    if isinstance(health_item, dict):
+        health_operation = health_item.get("get")
+        if isinstance(health_operation, dict):
+            health_operation.setdefault("summary", "Liveness probe")
+            health_operation.setdefault(
+                "description",
+                "Returns the service status, version and uptime.",
+            )
+            responses = health_operation.setdefault("responses", {})
+            responses["200"] = {
+                "description": "Liveness status",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/HealthResponse"},
+                        "example": {
+                            "ok": True,
+                            "data": {
+                                "status": "up",
+                                "version": app.version,
+                                "uptime_s": 1.23,
+                            },
+                            "error": None,
+                        },
+                    }
+                },
+            }
+
+    ready_item = paths.get(ready_path)
+    if isinstance(ready_item, dict):
+        ready_operation = ready_item.get("get")
+        if isinstance(ready_operation, dict):
+            ready_operation.setdefault("summary", "Readiness probe")
+            ready_operation.setdefault(
+                "description",
+                "Checks database connectivity and downstream dependencies.",
+            )
+            responses = ready_operation.setdefault("responses", {})
+            responses["200"] = {
+                "description": "All dependencies ready",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ReadySuccessResponse"},
+                        "example": {
+                            "ok": True,
+                            "data": {"db": "up", "deps": {}},
+                            "error": None,
+                        },
+                    }
+                },
+            }
+            responses["503"] = {
+                "description": "Dependencies unavailable",
+                "content": {
+                    "application/json": {
+                        "schema": error_ref,
+                        "example": {
+                            "ok": False,
+                            "error": {
+                                "code": "DEPENDENCY_ERROR",
+                                "message": "not ready",
+                                "meta": {
+                                    "db": "down",
+                                    "deps": {"spotify": "down"},
+                                },
+                            },
+                        },
+                    }
+                },
+            }
+
+    metrics_config = config.metrics
+    metrics_path = metrics_config.path
+    if not metrics_config.enabled:
+        paths.pop(metrics_path, None)
+    else:
+        metrics_item = paths.get(metrics_path)
+        if isinstance(metrics_item, dict):
+            metrics_operation = metrics_item.get("get")
+            if isinstance(metrics_operation, dict):
+                metrics_operation.setdefault("summary", "Prometheus metrics")
+                metrics_operation.setdefault(
+                    "description",
+                    "Exposes Prometheus compatible metrics in text format.",
+                )
+                responses = metrics_operation.setdefault("responses", {})
+                responses["200"] = {
+                    "description": "Prometheus metrics payload",
+                    "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}},
+                }
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
