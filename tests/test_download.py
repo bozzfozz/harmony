@@ -154,7 +154,9 @@ def test_get_downloads_supports_limit_and_offset(client) -> None:
 
 def test_get_downloads_rejects_invalid_limit(client) -> None:
     response = client.get("/downloads", params={"limit": -1})
-    assert response.status_code == 422
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_get_download_detail_returns_entry(client) -> None:

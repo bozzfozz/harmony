@@ -34,8 +34,9 @@ def test_flags_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
         assert artwork_response.json() == {
             "ok": False,
             "error": {
-                "code": "FEATURE_DISABLED",
+                "code": "DEPENDENCY_ERROR",
                 "message": "Artwork feature is disabled by configuration.",
+                "meta": {"feature": "artwork"},
             },
         }
 
@@ -44,8 +45,9 @@ def test_flags_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
         assert lyrics_response.json() == {
             "ok": False,
             "error": {
-                "code": "FEATURE_DISABLED",
+                "code": "DEPENDENCY_ERROR",
                 "message": "Lyrics feature is disabled by configuration.",
+                "meta": {"feature": "lyrics"},
             },
         }
 

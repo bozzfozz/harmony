@@ -6,13 +6,22 @@ import inspect
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+import sys
+from typing import Any, Mapping
 
-from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
+
+    class ExceptionGroup(Exception):  # type: ignore[override]
+        """Compatibility stub for Python versions without ExceptionGroup."""
+
 
 from app.config import AppConfig
 from app.core.config import DEFAULT_SETTINGS
@@ -25,6 +34,13 @@ from app.dependencies import (
 )
 from app.db import init_db
 from app.logging import configure_logging, get_logger
+from app.errors import (
+    AppError,
+    ErrorCode,
+    InternalServerError,
+    rate_limit_meta,
+    to_response,
+)
 from app.routers import (
     activity_router,
     backfill_router,
@@ -47,7 +63,6 @@ from app.routers import (
 from app.services.backfill_service import BackfillService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
 from app.services.cache import ResponseCache
-from app.problem_details import ProblemDetailException
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.workers import (
@@ -482,13 +497,190 @@ if _LEGACY_ROUTES_ENABLED:
     app.include_router(legacy_router)
 
 
-@app.exception_handler(ProblemDetailException)
-async def handle_problem_detail(request: Request, exc: ProblemDetailException) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=exc.to_dict(),
-        media_type="application/problem+json",
+def _format_validation_field(raw_loc: list[Any]) -> str:
+    location: list[str] = [str(part) for part in raw_loc]
+    if location and location[0] in {"body", "query", "path", "header", "cookie"}:
+        location = location[1:]
+    return ".".join(location) if location else ""
+
+
+def _extract_detail_message(detail: Any, default: str) -> str:
+    if isinstance(detail, str) and detail.strip():
+        return detail
+    if isinstance(detail, Mapping):
+        for key in ("message", "detail", "error"):
+            candidate = detail.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate
+    return default
+
+
+def _extract_detail_meta(detail: Any) -> Mapping[str, Any] | None:
+    if isinstance(detail, Mapping):
+        candidate = detail.get("meta")
+        if isinstance(candidate, Mapping):
+            return candidate
+        extras = {k: v for k, v in detail.items() if k not in {"message", "detail", "error"}}
+        if extras:
+            return extras
+    return None
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+    fields: list[dict[str, str]] = []
+    for error in exc.errors():
+        raw_loc = error.get("loc", [])
+        if isinstance(raw_loc, (list, tuple)):
+            components = list(raw_loc)
+        else:
+            components = [raw_loc]
+        location = _format_validation_field(components)
+        if not location:
+            location = ".".join(str(component) for component in components if component is not None)
+        message = error.get("msg", "Invalid input.")
+        fields.append({"name": location or "?", "message": message})
+    meta = {"fields": fields} if fields else None
+    return to_response(
+        message="Request validation failed.",
+        code=ErrorCode.VALIDATION_ERROR,
+        status_code=status.HTTP_400_BAD_REQUEST,
+        request_path=request.url.path,
+        method=request.method,
+        meta=meta,
     )
+
+
+async def _render_http_exception(
+    request: Request,
+    *,
+    status_code: int,
+    detail: Any,
+    headers: Mapping[str, str] | None,
+) -> JSONResponse:
+    effective_status = status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+    header_map = dict(headers or {})
+
+    if effective_status == status.HTTP_404_NOT_FOUND:
+        message = _extract_detail_message(detail, "Resource not found.")
+        return to_response(
+            message=message,
+            code=ErrorCode.NOT_FOUND,
+            status_code=effective_status,
+            request_path=request.url.path,
+            method=request.method,
+            headers=header_map or None,
+        )
+
+    if effective_status == status.HTTP_429_TOO_MANY_REQUESTS:
+        message = _extract_detail_message(detail, "Too many requests.")
+        base_meta = _extract_detail_meta(detail)
+        meta, retry_headers = rate_limit_meta(header_map)
+        if base_meta:
+            meta = {**base_meta, **(meta or {})}
+        combined_headers = {**header_map, **retry_headers}
+        return to_response(
+            message=message,
+            code=ErrorCode.RATE_LIMITED,
+            status_code=effective_status,
+            request_path=request.url.path,
+            method=request.method,
+            meta=meta,
+            headers=combined_headers or None,
+        )
+
+    if effective_status in {424, 502, 503, 504}:
+        message = _extract_detail_message(detail, "Upstream service is unavailable.")
+        meta = _extract_detail_meta(detail)
+        return to_response(
+            message=message,
+            code=ErrorCode.DEPENDENCY_ERROR,
+            status_code=effective_status,
+            request_path=request.url.path,
+            method=request.method,
+            meta=meta,
+            headers=header_map or None,
+        )
+
+    if effective_status == status.HTTP_400_BAD_REQUEST:
+        message = _extract_detail_message(detail, "Request validation failed.")
+        meta = _extract_detail_meta(detail)
+        return to_response(
+            message=message,
+            code=ErrorCode.VALIDATION_ERROR,
+            status_code=effective_status,
+            request_path=request.url.path,
+            method=request.method,
+            meta=meta,
+            headers=header_map or None,
+        )
+
+    if effective_status >= 500:
+        message = _extract_detail_message(detail, "An unexpected error occurred.")
+        meta = _extract_detail_meta(detail)
+        return to_response(
+            message=message,
+            code=ErrorCode.INTERNAL_ERROR,
+            status_code=effective_status,
+            request_path=request.url.path,
+            method=request.method,
+            meta=meta,
+        )
+
+    message = _extract_detail_message(detail, "Request could not be completed.")
+    meta = _extract_detail_meta(detail)
+    return to_response(
+        message=message,
+        code=ErrorCode.INTERNAL_ERROR,
+        status_code=effective_status,
+        request_path=request.url.path,
+        method=request.method,
+        meta=meta,
+        headers=header_map or None,
+    )
+
+
+@app.exception_handler(HTTPException)
+async def handle_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
+    return await _render_http_exception(
+        request,
+        status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=exc.detail,
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_starlette_http_exception(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    return await _render_http_exception(
+        request,
+        status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=exc.detail,
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(AppError)
+async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+    return exc.as_response(request_path=request.url.path, method=request.method)
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled application error", exc_info=exc)
+    error = InternalServerError()
+    return error.as_response(request_path=request.url.path, method=request.method)
+
+
+if sys.version_info >= (3, 11):  # pragma: no branch - version guard
+
+    @app.exception_handler(ExceptionGroup)  # type: ignore[arg-type]
+    async def handle_exception_group(request: Request, exc: ExceptionGroup) -> JSONResponse:
+        logger.exception("Unhandled application error group", exc_info=exc)
+        error = InternalServerError()
+        return error.as_response(request_path=request.url.path, method=request.method)
 
 
 def _is_allowlisted_path(path: str) -> bool:
@@ -529,6 +721,36 @@ def custom_openapi() -> dict[str, Any]:
     components = openapi_schema.setdefault("components", {})
     components.setdefault("securitySchemes", {})[security_scheme_name] = security_scheme
 
+    error_object_schema = {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+            "code": {
+                "type": "string",
+                "enum": [
+                    "VALIDATION_ERROR",
+                    "NOT_FOUND",
+                    "RATE_LIMITED",
+                    "DEPENDENCY_ERROR",
+                    "INTERNAL_ERROR",
+                ],
+            },
+            "message": {"type": "string"},
+            "meta": {"type": "object", "additionalProperties": True},
+        },
+    }
+    error_response_schema = {
+        "type": "object",
+        "required": ["ok", "error"],
+        "properties": {
+            "ok": {"type": "boolean", "const": False},
+            "error": {"$ref": "#/components/schemas/ErrorObject"},
+        },
+    }
+    schemas_section = components.setdefault("schemas", {})
+    schemas_section.setdefault("ErrorObject", error_object_schema)
+    schemas_section.setdefault("ErrorResponse", error_response_schema)
+
     security_config = config.security
 
     if security_config.require_auth and security_config.api_keys:
@@ -562,6 +784,17 @@ def custom_openapi() -> dict[str, Any]:
     }
 
     paths = openapi_schema.get("paths", {})
+    error_ref = {"$ref": "#/components/schemas/ErrorResponse"}
+    error_mappings = {
+        "400": "Validation error",
+        "404": "Resource not found",
+        "429": "Too many requests",
+        "424": "Failed dependency",
+        "500": "Internal server error",
+        "502": "Bad gateway",
+        "503": "Service unavailable",
+        "504": "Gateway timeout",
+    }
     for methods in paths.values():
         for method, operation in list(methods.items()):
             if method.lower() != "get" or not isinstance(operation, dict):
@@ -582,6 +815,25 @@ def custom_openapi() -> dict[str, Any]:
             header_section = not_modified.setdefault("headers", {})
             for header_name in ("ETag", "Last-Modified", "Cache-Control", "Vary"):
                 header_section.setdefault(header_name, dict(cache_header_spec[header_name]))
+
+    for methods in paths.values():
+        for operation in methods.values():
+            if not isinstance(operation, dict):
+                continue
+            responses = operation.setdefault("responses", {})
+            for status_code, description in error_mappings.items():
+                existing = responses.get(status_code)
+                if existing is None:
+                    responses[status_code] = {
+                        "description": description,
+                        "content": {"application/json": {"schema": error_ref}},
+                    }
+                    continue
+                if not isinstance(existing, dict):
+                    continue
+                existing.setdefault("description", description)
+                content = existing.setdefault("content", {})
+                content.setdefault("application/json", {"schema": error_ref})
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema

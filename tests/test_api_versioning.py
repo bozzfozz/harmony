@@ -15,4 +15,7 @@ def test_legacy_path_disabled_by_default(client) -> None:
     response = client.get("/status", use_raw_path=True)
     assert response.status_code == 404
     problem = response.json()
-    assert problem.get("detail") == "Not Found"
+    assert problem == {
+        "ok": False,
+        "error": {"code": "NOT_FOUND", "message": "Not Found"},
+    }

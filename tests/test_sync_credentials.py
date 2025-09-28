@@ -27,9 +27,11 @@ def test_manual_sync_blocks_without_credentials(client) -> None:
 
     assert response.status_code == 503
     payload = response.json()
-    detail = payload.get("detail", {}) if isinstance(payload, dict) else {}
-    assert detail.get("message") == "Sync blocked"
-    missing = detail.get("missing", {})
+    assert payload["ok"] is False
+    error = payload["error"]
+    assert error["code"] == "DEPENDENCY_ERROR"
+    assert error["message"] == "Sync blocked"
+    missing = error.get("meta", {}).get("missing", {})
     assert set(missing) == {"spotify", "soulseek"}
 
     with session_scope() as session:

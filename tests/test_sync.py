@@ -47,7 +47,9 @@ def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:
 
 def test_search_requires_query(client) -> None:
     response = client.post("/search", json={})
-    assert response.status_code == 422
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_search_aggregates_sources(client) -> None:

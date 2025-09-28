@@ -71,9 +71,13 @@ def test_free_ingest_rejects_invalid_playlist_host(client: SimpleTestClient) -> 
             "tracks": [],
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     payload = response.json()
+    assert payload["ok"] is False
     assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert payload["error"]["message"] == "invalid playlist links"
+    details = payload["error"].get("meta", {}).get("details", [])
+    assert details and details[0]["url"] == "https://example.com/playlist/123"
 
 
 def test_free_ingest_enforces_track_limit(

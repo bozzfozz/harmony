@@ -90,9 +90,11 @@ def test_date_filters_apply_to_export(client) -> None:
 
 def test_invalid_format_returns_422(client) -> None:
     response = client.get("/downloads/export", params={"format": "xml"})
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_invalid_date_returns_422(client) -> None:
     response = client.get("/downloads/export", params={"from": "invalid"})
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

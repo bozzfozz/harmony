@@ -27,13 +27,16 @@ def test_request_without_key_returns_401() -> None:
         response = client.get("/")
 
     assert response.status_code == 401
-    assert response.headers.get("content-type") == "application/problem+json"
-    assert response.json() == {
-        "type": "about:blank",
-        "title": "Unauthorized",
-        "status": 401,
-        "detail": "An API key is required to access this resource.",
+    body = response.json()
+    assert body == {
+        "ok": False,
+        "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "An API key is required to access this resource.",
+        },
     }
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    assert debug_header is not None
 
 
 def test_invalid_key_returns_403() -> None:
@@ -45,13 +48,16 @@ def test_invalid_key_returns_403() -> None:
         response = client.get("/")
 
     assert response.status_code == 403
-    assert response.headers.get("content-type") == "application/problem+json"
-    assert response.json() == {
-        "type": "about:blank",
-        "title": "Forbidden",
-        "status": 403,
-        "detail": "The provided API key is not valid.",
+    body = response.json()
+    assert body == {
+        "ok": False,
+        "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "The provided API key is not valid.",
+        },
     }
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    assert debug_header is not None
 
 
 def test_allowlist_path_bypasses_auth(monkeypatch: pytest.MonkeyPatch) -> None:
