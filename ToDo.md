@@ -2,6 +2,7 @@
 
 ## ✅ Erledigt
 - **Backend**
+  - Liveness (`/api/v1/health`), readiness (`/api/v1/ready`) and optional Prometheus metrics (`/metrics`) endpoints provide fast probes, configurable timeouts and documented observability settings.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:docs/observability.md†L1-L86】
   - API-Fehler folgen einem einheitlichen Envelope mit globalem FastAPI-Handler, App-spezifischem Fehlerbaum, Debug-ID-Header und dokumentiertem OpenAPI-Schema; Tests decken Mapping und Beispiele ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】【F:docs/errors.md†L1-L83】
   - HTTP-Caching für `/api/v1/*` liefert `ETag`/`Last-Modified`/`Cache-Control`, unterstützt `304 Not Modified`, nutzt einen TTL+LRU-In-Memory-Cache mit Invalidation und ist per `CACHE_*` ENV steuerbar.【F:app/middleware/cache_conditional.py†L1-L228】【F:app/services/cache.py†L1-L176】【F:app/main.py†L1-L421】【F:docs/api.md†L130-L164】
   - Globale API-Key-Authentifizierung sichert alle Router per Dependency, nutzt Problem-Details für 401/403 und respektiert konfigurierbare Allowlists; CORS akzeptiert nur definierte Origins.【F:app/dependencies.py†L1-L114】【F:app/main.py†L220-L315】【F:app/config.py†L79-L136】

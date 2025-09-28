@@ -91,6 +91,21 @@ class IntegrationsConfig:
 
 
 @dataclass(slots=True)
+class HealthConfig:
+    db_timeout_ms: int
+    dependency_timeout_ms: int
+    dependencies: tuple[str, ...]
+    require_database: bool
+
+
+@dataclass(slots=True)
+class MetricsConfig:
+    enabled: bool
+    path: str
+    require_api_key: bool
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     soulseek: SoulseekConfig
@@ -103,6 +118,8 @@ class AppConfig:
     integrations: IntegrationsConfig
     security: "SecurityConfig"
     api_base_path: str
+    health: HealthConfig
+    metrics: MetricsConfig
 
 
 @dataclass(slots=True)
@@ -138,8 +155,11 @@ DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
-DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/docs", "/redoc", "/openapi.json")
+DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
 DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
+DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
+DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
+DEFAULT_METRICS_PATH = "/metrics"
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -177,6 +197,21 @@ def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
             seen.add(item)
             deduplicated.append(item)
     return tuple(deduplicated or ("spotify",))
+
+
+def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:
+    if not value:
+        return ()
+    items = [entry.strip().lower() for entry in value.replace("\n", ",").split(",")]
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item:
+            continue
+        if item not in seen:
+            seen.add(item)
+            deduplicated.append(item)
+    return tuple(deduplicated)
 
 
 def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]:
@@ -242,6 +277,17 @@ def _compose_allowlist_entry(base_path: str, suffix: str) -> str:
     if not base_path or base_path == "/":
         return normalized_suffix
     return f"{base_path}{normalized_suffix}"
+
+
+def _normalise_metrics_path(value: Optional[str]) -> str:
+    candidate = (value or DEFAULT_METRICS_PATH).strip()
+    if not candidate:
+        candidate = DEFAULT_METRICS_PATH
+    if not candidate.startswith("/"):
+        candidate = f"/{candidate}"
+    if candidate != "/":
+        candidate = candidate.rstrip("/")
+    return candidate or DEFAULT_METRICS_PATH
 
 
 def _as_float(value: Optional[str], *, default: float) -> float:
@@ -551,6 +597,32 @@ def load_config() -> AppConfig:
         ),
     )
 
+    health = HealthConfig(
+        db_timeout_ms=max(
+            100,
+            _as_int(
+                os.getenv("HEALTH_DB_TIMEOUT_MS"),
+                default=DEFAULT_HEALTH_DB_TIMEOUT_MS,
+            ),
+        ),
+        dependency_timeout_ms=max(
+            100,
+            _as_int(
+                os.getenv("HEALTH_DEP_TIMEOUT_MS"),
+                default=DEFAULT_HEALTH_DEP_TIMEOUT_MS,
+            ),
+        ),
+        dependencies=_parse_dependency_names(os.getenv("HEALTH_DEPS")),
+        require_database=_as_bool(os.getenv("HEALTH_READY_REQUIRE_DB"), default=True),
+    )
+
+    metrics_path = _normalise_metrics_path(os.getenv("METRICS_PATH"))
+    metrics = MetricsConfig(
+        enabled=_as_bool(os.getenv("FEATURE_METRICS_ENABLED"), default=False),
+        path=metrics_path,
+        require_api_key=_as_bool(os.getenv("METRICS_REQUIRE_API_KEY"), default=True),
+    )
+
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
@@ -564,6 +636,9 @@ def load_config() -> AppConfig:
     allowlist_entries = _deduplicate_preserve_order(
         entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
     )
+    if not metrics.require_api_key:
+        metrics_prefix = _normalise_prefix(metrics.path)
+        allowlist_entries = _deduplicate_preserve_order((*allowlist_entries, metrics_prefix))
     allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
 
     security = SecurityConfig(
@@ -585,6 +660,8 @@ def load_config() -> AppConfig:
         integrations=integrations,
         security=security,
         api_base_path=api_base_path,
+        health=health,
+        metrics=metrics,
     )
 
 
