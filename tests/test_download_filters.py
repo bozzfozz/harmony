@@ -49,4 +49,6 @@ def test_status_filter_returns_expected_entries(client) -> None:
 
 def test_invalid_status_filter_returns_422(client) -> None:
     response = client.get("/downloads", params={"status": "unknown"})
-    assert response.status_code == 422
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"

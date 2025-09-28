@@ -6,10 +6,9 @@ import csv
 import io
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional
 
-from fastapi import HTTPException, status
-
 from app.models import Download
 from app.schemas import DownloadEntryResponse
+from app.errors import ValidationAppError
 
 STATUS_FILTERS: Dict[str, set[str]] = {
     "running": {"running", "downloading"},
@@ -52,10 +51,7 @@ def resolve_status_filter(value: str) -> set[str]:
     normalised = _normalise_status(value)
     states = STATUS_FILTERS.get(normalised)
     if states is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid status filter",
-        )
+        raise ValidationAppError("Invalid status filter")
     return states
 
 

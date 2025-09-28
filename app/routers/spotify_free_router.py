@@ -9,13 +9,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import AppConfig
 from app.db import session_scope
 from app.dependencies import get_app_config, get_soulseek_client
+from app.errors import DependencyError, NotFoundError, ValidationAppError
 from app.logging import get_logger
 from app.models import Download
 from app.utils.settings_store import write_setting
@@ -147,19 +147,6 @@ def _get_file_store(request: Request) -> _FreeImportFileStore:
         store = _FreeImportFileStore()
         request.app.state.spotify_free_store = store
     return store
-
-
-def _error_response(
-    *,
-    status_code: int,
-    code: str,
-    message: str,
-    errors: Optional[List[Dict[str, Any]]] = None,
-) -> JSONResponse:
-    payload: Dict[str, Any] = {"ok": False, "error": {"code": code, "message": message}}
-    if errors:
-        payload["error"]["details"] = errors
-    return JSONResponse(status_code=status_code, content=payload)
 
 
 def _split_lines(content: str) -> List[str]:
@@ -382,22 +369,10 @@ async def upload_import_file(
     suffix = filename.lower().rsplit(".", 1)
     extension = f".{suffix[1]}" if len(suffix) == 2 else ""
     if extension not in SUPPORTED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "VALIDATION_ERROR",
-                "message": "Unsupported file type. Allowed: .txt, .m3u, .m3u8",
-            },
-        )
+        raise ValidationAppError("Unsupported file type. Allowed: .txt, .m3u, .m3u8")
     content_bytes = payload.content.encode("utf-8", errors="ignore")
     if len(content_bytes) > config.spotify.free_import_max_file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "VALIDATION_ERROR",
-                "message": "File exceeds maximum allowed size",
-            },
-        )
+        raise ValidationAppError("File exceeds maximum allowed size")
     store = _get_file_store(request)
     token = store.store(payload.content)
     logger.info(
@@ -421,24 +396,12 @@ async def parse_import_lines(
     if payload.file_token:
         content = store.load(payload.file_token)
         if content is None:
-            return _error_response(
-                status_code=status.HTTP_404_NOT_FOUND,
-                code="NOT_FOUND",
-                message="Upload token is no longer valid",
-            )
+            raise NotFoundError("Upload token is no longer valid")
         combined_lines.extend(_split_lines(content))
     if not combined_lines:
-        return _error_response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="VALIDATION_ERROR",
-            message="No input provided",
-        )
+        raise ValidationAppError("No input provided")
     if len(combined_lines) > config.spotify.free_import_max_lines:
-        return _error_response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="VALIDATION_ERROR",
-            message="Too many lines submitted",
-        )
+        raise ValidationAppError("Too many lines submitted")
 
     items: List[NormalizedTrack] = []
     errors: List[Dict[str, Any]] = []
@@ -491,11 +454,9 @@ async def parse_import_lines(
         items.append(track)
 
     if errors:
-        return _error_response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="VALIDATION_ERROR",
-            message="Some lines could not be parsed",
-            errors=errors,
+        raise ValidationAppError(
+            "Some lines could not be parsed",
+            meta={"details": errors},
         )
 
     logger.info("event=spotify_free_parse count=%s", len(items))
@@ -509,11 +470,7 @@ async def enqueue_tracks(
     soulseek=Depends(get_soulseek_client),
 ) -> EnqueueResponse:
     if not payload.items:
-        return _error_response(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="VALIDATION_ERROR",
-            message="No tracks provided",
-        )
+        raise ValidationAppError("No tracks provided")
 
     worker = _ensure_worker(request)
     queued = 0
@@ -545,11 +502,10 @@ async def enqueue_tracks(
                 )
             except Exception as exc:  # pragma: no cover - defensive guard
                 logger.error("Spotify FREE enqueue search failed: %s", exc)
-                return _error_response(
+                raise DependencyError(
+                    "Unable to query Soulseek",
                     status_code=status.HTTP_424_FAILED_DEPENDENCY,
-                    code="DEPENDENCY_ERROR",
-                    message="Unable to query Soulseek",
-                )
+                ) from exc
             username, candidate = _select_candidate(results)
             if username and candidate:
                 query_used = query

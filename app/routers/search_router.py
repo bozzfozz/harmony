@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Dict, Iterable, Optional, Sequence, cast
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.matching_engine import MusicMatchingEngine
@@ -19,6 +19,7 @@ from app.dependencies import (
     get_soulseek_client,
     get_spotify_client,
 )
+from app.errors import DependencyError
 from app.logging import get_logger
 from app.schemas_search import (
     ItemTypeLiteral,
@@ -126,14 +127,10 @@ async def smart_search(
         logger.error(
             "Search failed for all sources", extra={"event": "search", "sources": resolved_sources}
         )
-        raise HTTPException(
+        raise DependencyError(
+            "All search sources failed",
+            meta={"failures": failures},
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "ok": False,
-                "code": "DEPENDENCY_ERROR",
-                "message": "All search sources failed",
-                "errors": failures,
-            },
         )
 
     filtered = _apply_filters(aggregated, request)

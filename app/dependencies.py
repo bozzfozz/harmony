@@ -17,8 +17,8 @@ from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
 from app.db import get_session
 from app.integrations.registry import ProviderRegistry
+from app.errors import AppError, ErrorCode
 from app.logging import get_logger
-from app.problem_details import ProblemDetailException
 from app.services.integration_service import IntegrationService
 
 logger = get_logger(__name__)
@@ -113,10 +113,10 @@ def require_api_key(request: Request) -> None:
                 "method": request.method,
             },
         )
-        raise ProblemDetailException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Unauthorized",
+        raise AppError(
             "An API key is required to access this resource.",
+            code=ErrorCode.INTERNAL_ERROR,
+            http_status=status.HTTP_401_UNAUTHORIZED,
         )
 
     presented_key = _extract_presented_key(request)
@@ -129,10 +129,10 @@ def require_api_key(request: Request) -> None:
                 "method": request.method,
             },
         )
-        raise ProblemDetailException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Unauthorized",
+        raise AppError(
             "An API key is required to access this resource.",
+            code=ErrorCode.INTERNAL_ERROR,
+            http_status=status.HTTP_401_UNAUTHORIZED,
         )
 
     for valid_key in security.api_keys:
@@ -147,8 +147,8 @@ def require_api_key(request: Request) -> None:
             "method": request.method,
         },
     )
-    raise ProblemDetailException(
-        status.HTTP_403_FORBIDDEN,
-        "Forbidden",
+    raise AppError(
         "The provided API key is not valid.",
+        code=ErrorCode.INTERNAL_ERROR,
+        http_status=status.HTTP_403_FORBIDDEN,
     )

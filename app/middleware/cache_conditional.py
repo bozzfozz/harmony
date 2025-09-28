@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Awaitable, Callable, Mapping
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -18,6 +19,13 @@ from app.services.cache import (
     build_cache_key,
     resolve_auth_variant,
 )
+from app.errors import AppError, InternalServerError
+
+if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
+
+    class ExceptionGroup(Exception):  # type: ignore[override]
+        """Compatibility stub for Python versions without ExceptionGroup."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,20 +73,20 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         if not self._enabled:
-            return await call_next(request)
+            return await self._call_next(request, call_next)
 
         method = request.method.upper()
         route = request.scope.get("route")
         path_template = getattr(route, "path_format", request.url.path)
 
         if method != "GET":
-            response = await call_next(request)
+            response = await self._call_next(request, call_next)
             if method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
                 await self._invalidate_related(path_template)
             return response
 
         if not self._is_cacheable_path(path_template):
-            response = await call_next(request)
+            response = await self._call_next(request, call_next)
             return self._apply_headers(response, path_template)
 
         cache_key = self._build_cache_key(request, path_template)
@@ -88,8 +96,24 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
                 return self._build_not_modified_response(entry)
             return self._build_cached_response(entry)
 
-        response = await call_next(request)
+        response = await self._call_next(request, call_next)
         return await self._store_and_respond(request, response, path_template, cache_key)
+
+    async def _call_next(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        try:
+            return await call_next(request)
+        except ExceptionGroup as exc:  # pragma: no cover - defensive
+            if len(exc.exceptions) == 1:
+                raise exc.exceptions[0]
+            raise
+        except (HTTPException, AppError):
+            raise
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Unhandled error in cache middleware", exc_info=exc)
+            error = InternalServerError()
+            return error.as_response(request_path=request.url.path, method=request.method)
 
     def _is_cacheable_path(self, path_template: str) -> bool:
         return path_template in self._policies

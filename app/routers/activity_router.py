@@ -9,10 +9,11 @@ from typing import Any, Dict, Literal
 import csv
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, Response
 
 from app.logging import get_logger
+from app.errors import ValidationAppError
 from app.db import session_scope
 from app.models import ActivityEvent
 from app.utils.activity import activity_manager
@@ -80,7 +81,7 @@ def _query_events(
     start = _normalise_timestamp(from_timestamp)
     end = _normalise_timestamp(to_timestamp)
     if start and end and end < start:
-        raise HTTPException(status_code=422, detail="'to' must be greater than or equal to 'from'")
+        raise ValidationAppError("'to' must be greater than or equal to 'from'")
     if start:
         filters.append(ActivityEvent.timestamp >= start)
     if end:

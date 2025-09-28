@@ -16,10 +16,12 @@ def test_download_endpoint_blocks_without_soulseek_credentials(client) -> None:
 
     assert response.status_code == 503
     body = response.json()
-    detail = body.get("detail", {}) if isinstance(body, dict) else {}
-    assert detail.get("message") == "Download blocked"
-    missing = detail.get("missing", {})
-    assert set(missing) == {"soulseek"}
+    assert body["ok"] is False
+    error = body["error"]
+    assert error["code"] == "DEPENDENCY_ERROR"
+    assert error["message"] == "Download blocked"
+    missing = set(error.get("meta", {}).get("missing", []))
+    assert missing == {"soulseek"}
 
     with session_scope() as session:
         downloads = session.query(Download).all()

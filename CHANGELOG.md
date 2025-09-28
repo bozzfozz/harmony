@@ -9,6 +9,7 @@
 
 ## v1.x.x
 
+- feat(api): vereinheitlichte Fehlerbehandlung mit globalem FastAPI-Handler, Fehlerklassen und einem stabilen Fehler-Envelope (`ok=false`, `error{code,message,meta}`); OpenAPI veröffentlicht `ErrorResponse`, Tests decken Mapping (Validation, Not Found, Rate Limit, Dependency, Internal) sowie Debug-Header ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】
 - fix(frontend): lazy load Library tabs, gate queries/toasts to the active view and sync the tab state with the URL to eliminate background polling.
 - feat(frontend): introduce a unified Library page with shadcn/ui tabs for artists, downloads and watchlist while redirecting legacy routes to the new entry point.
 - sec: enforce global API-Key authentication for all routers, return RFC 7807 problem-details for 401/403, document the scheme in OpenAPI, add configurable allowlist and restrictive CORS via env (`HARMONY_API_KEYS`, `AUTH_ALLOWLIST`, `ALLOWED_ORIGINS`).

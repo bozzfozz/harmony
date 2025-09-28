@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from app.config import AppConfig
 from app.dependencies import get_app_config
 from app.db import session_scope
+from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.models import ImportBatch, ImportSession
 from app.utils.spotify_free import (
@@ -50,15 +51,9 @@ async def create_free_import(
     body_size = len(body)
 
     if body_size > hard_cap_bytes:
-        return JSONResponse(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            content={
-                "ok": False,
-                "error": {
-                    "code": "TOO_MANY_ITEMS",
-                    "message": "payload exceeds maximum allowed size",
-                },
-            },
+        raise ValidationAppError(
+            "payload exceeds maximum allowed size",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
         )
 
     content_type = request.headers.get("content-type")
@@ -72,39 +67,15 @@ async def create_free_import(
             allow_user_urls=config.spotify.free_accept_user_urls,
         )
     except TooManyItemsError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            content={
-                "ok": False,
-                "error": {
-                    "code": "TOO_MANY_ITEMS",
-                    "message": f"received {exc.provided} links which exceeds hard limit {exc.limit}",
-                },
-            },
-        )
+        raise ValidationAppError(
+            f"received {exc.provided} links which exceeds hard limit {exc.limit}",
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        ) from exc
     except InvalidPayloadError as exc:
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "ok": False,
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": f"invalid payload: {exc.message}",
-                },
-            },
-        )
+        raise ValidationAppError(f"invalid payload: {exc.message}") from exc
 
     if not parse_result.accepted:
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "ok": False,
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "no valid playlist links in payload",
-                },
-            },
-        )
+        raise ValidationAppError("no valid playlist links in payload")
 
     session_id = _generate_id("sess")
     batch_records: List[ImportBatch] = []

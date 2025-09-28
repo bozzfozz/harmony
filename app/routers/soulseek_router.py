@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.db import session_scope
 from app.dependencies import get_db, get_soulseek_client
+from app.errors import DependencyError
 from app.logging import get_logger
 from app.models import DiscographyJob, Download
 from app.schemas import (
@@ -35,17 +36,11 @@ from app.workers.sync_worker import SyncWorker
 from app.utils import artwork_utils
 
 
-def _feature_disabled_response(feature: str) -> JSONResponse:
+def _feature_disabled_error(feature: str) -> DependencyError:
     capitalised = feature.capitalize()
-    return JSONResponse(
-        status_code=503,
-        content={
-            "ok": False,
-            "error": {
-                "code": "FEATURE_DISABLED",
-                "message": f"{capitalised} feature is disabled by configuration.",
-            },
-        },
+    return DependencyError(
+        f"{capitalised} feature is disabled by configuration.",
+        meta={"feature": feature},
     )
 
 
@@ -217,7 +212,7 @@ def soulseek_download_lyrics(
     """Return the generated LRC lyrics for a completed download."""
 
     if not _feature_enabled(request, "lyrics"):
-        return _feature_disabled_response("lyrics")
+        raise _feature_disabled_error("lyrics")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -257,7 +252,7 @@ async def refresh_download_lyrics(
     """Force a new lyrics lookup for the given download."""
 
     if not _feature_enabled(request, "lyrics"):
-        return _feature_disabled_response("lyrics")
+        raise _feature_disabled_error("lyrics")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -438,7 +433,7 @@ def soulseek_download_artwork(
     """Return the stored artwork as an image file."""
 
     if not _feature_enabled(request, "artwork"):
-        return _feature_disabled_response("artwork")
+        raise _feature_disabled_error("artwork")
 
     download = session.get(Download, download_id)
     if download is None:
@@ -464,7 +459,7 @@ async def soulseek_refresh_artwork(
     """Force an artwork refresh for a completed download."""
 
     if not _feature_enabled(request, "artwork"):
-        return _feature_disabled_response("artwork")
+        raise _feature_disabled_error("artwork")
 
     download = session.get(Download, download_id)
     if download is None:

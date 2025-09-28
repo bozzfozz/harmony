@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
 from app.dependencies import get_integration_service
+from app.errors import InternalServerError
 from app.services.integration_service import IntegrationService, ProviderHealth
 
 
@@ -35,7 +36,7 @@ def get_integrations(
     try:
         health: list[ProviderHealth] = service.health()
     except Exception as exc:  # pragma: no cover - defensive guard
-        return IntegrationsResponse(ok=False, error={"code": "INTERNAL_ERROR", "message": str(exc)})
+        raise InternalServerError("Failed to retrieve integration status.") from exc
     providers = [
         ProviderInfo(name=item.name, enabled=item.enabled, health=item.health) for item in health
     ]

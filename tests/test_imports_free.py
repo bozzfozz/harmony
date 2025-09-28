@@ -150,4 +150,6 @@ def test_hard_overlimit_returns_413(client: SimpleTestClient) -> None:
     assert response.status_code == 413
     payload = response.json()
     assert payload["ok"] is False
-    assert payload["error"]["code"] == "TOO_MANY_ITEMS"
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert "exceeds hard limit" in error["message"]

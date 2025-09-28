@@ -34,6 +34,7 @@ from app.utils.events import (
 )
 from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import PersistentJobQueue
+from app.errors import AppError, ValidationAppError
 
 router = APIRouter(tags=["Download"])
 logger = get_logger(__name__)
@@ -46,10 +47,7 @@ def _parse_iso8601(value: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(candidate)
     except ValueError as exc:  # pragma: no cover - defensive validation
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid datetime parameter",
-        ) from exc
+        raise ValidationAppError("Invalid datetime parameter") from exc
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed
@@ -103,7 +101,7 @@ def list_downloads(
             status_filter=status_label,
         )
         downloads = query.offset(offset).limit(limit).all()
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to list downloads: %s", exc)
@@ -125,7 +123,7 @@ def get_download(
     logger.info("Download detail requested for id=%s", download_id)
     try:
         download = session.get(Download, download_id)
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to load download %s: %s", download_id, exc)
@@ -152,7 +150,7 @@ def update_download_priority(
     logger.info("Priority update requested for download %s", download_id)
     try:
         download = session.get(Download, download_id)
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to load download %s for priority update: %s", download_id, exc)
@@ -323,7 +321,7 @@ async def cancel_download(
     logger.info("Cancellation requested for download id=%s", download_id)
     try:
         download = session.get(Download, download_id)
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to load download %s for cancellation: %s", download_id, exc)
@@ -390,10 +388,7 @@ def export_downloads(
 
     fmt = (format or "json").strip().lower()
     if fmt not in {"json", "csv"}:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Unsupported export format",
-        )
+        raise ValidationAppError("Unsupported export format")
 
     status_label = status_filter.strip() if isinstance(status_filter, str) else None
     created_from = _parse_iso8601(from_time) if from_time else None
@@ -408,7 +403,7 @@ def export_downloads(
             created_to=created_to,
         )
         downloads = query.all()
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to export downloads: %s", exc)
@@ -440,7 +435,7 @@ async def retry_download(
     logger.info("Retry requested for download id=%s", download_id)
     try:
         original = session.get(Download, download_id)
-    except HTTPException:
+    except (HTTPException, AppError):
         raise
     except Exception as exc:  # pragma: no cover - defensive database failure handling
         logger.exception("Failed to load download %s for retry: %s", download_id, exc)

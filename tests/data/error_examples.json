@@ -1,0 +1,63 @@
+[
+  {
+    "description": "Validation error with field details",
+    "payload": {
+      "ok": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Request validation failed.",
+        "meta": {
+          "fields": [
+            {"name": "playlist_links", "message": "Input should be a valid list"}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "description": "Not found error",
+    "payload": {
+      "ok": false,
+      "error": {
+        "code": "NOT_FOUND",
+        "message": "Watchlist entry was not found"
+      }
+    }
+  },
+  {
+    "description": "Rate limited with retry after",
+    "payload": {
+      "ok": false,
+      "error": {
+        "code": "RATE_LIMITED",
+        "message": "Too many requests",
+        "meta": {
+          "retry_after_ms": 2500
+        }
+      }
+    }
+  },
+  {
+    "description": "Dependency error for disabled feature",
+    "payload": {
+      "ok": false,
+      "error": {
+        "code": "DEPENDENCY_ERROR",
+        "message": "Artwork feature is disabled by configuration.",
+        "meta": {
+          "feature": "artwork"
+        }
+      }
+    }
+  },
+  {
+    "description": "Internal error fallback",
+    "payload": {
+      "ok": false,
+      "error": {
+        "code": "INTERNAL_ERROR",
+        "message": "An unexpected error occurred."
+      }
+    }
+  }
+]

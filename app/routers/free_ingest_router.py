@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import AppConfig
 from app.dependencies import get_app_config, get_soulseek_client
+from app.errors import NotFoundError, ValidationAppError
 from app.services.free_ingest_service import (
     FreeIngestService,
     IngestSubmission,
@@ -35,7 +36,7 @@ class FreeIngestRequest(BaseModel):
             return []
         if isinstance(value, list):
             return value
-        raise TypeError("playlist_links must be an array")
+        raise ValueError("playlist_links must be an array")
 
     @field_validator("tracks", mode="before")
     @classmethod
@@ -44,7 +45,7 @@ class FreeIngestRequest(BaseModel):
             return []
         if isinstance(value, list):
             return value
-        raise TypeError("tracks must be an array")
+        raise ValueError("tracks must be an array")
 
 
 class SubmissionAccepted(BaseModel):
@@ -144,11 +145,7 @@ async def submit_free_ingest(
     service: FreeIngestService = Depends(_get_service),
 ) -> JSONResponse:
     if not payload.playlist_links and not payload.tracks:
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message="playlist_links or tracks required",
-        )
+        raise ValidationAppError("playlist_links or tracks required")
 
     try:
         result = await service.submit(
@@ -158,12 +155,10 @@ async def submit_free_ingest(
         )
     except PlaylistValidationError as exc:
         details = [{"url": item.url, "reason": item.reason} for item in exc.invalid_links]
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message="invalid playlist links",
-            details=details,
-        )
+        raise ValidationAppError(
+            "invalid playlist links",
+            meta={"details": details},
+        ) from exc
 
     response = _build_submission_response(result)
     status_code = _submission_status_code(result)
@@ -180,34 +175,18 @@ async def upload_free_ingest(
     try:
         filename, content = _parse_multipart_file(content_type, body)
     except ValueError as exc:
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message=str(exc),
-        )
+        raise ValidationAppError(str(exc)) from exc
 
     if not content:
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message="file is empty",
-        )
+        raise ValidationAppError("file is empty")
 
     try:
         tracks = FreeIngestService.parse_tracks_from_file(content, filename)
     except ValueError as exc:
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message=str(exc),
-        )
+        raise ValidationAppError(str(exc)) from exc
 
     if not tracks:
-        return _error_response(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            code="VALIDATION_ERROR",
-            message="no tracks found in file",
-        )
+        raise ValidationAppError("no tracks found in file")
 
     result = await service.submit(tracks=tracks)
     response = _build_submission_response(result)
@@ -222,10 +201,7 @@ async def get_free_ingest_job(
 ) -> JobResponse:
     status_info = service.get_job_status(job_id)
     if status_info is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "NOT_FOUND", "message": "job not found"},
-        )
+        raise NotFoundError("job not found")
 
     counts = JobCountsModel(
         registered=status_info.counts.registered,
@@ -257,26 +233,6 @@ async def get_free_ingest_job(
         skip_reason=status_info.skip_reason,
     )
     return JobResponse(ok=True, job=payload, error=None)
-
-
-def _error_response(
-    *,
-    status_code: int,
-    code: str,
-    message: str,
-    details: List[Dict[str, Any]] | None = None,
-) -> JSONResponse:
-    error_payload: Dict[str, Any] = {"code": code, "message": message}
-    if details:
-        error_payload["details"] = details
-    content: Dict[str, Any] = {
-        "ok": False,
-        "job_id": None,
-        "accepted": None,
-        "skipped": {"playlists": 0, "tracks": 0, "reason": None},
-        "error": error_payload,
-    }
-    return JSONResponse(status_code=status_code, content=content)
 
 
 def _parse_multipart_file(content_type: str, body: bytes) -> Tuple[str, bytes]:
