@@ -1,4 +1,5 @@
 ## v1.0.1 — 2025-09-25
+- docs: `AGENTS.md` – Initiative Policy, Scope-Guard, Clarification & PR-Regeln ergänzt.
 - Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, bandit/npm audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
 - Update PR-Template: TASK_ID und Testnachweise verpflichtend.
 
