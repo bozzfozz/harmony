@@ -15,9 +15,10 @@ from app.db import Base
 # Import models for metadata registration
 from app import models  # noqa: F401
 
-config = context.config
+_context_config = getattr(context, "config", None)
+config = _context_config if _context_config is not None else Config()
 
-if config.config_file_name is not None:
+if getattr(config, "config_file_name", None):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
@@ -79,7 +80,8 @@ def get_database_url(alembic_config: Optional[Config] = None) -> str:
     return _resolve_database_url(alembic_config or config)
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+if _context_config is not None:
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()

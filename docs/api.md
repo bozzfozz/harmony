@@ -91,6 +91,27 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 
 `tests/snapshots/openapi.json` enthält einen Snapshot der generierten OpenAPI-Spezifikation. Die CI validiert Änderungen automatisch (`python -m app.main` → `app.openapi()`).
 
+## HTTP-Caching
+
+- Alle idempotenten `GET`-Antworten tragen nun `ETag`, `Last-Modified`, `Cache-Control` und `Vary`-Header. Clients können `If-None-Match`
+  oder `If-Modified-Since` senden, um `304 Not Modified` ohne Body zu erhalten.
+- Serverseitig puffert ein In-Memory-LRU-Cache (`ResponseCache`) erfolgreiche `GET`-Antworten unter Berücksichtigung von Query-Params,
+  Pfadparametern und Authentifizierungsvarianten. Schreiboperationen (`POST/PUT/PATCH/DELETE`) invalidieren die entsprechenden Schlüssel.
+- Feature-Flags & Konfiguration:
+
+| Variable | Default | Beschreibung |
+| -------- | ------- | ------------ |
+| `CACHE_ENABLED` | `true` | Aktiviert Middleware & Cache. |
+| `CACHE_DEFAULT_TTL_S` | `30` | TTL (Sekunden) für ungepolicte Routen. |
+| `CACHE_STALE_WHILE_REVALIDATE_S` | `60` | `stale-while-revalidate`-Fenster (Sekunden). |
+| `CACHE_MAX_ITEMS` | `5000` | Maximal zwischengespeicherte Einträge (LRU). |
+| `CACHE_STRATEGY_ETAG` | `strong` | `strong` oder `weak` ETag-Generierung. |
+| `CACHEABLE_PATHS` | – | Optionale CSV-Liste `</pfad>|<ttl>|<swr>` pro Route; leer ⇒ alle GET-Routen unter `/api/v1`. |
+| `CACHE_FAIL_OPEN` | `true` | Bei Cache-Fehlern Antwort ohne Cache ausliefern. |
+
+- Monitoring: Strukturierte Logs (`event=cache.hit|miss|store|invalidate`) zeigen Keys, TTLs und Latenzen an. Zusätzliche Metriken lassen sich
+  via Observability-Pipeline ableiten.
+
 ## Archivierte Routen
 
 Alle `/plex/*` und `/beets/*`-Routen sind aus der App entfernt und liefern `404` bzw. sind vollständig deaktiviert. Das Audit-Skript verhindert, dass neue Referenzen im aktiven Code auftauchen.

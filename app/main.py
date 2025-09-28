@@ -45,6 +45,8 @@ from app.routers import (
     watchlist_router,
 )
 from app.services.backfill_service import BackfillService
+from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
+from app.services.cache import ResponseCache
 from app.problem_details import ProblemDetailException
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
@@ -74,6 +76,62 @@ def _format_router_prefix(base_path: str) -> str:
     if not base_path or base_path == "/":
         return ""
     return base_path
+
+
+def _env_as_bool(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_as_int(value: str | None, *, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalise_cache_path(raw_path: str, base_path: str) -> str:
+    path = raw_path.strip()
+    if not path:
+        return ""
+    if not path.startswith("/"):
+        path = f"/{path}"
+    if not base_path or base_path == "/":
+        return path
+    if path.startswith(base_path):
+        return path
+    return f"{base_path.rstrip('/')}{path}"
+
+
+def _parse_cache_policies(
+    raw_value: str | None,
+    *,
+    base_path: str,
+    default_ttl: int,
+    default_stale: int,
+) -> dict[str, CachePolicy]:
+    if not raw_value:
+        return {}
+    policies: dict[str, CachePolicy] = {}
+    for chunk in raw_value.split(","):
+        entry = chunk.strip()
+        if not entry:
+            continue
+        parts = [component.strip() for component in entry.split("|") if component.strip()]
+        if not parts:
+            continue
+        path = _normalise_cache_path(parts[0], base_path)
+        max_age = default_ttl
+        stale = default_stale
+        if len(parts) > 1:
+            max_age = _env_as_int(parts[1], default=default_ttl)
+        if len(parts) > 2:
+            stale = _env_as_int(parts[2], default=default_stale)
+        policies[path] = CachePolicy(path=path, max_age=max_age, stale_while_revalidate=stale)
+    return policies
 
 
 class LegacyLoggingRoute(APIRoute):
@@ -370,6 +428,45 @@ app.add_middleware(
     expose_headers=[],
 )
 
+_cache_enabled = _env_as_bool(os.getenv("CACHE_ENABLED"), default=True)
+_cache_default_ttl = _env_as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)
+_cache_default_stale = _env_as_int(
+    os.getenv("CACHE_STALE_WHILE_REVALIDATE_S"), default=_cache_default_ttl * 2
+)
+_cache_max_items = _env_as_int(os.getenv("CACHE_MAX_ITEMS"), default=5_000)
+_cache_fail_open = _env_as_bool(os.getenv("CACHE_FAIL_OPEN"), default=True)
+_cache_etag_strategy = os.getenv("CACHE_STRATEGY_ETAG", "strong")
+_cacheable_paths_raw = os.getenv("CACHEABLE_PATHS")
+
+_cache_policies = _parse_cache_policies(
+    _cacheable_paths_raw,
+    base_path=_format_router_prefix(_API_BASE_PATH) or "/",
+    default_ttl=_cache_default_ttl,
+    default_stale=_cache_default_stale,
+)
+_cache_default_policy = CachePolicy(
+    path="*",
+    max_age=_cache_default_ttl,
+    stale_while_revalidate=_cache_default_stale,
+)
+_response_cache = ResponseCache(
+    max_items=_cache_max_items,
+    default_ttl=float(_cache_default_ttl),
+    fail_open=_cache_fail_open,
+)
+app.state.response_cache = _response_cache
+app.state.cache_policies = _cache_policies
+
+app.add_middleware(
+    ConditionalCacheMiddleware,
+    cache=_response_cache,
+    enabled=_cache_enabled,
+    policies=_cache_policies,
+    default_policy=_cache_default_policy,
+    etag_strategy=_cache_etag_strategy,
+    vary_headers=("Authorization", "X-API-Key", "Accept-Encoding"),
+)
+
 
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
@@ -444,6 +541,47 @@ def custom_openapi() -> dict[str, Any]:
                         operation.pop("security", None)
     else:
         openapi_schema["security"] = []
+
+    cache_header_spec = {
+        "ETag": {
+            "description": "Entity tag identifying the cached representation.",
+            "schema": {"type": "string"},
+        },
+        "Last-Modified": {
+            "description": "Timestamp of the last modification in RFC 1123 format.",
+            "schema": {"type": "string", "format": "date-time"},
+        },
+        "Cache-Control": {
+            "description": "Cache directives for clients and proxies.",
+            "schema": {"type": "string"},
+        },
+        "Vary": {
+            "description": "Headers that affect the cached representation.",
+            "schema": {"type": "string"},
+        },
+    }
+
+    paths = openapi_schema.get("paths", {})
+    for methods in paths.values():
+        for method, operation in list(methods.items()):
+            if method.lower() != "get" or not isinstance(operation, dict):
+                continue
+            responses = operation.setdefault("responses", {})
+            success = responses.get("200")
+            if isinstance(success, dict):
+                header_section = success.setdefault("headers", {})
+                for header_name, header_spec in cache_header_spec.items():
+                    header_section.setdefault(header_name, dict(header_spec))
+            not_modified = responses.setdefault(
+                "304",
+                {
+                    "description": "Not Modified",
+                    "headers": {},
+                },
+            )
+            header_section = not_modified.setdefault("headers", {})
+            for header_name in ("ETag", "Last-Modified", "Cache-Control", "Vary"):
+                header_section.setdefault(header_name, dict(cache_header_spec[header_name]))
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema

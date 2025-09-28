@@ -2,6 +2,7 @@
 
 ## ✅ Erledigt
 - **Backend**
+  - HTTP-Caching für `/api/v1/*` liefert `ETag`/`Last-Modified`/`Cache-Control`, unterstützt `304 Not Modified`, nutzt einen TTL+LRU-In-Memory-Cache mit Invalidation und ist per `CACHE_*` ENV steuerbar.【F:app/middleware/cache_conditional.py†L1-L228】【F:app/services/cache.py†L1-L176】【F:app/main.py†L1-L421】【F:docs/api.md†L130-L164】
   - Globale API-Key-Authentifizierung sichert alle Router per Dependency, nutzt Problem-Details für 401/403 und respektiert konfigurierbare Allowlists; CORS akzeptiert nur definierte Origins.【F:app/dependencies.py†L1-L114】【F:app/main.py†L220-L315】【F:app/config.py†L79-L136】
   - FastAPI bindet die aktiven Router (`/spotify`, `/soulseek`, `/matching`, `/settings`, `/search`, `/sync`, `/system`, `/download`, `/activity`, `/health`, `/watchlist`) ein, initialisiert die Datenbank und setzt Default-Settings im Lifespan-Hook. Archivierte Plex/Beets-Routen werden nicht registriert.【F:app/main.py†L248-L268】
   - Der Lifespan-Handler startet Artwork-, Lyrics-, Metadata-, Sync-, Matching-, Playlist-, Watchlist- und Retry-Worker und stoppt sie über die zentralisierte Shutdown-Routine wieder sauber. Plex/Beets-abhängige Worker bleiben deaktiviert.【F:app/main.py†L94-L214】
