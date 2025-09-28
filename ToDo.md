@@ -19,6 +19,7 @@
 - Alle produktiven Endpunkte laufen unter dem versionierten Präfix `/api/v1`; das Feature-Flag `FEATURE_ENABLE_LEGACY_ROUTES` hält die alten Pfade temporär parallel erreichbar, OpenAPI/Docs spiegeln den Namespace und das Frontend nutzt den neuen Basis-Pfad.【F:app/main.py†L295-L389】【F:app/config.py†L424-L511】【F:frontend/src/lib/api.ts†L1-L40】【F:docs/api.md†L5-L113】
 - **Frontend**
   - Das React-Frontend liefert geroutete Seiten für Dashboard, Library (Artists/Downloads/Watchlist), Spotify und Settings und nutzt einen Vite/TypeScript-Tooling-Stack inklusive Lint-, Test- und Build-Skripten.【F:frontend/src/routes/index.tsx†L1-L17】【F:frontend/package.json†L1-L35】
+  - Library-Tabs werden lazy geladen; nur der aktive Tab mountet Queries/Polling und synchronisiert den Tab-State mit der URL (TASK CODX-FE-045).【F:frontend/src/pages/Library/index.tsx†L1-L88】【F:frontend/src/pages/Library/LibraryDownloads.tsx†L1-L200】【F:frontend/src/__tests__/library.tabs.test.tsx†L1-L134】
   - Spotify-Seite mit FREE-Import-Karte (Textarea, Upload, Vorschau, Enqueue) sowie Modus-Schalter im Settings-Tab.【F:frontend/src/pages/SpotifyPage.tsx†L1-L79】【F:frontend/src/components/SpotifyFreeImport.tsx†L1-L187】【F:frontend/src/pages/SettingsPage.tsx†L1-L210】
 - **Tests**
   - Die Pytest-Suite deckt u. a. Such-Filterlogik und Watchlist-Automatisierung ab und läuft vollständig grün mit 214 Tests.【F:tests/test_search.py†L39-L107】【F:tests/test_watchlist.py†L14-L141】【8a3823†L1-L34】

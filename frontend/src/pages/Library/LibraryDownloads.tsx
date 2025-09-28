@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Button,
@@ -16,6 +16,7 @@ import { useToast } from '../../hooks/useToast';
 import {
   ApiError,
   DownloadEntry,
+  LIBRARY_POLL_INTERVAL_MS,
   cancelDownload,
   exportDownloads,
   getDownloads,
@@ -36,7 +37,11 @@ const statusOptions = [
   { value: 'blocked', label: 'Blockiert' }
 ];
 
-const LibraryDownloads = () => {
+interface LibraryDownloadsProps {
+  isActive?: boolean;
+}
+
+const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
   const { toast } = useToast();
   const [trackId, setTrackId] = useState('');
   const [showAllDownloads, setShowAllDownloads] = useState(false);
@@ -45,10 +50,23 @@ const LibraryDownloads = () => {
   const [priorityDrafts, setPriorityDrafts] = useState<Record<number, number>>({});
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
 
+  const isActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  const showErrorToast = (message: Parameters<typeof toast>[0]) => {
+    if (!isActiveRef.current) {
+      return;
+    }
+    toast(message);
+  };
+
   const handleCredentialsError = (error: unknown) => {
     if (error instanceof ApiError && error.status === 503) {
       if (!error.handled) {
-        toast({
+        showErrorToast({
           title: '❌ Zugangsdaten erforderlich',
           description: 'Bitte hinterlegen Sie gültige Zugangsdaten in den Einstellungen.',
           variant: 'destructive'
@@ -72,7 +90,7 @@ const LibraryDownloads = () => {
         includeAll: showAllDownloads,
         status: statusFilter === 'all' ? undefined : statusFilter
       }),
-    refetchInterval: 15000,
+    refetchInterval: isActive ? LIBRARY_POLL_INTERVAL_MS : false,
     onError: (error) => {
       if (handleCredentialsError(error)) {
         return;
@@ -83,12 +101,13 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Downloads konnten nicht geladen werden',
         description: 'Bitte Backend-Logs prüfen.',
         variant: 'destructive'
       });
-    }
+    },
+    enabled: isActive
   });
 
   const startDownloadMutation = useMutation({
@@ -113,7 +132,7 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Download fehlgeschlagen',
         description: 'Bitte Eingabe prüfen und erneut versuchen.',
         variant: 'destructive'
@@ -140,7 +159,7 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Abbruch fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'
@@ -171,7 +190,7 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Neu-Start fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'
@@ -208,7 +227,7 @@ const LibraryDownloads = () => {
           return;
         }
         error.markHandled();
-        toast({
+        showErrorToast({
           title: 'Neu-Start fehlgeschlagen',
           description: error.message,
           variant: 'destructive'
@@ -216,7 +235,7 @@ const LibraryDownloads = () => {
         return;
       }
       const description = error instanceof Error ? error.message : 'Unbekannter Fehler';
-      toast({
+      showErrorToast({
         title: 'Neu-Start fehlgeschlagen',
         description,
         variant: 'destructive'
@@ -249,7 +268,7 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Priorität konnte nicht aktualisiert werden',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'
@@ -322,7 +341,7 @@ const LibraryDownloads = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Export fehlgeschlagen',
         description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'

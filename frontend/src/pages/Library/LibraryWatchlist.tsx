@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 import {
@@ -21,11 +21,28 @@ import {
 } from '../../lib/api';
 import { useMutation, useQuery } from '../../lib/query';
 
-const LibraryWatchlist = () => {
+interface LibraryWatchlistProps {
+  isActive?: boolean;
+}
+
+const LibraryWatchlist = ({ isActive = true }: LibraryWatchlistProps = {}) => {
   const { toast } = useToast();
   const [spotifyArtistId, setSpotifyArtistId] = useState('');
   const [artistName, setArtistName] = useState('');
   const [removalId, setRemovalId] = useState<number | null>(null);
+
+  const isActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  const showErrorToast = (message: Parameters<typeof toast>[0]) => {
+    if (!isActiveRef.current) {
+      return;
+    }
+    toast(message);
+  };
 
   const dateFormatter = useMemo(
     () =>
@@ -46,12 +63,13 @@ const LibraryWatchlist = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Watchlist konnte nicht geladen werden',
         description: 'Bitte Backend-Verbindung prüfen.',
         variant: 'destructive'
       });
-    }
+    },
+    enabled: isActive
   });
 
   const addMutation = useMutation({
@@ -68,7 +86,7 @@ const LibraryWatchlist = () => {
     onError: (error) => {
       if (error instanceof ApiError) {
         if (error.status === 409) {
-          toast({
+          showErrorToast({
             title: 'Artist bereits vorhanden',
             description: 'Dieser Artist ist schon in der Watchlist.',
             variant: 'destructive'
@@ -80,7 +98,7 @@ const LibraryWatchlist = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Watchlist konnte nicht aktualisiert werden',
         description: 'Bitte Eingaben prüfen und erneut versuchen.',
         variant: 'destructive'
@@ -102,7 +120,7 @@ const LibraryWatchlist = () => {
       setRemovalId(null);
       if (error instanceof ApiError) {
         if (error.status === 404) {
-          toast({
+          showErrorToast({
             title: 'Artist nicht gefunden',
             description: 'Der Eintrag wurde bereits entfernt.',
             variant: 'destructive'
@@ -114,7 +132,7 @@ const LibraryWatchlist = () => {
         }
         error.markHandled();
       }
-      toast({
+      showErrorToast({
         title: 'Watchlist konnte nicht aktualisiert werden',
         description: 'Bitte versuchen Sie es erneut.',
         variant: 'destructive'

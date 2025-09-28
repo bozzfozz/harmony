@@ -1,11 +1,13 @@
-import { useEffect, useMemo } from 'react';
+import { Suspense, lazy, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 import { Tabs, TabsContent } from '../../components/ui/shadcn';
-import LibraryArtists from './LibraryArtists';
-import LibraryDownloads from './LibraryDownloads';
 import LibraryTabs, { LibraryTabKey, libraryTabItems } from './LibraryTabs';
-import LibraryWatchlist from './LibraryWatchlist';
+
+const LibraryArtists = lazy(() => import('./LibraryArtists'));
+const LibraryDownloads = lazy(() => import('./LibraryDownloads'));
+const LibraryWatchlist = lazy(() => import('./LibraryWatchlist'));
 
 const DEFAULT_TAB: LibraryTabKey = 'artists';
 
@@ -37,8 +39,16 @@ const LibraryPage = () => {
     const normalized = isLibraryTab(nextTab) ? nextTab : DEFAULT_TAB;
     const params = new URLSearchParams(searchParams);
     params.set('tab', normalized);
-    setSearchParams(params, { replace: true });
+    setSearchParams(params);
   };
+
+  const renderTabFallback = () => (
+    <div className="flex justify-center py-12 text-muted-foreground">
+      <span className="inline-flex items-center gap-2 text-sm">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Lädt Inhalte…
+      </span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -51,13 +61,25 @@ const LibraryPage = () => {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <LibraryTabs />
         <TabsContent value="artists" className="space-y-6">
-          <LibraryArtists />
+          {activeTab === 'artists' ? (
+            <Suspense fallback={renderTabFallback()}>
+              <LibraryArtists isActive />
+            </Suspense>
+          ) : null}
         </TabsContent>
         <TabsContent value="downloads" className="space-y-6">
-          <LibraryDownloads />
+          {activeTab === 'downloads' ? (
+            <Suspense fallback={renderTabFallback()}>
+              <LibraryDownloads isActive />
+            </Suspense>
+          ) : null}
         </TabsContent>
         <TabsContent value="watchlist" className="space-y-6">
-          <LibraryWatchlist />
+          {activeTab === 'watchlist' ? (
+            <Suspense fallback={renderTabFallback()}>
+              <LibraryWatchlist isActive />
+            </Suspense>
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>
