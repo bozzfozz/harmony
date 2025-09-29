@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import FailedBadge from '../../components/downloads/FailedBadge';
 import {
   Button,
   Card,
@@ -16,15 +17,18 @@ import { useToast } from '../../hooks/useToast';
 import {
   ApiError,
   DownloadEntry,
+  DOWNLOAD_STATS_QUERY_KEY,
   LIBRARY_POLL_INTERVAL_MS,
   cancelDownload,
   exportDownloads,
   getDownloads,
-  retryDownload,
   startDownload,
-  updateDownloadPriority
+  updateDownloadPriority,
+  useClearDownload,
+  useRetryAllFailed,
+  useRetryDownload
 } from '../../lib/api';
-import { useMutation, useQuery } from '../../lib/query';
+import { useMutation, useQuery, useQueryClient } from '../../lib/query';
 import { mapProgressToPercent } from '../../lib/utils';
 
 const statusOptions = [
@@ -43,12 +47,14 @@ interface LibraryDownloadsProps {
 
 const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [trackId, setTrackId] = useState('');
   const [showAllDownloads, setShowAllDownloads] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityDrafts, setPriorityDrafts] = useState<Record<number, number>>({});
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
+  const [failedCount, setFailedCount] = useState(0);
 
   const isActiveRef = useRef(isActive);
 
@@ -167,8 +173,7 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
     }
   });
 
-  const retryDownloadMutation = useMutation({
-    mutationFn: async ({ id }: { id: string; filename: string }) => retryDownload(id),
+  const retryDownloadMutation = useRetryDownload({
     onSuccess: (entry, { filename }) => {
       toast({
         title: 'Download neu gestartet',
@@ -179,6 +184,7 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
             : 'Download wurde erneut gestartet.'
       });
       void refetch();
+      queryClient.invalidateQueries({ queryKey: [...DOWNLOAD_STATS_QUERY_KEY] });
     },
     onError: (error) => {
       if (handleCredentialsError(error)) {
@@ -198,25 +204,14 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
     }
   });
 
-  const failedDownloads = useMemo(
-    () => (downloads ?? []).filter((download) => (download.status ?? '').toLowerCase() === 'failed'),
-    [downloads]
-  );
-  const failedDownloadIds = useMemo(
-    () => failedDownloads.map((download) => String(download.id)),
-    [failedDownloads]
-  );
-  const hasFailedDownloads = failedDownloadIds.length > 0;
-
-  const bulkRetryMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        await retryDownload(id);
-      }
-    },
-    onSuccess: async () => {
-      toast({ title: 'Alle fehlgeschlagenen Downloads wurden neu gestartet' });
-      await refetch();
+  const clearDownloadMutation = useClearDownload({
+    onSuccess: ({ filename }) => {
+      toast({
+        title: 'Download entfernt',
+        description: filename ? `"${filename}" wurde aus der Liste entfernt.` : undefined
+      });
+      void refetch();
+      queryClient.invalidateQueries({ queryKey: [...DOWNLOAD_STATS_QUERY_KEY] });
     },
     onError: (error) => {
       if (handleCredentialsError(error)) {
@@ -227,17 +222,10 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
           return;
         }
         error.markHandled();
-        showErrorToast({
-          title: 'Neu-Start fehlgeschlagen',
-          description: error.message,
-          variant: 'destructive'
-        });
-        return;
       }
-      const description = error instanceof Error ? error.message : 'Unbekannter Fehler';
       showErrorToast({
-        title: 'Neu-Start fehlgeschlagen',
-        description,
+        title: 'Eintrag konnte nicht entfernt werden',
+        description: 'Bitte erneut versuchen oder Backend-Logs prüfen.',
         variant: 'destructive'
       });
     }
@@ -276,6 +264,50 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
     }
   });
 
+  const retryAllFailedMutation = useRetryAllFailed({
+    onSuccess: (result) => {
+      const { requeued, skipped } = result;
+      const parts = [`Neu gestartet: ${requeued}`];
+      parts.push(`Übersprungen: ${skipped}`);
+      toast({
+        title: 'Fehlgeschlagene Downloads neu gestartet',
+        description: parts.join(' • ')
+      });
+      void refetch();
+    },
+    onError: (error) => {
+      if (handleCredentialsError(error)) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        if (error.status === 404 || error.status === 405 || error.status === 501) {
+          toast({
+            title: 'Aktion nicht verfügbar',
+            description: 'Das Backend unterstützt kein globales Neu-Starten.',
+            variant: 'default'
+          });
+          return;
+        }
+        if (error.handled) {
+          return;
+        }
+        error.markHandled();
+        showErrorToast({
+          title: 'Neu-Start fehlgeschlagen',
+          description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
+      const description = error instanceof Error ? error.message : 'Unbekannter Fehler';
+      showErrorToast({
+        title: 'Neu-Start fehlgeschlagen',
+        description,
+        variant: 'destructive'
+      });
+    }
+  });
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!trackId.trim()) {
@@ -290,7 +322,11 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
   };
 
   const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setStatusFilter(event.target.value);
+    const nextStatus = event.target.value;
+    setStatusFilter(nextStatus);
+    if (nextStatus === 'failed') {
+      setShowAllDownloads(true);
+    }
   };
 
   const handlePriorityInputChange = (downloadId: number, value: number) => {
@@ -415,14 +451,30 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
                   : 'Übersicht der aktuell aktiven Transfers.'}
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAllDownloads((value) => !value)}
-              aria-pressed={showAllDownloads}
-            >
-              {showAllDownloads ? 'Nur aktive' : 'Alle anzeigen'}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <FailedBadge
+                isActive={isActive}
+                isSelected={statusFilter === 'failed'}
+                onSelect={() =>
+                  setStatusFilter((current) => {
+                    if (current === 'failed') {
+                      return 'all';
+                    }
+                    setShowAllDownloads(true);
+                    return 'failed';
+                  })
+                }
+                onCountChange={setFailedCount}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAllDownloads((value) => !value)}
+                aria-pressed={showAllDownloads}
+              >
+                {showAllDownloads ? 'Nur aktive' : 'Alle anzeigen'}
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -448,25 +500,35 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                if (!hasFailedDownloads || bulkRetryMutation.isPending) {
-                  return;
-                }
-                void bulkRetryMutation.mutateAsync(failedDownloadIds);
-              }}
-              disabled={!hasFailedDownloads || bulkRetryMutation.isPending}
-            >
-              {bulkRetryMutation.isPending ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Wird neu gestartet...
-                </span>
-              ) : (
-                'Alle fehlgeschlagenen neu starten'
-              )}
-            </Button>
+            {retryAllFailedMutation.isSupported ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (failedCount === 0 || retryAllFailedMutation.isPending) {
+                    return;
+                  }
+                  const message =
+                    failedCount === 1
+                      ? 'Soll der fehlgeschlagene Download erneut gestartet werden?'
+                      : `Sollen ${failedCount} fehlgeschlagene Downloads erneut gestartet werden?`;
+                  const confirmed = window.confirm(message);
+                  if (!confirmed) {
+                    return;
+                  }
+                  void retryAllFailedMutation.mutate();
+                }}
+                disabled={failedCount === 0 || retryAllFailedMutation.isPending}
+              >
+                {retryAllFailedMutation.isPending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Wird neu gestartet...
+                  </span>
+                ) : (
+                  'Alle fehlgeschlagenen erneut versuchen'
+                )}
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -524,6 +586,7 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
                     const statusLower = (download.status ?? '').toLowerCase();
                     const showCancel = statusLower === 'running' || statusLower === 'queued' || statusLower === 'downloading';
                     const showRetry = statusLower === 'failed' || statusLower === 'cancelled';
+                    const showClear = statusLower === 'failed';
                     const draftPriority = priorityDrafts[numericId];
                     const priorityValue = Number.isFinite(draftPriority)
                       ? draftPriority
@@ -584,7 +647,8 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
                               }
                               disabled={
                                 cancelDownloadMutation.isPending ||
-                                retryDownloadMutation.isPending
+                                retryDownloadMutation.isPending ||
+                                clearDownloadMutation.isPending
                               }
                             >
                               Abbrechen
@@ -603,13 +667,35 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
                               }
                               disabled={
                                 cancelDownloadMutation.isPending ||
-                                retryDownloadMutation.isPending
+                                retryDownloadMutation.isPending ||
+                                clearDownloadMutation.isPending
                               }
                             >
                               Neu starten
                             </Button>
                           ) : null}
-                          {!showCancel && !showRetry ? (
+                          {showClear ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() =>
+                                clearDownloadMutation.mutate({
+                                  id: String(download.id),
+                                  filename: download.filename
+                                })
+                              }
+                              disabled={
+                                clearDownloadMutation.isPending ||
+                                cancelDownloadMutation.isPending ||
+                                retryDownloadMutation.isPending
+                              }
+                            >
+                              Entfernen
+                            </Button>
+                          ) : null}
+                          {!showCancel && !showRetry && !showClear ? (
                             <span className="text-xs text-muted-foreground">Keine Aktion</span>
                           ) : null}
                         </TableCell>

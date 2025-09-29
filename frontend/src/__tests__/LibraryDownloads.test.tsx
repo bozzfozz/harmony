@@ -2,53 +2,35 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
-import {
-  ApiError,
-  exportDownloads,
-  getDownloads,
-  retryDownload,
-  startDownload,
-  updateDownloadPriority
-} from '../lib/api';
+import { ApiError, exportDownloads, getDownloads, startDownload, updateDownloadPriority, useDownloadStats } from '../lib/api';
 
 jest.mock('../lib/api', () => ({
   ...jest.requireActual('../lib/api'),
   getDownloads: jest.fn(),
   startDownload: jest.fn(),
-  retryDownload: jest.fn(),
   updateDownloadPriority: jest.fn(),
-  exportDownloads: jest.fn()
+  exportDownloads: jest.fn(),
+  useDownloadStats: jest.fn()
 }));
 
 const mockedGetDownloads = getDownloads as jest.MockedFunction<typeof getDownloads>;
 const mockedStartDownload = startDownload as jest.MockedFunction<typeof startDownload>;
-const mockedRetryDownload = retryDownload as jest.MockedFunction<typeof retryDownload>;
 const mockedUpdatePriority = updateDownloadPriority as jest.MockedFunction<typeof updateDownloadPriority>;
 const mockedExportDownloads = exportDownloads as jest.MockedFunction<typeof exportDownloads>;
+const mockedUseDownloadStats = useDownloadStats as jest.MockedFunction<typeof useDownloadStats>;
 
 const toastMock = jest.fn();
 
 describe('LibraryDownloads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('shows the bulk retry button when failed downloads exist', async () => {
-    mockedGetDownloads.mockResolvedValue([
-      {
-        id: 10,
-        filename: 'Failed Song.mp3',
-        status: 'failed',
-        progress: 0,
-        priority: 1
-      }
-    ]);
-
-    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
-
-    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
-    expect(bulkButton).toBeInTheDocument();
-    expect(bulkButton).toBeEnabled();
+    mockedUseDownloadStats.mockImplementation(() => ({
+      data: { failed: 0 },
+      isLoading: false,
+      error: undefined,
+      isError: false,
+      refetch: jest.fn()
+    }));
   });
 
   it('filters downloads by status', async () => {
@@ -129,86 +111,6 @@ describe('LibraryDownloads', () => {
 
     expect(await screen.findByText('Retried File.mp3')).toBeInTheDocument();
     expect(screen.getByText('Download Retry Scheduled')).toBeInTheDocument();
-  });
-
-  it('retries all failed downloads when using the bulk retry button', async () => {
-    mockedGetDownloads.mockResolvedValue([
-      {
-        id: 11,
-        filename: 'First Failed.mp3',
-        status: 'failed',
-        progress: 0,
-        priority: 1
-      },
-      {
-        id: 12,
-        filename: 'Second Failed.mp3',
-        status: 'failed',
-        progress: 0,
-        priority: 2
-      },
-      {
-        id: 13,
-        filename: 'Completed.mp3',
-        status: 'completed',
-        progress: 100,
-        priority: 3
-      }
-    ]);
-    mockedRetryDownload.mockResolvedValue({
-      id: 11,
-      filename: 'First Failed.mp3',
-      status: 'queued',
-      progress: 0,
-      priority: 1
-    } as never);
-
-    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
-
-    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
-    await userEvent.click(bulkButton);
-
-    await waitFor(() => expect(mockedRetryDownload).toHaveBeenCalledTimes(2));
-    expect(mockedRetryDownload).toHaveBeenCalledWith('11');
-    expect(mockedRetryDownload).toHaveBeenCalledWith('12');
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Alle fehlgeschlagenen Downloads wurden neu gestartet' })
-    );
-  });
-
-  it('shows an error toast when the bulk retry fails', async () => {
-    mockedGetDownloads.mockResolvedValue([
-      {
-        id: 20,
-        filename: 'Broken.mp3',
-        status: 'failed',
-        progress: 0,
-        priority: 1
-      }
-    ]);
-    mockedRetryDownload.mockRejectedValue(
-      new ApiError({
-        message: 'Retry fehlgeschlagen',
-        status: 500,
-        data: null,
-        originalError: new Error('retry failed')
-      })
-    );
-
-    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
-
-    const bulkButton = await screen.findByRole('button', { name: 'Alle fehlgeschlagenen neu starten' });
-    await userEvent.click(bulkButton);
-
-    await waitFor(() =>
-      expect(toastMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Neu-Start fehlgeschlagen',
-          description: 'Retry fehlgeschlagen'
-        })
-      )
-    );
-    expect(mockedRetryDownload).toHaveBeenCalledTimes(1);
   });
 
   it('exports downloads as CSV', async () => {

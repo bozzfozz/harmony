@@ -5,6 +5,13 @@ import { useQuery } from '../lib/query';
 
 type MockedUseQuery = jest.MockedFunction<typeof useQuery>;
 
+type QueryOptions = {
+  queryKey?: unknown;
+  enabled?: boolean;
+  refetchInterval?: number | false;
+  onError?: (error: unknown) => void;
+};
+
 jest.mock('../lib/query', () => {
   const actual = jest.requireActual('../lib/query');
   return {
@@ -15,65 +22,80 @@ jest.mock('../lib/query', () => {
 
 const mockedUseQuery = useQuery as MockedUseQuery;
 
+const createQueryResult = () => ({
+  data: [],
+  error: undefined,
+  isLoading: false,
+  isError: false,
+  refetch: jest.fn()
+});
+
 describe('Library tab gating', () => {
   beforeEach(() => {
     mockedUseQuery.mockReset();
   });
 
   it('verhindert Datenabfragen in inaktiven Tabs', () => {
-    const capturedOptions: unknown[] = [];
-    mockedUseQuery.mockImplementation((options: any) => {
+    const capturedOptions: QueryOptions[] = [];
+    mockedUseQuery.mockImplementation((options: QueryOptions) => {
       capturedOptions.push(options);
-      return {
-        data: [],
-        error: undefined,
-        isLoading: false,
-        isError: false,
-        refetch: jest.fn()
-      };
+      return createQueryResult();
     });
 
     renderWithProviders(<LibraryDownloads isActive={false} />);
 
-    expect(capturedOptions).toHaveLength(1);
-    const options = capturedOptions[0] as { enabled?: boolean; refetchInterval?: number | false };
-    expect(options.enabled).toBe(false);
-    expect(options.refetchInterval).toBe(false);
+    const listOptions = capturedOptions.find((option) => {
+      const queryKey = option.queryKey as unknown[] | undefined;
+      return Array.isArray(queryKey) && queryKey.length === 3;
+    });
+    const statsOptions = capturedOptions.find((option) => {
+      const queryKey = option.queryKey as unknown[] | undefined;
+      return Array.isArray(queryKey) && queryKey.length === 2 && queryKey[1] === 'stats';
+    });
+
+    expect(listOptions).toBeDefined();
+    expect(listOptions?.enabled).toBe(false);
+    expect(listOptions?.refetchInterval).toBe(false);
+
+    expect(statsOptions).toBeDefined();
+    expect(statsOptions?.enabled).toBe(false);
   });
 
   it('aktiviert Polling nur im aktiven Tab', () => {
-    const capturedOptions: unknown[] = [];
-    mockedUseQuery.mockImplementation((options: any) => {
+    const capturedOptions: QueryOptions[] = [];
+    mockedUseQuery.mockImplementation((options: QueryOptions) => {
       capturedOptions.push(options);
-      return {
-        data: [],
-        error: undefined,
-        isLoading: false,
-        isError: false,
-        refetch: jest.fn()
-      };
+      return createQueryResult();
     });
 
     renderWithProviders(<LibraryDownloads isActive />);
 
-    expect(capturedOptions).toHaveLength(1);
-    const options = capturedOptions[0] as { enabled?: boolean; refetchInterval?: number | false };
-    expect(options.enabled).toBe(true);
-    expect(options.refetchInterval).toBe(LIBRARY_POLL_INTERVAL_MS);
+    const listOptions = capturedOptions.find((option) => {
+      const queryKey = option.queryKey as unknown[] | undefined;
+      return Array.isArray(queryKey) && queryKey.length === 3;
+    });
+    const statsOptions = capturedOptions.find((option) => {
+      const queryKey = option.queryKey as unknown[] | undefined;
+      return Array.isArray(queryKey) && queryKey.length === 2 && queryKey[1] === 'stats';
+    });
+
+    expect(listOptions).toBeDefined();
+    expect(listOptions?.enabled).toBe(true);
+    expect(listOptions?.refetchInterval).toBe(LIBRARY_POLL_INTERVAL_MS);
+
+    expect(statsOptions).toBeDefined();
+    expect(statsOptions?.enabled).toBe(true);
   });
 
   it('unterdrückt Fehler-Toasts wenn der Tab inaktiv ist', () => {
     const toastSpy = jest.fn();
     let onError: ((error: unknown) => void) | undefined;
-    mockedUseQuery.mockImplementation((options: any) => {
-      onError = options.onError;
-      return {
-        data: [],
-        error: undefined,
-        isLoading: false,
-        isError: false,
-        refetch: jest.fn()
-      };
+    mockedUseQuery.mockImplementation((options: QueryOptions) => {
+      const queryKey = options.queryKey as unknown[] | undefined;
+      if (Array.isArray(queryKey) && queryKey.length === 3) {
+        onError = options.onError;
+      }
+      return createQueryResult();
     });
 
     renderWithProviders(<LibraryDownloads isActive={false} />, { toastFn: toastSpy });
