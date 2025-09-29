@@ -38,6 +38,13 @@ from app.workers.retry_scheduler import RetryScheduler
 from tests.simple_client import SimpleTestClient
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "lifespan_workers: enable worker lifecycle tests that re-enable background workers with test stubs.",
+    )
+
+
 class StubSpotifyClient:
     def __init__(self) -> None:
         self.tracks: Dict[str, Dict[str, Any]] = {
@@ -686,3 +693,15 @@ def backfill_runtime(client: SimpleTestClient):
         client._loop.run_until_complete(worker.stop())
         client.app.state.backfill_worker = None
         client.app.state.backfill_service = None
+
+
+@pytest.fixture
+def lifespan_worker_settings(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    if request.node.get_closest_marker("lifespan_workers") is None:
+        yield
+        return
+    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "0")
+    monkeypatch.setenv("HARMONY_TEST_FAKE_WORKERS", "1")
+    yield

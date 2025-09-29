@@ -8,6 +8,9 @@
   responses and an in-memory TTL+LRU response cache with automatic invalidation hooks and configuration via `CACHE_*` variables.
 
 ## v1.x.x
+- test(lifespan): add dedicated FastAPI lifespan and worker lifecycle coverage with
+  stubbed workers, including startup failures, idempotent shutdown and
+  cancellation scenarios.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
 - refactor(worker): make the watchlist worker async-safe with DAO backed
   database access, configurable timeouts/backoff and deterministic shutdown; see
   `docs/worker_watchlist.md` for the updated architecture.【F:app/workers/watchlist_worker.py†L1-L341】【F:app/services/watchlist_dao.py†L1-L189】【F:docs/worker_watchlist.md†L1-L74】

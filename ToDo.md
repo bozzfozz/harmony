@@ -28,6 +28,7 @@
   - API-Key-Gating im Frontend blockt Requests ohne Schlüssel, setzt automatisch `X-API-Key`/`Authorization` nach Modus und bietet ein Settings-Panel zur lokalen Verwaltung inklusive Maskierung.【F:frontend/src/lib/api.ts†L1-L120】【F:frontend/src/lib/auth.ts†L1-L67】【F:frontend/src/pages/Settings/AuthKeyPanel.tsx†L1-L115】【F:frontend/src/__tests__/auth-header.test.ts†L1-L120】
 - **Tests**
   - Die Pytest-Suite deckt u. a. Such-Filterlogik und Watchlist-Automatisierung ab und läuft vollständig grün mit 214 Tests.【F:tests/test_search.py†L39-L107】【F:tests/test_watchlist.py†L14-L141】【8a3823†L1-L34】
+  - Lifespan-Tests prüfen Worker-Start, Fehlerpfade, Idempotenz und Cancel-Verhalten mit dedizierten Stubs.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
 - **Dokumentation**
   - README und CHANGELOG dokumentieren Smart Search, Worker, Watchlist, Release-Highlights sowie die aktuellen CI-Gates konsistent zum Code-Stand.【F:README.md†L101-L172】【F:CHANGELOG.md†L1-L18】
 - **Suche**
@@ -44,8 +45,6 @@
 - **Frontend**
   - DLQ-Downloads im Frontend visualisieren und steuerbar machen (bulk requeue, purge) inkl. Monitoring von Retry-Metriken.【F:app/routers/dlq_router.py†L1-L228】【F:docs/operations/dlq.md†L1-L144】
   - Secret-Validierung perspektivisch um persistente Historie und Metrics ergänzen (z. B. Erfolgsquote, letzte Prüfung pro Provider).【F:app/services/secret_validation.py†L1-L248】
-- **Tests**
-  - Der neue Lifespan-Pfad benötigt ergänzende Tests, die Start-/Stop-Orchestrierung und fehlertolerantes Verhalten der Worker absichern.【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
 
 ## 🏁 Nächste Meilensteine
 - **Backend**
