@@ -5,13 +5,16 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional, cast
+from typing import Any, Callable, Dict, Literal, Optional, cast
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.logging import get_logger
 from app.db import session_scope
 from app.models import Download, WorkerJob
+from app.dependencies import get_db
 from app.utils.activity import record_worker_stale
 from app.utils.events import WORKER_STALE
 from app.utils.service_health import evaluate_all_service_health
@@ -23,6 +26,12 @@ from app.utils.worker_health import (
     resolve_status,
 )
 from app.errors import DependencyError
+from app.services.secret_store import SecretStore
+from app.services.secret_validation import (
+    SecretValidationResult,
+    SecretValidationService,
+    SecretValidationSettings,
+)
 from app.services.health import HealthService
 from sqlalchemy import func, select
 
@@ -39,11 +48,50 @@ _START_TIME = datetime.now(timezone.utc)
 QueueValue = Any
 
 
+class SecretValidationRequest(BaseModel):
+    value: Optional[str] = Field(
+        default=None,
+        description="Optional override secret value used only for validation.",
+        max_length=256,
+    )
+
+
+class SecretValidatedPayload(BaseModel):
+    mode: Literal["live", "format"]
+    valid: bool
+    at: datetime
+    reason: Optional[str] = None
+    note: Optional[str] = None
+
+
+class SecretValidationPayload(BaseModel):
+    provider: str
+    validated: SecretValidatedPayload
+
+
+class SecretValidationEnvelope(BaseModel):
+    ok: bool
+    data: SecretValidationPayload
+    error: Optional[Dict[str, Any]] = None
+
+
+_DEFAULT_SECRET_VALIDATION_SERVICE = SecretValidationService(
+    settings=SecretValidationSettings.from_env()
+)
+
+
 def _get_health_service(request: Request) -> HealthService:
     service = getattr(request.app.state, "health_service", None)
     if service is None:  # pragma: no cover - configuration guard
         raise RuntimeError("Health service is not configured")
     return cast(HealthService, service)
+
+
+def _get_secret_validation_service(request: Request) -> SecretValidationService:
+    service = getattr(request.app.state, "secret_validation_service", None)
+    if service is None:
+        return _DEFAULT_SECRET_VALIDATION_SERVICE
+    return cast(SecretValidationService, service)
 
 
 @router.get("/health", tags=["System"])
@@ -113,6 +161,33 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
     )
     response = error.as_response(request_path=request.url.path, method=request.method)
     return response
+
+
+@router.post(
+    "/secrets/{provider}/validate",
+    response_model=SecretValidationEnvelope,
+    tags=["System"],
+)
+async def validate_secret(
+    provider: str,
+    request: Request,
+    payload: Optional[SecretValidationRequest] = None,
+    session: Session = Depends(get_db),
+) -> SecretValidationEnvelope:
+    service = _get_secret_validation_service(request)
+    store = SecretStore(session)
+    normalized_provider = provider.strip().lower()
+    override_value = payload.value if payload is not None else None
+    result: SecretValidationResult = await service.validate(
+        normalized_provider,
+        store=store,
+        override=override_value,
+    )
+    response_payload = SecretValidationPayload(
+        provider=result.provider,
+        validated=SecretValidatedPayload(**result.validated.as_dict()),
+    )
+    return SecretValidationEnvelope(ok=True, data=response_payload, error=None)
 
 
 @dataclass(frozen=True)

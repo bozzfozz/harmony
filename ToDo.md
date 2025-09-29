@@ -42,6 +42,7 @@
   - DLQ-Einträge benötigen langfristig UI/Management (Filter, Retry, Cleanup) und Monitoring-Kennzahlen.【F:app/routers/soulseek_router.py†L180-L225】
   - Watchlist-Worker auf blockierende API-Calls prüfen und bei Bedarf via `asyncio.to_thread` oder dedizierte Executor kapseln.【F:app/workers/watchlist_worker.py†L101-L210】
   - slskd-Adapter asynchronisieren und echte Track-Suche via `MusicProvider.search_tracks` abbilden, sobald Sync-Bridge steht.【F:app/integrations/slskd_adapter.py†L1-L69】
+  - Secret-Validierung perspektivisch um persistente Historie und Metrics ergänzen (z. B. Erfolgsquote, letzte Prüfung pro Provider).【F:app/services/secret_validation.py†L1-L248】
 - **Tests**
   - Der neue Lifespan-Pfad benötigt ergänzende Tests, die Start-/Stop-Orchestrierung und fehlertolerantes Verhalten der Worker absichern.【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
 
