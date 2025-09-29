@@ -9,6 +9,8 @@
 
 ## v1.x.x
 
+- feat(int): add async slskd track search adapter with deterministic timeout, error mapping and
+  documented integration contract.【F:app/integrations/slskd_adapter.py†L1-L211】【F:app/services/integration_service.py†L1-L73】【F:docs/integrations/slskd.md†L1-L84】
 - feat(api): vereinheitlichte Fehlerbehandlung mit globalem FastAPI-Handler, Fehlerklassen und einem stabilen Fehler-Envelope (`ok=false`, `error{code,message,meta}`); OpenAPI veröffentlicht `ErrorResponse`, Tests decken Mapping (Validation, Not Found, Rate Limit, Dependency, Internal) sowie Debug-Header ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】
 - feat(conf): Secret-Validierung für slskd/Spotify mit Live-Ping, Timeout-Fallback (`mode: format`), API-Endpoint `/api/v1/secrets/{provider}/validate`, UI-Panel „Jetzt testen“ sowie Dokumentation und Tests.【F:app/services/secret_validation.py†L1-L248】【F:app/routers/system_router.py†L1-L260】【F:frontend/src/pages/Settings/SecretsPanel.tsx†L1-L143】【F:tests/test_secret_validation.py†L1-L271】【F:docs/secrets.md†L1-L104】
 - feat(obs): introduce `/api/v1/health`, `/api/v1/ready` and a Prometheus `/metrics` exporter with configurable auth/timeouts plus documentation and tests.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:tests/test_health_ready.py†L1-L223】【F:docs/observability.md†L1-L86】

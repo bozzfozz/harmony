@@ -89,7 +89,9 @@ class ProviderDescriptor:
 
     name: str
     format_validator: ProviderValidator
-    live_validator: Callable[["SecretValidationService", str, SecretStore], Awaitable[SecretValidationDetails]]
+    live_validator: Callable[
+        ["SecretValidationService", str, SecretStore], Awaitable[SecretValidationDetails]
+    ]
 
 
 def _as_int(raw: Optional[str], *, default: int) -> int:
@@ -120,9 +122,9 @@ def _spotify_secret_format(value: str) -> tuple[bool, Optional[str]]:
     normalized = value.strip()
     if not normalized:
         return False, "secret missing"
-    if not 32 <= len(normalized) <= 128:
-        return False, "expected length between 32 and 128 characters"
-    if not re.fullmatch(r"[A-Za-z0-9]{16,128}", normalized):
+    if not 6 <= len(normalized) <= 128:
+        return False, "expected length between 6 and 128 characters"
+    if not re.fullmatch(r"[A-Za-z0-9]{6,128}", normalized):
         return False, "must consist of alphanumeric characters"
     return True, None
 
@@ -292,10 +294,7 @@ class SecretValidationService:
     async def _validate_slskd(
         self, secret_value: str, store: SecretStore
     ) -> SecretValidationDetails:
-        base_url = (
-            (store.get("SLSKD_URL").value or "").strip()
-            or self._settings.slskd_base_url
-        )
+        base_url = (store.get("SLSKD_URL").value or "").strip() or self._settings.slskd_base_url
         response = await self._request_slskd(secret_value, base_url)
         if 200 <= response.status_code < 300:
             return SecretValidationDetails(mode="live", valid=True, at=_now())
@@ -365,4 +364,3 @@ class SecretValidationService:
             at=_now(),
             reason=f"unexpected status {response.status_code}",
         )
-

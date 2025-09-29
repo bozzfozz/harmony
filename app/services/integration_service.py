@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable, cast
 
-from app.integrations.base import MusicProvider, ProviderError, Track
+from app.errors import DependencyError, InternalServerError, RateLimitedError, ValidationAppError
+from app.integrations.base import MusicProvider
+from app.integrations.slskd_adapter import (
+    SlskdAdapter,
+    SlskdAdapterDependencyError,
+    SlskdAdapterInternalError,
+    SlskdAdapterRateLimitedError,
+)
 from app.integrations.registry import ProviderRegistry
+from app.schemas.music import Track as IntegrationTrack
 
 
 @dataclass(slots=True)
@@ -23,29 +31,36 @@ class IntegrationService:
         self._registry = registry
         self._registry.initialise()
 
-    def search_tracks(
-        self, query: str, *, limit: int = 20, providers: Sequence[str] | None = None
-    ) -> tuple[list[tuple[str, Track]], dict[str, str]]:
-        names = tuple(providers) if providers else self._registry.enabled_names
-        results: list[tuple[str, Track]] = []
-        failures: dict[str, str] = {}
-        for name in names:
-            try:
-                adapter = self._registry.get(name)
-            except KeyError:
-                failures[name] = "provider-disabled"
-                continue
-            try:
-                tracks = list(adapter.search_tracks(query, limit=limit))
-            except ProviderError as exc:
-                failures[name] = exc.message
-                continue
-            except Exception as exc:  # pragma: no cover - defensive
-                failures[name] = str(exc)
-                continue
-            for track in tracks:
-                results.append((adapter.name, track))
-        return results, failures
+    async def search_tracks(self, query: str, limit: int = 20) -> list[IntegrationTrack]:
+        trimmed = query.strip()
+        if not trimmed:
+            raise ValidationAppError("query must not be empty.")
+        if len(trimmed) > 256:
+            raise ValidationAppError("query must not exceed 256 characters.")
+        if limit <= 0:
+            raise ValidationAppError("limit must be greater than zero.")
+
+        try:
+            provider = self._registry.get("slskd")
+        except KeyError as exc:
+            raise DependencyError("slskd integration is not enabled.") from exc
+
+        adapter = cast(SlskdAdapter, provider)
+        effective_limit = min(limit, 50)
+
+        try:
+            return await adapter.search_tracks(trimmed, limit=effective_limit)
+        except SlskdAdapterRateLimitedError as exc:
+            raise RateLimitedError(
+                "slskd rate limited the search request.",
+                retry_after_ms=exc.retry_after_ms,
+                retry_after_header=exc.retry_after_header,
+            ) from exc
+        except SlskdAdapterDependencyError as exc:
+            meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
+            raise DependencyError("slskd search is currently unavailable.", meta=meta) from exc
+        except SlskdAdapterInternalError as exc:
+            raise InternalServerError("Failed to process slskd search results.") from exc
 
     def providers(self) -> Iterable[MusicProvider]:
         return self._registry.all()

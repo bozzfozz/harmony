@@ -6,11 +6,11 @@ from collections import OrderedDict
 from typing import Dict, Iterable
 
 from app.config import AppConfig
-from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.integrations.base import MusicProvider
 from app.integrations.plex_adapter import PlexAdapter
 from app.integrations.slskd_adapter import SlskdAdapter
+from app.integrations.slskd_client import SlskdHttpClient
 from app.integrations.spotify_adapter import SpotifyAdapter
 from app.logging import get_logger
 
@@ -52,12 +52,14 @@ class ProviderRegistry:
         if name == "plex":
             return PlexAdapter(timeout_ms=timeout_ms)
         if name in {"slskd", "soulseek"}:
-            try:
-                client = SoulseekClient(self._config.soulseek)
-            except Exception as exc:  # pragma: no cover - configuration guard
-                logger.warning("Soulseek adapter disabled: %s", exc)
-                return None
-            return SlskdAdapter(client=client, timeout_ms=timeout_ms)
+            soulseek = self._config.soulseek
+            client = SlskdHttpClient(base_url=soulseek.base_url, api_key=soulseek.api_key)
+            fallback_ms = self._config.integrations.slskd_rate_limit_retry_after_fallback_ms
+            return SlskdAdapter(
+                client=client,
+                timeout_ms=timeout_ms,
+                rate_limit_fallback_ms=fallback_ms,
+            )
         return None
 
     def get(self, name: str) -> MusicProvider:

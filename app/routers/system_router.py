@@ -167,6 +167,7 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
     "/secrets/{provider}/validate",
     response_model=SecretValidationEnvelope,
     tags=["System"],
+    include_in_schema=False,
 )
 async def validate_secret(
     provider: str,
