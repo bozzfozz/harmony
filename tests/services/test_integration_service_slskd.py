@@ -6,11 +6,18 @@ from typing import Any
 import httpx
 import pytest
 
-from app.errors import DependencyError, InternalServerError, RateLimitedError, ValidationAppError
+from app.errors import (
+    DependencyError,
+    InternalServerError,
+    NotFoundError,
+    RateLimitedError,
+    ValidationAppError,
+)
 from app.integrations.slskd_adapter import (
     SlskdAdapter,
     SlskdAdapterDependencyError,
     SlskdAdapterInternalError,
+    SlskdAdapterNotFoundError,
     SlskdAdapterRateLimitedError,
     SlskdAdapterValidationError,
 )
@@ -47,6 +54,7 @@ def _make_adapter(
         timeout_ms=overrides.get("timeout_ms", 2000),
         max_retries=overrides.get("max_retries", 1),
         backoff_base_ms=overrides.get("backoff_base_ms", 5),
+        jitter_pct=overrides.get("jitter_pct", 0),
         preferred_formats=overrides.get("preferred_formats", ("FLAC", "MP3")),
         max_results=overrides.get("max_results", 25),
         client=client,
@@ -106,6 +114,7 @@ async def test_integration_service_dispatches_to_slskd_adapter() -> None:
     [
         (SlskdAdapterValidationError("bad", status_code=400), ValidationAppError),
         (SlskdAdapterRateLimitedError(headers={}, fallback_retry_after_ms=50), RateLimitedError),
+        (SlskdAdapterNotFoundError("missing", status_code=404), NotFoundError),
         (SlskdAdapterDependencyError("down", status_code=502), DependencyError),
         (SlskdAdapterInternalError("oops"), InternalServerError),
     ],

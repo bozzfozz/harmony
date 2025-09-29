@@ -1,4 +1,7 @@
 ## v1.0.1 — 2025-09-25
+- feat(integrations): harden slskd adapter with strict config validation, URL normalisation,
+  jittered retries, structured logging and updated contract tests; integration service and
+  configuration wiring follow suit.【F:app/integrations/slskd_adapter.py†L1-L470】【F:app/services/integration_service.py†L1-L120】【F:app/config.py†L570-L640】【F:app/integrations/registry.py†L1-L80】【F:tests/integrations/test_slskd_adapter.py†L1-L220】【F:tests/services/test_integration_service_slskd.py†L1-L160】
 - docs: AGENTS.md um Initiative-, Scope-Guard- und Clarification-Regeln inkl. Checklisten, CI-Gates und Beispielen erweitert.
 - docs: README/ENV aktualisiert, Health/Ready/Metrics-Doku konsolidiert,
   `.env.example` ergänzt und neue Ops-Guides für Runtime-Konfiguration sowie

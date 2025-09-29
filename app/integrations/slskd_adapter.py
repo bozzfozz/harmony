@@ -24,7 +24,7 @@ from app.utils.text_normalization import clean_track_title, normalize_quotes
 logger = get_logger(__name__)
 
 _DEFAULT_SEARCH_PATH = "/api/v0/search/tracks"
-_JITTER_PCT = 0.2
+_BACKOFF_CAP_MS = 2_000
 _ALLOWED_SCHEMES = {"http", "https"}
 _EMPTY_METADATA = MappingProxyType({})
 
@@ -64,6 +64,14 @@ class SlskdAdapterRateLimitedError(SlskdAdapterError):
 
 class SlskdAdapterDependencyError(SlskdAdapterError):
     """Raised when upstream dependency errors occur."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+class SlskdAdapterNotFoundError(SlskdAdapterError):
+    """Raised when slskd reported that the resource could not be found."""
 
     def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
@@ -150,6 +158,35 @@ def _iter_files(payload: Any) -> Iterable[Mapping[str, Any]]:
 
 def _compact_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _normalize_base_url(value: str) -> str:
+    trimmed = (value or "").strip()
+    if not trimmed:
+        raise RuntimeError("SLSKD_BASE_URL must be configured and non-empty")
+    parsed = urlparse(trimmed)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise RuntimeError("SLSKD_BASE_URL must use http or https")
+    if not parsed.netloc:
+        raise RuntimeError("SLSKD_BASE_URL must include a hostname")
+    path = re.sub(r"/{2,}", "/", parsed.path or "")
+    path = path.rstrip("/")
+    base = f"{scheme}://{parsed.netloc}"
+    if path:
+        if not path.startswith("/"):
+            path = "/" + path
+        base = f"{base}{path}"
+    return base
+
+
+def _normalize_path(path: str) -> str:
+    cleaned = re.sub(r"/{2,}", "/", (path or "").strip())
+    if not cleaned:
+        return "/"
+    if not cleaned.startswith("/"):
+        cleaned = "/" + cleaned
+    return cleaned
 
 
 def _normalise_search_value(value: str) -> str:
@@ -308,22 +345,35 @@ class SlskdAdapter(MusicProviderAdapter):
     timeout_ms: int
     max_retries: int
     backoff_base_ms: int
+    jitter_pct: float
     preferred_formats: tuple[str, ...]
     max_results: int
     client: httpx.AsyncClient | None = None
 
     def __post_init__(self) -> None:
-        parsed = urlparse(self.base_url)
-        if parsed.scheme not in _ALLOWED_SCHEMES:
-            raise ValueError("SLSKD_BASE_URL must use http or https")
-        normalized_base = parsed.geturl().rstrip("/") or f"{parsed.scheme}://{parsed.netloc}"
+        normalized_base = _normalize_base_url(self.base_url)
         object.__setattr__(self, "_base_url", normalized_base)
+
+        api_key = (self.api_key or "").strip()
+        if not api_key:
+            raise RuntimeError("SLSKD_API_KEY must be configured and non-empty")
+        object.__setattr__(self, "api_key", api_key)
+
         timeout_ms = max(200, int(self.timeout_ms))
         object.__setattr__(self, "_timeout_ms", timeout_ms)
+
         retries = max(0, int(self.max_retries))
         object.__setattr__(self, "_max_retries", retries)
+
         backoff = max(50, int(self.backoff_base_ms))
         object.__setattr__(self, "_backoff_base_ms", backoff)
+
+        jitter_fraction = float(self.jitter_pct)
+        if jitter_fraction > 1:
+            jitter_fraction = jitter_fraction / 100.0
+        jitter_fraction = max(0.0, min(jitter_fraction, 1.0))
+        object.__setattr__(self, "_jitter_pct", jitter_fraction)
+
         normalized_formats: list[str] = []
         seen_formats: set[str] = set()
         for entry in self.preferred_formats:
@@ -334,12 +384,15 @@ class SlskdAdapter(MusicProviderAdapter):
         formats = tuple(normalized_formats)
         object.__setattr__(self, "_preferred_formats", formats)
         object.__setattr__(self, "_format_ranking", _format_rankings(formats))
+
         max_results = max(1, int(self.max_results))
         object.__setattr__(self, "_max_results", max_results)
-        headers = {"Accept": "application/json"}
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
+
+        headers = {"Accept": "application/json", "X-API-Key": api_key}
         object.__setattr__(self, "_headers", headers)
+
+        object.__setattr__(self, "_search_path", _normalize_path(_DEFAULT_SEARCH_PATH))
+
         if self.client is not None:
             object.__setattr__(self, "_client", self.client)
             object.__setattr__(self, "_owns_client", False)
@@ -380,59 +433,69 @@ class SlskdAdapter(MusicProviderAdapter):
         preferred_formats = self._format_ranking
         params = {"query": combined, "limit": effective_limit, "type": "track"}
         q_hash = hashlib.sha1(combined.encode("utf-8")).hexdigest()[:12]
-        attempts = self._max_retries + 1
-        for attempt in range(1, attempts + 1):
-            started = perf_counter()
+        max_attempts = self._max_retries + 1
+        path = self._search_path
+        method = "GET"
+        overall_started = perf_counter()
+
+        for attempt in range(1, max_attempts + 1):
+            attempt_started = perf_counter()
             status_code: int | None = None
+            error: SlskdAdapterError | None = None
+            response: httpx.Response | None = None
+            status_label = "error"
+
             try:
                 response = await self._client.get(
-                    _DEFAULT_SEARCH_PATH,
+                    path,
                     params=params,
                     headers=self._headers,
                 )
                 status_code = response.status_code
+                status_label = str(status_code)
             except httpx.TimeoutException:
-                duration_ms = int((perf_counter() - started) * 1000)
-                logger.warning(
-                    "slskd search timeout",
-                    extra={
-                        "event": "slskd.search",
-                        "status": "timeout",
-                        "attempt": attempt,
-                        "q_hash": q_hash,
-                        "duration_ms": duration_ms,
-                        "limit": effective_limit,
-                    },
-                )
-                error: SlskdAdapterError = SlskdAdapterDependencyError(
-                    "slskd search request timed out",
-                )
+                status_label = "timeout"
+                error = SlskdAdapterDependencyError("slskd search request timed out")
             except httpx.HTTPError:
-                duration_ms = int((perf_counter() - started) * 1000)
-                logger.warning(
-                    "slskd search network failure",
-                    extra={
-                        "event": "slskd.search",
-                        "status": "network-error",
-                        "attempt": attempt,
-                        "q_hash": q_hash,
-                        "duration_ms": duration_ms,
-                        "limit": effective_limit,
-                    },
-                )
+                status_label = "network-error"
                 error = SlskdAdapterDependencyError("slskd search request failed")
-            else:
+
+            duration_ms = int((perf_counter() - attempt_started) * 1000)
+            self._log_attempt(
+                method=method,
+                path=path,
+                status=status_label,
+                status_code=status_code,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                duration_ms=duration_ms,
+                query_hash=q_hash,
+            )
+
+            if response is not None:
                 if status_code == httpx.codes.OK:
                     try:
                         payload = response.json()
                     except ValueError as exc:  # pragma: no cover - defensive guard
+                        self._log_complete(
+                            status="error",
+                            query_hash=q_hash,
+                            retries_used=attempt - 1,
+                            duration_ms=int((perf_counter() - overall_started) * 1000),
+                            error="invalid-json",
+                            upstream_status=status_code,
+                        )
                         raise SlskdAdapterInternalError("slskd returned invalid JSON") from exc
                     try:
                         candidates = [_build_candidate(entry) for entry in _iter_files(payload)]
                     except Exception as exc:  # pragma: no cover - defensive safeguard
-                        logger.exception(
-                            "slskd search normalisation failed",
-                            extra={"event": "slskd.search", "status": "error", "q_hash": q_hash},
+                        self._log_complete(
+                            status="error",
+                            query_hash=q_hash,
+                            retries_used=attempt - 1,
+                            duration_ms=int((perf_counter() - overall_started) * 1000),
+                            error="normalisation-failed",
+                            upstream_status=status_code,
                         )
                         raise SlskdAdapterInternalError(
                             "Failed to normalise slskd results"
@@ -444,26 +507,31 @@ class SlskdAdapter(MusicProviderAdapter):
                     ]
                     sorted_candidates = _sort_candidates(filtered, preferred_formats)
                     limited = sorted_candidates[:effective_limit]
-                    duration_ms = int((perf_counter() - started) * 1000)
-                    logger.info(
-                        "slskd search completed",
-                        extra={
-                            "event": "slskd.search",
-                            "status": "ok",
-                            "attempt": attempt,
-                            "q_hash": q_hash,
-                            "duration_ms": duration_ms,
-                            "limit": effective_limit,
-                            "results_count": len(limited),
-                            "upstream_status": status_code,
-                        },
+                    self._log_complete(
+                        status="ok",
+                        query_hash=q_hash,
+                        retries_used=attempt - 1,
+                        duration_ms=int((perf_counter() - overall_started) * 1000),
+                        results_count=len(limited),
+                        upstream_status=status_code,
                     )
                     return limited
+
                 if status_code == httpx.codes.TOO_MANY_REQUESTS:
                     backoff_ms = self._compute_backoff_ms(attempt)
                     error = SlskdAdapterRateLimitedError(
                         headers=response.headers,
                         fallback_retry_after_ms=backoff_ms,
+                    )
+                elif status_code == httpx.codes.NOT_FOUND:
+                    error = SlskdAdapterNotFoundError(
+                        "slskd did not find any results for the search query",
+                        status_code=status_code,
+                    )
+                elif status_code == httpx.codes.REQUEST_TIMEOUT:
+                    error = SlskdAdapterDependencyError(
+                        "slskd search request timed out upstream",
+                        status_code=status_code,
                     )
                 elif status_code is not None and 500 <= status_code < 600:
                     error = SlskdAdapterDependencyError(
@@ -471,6 +539,14 @@ class SlskdAdapter(MusicProviderAdapter):
                         status_code=status_code,
                     )
                 elif status_code is not None and 400 <= status_code < 500:
+                    self._log_complete(
+                        status="error",
+                        query_hash=q_hash,
+                        retries_used=attempt - 1,
+                        duration_ms=int((perf_counter() - overall_started) * 1000),
+                        error="validation",
+                        upstream_status=status_code,
+                    )
                     raise SlskdAdapterValidationError(
                         "slskd rejected the search request",
                         status_code=status_code,
@@ -481,32 +557,96 @@ class SlskdAdapter(MusicProviderAdapter):
                         status_code=status_code,
                     )
 
-            should_retry = attempt < attempts and isinstance(
+            if error is None:
+                continue
+
+            should_retry = attempt < max_attempts and isinstance(
                 error, (SlskdAdapterDependencyError, SlskdAdapterRateLimitedError)
             )
-            duration_ms = int((perf_counter() - started) * 1000)
-            logger.warning(
-                "slskd search failed",
-                extra={
-                    "event": "slskd.search",
-                    "status": "error",
-                    "attempt": attempt,
-                    "q_hash": q_hash,
-                    "duration_ms": duration_ms,
-                    "limit": effective_limit,
-                    "upstream_status": getattr(error, "status_code", status_code),
-                },
-            )
             if not should_retry:
+                self._log_complete(
+                    status="error",
+                    query_hash=q_hash,
+                    retries_used=attempt - 1,
+                    duration_ms=int((perf_counter() - overall_started) * 1000),
+                    error=error.__class__.__name__,
+                    upstream_status=getattr(error, "status_code", status_code),
+                )
                 raise error
+
             backoff_ms = self._compute_backoff_ms(attempt)
             await asyncio.sleep(backoff_ms / 1000)
+
+        self._log_complete(
+            status="error",
+            query_hash=q_hash,
+            retries_used=max_attempts - 1,
+            duration_ms=int((perf_counter() - overall_started) * 1000),
+            error="exhausted",
+        )
         raise SlskdAdapterDependencyError("slskd search failed after retries")
 
+    def _log_attempt(
+        self,
+        *,
+        method: str,
+        path: str,
+        status: str,
+        status_code: int | None,
+        attempt: int,
+        max_attempts: int,
+        duration_ms: int,
+        query_hash: str,
+    ) -> None:
+        extra = {
+            "event": "slskd.request",
+            "provider": "slskd",
+            "method": method,
+            "path": path,
+            "status": status,
+            "status_code": status_code,
+            "attempt": attempt,
+            "max_attempts": max_attempts,
+            "duration_ms": duration_ms,
+            "query_hash": query_hash,
+        }
+        logger.info("slskd request attempt", extra=extra)
+
+    def _log_complete(
+        self,
+        *,
+        status: str,
+        query_hash: str,
+        retries_used: int,
+        duration_ms: int,
+        results_count: int | None = None,
+        error: str | None = None,
+        upstream_status: int | None = None,
+    ) -> None:
+        extra = {
+            "event": "slskd.complete",
+            "provider": "slskd",
+            "status": status,
+            "query_hash": query_hash,
+            "retries_used": retries_used,
+            "duration_ms": duration_ms,
+            "upstream_status": upstream_status,
+        }
+        if results_count is not None:
+            extra["results_count"] = results_count
+        if error is not None:
+            extra["error"] = error
+        if status == "ok":
+            logger.info("slskd request complete", extra=extra)
+        else:
+            logger.warning("slskd request complete", extra=extra)
+
     def _compute_backoff_ms(self, attempt: int) -> int:
-        base = self._backoff_base_ms * (2 ** max(0, attempt - 1))
-        jitter_range = base * _JITTER_PCT
-        delay = base + random.uniform(-jitter_range, jitter_range)
+        exponent = max(0, attempt - 1)
+        base_delay = self._backoff_base_ms * (2**exponent)
+        capped = min(base_delay, _BACKOFF_CAP_MS)
+        jitter_range = capped * self._jitter_pct
+        delay = capped + random.uniform(-jitter_range, jitter_range)
         return max(0, int(delay))
 
     @staticmethod
@@ -523,6 +663,7 @@ __all__ = [
     "SlskdAdapterDependencyError",
     "SlskdAdapterError",
     "SlskdAdapterInternalError",
+    "SlskdAdapterNotFoundError",
     "SlskdAdapterRateLimitedError",
     "SlskdAdapterValidationError",
 ]
