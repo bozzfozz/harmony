@@ -20,7 +20,7 @@ def test_parse_provider_timeouts_reads_env_values() -> None:
     )
     assert result["spotify"] == 2000
     assert result["plex"] == 3000
-    assert result["slskd"] == 1200
+    assert result["slskd"] == 8000
 
 
 class _StubProvider(MusicProvider):

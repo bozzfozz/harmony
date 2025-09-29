@@ -32,6 +32,11 @@ class SpotifyConfig:
 class SoulseekConfig:
     base_url: str
     api_key: Optional[str]
+    timeout_ms: int
+    retry_max: int
+    retry_backoff_base_ms: int
+    preferred_formats: tuple[str, ...]
+    max_results: int
 
 
 @dataclass(slots=True)
@@ -88,7 +93,6 @@ class IntegrationsConfig:
     enabled: tuple[str, ...]
     timeouts_ms: dict[str, int]
     max_concurrency: int
-    slskd_rate_limit_retry_after_fallback_ms: int
 
 
 @dataclass(slots=True)
@@ -181,8 +185,11 @@ DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
 DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
-DEFAULT_SLSKD_TIMEOUT_MS = 1_200
-DEFAULT_SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS = 2_000
+DEFAULT_SLSKD_TIMEOUT_MS = 8_000
+DEFAULT_SLSKD_RETRY_MAX = 3
+DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS = 250
+DEFAULT_SLSKD_PREFERRED_FORMATS = ("FLAC", "ALAC", "APE", "MP3")
+DEFAULT_SLSKD_MAX_RESULTS = 50
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
 DEFAULT_METRICS_PATH = "/metrics"
@@ -564,7 +571,44 @@ def load_config() -> AppConfig:
         ),
     )
 
-    soulseek_base_env = os.getenv("SLSKD_URL") or legacy_slskd_url or DEFAULT_SOULSEEK_URL
+    soulseek_base_env = (
+        os.getenv("SLSKD_BASE_URL")
+        or os.getenv("SLSKD_URL")
+        or legacy_slskd_url
+        or DEFAULT_SOULSEEK_URL
+    )
+    timeout_ms = max(
+        200,
+        _as_int(
+            os.getenv("SLSKD_TIMEOUT_MS"),
+            default=DEFAULT_SLSKD_TIMEOUT_MS,
+        ),
+    )
+    retry_max = max(
+        0,
+        _as_int(
+            os.getenv("SLSKD_RETRY_MAX"),
+            default=DEFAULT_SLSKD_RETRY_MAX,
+        ),
+    )
+    retry_backoff_base_ms = max(
+        50,
+        _as_int(
+            os.getenv("SLSKD_RETRY_BACKOFF_BASE_MS"),
+            default=DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS,
+        ),
+    )
+    preferred_formats_list = _parse_list(os.getenv("SLSKD_PREFERRED_FORMATS"))
+    if not preferred_formats_list:
+        preferred_formats_list = list(DEFAULT_SLSKD_PREFERRED_FORMATS)
+    preferred_formats = tuple(preferred_formats_list)
+    max_results = max(
+        1,
+        _as_int(
+            os.getenv("SLSKD_MAX_RESULTS"),
+            default=DEFAULT_SLSKD_MAX_RESULTS,
+        ),
+    )
     soulseek = SoulseekConfig(
         base_url=_resolve_setting(
             "SLSKD_URL",
@@ -577,6 +621,11 @@ def load_config() -> AppConfig:
             db_settings=db_settings,
             fallback=os.getenv("SLSKD_API_KEY"),
         ),
+        timeout_ms=timeout_ms,
+        retry_max=retry_max,
+        retry_backoff_base_ms=retry_backoff_base_ms,
+        preferred_formats=preferred_formats,
+        max_results=max_results,
     )
 
     logging = LoggingConfig(level=os.getenv("HARMONY_LOG_LEVEL", "INFO"))
@@ -688,13 +737,6 @@ def load_config() -> AppConfig:
             _as_int(
                 os.getenv("PROVIDER_MAX_CONCURRENCY"),
                 default=DEFAULT_PROVIDER_MAX_CONCURRENCY,
-            ),
-        ),
-        slskd_rate_limit_retry_after_fallback_ms=max(
-            0,
-            _as_int(
-                os.getenv("SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS"),
-                default=DEFAULT_SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS,
             ),
         ),
     )
