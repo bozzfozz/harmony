@@ -1,4 +1,7 @@
 ## v1.0.1 — 2025-09-25
+- chore(conf): konservative Watchlist-Defaults mit Retry-Budget und Cooldown
+  festgeschrieben, Worker-Backoff gedeckelt, neue Tests und README-Tabelle
+  dokumentieren die Limits.【F:app/config.py†L114-L200】【F:app/workers/watchlist_worker.py†L1-L420】【F:tests/workers/test_watchlist_defaults.py†L1-L260】【F:README.md†L87-L104】
 - perf(worker): entblockt den Watchlist-Worker mit konfigurierbarem DB-I/O,
   strikten Spotify-/Soulseek-Timeouts, begrenzter Parallelität und
   exponentiellem Retry-Backoff; aktualisierte Tests und Dokumentation

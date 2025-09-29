@@ -86,7 +86,18 @@ Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Rel
 - `GET /watchlist` liefert alle eingetragenen Artists inklusive Zeitstempel des letzten Checks.
 - `DELETE /watchlist/{id}` entfernt einen Eintrag und beendet die Überwachung.
 
-Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden. Für Stabilität sorgen zusätzliche Parameter wie `WATCHLIST_MAX_CONCURRENCY`, `WATCHLIST_SPOTIFY_TIMEOUT_MS`, `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS`, `WATCHLIST_RETRY_MAX` und `WATCHLIST_DB_IO_MODE`, die Timeout-, Retry- und Datenbank-Verhalten konfigurieren.
+Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden.
+
+| Variable | Default | Beschreibung |
+| --- | --- | --- |
+| `WATCHLIST_DB_IO_MODE` | `thread` | Schaltet zwischen Thread-Offloading und einem nativen Async-DAO. |
+| `WATCHLIST_MAX_CONCURRENCY` | `3` | Maximale Anzahl paralleler Künstler, die pro Tick verarbeitet werden. |
+| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | `8000` | Timeout für Spotify-Aufrufe (Alben & Tracks). |
+| `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS` | `12000` | Timeout für jede Soulseek-Suche. |
+| `WATCHLIST_RETRY_MAX` | `3` | Maximale Versuche pro Tick und Künstler. |
+| `WATCHLIST_BACKOFF_BASE_MS` | `250` | Basiswert für exponentiellen Backoff (mit ±20 % Jitter, gedeckelt bei 5 s). |
+| `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | `6` | Gesamtbudget pro Künstlerlauf – darüber greift der Cooldown. |
+| `WATCHLIST_COOLDOWN_MINUTES` | `15` | Dauer, für die ein Künstler nach ausgeschöpftem Budget pausiert. |
 
 ## Automatic Lyrics
 

@@ -137,6 +137,8 @@ def _make_config(**overrides: Any) -> WatchlistWorkerConfig:
         jitter_pct=overrides.get("jitter_pct", 0.0),
         shutdown_grace_ms=overrides.get("shutdown_grace_ms", 200),
         db_io_mode=overrides.get("db_io_mode", "thread"),
+        retry_budget_per_artist=overrides.get("retry_budget_per_artist", 4),
+        cooldown_minutes=overrides.get("cooldown_minutes", 15),
     )
 
 
