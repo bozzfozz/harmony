@@ -88,6 +88,8 @@ Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Rel
 
 Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden.
 
+Nach ausgeschöpftem Retry-Budget setzt der Worker einen persistenten Cooldown pro Artist. Der Zeitstempel wird in `watchlist_artists.retry_block_until` gespeichert und überdauert Neustarts; während der Block aktiv ist, ignoriert der Worker den Eintrag und protokolliert das Ereignis als `event=watchlist.cooldown.skip`. Erfolgreiche Durchläufe löschen den Zeitstempel wieder (`event=watchlist.cooldown.clear`).
+
 | Variable | Default | Beschreibung |
 | --- | --- | --- |
 | `WATCHLIST_DB_IO_MODE` | `thread` | Schaltet zwischen Thread-Offloading und einem nativen Async-DAO. |

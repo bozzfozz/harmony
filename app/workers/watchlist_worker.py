@@ -182,50 +182,70 @@ class WatchlistWorker:
         semaphore = self._semaphore
         scheduled_artists: list[WatchlistArtistRow] = []
         tasks: list[asyncio.Task[WatchlistTaskOutcome]] = []
+        skipped_outcomes: list[WatchlistTaskOutcome] = []
         for artist in artists:
             if self._deadline_exhausted(deadline):
                 break
+            retry_block_until = artist.retry_block_until
+            if retry_block_until is not None and datetime.utcnow() < retry_block_until:
+                logger.info(
+                    "event=watchlist.cooldown.skip artist_id=%s retry_block_until=%s",
+                    artist.spotify_artist_id,
+                    retry_block_until.isoformat(),
+                )
+                skipped_outcomes.append(
+                    WatchlistTaskOutcome(
+                        artist=artist,
+                        status="cooldown",
+                        queued=0,
+                        attempts=0,
+                        duration_ms=int((time.monotonic() - start) * 1000),
+                        reason="retry_block_active",
+                    )
+                )
+                continue
             scheduled_artists.append(artist)
             tasks.append(asyncio.create_task(self._process_artist(artist, semaphore, deadline)))
 
-        if not tasks:
+        if not tasks and not skipped_outcomes:
             logger.debug("event=watchlist.tick status=skipped reason=no_budget")
             return []
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        outcomes: list[WatchlistTaskOutcome] = []
-        for artist, result in zip(scheduled_artists, results):
-            if isinstance(result, WatchlistTaskOutcome):
-                outcomes.append(result)
-            elif isinstance(result, Exception):
-                if isinstance(result, asyncio.CancelledError):
-                    reason = "cancelled"
-                    status = "cancelled"
-                else:
-                    reason = f"{type(result).__name__}: {result}"
-                    status = "internal_error"
-                logger.exception(
-                    "event=watchlist.process artist_id=%s status=%s reason=%s",
-                    artist.spotify_artist_id,
-                    status,
-                    reason,
-                )
-                await self._db_call(
-                    "mark_failed",
-                    artist.id,
-                    reason=status,
-                    retry_at=datetime.utcnow(),
-                )
-                outcomes.append(
-                    WatchlistTaskOutcome(
-                        artist=artist,
-                        status=status,
-                        queued=0,
-                        attempts=1,
-                        duration_ms=int((time.monotonic() - start) * 1000),
-                        reason=reason,
+        outcomes: list[WatchlistTaskOutcome] = list(skipped_outcomes)
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for artist, result in zip(scheduled_artists, results):
+                if isinstance(result, WatchlistTaskOutcome):
+                    outcomes.append(result)
+                elif isinstance(result, Exception):
+                    if isinstance(result, asyncio.CancelledError):
+                        reason = "cancelled"
+                        status = "cancelled"
+                    else:
+                        reason = f"{type(result).__name__}: {result}"
+                        status = "internal_error"
+                    logger.exception(
+                        "event=watchlist.process artist_id=%s status=%s reason=%s",
+                        artist.spotify_artist_id,
+                        status,
+                        reason,
                     )
-                )
+                    await self._db_call(
+                        "mark_failed",
+                        artist.id,
+                        reason=status,
+                        retry_at=datetime.utcnow(),
+                    )
+                    outcomes.append(
+                        WatchlistTaskOutcome(
+                            artist=artist,
+                            status=status,
+                            queued=0,
+                            attempts=1,
+                            duration_ms=int((time.monotonic() - start) * 1000),
+                            reason=reason,
+                        )
+                    )
 
         duration_ms = int((time.monotonic() - start) * 1000)
         logger.info(
@@ -267,42 +287,53 @@ class WatchlistWorker:
             if state is None:
                 state = _ArtistRetryState()
                 self._artist_states[artist.id] = state
-            else:
-                if state.cooldown_until and datetime.utcnow() >= state.cooldown_until:
-                    state.attempts = 0
-                    state.cooldown_until = None
-                elif state.cooldown_until and datetime.utcnow() < state.cooldown_until:
-                    cooldown_until = state.cooldown_until
-                    status = "cooldown"
-                    reason = "cooldown_active"
-                    logger.warning(
-                        "event=watchlist.retry artist_id=%s status=%s attempt=%d budget_left=%d backoff_ms=%d duration_ms=%d",
-                        artist.spotify_artist_id,
-                        status,
-                        attempts,
-                        0,
-                        0,
-                        int((time.monotonic() - start) * 1000),
-                    )
-                    await self._db_call(
-                        "mark_failed",
-                        artist.id,
-                        reason=status,
-                        retry_at=cooldown_until,
-                    )
-                    return WatchlistTaskOutcome(
-                        artist=artist,
-                        status=status,
-                        queued=0,
-                        attempts=0,
-                        duration_ms=int((time.monotonic() - start) * 1000),
-                        reason=reason,
-                    )
+            if artist.retry_block_until and (
+                state.cooldown_until is None or state.cooldown_until < artist.retry_block_until
+            ):
+                state.cooldown_until = artist.retry_block_until
+            current_time = datetime.utcnow()
+            if state.cooldown_until and current_time >= state.cooldown_until:
+                state.attempts = 0
+                state.cooldown_until = None
+                artist.retry_block_until = None
+            elif state.cooldown_until and current_time < state.cooldown_until:
+                cooldown_until = state.cooldown_until
+                status = "cooldown"
+                reason = "cooldown_active"
+                logger.info(
+                    "event=watchlist.cooldown.skip artist_id=%s retry_block_until=%s",
+                    artist.spotify_artist_id,
+                    cooldown_until.isoformat(),
+                )
+                logger.warning(
+                    "event=watchlist.retry artist_id=%s status=%s attempt=%d budget_left=%d backoff_ms=%d duration_ms=%d",
+                    artist.spotify_artist_id,
+                    status,
+                    attempts,
+                    0,
+                    0,
+                    int((time.monotonic() - start) * 1000),
+                )
+                await self._db_call(
+                    "mark_failed",
+                    artist.id,
+                    reason=status,
+                    retry_at=cooldown_until,
+                    retry_block_until=cooldown_until,
+                )
+                return WatchlistTaskOutcome(
+                    artist=artist,
+                    status=status,
+                    queued=0,
+                    attempts=0,
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                    reason=reason,
+                )
             while attempts < self._max_attempts:
                 if state.attempts >= self._retry_budget:
                     status = "cooldown"
                     reason = "retry_budget_exhausted"
-                    cooldown_until = self._activate_cooldown(state)
+                    cooldown_until = self._activate_cooldown(artist, state)
                     logger.warning(
                         "event=watchlist.retry artist_id=%s status=%s attempt=%d budget_left=%d backoff_ms=%d duration_ms=%d",
                         artist.spotify_artist_id,
@@ -334,7 +365,7 @@ class WatchlistWorker:
                     if remaining_budget <= 0:
                         status = "cooldown"
                         reason = "retry_budget_exhausted"
-                        cooldown_until = self._activate_cooldown(state)
+                        cooldown_until = self._activate_cooldown(artist, state)
                         elapsed_for_cooldown = int((time.monotonic() - start) * 1000)
                         logger.warning(
                             "event=watchlist.retry artist_id=%s status=%s attempt=%d budget_left=%d backoff_ms=%d duration_ms=%d",
@@ -362,14 +393,23 @@ class WatchlistWorker:
                 else:
                     status = "ok" if queued else "noop"
                     reason = None
+                    had_cooldown = (
+                        artist.retry_block_until is not None or state.cooldown_until is not None
+                    )
                     state.attempts = 0
                     state.cooldown_until = None
+                    artist.retry_block_until = None
                     self._artist_states.pop(artist.id, None)
                     await self._db_call(
                         "mark_success",
                         artist.id,
                         checked_at=datetime.utcnow(),
                     )
+                    if had_cooldown:
+                        logger.info(
+                            "event=watchlist.cooldown.clear artist_id=%s",
+                            artist.spotify_artist_id,
+                        )
                     break
 
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -386,20 +426,19 @@ class WatchlistWorker:
             )
         else:
             retry_at = None
+            mark_failed_kwargs: dict[str, Any] = {"reason": status}
             if status == "cooldown" and state is not None:
                 if cooldown_until is None:
-                    cooldown_until = self._activate_cooldown(state)
+                    cooldown_until = self._activate_cooldown(artist, state)
                 retry_at = cooldown_until
+                mark_failed_kwargs["retry_block_until"] = cooldown_until
             elif status in {"timeout", "dependency_error"}:
                 if backoff_ms <= 0:
                     backoff_ms = self._calculate_backoff_ms(attempts)
                 retry_at = datetime.utcnow() + timedelta(milliseconds=backoff_ms)
-            await self._db_call(
-                "mark_failed",
-                artist.id,
-                reason=status,
-                retry_at=retry_at,
-            )
+            if retry_at is not None:
+                mark_failed_kwargs["retry_at"] = retry_at
+            await self._db_call("mark_failed", artist.id, **mark_failed_kwargs)
             logger.warning(
                 "event=watchlist.process artist_id=%s status=%s attempts=%d retries=%d duration_ms=%d reason=%s",
                 artist.spotify_artist_id,
@@ -595,7 +634,7 @@ class WatchlistWorker:
         jitter_value = self._rng.uniform(-spread, spread)
         return min(max(int(delay + jitter_value), 0), self._max_backoff_ms)
 
-    def _activate_cooldown(self, state: _ArtistRetryState) -> datetime:
+    def _activate_cooldown(self, artist: WatchlistArtistRow, state: _ArtistRetryState) -> datetime:
         minutes = self._cooldown_minutes
         if minutes <= 0:
             cooldown_until = datetime.utcnow()
@@ -603,6 +642,13 @@ class WatchlistWorker:
             cooldown_until = datetime.utcnow() + timedelta(minutes=minutes)
         state.attempts = max(state.attempts, self._retry_budget)
         state.cooldown_until = cooldown_until
+        artist.retry_block_until = cooldown_until
+        logger.info(
+            "event=watchlist.cooldown.set artist_id=%s minutes=%d retry_block_until=%s",
+            artist.spotify_artist_id,
+            minutes,
+            cooldown_until.isoformat(),
+        )
         return cooldown_until
 
     def _deadline_exhausted(self, deadline: float | None) -> bool:

@@ -14,10 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Sequence
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, func, or_, select
 
 from app.db import session_scope
 from app.models import Download, WatchlistArtist
+
+
+_UNSET = object()
 
 
 @dataclass(slots=True)
@@ -28,6 +31,7 @@ class WatchlistArtistRow:
     spotify_artist_id: str
     name: str
     last_checked: datetime | None
+    retry_block_until: datetime | None
 
 
 class WatchlistDAO:
@@ -57,8 +61,14 @@ class WatchlistDAO:
                 )
                 statement = statement.where(
                     and_(
-                        WatchlistArtist.last_checked.is_(None)
-                        | (WatchlistArtist.last_checked <= now)
+                        or_(
+                            WatchlistArtist.retry_block_until.is_(None),
+                            WatchlistArtist.retry_block_until <= now,
+                        ),
+                        or_(
+                            WatchlistArtist.last_checked.is_(None),
+                            WatchlistArtist.last_checked <= now,
+                        ),
                     )
                 )
                 records = session.execute(statement).scalars().all()
@@ -68,6 +78,7 @@ class WatchlistDAO:
                         spotify_artist_id=record.spotify_artist_id,
                         name=record.name,
                         last_checked=record.last_checked,
+                        retry_block_until=record.retry_block_until,
                     )
                     for record in records
                 ]
@@ -104,6 +115,7 @@ class WatchlistDAO:
                 if record is None:
                     return
                 record.last_checked = timestamp
+                record.retry_block_until = None
                 session.add(record)
 
         _mark()
@@ -114,6 +126,7 @@ class WatchlistDAO:
         *,
         reason: str,
         retry_at: datetime | None = None,
+        retry_block_until: datetime | None | object = _UNSET,
     ) -> None:
         """Persist the failure outcome along with the next retry timestamp."""
 
@@ -125,6 +138,8 @@ class WatchlistDAO:
                 if record is None:
                     return
                 record.last_checked = next_time
+                if retry_block_until is not _UNSET:
+                    record.retry_block_until = retry_block_until
                 session.add(record)
 
         _mark()

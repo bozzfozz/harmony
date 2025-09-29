@@ -23,6 +23,10 @@ supports deterministic shutdown semantics.
 6. Failures caused by upstream timeouts or 5xx responses trigger an exponential
    backoff with jitter before the artist is retried. Retries are capped by
    `WATCHLIST_RETRY_MAX` per tick.
+7. Sobald das pro-Artist-Retry-Budget erschöpft ist, wird ein persistenter
+   Cooldown (`watchlist_artists.retry_block_until`) gesetzt. Der Worker
+   überspringt gesperrte Artists, bis der Zeitstempel in der Vergangenheit
+   liegt, und löscht den Wert nach einer erfolgreichen Verarbeitung.
 7. When the worker stops it waits up to `WATCHLIST_SHUTDOWN_GRACE_MS` and
    cancels any still running tasks so shutdown remains deterministic.
 
@@ -53,6 +57,9 @@ Structured log lines expose the worker lifecycle:
 
 - `event=watchlist.tick` — tick summary (count, duration, budget, concurrency)
 - `event=watchlist.process` — per artist result (`status`, `queued`, `attempts`, `retries`)
+- `event=watchlist.cooldown.set` — Retry-Budget ausgeschöpft, Cooldown gesetzt (`minutes`, `retry_block_until`)
+- `event=watchlist.cooldown.skip` — Verarbeitung übersprungen, weil der Cooldown noch aktiv ist
+- `event=watchlist.cooldown.clear` — Erfolgreicher Lauf hat den Cooldown zurückgesetzt
 - `event=watchlist.download` — downloads queued for SyncWorker
 - `event=watchlist.search` — Soulseek queries that did not return results
 
