@@ -72,6 +72,14 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 - Feature-Branch (`feat/<topic>`), kleine Commits, PR mit Task-Referenz und Testnachweisen.
 - Keine direkten API-/DB-Breaking-Changes ohne dokumentierte Migration (§7) und Maintainer-Bestätigung.
 
+## 5.2 Fast-Track-Modus (Implement Priority)
+**Auto-FAST-TRACK:** Für Tasks mit `TASK_ID`-Präfix **`CODX-ORCH-*`** gilt implizit `FAST-TRACK: true`. Codex darf Dateien anlegen/ändern/löschen, Tests und Snapshots aktualisieren sowie PRs eröffnen, **ohne zusätzliche Freigabe**. **CI bleibt Merge-Gate.**
+
+**Gültigkeit & Grenzen:**
+- Scope- und Clarification-Regeln (§19) bleiben anwendbar; nur der Freigabe-Check entfällt.
+- Sicherheits- und Compliance-Vorgaben (§6, §15) gelten unverändert.
+- Maintainer können den Modus durch Task-Kommentar widerrufen; der Widerruf ist in der Task-Beschreibung zu dokumentieren.
+
 ## 6. Daten, Geheimnisse, Compliance
 - Secrets: Niemals im Code oder Commit; Secret-Manager nutzen; Rotation dokumentieren.
 - Security-Scanner: Python bandit; JS/TS npm audit oder Äquivalent. Findings adressieren.
@@ -132,7 +140,7 @@ ADR (Kurzform):
 
 ## 11. Durchsetzung
 - CI-Gates erzwingen Lint, Typen, Tests, Security-Scans.
-- Schreibrechte von Codex sind nicht CI-gekoppelt; PR-/Branch-Flow empfohlen.
+- Schreibrechte von Codex sind nicht CI-gekoppelt; CI bleibt ausschließlich Merge-Gate. Auto-FAST-TRACK-Tasks (`CODX-ORCH-*`) folgen derselben Regel; PR-/Branch-Flow empfohlen.
 - Pre-Commit Hooks empfohlen: ruff, black, isort.
 - PR wird geblockt, wenn TASK_ID oder Testnachweise fehlen.
 - Merge nur bei erfüllten Checklisten.
@@ -230,6 +238,8 @@ Starte eine Rückfrage, wenn **mindestens einer** der Punkte zutrifft:
 - Die Umsetzung würde Public-API, DB-Schema oder migrationsrelevante Daten berühren.
 - Tests verlangen Verhalten, das in keinem Vertrag dokumentiert ist.
 - Externe Abhängigkeit oder Integrationsdetail (z. B. slskd/Spotify) ist nicht spezifiziert.
+
+**Hinweis Auto-FAST-TRACK (`CODX-ORCH-*`):** Minimal-invasive, reversible Änderungen dürfen ohne Rückfrage erfolgen. Bei potentiellen Contract-, Schema- oder Sicherheitsänderungen ist weiterhin eine Draft-PR als „Clarification Request“ zu eröffnen.
 
 **Clarification-Prozess:**
 1. PR in Draft setzen und Titel `Clarification Request: <TASK_ID>` nutzen.
