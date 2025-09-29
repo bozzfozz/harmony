@@ -685,7 +685,7 @@ app.add_middleware(
     policies=_cache_policies,
     default_policy=_cache_default_policy,
     etag_strategy=_cache_etag_strategy,
-    vary_headers=("Authorization", "X-API-Key", "Accept-Encoding"),
+    vary_headers=("Authorization", "X-API-Key", "Origin", "Accept-Encoding"),
 )
 
 

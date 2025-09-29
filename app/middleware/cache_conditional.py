@@ -59,7 +59,7 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
         policies: Mapping[str, CachePolicy],
         default_policy: CachePolicy,
         etag_strategy: str = "strong",
-        vary_headers: tuple[str, ...] = ("Authorization", "Accept-Encoding"),
+        vary_headers: tuple[str, ...] = ("Authorization", "X-API-Key", "Origin", "Accept-Encoding"),
     ) -> None:
         super().__init__(app)
         self._cache = cache
@@ -76,28 +76,35 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
             return await self._call_next(request, call_next)
 
         method = request.method.upper()
+        cache_method = "GET" if method == "HEAD" else method
         route = request.scope.get("route")
         path_template = getattr(route, "path_format", request.url.path)
 
-        if method != "GET":
+        if cache_method != "GET":
             response = await self._call_next(request, call_next)
-            if method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
+            if cache_method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
                 await self._invalidate_related(path_template)
             return response
 
         if not self._is_cacheable_path(path_template):
             response = await self._call_next(request, call_next)
-            return self._apply_headers(response, path_template)
+            return self._apply_headers(response, path_template, method=method)
 
-        cache_key = self._build_cache_key(request, path_template)
+        cache_key = self._build_cache_key(request, path_template, cache_method)
         entry = await self._safe_cache_get(cache_key)
         if entry is not None:
             if self._is_not_modified(request, entry):
                 return self._build_not_modified_response(entry)
-            return self._build_cached_response(entry)
+            return self._build_cached_response(entry, method=method)
 
         response = await self._call_next(request, call_next)
-        return await self._store_and_respond(request, response, path_template, cache_key)
+        return await self._store_and_respond(
+            request,
+            response,
+            path_template,
+            cache_key,
+            method=method,
+        )
 
     async def _call_next(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -139,11 +146,17 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
         response: Response,
         path_template: str,
         cache_key: str,
+        *,
+        method: str,
     ) -> Response:
         policy = self._policy_for(path_template)
-        enriched = await self._prepare_response(response, policy, path_template)
+        if method.upper() != "GET":
+            enriched = None
+        else:
+            enriched = await self._prepare_response(response, policy, path_template)
         if enriched is None:
-            return response
+            applied = self._apply_headers(response, path_template, method=method)
+            return self._ensure_head_semantics(applied, method)
 
         try:
             enriched.key = cache_key
@@ -155,7 +168,7 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
                 "Cache store failed; continuing without cache",
                 extra={"event": "cache.error", "key": cache_key},
             )
-        outbound = self._build_cached_response(enriched)
+        outbound = self._build_cached_response(enriched, method=method)
         outbound.background = response.background
         return outbound
 
@@ -221,7 +234,7 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
             return f'"{md5(body).hexdigest()}"'
         return f'"{digest}"'
 
-    def _build_cache_key(self, request: Request, path_template: str) -> str:
+    def _build_cache_key(self, request: Request, path_template: str, method: str) -> str:
         path_params = {key: str(value) for key, value in request.path_params.items()}
         auth_token = "|".join(
             filter(
@@ -234,18 +247,19 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
         )
         auth_variant = resolve_auth_variant(auth_token or None)
         return build_cache_key(
-            method=request.method,
+            method=method,
             path_template=path_template,
             query_string=request.url.query,
             path_params=path_params,
             auth_variant=auth_variant,
         )
 
-    def _build_cached_response(self, entry: CacheEntry) -> Response:
+    def _build_cached_response(self, entry: CacheEntry, *, method: str = "GET") -> Response:
         headers = dict(entry.headers)
         headers["Age"] = str(max(0, int(self._cache_age(entry))))
+        body = entry.body if method.upper() != "HEAD" else b""
         return Response(
-            content=entry.body,
+            content=body,
             status_code=entry.status_code,
             media_type=entry.media_type,
             headers=headers,
@@ -290,13 +304,15 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
             return True
         return etag in candidates
 
-    def _apply_headers(self, response: Response, path_template: str) -> Response:
+    def _apply_headers(
+        self, response: Response, path_template: str, *, method: str
+    ) -> Response:
         policy = self._policy_for(path_template)
         if not hasattr(response, "body"):
             response.headers.setdefault("Cache-Control", policy.cache_control)
             if self._vary_headers:
                 response.headers.setdefault("Vary", ", ".join(self._vary_headers))
-            return response
+            return self._ensure_head_semantics(response, method)
 
         body = response.body if isinstance(response.body, (bytes, bytearray)) else b""
         last_modified_dt = self._resolve_last_modified(response.headers.get("Last-Modified"))
@@ -310,6 +326,15 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("Cache-Control", policy.cache_control)
         if self._vary_headers:
             response.headers.setdefault("Vary", ", ".join(self._vary_headers))
+        return self._ensure_head_semantics(response, method)
+
+    def _ensure_head_semantics(self, response: Response, method: str) -> Response:
+        if method.upper() != "HEAD":
+            return response
+        response.body = b""
+        header_names = {key.lower() for key in response.headers}
+        if "content-length" not in header_names:
+            response.headers["Content-Length"] = "0"
         return response
 
     def _resolve_last_modified(self, value: str | None) -> datetime | None:

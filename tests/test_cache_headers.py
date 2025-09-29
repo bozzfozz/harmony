@@ -63,3 +63,28 @@ def test_if_modified_since_returns_304_when_fresh() -> None:
         )
         stale = client.get(path, headers={"If-Modified-Since": old_date}, use_raw_path=True)
         assert stale.status_code == 200
+
+
+def test_head_responses_preserve_cache_metadata() -> None:
+    path = api_path("")
+    with SimpleTestClient(app) as client:
+        initial = client.get(path, use_raw_path=True)
+        initial_headers = _lower_headers(initial.headers)
+        assert initial.status_code == 200
+        etag = initial_headers.get("etag")
+        assert etag is not None
+
+        head_response = client.head(path, use_raw_path=True)
+        head_headers = _lower_headers(head_response.headers)
+        assert head_response.status_code == 200
+        assert head_headers.get("etag") == etag
+        assert head_response.text == ""
+
+        conditional = client.head(
+            path,
+            headers={"If-None-Match": etag},
+            use_raw_path=True,
+        )
+        conditional_headers = _lower_headers(conditional.headers)
+        assert conditional.status_code == 304
+        assert conditional_headers.get("etag") == etag

@@ -27,6 +27,12 @@ class SimpleResponse:
             return None
         return json.loads(self._body.decode("utf-8"))
 
+    @property
+    def text(self) -> str:
+        if not self._body:
+            return ""
+        return self._body.decode("utf-8")
+
 
 class SimpleTestClient:
     def __init__(
@@ -182,6 +188,22 @@ class SimpleTestClient:
         return self._loop.run_until_complete(
             self._request(
                 "OPTIONS",
+                path,
+                headers=headers,
+                use_raw_path=use_raw_path,
+            )
+        )
+
+    def head(
+        self,
+        path: str,
+        headers: Optional[Mapping[str, str]] = None,
+        *,
+        use_raw_path: bool = False,
+    ) -> SimpleResponse:
+        return self._loop.run_until_complete(
+            self._request(
+                "HEAD",
                 path,
                 headers=headers,
                 use_raw_path=use_raw_path,
