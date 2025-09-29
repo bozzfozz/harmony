@@ -74,12 +74,15 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 PR-Checkliste:
 - [ ] Issue verlinkt und Beschreibung vollständig
 - [ ] Kleine, fokussierte Änderung
-- [ ] Lint, Typprüfung, Tests grün
+- [ ] TASK_ID im Titel und PR-Body (verweist auf docs/task-template.md)
+- [ ] AGENTS.md gelesen & Scope-Guard bestätigt
+- [ ] Keine Secrets, `BACKUP`- oder Lizenz-Dateien verändert
+- [ ] Tests/Linting grün (`pytest`, `mypy`, `ruff`, `black --check`) oder Ausnahme begründet
 - [ ] Security-Scan ohne Blocker
-- [ ] Doku aktualisiert (README, CHANGELOG, ADRs)
+- [ ] OpenAPI/Snapshots aktualisiert (falls API betroffen)
+- [ ] Doku-/ENV-Drift behoben (README, CHANGELOG, ADRs)
 - [ ] Rollback-Plan vorhanden
-- [ ] TASK_ID im Titel und im PR-Body (verweist auf docs/task-template.md)
-- [ ] Testnachweise (z. B. pytest -q, Coverage-Summary, relevante Logs)
+- [ ] Testnachweise dokumentiert (Logs, Screens, Coverage)
 
 Agent-Ausführung:
 - [ ] Eingaben validiert, Schema geprüft
@@ -158,44 +161,103 @@ Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen.
 - PR-Beschreibung MUSS enthalten: Was/Warum, Dateiänderungen (Neu/Geändert/Gelöscht), Migrationshinweise, Testnachweise (Logs/Screens), Risiken/Limitierungen, Verweis auf AGENTS.md/Template-Konformität sowie den **Nachweis des ToDo-Updates**.
 - Review achtet auf vollständige Template-Erfüllung und Einhaltung aller Completion Gates.
 
-### Initiative Policy
+## 19. Initiative-, Scope- und Clarification-Regeln <a id="initiative-scope-clarification"></a>
 
-**Zweck:** Repository-Drift überbrücken, ohne Scope/Contracts zu verletzen. Alle Regeln sind **verbindlich**.
+**Quick Reference:** Prüfe vor jeder Änderung `Zulässige Initiative` → `Scope-Guard` → `Clarification-Trigger` → `Commit-/PR-Standards` → `CI-/OpenAPI-Gates` → `Beispiele (Do/Don't)`.
 
-#### MAY (ohne Rückfrage, tagge Commits mit `[DRIFT-FIX]`)
-- Build/Lint/Test-Drift beheben, solange **keine** Logik/Contracts verändert werden
-- Defekte Importe/Pfade/Typen/Typos fixen; tote Importe entfernen
-- Snapshots/OpenAPI regenerieren, **nur** wenn der öffentliche Vertrag unverändert bleibt
-- Vorhandene Migrationen ausführen/verdrahten, **wenn** die Aufgabe es verlangt
-- Doku/Kommentare synchronisieren; CI-Pins innerhalb **gleicher Major-Version**
-- Feature-Flag-Defaults setzen, **nur** wenn in der Aufgabe explizit vorgegeben
+### Zulässige Initiative (DRIFT-FIX) <a id="zulassige-initiative"></a>
 
-#### MUST NOT
-- Scope, Public API, DB-Schema, ENV-Variablen, Dependencies verändern
-- Neue Endpunkte/Felder/Metriken hinzufügen
-- Semantik-/Performance-Änderungen mit möglichem Output-Einfluss
-- Tests löschen/abschwächen
+**Darf ohne Rückfrage (`MAY`, Commits optional mit `[DRIFT-FIX]` taggen):**
+- Defekte Tests, Lints oder Typprüfungen reparieren, solange Ursache eindeutig ist und **keine** Public-API beeinflusst wird.
+- Offensichtliche Lint-/Type-/Import-Fehler oder fehlerhafte Pfade beheben; tote Importe entfernen.
+- Doku-Drift in README/ENV/OpenAPI-Beispielen korrigieren, wenn die Codequelle eindeutig ist.
+- Snapshots/OpenAPI regenerieren, sofern der veröffentlichte Vertrag unverändert bleibt.
+- Vorhandene Migrationen verdrahten oder ausführen, **wenn** die Aufgabe es explizit verlangt.
 
-### Clarification Request (bei Blockern)
-Wenn der Task ohne Scope-Änderung nicht umsetzbar ist, **abbrechen** und im PR kommentieren:
-1. Titel: `Clarification Request: <TASK_ID>`
-2. Inhalt: **Beobachtung**, **Blocker-Logs/Diffs**, **Minimalvorschlag** (reversibel), **Impact**
-3. Label: `needs-owner-decision`
-Ohne Freigabe **keine** selbständige Abweichung.
+**Mini-Checkliste (nur wenn alle Kästchen `true` → Initiative zulässig):**
+- [ ] Änderung ist rein mechanisch (keine neue Business-Logik).
+- [ ] Öffentliche APIs, DB-Schemas und Konfiguration bleiben identisch.
+- [ ] Quelle der Wahrheit ist eindeutig (kein Ratespiel, keine Divergenz zu Docs/Code).
 
-### Commit & PR-Regeln
-- Jeder Commit: `<type>(<area>): … [<TASK_ID>][optional: DRIFT-FIX]`
-- PR muss die Task-Sektionen „Scope“, „Änderungen an Dateien“, „Zulässige Initiative“ referenzieren
-- Änderungen dürfen **nur** in der Task-Scope-Guard-Dateimenge stattfinden
+**Darf nur mit Task-Update oder Freigabe nach Clarification:**
+- Schema-/API-Änderungen, neue Endpunkte oder zusätzliche Felder.
+- Migrationslogik, die Daten manipuliert oder Verlust riskieren könnte.
+- UI-Flows, Feature-Flags oder Konfiguration mit Nutzerwirkung.
+- Änderungen mit potenziellem Performance- oder Semantik-Einfluss.
 
-### CI-Gates (referenziert)
-- `scope_guard`: Geänderte Pfade ⊆ Task-Scope-Guard
-- `api_guard`: OpenAPI-Diff (oasdiff) blockt Breaking Changes ohne Task-Freigabe
-- `db_guard`: Schema-Diff ohne Alembic-Revision → Fail
-- `deps_guard`: Neue Deps oder Major-Bumps → Fail
+### Scope-Guard <a id="scope-guard"></a>
 
-### Durchsetzung
-PRs, die gegen „MUST NOT“ verstoßen oder Gates auslösen, werden **nicht** gemerged. Wiederholung nur nach Task/Policy-Update.
+**MUST NOT:**
+- `BACKUP`-, `LICENSE`- oder andere geschützte Dateien anfassen.
+- Secrets, Tokens oder personenbezogene Daten ins Repository schreiben.
+- Public-APIs brechen, DB-Schemata ohne Migration ändern oder Datenverlust riskieren.
 
-### Glossar
-**DRIFT-FIX:** kleinste mechanische Korrekturen, die Build/Lint/Tests wiederherstellen, ohne Public Contracts zu ändern.
+**MUST:**
+- Migrationen idempotent halten; Rollback-Pfade dokumentieren.
+- Feature-Flags mit sicheren Defaults versehen (failsafe/off), wenn sie Teil des Tasks sind.
+- OpenAPI-Spezifikation, Tests und Dokumentation synchron halten.
+
+**Scope-Checkliste (vor jedem Commit prüfen):**
+- [ ] Geänderte Pfade liegen vollständig innerhalb des Task-Scopes.
+- [ ] Kein neuer oder geänderter Contract ohne explizite Freigabe.
+- [ ] Secrets/geschützte Dateien unverändert.
+
+### Clarification-Trigger (zwingend nachfragen) <a id="clarification-trigger"></a>
+
+Starte eine Rückfrage, wenn **mindestens einer** der Punkte zutrifft:
+- Task widerspricht bestehendem Code, Dokumentation oder den Scope-Guards.
+- Zielmetrik, gewünschtes Verhalten oder benötigte ENV/Secrets sind unklar oder fehlen.
+- Die Umsetzung würde Public-API, DB-Schema oder migrationsrelevante Daten berühren.
+- Tests verlangen Verhalten, das in keinem Vertrag dokumentiert ist.
+- Externe Abhängigkeit oder Integrationsdetail (z. B. slskd/Spotify) ist nicht spezifiziert.
+
+**Clarification-Prozess:**
+1. PR in Draft setzen und Titel `Clarification Request: <TASK_ID>` nutzen.
+2. Inhalt strukturieren: **Beobachtung**, **Blocker (Logs/Diffs)**, **Minimalvorschlag** (reversibel), **Impact**.
+3. Label `needs-owner-decision` setzen und auf Antwort warten. Ohne Freigabe **keine** Abweichung umsetzen.
+
+### Commit-/PR-Standards <a id="commit-pr-standards"></a>
+
+**Commits:**
+- Conventional Commits nutzen (`feat:`, `fix:`, `docs:`, `test:`, `chore:`) optional mit Scope (`feat(api): …`).
+- TASK-ID anfügen (`… [CODX-123]`), `[DRIFT-FIX]` bei reinem Drift-Fix optional ergänzen.
+- Ein Commit = ein fokussiertes Thema mit kurzer „Was/Warum“-Beschreibung.
+
+**PR-Beschreibung (Pflichtinhalte):**
+- Kurzfassung (Was/Warum) und Risiko/Limitierungen.
+- Änderungen an Dateien (Neu/Geändert/Gelöscht) als Liste.
+- Testnachweise mit Befehlen/Logs/Screenshots.
+- Verweis auf AGENTS.md-Konformität und ggf. OpenAPI-/ENV-Updates.
+
+**PR-Checkliste (muss vollständig im PR abgehakt sein):**
+- [ ] AGENTS.md gelesen und Scope-Guard geprüft.
+- [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert.
+- [ ] Tests grün (`pytest`, `mypy`, `ruff`, `black --check`) bzw. begründete Ausnahme dokumentiert.
+- [ ] OpenAPI/Snapshots aktualisiert, falls API betroffen.
+- [ ] Doku-/ENV-Drift geprüft und behoben.
+
+### CI-/OpenAPI-Gates <a id="ci-openapi-gates"></a>
+
+**MUST PASS (lokal oder CI):**
+- `pytest`
+- `mypy`
+- `ruff`
+- `black --check`
+
+**Zusätzliche Gates (nur bei Relevanz, dürfen nicht rot sein):**
+- OpenAPI-Snapshot (`/openapi.json`) aktualisieren, wenn Verträge sich ändern.
+- Beispiel-Responses und Doku synchronisieren (README/Docs, API-Referenzen).
+- `scope_guard`, `api_guard`, `db_guard`, `deps_guard` dürfen keine Blocker melden.
+
+### Beispiele (Do/Don't) <a id="initiative-examples"></a>
+
+| Do | Don't |
+| --- | --- |
+| ENV-Variable in README ergänzen, wenn `app/config.py` die Quelle klar vorgibt. | Schema-Feld „klein“ erweitern ohne Migration oder Task-Freigabe. |
+| Fehlenden Test importieren und Pfad korrigieren, weil `pytest` bricht. | Tests löschen oder abschwächen, um CI grün zu bekommen. |
+| OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route implementieren, weil sie „praktisch wäre“, ohne Scope-Anpassung. |
+| Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern, ohne dass der Task dies verlangt. |
+
+### Durchsetzung & Glossar
+- PRs, die gegen „MUST NOT“ verstoßen oder Gates reißen, werden nicht gemerged; Wiederholung erfordert Policy-Update.
+- **DRIFT-FIX:** kleinste mechanische Korrekturen, die Build/Lint/Tests wiederherstellen, ohne Public Contracts zu ändern.

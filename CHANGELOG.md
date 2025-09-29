@@ -1,4 +1,5 @@
 ## v1.0.1 — 2025-09-25
+- docs: AGENTS.md um Initiative-, Scope-Guard- und Clarification-Regeln inkl. Checklisten, CI-Gates und Beispielen erweitert.
 - docs: README/ENV aktualisiert, Health/Ready/Metrics-Doku konsolidiert,
   `.env.example` ergänzt und neue Ops-Guides für Runtime-Konfiguration sowie
   Prometheus-Integration hinzugefügt.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/ops/metrics.md†L1-L61】
