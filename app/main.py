@@ -65,6 +65,7 @@ from app.routers import (
 )
 from app.services.backfill_service import BackfillService
 from app.services.health import HealthService
+from app.services.secret_validation import SecretValidationService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
 from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
@@ -550,6 +551,7 @@ app.state.health_service = HealthService(
     config=_config_snapshot.health,
     session_factory=get_session,
 )
+app.state.secret_validation_service = SecretValidationService()
 app.state.metrics_config = _config_snapshot.metrics
 app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
 

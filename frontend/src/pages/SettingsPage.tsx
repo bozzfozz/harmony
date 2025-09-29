@@ -18,6 +18,7 @@ import { Label } from '../components/ui/label';
 import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 import { useToast } from '../hooks/useToast';
 import AuthKeyPanel from './Settings/AuthKeyPanel';
+import SecretsPanel from './Settings/SecretsPanel';
 import {
   ApiError,
   getSpotifyMode,
@@ -179,6 +180,7 @@ const SettingsPage = () => {
   return (
     <div className="space-y-6">
       <AuthKeyPanel />
+      <SecretsPanel />
       <Tabs defaultValue="spotify">
       <TabsList>
         <TabsTrigger value="spotify">Spotify</TabsTrigger>

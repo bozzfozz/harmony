@@ -221,6 +221,37 @@ export const subscribeToApiErrors = (subscriber: ApiErrorSubscriber) => {
 
 export type ConnectionStatus = 'ok' | 'fail' | 'unknown' | (string & {});
 
+export type SecretProvider = 'slskd_api_key' | 'spotify_client_secret';
+
+export interface ApiEnvelopeError {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface ApiEnvelope<T> {
+  ok: boolean;
+  data: T | null;
+  error: ApiEnvelopeError | null;
+}
+
+export type ValidationMode = 'live' | 'format';
+
+export interface SecretValidatedPayload {
+  mode: ValidationMode;
+  valid: boolean;
+  reason?: string;
+  note?: string;
+  at: string;
+}
+
+export interface SecretValidationData {
+  provider: SecretProvider;
+  validated: SecretValidatedPayload;
+}
+
+export type SecretValidationResponse = ApiEnvelope<SecretValidationData>;
+
 export interface WorkerHealth {
   last_seen?: string | null;
   queue_size?: number | Record<string, number | string> | string | null;
@@ -276,6 +307,17 @@ export const updateSettings = async (payload: UpdateSettingPayload[]) => {
     // eslint-disable-next-line no-await-in-loop
     await updateSetting(entry);
   }
+};
+
+export const validateSecret = async (provider: SecretProvider, override?: string) => {
+  const config: AxiosRequestConfig = {
+    method: 'POST',
+    url: apiUrl(`/secrets/${provider}/validate`)
+  };
+  if (typeof override === 'string') {
+    config.data = { value: override };
+  }
+  return request<SecretValidationResponse>(config);
 };
 
 export interface ServiceHealthResponse {
