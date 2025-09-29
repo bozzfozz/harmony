@@ -57,6 +57,7 @@ class ProviderRegistry:
                 timeout_ms=soulseek.timeout_ms,
                 max_retries=soulseek.retry_max,
                 backoff_base_ms=soulseek.retry_backoff_base_ms,
+                jitter_pct=soulseek.retry_jitter_pct,
                 preferred_formats=soulseek.preferred_formats,
                 max_results=soulseek.max_results,
             )

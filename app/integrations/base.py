@@ -96,7 +96,7 @@ class MusicProviderAdapter(Protocol):
     async def search_tracks(
         self, query: str, artist: str | None = None, limit: int = 50
     ) -> list[TrackCandidate]:
-        """Return potential download candidates for the supplied search query."""
+        """Return a concrete list of download candidates for the supplied search query."""
 
 
 class ProviderError(RuntimeError):
