@@ -234,6 +234,16 @@ class ImportBatch(Base):
 
 class WorkerJob(Base):
     __tablename__ = "worker_jobs"
+    __table_args__ = (
+        Index(
+            "ix_worker_jobs_worker_state_scheduled",
+            "worker",
+            "state",
+            "scheduled_at",
+        ),
+        Index("ix_worker_jobs_worker_job_key", "worker", "job_key"),
+        Index("ix_worker_jobs_worker_lease", "worker", "lease_expires_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     worker = Column(String(64), index=True, nullable=False)
@@ -242,6 +252,10 @@ class WorkerJob(Base):
     attempts = Column(Integer, nullable=False, default=0)
     last_error = Column(Text, nullable=True)
     scheduled_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    visibility_timeout = Column(Integer, nullable=False, default=0)
+    lease_expires_at = Column(DateTime, nullable=True)
+    job_key = Column(String(128), nullable=True)
+    stop_reason = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,

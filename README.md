@@ -458,9 +458,19 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `WATCHLIST_RETRY_MAX` | int | `3` | Retries pro Tick vor Eskalation. | — |
 | `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | int | `6` | Gesamtretry-Budget pro Artist innerhalb des Cooldowns. | — |
 | `WATCHLIST_COOLDOWN_MINUTES` | int | `15` | Pause nach fehlerhaften Läufen. | — |
+| `WATCHLIST_COOLDOWN_S` | int | `300` | Alternative Sekundenangabe für den Artist-Cooldown (überschreibt Minutenwert). | — |
 | `WATCHLIST_DB_IO_MODE` | string | `thread` | Datenbankmodus (`thread` oder `async`). | — |
 | `WATCHLIST_JITTER_PCT` | float | `0.2` | Zufallsjitter für Backoff-Delays. | — |
 | `WATCHLIST_SHUTDOWN_GRACE_MS` | int | `2000` | Grace-Periode beim Shutdown. | — |
+| `WORKERS_ENABLED` | bool | `true` | Globaler Schalter, der sämtliche Hintergrund-Worker deaktiviert, wenn `false`. | — |
+| `WORKER_MAX_CONCURRENCY` | int | `2` | Obergrenze für parallele Worker-Jobs (Fallback, wenn Worker-spezifische Werte fehlen). | — |
+| `MATCHING_EXECUTOR_MAX_WORKERS` | int | `2` | Maximalthreads für CPU-lastiges Matching innerhalb des Executors. | — |
+| `EXTERNAL_TIMEOUT_MS` | int | `10000` | Standard-Timeout für externe Aufrufe (Spotify, slskd), sofern keine Spezialspezifikation vorliegt. | — |
+| `EXTERNAL_RETRY_MAX` | int | `3` | Maximalzahl an Retries bei transienten Abhängigkeiten. | — |
+| `EXTERNAL_BACKOFF_BASE_MS` | int | `250` | Basiswert für exponentiellen Backoff externer Aufrufe. | — |
+| `EXTERNAL_JITTER_PCT` | int | `20` | Zufallsjitter (±%) für Backoff-Delays. | — |
+| `WORKER_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer für Worker-Jobs bevor eine Redelivery ausgelöst wird. | — |
+| `WORKER_HEARTBEAT_S` | int | `20` | Intervall für Heartbeats, die eine laufende Lease verlängern. | — |
 | `SYNC_WORKER_CONCURRENCY` | int | `2` | Parallele Downloads (kann via Setting überschrieben werden). | — |
 | `RETRY_MAX_ATTEMPTS` | int | `10` | Max. automatische Neuversuche je Download. | — |
 | `RETRY_BASE_SECONDS` | float | `60` | Grundverzögerung für Download-Retries. | — |

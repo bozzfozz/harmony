@@ -1,4 +1,8 @@
 ## v1.0.1 — 2025-09-25
+- feat(workers): add queue visibility timeouts with heartbeats, idempotent
+  enqueueing, jittered retries and structured persistence logs; expand worker
+  environment documentation and add regression tests for redelivery,
+  idempotency and graceful shutdown.【F:app/models.py†L235-L257】【F:app/workers/persistence.py†L1-L276】【F:tests/workers/test_visibility_timeout.py†L1-L28】【F:tests/workers/test_retries_and_backoff.py†L1-L28】【F:tests/workers/test_idempotency.py†L1-L26】【F:tests/workers/test_graceful_shutdown.py†L1-L28】【F:README.md†L452-L476】
 - feat(integrations): harden slskd adapter with strict config validation, URL normalisation,
   jittered retries, structured logging and updated contract tests; integration service and
   configuration wiring follow suit.【F:app/integrations/slskd_adapter.py†L1-L470】【F:app/services/integration_service.py†L1-L120】【F:app/config.py†L570-L640】【F:app/integrations/registry.py†L1-L80】【F:tests/integrations/test_slskd_adapter.py†L1-L220】【F:tests/services/test_integration_service_slskd.py†L1-L160】
