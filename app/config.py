@@ -88,6 +88,7 @@ class IntegrationsConfig:
     enabled: tuple[str, ...]
     timeouts_ms: dict[str, int]
     max_concurrency: int
+    slskd_rate_limit_retry_after_fallback_ms: int
 
 
 @dataclass(slots=True)
@@ -157,6 +158,8 @@ DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
 DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
+DEFAULT_SLSKD_TIMEOUT_MS = 1_200
+DEFAULT_SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS = 2_000
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
 DEFAULT_METRICS_PATH = "/metrics"
@@ -215,7 +218,11 @@ def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:
 
 
 def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]:
-    defaults: dict[str, int] = {"spotify": 15000, "plex": 15000, "slskd": 15000}
+    defaults: dict[str, int] = {
+        "spotify": 15000,
+        "plex": 15000,
+        "slskd": DEFAULT_SLSKD_TIMEOUT_MS,
+    }
     for key, provider in (
         ("SPOTIFY_TIMEOUT_MS", "spotify"),
         ("PLEX_TIMEOUT_MS", "plex"),
@@ -225,7 +232,7 @@ def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]
         if raw is None:
             continue
         try:
-            defaults[provider] = max(1000, int(raw))
+            defaults[provider] = max(200, int(raw))
         except (TypeError, ValueError):
             continue
     return defaults
@@ -593,6 +600,13 @@ def load_config() -> AppConfig:
             _as_int(
                 os.getenv("PROVIDER_MAX_CONCURRENCY"),
                 default=DEFAULT_PROVIDER_MAX_CONCURRENCY,
+            ),
+        ),
+        slskd_rate_limit_retry_after_fallback_ms=max(
+            0,
+            _as_int(
+                os.getenv("SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS"),
+                default=DEFAULT_SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS,
             ),
         ),
     )
