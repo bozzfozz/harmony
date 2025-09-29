@@ -36,6 +36,8 @@
   - Lifespan-Tests prüfen Worker-Start, Fehlerpfade, Idempotenz und Cancel-Verhalten mit dedizierten Stubs.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
 - **Dokumentation**
   - README und CHANGELOG dokumentieren Smart Search, Worker, Watchlist, Release-Highlights sowie die aktuellen CI-Gates konsistent zum Code-Stand.【F:README.md†L101-L172】【F:CHANGELOG.md†L1-L18】
+  - README & Ops-Doku konsolidieren sämtliche ENV-Variablen, liefern `.env.example`
+    sowie Prometheus-Quickstart (`docs/ops`).【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/ops/metrics.md†L1-L61】
 - **Suche**
   - Smart Search erhielt strukturierte Filter (Genre, Jahr, Qualität) inkl. Normalisierung, Ranking-Boosts und aktualisierte API-Dokumentation.【F:app/routers/search_router.py†L1-L280】【F:docs/api.md†L130-L233】
   - slskd-Adapter liefert asynchrone Track-Suche über den Integration Service inklusive Retry/Backoff, TrackCandidate-Mapping, Tests und aktualisierter Dokumentation.【F:app/integrations/slskd_adapter.py†L1-L309】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】【F:docs/integrations/slskd.md†L1-L134】
