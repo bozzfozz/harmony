@@ -91,11 +91,11 @@ def _extract_presented_key(request: Request) -> str | None:
     return None
 
 
-def require_api_key(request: Request) -> None:
+def require_api_key(request: Request, *, force: bool = False) -> None:
     config = get_app_config()
     security = config.security
 
-    if not security.require_auth:
+    if not force and not security.require_auth:
         return
 
     if request.method.upper() == "OPTIONS":

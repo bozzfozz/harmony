@@ -9,7 +9,7 @@ from app.config import HealthConfig
 from app.dependencies import get_app_config
 from app.errors import ErrorCode
 from app.services.health import HealthService, ReadinessResult
-from app.main import MetricsRegistry, _METRIC_BUCKETS
+from app.main import MetricsRegistry, _METRIC_BUCKETS, configure_metrics_route
 from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
 
@@ -186,6 +186,7 @@ def test_metrics_disabled_returns_404(client) -> None:
 def test_metrics_enabled_requires_api_key(client) -> None:
     client.app.state.metrics_config.enabled = True
     client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
+    configure_metrics_route(client.app, client.app.state.metrics_config)
 
     client.get(api_path("health"))
     response = client.get("/metrics", use_raw_path=True)
@@ -194,17 +195,20 @@ def test_metrics_enabled_requires_api_key(client) -> None:
     assert "app_build_info" in body
 
     client.app.state.metrics_config.enabled = False
+    configure_metrics_route(client.app, client.app.state.metrics_config)
 
 
 def test_metrics_unauthorized_without_api_key(client) -> None:
     client.app.state.metrics_config.enabled = True
     client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
+    configure_metrics_route(client.app, client.app.state.metrics_config)
 
     with SimpleTestClient(client.app, include_env_api_key=False) as anon_client:
         response = anon_client.get("/metrics", use_raw_path=True)
     assert response.status_code == 401
 
     client.app.state.metrics_config.enabled = False
+    configure_metrics_route(client.app, client.app.state.metrics_config)
 
 
 def test_metrics_public_when_not_requiring_api_key(client) -> None:
@@ -216,6 +220,7 @@ def test_metrics_public_when_not_requiring_api_key(client) -> None:
     original_allowlist = config.security.allowlist
     config.security.allowlist = allowlist
     client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
+    configure_metrics_route(client.app, client.app.state.metrics_config)
 
     try:
         with SimpleTestClient(client.app, include_env_api_key=False) as anon_client:
@@ -224,6 +229,7 @@ def test_metrics_public_when_not_requiring_api_key(client) -> None:
         config.security.allowlist = original_allowlist
         client.app.state.metrics_config.require_api_key = True
         client.app.state.metrics_config.enabled = False
+        configure_metrics_route(client.app, client.app.state.metrics_config)
 
     assert response.status_code == 200
     body = response._body.decode("utf-8")

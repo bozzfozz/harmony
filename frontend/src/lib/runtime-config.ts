@@ -21,7 +21,7 @@ const resolveApiBaseUrl = (): string => {
     return window.__HARMONY_API_URL__;
   }
 
-  return 'http://localhost:8000';
+  return 'http://127.0.0.1:8000';
 };
 
 const normalizeBasePath = (value: string): string => {
@@ -79,7 +79,7 @@ const resolveRequireAuth = (): boolean => {
     }
   }
 
-  return true;
+  return false;
 };
 
 type AuthHeaderMode = 'x-api-key' | 'bearer';

@@ -17933,11 +17933,7 @@
       }
     }
   },
-  "security": [
-    {
-      "ApiKeyAuth": []
-    }
-  ],
+  "security": [],
   "servers": [
     {
       "url": "/api/v1"

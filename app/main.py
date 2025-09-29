@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
@@ -26,7 +26,7 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
         """Compatibility stub for Python versions without ExceptionGroup."""
 
 
-from app.config import AppConfig
+from app.config import AppConfig, MetricsConfig, SecurityConfig
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
     get_app_config,
@@ -393,6 +393,11 @@ _API_BASE_PATH = _config_snapshot.api_base_path
 _LEGACY_ROUTES_ENABLED = _config_snapshot.features.enable_legacy_routes
 
 
+def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None:
+    app.state.security_config = security
+    app.openapi_schema = None
+
+
 def _should_start_workers() -> bool:
     return os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}
 
@@ -541,6 +546,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
     _configure_application(config)
 
+    _apply_security_dependencies(app, config.security)
+    configure_metrics_route(app, config.metrics)
+
     feature_flags = config.features
     app.state.feature_flags = feature_flags
     app.state.api_base_path = config.api_base_path
@@ -621,11 +629,12 @@ app = FastAPI(
     title="Harmony Backend",
     version="1.4.0",
     lifespan=lifespan,
-    dependencies=[Depends(require_api_key)],
     docs_url=_docs_url,
     redoc_url=_redoc_url,
     openapi_url=_openapi_url,
 )
+
+_apply_security_dependencies(app, _config_snapshot.security)
 
 app.state.start_time = _APP_START_TIME
 app.state.health_service = HealthService(
@@ -635,7 +644,6 @@ app.state.health_service = HealthService(
     session_factory=get_session,
 )
 app.state.secret_validation_service = SecretValidationService()
-app.state.metrics_config = _config_snapshot.metrics
 app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
 
 _initial_security = _config_snapshot.security
@@ -690,6 +698,19 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def enforce_api_key(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    security_config = getattr(request.app.state, "security_config", _config_snapshot.security)
+    if security_config.require_auth:
+        try:
+            require_api_key(request)
+        except AppError as exc:
+            return exc.as_response(request_path=request.url.path, method=request.method)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def collect_metrics(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
@@ -733,10 +754,6 @@ if _LEGACY_ROUTES_ENABLED:
     app.include_router(legacy_router)
 
 
-@app.get(
-    _config_snapshot.metrics.path,
-    include_in_schema=_config_snapshot.metrics.enabled,
-)
 async def metrics_endpoint(request: Request) -> PlainTextResponse:
     metrics_config = getattr(request.app.state, "metrics_config", _config_snapshot.metrics)
     logger.info(
@@ -746,11 +763,37 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
     if not metrics_config.enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metrics disabled")
 
+    if metrics_config.require_api_key:
+        try:
+            require_api_key(request, force=True)
+        except AppError as exc:
+            return exc.as_response(request_path=request.url.path, method=request.method)
+
     registry = getattr(request.app.state, "metrics_registry", None)
     body = ""
     if registry is not None:
         body = registry.render(version=request.app.version)
     return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
+
+
+def configure_metrics_route(app: FastAPI, metrics_config: MetricsConfig) -> None:
+    app.router.routes[:] = [
+        route
+        for route in app.router.routes
+        if getattr(route, "endpoint", None) is not metrics_endpoint
+    ]
+    if metrics_config.enabled:
+        app.add_api_route(
+            metrics_config.path,
+            metrics_endpoint,
+            methods=["GET"],
+            include_in_schema=True,
+        )
+    app.state.metrics_config = metrics_config
+    app.openapi_schema = None
+
+
+configure_metrics_route(app, _config_snapshot.metrics)
 
 
 def _format_validation_field(raw_loc: list[Any]) -> str:

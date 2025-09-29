@@ -175,7 +175,7 @@ npm install
 npm run dev
 ```
 
-Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_URL` (Host, z. B. `http://localhost:8000`) und optional `VITE_API_BASE_PATH` (Default: `/api/v1`) angebunden werden.
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_URL` (Host, z. B. `http://127.0.0.1:8000`) und optional `VITE_API_BASE_PATH` (Default: `/api/v1`) angebunden werden.
 
 ### API-Key-Authentifizierung im Frontend
 
@@ -183,12 +183,12 @@ Das Frontend setzt API-Keys automatisch auf jede Anfrage, sofern Authentifizieru
 
 ```bash
 # .env.local
-VITE_REQUIRE_AUTH=true             # blockiert Netzaufrufe ohne Key (Default: true)
+VITE_REQUIRE_AUTH=false            # blockiert Netzaufrufe ohne Key (Default: false)
 VITE_AUTH_HEADER_MODE=x-api-key    # oder "bearer" für Authorization-Header
 VITE_API_KEY=dev-local-key         # optionaler Build-Zeit-Key (nur lokal verwenden)
 ```
 
-Die Auflösung des API-Keys erfolgt priorisiert: `VITE_API_KEY` → `localStorage[HARMONY_API_KEY]` → Laufzeitkonfiguration (z. B. über `window.__HARMONY_RUNTIME_API_KEY__`). Bei aktivem `VITE_REQUIRE_AUTH=true` und fehlendem Schlüssel werden Requests vor dem Versand abgebrochen und liefern `{ ok: false, error: { code: "AUTH_REQUIRED", message: "API key missing" } }` zurück.
+Die Auflösung des API-Keys erfolgt priorisiert: `VITE_API_KEY` → `localStorage[HARMONY_API_KEY]` → Laufzeitkonfiguration (z. B. über `window.__HARMONY_RUNTIME_API_KEY__`). Ist `VITE_REQUIRE_AUTH=false`, sendet der Client keine Auth-Header und lässt Requests ohne Key zu. Bei aktivem `VITE_REQUIRE_AUTH=true` und fehlendem Schlüssel werden Requests vor dem Versand abgebrochen und liefern `{ ok: false, error: { code: "AUTH_REQUIRED", message: "API key missing" } }` zurück.
 
 Für lokale Entwicklung stellt die Einstellungsseite ein Panel bereit, das den Key maskiert anzeigt, explizit offenlegt und das Speichern/Löschen im Browser ermöglicht. Das Panel beeinflusst ausschließlich den lokalen Storage und überschreibt keine Build-Zeit-Variablen.
 
@@ -288,7 +288,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Der Server liest die Laufzeitkonfiguration aus `.env`. Ohne API-Key akzeptiert das Backend keine produktiven Requests (`FEATURE_REQUIRE_AUTH=true`). Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
+Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8000` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`, `FEATURE_METRICS_ENABLED=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
 
 ### Docker
 
@@ -335,10 +335,14 @@ try-Zugriffs im CI bewusst ausgelassen.
 | --- | --- | --- | --- | --- |
 | `DATABASE_URL` | string | `sqlite:///./harmony.db` | SQLAlchemy-Verbindungsstring; SQLite-Dateien werden bei Bedarf automatisch angelegt. | 🔒 enthält ggf. Zugangsdaten
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
+| `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
+| `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
+| `PORT` | int | `8000` | TCP-Port der API-Instanz. | — |
 | `HARMONY_DISABLE_WORKERS` | bool (`0/1`) | `false` | `true` deaktiviert alle Hintergrund-Worker (Tests/Demos). | — |
 | `API_BASE_PATH` | string | `/api/v1` | Präfix für alle öffentlichen API-Routen inkl. OpenAPI & Docs. | — |
 | `FEATURE_ENABLE_LEGACY_ROUTES` | bool | `false` | Aktiviert unversionierte Legacy-Routen – nur für Migrationsphasen. | — |
-| `FEATURE_REQUIRE_AUTH` | bool | `true` | Erzwingt API-Key-Authentifizierung für alle nicht freigestellten Pfade. | — |
+| `FEATURE_REQUIRE_AUTH` | bool | `false` | Erzwingt API-Key-Authentifizierung für alle nicht freigestellten Pfade. | — |
+| `FEATURE_RATE_LIMITING` | bool | `false` | Aktiviert die globale Rate-Limit-Middleware (OPTIONS & Allowlist bleiben ausgenommen). | — |
 | `HARMONY_API_KEYS` | csv | _(leer)_ | Kommagetrennte Liste gültiger API-Keys. | 🔒 niemals einchecken |
 | `HARMONY_API_KEYS_FILE` | path | _(leer)_ | Datei mit einem API-Key pro Zeile (wird zusätzlich zu `HARMONY_API_KEYS` geladen). | 🔒 Dateirechte restriktiv |
 | `AUTH_ALLOWLIST` | csv | automatisch `health`, `ready`, `docs`, `redoc`, `openapi.json` (mit Präfix) | Zusätzliche Pfade ohne Authentifizierung – z. B. `/metrics` wenn `METRICS_REQUIRE_API_KEY=false`. | — |
@@ -350,7 +354,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `FEATURE_METRICS_ENABLED` | bool | `false` | Schaltet den Prometheus-Endpunkt frei und registriert Request-Metriken. | — |
+| `FEATURE_METRICS_ENABLED` | bool | `false` | Schaltet den Prometheus-Endpunkt frei und registriert Request-Metriken (Pfad wird nur bei Aktivierung gemountet). | — |
 | `METRICS_PATH` | string | `/metrics` | Pfad für Prometheus-Scrapes; wird automatisch an die Auth-Allowlist angehängt, wenn `METRICS_REQUIRE_API_KEY=false`. | — |
 | `METRICS_REQUIRE_API_KEY` | bool | `true` | Erzwingt API-Key für `/metrics`; bei `false` ist der Pfad öffentlich. | — |
 | `HEALTH_DB_TIMEOUT_MS` | int | `500` | Timeout des Readiness-Datenbankchecks. | — |
@@ -377,7 +381,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
 | `SPOTIFY_MODE` | `FREE`\|`PRO` | `PRO` | Betriebsmodus – `FREE` benötigt keinen OAuth-Flow. | — |
 | `INTEGRATIONS_ENABLED` | csv | `spotify` | Aktivierte Provider (`spotify`, `slskd`, `plex`). | — |
-| `SLSKD_BASE_URL` | string | `http://localhost:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
+| `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
 | `SPOTIFY_TIMEOUT_MS` | int | `15000` | Timeout für Spotify-API-Aufrufe. | — |
 | `PLEX_TIMEOUT_MS` | int | `15000` | Timeout für Plex-Integrationen (archiviert). | — |
@@ -496,9 +500,9 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `VITE_API_URL` | string | `http://localhost:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
+| `VITE_API_URL` | string | `http://127.0.0.1:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
 | `VITE_API_BASE_PATH` | string | `/api/v1` | Präfix für alle REST-Aufrufe (z. B. `/api/v1`). | — |
-| `VITE_REQUIRE_AUTH` | bool | `true` | Blockt Frontend-Requests ohne API-Key. | — |
+| `VITE_REQUIRE_AUTH` | bool | `false` | Blockt Frontend-Requests ohne API-Key. | — |
 | `VITE_AUTH_HEADER_MODE` | `x-api-key`\|`bearer` | `x-api-key` | Wählt den HTTP-Header für den Key. | — |
 | `VITE_API_KEY` | string | _(leer)_ | Optionaler Build-Time-Key für lokale Entwicklung. | 🔒 |
 | `VITE_LIBRARY_POLL_INTERVAL_MS` | int | `15000` | Pollintervall (ms) für Library-Tab & Watchlist. | — |
@@ -510,9 +514,10 @@ try-Zugriffs im CI bewusst ausgelassen.
 # Auszug; vollständige Liste siehe `.env.example`
 DATABASE_URL=sqlite:///./harmony.db
 HARMONY_API_KEYS=local-dev-key
-FEATURE_METRICS_ENABLED=true
+FEATURE_REQUIRE_AUTH=false
+FEATURE_METRICS_ENABLED=false
 WATCHLIST_MAX_CONCURRENCY=3
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://127.0.0.1:8000
 VITE_AUTH_HEADER_MODE=x-api-key
 ```
 
