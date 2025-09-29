@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
-import { API_BASE_PATH, API_BASE_URL } from './runtime-config';
+import { applyAuth, getAuthMode, resolveKey } from './auth';
+import { API_BASE_PATH, API_BASE_URL, REQUIRE_AUTH } from './runtime-config';
 
 const ensureLeadingSlash = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
 
@@ -40,6 +41,14 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000
 });
+
+const AUTH_REQUIRED_PAYLOAD = {
+  ok: false,
+  error: {
+    code: 'AUTH_REQUIRED',
+    message: 'API key missing'
+  }
+} as const;
 
 export interface ApiErrorContext {
   error: ApiError;
@@ -85,6 +94,29 @@ export class ApiError extends Error {
     this.handled = true;
   }
 }
+
+api.interceptors.request.use((config) => {
+  const key = resolveKey();
+  if (!key) {
+    if (REQUIRE_AUTH) {
+      return Promise.reject(
+        new ApiError({
+          message: AUTH_REQUIRED_PAYLOAD.error.message,
+          status: 401,
+          data: AUTH_REQUIRED_PAYLOAD,
+          originalError: new Error(AUTH_REQUIRED_PAYLOAD.error.code),
+          url: config.url,
+          method: config.method?.toUpperCase()
+        })
+      );
+    }
+    return config;
+  }
+
+  applyAuth(config, key, getAuthMode());
+
+  return config;
+});
 
 const extractErrorMessage = (error: AxiosError) => {
   const responseData = error.response?.data;

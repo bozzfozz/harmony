@@ -12,7 +12,7 @@ const config = {
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
   },
-  testMatch: ['**/__tests__/**/*.smoke.test.tsx'],
+  testMatch: ['**/__tests__/**/*.smoke.test.tsx', '**/__tests__/auth-header.test.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };

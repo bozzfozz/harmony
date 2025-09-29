@@ -23,6 +23,7 @@
   - Das React-Frontend liefert geroutete Seiten für Dashboard, Library (Artists/Downloads/Watchlist), Spotify und Settings und nutzt einen Vite/TypeScript-Tooling-Stack inklusive Lint-, Test- und Build-Skripten.【F:frontend/src/routes/index.tsx†L1-L17】【F:frontend/package.json†L1-L35】
   - Library-Tabs werden lazy geladen; nur der aktive Tab mountet Queries/Polling und synchronisiert den Tab-State mit der URL (TASK CODX-FE-045).【F:frontend/src/pages/Library/index.tsx†L1-L88】【F:frontend/src/pages/Library/LibraryDownloads.tsx†L1-L200】【F:frontend/src/__tests__/library.tabs.test.tsx†L1-L134】
   - Spotify-Seite mit FREE-Import-Karte (Textarea, Upload, Vorschau, Enqueue) sowie Modus-Schalter im Settings-Tab.【F:frontend/src/pages/SpotifyPage.tsx†L1-L79】【F:frontend/src/components/SpotifyFreeImport.tsx†L1-L187】【F:frontend/src/pages/SettingsPage.tsx†L1-L210】
+  - API-Key-Gating im Frontend blockt Requests ohne Schlüssel, setzt automatisch `X-API-Key`/`Authorization` nach Modus und bietet ein Settings-Panel zur lokalen Verwaltung inklusive Maskierung.【F:frontend/src/lib/api.ts†L1-L120】【F:frontend/src/lib/auth.ts†L1-L67】【F:frontend/src/pages/Settings/AuthKeyPanel.tsx†L1-L115】【F:frontend/src/__tests__/auth-header.test.ts†L1-L120】
 - **Tests**
   - Die Pytest-Suite deckt u. a. Such-Filterlogik und Watchlist-Automatisierung ab und läuft vollständig grün mit 214 Tests.【F:tests/test_search.py†L39-L107】【F:tests/test_watchlist.py†L14-L141】【8a3823†L1-L34】
 - **Dokumentation**
