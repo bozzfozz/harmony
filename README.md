@@ -155,6 +155,21 @@ npm run dev
 
 Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_URL` (Host, z. B. `http://localhost:8000`) und optional `VITE_API_BASE_PATH` (Default: `/api/v1`) angebunden werden.
 
+### API-Key-Authentifizierung im Frontend
+
+Das Frontend setzt API-Keys automatisch auf jede Anfrage, sofern Authentifizierung aktiv ist. Die Konfiguration erfolgt über folgende Variablen:
+
+```bash
+# .env.local
+VITE_REQUIRE_AUTH=true             # blockiert Netzaufrufe ohne Key (Default: true)
+VITE_AUTH_HEADER_MODE=x-api-key    # oder "bearer" für Authorization-Header
+VITE_API_KEY=dev-local-key         # optionaler Build-Zeit-Key (nur lokal verwenden)
+```
+
+Die Auflösung des API-Keys erfolgt priorisiert: `VITE_API_KEY` → `localStorage[HARMONY_API_KEY]` → Laufzeitkonfiguration (z. B. über `window.__HARMONY_RUNTIME_API_KEY__`). Bei aktivem `VITE_REQUIRE_AUTH=true` und fehlendem Schlüssel werden Requests vor dem Versand abgebrochen und liefern `{ ok: false, error: { code: "AUTH_REQUIRED", message: "API key missing" } }` zurück.
+
+Für lokale Entwicklung stellt die Einstellungsseite ein Panel bereit, das den Key maskiert anzeigt, explizit offenlegt und das Speichern/Löschen im Browser ermöglicht. Das Panel beeinflusst ausschließlich den lokalen Storage und überschreibt keine Build-Zeit-Variablen.
+
 ### Tests & Builds
 
 ```bash

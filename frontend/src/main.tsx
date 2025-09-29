@@ -10,6 +10,9 @@ declare global {
     __HARMONY_API_URL__?: string;
     __HARMONY_API_BASE_PATH__?: string;
     __HARMONY_LIBRARY_POLL_INTERVAL_MS__?: string;
+    __HARMONY_REQUIRE_AUTH__?: string | boolean;
+    __HARMONY_AUTH_HEADER_MODE__?: string;
+    __HARMONY_RUNTIME_API_KEY__?: string;
   }
 }
 
@@ -17,6 +20,9 @@ if (typeof window !== 'undefined') {
   window.__HARMONY_API_URL__ = import.meta.env?.VITE_API_URL;
   window.__HARMONY_API_BASE_PATH__ = import.meta.env?.VITE_API_BASE_PATH;
   window.__HARMONY_LIBRARY_POLL_INTERVAL_MS__ = import.meta.env?.VITE_LIBRARY_POLL_INTERVAL_MS;
+  window.__HARMONY_REQUIRE_AUTH__ = import.meta.env?.VITE_REQUIRE_AUTH;
+  window.__HARMONY_AUTH_HEADER_MODE__ = import.meta.env?.VITE_AUTH_HEADER_MODE;
+  window.__HARMONY_RUNTIME_API_KEY__ = import.meta.env?.VITE_RUNTIME_API_KEY;
 }
 
 const queryClient = new QueryClient();
