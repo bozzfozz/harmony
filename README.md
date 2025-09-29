@@ -283,10 +283,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+cp .env.example .env
+# Passe `.env` gemäß den Tabellen im Abschnitt „Betrieb & Konfiguration" an.
 uvicorn app.main:app --reload
 ```
 
-Konfiguriere erforderliche Umgebungsvariablen (siehe Tabelle unten), bevor du den Server startest.
+Der Server liest die Laufzeitkonfiguration aus `.env`. Ohne API-Key akzeptiert das Backend keine produktiven Requests (`FEATURE_REQUIRE_AUTH=true`). Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
 
 ### Docker
 
@@ -303,50 +305,260 @@ docker compose up --build
 
 Das Dev-Override (`docker-compose.override.yml`) aktiviert Hot-Reloading und Debug-Logging.
 
+Beispielauszug aus `docker-compose.yml` mit gebundenem `.env`:
+
+```yaml
+services:
+  harmony-api:
+    build: .
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+```
+
 ### GitHub Actions
 
 Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull
 Requests ausschließlich die Backend-Tests (`pytest`) unter Python 3.11 aus. Frontend-Tests werden aufgrund fehlenden npm-Regis
 try-Zugriffs im CI bewusst ausgelassen.
 
-## Konfiguration
+## Betrieb & Konfiguration
 
-| Variable | Beschreibung |
-| --- | --- |
-| `SPOTIFY_CLIENT_ID` | Spotify OAuth Client ID |
-| `SPOTIFY_CLIENT_SECRET` | Spotify OAuth Client Secret |
-| `SPOTIFY_REDIRECT_URI` | Redirect URI für den OAuth-Flow |
-| `SPOTIFY_SCOPE` | Optionaler Scope für Spotify Berechtigungen |
-| `SLSKD_BASE_URL` | Basis-URL des Soulseek-Daemons (Legacy: `SLSKD_URL`) |
-| `SLSKD_API_KEY` | API-Key für slskd (falls gesetzt) |
-| `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
-| `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
-| `HARMONY_DISABLE_WORKERS` | `1` deaktiviert alle Hintergrund-Worker (z. B. für Tests) |
-| `API_BASE_PATH` | Basispräfix für alle API-Routen (Default: `/api/v1`) |
-| `FEATURE_ENABLE_LEGACY_ROUTES` | Aktiviert zusätzliche Legacy-Pfade ohne Versionierung (`true`/`false`, Default: `false`) |
-| `ENABLE_ARTWORK` | Aktiviert Artwork-Worker und -Endpoints (`true`/`false`, Default: `false`) |
-| `ENABLE_LYRICS` | Aktiviert Lyrics-Worker und -Endpoints (`true`/`false`, Default: `false`) |
-| `INTEGRATIONS_ENABLED` | Kommagetrennte Liste aktivierter Provider (`spotify`, `plex`, `slskd`; Default: `spotify`) |
-| `SPOTIFY_TIMEOUT_MS` | Timeout in Millisekunden für Spotify-Adapter (Default: `15000`) |
-| `PLEX_TIMEOUT_MS` | Timeout in Millisekunden für Plex-Adapter (Default: `15000`) |
-| `SLSKD_TIMEOUT_MS` | Timeout in Millisekunden für slskd-Adapter (Default: `8000`) |
-| `SLSKD_RETRY_MAX` | Maximale Anzahl an Neuversuchen für Suchanfragen (Default: `3`) |
-| `SLSKD_RETRY_BACKOFF_BASE_MS` | Basiswert für exponentielles Backoff mit Jitter (Default: `250`) |
-| `SLSKD_PREFERRED_FORMATS` | Kommagetrennte Liste bevorzugter Formate für das Ranking |
-| `SLSKD_MAX_RESULTS` | Obergrenze der zurückgegebenen Kandidaten (Default: `50`) |
-| `PROVIDER_MAX_CONCURRENCY` | Maximale parallele Provider-Aufrufe (Default: `4`) |
-| `RETRY_MAX_ATTEMPTS` | Maximale Anzahl an Download-Versuchen (Default: `10`) |
-| `RETRY_BASE_SECONDS` | Basisverzögerung für exponentielles Backoff in Sekunden (Default: `60`) |
-| `RETRY_JITTER_PCT` | Zufälliges Jitter (± Prozent) zur Vermeidung eines Thundering Herd (Default: `0.2`) |
-| `RETRY_SCAN_INTERVAL_SEC` | Intervall des Retry-Schedulers in Sekunden (Default: `60`) |
-| `RETRY_SCAN_BATCH_LIMIT` | Maximale Anzahl neu eingeplanter Downloads pro Scheduler-Lauf (Default: `100`) |
-| `FEATURE_MATCHING_EDITION_AWARE` | Aktiviert editionsbewusstes Album-Matching (`true`/`false`, Default: `true`) |
-| `MATCH_FUZZY_MAX_CANDIDATES` | Obergrenze der Kandidaten je Matching-Stufe (Default: `50`) |
-| `MATCH_MIN_ARTIST_SIM` | Mindest-Artist-Similarität bevor eine Penalty greift (Default: `0.6`) |
-| `MATCH_COMPLETE_THRESHOLD` | Anteil (`0.0–1.0`), ab dem ein Album als „complete“ gilt (Default: `0.9`) |
-| `MATCH_NEARLY_THRESHOLD` | Anteil (`0.0–1.0`), ab dem ein Album als „nearly complete“ gilt (Default: `0.8`) |
+### Backend-Umgebungsvariablen
 
-> **Hinweis:** Spotify- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
+#### Kern & Sicherheit
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `DATABASE_URL` | string | `sqlite:///./harmony.db` | SQLAlchemy-Verbindungsstring; SQLite-Dateien werden bei Bedarf automatisch angelegt. | 🔒 enthält ggf. Zugangsdaten
+| `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
+| `HARMONY_DISABLE_WORKERS` | bool (`0/1`) | `false` | `true` deaktiviert alle Hintergrund-Worker (Tests/Demos). | — |
+| `API_BASE_PATH` | string | `/api/v1` | Präfix für alle öffentlichen API-Routen inkl. OpenAPI & Docs. | — |
+| `FEATURE_ENABLE_LEGACY_ROUTES` | bool | `false` | Aktiviert unversionierte Legacy-Routen – nur für Migrationsphasen. | — |
+| `FEATURE_REQUIRE_AUTH` | bool | `true` | Erzwingt API-Key-Authentifizierung für alle nicht freigestellten Pfade. | — |
+| `HARMONY_API_KEYS` | csv | _(leer)_ | Kommagetrennte Liste gültiger API-Keys. | 🔒 niemals einchecken |
+| `HARMONY_API_KEYS_FILE` | path | _(leer)_ | Datei mit einem API-Key pro Zeile (wird zusätzlich zu `HARMONY_API_KEYS` geladen). | 🔒 Dateirechte restriktiv |
+| `AUTH_ALLOWLIST` | csv | automatisch `health`, `ready`, `docs`, `redoc`, `openapi.json` (mit Präfix) | Zusätzliche Pfade ohne Authentifizierung – z. B. `/metrics` wenn `METRICS_REQUIRE_API_KEY=false`. | — |
+| `ALLOWED_ORIGINS` | csv | _(leer)_ | Explizit erlaubte CORS-Origin(s) für Browser-Clients. | — |
+| `FEATURE_UNIFIED_ERROR_FORMAT` | bool | `true` | Aktiviert den globalen Fehler-Envelope (`ok`/`error`). | — |
+| `ERRORS_DEBUG_DETAILS` | bool | `false` | Ergänzt Fehlerantworten um Debug-ID/Hints – nur in geschützten Dev-Umgebungen setzen. | — |
+
+#### Observability & Caching
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `FEATURE_METRICS_ENABLED` | bool | `false` | Schaltet den Prometheus-Endpunkt frei und registriert Request-Metriken. | — |
+| `METRICS_PATH` | string | `/metrics` | Pfad für Prometheus-Scrapes; wird automatisch an die Auth-Allowlist angehängt, wenn `METRICS_REQUIRE_API_KEY=false`. | — |
+| `METRICS_REQUIRE_API_KEY` | bool | `true` | Erzwingt API-Key für `/metrics`; bei `false` ist der Pfad öffentlich. | — |
+| `HEALTH_DB_TIMEOUT_MS` | int | `500` | Timeout des Readiness-Datenbankchecks. | — |
+| `HEALTH_DEP_TIMEOUT_MS` | int | `800` | Timeout je externem Dependency-Check (parallelisiert). | — |
+| `HEALTH_DEPS` | csv | _(leer)_ | Liste benannter Abhängigkeiten (`spotify`, `slskd`, …) für die Readiness-Ausgabe. | — |
+| `HEALTH_READY_REQUIRE_DB` | bool | `true` | Bei `false` wird Readiness auch ohne DB-Verbindung als `ok` gemeldet. | — |
+| `CACHE_ENABLED` | bool | `true` | Aktiviert die Response-Cache-Middleware (`ConditionalCacheMiddleware`). | — |
+| `CACHE_DEFAULT_TTL_S` | int | `30` | Standard-TTL (Sekunden) für gecachte Antworten. | — |
+| `CACHE_STALE_WHILE_REVALIDATE_S` | int | `60` | Dauer des `stale-while-revalidate`-Fensters. | — |
+| `CACHE_MAX_ITEMS` | int | `5000` | Maximale Einträge im In-Memory-LRU-Cache. | — |
+| `CACHE_FAIL_OPEN` | bool | `true` | Liefert bei Cache-Fehlern die originale Response (Fail-Open). | — |
+| `CACHEABLE_PATHS` | string | _(leer)_ | Optionale Regeln `pfad|ttl|stale`; Pfade werden automatisch mit `API_BASE_PATH` normalisiert. | — |
+| `CACHE_STRATEGY_ETAG` | string | `strong` | Art der ETag-Berechnung (`strong`/`weak`). | — |
+| `SECRET_VALIDATE_TIMEOUT_MS` | int | `800` | Timeout für Live-Secret-Validierungen (Spotify/slskd). | — |
+| `SECRET_VALIDATE_MAX_PER_MIN` | int | `3` | Rate-Limit (Requests/min) pro Provider für Secret-Prüfungen. | — |
+
+#### Integrationen & externe Dienste
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `SPOTIFY_CLIENT_ID` | string | _(leer)_ | OAuth Client-ID für den PRO-Modus. | 🔒 |
+| `SPOTIFY_CLIENT_SECRET` | string | _(leer)_ | OAuth Client-Secret – niemals ins Repo. | 🔒 |
+| `SPOTIFY_REDIRECT_URI` | string | _(leer)_ | Registrierte Redirect-URI für den OAuth-Flow. | — |
+| `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
+| `SPOTIFY_MODE` | `FREE`\|`PRO` | `PRO` | Betriebsmodus – `FREE` benötigt keinen OAuth-Flow. | — |
+| `INTEGRATIONS_ENABLED` | csv | `spotify` | Aktivierte Provider (`spotify`, `slskd`, `plex`). | — |
+| `SLSKD_BASE_URL` | string | `http://localhost:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
+| `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
+| `SPOTIFY_TIMEOUT_MS` | int | `15000` | Timeout für Spotify-API-Aufrufe. | — |
+| `PLEX_TIMEOUT_MS` | int | `15000` | Timeout für Plex-Integrationen (archiviert). | — |
+| `SLSKD_TIMEOUT_MS` | int | `8000` | Timeout für slskd-Anfragen. | — |
+| `SLSKD_RETRY_MAX` | int | `3` | Neuversuche pro slskd-Request. | — |
+| `SLSKD_RETRY_BACKOFF_BASE_MS` | int | `250` | Basis für exponentielles Backoff bei slskd. | — |
+| `SLSKD_PREFERRED_FORMATS` | csv | `FLAC,ALAC,APE,MP3` | Ranking-Priorisierung für Audioformate. | — |
+| `SLSKD_MAX_RESULTS` | int | `50` | Maximale Treffer pro slskd-Suche. | — |
+| `PROVIDER_MAX_CONCURRENCY` | int | `4` | Parallele Provider-Aufrufe (Spotify/slskd). | — |
+
+#### Artwork & Lyrics
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `ENABLE_ARTWORK` | bool | `false` | Aktiviert Artwork-Worker & `/soulseek/download/*/artwork`. | — |
+| `ENABLE_LYRICS` | bool | `false` | Aktiviert Lyrics-Worker & zugehörige Endpunkte. | — |
+| `ARTWORK_DIR` | path | `./artwork` | Cache-Verzeichnis für Coverdateien (`HARMONY_ARTWORK_DIR` Alias). | — |
+| `ARTWORK_HTTP_TIMEOUT` | float | `15.0` | Timeout für Cover-Downloads (`ARTWORK_TIMEOUT_SEC`). | — |
+| `ARTWORK_MAX_BYTES` | int | `10485760` | Maximale Covergröße (10 MiB). | — |
+| `ARTWORK_WORKER_CONCURRENCY` | int | `2` | Gleichzeitige Artwork-Jobs (`ARTWORK_CONCURRENCY`). | — |
+| `ARTWORK_MIN_EDGE` | int | `1000` | Mindestkante in Pixeln für Embeds. | — |
+| `ARTWORK_MIN_BYTES` | int | `150000` | Mindestgröße (Bytes) für „hochauflösende“ Embeds. | — |
+| `ARTWORK_FALLBACK_ENABLED` | bool | `false` | Aktiviert MusicBrainz/Cover Art Archive als Fallback. | — |
+| `ARTWORK_FALLBACK_PROVIDER` | string | `musicbrainz` | Unterstützter Fallback-Provider. | — |
+| `ARTWORK_FALLBACK_TIMEOUT_SEC` | float | `12.0` | Timeout für Fallback-Downloads. | — |
+| `ARTWORK_FALLBACK_MAX_BYTES` | int | `10485760` | Maximale Dateigröße für Fallback-Downloads. | — |
+| `MUSIXMATCH_API_KEY` | string | _(leer)_ | Optionaler API-Key für Lyrics-Fallback. | 🔒 |
+
+#### Ingest, Backfill & Suche
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `FREE_IMPORT_MAX_LINES` | int | `200` | Max. Zeilen für den FREE-Import aus Textquellen. | — |
+| `FREE_IMPORT_MAX_FILE_BYTES` | int | `1048576` | Max. Upload-Größe für FREE-Import-Dateien. | — |
+| `FREE_IMPORT_MAX_PLAYLIST_LINKS` | int | `1000` | Max. Playlist-Links pro FREE-Request. | — |
+| `FREE_IMPORT_HARD_CAP_MULTIPLIER` | int | `10` | Sicherheitsfaktor gegen oversized Inputs. | — |
+| `FREE_ACCEPT_USER_URLS` | bool | `false` | Erlaubt benutzerdefinierte URLs im FREE-Modus. | — |
+| `FREE_MAX_PLAYLISTS` | int | `100` | Max. Playlists pro FREE-Ingest-Job. | — |
+| `FREE_MAX_TRACKS_PER_REQUEST` | int | `5000` | Track-Limit pro FREE-Anfrage. | — |
+| `FREE_BATCH_SIZE` | int | `500` | Batchgröße für FREE-Jobs. | — |
+| `INGEST_BATCH_SIZE` | int | `500` | Batchgröße beim Enqueue in die Download-Queue. | — |
+| `INGEST_MAX_PENDING_JOBS` | int | `100` | Backpressure-Grenze für offene Ingest-Jobs. | — |
+| `BACKFILL_MAX_ITEMS` | int | `2000` | Maximale Items pro Backfill-Lauf. | — |
+| `BACKFILL_CACHE_TTL_SEC` | int | `604800` | TTL (Sekunden) für den Spotify-Suche-Cache. | — |
+| `SEARCH_TIMEOUT_MS` | int | `8000` | Timeout für `/search`. | — |
+| `SEARCH_MAX_LIMIT` | int | `100` | Maximale Treffer pro Seite. | — |
+
+#### Worker, Queueing & Storage
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `WATCHLIST_INTERVAL` | int | `86400` | Wartezeit in Sekunden zwischen zwei Watchlist-Runs. | — |
+| `WATCHLIST_MAX_CONCURRENCY` | int | `3` | Parallele Artists pro Tick (1–10). | — |
+| `WATCHLIST_MAX_PER_TICK` | int | `20` | Bearbeitete Artists pro Tick. | — |
+| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | int | `8000` | Timeout für Spotify-Aufrufe in der Watchlist. | — |
+| `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS` | int | `12000` | Timeout für Soulseek-Suchen (Alias `WATCHLIST_SEARCH_TIMEOUT_MS`). | — |
+| `WATCHLIST_TICK_BUDGET_MS` | int | `8000` | Budget pro Verarbeitungsschritt. | — |
+| `WATCHLIST_BACKOFF_BASE_MS` | int | `250` | Basiswert für den Backoff bei Fehlern. | — |
+| `WATCHLIST_RETRY_MAX` | int | `3` | Retries pro Tick vor Eskalation. | — |
+| `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | int | `6` | Gesamtretry-Budget pro Artist innerhalb des Cooldowns. | — |
+| `WATCHLIST_COOLDOWN_MINUTES` | int | `15` | Pause nach fehlerhaften Läufen. | — |
+| `WATCHLIST_DB_IO_MODE` | string | `thread` | Datenbankmodus (`thread` oder `async`). | — |
+| `WATCHLIST_JITTER_PCT` | float | `0.2` | Zufallsjitter für Backoff-Delays. | — |
+| `WATCHLIST_SHUTDOWN_GRACE_MS` | int | `2000` | Grace-Periode beim Shutdown. | — |
+| `SYNC_WORKER_CONCURRENCY` | int | `2` | Parallele Downloads (kann via Setting überschrieben werden). | — |
+| `RETRY_MAX_ATTEMPTS` | int | `10` | Max. automatische Neuversuche je Download. | — |
+| `RETRY_BASE_SECONDS` | float | `60` | Grundverzögerung für Download-Retries. | — |
+| `RETRY_JITTER_PCT` | float | `0.2` | Jitter-Faktor für Download-Retries. | — |
+| `RETRY_SCAN_INTERVAL_SEC` | float | `60` | Intervall der Retry-Scans. | — |
+| `RETRY_SCAN_BATCH_LIMIT` | int | `100` | Limit pro Retry-Scan. | — |
+| `MATCHING_WORKER_BATCH_SIZE` | int | `10` | Batchgröße des Matching-Workers (Default aus Settings). | — |
+| `MATCHING_CONFIDENCE_THRESHOLD` | float | `0.65` | Mindest-Score zum Persistieren eines Matches. | — |
+| `FEATURE_MATCHING_EDITION_AWARE` | bool | `true` | Aktiviert editionsbewusstes Album-Matching. | — |
+| `MATCH_FUZZY_MAX_CANDIDATES` | int | `50` | Kandidatenlimit für fuzzy Matching. | — |
+| `MATCH_MIN_ARTIST_SIM` | float | `0.6` | Mindest-Künstler-Similarität. | — |
+| `MATCH_COMPLETE_THRESHOLD` | float | `0.9` | Schwelle für Albumstatus `complete`. | — |
+| `MATCH_NEARLY_THRESHOLD` | float | `0.8` | Schwelle für `nearly complete`. | — |
+| `DLQ_PAGE_SIZE_DEFAULT` | int | `25` | Standard-`page_size` der DLQ-Liste. | — |
+| `DLQ_PAGE_SIZE_MAX` | int | `100` | Obergrenze für `page_size`. | — |
+| `DLQ_REQUEUE_LIMIT` | int | `500` | Limit für Bulk-Requeue. | — |
+| `DLQ_PURGE_LIMIT` | int | `1000` | Limit für Bulk-Purge. | — |
+| `MUSIC_DIR` | path | `./music` | Zielpfad für organisierte Downloads. | — |
+
+> **Hinweis:** Spotify- und slskd-Zugangsdaten können über `/settings` in der Datenbank persistiert werden. Beim Laden der Anwendung haben Datenbankwerte Vorrang vor Umgebungsvariablen; ENV-Variablen dienen als Fallback und Basis für neue Deployments. Eine ausführliche Laufzeitreferenz inkl. Überschneidungen mit Datenbank-Settings befindet sich in [`docs/ops/runtime-config.md`](docs/ops/runtime-config.md).
+
+### Frontend-Umgebungsvariablen (Vite)
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `VITE_API_URL` | string | `http://localhost:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
+| `VITE_API_BASE_PATH` | string | `/api/v1` | Präfix für alle REST-Aufrufe (z. B. `/api/v1`). | — |
+| `VITE_REQUIRE_AUTH` | bool | `true` | Blockt Frontend-Requests ohne API-Key. | — |
+| `VITE_AUTH_HEADER_MODE` | `x-api-key`\|`bearer` | `x-api-key` | Wählt den HTTP-Header für den Key. | — |
+| `VITE_API_KEY` | string | _(leer)_ | Optionaler Build-Time-Key für lokale Entwicklung. | 🔒 |
+| `VITE_LIBRARY_POLL_INTERVAL_MS` | int | `15000` | Pollintervall (ms) für Library-Tab & Watchlist. | — |
+| `VITE_RUNTIME_API_KEY` | string | _(leer)_ | Optionaler Key, der zur Laufzeit via `window.__HARMONY_RUNTIME_API_KEY__` gesetzt wird. | 🔒 |
+
+### Beispiel `.env`
+
+```bash
+# Auszug; vollständige Liste siehe `.env.example`
+DATABASE_URL=sqlite:///./harmony.db
+HARMONY_API_KEYS=local-dev-key
+FEATURE_METRICS_ENABLED=true
+WATCHLIST_MAX_CONCURRENCY=3
+VITE_API_URL=http://localhost:8000
+VITE_AUTH_HEADER_MODE=x-api-key
+```
+
+### Health-, Readiness- und Metrics-Endpunkte
+
+- `GET /api/v1/health` liefert einen liveness-Check ohne externes I/O und benötigt keinen API-Key (Allowlist). Beispiel:
+
+  ```json
+  { "ok": true, "data": { "status": "up", "version": "1.4.0", "uptime_s": 123.4 }, "error": null }
+  ```
+
+- `GET /api/v1/ready` prüft Datenbank und deklarierte Dependencies. Erfolgsantwort:
+
+  ```json
+  { "ok": true, "data": { "db": "up", "deps": { "spotify": "up" } }, "error": null }
+  ```
+
+  Bei Störungen antwortet der Endpoint mit `503` und einem `DEPENDENCY_ERROR`, z. B.:
+
+  ```json
+  {
+    "ok": false,
+    "error": {
+      "code": "DEPENDENCY_ERROR",
+      "message": "not ready",
+      "meta": { "db": "down", "deps": { "spotify": "down" } }
+    }
+  }
+  ```
+
+- `GET <METRICS_PATH>` (Default `/metrics`) exponiert Prometheus-kompatible Metriken. Der Endpoint liefert `404`, solange `FEATURE_METRICS_ENABLED=false` ist, und verlangt standardmäßig einen API-Key (`METRICS_REQUIRE_API_KEY=true`). Eine Prometheus-Quickstart-Anleitung findet sich in [`docs/ops/metrics.md`](docs/ops/metrics.md).
+
+### Fehlerformat & OpenAPI
+
+Alle Fehler folgen dem kanonischen Envelope und enthalten die Fehlercodes `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMITED`, `DEPENDENCY_ERROR` oder `INTERNAL_ERROR`. Beispiel für eine abgewiesene Anfrage:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests.",
+    "meta": { "retry_after_ms": 1200 }
+  }
+}
+```
+
+Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und wird automatisch in Swagger (`/docs`) sowie ReDoc (`/redoc`) gespiegelt. Änderungen am öffentlichen Vertrag müssen stets das OpenAPI-Gate passieren.
+
+### Auth, CORS & Rate Limiting
+
+- Standardmäßig verlangt jede Route (außer Allowlist) einen gültigen API-Key via `X-API-Key` oder `Authorization: Bearer`. Hinterlegte Keys können aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`) stammen.
+- Health-, Readiness-, Docs- und OpenAPI-Pfade werden automatisch freigestellt. Zusätzliche Pfade lassen sich über `AUTH_ALLOWLIST` definieren.
+- `ALLOWED_ORIGINS` kontrolliert CORS; leere Konfiguration blockiert Browser-Anfragen.
+- `METRICS_REQUIRE_API_KEY=false` markiert `/metrics` automatisch als Allowlist-Eintrag – dennoch sollte der Endpoint nur hinter internen Netzen verfügbar sein.
+- Das Backend selbst führt kein globales Request-Rate-Limiting durch, setzt aber für sensible Pfade (`/system/secrets/*`) das interne Limit `SECRET_VALIDATE_MAX_PER_MIN` durch. Externe 429-Antworten (z. B. slskd) werden als `RATE_LIMITED` propagiert.
+
+### Logging & Observability
+
+Harmony loggt strukturierte Events mit stabilen Feldern:
+
+- `event` (z. B. `health.check`, `ready.check`, `cache.hit`, `auth.forbidden`)
+- `status`, `deps_up`, `deps_down` für Readiness-Auswertungen
+- `duration_ms` zur Messung von Health/Metrics/Secret-Validation-Latenzen
+- `entity_id`, `key`, `path` etc. je nach Kontext (Downloads, Cache, Auth)
+
+Die Logs eignen sich für ELK-/Loki-Pipelines und ergänzen die Prometheus-Metriken. Details siehe [`docs/observability.md`](docs/observability.md).
+
+### Performance & Zuverlässigkeit
+
+- Worker-Last wird über `WATCHLIST_*`, `SYNC_WORKER_CONCURRENCY`, `RETRY_*` und `MATCHING_WORKER_*` feinjustiert. Konservative Defaults verhindern SQLite-Locks; bei höherer Parallelität sollten Sie den Wechsel auf eine serverbasierte Datenbank evaluieren.
+- Der Response-Cache (`CACHE_*`) reduziert Lesezugriffe und generiert korrekte `ETag`-/`Cache-Control`-Header. Bei Fehlern fällt er dank `CACHE_FAIL_OPEN` auf Live-Responses zurück.
+- Backfill- und Ingest-Limits (`BACKFILL_MAX_ITEMS`, `FREE_*`, `INGEST_*`) verhindern Thundering-Herds und sichern deterministische Laufzeiten.
+- Die Watchlist respektiert Timeouts (`WATCHLIST_SPOTIFY_TIMEOUT_MS`, `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS`) sowie ein Retry-Budget pro Artist, damit Spotify/slskd nicht dauerhaft blockiert werden.
+- Für Produktions-Setups empfiehlt sich der Betrieb hinter einem Reverse-Proxy, der zusätzlich TLS, Request-Limits und IP-Blocking übernimmt.
 
 ## API-Endpoints
 
