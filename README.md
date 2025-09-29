@@ -288,7 +288,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8000` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`, `FEATURE_METRICS_ENABLED=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
+Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8000` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
 
 ### Docker
 
@@ -345,7 +345,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `FEATURE_RATE_LIMITING` | bool | `false` | Aktiviert die globale Rate-Limit-Middleware (OPTIONS & Allowlist bleiben ausgenommen). | — |
 | `HARMONY_API_KEYS` | csv | _(leer)_ | Kommagetrennte Liste gültiger API-Keys. | 🔒 niemals einchecken |
 | `HARMONY_API_KEYS_FILE` | path | _(leer)_ | Datei mit einem API-Key pro Zeile (wird zusätzlich zu `HARMONY_API_KEYS` geladen). | 🔒 Dateirechte restriktiv |
-| `AUTH_ALLOWLIST` | csv | automatisch `health`, `ready`, `docs`, `redoc`, `openapi.json` (mit Präfix) | Zusätzliche Pfade ohne Authentifizierung – z. B. `/metrics` wenn `METRICS_REQUIRE_API_KEY=false`. | — |
+| `AUTH_ALLOWLIST` | csv | automatisch `health`, `ready`, `docs`, `redoc`, `openapi.json` (mit Präfix) | Zusätzliche Pfade ohne Authentifizierung. | — |
 | `ALLOWED_ORIGINS` | csv | _(leer)_ | Explizit erlaubte CORS-Origin(s) für Browser-Clients. | — |
 | `FEATURE_UNIFIED_ERROR_FORMAT` | bool | `true` | Aktiviert den globalen Fehler-Envelope (`ok`/`error`). | — |
 | `ERRORS_DEBUG_DETAILS` | bool | `false` | Ergänzt Fehlerantworten um Debug-ID/Hints – nur in geschützten Dev-Umgebungen setzen. | — |
@@ -354,9 +354,6 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `FEATURE_METRICS_ENABLED` | bool | `false` | Schaltet den Prometheus-Endpunkt frei und registriert Request-Metriken (Pfad wird nur bei Aktivierung gemountet). | — |
-| `METRICS_PATH` | string | `/metrics` | Pfad für Prometheus-Scrapes; wird automatisch an die Auth-Allowlist angehängt, wenn `METRICS_REQUIRE_API_KEY=false`. | — |
-| `METRICS_REQUIRE_API_KEY` | bool | `true` | Erzwingt API-Key für `/metrics`; bei `false` ist der Pfad öffentlich. | — |
 | `HEALTH_DB_TIMEOUT_MS` | int | `500` | Timeout des Readiness-Datenbankchecks. | — |
 | `HEALTH_DEP_TIMEOUT_MS` | int | `800` | Timeout je externem Dependency-Check (parallelisiert). | — |
 | `HEALTH_DEPS` | csv | _(leer)_ | Liste benannter Abhängigkeiten (`spotify`, `slskd`, …) für die Readiness-Ausgabe. | — |
@@ -515,13 +512,12 @@ try-Zugriffs im CI bewusst ausgelassen.
 DATABASE_URL=sqlite:///./harmony.db
 HARMONY_API_KEYS=local-dev-key
 FEATURE_REQUIRE_AUTH=false
-FEATURE_METRICS_ENABLED=false
 WATCHLIST_MAX_CONCURRENCY=3
 VITE_API_URL=http://127.0.0.1:8000
 VITE_AUTH_HEADER_MODE=x-api-key
 ```
 
-### Health-, Readiness- und Metrics-Endpunkte
+### Health- und Readiness-Endpunkte
 
 - `GET /api/v1/health` liefert einen liveness-Check ohne externes I/O und benötigt keinen API-Key (Allowlist). Beispiel:
 
@@ -548,7 +544,6 @@ VITE_AUTH_HEADER_MODE=x-api-key
   }
   ```
 
-- `GET <METRICS_PATH>` (Default `/metrics`) exponiert Prometheus-kompatible Metriken. Der Endpoint liefert `404`, solange `FEATURE_METRICS_ENABLED=false` ist, und verlangt standardmäßig einen API-Key (`METRICS_REQUIRE_API_KEY=true`). Eine Prometheus-Quickstart-Anleitung findet sich in [`docs/ops/metrics.md`](docs/ops/metrics.md).
 
 ### Fehlerformat & OpenAPI
 
@@ -572,19 +567,19 @@ Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und 
 - Standardmäßig verlangt jede Route (außer Allowlist) einen gültigen API-Key via `X-API-Key` oder `Authorization: Bearer`. Hinterlegte Keys können aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`) stammen.
 - Health-, Readiness-, Docs- und OpenAPI-Pfade werden automatisch freigestellt. Zusätzliche Pfade lassen sich über `AUTH_ALLOWLIST` definieren.
 - `ALLOWED_ORIGINS` kontrolliert CORS; leere Konfiguration blockiert Browser-Anfragen.
-- `METRICS_REQUIRE_API_KEY=false` markiert `/metrics` automatisch als Allowlist-Eintrag – dennoch sollte der Endpoint nur hinter internen Netzen verfügbar sein.
 - Das Backend selbst führt kein globales Request-Rate-Limiting durch, setzt aber für sensible Pfade (`/system/secrets/*`) das interne Limit `SECRET_VALIDATE_MAX_PER_MIN` durch. Externe 429-Antworten (z. B. slskd) werden als `RATE_LIMITED` propagiert.
 
 ### Logging & Observability
 
-Harmony loggt strukturierte Events mit stabilen Feldern:
+Harmony setzt vollständig auf strukturierte Logs – ein Prometheus-Endpoint (`/metrics`) wird nicht mehr bereitgestellt. Die wichtigsten Event-Typen sind:
 
-- `event` (z. B. `health.check`, `ready.check`, `cache.hit`, `auth.forbidden`)
-- `status`, `deps_up`, `deps_down` für Readiness-Auswertungen
-- `duration_ms` zur Messung von Health/Metrics/Secret-Validation-Latenzen
-- `entity_id`, `key`, `path` etc. je nach Kontext (Downloads, Cache, Auth)
+- `event=request`, ergänzt um `route`, `status`, `duration_ms` und optional `cache_status`.
+- `event=worker_job`, ergänzt um `job_id`, `attempt`, `status`, `duration_ms`.
+- `event=integration_call`, ergänzt um `provider`, `status`, `duration_ms`.
 
-Die Logs eignen sich für ELK-/Loki-Pipelines und ergänzen die Prometheus-Metriken. Details siehe [`docs/observability.md`](docs/observability.md).
+Weitere Logs nutzen stabile Felder wie `deps_up`/`deps_down` für Readiness-Auswertungen oder `auth.forbidden`/`cache.hit` zur Fehlersuche. Ergänzende Metadaten (`duration_ms`, `entity_id`, `key`, `path` etc.) variieren je nach Kontext.
+
+Die Logs eignen sich für ELK-/Loki-Pipelines und bilden die alleinige Quelle für Betriebsmetriken. Details siehe [`docs/observability.md`](docs/observability.md).
 
 ### Performance & Zuverlässigkeit
 

@@ -18,8 +18,6 @@ def _reset_flags(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for key in (
         "FEATURE_REQUIRE_AUTH",
         "FEATURE_RATE_LIMITING",
-        "FEATURE_METRICS_ENABLED",
-        "METRICS_PATH",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -47,7 +45,7 @@ def test_default_rate_limit_does_not_return_429() -> None:
     assert all(status == 200 for status in statuses)
 
 
-def test_metrics_endpoint_not_mounted_when_disabled() -> None:
+def test_metrics_endpoint_removed() -> None:
     with SimpleTestClient(app, include_env_api_key=False) as client:
         response = client.get("/metrics", use_raw_path=True)
 

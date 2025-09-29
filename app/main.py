@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import inspect
 import os
-import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 import sys
 from datetime import datetime, timezone
-from threading import Lock
 from typing import Any, Mapping
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -26,7 +24,7 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
         """Compatibility stub for Python versions without ExceptionGroup."""
 
 
-from app.config import AppConfig, MetricsConfig, SecurityConfig
+from app.config import AppConfig, SecurityConfig
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
     get_app_config,
@@ -154,192 +152,6 @@ def _parse_cache_policies(
             stale = _env_as_int(parts[2], default=default_stale)
         policies[path] = CachePolicy(path=path, max_age=max_age, stale_while_revalidate=stale)
     return policies
-
-
-def _format_metrics_float(value: float) -> str:
-    if value == 0:
-        return "0"
-    formatted = f"{value:.6f}".rstrip("0").rstrip(".")
-    return formatted or "0"
-
-
-class _MetricsHistogram:
-    def __init__(self, buckets: tuple[float, ...]) -> None:
-        self._buckets = buckets
-        self.counts = [0] * len(buckets)
-        self.count = 0
-        self.sum = 0.0
-
-    def observe(self, value: float) -> None:
-        self.count += 1
-        self.sum += value
-        for index, boundary in enumerate(self._buckets):
-            if value <= boundary:
-                self.counts[index] += 1
-
-
-class MetricsRegistry:
-    """Minimal Prometheus-style metrics registry."""
-
-    def __init__(self, buckets: tuple[float, ...]) -> None:
-        self._buckets = buckets
-        self._lock = Lock()
-        self._counters: dict[tuple[str, str, str], int] = {}
-        self._histograms: dict[tuple[str, str, str], _MetricsHistogram] = {}
-        self._custom_gauges: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
-        self._custom_counters: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
-        self._custom_help: dict[str, tuple[str, str]] = {}
-
-    def observe(self, method: str, path: str, status: str, duration: float) -> None:
-        key = (method.upper(), path, status)
-        value = duration if duration >= 0 else 0.0
-        with self._lock:
-            self._counters[key] = self._counters.get(key, 0) + 1
-            histogram = self._histograms.get(key)
-            if histogram is None:
-                histogram = _MetricsHistogram(self._buckets)
-                self._histograms[key] = histogram
-            histogram.observe(value)
-
-    def render(self, *, version: str) -> str:
-        lines: list[str] = [
-            "# HELP app_build_info Build information for the Harmony backend",
-            "# TYPE app_build_info gauge",
-            f'app_build_info{{version="{version}"}} 1',
-        ]
-
-        if self._counters:
-            lines.append("# HELP app_requests_total Total number of processed HTTP requests")
-            lines.append("# TYPE app_requests_total counter")
-            for method, path, status in sorted(self._counters):
-                value = self._counters[(method, path, status)]
-                labels = self._format_labels(method, path, status)
-                lines.append(f"app_requests_total{{{labels}}} {value}")
-
-        lines.append("# HELP app_request_duration_seconds Request duration in seconds")
-        lines.append("# TYPE app_request_duration_seconds histogram")
-        for method, path, status in sorted(self._histograms):
-            histogram = self._histograms[(method, path, status)]
-            labels = self._format_labels(method, path, status)
-            for bucket, count in zip(self._buckets, histogram.counts):
-                bucket_value = _format_metrics_float(bucket)
-                lines.append(
-                    f'app_request_duration_seconds_bucket{{{labels},le="{bucket_value}"}} {count}'
-                )
-            lines.append(
-                f'app_request_duration_seconds_bucket{{{labels},le="+Inf"}} {histogram.count}'
-            )
-            lines.append(f"app_request_duration_seconds_count{{{labels}}} {histogram.count}")
-            lines.append(
-                f"app_request_duration_seconds_sum{{{labels}}} {_format_metrics_float(histogram.sum)}"
-            )
-
-        custom_names = set(self._custom_gauges) | set(self._custom_counters)
-        for name in sorted(custom_names):
-            metric_type, help_text = self._custom_help.get(name, ("", ""))
-            if help_text:
-                lines.append(f"# HELP {name} {help_text}")
-            if metric_type:
-                lines.append(f"# TYPE {name} {metric_type}")
-            if name in self._custom_gauges:
-                series = self._custom_gauges[name]
-                for labels, value in sorted(series.items()):
-                    rendered_labels = self._format_custom_labels(labels)
-                    formatted_value = _format_metrics_float(float(value))
-                    lines.append(f"{name}{rendered_labels} {formatted_value}")
-            if name in self._custom_counters:
-                series = self._custom_counters[name]
-                for labels, value in sorted(series.items()):
-                    rendered_labels = self._format_custom_labels(labels)
-                    formatted_value = _format_metrics_float(float(value))
-                    lines.append(f"{name}{rendered_labels} {formatted_value}")
-
-        return "\n".join(lines) + "\n"
-
-    @staticmethod
-    def _format_labels(method: str, path: str, status: str) -> str:
-        escaped_path = path.replace("\\", "\\\\").replace('"', '\\"')
-        return f'method="{method}",path="{escaped_path}",status="{status}"'
-
-    @staticmethod
-    def _normalise_label_items(labels: Mapping[str, str] | None) -> tuple[tuple[str, str], ...]:
-        if not labels:
-            return ()
-        items = [(str(key), str(value)) for key, value in labels.items()]
-        return tuple(sorted(items))
-
-    @staticmethod
-    def _format_custom_labels(labels: tuple[tuple[str, str], ...]) -> str:
-        if not labels:
-            return ""
-        escaped = []
-        for key, value in labels:
-            safe_key = key.replace("\\", "\\\\").replace('"', '\\"')
-            safe_value = value.replace("\\", "\\\\").replace('"', '\\"')
-            escaped.append(f'{safe_key}="{safe_value}"')
-        return "{" + ",".join(escaped) + "}"
-
-    def set_gauge(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: Mapping[str, str] | None = None,
-        help_text: str | None = None,
-    ) -> None:
-        label_key = self._normalise_label_items(labels)
-        with self._lock:
-            series = self._custom_gauges.setdefault(name, {})
-            series[label_key] = value
-            if help_text:
-                self._custom_help[name] = ("gauge", help_text)
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        amount: float = 1.0,
-        labels: Mapping[str, str] | None = None,
-        help_text: str | None = None,
-    ) -> float:
-        label_key = self._normalise_label_items(labels)
-        with self._lock:
-            series = self._custom_counters.setdefault(name, {})
-            current = series.get(label_key, 0.0)
-            new_value = current + amount
-            series[label_key] = new_value
-            if help_text:
-                self._custom_help[name] = ("counter", help_text)
-            return new_value
-
-    def clear_metric(self, name: str) -> None:
-        with self._lock:
-            self._custom_gauges.pop(name, None)
-            self._custom_counters.pop(name, None)
-            self._custom_help.pop(name, None)
-
-
-_METRIC_BUCKETS: tuple[float, ...] = (
-    0.005,
-    0.01,
-    0.025,
-    0.05,
-    0.1,
-    0.25,
-    0.5,
-    1.0,
-    2.5,
-    5.0,
-    10.0,
-)
-
-
-def _resolve_route_path(request: Request) -> str:
-    route = request.scope.get("route")
-    path = getattr(route, "path", None)
-    if isinstance(path, str):
-        return path
-    return request.url.path
 
 
 class LegacyLoggingRoute(APIRoute):
@@ -547,7 +359,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _configure_application(config)
 
     _apply_security_dependencies(app, config.security)
-    configure_metrics_route(app, config.metrics)
 
     feature_flags = config.features
     app.state.feature_flags = feature_flags
@@ -644,7 +455,6 @@ app.state.health_service = HealthService(
     session_factory=get_session,
 )
 app.state.secret_validation_service = SecretValidationService()
-app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
 
 _initial_security = _config_snapshot.security
 
@@ -710,36 +520,6 @@ async def enforce_api_key(
     return await call_next(request)
 
 
-@app.middleware("http")
-async def collect_metrics(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    metrics_config = getattr(request.app.state, "metrics_config", None)
-    registry = getattr(request.app.state, "metrics_registry", None)
-    if not metrics_config or not registry or not metrics_config.enabled:
-        return await call_next(request)
-
-    if request.url.path == metrics_config.path:
-        return await call_next(request)
-
-    route_path = _resolve_route_path(request)
-    start_time = time.perf_counter()
-    try:
-        response = await call_next(request)
-    except HTTPException as exc:
-        duration = time.perf_counter() - start_time
-        registry.observe(request.method, route_path, str(exc.status_code), duration)
-        raise
-    except Exception:
-        duration = time.perf_counter() - start_time
-        registry.observe(request.method, route_path, "500", duration)
-        raise
-
-    duration = time.perf_counter() - start_time
-    registry.observe(request.method, route_path, str(response.status_code), duration)
-    return response
-
-
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
@@ -752,48 +532,6 @@ if _LEGACY_ROUTES_ENABLED:
     legacy_router = APIRouter(route_class=LegacyLoggingRoute)
     _register_api_routes(legacy_router, root)
     app.include_router(legacy_router)
-
-
-async def metrics_endpoint(request: Request) -> PlainTextResponse:
-    metrics_config = getattr(request.app.state, "metrics_config", _config_snapshot.metrics)
-    logger.info(
-        "Metrics endpoint requested",  # pragma: no cover - logging string
-        extra={"event": "metrics.expose", "enabled": metrics_config.enabled},
-    )
-    if not metrics_config.enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Metrics disabled")
-
-    if metrics_config.require_api_key:
-        try:
-            require_api_key(request, force=True)
-        except AppError as exc:
-            return exc.as_response(request_path=request.url.path, method=request.method)
-
-    registry = getattr(request.app.state, "metrics_registry", None)
-    body = ""
-    if registry is not None:
-        body = registry.render(version=request.app.version)
-    return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
-
-
-def configure_metrics_route(app: FastAPI, metrics_config: MetricsConfig) -> None:
-    app.router.routes[:] = [
-        route
-        for route in app.router.routes
-        if getattr(route, "endpoint", None) is not metrics_endpoint
-    ]
-    if metrics_config.enabled:
-        app.add_api_route(
-            metrics_config.path,
-            metrics_endpoint,
-            methods=["GET"],
-            include_in_schema=True,
-        )
-    app.state.metrics_config = metrics_config
-    app.openapi_schema = None
-
-
-configure_metrics_route(app, _config_snapshot.metrics)
 
 
 def _format_validation_field(raw_loc: list[Any]) -> str:
@@ -1256,26 +994,6 @@ def custom_openapi() -> dict[str, Any]:
                     }
                 },
             }
-
-    metrics_config = config.metrics
-    metrics_path = metrics_config.path
-    if not metrics_config.enabled:
-        paths.pop(metrics_path, None)
-    else:
-        metrics_item = paths.get(metrics_path)
-        if isinstance(metrics_item, dict):
-            metrics_operation = metrics_item.get("get")
-            if isinstance(metrics_operation, dict):
-                metrics_operation.setdefault("summary", "Prometheus metrics")
-                metrics_operation.setdefault(
-                    "description",
-                    "Exposes Prometheus compatible metrics in text format.",
-                )
-                responses = metrics_operation.setdefault("responses", {})
-                responses["200"] = {
-                    "description": "Prometheus metrics payload",
-                    "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}},
-                }
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema

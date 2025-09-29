@@ -106,7 +106,7 @@ be tuned via `DLQ_PURGE_LIMIT`.
 
 ### `GET /api/v1/dlq/stats`
 
-Returns aggregate DLQ metrics:
+Returns aggregate DLQ statistics:
 
 ```json
 {
@@ -124,15 +124,16 @@ Returns aggregate DLQ metrics:
 }
 ```
 
-## Metrics
+## Logging Signals
 
-When the Prometheus exporter is enabled the service publishes the following
-series:
+DLQ operations emit structured logs that replace the former Prometheus gauges:
 
-- `dlq_total` (gauge): total number of dead-letter entries.
-- `dlq_by_reason{reason="…"}` (gauge): entries grouped by derived reason.
-- `dlq_requeued_total` (counter): cumulative count of API-driven requeues.
-- `dlq_purged_total` (counter): cumulative count of purged entries.
+- `event=dlq.requeue` with `requeued`, `skipped`, `actor`, `duration_ms`.
+- `event=dlq.purge` with `purged`, `reason`, `actor`, `duration_ms`.
+- `event=dlq.stats` with `total`, `last_24h`, `distinct_reasons`, `duration_ms`.
+
+Forward these logs to your log aggregation stack (Loki, ELK, etc.) and build
+alerts/dashboards to track requeue/purge activity over time.
 
 ## Limits & Configuration
 
@@ -150,5 +151,5 @@ Environment variables control runtime limits:
 The downloads table does not persist a dedicated “reason” column; therefore the
 API derives a reason slug from the leading token of the stored error message.
 If the schema gains an explicit reason field in the future the service can use
-it directly for filtering and metrics without altering the public API.
+it directly for filtering and reporting without altering the public API.
 

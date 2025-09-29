@@ -6,12 +6,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.config import HealthConfig
-from app.dependencies import get_app_config
 from app.errors import ErrorCode
 from app.services.health import HealthService, ReadinessResult
-from app.main import MetricsRegistry, _METRIC_BUCKETS, configure_metrics_route
 from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 def _session_factory(success: bool = True) -> Callable[[], MagicMock]:
@@ -178,59 +175,6 @@ def test_ready_endpoint_returns_200_when_ok(client) -> None:
         assert payload["data"]["db"] == "up"
 
 
-def test_metrics_disabled_returns_404(client) -> None:
+def test_metrics_endpoint_removed_returns_404(client) -> None:
     response = client.get("/metrics", use_raw_path=True)
     assert response.status_code == 404
-
-
-def test_metrics_enabled_requires_api_key(client) -> None:
-    client.app.state.metrics_config.enabled = True
-    client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
-    configure_metrics_route(client.app, client.app.state.metrics_config)
-
-    client.get(api_path("health"))
-    response = client.get("/metrics", use_raw_path=True)
-    assert response.status_code == 200
-    body = response._body.decode("utf-8")
-    assert "app_build_info" in body
-
-    client.app.state.metrics_config.enabled = False
-    configure_metrics_route(client.app, client.app.state.metrics_config)
-
-
-def test_metrics_unauthorized_without_api_key(client) -> None:
-    client.app.state.metrics_config.enabled = True
-    client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
-    configure_metrics_route(client.app, client.app.state.metrics_config)
-
-    with SimpleTestClient(client.app, include_env_api_key=False) as anon_client:
-        response = anon_client.get("/metrics", use_raw_path=True)
-    assert response.status_code == 401
-
-    client.app.state.metrics_config.enabled = False
-    configure_metrics_route(client.app, client.app.state.metrics_config)
-
-
-def test_metrics_public_when_not_requiring_api_key(client) -> None:
-    client.app.state.metrics_config.enabled = True
-    client.app.state.metrics_config.require_api_key = False
-    metrics_path = client.app.state.metrics_config.path
-    config = get_app_config()
-    allowlist = tuple([*config.security.allowlist, metrics_path])
-    original_allowlist = config.security.allowlist
-    config.security.allowlist = allowlist
-    client.app.state.metrics_registry = MetricsRegistry(_METRIC_BUCKETS)
-    configure_metrics_route(client.app, client.app.state.metrics_config)
-
-    try:
-        with SimpleTestClient(client.app, include_env_api_key=False) as anon_client:
-            response = anon_client.get("/metrics", use_raw_path=True)
-    finally:
-        config.security.allowlist = original_allowlist
-        client.app.state.metrics_config.require_api_key = True
-        client.app.state.metrics_config.enabled = False
-        configure_metrics_route(client.app, client.app.state.metrics_config)
-
-    assert response.status_code == 200
-    body = response._body.decode("utf-8")
-    assert "app_build_info" in body

@@ -68,9 +68,7 @@ def _parse_ids(raw_ids: list[str], *, limit: int) -> list[int]:
 
 
 def _build_service(request: Request) -> DLQService:
-    metrics_registry = getattr(request.app.state, "metrics_registry", None)
     return DLQService(
-        metrics_registry=metrics_registry,
         requeue_limit=_REQUEUE_LIMIT,
         purge_limit=_PURGE_LIMIT,
     )

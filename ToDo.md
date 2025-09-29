@@ -3,7 +3,7 @@
 ## ✅ Erledigt
 - **Backend**
   - DLQ-Management-API bietet Listing, Bulk-Requeue, Bulk-Purge und Stats inkl. Metriken unter `/api/v1/dlq`; dokumentiert in `docs/operations/dlq.md`.【F:app/services/dlq_service.py†L1-L355】【F:app/routers/dlq_router.py†L1-L228】【F:docs/operations/dlq.md†L1-L144】
-  - Liveness (`/api/v1/health`), readiness (`/api/v1/ready`) and optional Prometheus metrics (`/metrics`) endpoints provide fast probes, configurable timeouts and documented observability settings.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:docs/observability.md†L1-L86】
+  - Liveness (`/api/v1/health`) and readiness (`/api/v1/ready`) endpoints provide fast probes, configurable timeouts and documented observability settings; structured logs replace the former `/metrics` endpoint.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:docs/observability.md†L1-L120】
   - API-Fehler folgen einem einheitlichen Envelope mit globalem FastAPI-Handler, App-spezifischem Fehlerbaum, Debug-ID-Header und dokumentiertem OpenAPI-Schema; Tests decken Mapping und Beispiele ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】【F:docs/errors.md†L1-L83】
   - HTTP-Caching für `/api/v1/*` liefert `ETag`/`Last-Modified`/`Cache-Control`, unterstützt `304 Not Modified`, nutzt einen TTL+LRU-In-Memory-Cache mit Invalidation und ist per `CACHE_*` ENV steuerbar.【F:app/middleware/cache_conditional.py†L1-L228】【F:app/services/cache.py†L1-L176】【F:app/main.py†L1-L421】【F:docs/api.md†L130-L164】
   - Globale API-Key-Authentifizierung sichert alle Router per Dependency, nutzt Problem-Details für 401/403 und respektiert konfigurierbare Allowlists; CORS akzeptiert nur definierte Origins.【F:app/dependencies.py†L1-L114】【F:app/main.py†L220-L315】【F:app/config.py†L79-L136】
@@ -36,8 +36,7 @@
   - Lifespan-Tests prüfen Worker-Start, Fehlerpfade, Idempotenz und Cancel-Verhalten mit dedizierten Stubs.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
 - **Dokumentation**
   - README und CHANGELOG dokumentieren Smart Search, Worker, Watchlist, Release-Highlights sowie die aktuellen CI-Gates konsistent zum Code-Stand.【F:README.md†L101-L172】【F:CHANGELOG.md†L1-L18】
-  - README & Ops-Doku konsolidieren sämtliche ENV-Variablen, liefern `.env.example`
-    sowie Prometheus-Quickstart (`docs/ops`).【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/ops/metrics.md†L1-L61】
+  - README & Ops-Doku konsolidieren sämtliche ENV-Variablen und liefern `.env.example` inklusive Logging-Hinweisen.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】
 - **Suche**
   - Smart Search erhielt strukturierte Filter (Genre, Jahr, Qualität) inkl. Normalisierung, Ranking-Boosts und aktualisierte API-Dokumentation.【F:app/routers/search_router.py†L1-L280】【F:docs/api.md†L130-L233】
   - slskd-Adapter liefert asynchrone Track-Suche über den Integration Service inklusive Retry/Backoff, TrackCandidate-Mapping, Tests und aktualisierter Dokumentation.【F:app/integrations/slskd_adapter.py†L1-L309】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】【F:docs/integrations/slskd.md†L1-L134】

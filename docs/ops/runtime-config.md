@@ -14,21 +14,18 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 - API-Keys (`HARMONY_API_KEYS`, `HARMONY_API_KEYS_FILE`) und externe Secrets (`SPOTIFY_CLIENT_SECRET`, `SLSKD_API_KEY`, `MUSIXMATCH_API_KEY`) gehören in `.env` oder einen Secrets-Manager – niemals in Git.
 - `AUTH_ALLOWLIST` sollte nur explizit benötigte Zusatzpfade enthalten. Health/Ready/Docs/OpenAPI werden automatisch freigeschaltet.
-- Metrics nur dann ohne Auth (`METRICS_REQUIRE_API_KEY=false`) exponieren, wenn die Instanz hinter einer vertrauenswürdigen Firewall steht.
 - Aktiviere `ERRORS_DEBUG_DETAILS` ausschließlich in geschützten Entwicklungsumgebungen – die Erweiterung schreibt Debug-Hints in den Response-Body.
 
 ## Feature-Gruppen & Flags
 
 ### Observability & Fehlerdiagnose
 
-- `FEATURE_METRICS_ENABLED` initialisiert Registry & Middleware; solange der Flag `false` ist, liefert `/metrics` ein `404`.
-- `METRICS_REQUIRE_API_KEY=false` ergänzt das Metrics-URL-Präfix automatisch in die Auth-Allowlist – zusätzliche CORS- oder Firewall-Regeln bleiben empfohlen.
 - Health-Checks honorieren `HEALTH_DB_TIMEOUT_MS`, `HEALTH_DEP_TIMEOUT_MS`, `HEALTH_DEPS` und `HEALTH_READY_REQUIRE_DB`. Nutze `docs/observability.md` für Detailbeispiele.
 
 ### Auth & CORS
 
 - `FEATURE_REQUIRE_AUTH=true` bindet die API-Key-Dependency global ein. Setze den Flag nur für lokale Testläufe auf `false`.
-- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut. Wird `METRICS_REQUIRE_API_KEY` deaktiviert, ergänzt Harmony das `METRICS_PATH` automatisch.
+- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut.
 - `ALLOWED_ORIGINS` akzeptiert CSV oder Zeilen. Ein leerer Wert blockt sämtliche Browser-Anfragen.
 
 ### Caching
@@ -57,4 +54,4 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 3. Bei Spotify/slskd-Änderungen zusätzlich `/settings` aktualisieren, damit DB-Backups konsistent bleiben.
 4. Halte Änderungen im CHANGELOG fest, insbesondere bei Flags mit Sicherheitsauswirkungen.
 
-Weiterführende Beispiele und Best Practices findest du im Abschnitt „Betrieb & Konfiguration“ des README sowie in [`docs/ops/metrics.md`](metrics.md) für Prometheus-Integrationen.
+Weiterführende Beispiele und Best Practices findest du im Abschnitt „Betrieb & Konfiguration“ des README.
