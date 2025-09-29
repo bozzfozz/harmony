@@ -4,15 +4,11 @@ import asyncio
 
 import pytest
 
-pytest_plugins = ["tests.fixtures.worker_stubs"]
-
-import asyncio
-
-import pytest
-
 from app.main import _stop_background_workers, app
 from tests.fixtures.worker_stubs import WorkerRegistry
 from tests.support.async_utils import wait_for_event
+
+pytest_plugins = ["tests.fixtures.worker_stubs"]
 
 
 pytestmark = [pytest.mark.usefixtures("lifespan_worker_settings")]
@@ -21,7 +17,7 @@ pytestmark = [pytest.mark.usefixtures("lifespan_worker_settings")]
 @pytest.mark.asyncio
 @pytest.mark.lifespan_workers
 async def test_lifespan_happy_path_starts_and_stops_workers(
-    worker_registry: WorkerRegistry
+    worker_registry: WorkerRegistry,
 ) -> None:
     async with app.router.lifespan_context(app):
         pass
@@ -48,11 +44,11 @@ async def test_lifespan_happy_path_starts_and_stops_workers(
 @pytest.mark.asyncio
 @pytest.mark.lifespan_workers
 async def test_lifespan_start_failure_rolls_back_and_logs_error(
-    worker_registry: WorkerRegistry
+    worker_registry: WorkerRegistry,
 ) -> None:
     worker_registry.scenarios["metadata"].fail_on_start = True
     ctx = app.router.lifespan_context(app)
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(RuntimeError):
         await ctx.__aenter__()
 
     error_events = [
@@ -105,7 +101,9 @@ async def test_lifespan_double_stop_is_idempotent(worker_registry: WorkerRegistr
 
 @pytest.mark.asyncio
 @pytest.mark.lifespan_workers
-async def test_worker_cancel_on_shutdown_finishes_within_grace(worker_registry: WorkerRegistry) -> None:
+async def test_worker_cancel_on_shutdown_finishes_within_grace(
+    worker_registry: WorkerRegistry,
+) -> None:
     scenario = worker_registry.scenarios["sync"]
     scenario.run_forever = True
     scenario.stop_timeout = 0.3
@@ -136,9 +134,7 @@ async def test_worker_start_timeout_is_surface_as_timeout(worker_registry: Worke
 
 @pytest.mark.asyncio
 @pytest.mark.lifespan_workers
-async def test_worker_background_crash_is_logged(
-    worker_registry: WorkerRegistry
-) -> None:
+async def test_worker_background_crash_is_logged(worker_registry: WorkerRegistry) -> None:
     scenario = worker_registry.scenarios["playlist_sync"]
     scenario.run_forever = True
     scenario.crash_during_run = True

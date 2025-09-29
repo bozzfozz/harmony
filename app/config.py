@@ -112,14 +112,16 @@ class MetricsConfig:
 
 @dataclass(slots=True)
 class WatchlistWorkerConfig:
-    concurrency: int
+    max_concurrency: int
     max_per_tick: int
-    search_timeout_ms: int
+    spotify_timeout_ms: int
+    slskd_search_timeout_ms: int
     tick_budget_ms: int
     backoff_base_ms: int
-    backoff_max_tries: int
+    retry_max: int
     jitter_pct: float
     shutdown_grace_ms: int
+    db_io_mode: str
 
 
 @dataclass(slots=True)
@@ -193,14 +195,16 @@ DEFAULT_SLSKD_MAX_RESULTS = 50
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
 DEFAULT_METRICS_PATH = "/metrics"
-DEFAULT_WATCHLIST_CONCURRENCY = 4
+DEFAULT_WATCHLIST_MAX_CONCURRENCY = 4
 DEFAULT_WATCHLIST_MAX_PER_TICK = 20
-DEFAULT_WATCHLIST_SEARCH_TIMEOUT_MS = 1_200
+DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS = 8_000
+DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS = 12_000
 DEFAULT_WATCHLIST_TICK_BUDGET_MS = 8_000
-DEFAULT_WATCHLIST_BACKOFF_BASE_MS = 500
-DEFAULT_WATCHLIST_BACKOFF_MAX_TRIES = 3
+DEFAULT_WATCHLIST_BACKOFF_BASE_MS = 250
+DEFAULT_WATCHLIST_RETRY_MAX = 3
 DEFAULT_WATCHLIST_JITTER_PCT = 0.2
 DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
+DEFAULT_WATCHLIST_DB_IO_MODE = "thread"
 DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
 DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
 DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
@@ -767,14 +771,54 @@ def load_config() -> AppConfig:
         require_api_key=_as_bool(os.getenv("METRICS_REQUIRE_API_KEY"), default=True),
     )
 
-    watchlist_config = WatchlistWorkerConfig(
-        concurrency=max(
-            1,
-            _as_int(
-                os.getenv("WATCHLIST_CONCURRENCY"),
-                default=DEFAULT_WATCHLIST_CONCURRENCY,
-            ),
+    concurrency_env = os.getenv("WATCHLIST_MAX_CONCURRENCY")
+    if concurrency_env is None:
+        concurrency_env = os.getenv("WATCHLIST_CONCURRENCY")
+    max_concurrency = max(
+        1,
+        _as_int(
+            concurrency_env,
+            default=DEFAULT_WATCHLIST_MAX_CONCURRENCY,
         ),
+    )
+
+    spotify_timeout_ms = max(
+        100,
+        _as_int(
+            os.getenv("WATCHLIST_SPOTIFY_TIMEOUT_MS"),
+            default=DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS,
+        ),
+    )
+
+    slskd_timeout_env = os.getenv("WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS")
+    if slskd_timeout_env is None:
+        slskd_timeout_env = os.getenv("WATCHLIST_SEARCH_TIMEOUT_MS")
+    slskd_search_timeout_ms = max(
+        100,
+        _as_int(
+            slskd_timeout_env,
+            default=DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS,
+        ),
+    )
+
+    retry_env = os.getenv("WATCHLIST_RETRY_MAX")
+    if retry_env is None:
+        retry_env = os.getenv("WATCHLIST_BACKOFF_MAX_TRIES")
+    retry_max = max(
+        1,
+        _as_int(
+            retry_env,
+            default=DEFAULT_WATCHLIST_RETRY_MAX,
+        ),
+    )
+
+    db_io_mode_raw = (
+        (os.getenv("WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE).strip().lower()
+    )
+    db_io_mode = "async" if db_io_mode_raw == "async" else "thread"
+
+    watchlist_config = WatchlistWorkerConfig(
+        max_concurrency=max_concurrency,
         max_per_tick=max(
             1,
             _as_int(
@@ -782,13 +826,8 @@ def load_config() -> AppConfig:
                 default=DEFAULT_WATCHLIST_MAX_PER_TICK,
             ),
         ),
-        search_timeout_ms=max(
-            100,
-            _as_int(
-                os.getenv("WATCHLIST_SEARCH_TIMEOUT_MS"),
-                default=DEFAULT_WATCHLIST_SEARCH_TIMEOUT_MS,
-            ),
-        ),
+        spotify_timeout_ms=spotify_timeout_ms,
+        slskd_search_timeout_ms=slskd_search_timeout_ms,
         tick_budget_ms=max(
             100,
             _as_int(
@@ -803,13 +842,7 @@ def load_config() -> AppConfig:
                 default=DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
             ),
         ),
-        backoff_max_tries=max(
-            1,
-            _as_int(
-                os.getenv("WATCHLIST_BACKOFF_MAX_TRIES"),
-                default=DEFAULT_WATCHLIST_BACKOFF_MAX_TRIES,
-            ),
-        ),
+        retry_max=retry_max,
         jitter_pct=max(
             0.0,
             _as_float(
@@ -824,6 +857,7 @@ def load_config() -> AppConfig:
                 default=DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS,
             ),
         ),
+        db_io_mode=db_io_mode,
     )
 
     matching_config = load_matching_config()

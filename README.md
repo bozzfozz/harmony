@@ -86,7 +86,7 @@ Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Rel
 - `GET /watchlist` liefert alle eingetragenen Artists inklusive Zeitstempel des letzten Checks.
 - `DELETE /watchlist/{id}` entfernt einen Eintrag und beendet die Überwachung.
 
-Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden.
+Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden. Für Stabilität sorgen zusätzliche Parameter wie `WATCHLIST_MAX_CONCURRENCY`, `WATCHLIST_SPOTIFY_TIMEOUT_MS`, `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS`, `WATCHLIST_RETRY_MAX` und `WATCHLIST_DB_IO_MODE`, die Timeout-, Retry- und Datenbank-Verhalten konfigurieren.
 
 ## Automatic Lyrics
 

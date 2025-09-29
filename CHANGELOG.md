@@ -1,4 +1,8 @@
 ## v1.0.1 — 2025-09-25
+- perf(worker): entblockt den Watchlist-Worker mit konfigurierbarem DB-I/O,
+  strikten Spotify-/Soulseek-Timeouts, begrenzter Parallelität und
+  exponentiellem Retry-Backoff; aktualisierte Tests und Dokumentation
+  begleiten den Rollout.【F:app/workers/watchlist_worker.py†L1-L382】【F:app/services/watchlist_dao.py†L1-L201】【F:app/config.py†L114-L189】【F:docs/worker_watchlist.md†L1-L85】【F:tests/workers/test_watchlist_worker.py†L1-L229】
 - feat(integrations): async Soulseek adapter with retry/backoff, normalized
   TrackCandidate mapping and integration service delegation. 【F:app/integrations/slskd_adapter.py†L1-L302】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】
 - feat(frontend): Downloads-Tab ergänzt eine Fehlgeschlagen-Badge samt Inline-Steuerung (Retry, Entfernen, Retry-All mit Bestätigungsdialog) und deaktiviert Polling in inaktiven Tabs.
