@@ -1,18 +1,19 @@
-"""Background worker that watches Spotify artists for new releases."""
+"""Asynchronous background worker that watches artists for new releases."""
 
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+import random
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import select
-
+from app.config import WatchlistWorkerConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
-from app.db import session_scope
 from app.logging import get_logger
-from app.models import Download, WatchlistArtist
+from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
@@ -24,6 +25,29 @@ DEFAULT_INTERVAL_SECONDS = 86_400.0
 MIN_INTERVAL_SECONDS = 60.0
 
 
+@dataclass(slots=True)
+class WatchlistTaskOutcome:
+    """Result snapshot for a processed artist."""
+
+    artist: WatchlistArtistRow
+    status: str
+    queued: int
+    attempts: int
+    duration_ms: int
+    reason: str | None = None
+
+
+class WatchlistFailure(Exception):
+    """Internal error wrapper indicating how the worker should react."""
+
+    __slots__ = ("status", "retryable")
+
+    def __init__(self, status: str, message: str, *, retryable: bool) -> None:
+        super().__init__(message)
+        self.status = status
+        self.retryable = retryable
+
+
 class WatchlistWorker:
     """Monitor artists for new Spotify releases and queue missing tracks."""
 
@@ -33,17 +57,21 @@ class WatchlistWorker:
         spotify_client: SpotifyClient,
         soulseek_client: SoulseekClient,
         sync_worker: SyncWorker,
-        interval_seconds: float = DEFAULT_INTERVAL_SECONDS,
+        config: WatchlistWorkerConfig,
+        interval_seconds: float | None = None,
+        dao: WatchlistDAO | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
         self._sync = sync_worker
-        self._interval = max(
-            float(interval_seconds or DEFAULT_INTERVAL_SECONDS), MIN_INTERVAL_SECONDS
-        )
+        self._config = config
+        interval = float(interval_seconds or DEFAULT_INTERVAL_SECONDS)
+        self._interval = max(interval, MIN_INTERVAL_SECONDS)
+        self._dao = dao or WatchlistDAO()
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._running = False
+        self._rng = random.Random()
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -62,24 +90,38 @@ class WatchlistWorker:
         self._stop_event.set()
         task = self._task
         if task is not None:
+            grace_seconds = max(self._config.shutdown_grace_ms, 0) / 1000.0
             try:
-                await task
+                await asyncio.wait_for(asyncio.shield(task), timeout=grace_seconds)
+            except asyncio.TimeoutError:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
             finally:
                 self._task = None
         mark_worker_status("watchlist", WORKER_STOPPED)
         if was_running or task is not None:
             record_worker_stopped("watchlist")
 
-    async def run_once(self) -> None:
+    async def run_once(self) -> list[WatchlistTaskOutcome]:
         """Execute a single polling iteration (primarily for tests)."""
 
-        await self._process_watchlist()
+        return await self._process_watchlist()
 
     async def _run(self) -> None:
-        logger.info("WatchlistWorker started (interval %.0fs)", self._interval)
+        logger.info(
+            "WatchlistWorker started interval=%.0fs concurrency=%d max_per_tick=%d",
+            self._interval,
+            self._config.concurrency,
+            self._config.max_per_tick,
+        )
         try:
-            while self._running:
+            while self._running and not self._stop_event.is_set():
                 await self._process_watchlist()
+                if self._stop_event.is_set():
+                    break
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
                 except asyncio.TimeoutError:
@@ -94,47 +136,180 @@ class WatchlistWorker:
                 record_worker_stopped("watchlist")
             logger.info("WatchlistWorker stopped")
 
-    async def _process_watchlist(self) -> None:
+    async def _process_watchlist(self) -> list[WatchlistTaskOutcome]:
         record_worker_heartbeat("watchlist")
-        with session_scope() as session:
-            artists = session.execute(select(WatchlistArtist)).scalars().all()
+        start = time.monotonic()
+        deadline = start + max(self._config.tick_budget_ms, 0) / 1000.0
+        now = datetime.utcnow()
+        artists = await self._dao.load_batch(self._config.max_per_tick, cutoff=now)
         if not artists:
-            logger.debug("No watchlist artists to process")
-            return
+            logger.debug("event=watchlist.tick status=idle count=0")
+            return []
 
-        for artist in artists:
-            try:
-                await self._process_artist(artist)
-            except Exception as exc:  # pragma: no cover - defensive logging
+        semaphore = asyncio.Semaphore(max(1, self._config.concurrency))
+        tasks = [
+            asyncio.create_task(self._process_artist(artist, semaphore, deadline))
+            for artist in artists
+            if not self._deadline_exhausted(deadline)
+        ]
+        if not tasks:
+            logger.debug("event=watchlist.tick status=skipped reason=no_budget")
+            return []
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        outcomes: list[WatchlistTaskOutcome] = []
+        for artist, result in zip(artists, results):
+            if isinstance(result, WatchlistTaskOutcome):
+                outcomes.append(result)
+            elif isinstance(result, Exception):
+                if isinstance(result, asyncio.CancelledError):
+                    reason = "cancelled"
+                    status = "cancelled"
+                else:
+                    reason = f"{type(result).__name__}: {result}"
+                    status = "internal_error"
                 logger.exception(
-                    "Failed to process watchlist artist %s: %s",
+                    "event=watchlist.task artist_id=%s status=%s reason=%s",
                     artist.spotify_artist_id,
-                    exc,
+                    status,
+                    reason,
+                )
+                await self._dao.mark_failed(
+                    artist.id,
+                    reason=status,
+                    retry_at=datetime.utcnow(),
+                )
+                outcomes.append(
+                    WatchlistTaskOutcome(
+                        artist=artist,
+                        status=status,
+                        queued=0,
+                        attempts=1,
+                        duration_ms=int((time.monotonic() - start) * 1000),
+                        reason=reason,
+                    )
                 )
 
-    async def _process_artist(self, artist: WatchlistArtist) -> None:
-        logger.debug(
-            "Processing watchlist artist %s (last_checked=%s)",
-            artist.spotify_artist_id,
-            artist.last_checked,
+        duration_ms = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "event=watchlist.tick status=done count=%d duration_ms=%d budget_ms=%d concurrency=%d",
+            len(outcomes),
+            duration_ms,
+            self._config.tick_budget_ms,
+            self._config.concurrency,
         )
+        return outcomes
+
+    async def _process_artist(
+        self,
+        artist: WatchlistArtistRow,
+        semaphore: asyncio.Semaphore,
+        deadline: float,
+    ) -> WatchlistTaskOutcome:
+        attempts = 0
+        queued = 0
+        status = "noop"
+        reason: str | None = None
+        start = time.monotonic()
+        backoff_ms = 0
+
+        if not await self._dao.mark_in_progress(artist.id):
+            return WatchlistTaskOutcome(
+                artist=artist,
+                status="skipped",
+                queued=0,
+                attempts=0,
+                duration_ms=int((time.monotonic() - start) * 1000),
+                reason="missing",
+            )
+
+        async with semaphore:
+            while attempts < max(1, self._config.backoff_max_tries):
+                attempts += 1
+                if self._stop_event.is_set():
+                    status = "cancelled"
+                    reason = "shutdown"
+                    break
+                if self._deadline_exhausted(deadline):
+                    status = "timeout"
+                    reason = "tick_budget_exceeded"
+                    break
+                try:
+                    queued = await self._process_artist_once(artist, deadline)
+                except WatchlistFailure as failure:
+                    status = failure.status
+                    reason = str(failure)
+                    if not failure.retryable or attempts >= self._config.backoff_max_tries:
+                        break
+                    backoff_ms = self._calculate_backoff_ms(attempts)
+                    await self._sleep_with_deadline(backoff_ms / 1000.0, deadline)
+                    continue
+                else:
+                    status = "ok" if queued else "noop"
+                    reason = None
+                    await self._dao.mark_success(artist.id, checked_at=datetime.utcnow())
+                    break
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        if status in {"ok", "noop"}:
+            logger.info(
+                "event=watchlist.task artist_id=%s status=%s queued=%d attempts=%d duration_ms=%d",
+                artist.spotify_artist_id,
+                status,
+                queued,
+                attempts,
+                duration_ms,
+            )
+        else:
+            retry_at = None
+            if status in {"timeout", "dependency_error"}:
+                if backoff_ms <= 0:
+                    backoff_ms = self._calculate_backoff_ms(attempts)
+                retry_at = datetime.utcnow() + timedelta(milliseconds=backoff_ms)
+            await self._dao.mark_failed(
+                artist.id,
+                reason=status,
+                retry_at=retry_at,
+            )
+            logger.warning(
+                "event=watchlist.task artist_id=%s status=%s attempts=%d duration_ms=%d reason=%s",
+                artist.spotify_artist_id,
+                status,
+                attempts,
+                duration_ms,
+                reason,
+            )
+
+        return WatchlistTaskOutcome(
+            artist=artist,
+            status=status,
+            queued=queued,
+            attempts=attempts,
+            duration_ms=duration_ms,
+            reason=reason,
+        )
+
+    async def _process_artist_once(
+        self,
+        artist: WatchlistArtistRow,
+        deadline: float,
+    ) -> int:
+        if self._deadline_exhausted(deadline):
+            raise WatchlistFailure("timeout", "tick budget exceeded", retryable=True)
+
         try:
             albums = await asyncio.to_thread(
                 self._spotify.get_artist_albums, artist.spotify_artist_id
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error(
-                "Spotify lookup failed for artist %s: %s",
-                artist.spotify_artist_id,
-                exc,
+            raise WatchlistFailure(
+                "dependency_error", f"spotify albums failed: {exc}", retryable=True
             )
-            return
 
         last_checked = artist.last_checked
         recent_albums = [album for album in albums if self._is_new_release(album, last_checked)]
         if not recent_albums:
-            self._update_last_checked(artist.id)
-            return
+            return 0
 
         track_candidates: List[Tuple[dict[str, Any], dict[str, Any]]] = []
         for album in recent_albums:
@@ -144,12 +319,11 @@ class WatchlistWorker:
             try:
                 tracks = await asyncio.to_thread(self._spotify.get_album_tracks, album_id)
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning(
-                    "Failed to fetch tracks for album %s: %s",
-                    album_id,
-                    exc,
+                raise WatchlistFailure(
+                    "dependency_error",
+                    f"spotify album tracks failed: {exc}",
+                    retryable=True,
                 )
-                continue
             for track in tracks:
                 track_id = str(track.get("id") or "").strip()
                 if not track_id:
@@ -157,54 +331,30 @@ class WatchlistWorker:
                 track_candidates.append((album, track))
 
         if not track_candidates:
-            self._update_last_checked(artist.id)
-            return
+            return 0
 
         track_ids = [str(track.get("id")) for _, track in track_candidates if track.get("id")]
-        existing = self._load_existing_track_ids(track_ids)
+        existing = await self._dao.load_existing_track_ids(track_ids)
         scheduled: set[str] = set()
         queued = 0
+
         for album, track in track_candidates:
+            if self._deadline_exhausted(deadline):
+                raise WatchlistFailure("timeout", "tick budget exceeded", retryable=True)
+
             track_id = str(track.get("id") or "").strip()
             if not track_id or track_id in existing or track_id in scheduled:
                 continue
             scheduled.add(track_id)
-            if await self._schedule_download(artist, album, track):
+            created = await self._schedule_download(artist, album, track)
+            if created:
                 queued += 1
 
-        logger.info(
-            "Watchlist artist %s: queued %d new track(s)",
-            artist.spotify_artist_id,
-            queued,
-        )
-        self._update_last_checked(artist.id)
-
-    def _update_last_checked(self, artist_id: int) -> None:
-        with session_scope() as session:
-            record = session.get(WatchlistArtist, int(artist_id))
-            if record is None:
-                return
-            record.last_checked = datetime.utcnow()
-            session.add(record)
-
-    def _load_existing_track_ids(self, track_ids: Sequence[str]) -> set[str]:
-        if not track_ids:
-            return set()
-        with session_scope() as session:
-            results = (
-                session.execute(
-                    select(Download.spotify_track_id)
-                    .where(Download.spotify_track_id.in_(track_ids))
-                    .where(Download.state.notin_(["failed", "cancelled", "dead_letter"]))
-                )
-                .scalars()
-                .all()
-            )
-        return {str(value) for value in results if value}
+        return queued
 
     async def _schedule_download(
         self,
-        artist: WatchlistArtist,
+        artist: WatchlistArtistRow,
         album: dict[str, Any],
         track: dict[str, Any],
     ) -> bool:
@@ -212,17 +362,23 @@ class WatchlistWorker:
         if not query:
             return False
         try:
-            results = await self._soulseek.search(query)
-        except Exception as exc:  # pragma: no cover - network failure handling
-            logger.warning("Soulseek search failed for %s: %s", query, exc)
-            return False
+            results = await asyncio.wait_for(
+                self._soulseek.search(query),
+                timeout=max(self._config.search_timeout_ms, 1) / 1000.0,
+            )
+        except asyncio.TimeoutError:
+            raise WatchlistFailure("timeout", f"search timeout for {query}", retryable=True)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            raise WatchlistFailure(
+                "dependency_error", f"search failed for {query}: {exc}", retryable=True
+            )
 
         username, file_info = self._select_candidate(results)
         if not username or not file_info:
             logger.info(
-                "No Soulseek candidate found for watchlist track %s (%s)",
-                track.get("name"),
-                track.get("id"),
+                "event=watchlist.search artist_id=%s status=empty query=%s",
+                artist.spotify_artist_id,
+                query,
             )
             return False
 
@@ -234,7 +390,7 @@ class WatchlistWorker:
         track_id = str(track.get("id") or "").strip()
         album_id = str(album.get("id") or "").strip()
 
-        download_id = self._create_download_record(
+        download_id = await self._dao.create_download_record(
             username=username,
             filename=filename,
             priority=priority,
@@ -243,7 +399,11 @@ class WatchlistWorker:
             payload=payload,
         )
         if download_id is None:
-            return False
+            raise WatchlistFailure(
+                "internal_error",
+                f"failed to persist download for {filename}",
+                retryable=False,
+            )
 
         payload["download_id"] = download_id
         payload.setdefault("filename", filename)
@@ -258,66 +418,53 @@ class WatchlistWorker:
         try:
             await self._sync.enqueue(job)
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error(
-                "Failed to enqueue watchlist download %s: %s",
-                download_id,
-                exc,
+            await self._dao.mark_download_failed(download_id, str(exc))
+            raise WatchlistFailure(
+                "dependency_error",
+                f"failed to enqueue download {download_id}: {exc}",
+                retryable=True,
             )
-            self._mark_download_failed(download_id, str(exc))
-            return False
 
         logger.info(
-            "Queued watchlist download for %s - %s",
-            artist.name,
-            track.get("name"),
+            "event=watchlist.download artist_id=%s track_id=%s status=queued",
+            artist.spotify_artist_id,
+            track_id,
         )
         return True
 
-    def _create_download_record(
-        self,
-        *,
-        username: str,
-        filename: str,
-        priority: int,
-        spotify_track_id: str,
-        spotify_album_id: str,
-        payload: Dict[str, Any],
-    ) -> Optional[int]:
-        try:
-            with session_scope() as session:
-                download = Download(
-                    filename=filename,
-                    state="queued",
-                    progress=0.0,
-                    username=username,
-                    priority=priority,
-                    spotify_track_id=spotify_track_id or None,
-                    spotify_album_id=spotify_album_id or None,
-                )
-                session.add(download)
-                session.flush()
-                payload_copy = dict(payload)
-                payload_copy.setdefault("filename", filename)
-                payload_copy["download_id"] = download.id
-                payload_copy["priority"] = priority
-                download.request_payload = payload_copy
-                session.add(download)
-                return download.id
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error("Failed to create download record for %s: %s", filename, exc)
-            return None
+    def _calculate_backoff_ms(self, attempt: int) -> int:
+        base = max(self._config.backoff_base_ms, 0)
+        exponent = max(attempt - 1, 0)
+        delay = base * (2**exponent)
+        jitter = self._config.jitter_pct
+        if delay <= 0 or jitter <= 0:
+            return max(int(delay), 0)
+        spread = delay * jitter
+        jitter_value = self._rng.uniform(-spread, spread)
+        return max(int(delay + jitter_value), 0)
 
-    def _mark_download_failed(self, download_id: int, reason: str) -> None:
-        with session_scope() as session:
-            record = session.get(Download, int(download_id))
-            if record is None:
+    def _deadline_exhausted(self, deadline: float | None) -> bool:
+        if deadline is None:
+            return False
+        return time.monotonic() >= deadline
+
+    async def _sleep_with_deadline(self, seconds: float, deadline: float | None) -> None:
+        if seconds <= 0:
+            return
+        end_time = time.monotonic() + seconds
+        if deadline is not None:
+            end_time = min(end_time, deadline)
+        while True:
+            if self._stop_event.is_set():
                 return
-            record.state = "failed"
-            record.updated_at = datetime.utcnow()
-            payload = dict(record.request_payload or {})
-            payload["error"] = reason
-            record.request_payload = payload
-            session.add(record)
+            remaining = end_time - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=remaining)
+                return
+            except asyncio.TimeoutError:
+                return
 
     @staticmethod
     def _extract_priority(payload: Dict[str, Any]) -> int:
@@ -418,3 +565,6 @@ class WatchlistWorker:
         except ValueError:
             return None
         return None
+
+
+__all__ = ["WatchlistWorker", "WatchlistTaskOutcome", "WatchlistFailure"]

@@ -414,6 +414,7 @@ async def _start_background_workers(
         spotify_client=spotify_client,
         soulseek_client=soulseek_client,
         sync_worker=state.sync_worker,
+        config=config.watchlist,
         interval_seconds=interval_seconds,
     )
     await state.watchlist_worker.start()
