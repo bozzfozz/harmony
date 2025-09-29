@@ -17,6 +17,7 @@
 - docs: `AGENTS.md` – Initiative Policy, Scope-Guard, Clarification & PR-Regeln ergänzt.
 - Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, bandit/npm audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
 - Update PR-Template: TASK_ID und Testnachweise verpflichtend.
+- chore(core): Transfers-Wrapper typisiert, Fehler auf `VALIDATION_ERROR`/`NOT_FOUND`/`DEPENDENCY_ERROR` gemappt und Import-Sanity-Tests ergänzt.【F:app/core/transfers_api.py†L1-L188】【F:app/core/soulseek_client.py†L1-L190】【F:tests/core/test_transfers_api.py†L1-L124】【F:tests/core/test_imports.py†L1-L27】
 
 # Changelog
 - feat(cache): introduce HTTP conditional requests with strong/weak ETag support, Last-Modified propagation, documented 304

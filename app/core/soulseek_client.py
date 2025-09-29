@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections import deque
 from pathlib import Path
@@ -18,7 +19,18 @@ logger = get_logger(__name__)
 
 
 class SoulseekClientError(RuntimeError):
-    pass
+    """Raised when slskd returns an error or cannot be reached."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        payload: Any | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.payload = payload
 
 
 class SoulseekClient:
@@ -74,18 +86,41 @@ class SoulseekClient:
         for attempt in range(1, self._max_retries + 1):
             try:
                 async with session.request(method, url, headers=headers, **kwargs) as response:
+                    content_type = response.headers.get("Content-Type", "")
+                    body_text = await response.text()
                     if response.status >= 400:
-                        content = await response.text()
-                        raise SoulseekClientError(f"slskd error {response.status}: {content[:200]}")
-                    if "application/json" in response.headers.get("Content-Type", ""):
-                        return await response.json()
-                    return await response.text()
-            except (aiohttp.ClientError, SoulseekClientError) as exc:
+                        payload: Any | None = None
+                        if "application/json" in content_type:
+                            try:
+                                payload = json.loads(body_text)
+                            except json.JSONDecodeError:
+                                payload = None
+                        raise SoulseekClientError(
+                            f"slskd error {response.status}: {body_text[:200]}",
+                            status_code=response.status,
+                            payload=payload,
+                        )
+                    if "application/json" in content_type:
+                        if not body_text:
+                            return {}
+                        try:
+                            return json.loads(body_text)
+                        except json.JSONDecodeError as decode_error:
+                            raise SoulseekClientError(
+                                "slskd returned invalid JSON",
+                                status_code=response.status,
+                            ) from decode_error
+                    return body_text
+            except SoulseekClientError as exc:
                 if attempt == self._max_retries:
                     logger.error("Soulseek request failed: %s", exc)
                     raise
-                await asyncio.sleep(backoff)
-                backoff *= 2
+            except aiohttp.ClientError as exc:
+                if attempt == self._max_retries:
+                    logger.error("Soulseek request failed: %s", exc)
+                    raise SoulseekClientError(str(exc)) from exc
+            await asyncio.sleep(backoff)
+            backoff *= 2
 
     async def close(self) -> None:
         if self._session_owner and self._session and not self._session.closed:

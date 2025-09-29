@@ -544,19 +544,30 @@ class StubTransfersApi:
         self.raise_cancel: TransfersApiError | None = None
         self.raise_enqueue: TransfersApiError | None = None
 
-    async def cancel_download(self, download_id: int | str) -> Dict[str, Any]:
+    async def cancel_download(self, download_id: int | str) -> bool:
         if self.raise_cancel is not None:
             raise self.raise_cancel
         identifier = int(download_id)
         self.cancelled.append(identifier)
-        return await self._soulseek.cancel_download(str(identifier))
+        await self._soulseek.cancel_download(str(identifier))
+        return True
 
-    async def enqueue(self, *, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(self, *, username: str, files: list[Dict[str, Any]]) -> str:
         if self.raise_enqueue is not None:
             raise self.raise_enqueue
         job = {"username": username, "files": files}
         self.enqueued.append(job)
-        return await self._soulseek.enqueue(username, files)
+        response = await self._soulseek.enqueue(username, files)
+        job_payload = response.get("job") if isinstance(response, dict) else None
+        if isinstance(job_payload, dict):
+            identifier = job_payload.get("id") or job_payload.get("download_id")
+            if identifier is not None:
+                return str(identifier)
+        if files:
+            download_id = files[0].get("download_id")
+            if download_id is not None:
+                return str(download_id)
+        return username
 
 
 class StubLyricsWorker:
