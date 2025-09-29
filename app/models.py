@@ -203,6 +203,7 @@ class WatchlistArtist(Base):
     spotify_artist_id = Column(String(128), nullable=False)
     name = Column(String(512), nullable=False)
     last_checked = Column(DateTime, nullable=True)
+    retry_block_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

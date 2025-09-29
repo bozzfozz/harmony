@@ -92,9 +92,21 @@ class ThreadRecordingDAO(WatchlistDAO):
         self._record("mark_success")
         super().mark_success(artist_id, checked_at=checked_at)
 
-    def mark_failed(self, artist_id: int, *, reason: str, retry_at: datetime | None = None) -> None:
+    def mark_failed(
+        self,
+        artist_id: int,
+        *,
+        reason: str,
+        retry_at: datetime | None = None,
+        **extras: Any,
+    ) -> None:
         self._record("mark_failed")
-        super().mark_failed(artist_id, reason=reason, retry_at=retry_at)
+        super().mark_failed(
+            artist_id,
+            reason=reason,
+            retry_at=retry_at,
+            **extras,
+        )
 
     def load_existing_track_ids(self, track_ids: Sequence[str]) -> set[str]:
         self._record("load_existing_track_ids")
@@ -142,12 +154,18 @@ def _make_config(**overrides: Any) -> WatchlistWorkerConfig:
     )
 
 
-def _insert_artist(spotify_artist_id: str, *, last_checked: datetime | None = None) -> int:
+def _insert_artist(
+    spotify_artist_id: str,
+    *,
+    last_checked: datetime | None = None,
+    retry_block_until: datetime | None = None,
+) -> int:
     with session_scope() as session:
         artist = WatchlistArtist(
             spotify_artist_id=spotify_artist_id,
             name="Watcher",
             last_checked=last_checked,
+            retry_block_until=retry_block_until,
         )
         session.add(artist)
         session.flush()
