@@ -20,6 +20,15 @@ Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+### Matching-Engine
+
+- Unicode- und Akzent-Normalisierung (Fallback ohne `unidecode`), inklusive Vereinheitlichung typografischer Anführungszeichen.
+- Konservative Titel-Varianten (Klammern ↔ Dash, Entfernung von `explicit`/`clean`/`feat.` ohne Verlust von Remix-/Live-Hinweisen).
+- Künstler-Alias-Mapping (z. B. `Beyoncé` ↔ `Beyonce`, `KoЯn` ↔ `Korn`) für stabilere Artist-Scores.
+- Mehrstufige Kandidatensuche: direkte LIKE-Queries, normalisierte LIKE-Suche und begrenztes Fuzzy-Matching.
+- Editions-bewusstes Album-Matching mit Bonus/Penalty für Deluxe/Anniversary/Remaster-Varianten sowie Trackanzahl-Abgleich.
+- Album-Completion-Berechnung mit Klassifizierung (`complete`, `nearly`, `incomplete`) und Confidence-Score `0.0–1.0`.
+
 ## Spotify Modi
 
 Harmony kennt zwei Betriebsarten: **PRO** nutzt die vollständige OAuth-/API-Integration, **FREE** erlaubt parserbasierte
@@ -314,6 +323,11 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `RETRY_JITTER_PCT` | Zufälliges Jitter (± Prozent) zur Vermeidung eines Thundering Herd (Default: `0.2`) |
 | `RETRY_SCAN_INTERVAL_SEC` | Intervall des Retry-Schedulers in Sekunden (Default: `60`) |
 | `RETRY_SCAN_BATCH_LIMIT` | Maximale Anzahl neu eingeplanter Downloads pro Scheduler-Lauf (Default: `100`) |
+| `FEATURE_MATCHING_EDITION_AWARE` | Aktiviert editionsbewusstes Album-Matching (`true`/`false`, Default: `true`) |
+| `MATCH_FUZZY_MAX_CANDIDATES` | Obergrenze der Kandidaten je Matching-Stufe (Default: `50`) |
+| `MATCH_MIN_ARTIST_SIM` | Mindest-Artist-Similarität bevor eine Penalty greift (Default: `0.6`) |
+| `MATCH_COMPLETE_THRESHOLD` | Anteil (`0.0–1.0`), ab dem ein Album als „complete“ gilt (Default: `0.9`) |
+| `MATCH_NEARLY_THRESHOLD` | Anteil (`0.0–1.0`), ab dem ein Album als „nearly complete“ gilt (Default: `0.8`) |
 
 > **Hinweis:** Spotify- und slskd-Zugangsdaten können über den `/settings`-Endpoint gepflegt und in der Datenbank persistiert werden. Beim Laden der Anwendung haben Werte aus der Datenbank Vorrang vor Umgebungsvariablen; letztere dienen weiterhin als Fallback.
 
