@@ -304,7 +304,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SPOTIFY_CLIENT_SECRET` | Spotify OAuth Client Secret |
 | `SPOTIFY_REDIRECT_URI` | Redirect URI für den OAuth-Flow |
 | `SPOTIFY_SCOPE` | Optionaler Scope für Spotify Berechtigungen |
-| `SLSKD_URL` | Basis-URL des Soulseek-Daemons |
+| `SLSKD_BASE_URL` | Basis-URL des Soulseek-Daemons (Legacy: `SLSKD_URL`) |
 | `SLSKD_API_KEY` | API-Key für slskd (falls gesetzt) |
 | `DATABASE_URL` | SQLAlchemy Verbindungsstring (Standard: `sqlite:///./harmony.db`) |
 | `HARMONY_LOG_LEVEL` | Log-Level (`INFO`, `DEBUG`, …) |
@@ -316,7 +316,11 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `INTEGRATIONS_ENABLED` | Kommagetrennte Liste aktivierter Provider (`spotify`, `plex`, `slskd`; Default: `spotify`) |
 | `SPOTIFY_TIMEOUT_MS` | Timeout in Millisekunden für Spotify-Adapter (Default: `15000`) |
 | `PLEX_TIMEOUT_MS` | Timeout in Millisekunden für Plex-Adapter (Default: `15000`) |
-| `SLSKD_TIMEOUT_MS` | Timeout in Millisekunden für slskd-Adapter (Default: `15000`) |
+| `SLSKD_TIMEOUT_MS` | Timeout in Millisekunden für slskd-Adapter (Default: `8000`) |
+| `SLSKD_RETRY_MAX` | Maximale Anzahl an Neuversuchen für Suchanfragen (Default: `3`) |
+| `SLSKD_RETRY_BACKOFF_BASE_MS` | Basiswert für exponentielles Backoff mit Jitter (Default: `250`) |
+| `SLSKD_PREFERRED_FORMATS` | Kommagetrennte Liste bevorzugter Formate für das Ranking |
+| `SLSKD_MAX_RESULTS` | Obergrenze der zurückgegebenen Kandidaten (Default: `50`) |
 | `PROVIDER_MAX_CONCURRENCY` | Maximale parallele Provider-Aufrufe (Default: `4`) |
 | `RETRY_MAX_ATTEMPTS` | Maximale Anzahl an Download-Versuchen (Default: `10`) |
 | `RETRY_BASE_SECONDS` | Basisverzögerung für exponentielles Backoff in Sekunden (Default: `60`) |

@@ -7,10 +7,8 @@ from typing import Dict, Iterable
 
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
-from app.integrations.base import MusicProvider
 from app.integrations.plex_adapter import PlexAdapter
 from app.integrations.slskd_adapter import SlskdAdapter
-from app.integrations.slskd_client import SlskdHttpClient
 from app.integrations.spotify_adapter import SpotifyAdapter
 from app.logging import get_logger
 
@@ -23,7 +21,7 @@ class ProviderRegistry:
 
     def __init__(self, *, config: AppConfig) -> None:
         self._config = config
-        self._providers: Dict[str, MusicProvider] = {}
+        self._providers: Dict[str, object] = {}
 
     @property
     def enabled_names(self) -> tuple[str, ...]:
@@ -38,7 +36,7 @@ class ProviderRegistry:
             if adapter is not None:
                 self._providers[name] = adapter
 
-    def _build_adapter(self, name: str) -> MusicProvider | None:
+    def _build_adapter(self, name: str) -> object | None:
         name = name.lower()
         timeouts = self._config.integrations.timeouts_ms
         timeout_ms = timeouts.get(name, 15000)
@@ -53,22 +51,24 @@ class ProviderRegistry:
             return PlexAdapter(timeout_ms=timeout_ms)
         if name in {"slskd", "soulseek"}:
             soulseek = self._config.soulseek
-            client = SlskdHttpClient(base_url=soulseek.base_url, api_key=soulseek.api_key)
-            fallback_ms = self._config.integrations.slskd_rate_limit_retry_after_fallback_ms
             return SlskdAdapter(
-                client=client,
-                timeout_ms=timeout_ms,
-                rate_limit_fallback_ms=fallback_ms,
+                base_url=soulseek.base_url,
+                api_key=soulseek.api_key,
+                timeout_ms=soulseek.timeout_ms,
+                max_retries=soulseek.retry_max,
+                backoff_base_ms=soulseek.retry_backoff_base_ms,
+                preferred_formats=soulseek.preferred_formats,
+                max_results=soulseek.max_results,
             )
         return None
 
-    def get(self, name: str) -> MusicProvider:
+    def get(self, name: str) -> object:
         normalized = name.lower()
         if normalized not in self._providers:
             raise KeyError(f"Provider {name!r} is not enabled")
         return self._providers[normalized]
 
-    def all(self) -> Iterable[MusicProvider]:
+    def all(self) -> Iterable[object]:
         return tuple(
             self._providers[name] for name in self.enabled_names if name in self._providers
         )

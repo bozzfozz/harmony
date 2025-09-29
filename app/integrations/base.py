@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Iterable, Mapping, Protocol
 
 
 @dataclass(slots=True, frozen=True)
@@ -50,6 +50,23 @@ class Playlist:
     tracks: tuple[Track, ...]
 
 
+@dataclass(slots=True, frozen=True)
+class TrackCandidate:
+    """Representation of a downloadable track candidate returned by a provider."""
+
+    title: str
+    artist: str | None
+    format: str | None
+    bitrate_kbps: int | None
+    size_bytes: int | None
+    seeders: int | None
+    username: str | None
+    availability: float | None
+    source: str
+    download_uri: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
 class MusicProvider(Protocol):
     """Interface implemented by all music provider adapters."""
 
@@ -69,6 +86,17 @@ class MusicProvider(Protocol):
 
     def get_playlist(self, playlist_id: str) -> Playlist:
         """Return a playlist and its tracks."""
+
+
+class MusicProviderAdapter(Protocol):
+    """Specialised provider interface used by the integration service."""
+
+    name: str
+
+    async def search_tracks(
+        self, query: str, artist: str | None = None, limit: int = 50
+    ) -> list[TrackCandidate]:
+        """Return potential download candidates for the supplied search query."""
 
 
 class ProviderError(RuntimeError):

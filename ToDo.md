@@ -35,7 +35,7 @@
   - README und CHANGELOG dokumentieren Smart Search, Worker, Watchlist, Release-Highlights sowie die aktuellen CI-Gates konsistent zum Code-Stand.【F:README.md†L101-L172】【F:CHANGELOG.md†L1-L18】
 - **Suche**
   - Smart Search erhielt strukturierte Filter (Genre, Jahr, Qualität) inkl. Normalisierung, Ranking-Boosts und aktualisierte API-Dokumentation.【F:app/routers/search_router.py†L1-L280】【F:docs/api.md†L130-L233】
-  - slskd-Adapter liefert asynchrone Track-Suche über den Integration Service inkl. Timeout, Rate-Limit-Mapping und dokumentierter Normalisierung.【F:app/integrations/slskd_adapter.py†L1-L211】【F:app/services/integration_service.py†L1-L73】【F:docs/integrations/slskd.md†L1-L84】
+  - slskd-Adapter liefert asynchrone Track-Suche über den Integration Service inklusive Retry/Backoff, TrackCandidate-Mapping, Tests und aktualisierter Dokumentation.【F:app/integrations/slskd_adapter.py†L1-L309】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】【F:docs/integrations/slskd.md†L1-L134】
 - **Infrastruktur / CI**
   - Die CI auf Push/PR führt `ruff`, `black --check`, `mypy app`, `pytest -q`, `npm test`, `npm run typecheck`, `npm run build` sowie den OpenAPI-Snapshot-Vergleich aus.【F:.github/workflows/ci.yml†L1-L95】
   - Black ist auf Version 24.8.0 gepinnt und nutzt die gemeinsame `pyproject.toml`-Konfiguration für reproduzierbare Formatierungsläufe.【F:.github/workflows/ci.yml†L26-L35】【F:pyproject.toml†L1-L14】

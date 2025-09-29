@@ -2,31 +2,43 @@
 
 from __future__ import annotations
 
-from math import floor
+import asyncio
+import hashlib
+import random
+import re
+import unicodedata
+from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Iterable, Mapping
+from types import MappingProxyType
+from typing import Any, Iterable, Mapping, Sequence
+from urllib.parse import urlparse
+
+import httpx
 
 from app.errors import rate_limit_meta
-from app.integrations.base import Album, Artist, MusicProvider, Playlist, ProviderError, Track
-from app.integrations.slskd_client import (
-    SlskdClientError,
-    SlskdHTTPStatusError,
-    SlskdHttpClient,
-    SlskdInvalidResponseError,
-    SlskdRateLimitedError,
-    SlskdTimeoutError,
-)
+from app.integrations.base import MusicProviderAdapter, TrackCandidate
 from app.logging import get_logger
-from app.schemas.music import Track as IntegrationTrack
+from app.utils.text_normalization import clean_track_title, normalize_quotes
 
 
 logger = get_logger(__name__)
 
-_MAX_LIMIT = 50
+_DEFAULT_SEARCH_PATH = "/api/v0/search/tracks"
+_JITTER_PCT = 0.2
+_ALLOWED_SCHEMES = {"http", "https"}
+_EMPTY_METADATA = MappingProxyType({})
 
 
 class SlskdAdapterError(RuntimeError):
     """Base exception raised for adapter level failures."""
+
+
+class SlskdAdapterValidationError(SlskdAdapterError):
+    """Raised when the upstream service rejected the request as invalid."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class SlskdAdapterRateLimitedError(SlskdAdapterError):
@@ -38,17 +50,16 @@ class SlskdAdapterRateLimitedError(SlskdAdapterError):
         headers: Mapping[str, str] | None,
         fallback_retry_after_ms: int,
     ) -> None:
-        normalized_headers = {str(key).lower(): value for key, value in (headers or {}).items()}
-        retry_after_header = normalized_headers.get("retry-after")
-        header_payload = {"Retry-After": retry_after_header} if retry_after_header else {}
-        meta, _ = rate_limit_meta(header_payload)
+        normalized_headers = {str(key): str(value) for key, value in (headers or {}).items()}
+        meta, safe_headers = rate_limit_meta(normalized_headers)
         retry_after_ms = meta.get("retry_after_ms") if meta else None
         if retry_after_ms is None:
             retry_after_ms = max(0, fallback_retry_after_ms)
+        retry_after_header = safe_headers.get("Retry-After")
         super().__init__("slskd rate limited the request")
         self.retry_after_ms = retry_after_ms
         self.retry_after_header = retry_after_header
-        self.headers = dict(headers or {})
+        self.headers = normalized_headers
 
 
 class SlskdAdapterDependencyError(SlskdAdapterError):
@@ -61,16 +72,6 @@ class SlskdAdapterDependencyError(SlskdAdapterError):
 
 class SlskdAdapterInternalError(SlskdAdapterError):
     """Raised when the adapter failed to normalise results."""
-
-
-def _ensure_list(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, dict):
-        return list(value.values())
-    if value is None:
-        return []
-    return [value]
 
 
 def _coerce_str(value: Any) -> str | None:
@@ -87,11 +88,13 @@ def _coerce_int(value: Any) -> int | None:
         return int(value)
     if isinstance(value, (int, float)):
         return int(value)
-    if isinstance(value, str) and value.strip().lstrip("-+").isdigit():
-        try:
-            return int(value.strip())
-        except ValueError:  # pragma: no cover - defensive guard
-            return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.lstrip("-+").isdigit():
+            try:
+                return int(cleaned)
+            except ValueError:  # pragma: no cover - defensive guard
+                return None
     return None
 
 
@@ -108,42 +111,14 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
-def _coerce_duration_seconds(value: Any) -> int | None:
-    duration = _coerce_float(value)
-    if duration is None:
-        return None
-    if duration <= 0:
-        return None
-    if duration > 10_000:  # treat as milliseconds
-        duration /= 1000
-    return max(0, int(floor(duration)))
-
-
-def _extract_artists(payload: Any) -> list[str]:
-    if isinstance(payload, list):
-        artists: list[str] = []
-        for entry in payload:
-            name = _coerce_str(entry.get("name")) if isinstance(entry, dict) else _coerce_str(entry)
-            if name:
-                artists.append(name)
-        return artists
-    name = _coerce_str(payload)
-    return [name] if name else []
-
-
-def _external_id(entry: Mapping[str, Any]) -> str:
-    for key in ("id", "token", "objectKey", "path", "magnet", "filename"):
-        candidate = entry.get(key)
-        text = _coerce_str(candidate)
-        if text:
-            return text
-    username = _coerce_str(entry.get("username"))
-    path = _coerce_str(entry.get("path"))
-    title = _coerce_str(entry.get("title"))
-    components = [component for component in (username, path, title) if component]
-    if components:
-        return "::".join(components)
-    return "slskd-track"
+def _ensure_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if value is None:
+        return []
+    return [value]
 
 
 def _iter_files(payload: Any) -> Iterable[Mapping[str, Any]]:
@@ -169,168 +144,378 @@ def _iter_files(payload: Any) -> Iterable[Mapping[str, Any]]:
                 else:
                     yield item
         return
-    yield payload
+    if isinstance(payload, Mapping):
+        yield payload
 
 
-def _normalise_track(entry: Mapping[str, Any]) -> IntegrationTrack:
-    title = _coerce_str(entry.get("title") or entry.get("name") or entry.get("filename"))
-    if not title:
-        title = "Unknown Track"
-    artists = _extract_artists(entry.get("artists") or entry.get("artist"))
-    track: IntegrationTrack = {
-        "title": title,
-        "artists": artists,
-        "source": "slskd",
-        "external_id": _external_id(entry),
-    }
-    album = _coerce_str(entry.get("album"))
-    if album:
-        track["album"] = album
-    duration = _coerce_duration_seconds(
-        entry.get("duration_s")
-        or entry.get("duration")
-        or entry.get("length")
-        or entry.get("duration_ms")
+def _compact_whitespace(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _normalise_search_value(value: str) -> str:
+    cleaned = clean_track_title(value)
+    cleaned = normalize_quotes(cleaned)
+    cleaned = unicodedata.normalize("NFKC", cleaned)
+    cleaned = re.sub(
+        r"\s*(?:feat\.?|featuring|ft\.?|with)\s+.+$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
     )
-    if duration is not None:
-        track["duration_s"] = duration
-    bitrate = _coerce_int(entry.get("bitrate") or entry.get("bitrate_kbps"))
-    if bitrate is not None:
-        track["bitrate_kbps"] = max(0, bitrate)
-    size = _coerce_int(entry.get("size") or entry.get("size_bytes") or entry.get("filesize"))
-    if size is not None:
-        track["size_bytes"] = max(0, size)
-    path = _coerce_str(entry.get("magnet") or entry.get("magnet_uri") or entry.get("path"))
-    if path:
-        track["magnet_or_path"] = path
+    cleaned = re.sub(r"\(\s*\)", "", cleaned)
+    cleaned = cleaned.strip(" -")
+    return _compact_whitespace(cleaned)
+
+
+def _combine_terms(query: str, artist: str | None) -> str:
+    parts = [part for part in (artist, query) if part]
+    if not parts:
+        return ""
+    return _compact_whitespace(" - ".join(parts))
+
+
+def _format_rankings(preferred_formats: Sequence[str]) -> Mapping[str, int]:
+    ranking: dict[str, int] = {}
+    for index, entry in enumerate(preferred_formats):
+        if not entry:
+            continue
+        normalized = entry.strip().upper()
+        if normalized and normalized not in ranking:
+            ranking[normalized] = index
+    return ranking
+
+
+def _extract_format(entry: Mapping[str, Any]) -> str | None:
+    format_fields = ("format", "file_type", "extension", "ext")
+    for key in format_fields:
+        candidate = _coerce_str(entry.get(key))
+        if candidate:
+            return candidate.upper()
+    filename = _coerce_str(entry.get("filename") or entry.get("path"))
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[-1]
+        if ext:
+            return ext.upper()
+    return None
+
+
+def _extract_artist(entry: Mapping[str, Any]) -> str | None:
+    artists = entry.get("artists")
+    if isinstance(artists, list):
+        for item in artists:
+            name = _coerce_str(item.get("name")) if isinstance(item, Mapping) else _coerce_str(item)
+            if name:
+                return normalize_quotes(name)
+    artist = _coerce_str(entry.get("artist") or entry.get("uploader"))
+    if artist:
+        return normalize_quotes(artist)
+    return None
+
+
+def _extract_title(entry: Mapping[str, Any]) -> str:
+    for key in ("title", "name", "filename"):
+        candidate = _coerce_str(entry.get(key))
+        if candidate:
+            return normalize_quotes(candidate)
+    return "Unknown Track"
+
+
+def _extract_seeders(entry: Mapping[str, Any]) -> int | None:
+    for key in ("seeders", "user_count", "users", "availability", "count"):
+        seeders = _coerce_int(entry.get(key))
+        if seeders is not None:
+            return max(0, seeders)
+    return None
+
+
+def _extract_availability(entry: Mapping[str, Any], seeders: int | None) -> float | None:
+    for key in ("availability", "availability_score", "estimated_availability"):
+        availability = _coerce_float(entry.get(key))
+        if availability is not None:
+            return max(0.0, min(1.0, availability))
+    if seeders is not None:
+        return max(0.0, min(1.0, seeders / 5.0))
+    return None
+
+
+def _extract_metadata(entry: Mapping[str, Any]) -> Mapping[str, Any]:
+    metadata: dict[str, Any] = {}
+    filename = _coerce_str(entry.get("filename"))
+    if filename:
+        metadata["filename"] = filename
     score = _coerce_float(entry.get("score"))
     if score is not None:
-        track["score"] = score
-    return track
+        metadata["score"] = score
+    bitrate_mode = _coerce_str(entry.get("bitrate_mode") or entry.get("encoding"))
+    if bitrate_mode:
+        metadata["bitrate_mode"] = bitrate_mode
+    if not metadata:
+        return _EMPTY_METADATA
+    return MappingProxyType(metadata)
 
 
-class SlskdAdapter(MusicProvider):
-    """Adapter mapping slskd search results to Harmony's track schema."""
+def _build_candidate(entry: Mapping[str, Any]) -> TrackCandidate:
+    title = clean_track_title(_extract_title(entry)) or "Unknown Track"
+    artist = _extract_artist(entry)
+    format_name = _extract_format(entry)
+    bitrate = _coerce_int(entry.get("bitrate") or entry.get("bitrate_kbps"))
+    if bitrate is not None and bitrate <= 0:
+        bitrate = None
+    size = _coerce_int(entry.get("size") or entry.get("size_bytes") or entry.get("filesize"))
+    if size is not None and size < 0:
+        size = None
+    seeders = _extract_seeders(entry)
+    username = _coerce_str(entry.get("username") or entry.get("user"))
+    availability = _extract_availability(entry, seeders)
+    download_uri = _coerce_str(entry.get("magnet") or entry.get("magnet_uri") or entry.get("path"))
+    metadata = _extract_metadata(entry)
+    return TrackCandidate(
+        title=title,
+        artist=artist,
+        format=format_name,
+        bitrate_kbps=bitrate,
+        size_bytes=size,
+        seeders=seeders,
+        username=username,
+        availability=availability,
+        source="slskd",
+        download_uri=download_uri,
+        metadata=metadata,
+    )
+
+
+def _sort_candidates(
+    candidates: list[TrackCandidate], preferred_formats: Mapping[str, int]
+) -> list[TrackCandidate]:
+    def sort_key(candidate: TrackCandidate) -> tuple[int, int, int, str]:
+        format_rank = preferred_formats.get(
+            (candidate.format or "").upper(), len(preferred_formats)
+        )
+        seeders = -(candidate.seeders or 0)
+        size = candidate.size_bytes if candidate.size_bytes is not None else 1_000_000_000
+        title = candidate.title.lower()
+        return (format_rank, seeders, size, title)
+
+    return sorted(candidates, key=sort_key)
+
+
+@dataclass(slots=True)
+class SlskdAdapter(MusicProviderAdapter):
+    """Adapter mapping slskd search results to Harmony's track candidate schema."""
+
+    base_url: str
+    api_key: str | None
+    timeout_ms: int
+    max_retries: int
+    backoff_base_ms: int
+    preferred_formats: tuple[str, ...]
+    max_results: int
+    client: httpx.AsyncClient | None = None
+
+    def __post_init__(self) -> None:
+        parsed = urlparse(self.base_url)
+        if parsed.scheme not in _ALLOWED_SCHEMES:
+            raise ValueError("SLSKD_BASE_URL must use http or https")
+        normalized_base = parsed.geturl().rstrip("/") or f"{parsed.scheme}://{parsed.netloc}"
+        object.__setattr__(self, "_base_url", normalized_base)
+        timeout_ms = max(200, int(self.timeout_ms))
+        object.__setattr__(self, "_timeout_ms", timeout_ms)
+        retries = max(0, int(self.max_retries))
+        object.__setattr__(self, "_max_retries", retries)
+        backoff = max(50, int(self.backoff_base_ms))
+        object.__setattr__(self, "_backoff_base_ms", backoff)
+        normalized_formats: list[str] = []
+        seen_formats: set[str] = set()
+        for entry in self.preferred_formats:
+            cleaned = entry.strip().upper()
+            if cleaned and cleaned not in seen_formats:
+                seen_formats.add(cleaned)
+                normalized_formats.append(cleaned)
+        formats = tuple(normalized_formats)
+        object.__setattr__(self, "_preferred_formats", formats)
+        object.__setattr__(self, "_format_ranking", _format_rankings(formats))
+        max_results = max(1, int(self.max_results))
+        object.__setattr__(self, "_max_results", max_results)
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        object.__setattr__(self, "_headers", headers)
+        if self.client is not None:
+            object.__setattr__(self, "_client", self.client)
+            object.__setattr__(self, "_owns_client", False)
+        else:
+            timeout = self._build_timeout(timeout_ms)
+            client = httpx.AsyncClient(
+                base_url=self._base_url,
+                headers=headers,
+                timeout=timeout,
+            )
+            object.__setattr__(self, "_client", client)
+            object.__setattr__(self, "_owns_client", True)
 
     name = "slskd"
 
-    def __init__(
-        self,
-        *,
-        client: SlskdHttpClient,
-        timeout_ms: int,
-        rate_limit_fallback_ms: int,
-    ) -> None:
-        self._client = client
-        self._timeout_ms = max(timeout_ms, 100)
-        self._rate_limit_fallback_ms = max(0, rate_limit_fallback_ms)
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client when owned by the adapter."""
 
-    async def search_tracks(  # type: ignore[override]
+        if getattr(self, "_owns_client", False):
+            await self._client.aclose()
+
+    async def search_tracks(
         self,
         query: str,
         *,
-        limit: int = 20,
-        timeout_ms: int | None = None,
-    ) -> list[IntegrationTrack]:
-        """Perform a slskd search and normalise the results."""
+        artist: str | None = None,
+        limit: int = 50,
+    ) -> list[TrackCandidate]:
+        trimmed_query = query.strip()
+        if not trimmed_query:
+            raise SlskdAdapterValidationError("query must not be empty")
+        normalized_query = _normalise_search_value(trimmed_query)
+        normalized_artist = _normalise_search_value(artist) if artist else None
+        combined = _combine_terms(normalized_query, normalized_artist)
+        if not combined:
+            raise SlskdAdapterValidationError("query must not be empty after normalization")
+        effective_limit = max(1, min(int(limit), self._max_results))
+        preferred_formats = self._format_ranking
+        params = {"query": combined, "limit": effective_limit, "type": "track"}
+        q_hash = hashlib.sha1(combined.encode("utf-8")).hexdigest()[:12]
+        attempts = self._max_retries + 1
+        for attempt in range(1, attempts + 1):
+            started = perf_counter()
+            status_code: int | None = None
+            try:
+                response = await self._client.get(
+                    _DEFAULT_SEARCH_PATH,
+                    params=params,
+                    headers=self._headers,
+                )
+                status_code = response.status_code
+            except httpx.TimeoutException:
+                duration_ms = int((perf_counter() - started) * 1000)
+                logger.warning(
+                    "slskd search timeout",
+                    extra={
+                        "event": "slskd.search",
+                        "status": "timeout",
+                        "attempt": attempt,
+                        "q_hash": q_hash,
+                        "duration_ms": duration_ms,
+                        "limit": effective_limit,
+                    },
+                )
+                error: SlskdAdapterError = SlskdAdapterDependencyError(
+                    "slskd search request timed out",
+                )
+            except httpx.HTTPError:
+                duration_ms = int((perf_counter() - started) * 1000)
+                logger.warning(
+                    "slskd search network failure",
+                    extra={
+                        "event": "slskd.search",
+                        "status": "network-error",
+                        "attempt": attempt,
+                        "q_hash": q_hash,
+                        "duration_ms": duration_ms,
+                        "limit": effective_limit,
+                    },
+                )
+                error = SlskdAdapterDependencyError("slskd search request failed")
+            else:
+                if status_code == httpx.codes.OK:
+                    try:
+                        payload = response.json()
+                    except ValueError as exc:  # pragma: no cover - defensive guard
+                        raise SlskdAdapterInternalError("slskd returned invalid JSON") from exc
+                    try:
+                        candidates = [_build_candidate(entry) for entry in _iter_files(payload)]
+                    except Exception as exc:  # pragma: no cover - defensive safeguard
+                        logger.exception(
+                            "slskd search normalisation failed",
+                            extra={"event": "slskd.search", "status": "error", "q_hash": q_hash},
+                        )
+                        raise SlskdAdapterInternalError(
+                            "Failed to normalise slskd results"
+                        ) from exc
+                    filtered = [
+                        candidate
+                        for candidate in candidates
+                        if isinstance(candidate, TrackCandidate)
+                    ]
+                    sorted_candidates = _sort_candidates(filtered, preferred_formats)
+                    limited = sorted_candidates[:effective_limit]
+                    duration_ms = int((perf_counter() - started) * 1000)
+                    logger.info(
+                        "slskd search completed",
+                        extra={
+                            "event": "slskd.search",
+                            "status": "ok",
+                            "attempt": attempt,
+                            "q_hash": q_hash,
+                            "duration_ms": duration_ms,
+                            "limit": effective_limit,
+                            "results_count": len(limited),
+                            "upstream_status": status_code,
+                        },
+                    )
+                    return limited
+                if status_code == httpx.codes.TOO_MANY_REQUESTS:
+                    backoff_ms = self._compute_backoff_ms(attempt)
+                    error = SlskdAdapterRateLimitedError(
+                        headers=response.headers,
+                        fallback_retry_after_ms=backoff_ms,
+                    )
+                elif status_code is not None and 500 <= status_code < 600:
+                    error = SlskdAdapterDependencyError(
+                        "slskd returned a server error",
+                        status_code=status_code,
+                    )
+                elif status_code is not None and 400 <= status_code < 500:
+                    raise SlskdAdapterValidationError(
+                        "slskd rejected the search request",
+                        status_code=status_code,
+                    )
+                else:
+                    error = SlskdAdapterDependencyError(
+                        "slskd responded with an unexpected status",
+                        status_code=status_code,
+                    )
 
-        effective_limit = max(1, min(limit, _MAX_LIMIT))
-        resolved_timeout = timeout_ms if timeout_ms is not None else self._timeout_ms
-        started = perf_counter()
-        try:
-            payload = await self._client.search_tracks(
-                query,
-                limit=effective_limit,
-                timeout_ms=resolved_timeout,
+            should_retry = attempt < attempts and isinstance(
+                error, (SlskdAdapterDependencyError, SlskdAdapterRateLimitedError)
             )
-        except SlskdRateLimitedError as exc:
             duration_ms = int((perf_counter() - started) * 1000)
             logger.warning(
-                "slskd search rate limited",
+                "slskd search failed",
                 extra={
                     "event": "slskd.search",
                     "status": "error",
+                    "attempt": attempt,
+                    "q_hash": q_hash,
                     "duration_ms": duration_ms,
                     "limit": effective_limit,
-                    "upstream_status": 429,
+                    "upstream_status": getattr(error, "status_code", status_code),
                 },
             )
-            raise SlskdAdapterRateLimitedError(
-                headers=exc.headers,
-                fallback_retry_after_ms=self._rate_limit_fallback_ms,
-            ) from exc
-        except (SlskdTimeoutError, SlskdHTTPStatusError) as exc:
-            duration_ms = int((perf_counter() - started) * 1000)
-            status_code = getattr(exc, "status_code", None)
-            logger.warning(
-                "slskd search dependency failure",
-                extra={
-                    "event": "slskd.search",
-                    "status": "error",
-                    "duration_ms": duration_ms,
-                    "limit": effective_limit,
-                    "upstream_status": status_code,
-                },
-            )
-            raise SlskdAdapterDependencyError(
-                "slskd search request failed",
-                status_code=status_code,
-            ) from exc
-        except (SlskdInvalidResponseError, SlskdClientError) as exc:
-            duration_ms = int((perf_counter() - started) * 1000)
-            logger.error(
-                "slskd search returned an invalid payload",
-                extra={
-                    "event": "slskd.search",
-                    "status": "error",
-                    "duration_ms": duration_ms,
-                    "limit": effective_limit,
-                },
-            )
-            raise SlskdAdapterInternalError("Failed to decode slskd search results") from exc
+            if not should_retry:
+                raise error
+            backoff_ms = self._compute_backoff_ms(attempt)
+            await asyncio.sleep(backoff_ms / 1000)
+        raise SlskdAdapterDependencyError("slskd search failed after retries")
 
-        try:
-            tracks: list[IntegrationTrack] = []
-            for entry in _iter_files(payload):
-                if not isinstance(entry, Mapping):
-                    continue
-                tracks.append(_normalise_track(entry))
-                if len(tracks) >= effective_limit:
-                    break
-        except Exception as exc:  # pragma: no cover - defensive safeguard
-            logger.exception(
-                "slskd search normalisation failed",
-                extra={"event": "slskd.search", "status": "error"},
-            )
-            raise SlskdAdapterInternalError("Failed to normalise slskd results") from exc
+    def _compute_backoff_ms(self, attempt: int) -> int:
+        base = self._backoff_base_ms * (2 ** max(0, attempt - 1))
+        jitter_range = base * _JITTER_PCT
+        delay = base + random.uniform(-jitter_range, jitter_range)
+        return max(0, int(delay))
 
-        duration_ms = int((perf_counter() - started) * 1000)
-        logger.info(
-            "slskd search completed",
-            extra={
-                "event": "slskd.search",
-                "status": "ok",
-                "duration_ms": duration_ms,
-                "limit": effective_limit,
-                "results_count": len(tracks),
-                "upstream_status": 200,
-            },
+    @staticmethod
+    def _build_timeout(timeout_ms: int) -> httpx.Timeout:
+        total_seconds = timeout_ms / 1000
+        connect_timeout = min(total_seconds, 5.0)
+        return httpx.Timeout(
+            total_seconds, connect=connect_timeout, read=total_seconds, write=total_seconds
         )
-        return tracks
-
-    def get_artist(self, artist_id: str) -> Artist:  # pragma: no cover - legacy API
-        raise ProviderError(self.name, "Artist metadata is not available from slskd")
-
-    def get_album(self, album_id: str) -> Album:  # pragma: no cover - legacy API
-        raise ProviderError(self.name, "Album metadata is not available from slskd")
-
-    def get_artist_top_tracks(
-        self, artist_id: str, limit: int = 10
-    ) -> Iterable[Track]:  # pragma: no cover - legacy API
-        raise ProviderError(self.name, "Top tracks are not available from slskd")
-
-    def get_playlist(self, playlist_id: str) -> Playlist:  # pragma: no cover - legacy API
-        raise ProviderError(self.name, "Playlists are not available from slskd")
 
 
 __all__ = [
@@ -339,4 +524,5 @@ __all__ = [
     "SlskdAdapterError",
     "SlskdAdapterInternalError",
     "SlskdAdapterRateLimitedError",
+    "SlskdAdapterValidationError",
 ]
