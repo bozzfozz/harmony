@@ -122,6 +122,8 @@ class WatchlistWorkerConfig:
     jitter_pct: float
     shutdown_grace_ms: int
     db_io_mode: str
+    retry_budget_per_artist: int
+    cooldown_minutes: int
 
 
 @dataclass(slots=True)
@@ -195,7 +197,7 @@ DEFAULT_SLSKD_MAX_RESULTS = 50
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
 DEFAULT_METRICS_PATH = "/metrics"
-DEFAULT_WATCHLIST_MAX_CONCURRENCY = 4
+DEFAULT_WATCHLIST_MAX_CONCURRENCY = 3
 DEFAULT_WATCHLIST_MAX_PER_TICK = 20
 DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS = 8_000
 DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS = 12_000
@@ -205,6 +207,8 @@ DEFAULT_WATCHLIST_RETRY_MAX = 3
 DEFAULT_WATCHLIST_JITTER_PCT = 0.2
 DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
 DEFAULT_WATCHLIST_DB_IO_MODE = "thread"
+DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST = 6
+DEFAULT_WATCHLIST_COOLDOWN_MINUTES = 15
 DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
 DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
 DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
@@ -774,41 +778,75 @@ def load_config() -> AppConfig:
     concurrency_env = os.getenv("WATCHLIST_MAX_CONCURRENCY")
     if concurrency_env is None:
         concurrency_env = os.getenv("WATCHLIST_CONCURRENCY")
-    max_concurrency = max(
-        1,
-        _as_int(
-            concurrency_env,
-            default=DEFAULT_WATCHLIST_MAX_CONCURRENCY,
+    max_concurrency = min(
+        10,
+        max(
+            1,
+            _as_int(
+                concurrency_env,
+                default=DEFAULT_WATCHLIST_MAX_CONCURRENCY,
+            ),
         ),
     )
 
-    spotify_timeout_ms = max(
-        100,
-        _as_int(
-            os.getenv("WATCHLIST_SPOTIFY_TIMEOUT_MS"),
-            default=DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS,
+    spotify_timeout_ms = min(
+        60_000,
+        max(
+            100,
+            _as_int(
+                os.getenv("WATCHLIST_SPOTIFY_TIMEOUT_MS"),
+                default=DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS,
+            ),
         ),
     )
 
     slskd_timeout_env = os.getenv("WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS")
     if slskd_timeout_env is None:
         slskd_timeout_env = os.getenv("WATCHLIST_SEARCH_TIMEOUT_MS")
-    slskd_search_timeout_ms = max(
-        100,
-        _as_int(
-            slskd_timeout_env,
-            default=DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS,
+    slskd_search_timeout_ms = min(
+        60_000,
+        max(
+            100,
+            _as_int(
+                slskd_timeout_env,
+                default=DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS,
+            ),
         ),
     )
 
     retry_env = os.getenv("WATCHLIST_RETRY_MAX")
     if retry_env is None:
         retry_env = os.getenv("WATCHLIST_BACKOFF_MAX_TRIES")
-    retry_max = max(
-        1,
-        _as_int(
-            retry_env,
-            default=DEFAULT_WATCHLIST_RETRY_MAX,
+    retry_max = min(
+        5,
+        max(
+            1,
+            _as_int(
+                retry_env,
+                default=DEFAULT_WATCHLIST_RETRY_MAX,
+            ),
+        ),
+    )
+
+    retry_budget = min(
+        20,
+        max(
+            1,
+            _as_int(
+                os.getenv("WATCHLIST_RETRY_BUDGET_PER_ARTIST"),
+                default=DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST,
+            ),
+        ),
+    )
+
+    cooldown_minutes = min(
+        240,
+        max(
+            0,
+            _as_int(
+                os.getenv("WATCHLIST_COOLDOWN_MINUTES"),
+                default=DEFAULT_WATCHLIST_COOLDOWN_MINUTES,
+            ),
         ),
     )
 
@@ -819,11 +857,14 @@ def load_config() -> AppConfig:
 
     watchlist_config = WatchlistWorkerConfig(
         max_concurrency=max_concurrency,
-        max_per_tick=max(
-            1,
-            _as_int(
-                os.getenv("WATCHLIST_MAX_PER_TICK"),
-                default=DEFAULT_WATCHLIST_MAX_PER_TICK,
+        max_per_tick=min(
+            100,
+            max(
+                1,
+                _as_int(
+                    os.getenv("WATCHLIST_MAX_PER_TICK"),
+                    default=DEFAULT_WATCHLIST_MAX_PER_TICK,
+                ),
             ),
         ),
         spotify_timeout_ms=spotify_timeout_ms,
@@ -835,19 +876,25 @@ def load_config() -> AppConfig:
                 default=DEFAULT_WATCHLIST_TICK_BUDGET_MS,
             ),
         ),
-        backoff_base_ms=max(
-            0,
-            _as_int(
-                os.getenv("WATCHLIST_BACKOFF_BASE_MS"),
-                default=DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
+        backoff_base_ms=min(
+            5_000,
+            max(
+                0,
+                _as_int(
+                    os.getenv("WATCHLIST_BACKOFF_BASE_MS"),
+                    default=DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
+                ),
             ),
         ),
         retry_max=retry_max,
-        jitter_pct=max(
-            0.0,
-            _as_float(
-                os.getenv("WATCHLIST_JITTER_PCT"),
-                default=DEFAULT_WATCHLIST_JITTER_PCT,
+        jitter_pct=min(
+            1.0,
+            max(
+                0.0,
+                _as_float(
+                    os.getenv("WATCHLIST_JITTER_PCT"),
+                    default=DEFAULT_WATCHLIST_JITTER_PCT,
+                ),
             ),
         ),
         shutdown_grace_ms=max(
@@ -858,6 +905,8 @@ def load_config() -> AppConfig:
             ),
         ),
         db_io_mode=db_io_mode,
+        retry_budget_per_artist=retry_budget,
+        cooldown_minutes=cooldown_minutes,
     )
 
     matching_config = load_matching_config()
