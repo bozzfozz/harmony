@@ -8,6 +8,9 @@
   responses and an in-memory TTL+LRU response cache with automatic invalidation hooks and configuration via `CACHE_*` variables.
 
 ## v1.x.x
+- refactor(worker): make the watchlist worker async-safe with DAO backed
+  database access, configurable timeouts/backoff and deterministic shutdown; see
+  `docs/worker_watchlist.md` for the updated architecture.【F:app/workers/watchlist_worker.py†L1-L341】【F:app/services/watchlist_dao.py†L1-L189】【F:docs/worker_watchlist.md†L1-L74】
 
 - feat(int): add async slskd track search adapter with deterministic timeout, error mapping and
   documented integration contract.【F:app/integrations/slskd_adapter.py†L1-L211】【F:app/services/integration_service.py†L1-L73】【F:docs/integrations/slskd.md†L1-L84】

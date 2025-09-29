@@ -107,6 +107,18 @@ class MetricsConfig:
 
 
 @dataclass(slots=True)
+class WatchlistWorkerConfig:
+    concurrency: int
+    max_per_tick: int
+    search_timeout_ms: int
+    tick_budget_ms: int
+    backoff_base_ms: int
+    backoff_max_tries: int
+    jitter_pct: float
+    shutdown_grace_ms: int
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     soulseek: SoulseekConfig
@@ -121,6 +133,7 @@ class AppConfig:
     api_base_path: str
     health: HealthConfig
     metrics: MetricsConfig
+    watchlist: WatchlistWorkerConfig
 
 
 @dataclass(slots=True)
@@ -163,6 +176,14 @@ DEFAULT_SLSKD_RATE_LIMIT_RETRY_AFTER_FALLBACK_MS = 2_000
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
 DEFAULT_METRICS_PATH = "/metrics"
+DEFAULT_WATCHLIST_CONCURRENCY = 4
+DEFAULT_WATCHLIST_MAX_PER_TICK = 20
+DEFAULT_WATCHLIST_SEARCH_TIMEOUT_MS = 1_200
+DEFAULT_WATCHLIST_TICK_BUDGET_MS = 8_000
+DEFAULT_WATCHLIST_BACKOFF_BASE_MS = 500
+DEFAULT_WATCHLIST_BACKOFF_MAX_TRIES = 3
+DEFAULT_WATCHLIST_JITTER_PCT = 0.2
+DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -637,6 +658,65 @@ def load_config() -> AppConfig:
         require_api_key=_as_bool(os.getenv("METRICS_REQUIRE_API_KEY"), default=True),
     )
 
+    watchlist_config = WatchlistWorkerConfig(
+        concurrency=max(
+            1,
+            _as_int(
+                os.getenv("WATCHLIST_CONCURRENCY"),
+                default=DEFAULT_WATCHLIST_CONCURRENCY,
+            ),
+        ),
+        max_per_tick=max(
+            1,
+            _as_int(
+                os.getenv("WATCHLIST_MAX_PER_TICK"),
+                default=DEFAULT_WATCHLIST_MAX_PER_TICK,
+            ),
+        ),
+        search_timeout_ms=max(
+            100,
+            _as_int(
+                os.getenv("WATCHLIST_SEARCH_TIMEOUT_MS"),
+                default=DEFAULT_WATCHLIST_SEARCH_TIMEOUT_MS,
+            ),
+        ),
+        tick_budget_ms=max(
+            100,
+            _as_int(
+                os.getenv("WATCHLIST_TICK_BUDGET_MS"),
+                default=DEFAULT_WATCHLIST_TICK_BUDGET_MS,
+            ),
+        ),
+        backoff_base_ms=max(
+            0,
+            _as_int(
+                os.getenv("WATCHLIST_BACKOFF_BASE_MS"),
+                default=DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
+            ),
+        ),
+        backoff_max_tries=max(
+            1,
+            _as_int(
+                os.getenv("WATCHLIST_BACKOFF_MAX_TRIES"),
+                default=DEFAULT_WATCHLIST_BACKOFF_MAX_TRIES,
+            ),
+        ),
+        jitter_pct=max(
+            0.0,
+            _as_float(
+                os.getenv("WATCHLIST_JITTER_PCT"),
+                default=DEFAULT_WATCHLIST_JITTER_PCT,
+            ),
+        ),
+        shutdown_grace_ms=max(
+            0,
+            _as_int(
+                os.getenv("WATCHLIST_SHUTDOWN_GRACE_MS"),
+                default=DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS,
+            ),
+        ),
+    )
+
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
@@ -676,6 +756,7 @@ def load_config() -> AppConfig:
         api_base_path=api_base_path,
         health=health,
         metrics=metrics,
+        watchlist=watchlist_config,
     )
 
 
