@@ -119,6 +119,15 @@ class WatchlistWorkerConfig:
 
 
 @dataclass(slots=True)
+class MatchingConfig:
+    edition_aware: bool
+    fuzzy_max_candidates: int
+    min_artist_similarity: float
+    complete_threshold: float
+    nearly_threshold: float
+
+
+@dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
     soulseek: SoulseekConfig
@@ -134,6 +143,7 @@ class AppConfig:
     health: HealthConfig
     metrics: MetricsConfig
     watchlist: WatchlistWorkerConfig
+    matching: MatchingConfig
 
 
 @dataclass(slots=True)
@@ -184,6 +194,10 @@ DEFAULT_WATCHLIST_BACKOFF_BASE_MS = 500
 DEFAULT_WATCHLIST_BACKOFF_MAX_TRIES = 3
 DEFAULT_WATCHLIST_JITTER_PCT = 0.2
 DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
+DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
+DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
+DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
+DEFAULT_MATCH_NEARLY_THRESHOLD = 0.8
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -325,6 +339,59 @@ def _as_float(value: Optional[str], *, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def load_matching_config() -> MatchingConfig:
+    """Return configuration values that control the matching engine."""
+
+    edition_aware = _as_bool(
+        os.getenv("FEATURE_MATCHING_EDITION_AWARE"),
+        default=True,
+    )
+    fuzzy_max = max(
+        5,
+        _as_int(
+            os.getenv("MATCH_FUZZY_MAX_CANDIDATES"),
+            default=DEFAULT_MATCH_FUZZY_MAX_CANDIDATES,
+        ),
+    )
+    min_artist = max(
+        0.0,
+        min(
+            1.0,
+            _as_float(
+                os.getenv("MATCH_MIN_ARTIST_SIM"),
+                default=DEFAULT_MATCH_MIN_ARTIST_SIM,
+            ),
+        ),
+    )
+    complete = max(
+        0.0,
+        min(
+            1.0,
+            _as_float(
+                os.getenv("MATCH_COMPLETE_THRESHOLD"),
+                default=DEFAULT_MATCH_COMPLETE_THRESHOLD,
+            ),
+        ),
+    )
+    nearly = max(
+        0.0,
+        min(
+            complete,
+            _as_float(
+                os.getenv("MATCH_NEARLY_THRESHOLD"),
+                default=DEFAULT_MATCH_NEARLY_THRESHOLD,
+            ),
+        ),
+    )
+    return MatchingConfig(
+        edition_aware=edition_aware,
+        fuzzy_max_candidates=fuzzy_max,
+        min_artist_similarity=min_artist,
+        complete_threshold=complete,
+        nearly_threshold=nearly,
+    )
 
 
 def _load_settings_from_db(
@@ -717,6 +784,8 @@ def load_config() -> AppConfig:
         ),
     )
 
+    matching_config = load_matching_config()
+
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
@@ -757,6 +826,7 @@ def load_config() -> AppConfig:
         health=health,
         metrics=metrics,
         watchlist=watchlist_config,
+        matching=matching_config,
     )
 
 

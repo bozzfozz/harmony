@@ -9,6 +9,7 @@
   responses and an in-memory TTL+LRU response cache with automatic invalidation hooks and configuration via `CACHE_*` variables.
 
 ## v1.x.x
+- feat(match): Unicode/alias-normalisierte Matching-Pipeline inkl. Editions-Bonus, Confidence-Score und Album-Completion-Bewertung.【F:app/core/matching_engine.py†L1-L238】【F:app/services/library_service.py†L1-L156】【F:app/utils/text_normalization.py†L1-L215】【F:tests/test_matching_engine.py†L1-L93】【F:tests/test_text_normalization.py†L1-L38】
 - test(lifespan): add dedicated FastAPI lifespan and worker lifecycle coverage with
   stubbed workers, including startup failures, idempotent shutdown and
   cancellation scenarios.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
