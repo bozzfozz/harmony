@@ -2,6 +2,7 @@
 
 ## ✅ Erledigt
 - **Backend**
+  - DLQ-Management-API bietet Listing, Bulk-Requeue, Bulk-Purge und Stats inkl. Metriken unter `/api/v1/dlq`; dokumentiert in `docs/operations/dlq.md`.【F:app/services/dlq_service.py†L1-L355】【F:app/routers/dlq_router.py†L1-L228】【F:docs/operations/dlq.md†L1-L144】
   - Liveness (`/api/v1/health`), readiness (`/api/v1/ready`) and optional Prometheus metrics (`/metrics`) endpoints provide fast probes, configurable timeouts and documented observability settings.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:docs/observability.md†L1-L86】
   - API-Fehler folgen einem einheitlichen Envelope mit globalem FastAPI-Handler, App-spezifischem Fehlerbaum, Debug-ID-Header und dokumentiertem OpenAPI-Schema; Tests decken Mapping und Beispiele ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】【F:docs/errors.md†L1-L83】
   - HTTP-Caching für `/api/v1/*` liefert `ETag`/`Last-Modified`/`Cache-Control`, unterstützt `304 Not Modified`, nutzt einen TTL+LRU-In-Memory-Cache mit Invalidation und ist per `CACHE_*` ENV steuerbar.【F:app/middleware/cache_conditional.py†L1-L228】【F:app/services/cache.py†L1-L176】【F:app/main.py†L1-L421】【F:docs/api.md†L130-L164】
@@ -40,8 +41,8 @@
   - Alembic-basierte Migrationen initialisieren das Datenbankschema deterministisch (`init_db` ruft `alembic upgrade head` auf, Docker-Entrypoint und Makefile bieten Upgrade/Revision-Shortcuts, README beschreibt die Workflows).【F:app/db.py†L1-L107】【F:scripts/docker-entrypoint.sh†L1-L11】【F:Makefile†L1-L48】【F:README.md†L189-L202】
 
 ## ⬜️ Offen
-- **Backend**
-  - DLQ-Einträge benötigen langfristig UI/Management (Filter, Retry, Cleanup) und Monitoring-Kennzahlen.【F:app/routers/soulseek_router.py†L180-L225】
+- **Frontend**
+  - DLQ-Downloads im Frontend visualisieren und steuerbar machen (bulk requeue, purge) inkl. Monitoring von Retry-Metriken.【F:app/routers/dlq_router.py†L1-L228】【F:docs/operations/dlq.md†L1-L144】
   - Secret-Validierung perspektivisch um persistente Historie und Metrics ergänzen (z. B. Erfolgsquote, letzte Prüfung pro Provider).【F:app/services/secret_validation.py†L1-L248】
 - **Tests**
   - Der neue Lifespan-Pfad benötigt ergänzende Tests, die Start-/Stop-Orchestrierung und fehlertolerantes Verhalten der Worker absichern.【F:app/main.py†L95-L214】【F:tests/simple_client.py†L1-L87】
