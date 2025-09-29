@@ -47,11 +47,30 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 ## 5. Prompt- und Agent-Spezifika
 - Prompt-Design: Ziel, Eingaben, Ausgaben, Constraints, Abbruchkriterien; Idempotenz; Trennung Instruktion/Daten.
 - Konfiguration: Prompts versionieren unter prompts/<name>@vX.Y.Z.md; Parameter und Limits (Timeout, Retries, Rate-Limits) deklarieren.
-- Werkzeugnutzung: Nur freigegebene Tools; Minimalrechte; auditierbare Aufrufe; Schreibzugriff nur auf erlaubte Pfade.
+- Werkzeugnutzung: Nur freigegebene Tools; Minimalrechte; auditierbare Aufrufe; Schreibzugriff auf alle Repository-Pfade; Schutzregeln siehe §19 Scope-Guard und §15 Prohibited.
 - Beweise/Logs: Eingaben-Hash, Artefakt-Hashes, Laufzeit, Retries, Exit-Status; keine personenbezogenen Daten.
 - AI-spezifische Verantwortlichkeiten:
   - AI-generierter Code ist vollständig, ausführbar, mit bestandenen Tests.
   - Human Maintainer Review ist vor Merge obligatorisch.
+
+## 5.1 Codex Write Mode – Vollzugriff (Default)
+**Modus:** Implement (Standard)
+
+**Rechteumfang:**
+- Schreibzugriff auf **alle Pfade** im Repository (Erstellen/Ändern/Löschen von Dateien, Reorganisation).
+- Branch- und PR-Erstellung jederzeit erlaubt; Direkt-Push auf `main` nur, wenn Repo-Policy es zulässt (empfohlen: Branch + PR).
+- Ausführung üblicher Build-/Test-/Lint-/Tool-Befehle ist erlaubt.
+
+**Pflichten & Grenzen:**
+- **Keine Secrets** oder Zugangsdaten in den Code/Repo schreiben (§6).
+- **Prohibited** (§15) bleibt verbindlich (keine `BACKUP`-/Lizenz-Dateien anfassen).
+- **Scope-/Clarification-Regeln** (§19) anwenden: Bei Unklarheit Draft-PR mit „Clarification Request“.
+- **Commit-/PR-Standards** (§18) einhalten (Conventional Commits, TASK_ID, Testnachweise).
+- **Qualitätsgates** (§14) sind Merge-Gates. Schreiben bleibt erlaubt, Merge nur bei erfüllten Gates oder expliziter Maintainer-Freigabe.
+
+**Empfohlener Flow:**
+- Feature-Branch (`feat/<topic>`), kleine Commits, PR mit Task-Referenz und Testnachweisen.
+- Keine direkten API-/DB-Breaking-Changes ohne dokumentierte Migration (§7) und Maintainer-Bestätigung.
 
 ## 6. Daten, Geheimnisse, Compliance
 - Secrets: Niemals im Code oder Commit; Secret-Manager nutzen; Rotation dokumentieren.
@@ -113,6 +132,7 @@ ADR (Kurzform):
 
 ## 11. Durchsetzung
 - CI-Gates erzwingen Lint, Typen, Tests, Security-Scans.
+- Schreibrechte von Codex sind nicht CI-gekoppelt; PR-/Branch-Flow empfohlen.
 - Pre-Commit Hooks empfohlen: ruff, black, isort.
 - PR wird geblockt, wenn TASK_ID oder Testnachweise fehlen.
 - Merge nur bei erfüllten Checklisten.
@@ -133,7 +153,7 @@ Nach Abschluss **jedes Tasks** ist `ToDo.md` zu pflegen.
 - Ohne ToDo-Nachweis erfolgt kein Merge.
 
 ## 14. Completion Gates (Pflicht)
-Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen.
+Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen. Gates prüfen Qualität; fehlgeschlagene Gates dürfen das Schreiben nicht verhindern, wohl aber den Merge.
 
 - Backend: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
 - Frontend (falls vorhanden): `npm test`, `tsc --noEmit`.
