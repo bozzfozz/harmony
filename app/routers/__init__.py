@@ -1,6 +1,7 @@
 from .activity_router import router as activity_router
 from .backfill_router import router as backfill_router
 from .download_router import router as download_router
+from .dlq_router import router as dlq_router
 from .free_ingest_router import router as free_ingest_router
 from .health_router import router as health_router
 from .imports_router import router as imports_router
@@ -20,6 +21,7 @@ __all__ = [
     "activity_router",
     "backfill_router",
     "download_router",
+    "dlq_router",
     "free_ingest_router",
     "health_router",
     "imports_router",

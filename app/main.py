@@ -48,6 +48,7 @@ from app.routers import (
     activity_router,
     backfill_router,
     download_router,
+    dlq_router,
     free_ingest_router,
     health_router,
     integrations_router,
@@ -185,6 +186,9 @@ class MetricsRegistry:
         self._lock = Lock()
         self._counters: dict[tuple[str, str, str], int] = {}
         self._histograms: dict[tuple[str, str, str], _MetricsHistogram] = {}
+        self._custom_gauges: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
+        self._custom_counters: dict[str, dict[tuple[tuple[str, str], ...], float]] = {}
+        self._custom_help: dict[str, tuple[str, str]] = {}
 
     def observe(self, method: str, path: str, status: str, duration: float) -> None:
         key = (method.upper(), path, status)
@@ -230,12 +234,89 @@ class MetricsRegistry:
                 f"app_request_duration_seconds_sum{{{labels}}} {_format_metrics_float(histogram.sum)}"
             )
 
+        custom_names = set(self._custom_gauges) | set(self._custom_counters)
+        for name in sorted(custom_names):
+            metric_type, help_text = self._custom_help.get(name, ("", ""))
+            if help_text:
+                lines.append(f"# HELP {name} {help_text}")
+            if metric_type:
+                lines.append(f"# TYPE {name} {metric_type}")
+            if name in self._custom_gauges:
+                series = self._custom_gauges[name]
+                for labels, value in sorted(series.items()):
+                    rendered_labels = self._format_custom_labels(labels)
+                    formatted_value = _format_metrics_float(float(value))
+                    lines.append(f"{name}{rendered_labels} {formatted_value}")
+            if name in self._custom_counters:
+                series = self._custom_counters[name]
+                for labels, value in sorted(series.items()):
+                    rendered_labels = self._format_custom_labels(labels)
+                    formatted_value = _format_metrics_float(float(value))
+                    lines.append(f"{name}{rendered_labels} {formatted_value}")
+
         return "\n".join(lines) + "\n"
 
     @staticmethod
     def _format_labels(method: str, path: str, status: str) -> str:
         escaped_path = path.replace("\\", "\\\\").replace('"', '\\"')
         return f'method="{method}",path="{escaped_path}",status="{status}"'
+
+    @staticmethod
+    def _normalise_label_items(labels: Mapping[str, str] | None) -> tuple[tuple[str, str], ...]:
+        if not labels:
+            return ()
+        items = [(str(key), str(value)) for key, value in labels.items()]
+        return tuple(sorted(items))
+
+    @staticmethod
+    def _format_custom_labels(labels: tuple[tuple[str, str], ...]) -> str:
+        if not labels:
+            return ""
+        escaped = []
+        for key, value in labels:
+            safe_key = key.replace("\\", "\\\\").replace('"', '\\"')
+            safe_value = value.replace("\\", "\\\\").replace('"', '\\"')
+            escaped.append(f'{safe_key}="{safe_value}"')
+        return "{" + ",".join(escaped) + "}"
+
+    def set_gauge(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: Mapping[str, str] | None = None,
+        help_text: str | None = None,
+    ) -> None:
+        label_key = self._normalise_label_items(labels)
+        with self._lock:
+            series = self._custom_gauges.setdefault(name, {})
+            series[label_key] = value
+            if help_text:
+                self._custom_help[name] = ("gauge", help_text)
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        amount: float = 1.0,
+        labels: Mapping[str, str] | None = None,
+        help_text: str | None = None,
+    ) -> float:
+        label_key = self._normalise_label_items(labels)
+        with self._lock:
+            series = self._custom_counters.setdefault(name, {})
+            current = series.get(label_key, 0.0)
+            new_value = current + amount
+            series[label_key] = new_value
+            if help_text:
+                self._custom_help[name] = ("counter", help_text)
+            return new_value
+
+    def clear_metric(self, name: str) -> None:
+        with self._lock:
+            self._custom_gauges.pop(name, None)
+            self._custom_counters.pop(name, None)
+            self._custom_help.pop(name, None)
 
 
 _METRIC_BUCKETS: tuple[float, ...] = (
@@ -295,6 +376,7 @@ def _register_api_routes(
     router.include_router(matching_router, prefix="/matching", tags=["Matching"])
     router.include_router(settings_router, prefix="/settings", tags=["Settings"])
     router.include_router(metadata_router)
+    router.include_router(dlq_router, prefix="/dlq", tags=["DLQ"])
     router.include_router(search_router)
     router.include_router(sync_router)
     router.include_router(system_router)
