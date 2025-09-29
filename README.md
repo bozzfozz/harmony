@@ -388,6 +388,24 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SLSKD_MAX_RESULTS` | int | `50` | Maximale Treffer pro slskd-Suche. | — |
 | `PROVIDER_MAX_CONCURRENCY` | int | `4` | Parallele Provider-Aufrufe (Spotify/slskd). | — |
 
+##### Spotify OAuth (PRO-Modus)
+
+- `SPOTIFY_CLIENT_ID` und `SPOTIFY_CLIENT_SECRET` **müssen** gesetzt sein, sobald `SPOTIFY_MODE=PRO` aktiv ist. Die Werte stammen
+  aus der Spotify Developer Console (App → _Settings_). Sie dürfen nicht eingecheckt werden.
+- `SPOTIFY_REDIRECT_URI` muss exakt mit der in Spotify registrierten Redirect-URI übereinstimmen (inkl. Protokoll/Port). Für
+  lokale Tests bietet sich z. B. `http://localhost:3000/api/auth/spotify/callback` an.
+- Optional können die Secrets auch über `/settings` in die Datenbank geschrieben werden. ENV-Werte dienen als Fallback bzw.
+  Initialbefüllung.
+
+##### slskd (Soulseek-Daemon)
+
+- `SLSKD_BASE_URL` verweist auf die HTTP-Instanz (Default `http://localhost:5030`). Legacy-Varianten (`SLSKD_URL`, Host/Port)
+  werden weiterhin gelesen, sollten aber migriert werden.
+- Wenn slskd mit API-Key abgesichert ist, muss `SLSKD_API_KEY` konfiguriert werden. Der Key wird per `X-API-Key` Header
+  übertragen.
+- Zeitkritische Pfade verwenden `SLSKD_TIMEOUT_MS` sowie die Retry-Parameter `SLSKD_RETRY_MAX`/`SLSKD_RETRY_BACKOFF_BASE_MS`.
+  Bei hohen Latenzen empfiehlt sich ein Timeout ≥ 8000 ms sowie ein konservatives Retry-Limit.
+
 #### Artwork & Lyrics
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
