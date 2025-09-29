@@ -161,6 +161,7 @@ class SecurityConfig:
     api_keys: tuple[str, ...]
     allowlist: tuple[str, ...]
     allowed_origins: tuple[str, ...]
+    rate_limiting_enabled: bool
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -937,10 +938,14 @@ def load_config() -> AppConfig:
     allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
 
     security = SecurityConfig(
-        require_auth=_as_bool(os.getenv("FEATURE_REQUIRE_AUTH"), default=True),
+        require_auth=_as_bool(os.getenv("FEATURE_REQUIRE_AUTH"), default=False),
         api_keys=api_keys,
         allowlist=allowlist_entries,
         allowed_origins=allowed_origins,
+        rate_limiting_enabled=_as_bool(
+            os.getenv("FEATURE_RATE_LIMITING"),
+            default=False,
+        ),
     )
 
     return AppConfig(

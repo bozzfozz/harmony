@@ -304,9 +304,7 @@ class ConditionalCacheMiddleware(BaseHTTPMiddleware):
             return True
         return etag in candidates
 
-    def _apply_headers(
-        self, response: Response, path_template: str, *, method: str
-    ) -> Response:
+    def _apply_headers(self, response: Response, path_template: str, *, method: str) -> Response:
         policy = self._policy_for(path_template)
         if not hasattr(response, "body"):
             response.headers.setdefault("Cache-Control", policy.cache_control)

@@ -113,6 +113,10 @@ api.interceptors.request.use((config) => {
     return config;
   }
 
+  if (!REQUIRE_AUTH) {
+    return config;
+  }
+
   applyAuth(config, key, getAuthMode());
 
   return config;

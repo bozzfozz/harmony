@@ -99,6 +99,7 @@ describe('auth header integration', () => {
     const env = ensureEnv();
     env.VITE_API_KEY = 'token-123';
     env.VITE_AUTH_HEADER_MODE = 'bearer';
+    env.VITE_REQUIRE_AUTH = 'true';
 
     const calls: AxiosRequestConfig[] = [];
 
@@ -122,6 +123,37 @@ describe('auth header integration', () => {
     const requestConfig = calls[0];
     const headers = requestConfig.headers as AxiosHeaders;
     expect(headers.get('Authorization')).toBe('Bearer token-123');
+    expect(headers.get('X-API-Key')).toBeUndefined();
+  });
+
+  it('omits auth headers when authentication is disabled', async () => {
+    const env = ensureEnv();
+    env.VITE_API_KEY = 'token-123';
+    env.VITE_AUTH_HEADER_MODE = 'bearer';
+    env.VITE_REQUIRE_AUTH = 'false';
+
+    const calls: AxiosRequestConfig[] = [];
+
+    await jest.isolateModulesAsync(async () => {
+      const { api } = await import('../lib/api');
+      api.defaults.adapter = async (config) => {
+        calls.push(config);
+        return {
+          data: { ok: true },
+          status: 200,
+          statusText: 'OK',
+          headers: new AxiosHeaders(),
+          config
+        };
+      };
+
+      await api.get('/protected');
+    });
+
+    expect(calls).toHaveLength(1);
+    const requestConfig = calls[0];
+    const headers = requestConfig.headers as AxiosHeaders;
+    expect(headers.get('Authorization')).toBeUndefined();
     expect(headers.get('X-API-Key')).toBeUndefined();
   });
 
