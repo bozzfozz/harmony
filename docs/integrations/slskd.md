@@ -12,10 +12,11 @@ upstream service.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `SLSKD_BASE_URL` | `http://localhost:5030` | Base URL of the slskd service. Legacy `SLSKD_URL` is still honoured. |
-| `SLSKD_API_KEY` | `None` | Optional API key presented via the `X-API-Key` header. |
+| `SLSKD_API_KEY` | _(required)_ | Mandatory API key presented via the `X-API-Key` header. |
 | `SLSKD_TIMEOUT_MS` | `8000` | Hard timeout for upstream requests in milliseconds. |
 | `SLSKD_RETRY_MAX` | `3` | Number of retry attempts on timeouts/5xx/429 responses. |
-| `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | Base value for exponential backoff with ±20 % jitter. |
+| `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | Base value for exponential backoff (capped at 2 000 ms). |
+| `SLSKD_JITTER_PCT` | `20` | Percentage of symmetric jitter applied to the computed backoff. |
 | `SLSKD_PREFERRED_FORMATS` | `FLAC,ALAC,APE,MP3` | Format preference order used to rank candidates. |
 | `SLSKD_MAX_RESULTS` | `50` | Maximum number of candidates returned per request. |
 
@@ -61,6 +62,7 @@ sorted by the configured format preferences and seeder count.
 | --- | --- | --- |
 | `429 Too Many Requests` | `SlskdAdapterRateLimitedError` | `RATE_LIMITED` with `meta.retry_after_ms` and the original `Retry-After` header when present. |
 | `5xx`, network failures, timeouts | `SlskdAdapterDependencyError` | `DEPENDENCY_ERROR` with optional `meta.provider_status`. |
+| `404 Not Found` | `SlskdAdapterNotFoundError` | `NOT_FOUND`. |
 | Invalid/garbled JSON | `SlskdAdapterInternalError` | `INTERNAL_ERROR`. |
 | Upstream 4xx validation errors | `SlskdAdapterValidationError` | `VALIDATION_ERROR` with `meta.provider_status`. |
 | Local validation (empty query, limit ≤ 0) | – | `VALIDATION_ERROR`. |
@@ -70,9 +72,12 @@ backoff interval before surfacing the rate limit error.
 
 ## Logging
 
-Every slskd lookup emits a structured log with `event="slskd.search"`, including status,
-`duration_ms`, `limit`, `results_count` and the upstream status code. Failures log at `WARNING`
-level for dependency issues and `ERROR` for malformed payloads.
+Each attempt emits `event="slskd.request"` with `provider="slskd"`, HTTP method/path,
+`status`/`status_code`, `attempt`, `max_attempts`, `duration_ms` and a hashed query identifier.
+Completion is logged separately via `event="slskd.complete"` including `status="ok|error"`,
+`retries_used`, `duration_ms`, `results_count` (when successful) and optional `error`/`upstream_status`
+fields. Dependency failures log at `WARNING` level; payload issues log at `WARNING` with
+`error="normalisation-failed"`.
 
 ## Example Response
 

@@ -35,6 +35,7 @@ class SoulseekConfig:
     timeout_ms: int
     retry_max: int
     retry_backoff_base_ms: int
+    retry_jitter_pct: float
     preferred_formats: tuple[str, ...]
     max_results: int
 
@@ -192,6 +193,7 @@ DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
 DEFAULT_SLSKD_TIMEOUT_MS = 8_000
 DEFAULT_SLSKD_RETRY_MAX = 3
 DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS = 250
+DEFAULT_SLSKD_RETRY_JITTER_PCT = 20.0
 DEFAULT_SLSKD_PREFERRED_FORMATS = ("FLAC", "ALAC", "APE", "MP3")
 DEFAULT_SLSKD_MAX_RESULTS = 50
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
@@ -606,6 +608,10 @@ def load_config() -> AppConfig:
             default=DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS,
         ),
     )
+    retry_jitter_pct_raw = _as_float(
+        os.getenv("SLSKD_JITTER_PCT"), default=DEFAULT_SLSKD_RETRY_JITTER_PCT
+    )
+    retry_jitter_pct = min(100.0, max(0.0, retry_jitter_pct_raw))
     preferred_formats_list = _parse_list(os.getenv("SLSKD_PREFERRED_FORMATS"))
     if not preferred_formats_list:
         preferred_formats_list = list(DEFAULT_SLSKD_PREFERRED_FORMATS)
@@ -632,6 +638,7 @@ def load_config() -> AppConfig:
         timeout_ms=timeout_ms,
         retry_max=retry_max,
         retry_backoff_base_ms=retry_backoff_base_ms,
+        retry_jitter_pct=retry_jitter_pct,
         preferred_formats=preferred_formats,
         max_results=max_results,
     )

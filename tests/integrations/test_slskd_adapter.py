@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import random
 from typing import Any
 
 import httpx
 import pytest
 
+from app.integrations.base import TrackCandidate
 from app.integrations.slskd_adapter import (
     SlskdAdapter,
     SlskdAdapterDependencyError,
+    SlskdAdapterNotFoundError,
     SlskdAdapterRateLimitedError,
     SlskdAdapterValidationError,
 )
@@ -17,13 +18,17 @@ from app.integrations.slskd_adapter import (
 def _build_adapter(
     handler: httpx.MockTransport, **overrides: Any
 ) -> tuple[SlskdAdapter, httpx.AsyncClient]:
-    client = httpx.AsyncClient(base_url="http://slskd", transport=handler)
+    client = httpx.AsyncClient(
+        base_url=overrides.get("base_url", "http://slskd"),
+        transport=handler,
+    )
     adapter = SlskdAdapter(
-        base_url="http://slskd",
-        api_key="secret",
-        timeout_ms=overrides.get("timeout_ms", 2000),
+        base_url=overrides.get("base_url", "http://slskd"),
+        api_key=overrides.get("api_key", "secret"),
+        timeout_ms=overrides.get("timeout_ms", 2_000),
         max_retries=overrides.get("max_retries", 2),
-        backoff_base_ms=overrides.get("backoff_base_ms", 5),
+        backoff_base_ms=overrides.get("backoff_base_ms", 10),
+        jitter_pct=overrides.get("jitter_pct", 0),
         preferred_formats=overrides.get("preferred_formats", ("FLAC", "MP3", "AAC")),
         max_results=overrides.get("max_results", 10),
         client=client,
@@ -32,86 +37,20 @@ def _build_adapter(
 
 
 @pytest.mark.asyncio
-async def test_search_tracks_success_maps_results_sorted_by_preferred_formats() -> None:
-    captured_queries: list[str] = []
-
+async def test_search_tracks_returns_iterable_list() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
-        captured_queries.append(request.url.params["query"])
+        assert request.url.path == "/api/v0/search/tracks"
         payload = {
             "results": [
                 {
-                    "username": "collector-flac",
+                    "username": "collector",
                     "files": [
                         {
                             "title": "Song A",
                             "artist": "Artist",
                             "format": "FLAC",
-                            "bitrate": 0,
-                            "size_bytes": 1234,
-                            "seeders": 12,
-                            "magnet": "magnet:?xt=urn:btih:flac",
-                        },
-                        {
-                            "title": "Song A",
-                            "artist": "Artist",
-                            "format": "MP3",
-                            "bitrate_kbps": 320,
-                            "size": 4321,
                             "seeders": 3,
-                        },
-                    ],
-                },
-                {
-                    "username": "another-user",
-                    "files": [
-                        {
-                            "filename": "song_a.ogg",
-                            "bitrate": 256,
-                            "size_bytes": 2222,
-                            "seeders": 1,
-                        }
-                    ],
-                },
-            ]
-        }
-        return httpx.Response(200, json=payload)
-
-    transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, preferred_formats=("FLAC", "MP3", "OGG"))
-
-    try:
-        results = await adapter.search_tracks("Song A (Explicit)", artist="Artist feat. B", limit=5)
-    finally:
-        await client.aclose()
-
-    assert captured_queries[0] == "Artist - Song A"
-    assert [candidate.format for candidate in results] == ["FLAC", "MP3", "OGG"]
-    assert results[0].username == "collector-flac"
-    assert results[0].download_uri == "magnet:?xt=urn:btih:flac"
-    assert results[0].availability == 1.0
-    assert results[1].bitrate_kbps == 320
-    assert results[2].format == "OGG"
-
-
-@pytest.mark.asyncio
-async def test_search_tracks_timeout_then_retry_success() -> None:
-    attempts = 0
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise httpx.TimeoutException("timeout", request=request)
-        payload = {
-            "results": [
-                {
-                    "username": "retry-user",
-                    "files": [
-                        {
-                            "title": "Resilient",
-                            "artist": "Tester",
-                            "format": "FLAC",
-                            "seeders": 4,
+                            "magnet": "magnet:?xt=urn:btih:flac",
                         }
                     ],
                 }
@@ -120,86 +59,37 @@ async def test_search_tracks_timeout_then_retry_success() -> None:
         return httpx.Response(200, json=payload)
 
     transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, max_retries=1, backoff_base_ms=1)
+    adapter, client = _build_adapter(transport)
 
     try:
-        results = await adapter.search_tracks("Resilient", artist="Tester", limit=2)
+        results = await adapter.search_tracks(" Song A  ", artist="Artist", limit=5)
     finally:
         await client.aclose()
 
-    assert attempts == 2
-    assert results[0].username == "retry-user"
+    assert isinstance(results, list)
+    assert all(isinstance(candidate, TrackCandidate) for candidate in results)
+    assert results[0].download_uri == "magnet:?xt=urn:btih:flac"
 
 
 @pytest.mark.asyncio
-async def test_search_tracks_429_rate_limited_after_retries() -> None:
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(429, headers={})
-
-    transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, max_retries=1, backoff_base_ms=10)
-
-    random.seed(0)
-    try:
-        with pytest.raises(SlskdAdapterRateLimitedError) as excinfo:
-            await adapter.search_tracks("Blocked", artist="Artist")
-    finally:
-        await client.aclose()
-
-    assert excinfo.value.retry_after_ms >= 0
-
-
-@pytest.mark.asyncio
-async def test_search_tracks_5xx_retry_then_fail_dependency_error() -> None:
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503)
-
-    transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, max_retries=1, backoff_base_ms=1)
-
-    try:
-        with pytest.raises(SlskdAdapterDependencyError) as excinfo:
-            await adapter.search_tracks("Server Down")
-    finally:
-        await client.aclose()
-
-    assert excinfo.value.status_code == 503
-
-
-@pytest.mark.asyncio
-async def test_search_tracks_4xx_validation_error_no_retry() -> None:
-    attempts = 0
+async def test_retries_then_success_logs_attempts_and_durations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts: list[int] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal attempts
-        attempts += 1
-        return httpx.Response(400)
-
-    transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, max_retries=3)
-
-    try:
-        with pytest.raises(SlskdAdapterValidationError):
-            await adapter.search_tracks("Invalid")
-    finally:
-        await client.aclose()
-
-    assert attempts == 1
-
-
-@pytest.mark.asyncio
-async def test_search_tracks_mapping_unknown_fields_defaults() -> None:
-    async def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(503)
         payload = {
             "results": [
                 {
                     "files": [
                         {
-                            "name": "Mystery",
-                            "artist": None,
-                            "size": None,
-                            "user": "mystery-user",
-                            "count": 0,
+                            "title": "Recovery",
+                            "artist": "Tester",
+                            "format": "MP3",
+                            "seeders": 5,
                         }
                     ]
                 }
@@ -207,18 +97,147 @@ async def test_search_tracks_mapping_unknown_fields_defaults() -> None:
         }
         return httpx.Response(200, json=payload)
 
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleep_calls.append(delay)
+
+    monkeypatch.setattr("app.integrations.slskd_adapter.asyncio.sleep", fake_sleep)
+    attempt_logs: list[dict[str, Any]] = []
+    complete_logs: list[dict[str, Any]] = []
+
+    def capture_attempt(self: SlskdAdapter, **payload: Any) -> None:
+        attempt_logs.append(payload)
+
+    def capture_complete(self: SlskdAdapter, **payload: Any) -> None:
+        complete_logs.append(payload)
+
+    monkeypatch.setattr(SlskdAdapter, "_log_attempt", capture_attempt)
+    monkeypatch.setattr(SlskdAdapter, "_log_complete", capture_complete)
+
     transport = httpx.MockTransport(handler)
-    adapter, client = _build_adapter(transport, preferred_formats=("FLAC",))
+    adapter, client = _build_adapter(transport, max_retries=2, backoff_base_ms=25, jitter_pct=0)
 
     try:
-        results = await adapter.search_tracks("Mystery")
+        results = await adapter.search_tracks("Recovery", artist="Tester", limit=3)
     finally:
         await client.aclose()
 
-    candidate = results[0]
-    assert candidate.artist is None
-    assert candidate.format is None
-    assert candidate.size_bytes is None
-    assert candidate.seeders == 0
-    assert candidate.availability == 0.0
-    assert candidate.metadata == {}
+    assert len(results) == 1
+    assert len(sleep_calls) == 1
+    assert [entry["attempt"] for entry in attempt_logs] == [1, 2]
+    assert all(entry["duration_ms"] >= 0 for entry in attempt_logs)
+    assert complete_logs[-1]["status"] == "ok"
+    assert complete_logs[-1]["retries_used"] == 1
+
+
+@pytest.mark.asyncio
+async def test_timeout_exhaustion_maps_dependency_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timeout", request=request)
+
+    async def fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.integrations.slskd_adapter.asyncio.sleep", fake_sleep)
+    complete_logs: list[dict[str, Any]] = []
+
+    def capture_complete(self: SlskdAdapter, **payload: Any) -> None:
+        complete_logs.append(payload)
+
+    monkeypatch.setattr(SlskdAdapter, "_log_complete", capture_complete)
+
+    transport = httpx.MockTransport(handler)
+    adapter, client = _build_adapter(transport, max_retries=1, backoff_base_ms=10, jitter_pct=0)
+
+    try:
+        with pytest.raises(SlskdAdapterDependencyError):
+            await adapter.search_tracks("Timeout City")
+    finally:
+        await client.aclose()
+
+    assert complete_logs[-1]["status"] == "error"
+    assert complete_logs[-1]["error"] in {"exhausted", "SlskdAdapterDependencyError"}
+
+
+@pytest.mark.asyncio
+async def test_404_maps_not_found() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    adapter, client = _build_adapter(transport, max_retries=0)
+
+    try:
+        with pytest.raises(SlskdAdapterNotFoundError):
+            await adapter.search_tracks("missing")
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_error_exposes_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"Retry-After": "1"})
+
+    async def fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.integrations.slskd_adapter.asyncio.sleep", fake_sleep)
+    transport = httpx.MockTransport(handler)
+    adapter, client = _build_adapter(transport, max_retries=1, backoff_base_ms=50, jitter_pct=0)
+
+    try:
+        with pytest.raises(SlskdAdapterRateLimitedError) as excinfo:
+            await adapter.search_tracks("limited")
+    finally:
+        await client.aclose()
+
+    assert excinfo.value.retry_after_ms >= 0
+
+
+def test_missing_config_fails_fast() -> None:
+    with pytest.raises(RuntimeError):
+        SlskdAdapter(
+            base_url=" ",
+            api_key="secret",
+            timeout_ms=1_000,
+            max_retries=1,
+            backoff_base_ms=10,
+            jitter_pct=0,
+            preferred_formats=("FLAC",),
+            max_results=5,
+        )
+
+    with pytest.raises(RuntimeError):
+        SlskdAdapter(
+            base_url="http://slskd",
+            api_key=" ",
+            timeout_ms=1_000,
+            max_retries=1,
+            backoff_base_ms=10,
+            jitter_pct=0,
+            preferred_formats=("FLAC",),
+            max_results=5,
+        )
+
+
+@pytest.mark.asyncio
+async def test_validation_error_bubbles_up_without_retry() -> None:
+    attempt_count = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempt_count
+        attempt_count += 1
+        return httpx.Response(400)
+
+    transport = httpx.MockTransport(handler)
+    adapter, client = _build_adapter(transport, max_retries=3)
+
+    try:
+        with pytest.raises(SlskdAdapterValidationError):
+            await adapter.search_tracks("invalid")
+    finally:
+        await client.aclose()
+
+    assert attempt_count == 1

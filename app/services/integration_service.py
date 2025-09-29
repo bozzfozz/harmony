@@ -6,12 +6,19 @@ import asyncio
 from dataclasses import dataclass
 from typing import Iterable
 
-from app.errors import DependencyError, InternalServerError, RateLimitedError, ValidationAppError
+from app.errors import (
+    DependencyError,
+    InternalServerError,
+    NotFoundError,
+    RateLimitedError,
+    ValidationAppError,
+)
 from app.integrations.base import TrackCandidate
 from app.integrations.slskd_adapter import (
     SlskdAdapter,
     SlskdAdapterDependencyError,
     SlskdAdapterInternalError,
+    SlskdAdapterNotFoundError,
     SlskdAdapterRateLimitedError,
     SlskdAdapterValidationError,
 )
@@ -96,6 +103,8 @@ class IntegrationService:
                 retry_after_ms=exc.retry_after_ms,
                 retry_after_header=exc.retry_after_header,
             ) from exc
+        except SlskdAdapterNotFoundError as exc:
+            raise NotFoundError("slskd returned no matching results.") from exc
         except SlskdAdapterDependencyError as exc:
             meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
             raise DependencyError("slskd search is currently unavailable.", meta=meta) from exc

@@ -384,6 +384,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SLSKD_TIMEOUT_MS` | int | `8000` | Timeout für slskd-Anfragen. | — |
 | `SLSKD_RETRY_MAX` | int | `3` | Neuversuche pro slskd-Request. | — |
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | int | `250` | Basis für exponentielles Backoff bei slskd. | — |
+| `SLSKD_JITTER_PCT` | int | `20` | Zufälliger ±Jitter (in %) für das Backoff pro Versuch. | — |
 | `SLSKD_PREFERRED_FORMATS` | csv | `FLAC,ALAC,APE,MP3` | Ranking-Priorisierung für Audioformate. | — |
 | `SLSKD_MAX_RESULTS` | int | `50` | Maximale Treffer pro slskd-Suche. | — |
 | `PROVIDER_MAX_CONCURRENCY` | int | `4` | Parallele Provider-Aufrufe (Spotify/slskd). | — |
@@ -401,8 +402,8 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 - `SLSKD_BASE_URL` verweist auf die HTTP-Instanz (Default `http://localhost:5030`). Legacy-Varianten (`SLSKD_URL`, Host/Port)
   werden weiterhin gelesen, sollten aber migriert werden.
-- Wenn slskd mit API-Key abgesichert ist, muss `SLSKD_API_KEY` konfiguriert werden. Der Key wird per `X-API-Key` Header
-  übertragen.
+- `SLSKD_API_KEY` **muss** konfiguriert werden und wird per `X-API-Key` Header übertragen.
+- `SLSKD_JITTER_PCT` steuert den ±Jitter für das exponentielle Backoff (Default ±20 %).
 - Zeitkritische Pfade verwenden `SLSKD_TIMEOUT_MS` sowie die Retry-Parameter `SLSKD_RETRY_MAX`/`SLSKD_RETRY_BACKOFF_BASE_MS`.
   Bei hohen Latenzen empfiehlt sich ein Timeout ≥ 8000 ms sowie ein konservatives Retry-Limit.
 
