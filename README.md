@@ -227,6 +227,14 @@ CI_OFFLINE=true make all
 
 Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/matching`, `/settings`). Archivierte Routen (`/plex`, `/beets`) werden nicht mehr ausgeliefert.
 
+### Fehlgeschlagene Downloads verwalten
+
+- Im Downloads-Tab zeigt eine Badge "Fehlgeschlagen: N" den aktuellen Bestand. Die Zahl wird nur für den aktiven Tab geladen; Invalidation erfolgt nach Aktionen oder beim erneuten Aktivieren.
+- Ein Klick auf die Badge aktiviert automatisch den Statusfilter „failed“ und blendet fehlgeschlagene Einträge in der Liste ein.
+- Zeilen mit Status `failed` bieten nun direkte Aktionen: **Neu starten** (POST `/downloads/{id}/retry`) und **Entfernen** (DELETE `/downloads/{id}`) aktualisieren Tabelle und Badge unmittelbar.
+- Ein globaler Button **Alle fehlgeschlagenen erneut versuchen** triggert optional `/downloads/retry-failed`. Die Aktion wird nur angeboten, wenn der Endpoint erreichbar ist und fordert vor dem Start eine Bestätigung an.
+- Während Requests sind Buttons deaktiviert; inaktive Tabs poll nicht im Hintergrund.
+
 ## Architekturüberblick
 
 Harmony folgt einer klar getrennten Schichten-Architektur:

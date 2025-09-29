@@ -5,7 +5,7 @@ import { API_BASE_PATH, API_BASE_URL, REQUIRE_AUTH } from './runtime-config';
 
 const ensureLeadingSlash = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
 
-const apiUrl = (path: string): string => {
+export const apiUrl = (path: string): string => {
   const normalizedPath = ensureLeadingSlash(path);
   if (!API_BASE_PATH) {
     return normalizedPath;
@@ -198,7 +198,7 @@ const redirectToSettings = () => {
   window.location.href = '/settings';
 };
 
-const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
+export const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
   try {
     const response = await api.request<T>(config);
     return response.data;
@@ -486,157 +486,7 @@ export const uploadSpotifyFreeFile = async (
     data: payload
   });
 
-export interface DownloadEntry {
-  id: number | string;
-  filename: string;
-  status: string;
-  progress: number;
-  created_at?: string;
-  updated_at?: string;
-  priority: number;
-  username?: string | null;
-}
-
-export interface FetchDownloadsOptions {
-  includeAll?: boolean;
-  limit?: number;
-  offset?: number;
-  status?: string;
-}
-
-const extractDownloadArray = (value: unknown): DownloadEntry[] => {
-  if (Array.isArray(value)) {
-    return value as DownloadEntry[];
-  }
-  if (value && typeof value === 'object' && Array.isArray((value as { downloads?: unknown[] }).downloads)) {
-    return (value as { downloads: DownloadEntry[] }).downloads;
-  }
-  return [];
-};
-
-const normalizeDownloadEntry = (entry: DownloadEntry | (DownloadEntry & { state?: string })): DownloadEntry => {
-  const status = (entry.status ?? (entry as { state?: string }).state ?? 'unknown').toString();
-  const priorityValue = (entry as { priority?: unknown }).priority;
-  const priority =
-    typeof priorityValue === 'number'
-      ? priorityValue
-      : typeof priorityValue === 'string'
-        ? Number.parseInt(priorityValue, 10) || 0
-        : 0;
-
-  return {
-    id: entry.id,
-    filename: entry.filename ?? '',
-    status,
-    progress: entry.progress ?? 0,
-    created_at: entry.created_at,
-    updated_at: entry.updated_at,
-    priority,
-    username: entry.username ?? null
-  };
-};
-
-export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise<DownloadEntry[]> => {
-  const params: Record<string, string | number | boolean> = {};
-  if (options.includeAll) {
-    params.all = true;
-  }
-  if (typeof options.limit === 'number') {
-    params.limit = options.limit;
-  }
-  if (typeof options.offset === 'number') {
-    params.offset = options.offset;
-  }
-  if (options.status) {
-    params.status = options.status;
-  }
-
-  const payload = await request<unknown>({
-    method: 'GET',
-    url: apiUrl('/downloads'),
-    params: Object.keys(params).length > 0 ? params : undefined
-  });
-  return extractDownloadArray(payload).map(normalizeDownloadEntry);
-};
-
-export const cancelDownload = async (id: string | number) =>
-  request<void>({
-    method: 'DELETE',
-    url: apiUrl(`/download/${id}`)
-  });
-
-export const retryDownload = async (id: string | number): Promise<DownloadEntry> =>
-  request<unknown>({
-    method: 'POST',
-    url: apiUrl(`/download/${id}/retry`)
-  }).then((payload) => {
-    const downloads = extractDownloadArray(payload).map(normalizeDownloadEntry);
-    return (
-      downloads[0] ??
-      normalizeDownloadEntry({
-        id,
-        filename: '',
-        status: 'queued',
-        progress: 0,
-        priority: 0
-      })
-    );
-  });
-
-export const updateDownloadPriority = async (id: string | number, priority: number) =>
-  request<DownloadEntry>({
-    method: 'PATCH',
-    url: apiUrl(`/download/${id}/priority`),
-    data: { priority }
-  }).then(normalizeDownloadEntry);
-
-export interface StartDownloadPayload {
-  track_id: string;
-}
-
-export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> =>
-  request<unknown>({
-    method: 'POST',
-    url: apiUrl('/download'),
-    data: payload
-  }).then((response) => {
-    const downloads = extractDownloadArray(response).map(normalizeDownloadEntry);
-    return (
-      downloads[0] ??
-      normalizeDownloadEntry({
-        id: '',
-        filename: '',
-        status: 'queued',
-        progress: 0,
-        priority: 0
-      })
-    );
-  });
-
-export interface DownloadExportFilters {
-  status?: string;
-  from?: string;
-  to?: string;
-}
-
-export const exportDownloads = async (format: 'csv' | 'json', filters: DownloadExportFilters = {}) => {
-  const params: Record<string, string> = { format };
-  if (filters.status) {
-    params.status = filters.status;
-  }
-  if (filters.from) {
-    params.from = filters.from;
-  }
-  if (filters.to) {
-    params.to = filters.to;
-  }
-  return request<Blob>({
-    method: 'GET',
-    url: apiUrl('/downloads/export'),
-    params,
-    responseType: 'blob'
-  });
-};
+export * from './api.downloads';
 
 
 export interface WatchlistArtistEntry {
