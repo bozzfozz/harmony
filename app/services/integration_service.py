@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -65,12 +66,27 @@ class IntegrationService:
 
         effective_limit = min(clamped_limit, resolved.max_results)
 
+        timeout_seconds: float | None = None
+        raw_timeout = getattr(resolved, "timeout_ms", None)
+        if raw_timeout is not None:
+            try:
+                timeout_ms = max(int(raw_timeout), 100)
+            except (TypeError, ValueError):
+                timeout_ms = None
+            if timeout_ms:
+                timeout_seconds = timeout_ms / 1000.0
+
         try:
-            return await resolved.search_tracks(
+            operation = resolved.search_tracks(
                 trimmed_query,
                 artist=normalized_artist,
                 limit=effective_limit,
             )
+            if timeout_seconds is None:
+                return await operation
+            return await asyncio.wait_for(operation, timeout=timeout_seconds)
+        except asyncio.TimeoutError as exc:
+            raise DependencyError("slskd search timed out.") from exc
         except SlskdAdapterValidationError as exc:
             meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
             raise ValidationAppError("slskd rejected the search request.", meta=meta) from exc

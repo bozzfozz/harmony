@@ -1,16 +1,15 @@
 """Database access helpers for the watchlist worker.
 
-The worker executes within an asynchronous event loop but our SQLAlchemy
-integration is synchronous.  To avoid blocking the loop we perform all
-database operations via ``asyncio.to_thread`` and keep the functions small
-and idempotent.  The DAO exposes the minimal primitives required by the
-worker: loading artists, updating their processing state and creating the
-download records that are handed off to the sync worker.
+The worker orchestrates asynchronous processing but our SQLAlchemy
+integration remains synchronous.  To keep scheduling flexible the DAO
+exposes plain synchronous primitives; the worker decides whether to wrap
+them in ``asyncio.to_thread`` or use an async session depending on its
+configuration.  Only the minimal operations required by the worker are
+implemented: loading artists, updating their state and creating download
+records for the sync worker.
 """
 
 from __future__ import annotations
-
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Sequence
@@ -34,7 +33,7 @@ class WatchlistArtistRow:
 class WatchlistDAO:
     """Async-friendly access layer for watchlist related persistence."""
 
-    async def load_batch(
+    def load_batch(
         self,
         limit: int,
         *,
@@ -73,9 +72,9 @@ class WatchlistDAO:
                     for record in records
                 ]
 
-        return await asyncio.to_thread(_query)
+        return _query()
 
-    async def mark_in_progress(self, artist_id: int) -> bool:
+    def mark_in_progress(self, artist_id: int) -> bool:
         """Ensure the artist still exists before processing."""
 
         def _mark() -> bool:
@@ -87,9 +86,9 @@ class WatchlistDAO:
                 # concurrent deletions of the artist entry.
                 return True
 
-        return await asyncio.to_thread(_mark)
+        return _mark()
 
-    async def mark_success(
+    def mark_success(
         self,
         artist_id: int,
         *,
@@ -107,9 +106,9 @@ class WatchlistDAO:
                 record.last_checked = timestamp
                 session.add(record)
 
-        await asyncio.to_thread(_mark)
+        _mark()
 
-    async def mark_failed(
+    def mark_failed(
         self,
         artist_id: int,
         *,
@@ -128,9 +127,9 @@ class WatchlistDAO:
                 record.last_checked = next_time
                 session.add(record)
 
-        await asyncio.to_thread(_mark)
+        _mark()
 
-    async def load_existing_track_ids(self, track_ids: Sequence[str]) -> set[str]:
+    def load_existing_track_ids(self, track_ids: Sequence[str]) -> set[str]:
         """Return already scheduled Spotify track identifiers."""
 
         if not track_ids:
@@ -146,9 +145,9 @@ class WatchlistDAO:
                 values = session.execute(statement).scalars().all()
                 return {str(value) for value in values if value}
 
-        return await asyncio.to_thread(_query)
+        return _query()
 
-    async def create_download_record(
+    def create_download_record(
         self,
         *,
         username: str,
@@ -181,9 +180,9 @@ class WatchlistDAO:
                 session.add(download)
                 return int(download.id)
 
-        return await asyncio.to_thread(_create)
+        return _create()
 
-    async def mark_download_failed(self, download_id: int, reason: str) -> None:
+    def mark_download_failed(self, download_id: int, reason: str) -> None:
         """Persist a download failure in case enqueueing the job fails."""
 
         def _mark() -> None:
@@ -199,7 +198,7 @@ class WatchlistDAO:
                 record.request_payload = payload
                 session.add(record)
 
-        await asyncio.to_thread(_mark)
+        _mark()
 
 
 __all__ = ["WatchlistDAO", "WatchlistArtistRow"]
