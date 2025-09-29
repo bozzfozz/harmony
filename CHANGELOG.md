@@ -1,3 +1,6 @@
+## v2.0.0 — unreleased
+- feat!: remove the `/metrics` endpoint, Prometheus registry and related feature flags in favour of structured logs; update docs and tests accordingly. Migration: retire Prometheus scrapes and forward `event=request`, `event=worker_job` and `event=integration_call` logs to your observability stack.【F:app/main.py†L1-L910】【F:app/config.py†L1-L972】【F:app/services/dlq_service.py†L1-L360】【F:app/routers/dlq_router.py†L1-L228】【F:tests/test_health_ready.py†L1-L210】【F:tests/routers/test_defaults_flags.py†L1-L80】【F:tests/test_dlq_service.py†L1-L160】【F:README.md†L280-L582】【F:.env.example†L1-L80】【F:docs/observability.md†L1-L120】【F:docs/ops/runtime-config.md†L1-L83】【F:ToDo.md†L1-L120】
+
 ## v1.0.1 — 2025-09-25
 - chore(config): default authentication, rate limiting and metrics to off,
   bind the API to 127.0.0.1 and update docs, frontend defaults and
@@ -10,9 +13,9 @@
   jittered retries, structured logging and updated contract tests; integration service and
   configuration wiring follow suit.【F:app/integrations/slskd_adapter.py†L1-L470】【F:app/services/integration_service.py†L1-L120】【F:app/config.py†L570-L640】【F:app/integrations/registry.py†L1-L80】【F:tests/integrations/test_slskd_adapter.py†L1-L220】【F:tests/services/test_integration_service_slskd.py†L1-L160】
 - docs: AGENTS.md um Initiative-, Scope-Guard- und Clarification-Regeln inkl. Checklisten, CI-Gates und Beispielen erweitert.
-- docs: README/ENV aktualisiert, Health/Ready/Metrics-Doku konsolidiert,
+- docs: README/ENV aktualisiert, Health/Ready-Doku konsolidiert,
   `.env.example` ergänzt und neue Ops-Guides für Runtime-Konfiguration sowie
-  Prometheus-Integration hinzugefügt.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/ops/metrics.md†L1-L61】
+  Observability hinzugefügt.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/observability.md†L1-L120】
 - feat(watchlist): persistenter Cooldown speichert `retry_block_until`, Worker überspringt gesperrte Artists und löscht den Wert nach Erfolg; Migration, Tests und Doku decken Verhalten und Logs ab.【F:app/models.py†L205-L212】【F:app/services/watchlist_dao.py†L17-L153】【F:app/workers/watchlist_worker.py†L102-L428】【F:app/migrations/versions/b4e3a1f6c8f6_add_retry_block_until_watchlist.py†L1-L46】【F:tests/workers/test_watchlist_cooldown.py†L1-L123】【F:docs/worker_watchlist.md†L15-L63】
 - chore(conf): konservative Watchlist-Defaults mit Retry-Budget und Cooldown
   festgeschrieben, Worker-Backoff gedeckelt, neue Tests und README-Tabelle
@@ -46,7 +49,7 @@
   documented integration contract.【F:app/integrations/slskd_adapter.py†L1-L211】【F:app/services/integration_service.py†L1-L73】【F:docs/integrations/slskd.md†L1-L84】
 - feat(api): vereinheitlichte Fehlerbehandlung mit globalem FastAPI-Handler, Fehlerklassen und einem stabilen Fehler-Envelope (`ok=false`, `error{code,message,meta}`); OpenAPI veröffentlicht `ErrorResponse`, Tests decken Mapping (Validation, Not Found, Rate Limit, Dependency, Internal) sowie Debug-Header ab.【F:app/errors.py†L1-L231】【F:app/main.py†L1-L458】【F:tests/test_errors_contract.py†L1-L104】
 - feat(conf): Secret-Validierung für slskd/Spotify mit Live-Ping, Timeout-Fallback (`mode: format`), API-Endpoint `/api/v1/secrets/{provider}/validate`, UI-Panel „Jetzt testen“ sowie Dokumentation und Tests.【F:app/services/secret_validation.py†L1-L248】【F:app/routers/system_router.py†L1-L260】【F:frontend/src/pages/Settings/SecretsPanel.tsx†L1-L143】【F:tests/test_secret_validation.py†L1-L271】【F:docs/secrets.md†L1-L104】
-- feat(obs): introduce `/api/v1/health`, `/api/v1/ready` and a Prometheus `/metrics` exporter with configurable auth/timeouts plus documentation and tests.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:tests/test_health_ready.py†L1-L223】【F:docs/observability.md†L1-L86】
+- feat(obs): introduce `/api/v1/health`, `/api/v1/ready` and a Prometheus `/metrics` exporter with configurable auth/timeouts plus documentation and tests.【F:app/services/health.py†L1-L152】【F:app/routers/system_router.py†L1-L210】【F:app/main.py†L1-L910】【F:tests/test_health_ready.py†L1-L223】【F:docs/observability.md†L1-L120】
 - feat(dlq): expose `/api/v1/dlq` management endpoints (list, bulk requeue, purge, stats), update metrics registry with custom gauges/counters and document operational workflows.【F:app/services/dlq_service.py†L1-L355】【F:app/routers/dlq_router.py†L1-L228】【F:app/main.py†L1-L915】【F:docs/operations/dlq.md†L1-L144】【F:tests/test_dlq_router.py†L1-L146】【F:tests/test_dlq_service.py†L1-L152】
 - fix(frontend): lazy load Library tabs, gate queries/toasts to the active view and sync the tab state with the URL to eliminate background polling.
 - feat(frontend): introduce a unified Library page with shadcn/ui tabs for artists, downloads and watchlist while redirecting legacy routes to the new entry point.

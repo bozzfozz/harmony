@@ -75,70 +75,12 @@ class DLQStats:
     last_24h: int
 
 
-class DLQMetricsRecorder:
-    """Facade for updating DLQ specific metrics."""
-
-    def __init__(self, registry: Any | None) -> None:
-        self._registry = registry
-
-    def set_total(self, value: int) -> None:
-        if self._registry is None:
-            return
-        setter = getattr(self._registry, "set_gauge", None)
-        if callable(setter):
-            setter(
-                "dlq_total",
-                float(value),
-                help_text="Total number of entries in the dead-letter queue",
-            )
-
-    def set_reason_gauges(self, values: Mapping[str, int]) -> None:
-        if self._registry is None:
-            return
-        clearer = getattr(self._registry, "clear_metric", None)
-        setter = getattr(self._registry, "set_gauge", None)
-        if callable(clearer):
-            clearer("dlq_by_reason")
-        if not callable(setter):
-            return
-        for reason, count in values.items():
-            setter(
-                "dlq_by_reason",
-                float(count),
-                labels={"reason": reason},
-                help_text="Number of DLQ entries grouped by reason",
-            )
-
-    def increment_requeued(self, amount: int) -> None:
-        if self._registry is None or amount <= 0:
-            return
-        counter = getattr(self._registry, "increment_counter", None)
-        if callable(counter):
-            counter(
-                "dlq_requeued_total",
-                amount=float(amount),
-                help_text="Total number of DLQ entries requeued via the API",
-            )
-
-    def increment_purged(self, amount: int) -> None:
-        if self._registry is None or amount <= 0:
-            return
-        counter = getattr(self._registry, "increment_counter", None)
-        if callable(counter):
-            counter(
-                "dlq_purged_total",
-                amount=float(amount),
-                help_text="Total number of DLQ entries purged via the API",
-            )
-
-
 class DLQService:
     """Business logic for the dead-letter queue management API."""
 
     def __init__(
         self,
         *,
-        metrics_registry: Any | None = None,
         requeue_limit: int = 500,
         purge_limit: int = 1000,
     ) -> None:
@@ -146,7 +88,6 @@ class DLQService:
             raise ValueError("requeue_limit must be positive")
         if purge_limit <= 0:
             raise ValueError("purge_limit must be positive")
-        self._metrics = DLQMetricsRecorder(metrics_registry)
         self._requeue_limit = requeue_limit
         self._purge_limit = purge_limit
 
@@ -303,9 +244,6 @@ class DLQService:
             duration_ms,
         )
 
-        self._metrics.increment_requeued(len(requeued_ids))
-        self._update_metrics_snapshot(session)
-
         return DLQRequeueResult(requeued=requeued_ids, skipped=skipped)
 
     def purge_bulk(
@@ -369,8 +307,6 @@ class DLQService:
             older_than.isoformat() if older_than else "",
             duration_ms,
         )
-        self._metrics.increment_purged(int(deleted))
-        self._update_metrics_snapshot(session)
 
         return DLQPurgeResult(purged=int(deleted))
 
@@ -397,9 +333,6 @@ class DLQService:
                 Download.created_at >= cutoff,
             )
         ).scalar_one()
-
-        self._metrics.set_total(int(total))
-        self._metrics.set_reason_gauges(by_reason)
 
         duration_ms = (time.perf_counter() - start) * 1000
         logger.info(
@@ -452,21 +385,3 @@ class DLQService:
             record.updated_at = now
             record.next_retry_at = None
             recovery.add(record)
-
-    def _update_metrics_snapshot(self, session: Session) -> None:
-        total = session.execute(
-            select(func.count(Download.id)).where(Download.state == DownloadState.DEAD_LETTER.value)
-        ).scalar_one()
-        reason_stmt = (
-            select(Download.last_error, func.count(Download.id))
-            .where(Download.state == DownloadState.DEAD_LETTER.value)
-            .group_by(Download.last_error)
-        )
-        reason_rows = session.execute(reason_stmt).all()
-        reason_counts: dict[str, int] = {}
-        for last_error, count in reason_rows:
-            reason_key = self._normalise_reason(last_error)
-            reason_counts[reason_key] = reason_counts.get(reason_key, 0) + int(count or 0)
-
-        self._metrics.set_total(int(total))
-        self._metrics.set_reason_gauges(reason_counts)

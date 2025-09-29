@@ -64,7 +64,7 @@ Structured log lines expose the worker lifecycle:
 - `event=watchlist.search` — Soulseek queries that did not return results
 
 The worker also continues to publish activity and health heartbeats via the
-existing metrics hooks (`record_worker_started`, `record_worker_stopped`,
+structured logging hooks (`record_worker_started`, `record_worker_stopped`,
 `record_worker_heartbeat`).
 
 ## Troubleshooting

@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.main import MetricsRegistry, _METRIC_BUCKETS
 from app.models import Download
 from app.services.dlq_service import DLQService
 
@@ -16,8 +15,7 @@ def setup_database() -> None:
 
 @pytest.fixture
 def service() -> DLQService:
-    registry = MetricsRegistry(_METRIC_BUCKETS)
-    return DLQService(metrics_registry=registry)
+    return DLQService()
 
 
 class StubWorker:

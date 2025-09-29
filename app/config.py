@@ -105,13 +105,6 @@ class HealthConfig:
 
 
 @dataclass(slots=True)
-class MetricsConfig:
-    enabled: bool
-    path: str
-    require_api_key: bool
-
-
-@dataclass(slots=True)
 class WatchlistWorkerConfig:
     max_concurrency: int
     max_per_tick: int
@@ -150,7 +143,6 @@ class AppConfig:
     security: "SecurityConfig"
     api_base_path: str
     health: HealthConfig
-    metrics: MetricsConfig
     watchlist: WatchlistWorkerConfig
     matching: MatchingConfig
 
@@ -199,7 +191,6 @@ DEFAULT_SLSKD_PREFERRED_FORMATS = ("FLAC", "ALAC", "APE", "MP3")
 DEFAULT_SLSKD_MAX_RESULTS = 50
 DEFAULT_HEALTH_DB_TIMEOUT_MS = 500
 DEFAULT_HEALTH_DEP_TIMEOUT_MS = 800
-DEFAULT_METRICS_PATH = "/metrics"
 DEFAULT_WATCHLIST_MAX_CONCURRENCY = 3
 DEFAULT_WATCHLIST_MAX_PER_TICK = 20
 DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS = 8_000
@@ -337,17 +328,6 @@ def _compose_allowlist_entry(base_path: str, suffix: str) -> str:
     if not base_path or base_path == "/":
         return normalized_suffix
     return f"{base_path}{normalized_suffix}"
-
-
-def _normalise_metrics_path(value: Optional[str]) -> str:
-    candidate = (value or DEFAULT_METRICS_PATH).strip()
-    if not candidate:
-        candidate = DEFAULT_METRICS_PATH
-    if not candidate.startswith("/"):
-        candidate = f"/{candidate}"
-    if candidate != "/":
-        candidate = candidate.rstrip("/")
-    return candidate or DEFAULT_METRICS_PATH
 
 
 def _as_float(value: Optional[str], *, default: float) -> float:
@@ -776,13 +756,6 @@ def load_config() -> AppConfig:
         require_database=_as_bool(os.getenv("HEALTH_READY_REQUIRE_DB"), default=True),
     )
 
-    metrics_path = _normalise_metrics_path(os.getenv("METRICS_PATH"))
-    metrics = MetricsConfig(
-        enabled=_as_bool(os.getenv("FEATURE_METRICS_ENABLED"), default=False),
-        path=metrics_path,
-        require_api_key=_as_bool(os.getenv("METRICS_REQUIRE_API_KEY"), default=True),
-    )
-
     concurrency_env = os.getenv("WATCHLIST_MAX_CONCURRENCY")
     if concurrency_env is None:
         concurrency_env = os.getenv("WATCHLIST_CONCURRENCY")
@@ -932,9 +905,6 @@ def load_config() -> AppConfig:
     allowlist_entries = _deduplicate_preserve_order(
         entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
     )
-    if not metrics.require_api_key:
-        metrics_prefix = _normalise_prefix(metrics.path)
-        allowlist_entries = _deduplicate_preserve_order((*allowlist_entries, metrics_prefix))
     allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
 
     security = SecurityConfig(
@@ -961,7 +931,6 @@ def load_config() -> AppConfig:
         security=security,
         api_base_path=api_base_path,
         health=health,
-        metrics=metrics,
         watchlist=watchlist_config,
         matching=matching_config,
     )

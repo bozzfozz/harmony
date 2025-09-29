@@ -40,7 +40,7 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - **Rate Limiting**: Schutz vor Missbrauch durch Drosselung.  
 
 ## 6. Monitoring & Observability
-- **Status-Endpoints** bereitstellen (`/status`, `/health`, optional `/metrics`).  
+- **Status-Endpoints** bereitstellen (`/status`, `/health`, `/ready`).
 - **Systemmetriken** sammeln (CPU, RAM, Disk, Netzwerk).  
 - **Audit-Logs/Activity Feed** für nachvollziehbare Änderungen pflegen.  
 - **Logs** strukturiert ausgeben und optional in Systeme wie Prometheus, Grafana, ELK weiterleiten.  
