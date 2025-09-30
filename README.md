@@ -614,7 +614,7 @@ Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/i
 
 ## Contributing
 
-Für neue Arbeiten bitte die [Task-Vorlage](docs/task-template.md) nutzen und im PR referenzieren.
+Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
 
 ## Tests & CI
 

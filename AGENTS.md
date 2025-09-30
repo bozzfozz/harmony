@@ -161,8 +161,9 @@ ADR (Kurzform):
 - Wiederholte Verstöße führen zu Review-Pflicht und ggf. Rechtemanagement.
 
 ## 12. Task-Template-Pflicht
-Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
+Alle Aufgaben **müssen** auf Basis von [`docs/task-template.md`](docs/task-template.md) erstellt, umgesetzt und reviewed werden.
 
+- Issues nutzen das Markdown-Template [`Task (Codex-ready)`](.github/ISSUE_TEMPLATE/task.md) und übernehmen FAST-TRACK- sowie SPLIT_ALLOWED-Flags aus der Vorlage unverändert.
 - Abweichungen sind nur mit ausdrücklicher Maintainer-Freigabe zulässig und müssen im PR begründet werden.
 - PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) nachvollziehbar aus.
 - TASK_ID bleibt im Titel und Body verpflichtend und verweist auf das ausgefüllte Template.
@@ -200,6 +201,7 @@ Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen. Gates prü
 
 ## 18. Review & PR
 - Commits folgen Conventional-Commit-Standards (feat/fix/docs/test/chore).
+- Nutze die strukturierte PR-Vorlage [`PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md); alle Felder sind entsprechend der Deliverables aus `docs/task-template.md` (inkl. DoD/Checkliste) auszufüllen.
 - PR-Beschreibung MUSS enthalten: Was/Warum, Dateiänderungen (Neu/Geändert/Gelöscht), Migrationshinweise, Testnachweise (Logs/Screens), Risiken/Limitierungen, Verweis auf AGENTS.md/Template-Konformität sowie den **Nachweis des ToDo-Updates**.
 - Review achtet auf vollständige Template-Erfüllung und Einhaltung aller Completion Gates.
 
