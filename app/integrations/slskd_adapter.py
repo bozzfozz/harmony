@@ -280,12 +280,42 @@ def _extract_metadata(entry: Mapping[str, Any]) -> Mapping[str, Any]:
     filename = _coerce_str(entry.get("filename"))
     if filename:
         metadata["filename"] = filename
+    identifier = entry.get("id") or entry.get("track_id")
+    if identifier:
+        metadata["id"] = identifier
     score = _coerce_float(entry.get("score"))
     if score is not None:
         metadata["score"] = score
     bitrate_mode = _coerce_str(entry.get("bitrate_mode") or entry.get("encoding"))
     if bitrate_mode:
         metadata["bitrate_mode"] = bitrate_mode
+    year = _coerce_int(entry.get("year"))
+    if year is not None:
+        metadata["year"] = year
+    genres_field = entry.get("genres")
+    if isinstance(genres_field, (list, tuple)):
+        metadata["genres"] = [str(item) for item in genres_field if item]
+    genre = _coerce_str(entry.get("genre"))
+    if genre:
+        metadata["genre"] = genre
+    album = _coerce_str(entry.get("album"))
+    if album:
+        metadata["album"] = album
+    artists = entry.get("artists")
+    if isinstance(artists, list):
+        names: list[str] = []
+        for item in artists:
+            if isinstance(item, Mapping):
+                name = _coerce_str(item.get("name"))
+            else:
+                name = _coerce_str(item)
+            if name:
+                names.append(name)
+        if names:
+            metadata["artists"] = names
+    artist = _coerce_str(entry.get("artist"))
+    if artist:
+        metadata.setdefault("artists", []).append(artist)
     if not metadata:
         return _EMPTY_METADATA
     return MappingProxyType(metadata)

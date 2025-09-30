@@ -6,7 +6,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from app.integrations.contracts import (
     ProviderDependencyError,
@@ -101,6 +101,52 @@ class ProviderGatewayInternalError(ProviderGatewayError):
     pass
 
 
+@dataclass(slots=True, frozen=True)
+class ProviderGatewaySearchResult:
+    """Container describing the outcome of a single provider call."""
+
+    provider: str
+    tracks: tuple[ProviderTrack, ...]
+    error: ProviderGatewayError | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
+@dataclass(slots=True, frozen=True)
+class ProviderGatewaySearchResponse:
+    """Aggregated response for multi-provider search operations."""
+
+    results: tuple[ProviderGatewaySearchResult, ...]
+
+    @property
+    def tracks(self) -> tuple[ProviderTrack, ...]:
+        aggregated: list[ProviderTrack] = []
+        for result in self.results:
+            aggregated.extend(result.tracks)
+        return tuple(aggregated)
+
+    @property
+    def errors(self) -> Mapping[str, ProviderGatewayError]:
+        failures: dict[str, ProviderGatewayError] = {}
+        for result in self.results:
+            if result.error is not None:
+                failures[result.provider] = result.error
+        return failures
+
+    @property
+    def status(self) -> str:
+        if not self.results:
+            return "ok"
+        successes = sum(1 for result in self.results if result.ok)
+        if successes == len(self.results):
+            return "ok"
+        if successes == 0:
+            return "failed"
+        return "partial"
+
+
 class ProviderGateway:
     """Coordinates provider calls and normalises failures."""
 
@@ -115,24 +161,50 @@ class ProviderGateway:
         self._semaphore = asyncio.Semaphore(config.max_concurrency)
 
     async def search_tracks(self, provider: str, query: SearchQuery) -> list[ProviderTrack]:
+        response = await self._search_provider(provider, query)
+        if response.error is not None:
+            raise response.error
+        return list(response.tracks)
+
+    async def search_many(
+        self, providers: Sequence[str], query: SearchQuery
+    ) -> ProviderGatewaySearchResponse:
+        if not providers:
+            return ProviderGatewaySearchResponse(results=())
+
+        async def _run(name: str) -> ProviderGatewaySearchResult:
+            return await self._search_provider(name, query)
+
+        tasks = [asyncio.create_task(_run(provider)) for provider in providers]
+        results = await asyncio.gather(*tasks)
+        return ProviderGatewaySearchResponse(results=tuple(results))
+
+    async def _search_provider(
+        self, provider: str, query: SearchQuery
+    ) -> ProviderGatewaySearchResult:
         normalized = provider.lower()
         if normalized not in self._providers:
             raise KeyError(f"Provider {provider!r} is not registered")
         track_provider = self._providers[normalized]
         policy = self._config.policy_for(normalized)
         attempts = max(1, policy.retry_max + 1)
+        error: ProviderGatewayError | None = None
 
         for attempt in range(1, attempts + 1):
             started = perf_counter()
-            error: ProviderGatewayError | None = None
+            error = None
             try:
                 async with self._semaphore:
                     result = await asyncio.wait_for(
                         track_provider.search_tracks(query),
                         timeout=policy.timeout_ms / 1000,
                     )
+                tracks = tuple(result)
                 self._log(track_provider.name, "success", attempt, attempts, started)
-                return result
+                return ProviderGatewaySearchResult(
+                    provider=track_provider.name,
+                    tracks=tracks,
+                )
             except asyncio.TimeoutError as exc:
                 error = ProviderGatewayTimeoutError(track_provider.name, policy.timeout_ms, cause=exc)
             except ProviderTimeoutError as exc:
@@ -178,13 +250,18 @@ class ProviderGateway:
 
             should_retry = self._should_retry(error) and attempt < attempts
             if not should_retry:
-                raise error
+                break
 
             backoff_seconds = self._backoff_seconds(policy, attempt)
             if backoff_seconds > 0:
                 await asyncio.sleep(backoff_seconds)
 
-        raise ProviderGatewayInternalError(track_provider.name, "exhausted retries")
+        assert error is not None
+        return ProviderGatewaySearchResult(
+            provider=track_provider.name,
+            tracks=tuple(),
+            error=error,
+        )
 
     @staticmethod
     def _should_retry(error: ProviderGatewayError) -> bool:
@@ -253,6 +330,8 @@ __all__ = [
     "ProviderGatewayRateLimitedError",
     "ProviderGatewayTimeoutError",
     "ProviderGatewayValidationError",
+    "ProviderGatewaySearchResponse",
+    "ProviderGatewaySearchResult",
     "ProviderRetryPolicy",
 ]
 
