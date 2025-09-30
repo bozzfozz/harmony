@@ -268,6 +268,12 @@ Harmony folgt einer klar getrennten Schichten-Architektur:
 
 Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architecture.md`](docs/architecture.md).
 
+### Router-Registry
+
+- Alle produktiven Router werden zentral in `app/api/router_registry.py` registriert. Jedes Tupel enthält den Prefix (leer bedeutet „Router nutzt eigenen Prefix“), das Router-Objekt und optionale zusätzliche Tags.
+- Neue Router fügst du hinzu, indem du sie in der Registry importierst, einen Eintrag in `get_domain_routers()` ergänzt und bei Bedarf `compose_prefix()` zum Zusammenbauen komplexerer Prefixe verwendest.
+- Ergänze beim Hinzufügen eines Routers stets die Tests in `tests/routers/test_router_registry.py`, damit die Konfiguration stabil bleibt und OpenAPI unverändert bleibt.
+
 ## Setup-Anleitung
 
 ### Voraussetzungen
