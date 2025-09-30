@@ -91,7 +91,7 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enqueue_backfill_job_initialises_worker_once() -> None:
+async def test_enqueue_backfill_initialises_worker_once() -> None:
     class StubBackfillService:
         def __init__(self) -> None:
             self.created_jobs: list[Any] = []
@@ -134,12 +134,12 @@ async def test_enqueue_backfill_job_initialises_worker_once() -> None:
     )
 
     job = service.create_backfill_job(max_items=50, expand_playlists=True)
-    await service.enqueue_backfill_job(job)
+    await service.enqueue_backfill(job)
     assert created_worker is not None
     assert created_worker.started == 1
     assert created_worker.enqueued == [job]
 
     # second enqueue should reuse running worker
-    await service.enqueue_backfill_job(job)
+    await service.enqueue_backfill(job)
     assert created_worker.started == 1
     assert created_worker.enqueued == [job, job]

@@ -301,7 +301,7 @@ class SpotifyDomainService:
         service = self.ensure_backfill_service()
         return service.get_status(job_id)
 
-    async def enqueue_backfill_job(self, job: BackfillJobSpec) -> None:
+    async def enqueue_backfill(self, job: BackfillJobSpec) -> None:
         worker = await self.ensure_backfill_worker()
         await worker.enqueue(job)
 

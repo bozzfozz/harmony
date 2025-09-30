@@ -1,10 +1,8 @@
-import asyncio
-import time
 from datetime import datetime
 
 from app.db import session_scope
 from app.models import IngestItem, IngestJob
-from app.services.backfill_service import BackfillJobStatus, BackfillService
+from app.services.backfill_service import BackfillService
 
 
 def _create_job(job_id: str) -> None:
@@ -19,23 +17,8 @@ def _create_job(job_id: str) -> None:
         )
 
 
-def _wait_for_job(
-    client, worker, service: BackfillService, job_id: str, timeout: float = 2.0
-) -> BackfillJobStatus:
-    deadline = time.monotonic() + timeout
-    last_status: BackfillJobStatus | None = None
-    while time.monotonic() < deadline:
-        client._loop.run_until_complete(asyncio.sleep(0.01))
-        status = service.get_status(job_id)
-        if status is not None:
-            last_status = status
-            if status.state not in {"queued", "running"}:
-                return status
-    raise AssertionError(f"Backfill job {job_id} did not complete; last status={last_status}")
-
-
-def test_backfill_service_enriches_tracks(client, backfill_runtime) -> None:
-    service, worker = backfill_runtime
+def test_backfill_service_enriches_tracks(backfill_service: BackfillService) -> None:
+    service = backfill_service
 
     job_id = "job-service-1"
     _create_job(job_id)
@@ -60,8 +43,9 @@ def test_backfill_service_enriches_tracks(client, backfill_runtime) -> None:
         item_id = item.id
 
     job = service.create_job(max_items=5, expand_playlists=False)
-    client._loop.run_until_complete(worker.enqueue(job))
-    status = _wait_for_job(client, worker, service, job.id)
+    service.run_job(job)
+    status = service.get_status(job.id)
+    assert status is not None
     assert status.state == "completed"
     assert status.matched_items == 1
 
@@ -74,8 +58,8 @@ def test_backfill_service_enriches_tracks(client, backfill_runtime) -> None:
         assert stored.duration_sec == 200
 
 
-def test_backfill_service_expands_playlists(client, backfill_runtime) -> None:
-    service, worker = backfill_runtime
+def test_backfill_service_expands_playlists(backfill_service: BackfillService) -> None:
+    service = backfill_service
 
     job_id = "job-service-2"
     _create_job(job_id)
@@ -101,8 +85,9 @@ def test_backfill_service_expands_playlists(client, backfill_runtime) -> None:
         playlist_item_id = playlist_item.id
 
     job = service.create_job(max_items=1, expand_playlists=True)
-    client._loop.run_until_complete(worker.enqueue(job))
-    status = _wait_for_job(client, worker, service, job.id)
+    service.run_job(job)
+    status = service.get_status(job.id)
+    assert status is not None
     assert status.state == "completed"
 
     with session_scope() as session:

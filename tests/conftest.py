@@ -42,7 +42,7 @@ from app.logging import get_logger
 from app.main import app
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers import BackfillWorker, MatchingWorker, PlaylistSyncWorker, SyncWorker
+from app.workers import MatchingWorker, PlaylistSyncWorker, SyncWorker
 from app.workers.retry_scheduler import RetryScheduler
 from tests.simple_client import SimpleTestClient
 
@@ -906,23 +906,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
 
 
 @pytest.fixture
-def backfill_runtime(client: SimpleTestClient):
+def backfill_service(client: SimpleTestClient) -> BackfillService:
     from app import dependencies as deps
 
     config = deps.get_app_config()
     spotify_client = client.app.state.spotify_stub
     service = BackfillService(config.spotify, spotify_client)
-    worker = BackfillWorker(service)
-    client.app.state.backfill_service = service
-    client.app.state.backfill_worker = worker
-    client._loop.run_until_complete(worker.start())
-    try:
-        yield service, worker
-        client._loop.run_until_complete(worker.wait_until_idle())
-    finally:
-        client._loop.run_until_complete(worker.stop())
-        client.app.state.backfill_worker = None
-        client.app.state.backfill_service = None
+    return service
 
 
 @pytest.fixture

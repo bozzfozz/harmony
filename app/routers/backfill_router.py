@@ -9,6 +9,10 @@ from pydantic import BaseModel, Field
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
+from app.orchestrator.handlers import (
+    enqueue_spotify_backfill,
+    get_spotify_backfill_status,
+)
 from app.services.backfill_service import BackfillJobStatus
 from app.services.spotify_domain_service import SpotifyDomainService
 
@@ -71,7 +75,8 @@ async def run_backfill(
         )
 
     try:
-        job = service.create_backfill_job(
+        job_id = await enqueue_spotify_backfill(
+            service,
             max_items=payload.max_items,
             expand_playlists=payload.expand_playlists,
         )
@@ -81,8 +86,7 @@ async def run_backfill(
             detail="Spotify credentials are required for backfill",
         ) from None
 
-    await service.enqueue_backfill_job(job)
-    response = BackfillRunResponse(ok=True, job_id=job.id)
+    response = BackfillRunResponse(ok=True, job_id=job_id)
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=response.model_dump())
 
 
@@ -103,7 +107,7 @@ async def get_backfill_job(
     job_id: str,
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> BackfillJobResponse:
-    status_payload = service.get_backfill_status(job_id)
+    status_payload = get_spotify_backfill_status(service, job_id)
     if status_payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
