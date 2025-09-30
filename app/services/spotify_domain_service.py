@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Callable, Iterable, Literal, Optional, Sequence, cast
 
 from sqlalchemy.orm import Session
@@ -10,21 +11,22 @@ from sqlalchemy.orm import Session
 from app.config import AppConfig, SpotifyConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import Playlist
 from app.services.backfill_service import (
     BackfillJobSpec,
     BackfillJobStatus,
     BackfillService,
 )
-from app.services.free_ingest_service import (
-    FreeIngestService,
-    IngestSubmission,
-    JobStatus,
-)
+from app.services.free_ingest_service import FreeIngestService, IngestSubmission, JobStatus
 from app.utils.settings_store import write_setting
 from app.dependencies import get_app_config
 from app.workers.backfill_worker import BackfillWorker
 from app.workers.sync_worker import SyncWorker
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -254,16 +256,65 @@ class SpotifyDomainService:
         tracks: Sequence[str] | None = None,
         batch_hint: Optional[int] = None,
     ) -> IngestSubmission:
+        return await self._submit_free_import(
+            playlist_links=playlist_links,
+            tracks=tracks,
+            batch_hint=batch_hint,
+        )
+
+    async def free_import(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: Optional[int] = None,
+    ) -> IngestSubmission:
+        """Submit a FREE import request via the orchestrator."""
+
+        from app.orchestrator import handlers as orchestrator_handlers
+
+        started = perf_counter()
+        result = await orchestrator_handlers.enqueue_spotify_free_import(
+            self,
+            playlist_links=playlist_links,
+            tracks=tracks,
+            batch_hint=batch_hint,
+        )
+
+        duration_ms = round((perf_counter() - started) * 1_000, 3)
+        status_value = "ok" if result.ok else "error"
+        log_event(
+            logger,
+            "spotify.free_import",
+            component="service.spotify",
+            status=status_value,
+            duration_ms=duration_ms,
+            job_id=result.job_id,
+            accepted_playlists=result.accepted.playlists,
+            accepted_tracks=result.accepted.tracks,
+            skipped_playlists=result.skipped.playlists,
+            skipped_tracks=result.skipped.tracks,
+            error=result.error,
+        )
+        return result
+
+    def get_free_ingest_job(self, job_id: str) -> Optional[JobStatus]:
+        service = self._build_free_ingest_service()
+        return service.get_job_status(job_id)
+
+    async def _submit_free_import(
+        self,
+        *,
+        playlist_links: Sequence[str] | None,
+        tracks: Sequence[str] | None,
+        batch_hint: Optional[int],
+    ) -> IngestSubmission:
         service = self._build_free_ingest_service()
         return await service.submit(
             playlist_links=playlist_links,
             tracks=tracks,
             batch_hint=batch_hint,
         )
-
-    def get_free_ingest_job(self, job_id: str) -> Optional[JobStatus]:
-        service = self._build_free_ingest_service()
-        return service.get_job_status(job_id)
 
     def parse_tracks_from_file(self, content: bytes, filename: str) -> Sequence[str]:
         return FreeIngestService.parse_tracks_from_file(content, filename)
