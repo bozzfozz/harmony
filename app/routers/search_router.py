@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Dict, Iterable, Optional, Sequence, cast
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.matching_engine import MusicMatchingEngine
@@ -21,6 +21,7 @@ from app.dependencies import (
 )
 from app.errors import DependencyError
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -76,6 +77,7 @@ router = APIRouter(tags=["Search"])
 @router.post("/search", response_model=SearchResponse, status_code=status.HTTP_200_OK)
 async def smart_search(
     request: SearchRequest,
+    raw_request: Request,
     spotify_client: SpotifyClient = Depends(get_spotify_client),
     soulseek_client: SoulseekClient = Depends(get_soulseek_client),
     matching_engine: MusicMatchingEngine = Depends(get_matching_engine),
@@ -141,13 +143,19 @@ async def smart_search(
     page_items = capped_items[offset : offset + limit]
 
     duration_ms = (time.perf_counter() - started) * 1000
-    logger.info(
-        "Smart search completed",
-        extra={
-            "event": "search",
-            "query": request.query,
+    status_value = "ok" if not failures else "partial"
+    log_event(
+        logger,
+        "api.request",
+        component="router.search",
+        status=status_value,
+        duration_ms=round(duration_ms, 2),
+        entity_id=getattr(raw_request.state, "request_id", None),
+        path=raw_request.url.path,
+        method=raw_request.method,
+        query=request.query,
+        meta={
             "sources": resolved_sources,
-            "duration_ms": round(duration_ms, 2),
             "total_before_paging": len(scored_items),
             "partial_failures": sorted(failures.keys()),
         },

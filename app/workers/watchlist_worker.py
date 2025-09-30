@@ -14,6 +14,7 @@ from app.config import WatchlistWorkerConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
@@ -90,15 +91,18 @@ class WatchlistWorker:
         self._stop_event = asyncio.Event()
         self._running = False
         self._rng = random.Random()
-        logger.info(
-            "event=watchlist.defaults max_concurrency=%d max_per_tick=%d retry_max=%d retry_budget=%d cooldown_minutes=%d spotify_timeout_ms=%d slskd_timeout_ms=%d",
-            self._max_concurrency,
-            self._config.max_per_tick,
-            self._max_attempts,
-            self._retry_budget,
-            self._cooldown_minutes,
-            self._config.spotify_timeout_ms,
-            self._config.slskd_search_timeout_ms,
+        log_event(
+            logger,
+            "worker.config",
+            component="worker.watchlist",
+            status="ok",
+            max_concurrency=self._max_concurrency,
+            max_per_tick=self._config.max_per_tick,
+            retry_max=self._max_attempts,
+            retry_budget=self._retry_budget,
+            cooldown_minutes=self._cooldown_minutes,
+            spotify_timeout_ms=self._config.spotify_timeout_ms,
+            slskd_timeout_ms=self._config.slskd_search_timeout_ms,
         )
 
     async def start(self) -> None:
@@ -139,12 +143,15 @@ class WatchlistWorker:
         return await self._process_watchlist()
 
     async def _run(self) -> None:
-        logger.info(
-            "event=watchlist.start interval=%.0fs concurrency=%d max_per_tick=%d db_mode=%s",
-            self._interval,
-            self._max_concurrency,
-            self._config.max_per_tick,
-            self._db_mode,
+        log_event(
+            logger,
+            "worker.start",
+            component="worker.watchlist",
+            status="running",
+            interval_s=int(self._interval),
+            concurrency=self._max_concurrency,
+            max_per_tick=self._config.max_per_tick,
+            db_mode=self._db_mode,
         )
         try:
             while self._running and not self._stop_event.is_set():
@@ -163,7 +170,12 @@ class WatchlistWorker:
             if running:
                 mark_worker_status("watchlist", WORKER_STOPPED)
                 record_worker_stopped("watchlist")
-            logger.info("WatchlistWorker stopped")
+            log_event(
+                logger,
+                "worker.stop",
+                component="worker.watchlist",
+                status="stopped",
+            )
 
     async def _process_watchlist(self) -> list[WatchlistTaskOutcome]:
         record_worker_heartbeat("watchlist")
@@ -176,7 +188,17 @@ class WatchlistWorker:
             cutoff=now,
         )
         if not artists:
-            logger.debug("event=watchlist.tick status=idle count=0")
+            duration_ms = int((time.monotonic() - start) * 1000)
+            log_event(
+                logger,
+                "worker.tick",
+                component="worker.watchlist",
+                status="idle",
+                duration_ms=duration_ms,
+                jobs_total=0,
+                jobs_success=0,
+                jobs_failed=0,
+            )
             return []
 
         semaphore = self._semaphore
@@ -208,7 +230,18 @@ class WatchlistWorker:
             tasks.append(asyncio.create_task(self._process_artist(artist, semaphore, deadline)))
 
         if not tasks and not skipped_outcomes:
-            logger.debug("event=watchlist.tick status=skipped reason=no_budget")
+            duration_ms = int((time.monotonic() - start) * 1000)
+            log_event(
+                logger,
+                "worker.tick",
+                component="worker.watchlist",
+                status="skipped",
+                duration_ms=duration_ms,
+                jobs_total=0,
+                jobs_success=0,
+                jobs_failed=0,
+                meta={"reason": "no_budget"},
+            )
             return []
 
         outcomes: list[WatchlistTaskOutcome] = list(skipped_outcomes)
@@ -248,12 +281,25 @@ class WatchlistWorker:
                     )
 
         duration_ms = int((time.monotonic() - start) * 1000)
-        logger.info(
-            "event=watchlist.tick status=done count=%d duration_ms=%d budget_ms=%d concurrency=%d",
-            len(outcomes),
-            duration_ms,
-            self._config.tick_budget_ms,
-            self._max_concurrency,
+        jobs_total = len(outcomes)
+        jobs_success = sum(1 for outcome in outcomes if outcome.status in {"ok", "noop"})
+        jobs_failed = jobs_total - jobs_success
+        status_value = "ok" if jobs_failed == 0 else "partial"
+        log_event(
+            logger,
+            "worker.tick",
+            component="worker.watchlist",
+            status=status_value,
+            duration_ms=duration_ms,
+            jobs_total=jobs_total,
+            jobs_success=jobs_success,
+            jobs_failed=jobs_failed,
+            meta={
+                "budget_ms": self._config.tick_budget_ms,
+                "concurrency": self._max_concurrency,
+                "scheduled": len(scheduled_artists),
+                "skipped": len(skipped_outcomes),
+            },
         )
         return outcomes
 
@@ -406,24 +452,20 @@ class WatchlistWorker:
                         checked_at=datetime.utcnow(),
                     )
                     if had_cooldown:
-                        logger.info(
-                            "event=watchlist.cooldown.clear artist_id=%s",
-                            artist.spotify_artist_id,
+                        log_event(
+                            logger,
+                            "worker.cooldown.cleared",
+                            component="worker.watchlist",
+                            status="ok",
+                            entity_id=artist.spotify_artist_id,
                         )
                     break
 
         duration_ms = int((time.monotonic() - start) * 1000)
         retries = max(attempts - 1, 0)
+        meta: dict[str, Any] | None = None
         if status in {"ok", "noop"}:
-            logger.info(
-                "event=watchlist.process artist_id=%s status=%s queued=%d attempts=%d retries=%d duration_ms=%d",
-                artist.spotify_artist_id,
-                status,
-                queued,
-                attempts,
-                retries,
-                duration_ms,
-            )
+            pass
         else:
             retry_at = None
             mark_failed_kwargs: dict[str, Any] = {"reason": status}
@@ -439,15 +481,35 @@ class WatchlistWorker:
             if retry_at is not None:
                 mark_failed_kwargs["retry_at"] = retry_at
             await self._db_call("mark_failed", artist.id, **mark_failed_kwargs)
-            logger.warning(
-                "event=watchlist.process artist_id=%s status=%s attempts=%d retries=%d duration_ms=%d reason=%s",
-                artist.spotify_artist_id,
-                status,
-                attempts,
-                retries,
-                duration_ms,
-                reason,
-            )
+            if status not in {"ok", "noop"}:
+                logger.warning(
+                    "Watchlist job %s finished with status %s (reason=%s)",
+                    artist.spotify_artist_id,
+                    status,
+                    reason,
+                )
+            if reason or cooldown_until is not None or backoff_ms > 0:
+                meta = {
+                    "reason": reason,
+                    "cooldown_until": (
+                        cooldown_until.isoformat() if cooldown_until is not None else None
+                    ),
+                    "backoff_ms": backoff_ms or None,
+                }
+                meta = {k: v for k, v in meta.items() if v is not None}
+
+        event_payload: dict[str, Any] = {
+            "component": "worker.watchlist",
+            "entity_id": artist.spotify_artist_id,
+            "status": status,
+            "queued": queued,
+            "attempts": attempts,
+            "retries": retries,
+            "duration_ms": duration_ms,
+        }
+        if meta:
+            event_payload["meta"] = meta
+        log_event(logger, "worker.job", **event_payload)
 
         return WatchlistTaskOutcome(
             artist=artist,
