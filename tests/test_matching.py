@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
+from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.models import Match
 from tests.simple_client import SimpleTestClient
 
@@ -11,8 +12,12 @@ def matching_engine() -> MusicMatchingEngine:
 
 
 def test_slskd_confidence_scoring(matching_engine: MusicMatchingEngine) -> None:
-    spotify_track = {"name": "Song", "artist": "Artist", "duration_ms": 200000}
-    candidate = {"filename": "Artist - Song", "username": "Artist", "bitrate": 320}
+    spotify_track = normalize_spotify_track(
+        {"name": "Song", "artists": [{"name": "Artist"}], "duration_ms": 200000}
+    )
+    candidate = normalize_slskd_candidate(
+        {"filename": "Artist - Song", "username": "Artist", "bitrate": 320}
+    )
 
     score = matching_engine.calculate_slskd_match_confidence(spotify_track, candidate)
 

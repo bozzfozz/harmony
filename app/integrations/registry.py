@@ -10,8 +10,6 @@ from typing import Dict, Iterable, Mapping
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
 from app.integrations.contracts import (
-    ProviderAlbum,
-    ProviderArtist,
     ProviderDependencyError,
     ProviderInternalError,
     ProviderNotFoundError,
@@ -20,6 +18,10 @@ from app.integrations.contracts import (
     ProviderValidationError,
     SearchQuery,
     TrackProvider,
+)
+from app.integrations.normalizers import (
+    normalize_slskd_track,
+    normalize_spotify_track,
 )
 from app.integrations.provider_gateway import ProviderGatewayConfig, ProviderRetryPolicy
 from app.integrations.plex_adapter import PlexAdapter
@@ -205,18 +207,7 @@ class _SlskdTrackProvider(TrackProvider):
         except Exception as exc:  # pragma: no cover - defensive guard
             raise ProviderInternalError(self.name, "slskd unexpected error", cause=exc) from exc
 
-        tracks: list[ProviderTrack] = []
-        for candidate in candidates:
-            artists = (ProviderArtist(name=candidate.artist),) if candidate.artist else ()
-            tracks.append(
-                ProviderTrack(
-                    name=candidate.title,
-                    provider=self.name,
-                    artists=artists,
-                    candidates=(candidate,),
-                )
-            )
-        return tracks
+        return [normalize_slskd_track(candidate, provider=self.name) for candidate in candidates]
 
 
 @dataclass(slots=True)
@@ -234,75 +225,4 @@ class _SpotifyTrackProvider(TrackProvider):
             return list(self._adapter.search_tracks(query.text, limit=limit))
 
         tracks = await asyncio.to_thread(_search)
-        results: list[ProviderTrack] = []
-        for track in tracks:
-            artist_entries: list[ProviderArtist] = []
-            aggregated_genres: set[str] = set()
-            for artist in getattr(track, "artists", ()):
-                metadata: dict[str, object] = {}
-                artist_id = getattr(artist, "id", None)
-                if getattr(artist, "genres", None):
-                    genres = tuple(str(entry) for entry in artist.genres if entry)
-                    if genres:
-                        metadata["genres"] = genres
-                        aggregated_genres.update(genres)
-                popularity = getattr(artist, "popularity", None)
-                if popularity is not None:
-                    metadata["popularity"] = popularity
-                artist_entries.append(
-                    ProviderArtist(
-                        name=getattr(artist, "name", ""),
-                        id=artist_id,
-                        metadata=metadata,
-                    )
-                )
-            album = None
-            if getattr(track, "album", None) is not None:
-                album_artists: list[ProviderArtist] = []
-                album_metadata: dict[str, object] = {}
-                for artist in track.album.artists:
-                    album_artist_metadata: dict[str, object] = {}
-                    if getattr(artist, "genres", None):
-                        album_artist_metadata["genres"] = tuple(
-                            str(entry) for entry in artist.genres if entry
-                        )
-                    album_artists.append(
-                        ProviderArtist(
-                            name=getattr(artist, "name", ""),
-                            id=getattr(artist, "id", None),
-                            metadata=album_artist_metadata,
-                        )
-                    )
-                if getattr(track.album, "release_year", None) is not None:
-                    album_metadata["release_year"] = track.album.release_year
-                if getattr(track.album, "total_tracks", None) is not None:
-                    album_metadata["total_tracks"] = track.album.total_tracks
-                album = ProviderAlbum(
-                    name=getattr(track.album, "name", ""),
-                    id=getattr(track.album, "id", None),
-                    artists=tuple(album_artists),
-                    metadata=album_metadata,
-                )
-            track_metadata: dict[str, object] = {}
-            track_id = getattr(track, "id", None)
-            if track_id is not None:
-                track_metadata["id"] = track_id
-            if getattr(track, "duration_ms", None) is not None:
-                track_metadata["duration_ms"] = track.duration_ms
-            if getattr(track, "isrc", None):
-                track_metadata["isrc"] = track.isrc
-            if aggregated_genres:
-                track_metadata["genres"] = tuple(aggregated_genres)
-            results.append(
-                ProviderTrack(
-                    name=getattr(track, "name", ""),
-                    provider=self.name,
-                    artists=tuple(artist_entries),
-                    album=album,
-                    duration_ms=getattr(track, "duration_ms", None),
-                    isrc=getattr(track, "isrc", None),
-                    candidates=(),
-                    metadata=track_metadata,
-                )
-            )
-        return results
+        return [normalize_spotify_track(track, provider=self.name) for track in tracks]

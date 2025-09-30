@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional
 
 from app.config import MatchingConfig, load_matching_config
 from app.logging import get_logger
+from app.integrations.base import TrackCandidate
+from app.integrations.contracts import ProviderTrack
 from app.services.library_service import LibraryAlbum, LibraryService, LibraryTrack
 from app.utils.text_normalization import (
     clean_album_title,
@@ -401,24 +403,106 @@ class MusicMatchingEngine:
         return round(min(score, 1.0), 4)
 
     def calculate_slskd_match_confidence(
-        self, spotify_track: Dict[str, str], soulseek_entry: Dict[str, str]
+        self,
+        spotify_track: ProviderTrack | Mapping[str, Any],
+        soulseek_entry: TrackCandidate | Mapping[str, Any],
     ) -> float:
-        track_title = self._normalise(spotify_track.get("name"))
-        candidate_title = self._normalise(soulseek_entry.get("filename"))
+        """Return a confidence score comparing Spotify and Soulseek payloads."""
+
+        def _first_artist_from_mapping(payload: Mapping[str, Any]) -> str:
+            artists_value = payload.get("artists")
+            if isinstance(artists_value, list) and artists_value:
+                first = artists_value[0]
+                if isinstance(first, Mapping):
+                    return str(first.get("name") or first.get("artist") or "")
+                return str(first or "")
+            if isinstance(artists_value, Mapping):
+                return str(artists_value.get("name") or "")
+            return str(payload.get("artist") or "")
+
+        track_name: str
+        track_artist: str
+        if isinstance(spotify_track, ProviderTrack):
+            track_name = spotify_track.name
+            if spotify_track.artists:
+                track_artist = spotify_track.artists[0].name
+            else:
+                track_artist = ""
+                metadata_artists = spotify_track.metadata.get("artists")
+                if isinstance(metadata_artists, (list, tuple)) and metadata_artists:
+                    track_artist = str(metadata_artists[0])
+        elif isinstance(spotify_track, Mapping):
+            track_name = str(spotify_track.get("name") or "")
+            track_artist = _first_artist_from_mapping(spotify_track)
+        else:
+            track_name = str(getattr(spotify_track, "name", "") or "")
+            track_artist = str(getattr(spotify_track, "artist", "") or "")
+
+        if isinstance(soulseek_entry, TrackCandidate):
+            candidate_title_raw = soulseek_entry.metadata.get("filename")
+            if not candidate_title_raw:
+                candidate_title_raw = soulseek_entry.download_uri or soulseek_entry.title
+            candidate_username = soulseek_entry.username or ""
+            candidate_artist = soulseek_entry.artist or ""
+            candidate_bitrate = soulseek_entry.bitrate_kbps or 0
+            candidate_metadata = soulseek_entry.metadata
+        else:
+            candidate_mapping: Mapping[str, Any]
+            if isinstance(soulseek_entry, Mapping):
+                candidate_mapping = soulseek_entry
+            else:
+                candidate_mapping = {}
+            candidate_title_raw = (
+                candidate_mapping.get("filename")
+                or candidate_mapping.get("title")
+                or candidate_mapping.get("name")
+                or getattr(soulseek_entry, "filename", None)
+                or getattr(soulseek_entry, "title", None)
+                or ""
+            )
+            candidate_username = str(
+                candidate_mapping.get("username")
+                or candidate_mapping.get("user")
+                or getattr(soulseek_entry, "username", "")
+            )
+            candidate_artist = str(
+                candidate_mapping.get("artist")
+                or getattr(soulseek_entry, "artist", "")
+            )
+            bitrate_value = (
+                candidate_mapping.get("bitrate")
+                or candidate_mapping.get("bitrate_kbps")
+                or getattr(soulseek_entry, "bitrate_kbps", None)
+            )
+            candidate_bitrate = int(bitrate_value or 0)
+            candidate_metadata = candidate_mapping.get("metadata")
+            if not isinstance(candidate_metadata, Mapping):
+                candidate_metadata = {}
+
+        candidate_title_text = str(candidate_title_raw or "")
+        normalized_track_title = self._normalise(track_name)
+        normalized_candidate_title = self._normalise(candidate_title_text)
         alternate_title = ""
-        if " - " in candidate_title:
-            alternate_title = candidate_title.split(" - ", 1)[1]
+        if " - " in candidate_title_text:
+            alternate_title = candidate_title_text.split(" - ", 1)[1]
+        elif isinstance(candidate_metadata, Mapping):
+            filename = candidate_metadata.get("filename")
+            if filename and " - " in str(filename):
+                alternate_title = str(filename).split(" - ", 1)[1]
         title_score = max(
-            self._ratio(track_title, candidate_title),
-            self._ratio(track_title, alternate_title),
+            self._ratio(normalized_track_title, normalized_candidate_title),
+            self._ratio(normalized_track_title, self._normalise(alternate_title)),
         )
-        artist = (
-            (spotify_track.get("artists") or [{}])[0].get("name")
-            if isinstance(spotify_track.get("artists"), list)
-            else spotify_track.get("artist")
-        )
+
+        candidate_artist_name = candidate_artist
+        if not candidate_artist_name and isinstance(candidate_metadata, Mapping):
+            artists_meta = candidate_metadata.get("artists")
+            if isinstance(artists_meta, list) and artists_meta:
+                candidate_artist_name = str(artists_meta[0])
+
         artist_score = self._ratio(
-            self._normalise(artist), self._normalise(soulseek_entry.get("username"))
+            self._normalise(track_artist),
+            self._normalise(candidate_username or candidate_artist_name),
         )
-        bitrate_score = 1.0 if (soulseek_entry.get("bitrate") or 0) >= 256 else 0.5
+        bitrate_score = 1.0 if candidate_bitrate >= 256 else 0.5
         return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)

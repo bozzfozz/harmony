@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
+from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
 from app.models import Match
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
@@ -209,11 +210,15 @@ class MatchingWorker:
     ) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
         matches: List[Tuple[Dict[str, Any], float]] = []
         rejected = 0
+        spotify_track_dto = normalize_spotify_track(spotify_track)
         for candidate in candidates:
             if not isinstance(candidate, dict):
                 rejected += 1
                 continue
-            score = self._engine.calculate_slskd_match_confidence(spotify_track, candidate)
+            candidate_dto = normalize_slskd_candidate(candidate)
+            score = self._engine.calculate_slskd_match_confidence(
+                spotify_track_dto, candidate_dto
+            )
             if score >= self._confidence_threshold:
                 matches.append((candidate, score))
             else:

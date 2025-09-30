@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db, get_matching_engine
+from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
 from app.models import Download, Match
 from app.schemas import MatchingRequest, MatchingResponse
@@ -92,8 +93,10 @@ def spotify_to_soulseek(
 
     best_candidate: Optional[Dict[str, Any]] = None
     best_score = 0.0
+    spotify_track_dto = normalize_spotify_track(payload.spotify_track)
     for candidate in payload.candidates:
-        score = engine.calculate_slskd_match_confidence(payload.spotify_track, candidate)
+        candidate_dto = normalize_slskd_candidate(candidate)
+        score = engine.calculate_slskd_match_confidence(spotify_track_dto, candidate_dto)
         if score > best_score:
             best_score = score
             best_candidate = candidate

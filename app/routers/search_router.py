@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Request, status
@@ -58,6 +58,7 @@ class Candidate:
     type: ItemTypeLiteral
     id: str
     source: SourceLiteral
+    provider: str
     title: str
     artists: list[str]
     album: Optional[str]
@@ -65,7 +66,11 @@ class Candidate:
     genres: list[str]
     bitrate: Optional[int]
     audio_format: Optional[str]
-    raw: dict[str, Any]
+    provider_track: ProviderTrack
+    track_metadata: Mapping[str, Any]
+    album_metadata: Mapping[str, Any]
+    download: TrackCandidate | None = None
+    candidate_metadata: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def primary_artist(self) -> Optional[str]:
@@ -190,13 +195,6 @@ def _build_candidates_from_track(
             audio_format = _normalise_format(candidate.format)
             title = candidate.title or track.name
             artists = list(track_artists) or ([candidate.artist] if candidate.artist else [])
-            metadata = _candidate_metadata(
-                track=track,
-                track_metadata=track_metadata,
-                album_metadata=album_metadata,
-                candidate=candidate,
-                candidate_metadata=candidate_metadata,
-            )
             identifier = _candidate_identifier(
                 source,
                 track_metadata,
@@ -209,6 +207,7 @@ def _build_candidates_from_track(
                     type="track",
                     id=identifier,
                     source=source,
+                    provider=track.provider,
                     title=title,
                     artists=artists,
                     album=album_name,
@@ -216,21 +215,21 @@ def _build_candidates_from_track(
                     genres=genres or base_genres,
                     bitrate=bitrate,
                     audio_format=audio_format,
-                    raw=metadata,
+                    provider_track=track,
+                    track_metadata=track_metadata,
+                    album_metadata=album_metadata,
+                    download=candidate,
+                    candidate_metadata=candidate_metadata,
                 )
             )
     else:
-        metadata = _candidate_metadata(
-            track=track,
-            track_metadata=track_metadata,
-            album_metadata=album_metadata,
-        )
         identifier = _candidate_identifier(source, track_metadata, None, None, track.name)
         results.append(
             Candidate(
                 type="track",
                 id=identifier,
                 source=source,
+                provider=track.provider,
                 title=track.name,
                 artists=track_artists,
                 album=album_name,
@@ -238,7 +237,11 @@ def _build_candidates_from_track(
                 genres=base_genres,
                 bitrate=None,
                 audio_format=None,
-                raw=metadata,
+                provider_track=track,
+                track_metadata=track_metadata,
+                album_metadata=album_metadata,
+                download=None,
+                candidate_metadata={},
             )
         )
     return results
@@ -250,42 +253,35 @@ def _mapping_to_dict(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     return {str(key): value for key, value in payload.items()}
 
 
-def _candidate_metadata(
-    *,
-    track: ProviderTrack,
-    track_metadata: Mapping[str, Any],
-    album_metadata: Mapping[str, Any],
-    candidate: TrackCandidate | None = None,
-    candidate_metadata: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+def _candidate_metadata(candidate: Candidate) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "provider": track.provider,
+        "provider": candidate.provider,
         "track": {
-            "name": track.name,
-            "duration_ms": track.duration_ms,
-            "isrc": track.isrc,
-            "metadata": dict(track_metadata),
+            "name": candidate.provider_track.name,
+            "duration_ms": candidate.provider_track.duration_ms,
+            "isrc": candidate.provider_track.isrc,
+            "metadata": dict(candidate.track_metadata),
         },
     }
-    if track.album is not None:
+    if candidate.provider_track.album is not None:
         payload["album"] = {
-            "name": track.album.name,
-            "id": track.album.id,
-            "metadata": dict(album_metadata),
+            "name": candidate.provider_track.album.name,
+            "id": candidate.provider_track.album.id,
+            "metadata": dict(candidate.album_metadata),
         }
-    if candidate is not None:
+    if candidate.download is not None:
         payload["candidate"] = {
-            "title": candidate.title,
-            "artist": candidate.artist,
-            "format": candidate.format,
-            "bitrate_kbps": candidate.bitrate_kbps,
-            "size_bytes": candidate.size_bytes,
-            "seeders": candidate.seeders,
-            "username": candidate.username,
-            "availability": candidate.availability,
-            "download_uri": candidate.download_uri,
-            "source": candidate.source,
-            "metadata": dict(candidate_metadata or {}),
+            "title": candidate.download.title,
+            "artist": candidate.download.artist,
+            "format": candidate.download.format,
+            "bitrate_kbps": candidate.download.bitrate_kbps,
+            "size_bytes": candidate.download.size_bytes,
+            "seeders": candidate.download.seeders,
+            "username": candidate.download.username,
+            "availability": candidate.download.availability,
+            "download_uri": candidate.download.download_uri,
+            "source": candidate.download.source,
+            "metadata": dict(candidate.candidate_metadata),
         }
     return payload
 
@@ -407,9 +403,9 @@ def _score_and_sort(
             + year_distance_bonus(candidate.year, request.year_from, request.year_to)
             + (0.1 if request.type != "mixed" and candidate.type == request.type else 0.0)
         )
-        metadata: Dict[str, Any] = {"raw": candidate.raw}
+        metadata = _candidate_metadata(candidate)
         if candidate.artists:
-            metadata["artists"] = candidate.artists
+            metadata.setdefault("artists", candidate.artists)
         item = SearchItem(
             type=candidate.type,
             id=candidate.id,
