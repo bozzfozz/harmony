@@ -145,7 +145,7 @@ async def submit_free_ingest(
         raise ValidationAppError("playlist_links or tracks required")
 
     try:
-        result = await service.submit_free_ingest(
+        result = await service.free_import(
             playlist_links=payload.playlist_links,
             tracks=payload.tracks,
             batch_hint=payload.batch_hint,
@@ -185,7 +185,7 @@ async def upload_free_ingest(
     if not tracks:
         raise ValidationAppError("no tracks found in file")
 
-    result = await service.submit_free_ingest(tracks=tracks)
+    result = await service.free_import(tracks=tracks)
     response = _build_submission_response(result)
     status_code = _submission_status_code(result)
     return JSONResponse(status_code=status_code, content=response.model_dump())

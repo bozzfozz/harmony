@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import load_config
+from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
 from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
 
 
@@ -88,6 +89,57 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
     assert result == "submission"
     assert created["worker"] is None
     submit_mock.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_free_import_uses_orchestrator_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    submission = IngestSubmission(
+        ok=True,
+        job_id="job-123",
+        accepted=IngestAccepted(playlists=1, tracks=2, batches=1),
+        skipped=IngestSkipped(playlists=0, tracks=0, reason=None),
+        error=None,
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_enqueue(service: SpotifyDomainService, **kwargs: Any) -> IngestSubmission:
+        captured.update(kwargs)
+        return submission
+
+    events: list[dict[str, Any]] = []
+
+    def fake_log_event(logger: Any, event: str, /, **fields: Any) -> None:
+        events.append({"event": event, **fields})
+
+    monkeypatch.setattr(
+        "app.orchestrator.handlers.enqueue_spotify_free_import",
+        fake_enqueue,
+    )
+    monkeypatch.setattr("app.services.spotify_domain_service.log_event", fake_log_event)
+
+    service = _make_service()
+
+    result = await service.free_import(
+        playlist_links=["https://open.spotify.com/playlist/abc"],
+        tracks=["Artist - Title"],
+        batch_hint=10,
+    )
+
+    assert result == submission
+    assert captured == {
+        "playlist_links": ["https://open.spotify.com/playlist/abc"],
+        "tracks": ["Artist - Title"],
+        "batch_hint": 10,
+    }
+    matching_events = [entry for entry in events if entry.get("event") == "spotify.free_import"]
+    assert matching_events, "expected spotify.free_import log event"
+    logged = matching_events[0]
+    assert logged["component"] == "service.spotify"
+    assert logged["status"] == "ok"
+    assert logged["job_id"] == submission.job_id
+    assert logged["accepted_tracks"] == submission.accepted.tracks
+    assert logged["skipped_tracks"] == submission.skipped.tracks
+    assert "duration_ms" in logged
 
 
 @pytest.mark.asyncio
