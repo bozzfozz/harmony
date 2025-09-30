@@ -37,6 +37,7 @@ from app.dependencies import (
 )
 from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
+from app.logging_events import log_event
 from app.errors import (
     AppError,
     ErrorCode,
@@ -227,12 +228,59 @@ def _resolve_watchlist_interval(raw_value: str | None) -> float:
         return default
 
 
+def _resolve_visibility_timeout(raw_value: str | None) -> int:
+    resolved = _env_as_int(raw_value, default=60)
+    return max(5, resolved)
+
+
 def _configure_application(config: AppConfig) -> None:
     configure_logging(config.logging.level)
     init_db()
     ensure_default_settings(DEFAULT_SETTINGS)
     logger.info("Database initialised")
     activity_manager.refresh_cache()
+
+
+def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
+    watchlist_config = config.watchlist
+    interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
+    visibility_timeout = _resolve_visibility_timeout(os.getenv("WORKER_VISIBILITY_TIMEOUT_S"))
+
+    meta = {
+        "watchlist": {
+            "interval_s": interval_seconds,
+            "concurrency": watchlist_config.max_concurrency,
+            "max_per_tick": watchlist_config.max_per_tick,
+            "retry_budget_per_artist": watchlist_config.retry_budget_per_artist,
+            "backoff_base_ms": watchlist_config.backoff_base_ms,
+            "jitter_pct": watchlist_config.jitter_pct,
+        },
+        "queue": {
+            "visibility_timeout_s": visibility_timeout,
+        },
+        "providers": {
+            "max_concurrency": config.integrations.max_concurrency,
+            "slskd": {
+                "timeout_ms": config.soulseek.timeout_ms,
+                "retry_max": config.soulseek.retry_max,
+                "retry_backoff_base_ms": config.soulseek.retry_backoff_base_ms,
+                "jitter_pct": config.soulseek.retry_jitter_pct,
+            },
+        },
+        "features": {
+            "require_auth": config.security.require_auth,
+            "rate_limiting": config.security.rate_limiting_enabled,
+            "workers_disabled": not workers_enabled,
+        },
+    }
+
+    log_event(
+        logger,
+        "worker.config",
+        component="bootstrap",
+        status="ok",
+        meta=meta,
+    )
 
 
 async def _start_background_workers(
@@ -359,6 +407,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _apply_security_dependencies(app, config.security)
 
+    workers_enabled = _should_start_workers()
+    _emit_worker_config_event(config, workers_enabled=workers_enabled)
+
     feature_flags = config.features
     app.state.feature_flags = feature_flags
     app.state.api_base_path = config.api_base_path
@@ -370,7 +421,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     worker_status: dict[str, bool] = {}
 
-    if _should_start_workers():
+    if workers_enabled:
         worker_status = await _start_background_workers(
             app,
             config,
