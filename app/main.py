@@ -66,6 +66,7 @@ from app.services.backfill_service import BackfillService
 from app.services.health import HealthService
 from app.services.secret_validation import SecretValidationService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
+from app.middleware.request_id import RequestIDMiddleware
 from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
@@ -457,6 +458,8 @@ app.state.health_service = HealthService(
 app.state.secret_validation_service = SecretValidationService()
 
 _initial_security = _config_snapshot.security
+
+app.add_middleware(RequestIDMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

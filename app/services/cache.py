@@ -12,6 +12,7 @@ from typing import Callable, Iterable, Mapping
 from urllib.parse import parse_qsl
 
 from app.logging import get_logger
+from app.logging_events import log_event
 
 logger = get_logger(__name__)
 
@@ -71,22 +72,36 @@ class ResponseCache:
         async with self._lock:
             entry = self._cache.get(key)
             if entry is None:
-                logger.info("Cache miss", extra={"event": "cache.miss", "key": key})
+                log_event(
+                    logger,
+                    "cache.miss",
+                    component="cache",
+                    status="miss",
+                    key_hash=key,
+                )
                 return None
             now = self._now()
             if entry.is_expired(now):
                 self._cache.pop(key, None)
-                logger.info(
-                    "Cache expired",
-                    extra={
-                        "event": "cache.expired",
-                        "key": key,
-                        "age_s": round(now - entry.created_at, 3),
-                    },
+                log_event(
+                    logger,
+                    "cache.expired",
+                    component="cache",
+                    status="expired",
+                    key_hash=key,
+                    path=entry.path_template,
+                    age_s=round(now - entry.created_at, 3),
                 )
                 return None
             self._cache.move_to_end(key)
-            logger.info("Cache hit", extra={"event": "cache.hit", "key": key})
+            log_event(
+                logger,
+                "cache.hit",
+                component="cache",
+                status="hit",
+                key_hash=key,
+                path=entry.path_template,
+            )
             return entry
 
     async def set(self, key: str, entry: CacheEntry, *, ttl: float | None = None) -> None:
@@ -101,21 +116,27 @@ class ResponseCache:
                 self._cache.pop(key)
             self._cache[key] = entry
             self._enforce_limit()
-        logger.info(
-            "Cache store",
-            extra={
-                "event": "cache.store",
-                "key": key,
-                "ttl_s": ttl_value,
-                "path": entry.path_template,
-            },
+        log_event(
+            logger,
+            "cache.store",
+            component="cache",
+            status="stored",
+            key_hash=key,
+            ttl_s=ttl_value,
+            path=entry.path_template,
         )
 
     async def invalidate(self, key: str) -> None:
         async with self._lock:
             if key in self._cache:
                 self._cache.pop(key, None)
-                logger.info("Cache invalidate", extra={"event": "cache.invalidate", "key": key})
+                log_event(
+                    logger,
+                    "cache.invalidate",
+                    component="cache",
+                    status="invalidated",
+                    key_hash=key,
+                )
 
     async def invalidate_prefix(self, prefix: str) -> int:
         async with self._lock:
@@ -123,16 +144,26 @@ class ResponseCache:
             for key in keys:
                 self._cache.pop(key, None)
             if keys:
-                logger.info(
-                    "Cache invalidate prefix",
-                    extra={"event": "cache.invalidate", "prefix": prefix, "count": len(keys)},
+                log_event(
+                    logger,
+                    "cache.invalidate",
+                    component="cache",
+                    status="invalidated",
+                    key_hash=prefix,
+                    count=len(keys),
                 )
             return len(keys)
 
     def _enforce_limit(self) -> None:
         while len(self._cache) > self._max_items:
             key, _ = self._cache.popitem(last=False)
-            logger.info("Cache evict", extra={"event": "cache.evict", "key": key})
+            log_event(
+                logger,
+                "cache.evict",
+                component="cache",
+                status="evicted",
+                key_hash=key,
+            )
 
     def _resolve_ttl(self, ttl: float | None) -> float:
         if ttl is None:
