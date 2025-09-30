@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 import sys
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any, Mapping
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response, status
@@ -24,6 +25,7 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
         """Compatibility stub for Python versions without ExceptionGroup."""
 
 
+from app.api.router_registry import compose_prefix as build_router_prefix, get_domain_routers
 from app.config import AppConfig, SecurityConfig
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
@@ -41,26 +43,6 @@ from app.errors import (
     InternalServerError,
     rate_limit_meta,
     to_response,
-)
-from app.routers import (
-    activity_router,
-    backfill_router,
-    download_router,
-    dlq_router,
-    free_ingest_router,
-    health_router,
-    integrations_router,
-    imports_router,
-    matching_router,
-    metadata_router,
-    search_router,
-    settings_router,
-    soulseek_router,
-    spotify_free_router,
-    spotify_router,
-    sync_router,
-    system_router,
-    watchlist_router,
 )
 from app.services.backfill_service import BackfillService
 from app.services.health import HealthService
@@ -176,29 +158,45 @@ class LegacyLoggingRoute(APIRoute):
         return logging_route_handler
 
 
-def _register_api_routes(
+def _mount_domain_routers(
     router: APIRouter,
-    root_handler: Callable[[], Awaitable[dict[str, str]]],
+    *,
+    base_prefix: str,
+    emit_log: bool,
 ) -> None:
-    router.include_router(spotify_router, prefix="/spotify", tags=["Spotify"])
-    router.include_router(backfill_router, prefix="/spotify/backfill", tags=["Spotify Backfill"])
-    router.include_router(spotify_free_router)
-    router.include_router(free_ingest_router)
-    router.include_router(imports_router)
-    router.include_router(soulseek_router, prefix="/soulseek", tags=["Soulseek"])
-    router.include_router(matching_router, prefix="/matching", tags=["Matching"])
-    router.include_router(settings_router, prefix="/settings", tags=["Settings"])
-    router.include_router(metadata_router)
-    router.include_router(dlq_router, prefix="/dlq", tags=["DLQ"])
-    router.include_router(search_router)
-    router.include_router(sync_router)
-    router.include_router(system_router)
-    router.include_router(download_router)
-    router.include_router(activity_router)
-    router.include_router(integrations_router)
-    router.include_router(health_router, prefix="/health", tags=["Health"])
-    router.include_router(watchlist_router)
-    router.add_api_route("/", root_handler, methods=["GET"], tags=["System"])
+    start_time = perf_counter()
+    entries = get_domain_routers()
+    registered_prefixes: list[str] = []
+
+    for prefix, domain_router, tags in entries:
+        if prefix and tags:
+            router.include_router(domain_router, prefix=prefix, tags=tags)
+        elif prefix:
+            router.include_router(domain_router, prefix=prefix)
+        elif tags:
+            router.include_router(domain_router, tags=tags)
+        else:
+            router.include_router(domain_router)
+
+        effective_prefix = prefix or domain_router.prefix or ""
+        combined_prefix = build_router_prefix(base_prefix, effective_prefix)
+        registered_prefixes.append(combined_prefix or "/")
+
+    if emit_log:
+        duration_ms = (perf_counter() - start_time) * 1_000
+        preview = registered_prefixes[:5]
+        if len(registered_prefixes) > 5:
+            preview = preview + ["…"]
+        logger.info(
+            "Mounted %d domain routers",
+            len(entries),
+            extra={
+                "event": "router_registry.mounted",
+                "count": len(entries),
+                "prefixes": preview,
+                "duration_ms": round(duration_ms, 3),
+            },
+        )
 
 
 _config_snapshot = get_app_config()
@@ -527,13 +525,21 @@ async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
+_api_base_prefix = _format_router_prefix(_API_BASE_PATH)
+
 _versioned_router = APIRouter()
-_register_api_routes(_versioned_router, root)
-app.include_router(_versioned_router, prefix=_format_router_prefix(_API_BASE_PATH))
+_mount_domain_routers(
+    _versioned_router,
+    base_prefix=_api_base_prefix,
+    emit_log=True,
+)
+_versioned_router.add_api_route("/", root, methods=["GET"], tags=["System"])
+app.include_router(_versioned_router, prefix=_api_base_prefix)
 
 if _LEGACY_ROUTES_ENABLED:
     legacy_router = APIRouter(route_class=LegacyLoggingRoute)
-    _register_api_routes(legacy_router, root)
+    _mount_domain_routers(legacy_router, base_prefix="", emit_log=False)
+    legacy_router.add_api_route("/", root, methods=["GET"], tags=["System"])
     app.include_router(legacy_router)
 
 
