@@ -85,19 +85,19 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 - Feature-Branch (`feat/<topic>`), kleine Commits, PR mit Task-Referenz und Testnachweisen.
 - Keine direkten API-/DB-Breaking-Changes ohne dokumentierte Migration (§7) und Maintainer-Bestätigung.
 
-## 5.2 FAST-TRACK (Auto)
-**Definition:** Tasks mit `FAST-TRACK: true` im Header oder mit einem bekannten Auto-Präfix setzen den Modus **Implement** ohne zusätzliche Rückfrage. Die aktuelle Auto-Liste wird zentral in `docs/task-template.md` gepflegt.
+## 5.2 FAST-TRACK-Policy (Auto-Erkennung)
 
-**Auto-Präfixe (Stand heute):**
-- `CODX-ORCH-*`
-
-**Rechte & Grenzen:**
-- Codex darf Dateien anlegen/ändern/löschen, Tests und Snapshots aktualisieren sowie Commits/PRs erstellen, ohne auf weitere Freigaben zu warten.
-- Prohibited-Regeln (§15) und Scope-Guards (§19) bleiben unverändert verbindlich. Bei möglichen Breaking-Changes weiterhin Clarification-Prozess nutzen.
-- Maintainer können FAST-TRACK per Task-Kommentar temporär aussetzen; der Widerruf muss in der Task-Beschreibung dokumentiert sein.
-- Schreiben ist **nicht** CI-gekoppelt; Merge bleibt durch CI-Gates (§14) blockiert oder erfordert Maintainer-Freigabe.
-
-**Hinweis:** Weitere Präfixe können jederzeit ergänzt werden. Tasks und Subtasks sollten die Felder `FAST-TRACK` und `SPLIT_ALLOWED` gemäß `docs/task-template.md` pflegen.
+- **Zweck:** Bestimmte Aufgabenpräfixe dürfen unabhängig von „Read-only QA“-Sitzungen in den **Write Mode** wechseln. CI-/Review-Gates bleiben **Merge-blockierend**, nicht **Write-blockierend**.
+- **Auto-Aktivierung (Regex auf `TASK_ID`):**
+  - `^CODX-ORCH-`   → FAST-TRACK: true  
+  - `^CODX-P1-SPOT-` → FAST-TRACK: true  
+  - `^CODX-P1-GW-`   → FAST-TRACK: true  
+- **Wirkung bei FAST-TRACK: true**
+  - Read-only-Session-Flags werden ignoriert; Codex darf Branches anlegen, Dateien ändern/löschen, Commits/PRs erstellen, Builds/Tests/Lints ausführen.
+  - **Unverändert verpflichtend:** §14 Completion Gates (pytest/mypy/ruff/black), §15 Prohibited, §19 Scope-Guard, §18 Commit-/PR-Standards.
+  - Optionaler Header `FAST-TRACK: true` im Task ist weiterhin möglich, aber nicht erforderlich, wenn das Präfix matcht.
+- **Sicherheitsgeländer:** Keine Secrets, keine `BACKUP`-/Lizenzdateien, keine Public-API-/Schema-Breaker ohne explizite Freigabe + Migration.
+- **Audit:** PR-Body nennt die Auto-FAST-TRACK-Auslösung (z. B. „Auto via Präfix CODX-P1-GW-*“) und enthält Testnachweise.
 
 ## 5.3 SPLIT_ALLOWED (Task-Splitting)
 **Zweck:** Erlaubt Subtasks oder mehrere PRs zu einem Task, um große Umfänge in kleine, überprüfbare Einheiten zu schneiden.
