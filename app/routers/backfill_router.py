@@ -1,4 +1,4 @@
-"""FastAPI router exposing Spotify backfill endpoints."""
+"""Spotify backfill router delegating to :mod:`SpotifyDomainService`."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.config import AppConfig
+from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
-from app.dependencies import get_app_config, get_spotify_client
-from app.services.backfill_service import BackfillJobStatus, BackfillService
-from app.workers.backfill_worker import BackfillWorker
+from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
+from app.services.backfill_service import BackfillJobStatus
+from app.services.spotify_domain_service import SpotifyDomainService
 
 router = APIRouter()
 
@@ -45,51 +45,33 @@ class BackfillJobResponse(BaseModel):
     error: str | None = None
 
 
-def _ensure_service(
+def _get_spotify_service(
     request: Request,
-    config: AppConfig = Depends(get_app_config),
-    client: SpotifyClient = Depends(get_spotify_client),
-) -> BackfillService:
-    service = getattr(request.app.state, "backfill_service", None)
-    if not isinstance(service, BackfillService):
-        service = BackfillService(config.spotify, client)
-        request.app.state.backfill_service = service
-    return service
-
-
-async def _ensure_worker(
-    request: Request,
-    service: BackfillService = Depends(_ensure_service),
-) -> BackfillWorker:
-    worker = getattr(request.app.state, "backfill_worker", None)
-    if not isinstance(worker, BackfillWorker):
-        worker = BackfillWorker(service)
-        request.app.state.backfill_worker = worker
-        await worker.start()
-    elif not worker.is_running():
-        await worker.start()
-    return worker
+    config=Depends(get_app_config),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    soulseek_client: SoulseekClient = Depends(get_soulseek_client),
+) -> SpotifyDomainService:
+    return SpotifyDomainService(
+        config=config,
+        spotify_client=spotify_client,
+        soulseek_client=soulseek_client,
+        app_state=request.app.state,
+    )
 
 
 @router.post("/run", response_model=BackfillRunResponse)
 async def run_backfill(
     payload: BackfillRunRequest,
-    service: BackfillService = Depends(_ensure_service),
-    worker: BackfillWorker = Depends(_ensure_worker),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> JSONResponse:
-    try:
-        authenticated = spotify_client.is_authenticated()
-    except Exception:  # pragma: no cover - defensive guard
-        authenticated = False
-    if not authenticated:
+    if not service.is_authenticated():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Spotify credentials are required for backfill",
         )
 
     try:
-        job = service.create_job(
+        job = service.create_backfill_job(
             max_items=payload.max_items,
             expand_playlists=payload.expand_playlists,
         )
@@ -99,7 +81,7 @@ async def run_backfill(
             detail="Spotify credentials are required for backfill",
         ) from None
 
-    await worker.enqueue(job)
+    await service.enqueue_backfill_job(job)
     response = BackfillRunResponse(ok=True, job_id=job.id)
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=response.model_dump())
 
@@ -119,9 +101,9 @@ def _build_counts(status: BackfillJobStatus) -> BackfillJobCounts:
 @router.get("/jobs/{job_id}", response_model=BackfillJobResponse)
 async def get_backfill_job(
     job_id: str,
-    service: BackfillService = Depends(_ensure_service),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> BackfillJobResponse:
-    status_payload = service.get_status(job_id)
+    status_payload = service.get_backfill_status(job_id)
     if status_payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
@@ -135,3 +117,6 @@ async def get_backfill_job(
         duration_ms=status_payload.duration_ms,
         error=status_payload.error,
     )
+
+
+__all__ = ["router"]

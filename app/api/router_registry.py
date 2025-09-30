@@ -8,10 +8,8 @@ from fastapi import APIRouter
 
 from app.routers import (
     activity_router,
-    backfill_router,
     download_router,
     dlq_router,
-    free_ingest_router,
     health_router,
     imports_router,
     integrations_router,
@@ -20,8 +18,7 @@ from app.routers import (
     search_router,
     settings_router,
     soulseek_router,
-    spotify_free_router,
-    spotify_router,
+    spotify_domain_router,
     sync_router,
     system_router,
     watchlist_router,
@@ -53,10 +50,7 @@ def compose_prefix(base: str, *parts: str) -> str:
 
 
 def _build_entries() -> Iterable[RouterEntry]:
-    yield "/spotify", spotify_router, ["Spotify"]
-    yield "/spotify/backfill", backfill_router, ["Spotify Backfill"]
-    yield "", spotify_free_router, []
-    yield "", free_ingest_router, []
+    yield "", spotify_domain_router, []
     yield "", imports_router, []
     yield "/soulseek", soulseek_router, ["Soulseek"]
     yield "/matching", matching_router, ["Matching"]
