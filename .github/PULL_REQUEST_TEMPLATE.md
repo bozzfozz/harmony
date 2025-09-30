@@ -1,30 +1,23 @@
-## Änderung
-Kurzbeschreibung: was und warum.
+## Kurzfassung
+**Was/Warum:**  
+**TASK_ID:** <z. B. CODX-XXX-123> (muss existieren; basiert auf `docs/task-template.md`)
 
-## Task
-- TASK_ID: bitte referenzieren (z. B. TASK-123; verweist auf docs/task-template.md)
+## Änderungen (Dateien)
+- Neu/Geändert/Gelöscht:
+
+## Tests & Nachweise
+- Befehle/Logs/Screens:
+- Coverage (geänderte Module): ≥ 85 % | Begründete Ausnahme:
+
+## Verträge
+- Public-API: unverändert / geändert (OpenAPI aktualisiert)
+- DB/Migration: nein / ja (idempotent, rollback-fähig)
+
+## Doku & ToDo
+- README/CHANGELOG/ADR aktualisiert: ja/nein
+- ToDo.md aktualisiert (Nachweis-Link):
 
 ## Checkliste
-- [ ] Issue verlinkt
-- [ ] Kleine, fokussierte Änderung
-- [ ] Lint/Typprüfung/Tests grün
-- [ ] Security-Scan ohne Blocker
-- [ ] Doku (README/CHANGELOG/ADRs) aktualisiert
-- [ ] Rollback-Plan beschrieben
-- [ ] TASK_ID im Titel und im Body
-- [ ] Testnachweise beigefügt (pytest-Auszug, Coverage, relevante Logs)
-
-## Testnachweise
-- Beispiel-Befehle:
-  - pytest -q
-  - coverage report
-
-## Breaking Changes
-- [ ] Nein
-- [ ] Ja → Details
-
-## Release
-- [ ] Keine
-- [ ] SemVer-Impact: MAJOR/MINOR/PATCH
-
-Referenz: Siehe AGENTS.md (Abschnitte 3, 4, 9, 11).
+- [ ] AGENTS.md gelesen & Scope-Guard geprüft
+- [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert
+- [ ] `pytest -q`, `mypy app`, `ruff`, `black --check` grün oder Ausnahme dokumentiert
