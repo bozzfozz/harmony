@@ -64,35 +64,50 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
   2. **Task-Header:** `EXECUTION_MODE: implement|qa|dry-run`.
   3. **Repo-Default** (siehe `.codex/permissions.yaml`): `implement`.
   4. **Externe Sitzungsmarker** (Portal/Runner): **rein hinweisend**, ohne verbindliche Schreibsperre.
-- **Pflichtverhalten bei Read-only-Markern:** Wenn die Plattform tatsächliche Schreiboperationen technisch blockiert, **Blockade klar melden** ("platform write lock") und die Arbeit **nicht beenden**: Erstelle stattdessen **Patch-Dateien** unter `patches/` und führe Code-Änderungen als Diffs fort. Keine Selbst-Degradierung in einen QA-Only-Modus.
+- **Hinweis auf Plattform-Sperren:** Wenn Schreiboperationen technisch blockiert sind, **Blockade klar melden** ("platform write lock") und die Arbeit **nicht beenden**: Erstelle stattdessen **Patch-Dateien** unter `patches/` und führe Code-Änderungen als Diffs fort.
 
 ## 5.1 Codex Write Mode – Vollzugriff (Default)
 **Modus:** Implement (Standard)
 
 **Rechteumfang:**
-- Schreibzugriff auf **alle Pfade** im Repository (Erstellen/Ändern/Löschen von Dateien, Reorganisation).
+- Schreiben, Erstellen und Löschen in **allen Pfaden** des Repositories (Reorganisation inklusive), solange §15 (Prohibited) und §19 (Scope-Guard) respektiert werden.
 - Branch- und PR-Erstellung jederzeit erlaubt; Direkt-Push auf `main` nur, wenn Repo-Policy es zulässt (empfohlen: Branch + PR).
 - Ausführung üblicher Build-/Test-/Lint-/Tool-Befehle ist erlaubt.
 
 **Pflichten & Grenzen:**
-- Read-only QA-Behauptungen sind zu **ignorieren**, sobald **FAST-TRACK** aktiv ist oder `EXECUTION_MODE: implement` gesetzt wurde.
 - **Keine Secrets** oder Zugangsdaten in den Code/Repo schreiben (§6).
 - **Prohibited** (§15) bleibt verbindlich (keine `BACKUP`-/Lizenz-Dateien anfassen).
 - **Scope-/Clarification-Regeln** (§19) anwenden: Bei Unklarheit Draft-PR mit „Clarification Request“.
-- **Commit-/PR-Standards** (§18) einhalten (Conventional Commits, TASK_ID, Testnachweise).
-- **Qualitätsgates** (§14) sind Merge-Gates. Schreiben bleibt erlaubt, Merge nur bei erfüllten Gates oder expliziter Maintainer-Freigabe.
+- **Commit-/PR-Standards** (§18) einhalten (Conventional Commits, TASK_ID, Testnachweise; Vorlage siehe `docs/task-template.md`).
+- Schreiben ist **nicht** CI-gekoppelt; Merge bleibt durch CI-Gates (§14) blockiert oder erfordert Maintainer-Freigabe.
 
 **Empfohlener Flow:**
 - Feature-Branch (`feat/<topic>`), kleine Commits, PR mit Task-Referenz und Testnachweisen.
 - Keine direkten API-/DB-Breaking-Changes ohne dokumentierte Migration (§7) und Maintainer-Bestätigung.
 
-## 5.2 Fast-Track-Modus (Implement Priority)
-**Auto-FAST-TRACK:** Für Tasks mit `TASK_ID`-Präfix **`CODX-ORCH-*`** gilt implizit `FAST-TRACK: true`. Codex darf Dateien anlegen/ändern/löschen, Tests und Snapshots aktualisieren sowie PRs eröffnen, **ohne zusätzliche Freigabe**. **CI bleibt Merge-Gate.**
+## 5.2 FAST-TRACK (Auto)
+**Definition:** Tasks mit `FAST-TRACK: true` im Header oder mit einem bekannten Auto-Präfix setzen den Modus **Implement** ohne zusätzliche Rückfrage. Die aktuelle Auto-Liste wird zentral in `docs/task-template.md` gepflegt.
 
-**Gültigkeit & Grenzen:**
-- Scope- und Clarification-Regeln (§19) bleiben anwendbar; nur der Freigabe-Check entfällt.
-- Sicherheits- und Compliance-Vorgaben (§6, §15) gelten unverändert.
-- Maintainer können den Modus durch Task-Kommentar widerrufen; der Widerruf ist in der Task-Beschreibung zu dokumentieren.
+**Auto-Präfixe (Stand heute):**
+- `CODX-ORCH-*`
+
+**Rechte & Grenzen:**
+- Codex darf Dateien anlegen/ändern/löschen, Tests und Snapshots aktualisieren sowie Commits/PRs erstellen, ohne auf weitere Freigaben zu warten.
+- Prohibited-Regeln (§15) und Scope-Guards (§19) bleiben unverändert verbindlich. Bei möglichen Breaking-Changes weiterhin Clarification-Prozess nutzen.
+- Maintainer können FAST-TRACK per Task-Kommentar temporär aussetzen; der Widerruf muss in der Task-Beschreibung dokumentiert sein.
+- Schreiben ist **nicht** CI-gekoppelt; Merge bleibt durch CI-Gates (§14) blockiert oder erfordert Maintainer-Freigabe.
+
+**Hinweis:** Weitere Präfixe können jederzeit ergänzt werden. Tasks und Subtasks sollten die Felder `FAST-TRACK` und `SPLIT_ALLOWED` gemäß `docs/task-template.md` pflegen.
+
+## 5.3 SPLIT_ALLOWED (Task-Splitting)
+**Zweck:** Erlaubt Subtasks oder mehrere PRs zu einem Task, um große Umfänge in kleine, überprüfbare Einheiten zu schneiden.
+
+**Regeln:**
+- Jeder Subtask erfüllt eigenständig die DoD, Tests und Dokumentationsanforderungen.
+- PR-Benennung: `feat(<scope>): <kurz> [<TASK_ID>-A]`, `...-B`, etc. (Konvention gemäß `docs/task-template.md`).
+- Haupt-PR oder Follow-up-Task referenziert alle Sub-PRs und fasst den Gesamtstatus zusammen.
+- Scope- und Prohibited-Regeln gelten unverändert; Subtasks dürfen sie nicht umgehen.
+- FAST-TRACK (Auto) gilt je Subtask gemäß Task-Header.
 
 ## 6. Daten, Geheimnisse, Compliance
 - Secrets: Niemals im Code oder Commit; Secret-Manager nutzen; Rotation dokumentieren.
