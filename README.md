@@ -499,6 +499,10 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 > **Hinweis:** Spotify- und slskd-Zugangsdaten können über `/settings` in der Datenbank persistiert werden. Beim Laden der Anwendung haben Datenbankwerte Vorrang vor Umgebungsvariablen; ENV-Variablen dienen als Fallback und Basis für neue Deployments. Eine ausführliche Laufzeitreferenz inkl. Überschneidungen mit Datenbank-Settings befindet sich in [`docs/ops/runtime-config.md`](docs/ops/runtime-config.md).
 
+### Background Workers
+
+Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispiel-Profile findet sich in [`docs/workers.md`](docs/workers.md). Beim Applikationsstart wird zusätzlich ein strukturiertes Log-Event `worker.config` geschrieben (`component="bootstrap"`), das die aktiven Parameter ohne Secrets ausgibt.
+
 ### Frontend-Umgebungsvariablen (Vite)
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
