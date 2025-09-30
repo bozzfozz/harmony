@@ -16,6 +16,7 @@ from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
 from app.db import get_session
+from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
 from app.errors import AppError, ErrorCode
 from app.logging import get_logger
@@ -47,6 +48,15 @@ def get_transfers_api() -> TransfersApi:
 @lru_cache()
 def get_provider_registry() -> ProviderRegistry:
     return ProviderRegistry(config=get_app_config())
+
+
+@lru_cache()
+def get_provider_gateway() -> ProviderGateway:
+    registry = get_provider_registry()
+    registry.initialise()
+    providers = registry.track_providers()
+    config = registry.gateway_config
+    return ProviderGateway(providers=providers, config=config)
 
 
 @lru_cache()

@@ -5,6 +5,12 @@ from typing import Any, Dict
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
+from app.dependencies import get_provider_gateway as dependency_provider_gateway
+from app.integrations.provider_gateway import (
+    ProviderGatewayInternalError,
+    ProviderGatewaySearchResponse,
+    ProviderGatewaySearchResult,
+)
 
 
 def _prepare_soulseek_results(client) -> None:
@@ -165,3 +171,49 @@ def test_search_validation_errors(client) -> None:
     response = client.post("/search", json=payload)
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_search_invokes_provider_gateway(client) -> None:
+    gateway = client.app.state.provider_gateway_stub
+    gateway.calls.clear()
+
+    response = client.post("/search", json={"query": "Track", "limit": 5, "offset": 0})
+
+    assert response.status_code == 200
+    assert gateway.calls, "expected gateway to be invoked"
+    providers, query = gateway.calls[-1]
+    assert providers == ("spotify", "slskd")
+    assert query.text == "Track"
+
+
+def test_search_emits_dependency_logs(client, caplog: pytest.LogCaptureFixture) -> None:
+    gateway = client.app.state.provider_gateway_stub
+    gateway.log_events.clear()
+    response = client.post("/search", json={"query": "Log Check"})
+    assert response.status_code == 200
+    assert gateway.log_events, "Expected dependency log entries"
+
+
+def test_search_dependency_failure_maps_to_503(client) -> None:
+    class FailingGateway:
+        async def search_many(self, providers, query):
+            error = ProviderGatewayInternalError("slskd", "boom")
+            return ProviderGatewaySearchResponse(
+                results=(
+                    ProviderGatewaySearchResult(
+                        provider="slskd",
+                        tracks=tuple(),
+                        error=error,
+                    ),
+                )
+            )
+
+    client.app.dependency_overrides[dependency_provider_gateway] = lambda: FailingGateway()
+    try:
+        response = client.post("/search", json={"query": "Track", "sources": ["soulseek"]})
+    finally:
+        client.app.dependency_overrides.pop(dependency_provider_gateway, None)
+
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["error"]["code"] == "DEPENDENCY_ERROR"

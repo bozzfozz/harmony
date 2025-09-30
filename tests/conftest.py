@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: E402
 
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 import os
 
@@ -25,11 +25,20 @@ from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.dependencies import (
     get_matching_engine as dependency_matching_engine,
+    get_provider_gateway as dependency_provider_gateway,
     get_soulseek_client as dependency_soulseek_client,
     get_spotify_client as dependency_spotify_client,
     get_transfers_api as dependency_transfers_api,
 )
+from app.integrations.base import TrackCandidate
+from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack, SearchQuery
+from app.integrations.provider_gateway import (
+    ProviderGatewayInternalError,
+    ProviderGatewaySearchResponse,
+    ProviderGatewaySearchResult,
+)
 from app.services.backfill_service import BackfillService
+from app.logging import get_logger
 from app.main import app
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
@@ -438,6 +447,211 @@ class StubSoulseekClient:
             self.downloads[identifier] = entry
         return {"status": "queued"}
 
+
+class StubSearchGateway:
+    def __init__(self, spotify: StubSpotifyClient, soulseek: StubSoulseekClient) -> None:
+        self._spotify = spotify
+        self._soulseek = soulseek
+        self.calls: list[tuple[tuple[str, ...], SearchQuery]] = []
+        self.log_events: list[dict[str, Any]] = []
+
+    async def search_many(
+        self, providers: Sequence[str], query: SearchQuery
+    ) -> ProviderGatewaySearchResponse:
+        self.calls.append((tuple(providers), query))
+        results: list[ProviderGatewaySearchResult] = []
+        gateway_logger = get_logger("app.integrations.provider_gateway")
+        for provider in providers:
+            normalized = provider.lower()
+            if normalized == "spotify":
+                tracks = self._spotify_tracks(query)
+                results.append(
+                    ProviderGatewaySearchResult(provider="spotify", tracks=tuple(tracks))
+                )
+                event_payload = {
+                    "event": "api.dependency",
+                    "provider": "spotify",
+                    "operation": "search_tracks",
+                    "status": "success",
+                    "attempt": 1,
+                    "max_attempts": 1,
+                    "duration_ms": 1,
+                }
+                gateway_logger.info("provider call", extra=event_payload)
+                self.log_events.append(event_payload)
+            elif normalized in {"slskd", "soulseek"}:
+                tracks = self._soulseek_tracks(query)
+                results.append(
+                    ProviderGatewaySearchResult(provider="slskd", tracks=tuple(tracks))
+                )
+                event_payload = {
+                    "event": "api.dependency",
+                    "provider": "slskd",
+                    "operation": "search_tracks",
+                    "status": "success",
+                    "attempt": 1,
+                    "max_attempts": 1,
+                    "duration_ms": 1,
+                }
+                gateway_logger.info("provider call", extra=event_payload)
+                self.log_events.append(event_payload)
+            else:
+                error = ProviderGatewayInternalError(normalized, "provider not stubbed")
+                results.append(
+                    ProviderGatewaySearchResult(provider=normalized, tracks=tuple(), error=error)
+                )
+                event_payload = {
+                    "event": "api.dependency",
+                    "provider": normalized,
+                    "operation": "search_tracks",
+                    "status": "error",
+                    "attempt": 1,
+                    "max_attempts": 1,
+                    "duration_ms": 1,
+                    "error": error.__class__.__name__,
+                }
+                gateway_logger.warning("provider call", extra=event_payload)
+                self.log_events.append(event_payload)
+        return ProviderGatewaySearchResponse(results=tuple(results))
+
+    def _spotify_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
+        payload = self._spotify.search_tracks(query.text, limit=query.limit)
+        container = payload.get("tracks") if isinstance(payload, dict) else None
+        items = container.get("items") if isinstance(container, dict) else []
+        results: list[ProviderTrack] = []
+        for raw in (items or [])[: query.limit]:
+            if not isinstance(raw, dict):
+                continue
+            artists: list[ProviderArtist] = []
+            for artist_payload in raw.get("artists") or []:
+                if isinstance(artist_payload, dict):
+                    artists.append(ProviderArtist(name=str(artist_payload.get("name") or "")))
+            album_payload = raw.get("album") if isinstance(raw.get("album"), dict) else None
+            album = None
+            if isinstance(album_payload, dict):
+                album_artists: list[ProviderArtist] = []
+                for entry in album_payload.get("artists") or []:
+                    if isinstance(entry, dict):
+                        album_artists.append(ProviderArtist(name=str(entry.get("name") or "")))
+                album_metadata: dict[str, object] = {}
+                release_date = album_payload.get("release_date")
+                if release_date:
+                    album_metadata["release_date"] = release_date
+                album = ProviderAlbum(
+                    name=str(album_payload.get("name") or ""),
+                    id=str(album_payload.get("id") or ""),
+                    artists=tuple(album_artists),
+                    metadata=album_metadata,
+                )
+            track_metadata: dict[str, object] = {}
+            track_id = raw.get("id")
+            if track_id:
+                track_metadata["id"] = track_id
+            genre = raw.get("genre")
+            if genre:
+                track_metadata["genre"] = genre
+            duration_ms = raw.get("duration_ms")
+            external_ids = raw.get("external_ids") if isinstance(raw.get("external_ids"), dict) else {}
+            isrc = external_ids.get("isrc") if isinstance(external_ids, dict) else None
+            results.append(
+                ProviderTrack(
+                    name=str(raw.get("name") or ""),
+                    provider="spotify",
+                    artists=tuple(artists),
+                    album=album,
+                    duration_ms=duration_ms,
+                    isrc=isrc,
+                    candidates=(),
+                    metadata=track_metadata,
+                )
+            )
+        return results
+
+    def _soulseek_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
+        tracks: list[ProviderTrack] = []
+        limit = max(1, query.limit)
+        count = 0
+        for entry in self._soulseek.search_results:
+            files = entry.get("files") or []
+            username = entry.get("username")
+            for file_info in files:
+                if count >= limit:
+                    return tracks
+                if not isinstance(file_info, dict):
+                    continue
+                metadata: dict[str, Any] = {}
+                identifier = file_info.get("id")
+                if identifier:
+                    metadata["id"] = identifier
+                if file_info.get("genre"):
+                    metadata["genre"] = file_info.get("genre")
+                    metadata["genres"] = [file_info.get("genre")]
+                if file_info.get("year") is not None:
+                    metadata["year"] = file_info.get("year")
+                if file_info.get("album"):
+                    metadata["album"] = file_info.get("album")
+                artist_name = file_info.get("artist")
+                if artist_name:
+                    metadata["artists"] = [artist_name]
+                bitrate_value = self._coerce_int(file_info.get("bitrate"))
+                size_value = self._coerce_int(
+                    file_info.get("size") or file_info.get("size_bytes") or file_info.get("filesize")
+                )
+                seeders = self._coerce_int(file_info.get("seeders"))
+                candidate = TrackCandidate(
+                    title=str(file_info.get("title") or file_info.get("filename") or ""),
+                    artist=str(artist_name) if artist_name else None,
+                    format=str(file_info.get("format") or "").upper() or None,
+                    bitrate_kbps=bitrate_value,
+                    size_bytes=size_value,
+                    seeders=seeders,
+                    username=str(username) if username else None,
+                    availability=None,
+                    source="slskd",
+                    download_uri=file_info.get("filename"),
+                    metadata=metadata,
+                )
+                provider_artists = (ProviderArtist(name=str(artist_name)),) if artist_name else ()
+                album = None
+                if file_info.get("album"):
+                    album = ProviderAlbum(name=str(file_info.get("album")), id=None, artists=())
+                tracks.append(
+                    ProviderTrack(
+                        name=candidate.title,
+                        provider="slskd",
+                        artists=provider_artists,
+                        album=album,
+                        duration_ms=None,
+                        isrc=None,
+                        candidates=(candidate,),
+                        metadata={
+                            "genre": file_info.get("genre"),
+                            "genres": metadata.get("genres", []),
+                            "year": file_info.get("year"),
+                        },
+                    )
+                )
+                count += 1
+                if count >= limit:
+                    return tracks
+        return tracks
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        text = str(value).strip()
+        if text.isdigit():
+            try:
+                return int(text)
+            except ValueError:
+                return None
+        return None
+
     async def cancel_download(self, download_id: str) -> Dict[str, Any]:
         identifier = int(download_id)
         if identifier in self.downloads:
@@ -643,6 +857,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     stub_transfers = StubTransfersApi(stub_soulseek)
     stub_lyrics = StubLyricsWorker()
     engine = dependency_matching_engine()
+    stub_gateway = StubSearchGateway(stub_spotify, stub_soulseek)
 
     async def noop_start(self) -> None:  # type: ignore[override]
         return None
@@ -666,11 +881,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     monkeypatch.setattr(deps, "get_soulseek_client", lambda: stub_soulseek)
     monkeypatch.setattr(deps, "get_transfers_api", lambda: stub_transfers)
     monkeypatch.setattr(deps, "get_matching_engine", lambda: engine)
+    monkeypatch.setattr(deps, "get_provider_gateway", lambda: stub_gateway)
 
     app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
     app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
     app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
     app.dependency_overrides[dependency_matching_engine] = lambda: engine
+    app.dependency_overrides[dependency_provider_gateway] = lambda: stub_gateway
 
     app.state.soulseek_stub = stub_soulseek
     app.state.transfers_stub = stub_transfers
@@ -679,11 +896,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
     app.state.retry_scheduler = RetryScheduler(app.state.sync_worker)
     app.state.playlist_worker = PlaylistSyncWorker(stub_spotify, interval_seconds=0.1)
+    app.state.provider_gateway_stub = stub_gateway
 
     with SimpleTestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+    app.state.provider_gateway_stub = None
 
 
 @pytest.fixture

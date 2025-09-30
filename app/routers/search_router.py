@@ -2,26 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Awaitable, Dict, Iterable, Optional, Sequence, cast
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Request, status
-from fastapi.concurrency import run_in_threadpool
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.core.soulseek_client import SoulseekClient
-from app.core.spotify_client import SpotifyClient
-from app.dependencies import (
-    get_matching_engine,
-    get_soulseek_client,
-    get_spotify_client,
-)
+from app.dependencies import get_matching_engine, get_provider_gateway
 from app.errors import DependencyError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.integrations.base import TrackCandidate
+from app.integrations.contracts import ProviderTrack, SearchQuery
+from app.integrations.provider_gateway import ProviderGateway, ProviderGatewaySearchResponse
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -43,11 +38,17 @@ from app.utils.normalize import (
 logger = get_logger(__name__)
 
 DEFAULT_SOURCES: tuple[SourceLiteral, ...] = ("spotify", "soulseek")
-SEARCH_TIMEOUT_MS = int(os.getenv("SEARCH_TIMEOUT_MS", "8000") or "8000")
-SEARCH_TIMEOUT_SECONDS = max(0.1, SEARCH_TIMEOUT_MS / 1000)
 SEARCH_MAX_LIMIT = int(os.getenv("SEARCH_MAX_LIMIT", "100") or "100")
 TOTAL_RESULT_CAP = 1000
 PER_SOURCE_FETCH_LIMIT = 60
+
+SOURCE_TO_PROVIDER: dict[SourceLiteral, str] = {
+    "spotify": "spotify",
+    "soulseek": "slskd",
+}
+PROVIDER_TO_SOURCE: dict[str, SourceLiteral] = {
+    value: key for key, value in SOURCE_TO_PROVIDER.items()
+}
 
 
 @dataclass(slots=True)
@@ -78,9 +79,8 @@ router = APIRouter(tags=["Search"])
 async def smart_search(
     request: SearchRequest,
     raw_request: Request,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    soulseek_client: SoulseekClient = Depends(get_soulseek_client),
     matching_engine: MusicMatchingEngine = Depends(get_matching_engine),
+    gateway: ProviderGateway = Depends(get_provider_gateway),
 ) -> SearchResponse:
     """Aggregate search results from Spotify and Soulseek with ranking."""
 
@@ -88,44 +88,27 @@ async def smart_search(
     limit = min(request.limit, SEARCH_MAX_LIMIT)
     offset = request.offset
 
-    tasks: list[tuple[SourceLiteral, asyncio.Task[tuple[list[Candidate], Optional[str]]]]] = []
+    provider_names: list[str] = []
+    for source in resolved_sources:
+        provider = SOURCE_TO_PROVIDER.get(source)
+        if provider and provider not in provider_names:
+            provider_names.append(provider)
 
-    if "spotify" in resolved_sources:
-        tasks.append(
-            (
-                "spotify",
-                asyncio.create_task(
-                    _execute_source(
-                        "spotify",
-                        _search_spotify(request, spotify_client),
-                    )
-                ),
-            )
-        )
-    if "soulseek" in resolved_sources:
-        tasks.append(
-            (
-                "soulseek",
-                asyncio.create_task(
-                    _execute_source(
-                        "soulseek",
-                        _search_soulseek(request, soulseek_client),
-                    )
-                ),
-            )
-        )
-
-    aggregated: list[Candidate] = []
-    failures: Dict[str, str] = {}
+    search_query = SearchQuery(text=request.query, artist=None, limit=PER_SOURCE_FETCH_LIMIT)
 
     started = time.perf_counter()
-    for source, task in tasks:
-        items, error = await task
-        if error:
-            failures[source] = error
-        aggregated.extend(items)
+    try:
+        gateway_response = await gateway.search_many(provider_names, search_query)
+    except KeyError as exc:
+        logger.error("Requested provider not available", exc_info=exc)
+        raise DependencyError(
+            "Requested search source is not available",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        ) from exc
 
-    if failures and len(failures) == len(tasks):
+    aggregated, failures = _collect_candidates(gateway_response)
+
+    if gateway_response.status == "failed":
         logger.error(
             "Search failed for all sources", extra={"event": "search", "sources": resolved_sources}
         )
@@ -143,7 +126,7 @@ async def smart_search(
     page_items = capped_items[offset : offset + limit]
 
     duration_ms = (time.perf_counter() - started) * 1000
-    status_value = "ok" if not failures else "partial"
+    status_value = gateway_response.status
     log_event(
         logger,
         "api.request",
@@ -162,7 +145,7 @@ async def smart_search(
     )
 
     return SearchResponse(
-        ok=not failures,
+        ok=gateway_response.status != "failed",
         total=len(scored_items),
         limit=limit,
         offset=offset,
@@ -170,197 +153,200 @@ async def smart_search(
     )
 
 
-async def _execute_source(
-    source: SourceLiteral, coroutine: Awaitable[list[Candidate]]
-) -> tuple[list[Candidate], Optional[str]]:
-    try:
-        items = await asyncio.wait_for(coroutine, timeout=SEARCH_TIMEOUT_SECONDS)
-        return items, None
-    except asyncio.TimeoutError:
-        logger.warning("Search source %s timed out", source)
-        return [], f"{source.capitalize()} search timed out"
-    except Exception as exc:  # pragma: no cover - defensive guard
-        logger.warning("Search source %s failed: %s", source, exc)
-        return [], f"{source.capitalize()} source unavailable"
-
-
-async def _search_spotify(request: SearchRequest, client: SpotifyClient) -> list[Candidate]:
-    """Query Spotify for artists, albums and tracks."""
-
-    search_types = _resolve_types(request.type)
-    tasks: list[asyncio.Task[Dict[str, Any]]] = []
-
-    if "track" in search_types:
-        tasks.append(
-            asyncio.create_task(
-                run_in_threadpool(
-                    client.search_tracks,
-                    request.query,
-                    PER_SOURCE_FETCH_LIMIT,
-                    genre=request.genre,
-                    year_from=request.year_from,
-                    year_to=request.year_to,
-                )
-            )
-        )
-    if "album" in search_types:
-        tasks.append(
-            asyncio.create_task(
-                run_in_threadpool(
-                    client.search_albums,
-                    request.query,
-                    PER_SOURCE_FETCH_LIMIT,
-                    genre=request.genre,
-                    year_from=request.year_from,
-                    year_to=request.year_to,
-                )
-            )
-        )
-    if "artist" in search_types:
-        tasks.append(
-            asyncio.create_task(
-                run_in_threadpool(
-                    client.search_artists,
-                    request.query,
-                    PER_SOURCE_FETCH_LIMIT,
-                    genre=request.genre,
-                    year_from=request.year_from,
-                    year_to=request.year_to,
-                )
-            )
-        )
-
-    if not tasks:
-        return []
-
-    payloads = await asyncio.gather(*tasks, return_exceptions=True)
-
-    candidates: list[Candidate] = []
-    errors = 0
-    for payload in payloads:
-        if isinstance(payload, Exception):  # pragma: no cover - handled by caller
-            logger.warning("Spotify search payload failed: %s", payload)
-            errors += 1
+def _collect_candidates(
+    response: ProviderGatewaySearchResponse,
+) -> tuple[list[Candidate], Dict[SourceLiteral, str]]:
+    aggregated: list[Candidate] = []
+    failures: Dict[SourceLiteral, str] = {}
+    for result in response.results:
+        source = PROVIDER_TO_SOURCE.get(result.provider.lower())
+        if source is None:
             continue
-        candidates.extend(_extract_spotify_candidates(payload))
-    if errors and errors == len(payloads):
-        raise RuntimeError("Spotify search failed")
-    return candidates
-
-
-async def _search_soulseek(request: SearchRequest, client: SoulseekClient) -> list[Candidate]:
-    payload = await client.search(
-        request.query,
-        min_bitrate=request.min_bitrate,
-        format_priority=request.format_priority or [],
-    )
-    entries = client.normalise_search_results(payload)
-    candidates: list[Candidate] = []
-    for entry in entries:
-        genres = normalize_genres(entry.get("genres", []))
-        bitrate = _coerce_int(entry.get("bitrate"))
-        audio_format = _normalise_format(entry.get("format"))
-        artists = [str(name) for name in entry.get("artists", []) if name]
-        identifier = (
-            entry.get("id") or entry.get("extra", {}).get("path") or entry.get("title") or "unknown"
-        )
-        identifier_str = str(identifier)
-        candidate = Candidate(
-            type="track",
-            id=f"soulseek:file:{identifier_str}",
-            source="soulseek",
-            title=str(entry.get("title") or entry.get("filename") or ""),
-            artists=artists,
-            album=entry.get("album"),
-            year=_coerce_int(entry.get("year")),
-            genres=genres,
-            bitrate=bitrate,
-            audio_format=audio_format,
-            raw=entry,
-        )
-        candidates.append(candidate)
-    return candidates
-
-
-def _resolve_types(request_type: str) -> list[ItemTypeLiteral]:
-    if request_type == "mixed":
-        return ["artist", "album", "track"]
-    return [cast(ItemTypeLiteral, request_type)]
-
-
-def _extract_spotify_candidates(payload: Dict[str, Any]) -> list[Candidate]:
-    candidates: list[Candidate] = []
-    if not isinstance(payload, dict):
-        return candidates
-
-    for section, item_type in (("tracks", "track"), ("albums", "album"), ("artists", "artist")):
-        container = payload.get(section)
-        items = None
-        if isinstance(container, dict):
-            items = container.get("items")
-        if not isinstance(items, list):
+        if result.error is not None:
+            failures[source] = str(result.error)
             continue
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            candidates.append(_build_spotify_candidate(item, item_type))
-    return candidates
+        for track in result.tracks:
+            aggregated.extend(_build_candidates_from_track(track, source))
+    return aggregated, failures
 
 
-def _build_spotify_candidate(payload: Dict[str, Any], item_type: str) -> Candidate:
-    title = str(payload.get("name") or payload.get("title") or "")
-    artists_field = payload.get("artists") or payload.get("artist")
-    artists: list[str] = []
-    if isinstance(artists_field, list):
-        for entry in artists_field:
-            if isinstance(entry, dict):
-                name = entry.get("name")
-                if name:
-                    artists.append(str(name))
-            elif entry:
-                artists.append(str(entry))
-    elif isinstance(artists_field, dict):
-        name = artists_field.get("name")
-        if name:
-            artists.append(str(name))
-    elif artists_field:
-        artists.append(str(artists_field))
+def _build_candidates_from_track(
+    track: ProviderTrack, source: SourceLiteral
+) -> list[Candidate]:
+    track_artists = [artist.name for artist in track.artists if artist.name]
+    album_name = track.album.name if track.album else None
+    track_metadata = _mapping_to_dict(track.metadata)
+    album_metadata = _mapping_to_dict(track.album.metadata) if track.album else {}
+    base_year = _extract_year(track_metadata, album_metadata)
+    base_genres = _extract_genres(track_metadata, album_metadata)
 
-    album_info = payload.get("album") if isinstance(payload.get("album"), dict) else None
-    album_title = album_info.get("name") if isinstance(album_info, dict) else None
-    release_date = None
-    if album_info and isinstance(album_info, dict):
-        release_date = album_info.get("release_date") or album_info.get("releaseDate")
-    elif item_type == "album":
-        release_date = payload.get("release_date")
-
-    genres_field = payload.get("genres")
-    if isinstance(genres_field, list):
-        genres = normalize_genres(genres_field)
+    results: list[Candidate] = []
+    if track.candidates:
+        for candidate in track.candidates:
+            candidate_metadata = _mapping_to_dict(candidate.metadata)
+            genres = _extract_genres(candidate_metadata, track_metadata, album_metadata)
+            year = _extract_year(candidate_metadata, track_metadata, album_metadata)
+            bitrate = candidate.bitrate_kbps
+            audio_format = _normalise_format(candidate.format)
+            title = candidate.title or track.name
+            artists = list(track_artists) or ([candidate.artist] if candidate.artist else [])
+            metadata = _candidate_metadata(
+                track=track,
+                track_metadata=track_metadata,
+                album_metadata=album_metadata,
+                candidate=candidate,
+                candidate_metadata=candidate_metadata,
+            )
+            identifier = _candidate_identifier(
+                source,
+                track_metadata,
+                candidate_metadata,
+                candidate.download_uri,
+                title,
+            )
+            results.append(
+                Candidate(
+                    type="track",
+                    id=identifier,
+                    source=source,
+                    title=title,
+                    artists=artists,
+                    album=album_name,
+                    year=year or base_year,
+                    genres=genres or base_genres,
+                    bitrate=bitrate,
+                    audio_format=audio_format,
+                    raw=metadata,
+                )
+            )
     else:
-        single_genre = payload.get("genre")
-        genres = normalize_genres([single_genre] if single_genre else [])
-    audio_format = _normalise_format(payload.get("format"))
+        metadata = _candidate_metadata(
+            track=track,
+            track_metadata=track_metadata,
+            album_metadata=album_metadata,
+        )
+        identifier = _candidate_identifier(source, track_metadata, None, None, track.name)
+        results.append(
+            Candidate(
+                type="track",
+                id=identifier,
+                source=source,
+                title=track.name,
+                artists=track_artists,
+                album=album_name,
+                year=base_year,
+                genres=base_genres,
+                bitrate=None,
+                audio_format=None,
+                raw=metadata,
+            )
+        )
+    return results
 
-    identifier = payload.get("uri") or payload.get("id") or "unknown"
-    spotify_id = str(identifier)
-    if ":" not in spotify_id and payload.get("id"):
-        spotify_id = f"spotify:{item_type}:{payload['id']}"
 
-    candidate = Candidate(
-        type=cast(ItemTypeLiteral, item_type),
-        id=spotify_id,
-        source="spotify",
-        title=title,
-        artists=artists,
-        album=album_title if item_type != "artist" else None,
-        year=_parse_year(release_date),
-        genres=genres,
-        bitrate=None,
-        audio_format=audio_format,
-        raw=payload,
-    )
-    return candidate
+def _mapping_to_dict(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not payload:
+        return {}
+    return {str(key): value for key, value in payload.items()}
+
+
+def _candidate_metadata(
+    *,
+    track: ProviderTrack,
+    track_metadata: Mapping[str, Any],
+    album_metadata: Mapping[str, Any],
+    candidate: TrackCandidate | None = None,
+    candidate_metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "provider": track.provider,
+        "track": {
+            "name": track.name,
+            "duration_ms": track.duration_ms,
+            "isrc": track.isrc,
+            "metadata": dict(track_metadata),
+        },
+    }
+    if track.album is not None:
+        payload["album"] = {
+            "name": track.album.name,
+            "id": track.album.id,
+            "metadata": dict(album_metadata),
+        }
+    if candidate is not None:
+        payload["candidate"] = {
+            "title": candidate.title,
+            "artist": candidate.artist,
+            "format": candidate.format,
+            "bitrate_kbps": candidate.bitrate_kbps,
+            "size_bytes": candidate.size_bytes,
+            "seeders": candidate.seeders,
+            "username": candidate.username,
+            "availability": candidate.availability,
+            "download_uri": candidate.download_uri,
+            "source": candidate.source,
+            "metadata": dict(candidate_metadata or {}),
+        }
+    return payload
+
+
+def _candidate_identifier(
+    source: SourceLiteral,
+    track_metadata: Mapping[str, Any],
+    candidate_metadata: Mapping[str, Any] | None,
+    download_uri: str | None,
+    title: str,
+) -> str:
+    parts: list[str] = [source]
+    track_id = track_metadata.get("uri") or track_metadata.get("id")
+    if track_id:
+        parts.append(str(track_id))
+    if candidate_metadata:
+        for key in ("id", "path", "filename", "download_id"):
+            value = candidate_metadata.get(key)
+            if value:
+                parts.append(str(value))
+                break
+    if download_uri:
+        parts.append(download_uri)
+    if len(parts) == 1 and title:
+        parts.append(normalize_text(title))
+    identifier = ":".join(part for part in parts if part)
+    return identifier or f"{source}:{normalize_text(title) if title else 'unknown'}"
+
+
+def _extract_year(*sources: Mapping[str, Any] | None) -> Optional[int]:
+    for mapping in sources:
+        if not mapping:
+            continue
+        for key in ("year", "release_year", "releaseYear"):
+            value = mapping.get(key)
+            if value is not None:
+                year = _coerce_int(value)
+                if year is not None:
+                    return year
+        release_date = mapping.get("release_date")
+        if release_date:
+            parsed = _parse_year(release_date)
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _extract_genres(*sources: Mapping[str, Any] | None) -> list[str]:
+    genres: list[str] = []
+    for mapping in sources:
+        if not mapping:
+            continue
+        raw = mapping.get("genres")
+        if isinstance(raw, (list, tuple)):
+            genres.extend(str(item) for item in raw if item)
+        elif raw:
+            genres.append(str(raw))
+        single = mapping.get("genre")
+        if single:
+            genres.append(str(single))
+    return normalize_genres(genres)
 
 
 def _apply_filters(candidates: Iterable[Candidate], request: SearchRequest) -> list[Candidate]:

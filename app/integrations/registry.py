@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Dict, Iterable, Mapping
@@ -9,13 +10,14 @@ from typing import Dict, Iterable, Mapping
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
 from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderArtist,
     ProviderDependencyError,
     ProviderInternalError,
     ProviderNotFoundError,
     ProviderRateLimitedError,
     ProviderTrack,
     ProviderValidationError,
-    ProviderArtist,
     SearchQuery,
     TrackProvider,
 )
@@ -114,6 +116,16 @@ class ProviderRegistry:
                 jitter_pct=max(0.0, soulseek.retry_jitter_pct),
             )
             self._policies[provider.name] = policy
+        elif isinstance(adapter, SpotifyAdapter):
+            provider = _SpotifyTrackProvider(adapter)
+            self._track_providers[provider.name] = provider
+            timeout_ms = self._config.integrations.timeouts_ms.get("spotify", 15000)
+            self._policies[provider.name] = ProviderRetryPolicy(
+                timeout_ms=timeout_ms,
+                retry_max=0,
+                backoff_base_ms=50,
+                jitter_pct=0.1,
+            )
         elif normalized in self._config.integrations.timeouts_ms:
             timeout_ms = self._config.integrations.timeouts_ms[normalized]
             self._policies[normalized] = ProviderRetryPolicy(
@@ -205,3 +217,92 @@ class _SlskdTrackProvider(TrackProvider):
                 )
             )
         return tracks
+
+
+@dataclass(slots=True)
+class _SpotifyTrackProvider(TrackProvider):
+    _adapter: SpotifyAdapter
+
+    @property
+    def name(self) -> str:  # pragma: no cover - simple delegation
+        return "spotify"
+
+    async def search_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
+        limit = max(1, query.limit)
+
+        def _search() -> list:
+            return list(self._adapter.search_tracks(query.text, limit=limit))
+
+        tracks = await asyncio.to_thread(_search)
+        results: list[ProviderTrack] = []
+        for track in tracks:
+            artist_entries: list[ProviderArtist] = []
+            aggregated_genres: set[str] = set()
+            for artist in getattr(track, "artists", ()):
+                metadata: dict[str, object] = {}
+                artist_id = getattr(artist, "id", None)
+                if getattr(artist, "genres", None):
+                    genres = tuple(str(entry) for entry in artist.genres if entry)
+                    if genres:
+                        metadata["genres"] = genres
+                        aggregated_genres.update(genres)
+                popularity = getattr(artist, "popularity", None)
+                if popularity is not None:
+                    metadata["popularity"] = popularity
+                artist_entries.append(
+                    ProviderArtist(
+                        name=getattr(artist, "name", ""),
+                        id=artist_id,
+                        metadata=metadata,
+                    )
+                )
+            album = None
+            if getattr(track, "album", None) is not None:
+                album_artists: list[ProviderArtist] = []
+                album_metadata: dict[str, object] = {}
+                for artist in track.album.artists:
+                    album_artist_metadata: dict[str, object] = {}
+                    if getattr(artist, "genres", None):
+                        album_artist_metadata["genres"] = tuple(
+                            str(entry) for entry in artist.genres if entry
+                        )
+                    album_artists.append(
+                        ProviderArtist(
+                            name=getattr(artist, "name", ""),
+                            id=getattr(artist, "id", None),
+                            metadata=album_artist_metadata,
+                        )
+                    )
+                if getattr(track.album, "release_year", None) is not None:
+                    album_metadata["release_year"] = track.album.release_year
+                if getattr(track.album, "total_tracks", None) is not None:
+                    album_metadata["total_tracks"] = track.album.total_tracks
+                album = ProviderAlbum(
+                    name=getattr(track.album, "name", ""),
+                    id=getattr(track.album, "id", None),
+                    artists=tuple(album_artists),
+                    metadata=album_metadata,
+                )
+            track_metadata: dict[str, object] = {}
+            track_id = getattr(track, "id", None)
+            if track_id is not None:
+                track_metadata["id"] = track_id
+            if getattr(track, "duration_ms", None) is not None:
+                track_metadata["duration_ms"] = track.duration_ms
+            if getattr(track, "isrc", None):
+                track_metadata["isrc"] = track.isrc
+            if aggregated_genres:
+                track_metadata["genres"] = tuple(aggregated_genres)
+            results.append(
+                ProviderTrack(
+                    name=getattr(track, "name", ""),
+                    provider=self.name,
+                    artists=tuple(artist_entries),
+                    album=album,
+                    duration_ms=getattr(track, "duration_ms", None),
+                    isrc=getattr(track, "isrc", None),
+                    candidates=(),
+                    metadata=track_metadata,
+                )
+            )
+        return results
