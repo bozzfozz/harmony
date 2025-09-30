@@ -116,7 +116,7 @@ class BackfillService:
         """Run a backfill job asynchronously inside a worker thread."""
 
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._run_job, job)
+        await loop.run_in_executor(None, self.run_job, job)
 
     def get_status(self, job_id: str) -> Optional[BackfillJobStatus]:
         """Return a snapshot of the persisted job state."""
@@ -143,7 +143,7 @@ class BackfillService:
 
     # Core processing ----------------------------------------------------
 
-    def _run_job(self, job: BackfillJobSpec) -> None:
+    def run_job(self, job: BackfillJobSpec) -> None:
         start_time = time.perf_counter()
         processed = 0
         matched = 0

@@ -2,9 +2,12 @@ import asyncio
 import time
 from datetime import datetime
 
+from app import dependencies as deps
 from app.db import session_scope
 from app.models import IngestItem, IngestJob
+from app.orchestrator.handlers import get_spotify_backfill_status
 from app.services.backfill_service import BackfillService
+from app.services.spotify_domain_service import SpotifyDomainService
 
 
 def _create_job(job_id: str) -> None:
@@ -19,13 +22,17 @@ def _create_job(job_id: str) -> None:
         )
 
 
+async def _poll_once() -> None:
+    await asyncio.sleep(0.01)
+
+
 def _await_backfill(
-    client, worker, service: BackfillService, job_id: str, timeout: float = 2.0
+    client, service: SpotifyDomainService, job_id: str, timeout: float = 2.0
 ) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        client._loop.run_until_complete(asyncio.sleep(0.01))
-        status = service.get_status(job_id)
+        client._loop.run_until_complete(_poll_once())
+        status = get_spotify_backfill_status(service, job_id)
         if status and status.state not in {"queued", "running"}:
             if status.state != "completed":
                 raise AssertionError(f"Backfill job failed: {status.state}")
@@ -64,9 +71,15 @@ def test_backfill_run_endpoint(client) -> None:
     assert payload["ok"] is True
     job_identifier = payload["job_id"]
 
-    worker = client.app.state.backfill_worker
-    service = client.app.state.backfill_service
-    _await_backfill(client, worker, service, job_identifier)
+    backfill_service = client.app.state.backfill_service
+    assert isinstance(backfill_service, BackfillService)
+    domain_service = SpotifyDomainService(
+        config=deps.get_app_config(),
+        spotify_client=client.app.state.spotify_stub,
+        soulseek_client=client.app.state.soulseek_stub,
+        app_state=client.app.state,
+    )
+    _await_backfill(client, domain_service, job_identifier)
 
     status_response = client.get(f"/spotify/backfill/jobs/{job_identifier}")
     assert status_response.status_code == 200
