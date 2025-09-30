@@ -433,9 +433,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     router_status = {
         "spotify": True,
-        "spotify_backfill": True,
-        "spotify_free": True,
-        "free_ingest": True,
         "imports": True,
         "soulseek": True,
         "matching": True,

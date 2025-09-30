@@ -10,15 +10,12 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from app.config import AppConfig
-from app.dependencies import get_app_config, get_soulseek_client
+from app.core.soulseek_client import SoulseekClient
+from app.core.spotify_client import SpotifyClient
+from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
 from app.errors import NotFoundError, ValidationAppError
-from app.services.free_ingest_service import (
-    FreeIngestService,
-    IngestSubmission,
-    PlaylistValidationError,
-)
-from app.workers.sync_worker import SyncWorker
+from app.services.free_ingest_service import IngestSubmission, PlaylistValidationError
+from app.services.spotify_domain_service import SpotifyDomainService
 
 
 router = APIRouter(prefix="/spotify/import", tags=["Spotify FREE Ingest"])
@@ -95,18 +92,18 @@ class JobResponse(BaseModel):
     error: Optional[Dict[str, Any]] = None
 
 
-def _resolve_sync_worker(request: Request) -> SyncWorker | None:
-    worker = getattr(request.app.state, "sync_worker", None)
-    return worker if isinstance(worker, SyncWorker) else None
-
-
-def _get_service(
+def _get_spotify_service(
     request: Request,
-    config: AppConfig = Depends(get_app_config),
-    soulseek=Depends(get_soulseek_client),
-) -> FreeIngestService:
-    worker = _resolve_sync_worker(request)
-    return FreeIngestService(config=config, soulseek_client=soulseek, sync_worker=worker)
+    config=Depends(get_app_config),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    soulseek_client: SoulseekClient = Depends(get_soulseek_client),
+) -> SpotifyDomainService:
+    return SpotifyDomainService(
+        config=config,
+        spotify_client=spotify_client,
+        soulseek_client=soulseek_client,
+        app_state=request.app.state,
+    )
 
 
 def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
@@ -142,13 +139,13 @@ def _submission_status_code(result: IngestSubmission) -> int:
 @router.post("/free", response_model=SubmissionResponse)
 async def submit_free_ingest(
     payload: FreeIngestRequest,
-    service: FreeIngestService = Depends(_get_service),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> JSONResponse:
     if not payload.playlist_links and not payload.tracks:
         raise ValidationAppError("playlist_links or tracks required")
 
     try:
-        result = await service.submit(
+        result = await service.submit_free_ingest(
             playlist_links=payload.playlist_links,
             tracks=payload.tracks,
             batch_hint=payload.batch_hint,
@@ -168,7 +165,7 @@ async def submit_free_ingest(
 @router.post("/free/upload", response_model=SubmissionResponse)
 async def upload_free_ingest(
     request: Request,
-    service: FreeIngestService = Depends(_get_service),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> JSONResponse:
     content_type = request.headers.get("content-type") or ""
     body = await request.body()
@@ -181,14 +178,14 @@ async def upload_free_ingest(
         raise ValidationAppError("file is empty")
 
     try:
-        tracks = FreeIngestService.parse_tracks_from_file(content, filename)
+        tracks = service.parse_tracks_from_file(content, filename)
     except ValueError as exc:
         raise ValidationAppError(str(exc)) from exc
 
     if not tracks:
         raise ValidationAppError("no tracks found in file")
 
-    result = await service.submit(tracks=tracks)
+    result = await service.submit_free_ingest(tracks=tracks)
     response = _build_submission_response(result)
     status_code = _submission_status_code(result)
     return JSONResponse(status_code=status_code, content=response.model_dump())
@@ -197,9 +194,9 @@ async def upload_free_ingest(
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_free_ingest_job(
     job_id: str,
-    service: FreeIngestService = Depends(_get_service),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> JobResponse:
-    status_info = service.get_job_status(job_id)
+    status_info = service.get_free_ingest_job(job_id)
     if status_info is None:
         raise NotFoundError("job not found")
 

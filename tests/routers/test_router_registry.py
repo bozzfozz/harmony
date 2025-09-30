@@ -3,10 +3,8 @@ from __future__ import annotations
 from app.api.router_registry import compose_prefix, get_domain_routers
 from app.routers import (
     activity_router,
-    backfill_router,
     download_router,
     dlq_router,
-    free_ingest_router,
     health_router,
     imports_router,
     integrations_router,
@@ -15,8 +13,7 @@ from app.routers import (
     search_router,
     settings_router,
     soulseek_router,
-    spotify_free_router,
-    spotify_router,
+    spotify_domain_router,
     sync_router,
     system_router,
     watchlist_router,
@@ -37,10 +34,7 @@ def test_compose_prefix_handles_empty_segments() -> None:
 
 def test_get_domain_routers_matches_expected_configuration() -> None:
     expected = [
-        ("/spotify", spotify_router, ["Spotify"]),
-        ("/spotify/backfill", backfill_router, ["Spotify Backfill"]),
-        ("", spotify_free_router, []),
-        ("", free_ingest_router, []),
+        ("", spotify_domain_router, []),
         ("", imports_router, []),
         ("/soulseek", soulseek_router, ["Soulseek"]),
         ("/matching", matching_router, ["Matching"]),
@@ -61,4 +55,4 @@ def test_get_domain_routers_matches_expected_configuration() -> None:
 
     first_call = get_domain_routers()
     first_call[0][2].append("Extra")
-    assert get_domain_routers()[0][2] == ["Spotify"]
+    assert get_domain_routers()[0][2] == []
