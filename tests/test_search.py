@@ -113,6 +113,7 @@ def test_search_filters_by_genre(client) -> None:
     for item in body["items"]:
         genres = [genre.lower() for genre in item.get("genres", [])]
         assert any("rock" in genre for genre in genres)
+        assert item["metadata"].get("provider") in {"spotify", "slskd"}
 
 
 def test_search_respects_min_bitrate_and_format_priority(client) -> None:
