@@ -141,6 +141,7 @@ class MatchingWorker:
         while self._running.is_set():
             first_job = await self._queue.get()
             if first_job is None:
+                self._queue.task_done()
                 break
             batch = [first_job]
             while len(batch) < self._batch_size:
@@ -149,6 +150,7 @@ class MatchingWorker:
                 except asyncio.TimeoutError:
                     break
                 if job is None:
+                    self._queue.task_done()
                     await self._queue.put(None)
                     break
                 batch.append(job)
