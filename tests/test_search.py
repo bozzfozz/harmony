@@ -5,7 +5,7 @@ from typing import Any, Dict
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.dependencies import get_provider_gateway as dependency_provider_gateway
+from app.dependencies import get_integration_service as dependency_integration_service
 from app.integrations.provider_gateway import (
     ProviderGatewayInternalError,
     ProviderGatewaySearchResponse,
@@ -196,8 +196,8 @@ def test_search_emits_dependency_logs(client, caplog: pytest.LogCaptureFixture) 
 
 
 def test_search_dependency_failure_maps_to_503(client) -> None:
-    class FailingGateway:
-        async def search_many(self, providers, query):
+    class FailingService:
+        async def search_providers(self, providers, query):
             error = ProviderGatewayInternalError("slskd", "boom")
             return ProviderGatewaySearchResponse(
                 results=(
@@ -209,11 +209,11 @@ def test_search_dependency_failure_maps_to_503(client) -> None:
                 )
             )
 
-    client.app.dependency_overrides[dependency_provider_gateway] = lambda: FailingGateway()
+    client.app.dependency_overrides[dependency_integration_service] = lambda: FailingService()
     try:
         response = client.post("/search", json={"query": "Track", "sources": ["soulseek"]})
     finally:
-        client.app.dependency_overrides.pop(dependency_provider_gateway, None)
+        client.app.dependency_overrides.pop(dependency_integration_service, None)
 
     assert response.status_code == 503
     payload = response.json()
