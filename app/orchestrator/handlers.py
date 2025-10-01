@@ -42,7 +42,7 @@ from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
-from app.services.spotify_domain import SpotifyDomainService
+from app.services.spotify_domain_service import SpotifyDomainService
 from app.utils.activity import record_activity
 from app.utils.events import (
     DOWNLOAD_RETRY_COMPLETED,

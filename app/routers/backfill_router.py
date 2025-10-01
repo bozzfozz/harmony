@@ -1,126 +1,15 @@
-"""Spotify backfill router delegating to :mod:`SpotifyDomainService`."""
+"""Compatibility layer delegating to the unified Spotify backfill router."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from warnings import warn
 
-from app.core.soulseek_client import SoulseekClient
-from app.core.spotify_client import SpotifyClient
-from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
-from app.orchestrator.handlers import (
-    enqueue_spotify_backfill,
-    get_spotify_backfill_status,
+from app.api.spotify import backfill_router as router
+
+warn(
+    "app.routers.backfill_router is deprecated; use app.api.spotify.backfill_router instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
-from app.services.backfill_service import BackfillJobStatus
-from app.services.spotify_domain import SpotifyDomainService
-
-router = APIRouter()
-
-
-class BackfillRunRequest(BaseModel):
-    max_items: int | None = Field(default=None, ge=1, le=10_000)
-    expand_playlists: bool = True
-
-
-class BackfillRunResponse(BaseModel):
-    ok: bool
-    job_id: str
-
-
-class BackfillJobCounts(BaseModel):
-    requested: int
-    processed: int
-    matched: int
-    cache_hits: int
-    cache_misses: int
-    expanded_playlists: int
-    expanded_tracks: int
-
-
-class BackfillJobResponse(BaseModel):
-    ok: bool
-    job_id: str
-    state: str
-    counts: BackfillJobCounts
-    expand_playlists: bool
-    duration_ms: int | None = None
-    error: str | None = None
-
-
-def _get_spotify_service(
-    request: Request,
-    config=Depends(get_app_config),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    soulseek_client: SoulseekClient = Depends(get_soulseek_client),
-) -> SpotifyDomainService:
-    return SpotifyDomainService(
-        config=config,
-        spotify_client=spotify_client,
-        soulseek_client=soulseek_client,
-        app_state=request.app.state,
-    )
-
-
-@router.post("/run", response_model=BackfillRunResponse)
-async def run_backfill(
-    payload: BackfillRunRequest,
-    service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> JSONResponse:
-    if not service.is_authenticated():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Spotify credentials are required for backfill",
-        )
-
-    try:
-        job_id = await enqueue_spotify_backfill(
-            service,
-            max_items=payload.max_items,
-            expand_playlists=payload.expand_playlists,
-        )
-    except PermissionError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Spotify credentials are required for backfill",
-        ) from None
-
-    response = BackfillRunResponse(ok=True, job_id=job_id)
-    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=response.model_dump())
-
-
-def _build_counts(status: BackfillJobStatus) -> BackfillJobCounts:
-    return BackfillJobCounts(
-        requested=status.requested_items,
-        processed=status.processed_items,
-        matched=status.matched_items,
-        cache_hits=status.cache_hits,
-        cache_misses=status.cache_misses,
-        expanded_playlists=status.expanded_playlists,
-        expanded_tracks=status.expanded_tracks,
-    )
-
-
-@router.get("/jobs/{job_id}", response_model=BackfillJobResponse)
-async def get_backfill_job(
-    job_id: str,
-    service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> BackfillJobResponse:
-    status_payload = get_spotify_backfill_status(service, job_id)
-    if status_payload is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-
-    counts = _build_counts(status_payload)
-    return BackfillJobResponse(
-        ok=True,
-        job_id=status_payload.id,
-        state=status_payload.state,
-        counts=counts,
-        expand_playlists=status_payload.expand_playlists,
-        duration_ms=status_payload.duration_ms,
-        error=status_payload.error,
-    )
-
 
 __all__ = ["router"]

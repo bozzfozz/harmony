@@ -645,8 +645,8 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 
 ### Spotify-Domäne (intern)
 
-- **Service-Layer:** `SpotifyDomainService` bündelt Statusabfragen, Playlist-Operationen, FREE-Import und Backfill-Trigger in `app/services/spotify_domain.py`.
-- **Router-Bündelung:** Spotify-Endpunkte werden im Sammelrouter `app/api/spotify.py` registriert und von Legacy-Modulen re-exportiert.
+- **Service-Layer:** `SpotifyDomainService` bündelt Statusabfragen, Playlist-Operationen, FREE-Import und Backfill-Trigger in `app/services/spotify_domain_service.py`.
+- **Router-Bündelung:** Spotify-Endpunkte werden im Sammelrouter `app/api/spotify.py` registriert; die Legacy-Router delegieren lediglich.
 - **Orchestrator-Anbindung:** FREE-Import- und Backfill-Flows nutzen ausschließlich die Orchestrator-Handler; direkte Worker-Initiierung aus Routern entfällt.
 
 Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.
