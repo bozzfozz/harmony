@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping
 import pytest
 from sqlalchemy import select
 
+from app.config import ExternalCallPolicy
 from app.core.matching_engine import MusicMatchingEngine
 from app.models import QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
@@ -198,14 +199,16 @@ async def test_dispatcher_retries_with_backoff(
 
 @pytest.mark.asyncio
 async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     captured_events: list[tuple[str, Mapping[str, Any]]],
 ) -> None:
     caplog.set_level("INFO", logger="app.orchestrator.dispatcher")
-    monkeypatch.setenv("EXTERNAL_RETRY_MAX", "2")
-    monkeypatch.setenv("EXTERNAL_BACKOFF_BASE_MS", "100")
-    monkeypatch.setenv("EXTERNAL_JITTER_PCT", "0")
+    policy = ExternalCallPolicy(
+        timeout_ms=10_000,
+        retry_max=2,
+        backoff_base_ms=100,
+        jitter_pct=0.0,
+    )
 
     job = make_job(3, "sync", attempts=2)
     scheduler = StubScheduler([[job], []])
@@ -222,7 +225,12 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
 
     storage.to_dlq = dlq_hook  # type: ignore[assignment]
 
-    dispatcher = Dispatcher(scheduler, {"sync": handler}, persistence_module=storage)
+    dispatcher = Dispatcher(
+        scheduler,
+        {"sync": handler},
+        persistence_module=storage,
+        external_policy=policy,
+    )
 
     task = asyncio.create_task(dispatcher.run())
     await asyncio.wait_for(dead_lettered.wait(), timeout=1)

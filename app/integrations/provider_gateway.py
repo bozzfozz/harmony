@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Mapping, Sequence
 
+from app.config import ExternalCallPolicy, ProviderProfile, settings
 from app.integrations.contracts import (
     ProviderDependencyError,
     ProviderError,
@@ -35,6 +36,17 @@ class ProviderRetryPolicy:
     backoff_base_ms: int
     jitter_pct: float
 
+    @classmethod
+    def from_external(cls, policy: ExternalCallPolicy) -> "ProviderRetryPolicy":
+        """Create a retry policy from the shared external call policy."""
+
+        return cls(
+            timeout_ms=max(100, policy.timeout_ms),
+            retry_max=max(0, policy.retry_max),
+            backoff_base_ms=max(1, policy.backoff_base_ms),
+            jitter_pct=max(0.0, policy.jitter_pct),
+        )
+
 
 @dataclass(slots=True, frozen=True)
 class ProviderGatewayConfig:
@@ -46,6 +58,28 @@ class ProviderGatewayConfig:
 
     def policy_for(self, provider: str) -> ProviderRetryPolicy:
         return self.provider_policies.get(provider, self.default_policy)
+
+    @classmethod
+    def from_settings(
+        cls,
+        *,
+        max_concurrency: int,
+        external_policy: ExternalCallPolicy | None = None,
+        provider_profiles: Mapping[str, ProviderProfile] | None = None,
+    ) -> "ProviderGatewayConfig":
+        """Create a gateway configuration backed by centralised settings."""
+
+        external = external_policy or settings.external
+        profiles = provider_profiles or settings.provider_profiles
+        default_policy = ProviderRetryPolicy.from_external(external)
+        provider_policies: dict[str, ProviderRetryPolicy] = {}
+        for name, profile in profiles.items():
+            provider_policies[name.lower()] = ProviderRetryPolicy.from_external(profile.policy)
+        return cls(
+            max_concurrency=max(1, max_concurrency),
+            default_policy=default_policy,
+            provider_policies=provider_policies,
+        )
 
 
 class ProviderGatewayError(RuntimeError):

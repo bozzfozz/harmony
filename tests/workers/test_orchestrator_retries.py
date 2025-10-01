@@ -7,6 +7,7 @@ import random
 
 import pytest
 
+from app.config import ExternalCallPolicy
 from app.orchestrator.dispatcher import Dispatcher
 
 
@@ -27,11 +28,15 @@ class _StubScheduler:
 
 @pytest.mark.asyncio
 async def test_dispatcher_sends_job_to_dlq_after_max_retries(
-    monkeypatch: pytest.MonkeyPatch,
     queue_job_factory,
     stub_queue_persistence,
 ) -> None:
-    monkeypatch.setenv("EXTERNAL_RETRY_MAX", "2")
+    policy = ExternalCallPolicy(
+        timeout_ms=10_000,
+        retry_max=2,
+        backoff_base_ms=250,
+        jitter_pct=0.2,
+    )
     job = queue_job_factory(job_id=11, job_type="sync", attempts=2, lease_timeout_seconds=30)
     scheduler = _StubScheduler([job])
 
@@ -43,6 +48,7 @@ async def test_dispatcher_sends_job_to_dlq_after_max_retries(
         handlers={"sync": failing_handler},
         persistence_module=stub_queue_persistence,
         rng=random.Random(1234),
+        external_policy=policy,
     )
 
     task = asyncio.create_task(dispatcher.run())

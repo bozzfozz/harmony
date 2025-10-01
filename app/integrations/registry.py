@@ -51,16 +51,15 @@ class ProviderRegistry:
 
     @property
     def gateway_config(self) -> ProviderGatewayConfig:
-        default_policy = ProviderRetryPolicy(
-            timeout_ms=15_000,
-            retry_max=0,
-            backoff_base_ms=50,
-            jitter_pct=0.1,
-        )
-        return ProviderGatewayConfig(
+        base_config = ProviderGatewayConfig.from_settings(
             max_concurrency=self._config.integrations.max_concurrency,
-            default_policy=default_policy,
-            provider_policies=dict(self._policies),
+        )
+        provider_policies: dict[str, ProviderRetryPolicy] = dict(self._policies)
+        provider_policies.update(base_config.provider_policies)
+        return ProviderGatewayConfig(
+            max_concurrency=base_config.max_concurrency,
+            default_policy=base_config.default_policy,
+            provider_policies=provider_policies,
         )
 
     @property
