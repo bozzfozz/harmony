@@ -476,8 +476,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `EXTERNAL_RETRY_MAX` | int | `3` | Maximalzahl an Retries bei transienten Abhängigkeiten. | — |
 | `EXTERNAL_BACKOFF_BASE_MS` | int | `250` | Basiswert für exponentiellen Backoff externer Aufrufe. | — |
 | `EXTERNAL_JITTER_PCT` | int | `20` | Zufallsjitter (±%) für Backoff-Delays. | — |
-| `WORKER_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer für Worker-Jobs bevor eine Redelivery ausgelöst wird. | — |
-| `WORKER_HEARTBEAT_S` | int | `20` | Intervall für Heartbeats, die eine laufende Lease verlängern. | — |
+| `WORKER_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer, die beim Enqueue von Jobs als Default in das Payload geschrieben wird; sollte mit `ORCH_VISIBILITY_TIMEOUT_S` harmonieren. | — |
 | `SYNC_WORKER_CONCURRENCY` | int | `2` | Parallele Downloads (kann via Setting überschrieben werden). | — |
 | `RETRY_MAX_ATTEMPTS` | int | `10` | Max. automatische Neuversuche je Download. | — |
 | `RETRY_BASE_SECONDS` | float | `60` | Grundverzögerung für Download-Retries. | — |
@@ -498,6 +497,37 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `MUSIC_DIR` | path | `./music` | Zielpfad für organisierte Downloads. | — |
 
 > **Hinweis:** Spotify- und slskd-Zugangsdaten können über `/settings` in der Datenbank persistiert werden. Beim Laden der Anwendung haben Datenbankwerte Vorrang vor Umgebungsvariablen; ENV-Variablen dienen als Fallback und Basis für neue Deployments. Eine ausführliche Laufzeitreferenz inkl. Überschneidungen mit Datenbank-Settings befindet sich in [`docs/ops/runtime-config.md`](docs/ops/runtime-config.md).
+
+### Orchestrator & Queue-Steuerung
+
+Harmony bündelt alle Hintergrundjobs in einem Orchestrator, der die Queue priorisiert, Leases erneuert und periodische Watchlist-Ticks kontrolliert. Der Orchestrator ersetzt die früheren Worker-Runner und stellt reproduzierbare Start/Stop-Sequenzen bereit.
+
+**Komponenten**
+
+- **Scheduler** (`app/orchestrator/scheduler.py`) liest `queue_jobs`, sortiert sie nach konfigurierbaren Prioritäten und leased sie mit einem gemeinsamen Sichtbarkeits-Timeout. Stop-Signale werden über Ereignisse propagiert, sodass der Scheduler ohne Race-Conditions endet.
+- **Dispatcher** (`app/orchestrator/dispatcher.py`) respektiert globale und Pool-bezogene Parallelitätsgrenzen, startet Handler pro Job-Typ und pflegt Heartbeats. Jeder Lauf emittiert strukturierte `event=orchestrator.*` Logs für Schedule-, Lease-, Dispatch- und Commit-Phasen.
+- **WatchlistTimer** (`app/orchestrator/timer.py`) triggert periodisch neue Watchlist-Jobs, respektiert dabei dieselben Stop-Events und wartet beim Shutdown auf laufende Ticks. Das verhindert, dass nach einem Shutdown noch neue Artists eingeplant werden.
+
+**Sichtbarkeit & Heartbeats**
+
+- Scheduler und Dispatcher teilen sich eine Lease-Dauer: `ORCH_VISIBILITY_TIMEOUT_S` setzt die Leasing-Zeit beim Abruf aus der Queue, während `WORKER_VISIBILITY_TIMEOUT_S` weiterhin die Default-Lease beim Enqueue bestimmt. Beide Werte sollten konsistent bleiben, insbesondere für langlaufende Downloads.
+- Während der Ausführung sendet der Dispatcher Heartbeats im 50 %-Intervall der aktuellen Lease (`lease_timeout_seconds * 0.5`). Die Heartbeats verlängern das Lease per `persistence.heartbeat()` und melden „lost“-Events, wenn ein Lease unerwartet abläuft.
+
+**Timer-Verhalten**
+
+- Der WatchlistTimer startet nur, wenn `WATCHLIST_INTERVAL` > 0 und der Feature-Flag aktiv ist. Ein Shutdown löst ein Stop-Event aus, wartet die in `WATCHLIST_SHUTDOWN_GRACE_MS` definierte Grace-Periode ab und bricht laufende Tasks andernfalls hart ab. Busy-Ticks werden übersprungen (`status="skipped"`, `reason="busy"`).
+- Erfolgreiche Läufe protokollieren Anzahl der geladenen Artists, eingeplante Jobs sowie Fehler. Bei deaktiviertem Timer sendet der Orchestrator ein `status="disabled"`-Event – nützlich für Diagnose in Read-only-Setups.
+
+#### Orchestrator-Variablen
+
+| Variable | Typ | Default | Beschreibung | Sicherheit |
+| --- | --- | --- | --- | --- |
+| `ORCH_PRIORITY_JSON` | json | _(leer)_ | Optionales Mapping `job_type → priority`. JSON besitzt Vorrang vor CSV. | — |
+| `ORCH_PRIORITY_CSV` | string | `sync:100,watchlist:60,retry:20` | Fallback für Prioritäten (`job:score`). Unbekannte Job-Typen werden ignoriert. | — |
+| `ORCH_POLL_INTERVAL_MS` | int | `250` | Wartezeit zwischen Scheduler-Ticks (mindestens 10 ms). | — |
+| `ORCH_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer beim Leasing aus der Queue (Minimum 5 s). | — |
+| `ORCH_GLOBAL_CONCURRENCY` | int | `10` | Globale Obergrenze paralleler Dispatcher-Tasks. | — |
+| `ORCH_POOL_<JOB>` | int | _(leer)_ | Optionale per-Job-Limits (z. B. `ORCH_POOL_SYNC=3`). Fällt ohne Wert auf das globale Limit zurück. | — |
 
 ### Background Workers
 

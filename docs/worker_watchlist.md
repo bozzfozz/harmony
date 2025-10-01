@@ -2,8 +2,11 @@
 
 The watchlist worker polls Spotify for new releases of the artists that are
 stored in `watchlist_artists` and schedules missing tracks for download via the
-SyncWorker. The new implementation is fully async-friendly, time-bounded and
-supports deterministic shutdown semantics.
+SyncWorker. The orchestration is handled by the global Scheduler/Dispatcher
+combo: the WatchlistTimer enqueues jobs on its interval, honours orchestrator
+stop events and prevents new ticks while shutdown is in progress. The new
+implementation is fully async-friendly, time-bounded and supports deterministic
+shutdown semantics.
 
 ## Execution Flow
 

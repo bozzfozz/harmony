@@ -13,6 +13,10 @@
 - Public-API: unverändert / geändert (OpenAPI aktualisiert)
 - DB/Migration: nein / ja (idempotent, rollback-fähig)
 
+## Migration & Deployment
+- Migration ausgeführt (`alembic upgrade head`): ja/nein
+- ENV-Defaults geprüft/kommuniziert (siehe README „Orchestrator & Queue-Steuerung“, `docs/workers.md`):
+
 ## Doku & ToDo
 - README/CHANGELOG/ADR aktualisiert: ja/nein
 - ToDo.md aktualisiert (Nachweis-Link):

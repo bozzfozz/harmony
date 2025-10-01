@@ -37,7 +37,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 - Spotify/slskd-Zeitlimits (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`) greifen sowohl in REST-Endpunkten als auch in Workern (z. B. Watchlist).
 - `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn SQLite-Locks auftreten, oder schalte auf `WATCHLIST_DB_IO_MODE=async`, sobald eine asynchrone Datenbank verwendet wird.
-- Download-Retries (`RETRY_*`) und Scheduler-Limits (`RETRY_SCAN_*`) greifen sowohl für Live-Downloads als auch für den `RetryScheduler`.
+- Download-Retries (`RETRY_*`) konfigurieren die Sync-/Retry-Handler des Orchestrators; die historischen `RETRY_SCAN_*`-Werte werden nur noch für Legacy-Fallbacks gelesen.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
 
 ## Frontend & Runtime Injection
