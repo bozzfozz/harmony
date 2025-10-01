@@ -29,6 +29,11 @@ def test_flags_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
         assert flags.enable_lyrics is False
         assert flags.enable_legacy_routes is False
 
+        orchestrator_status = client.app.state.orchestrator_status
+        enabled_jobs = orchestrator_status.get("enabled_jobs", {})
+        assert enabled_jobs.get("artwork") is False
+        assert enabled_jobs.get("lyrics") is False
+
         artwork_response = client.get("/soulseek/download/999/artwork")
         assert artwork_response.status_code == 503
         assert artwork_response.json() == {
@@ -95,6 +100,11 @@ def test_enable_artwork_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
         assert flags.enable_artwork is True
         assert flags.enable_lyrics is False
 
+        orchestrator_status = client.app.state.orchestrator_status
+        enabled_jobs = orchestrator_status.get("enabled_jobs", {})
+        assert enabled_jobs.get("artwork") is True
+        assert enabled_jobs.get("lyrics") is False
+
         artwork_response = client.get(f"/soulseek/download/{download_id}/artwork")
         assert artwork_response.status_code == 200
         assert artwork_response._body == b"cover"
@@ -133,6 +143,11 @@ def test_enable_lyrics_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         flags = client.app.state.feature_flags
         assert flags.enable_artwork is False
         assert flags.enable_lyrics is True
+
+        orchestrator_status = client.app.state.orchestrator_status
+        enabled_jobs = orchestrator_status.get("enabled_jobs", {})
+        assert enabled_jobs.get("artwork") is False
+        assert enabled_jobs.get("lyrics") is True
 
         lyrics_response = client.get(f"/soulseek/download/{download_id}/lyrics")
         assert lyrics_response.status_code == 200

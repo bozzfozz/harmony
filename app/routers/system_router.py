@@ -130,8 +130,23 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
     result = await service.readiness()
     duration_ms = (time.perf_counter() - start) * 1000
     deps = result.dependencies
-    deps_up = sum(1 for status in deps.values() if status == "up")
-    deps_down = sum(1 for status in deps.values() if status != "up")
+    orchestrator_components: dict[str, str] = {}
+    orchestrator_jobs: dict[str, str] = {}
+    filtered_deps: dict[str, str] = {}
+    for name, status_text in deps.items():
+        if name.startswith("orchestrator:job:"):
+            _, _, job_name = name.partition(":job:")
+            orchestrator_jobs[job_name or name] = status_text
+        elif name.startswith("orchestrator:"):
+            _, _, component = name.partition(":")
+            orchestrator_components[component or name] = status_text
+        else:
+            filtered_deps[name] = status_text
+    orchestrator_status = getattr(request.app.state, "orchestrator_status", {})
+    orchestrator_enabled_jobs = dict(orchestrator_status.get("enabled_jobs", {}))
+    healthy_statuses = {"up", "enabled", "disabled", "not_required"}
+    deps_up = sum(1 for status in deps.values() if status in healthy_statuses)
+    deps_down = sum(1 for status in deps.values() if status not in healthy_statuses)
     logger.info(
         "Reporting readiness status",  # pragma: no cover - logging string
         extra={
@@ -147,7 +162,12 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
             "ok": True,
             "data": {
                 "db": result.database,
-                "deps": deps,
+                "deps": filtered_deps,
+                "orchestrator": {
+                    "components": orchestrator_components,
+                    "jobs": orchestrator_jobs,
+                    "enabled_jobs": orchestrator_enabled_jobs,
+                },
             },
             "error": None,
         }
@@ -157,6 +177,11 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
         meta={
             "db": result.database,
             "deps": deps,
+            "orchestrator": {
+                "components": orchestrator_components,
+                "jobs": orchestrator_jobs,
+                "enabled_jobs": orchestrator_enabled_jobs,
+            },
         },
     )
     response = error.as_response(request_path=request.url.path, method=request.method)

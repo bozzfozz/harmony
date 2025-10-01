@@ -28,6 +28,14 @@ class HealthSummary:
 
 
 @dataclass(frozen=True)
+class DependencyStatus:
+    """Represents the outcome of a single dependency probe."""
+
+    ok: bool
+    status: str
+
+
+@dataclass(frozen=True)
 class ReadinessResult:
     """Outcome of readiness probes for dependencies."""
 
@@ -36,7 +44,7 @@ class ReadinessResult:
     dependencies: dict[str, str]
 
 
-Probe = Callable[[], bool | Awaitable[bool]]
+Probe = Callable[[], bool | str | DependencyStatus | Awaitable[bool | str | DependencyStatus]]
 
 
 class HealthService:
@@ -57,9 +65,15 @@ class HealthService:
         self._version = version
         self._config = config
         self._session_factory = session_factory
-        self._dependency_names = tuple(config.dependencies)
+        resolved_probes = dependency_probes or {}
+        dependency_names = [name.lower() for name in config.dependencies]
+        for probe_name in resolved_probes.keys():
+            normalized = probe_name.lower()
+            if normalized not in dependency_names:
+                dependency_names.append(normalized)
+        self._dependency_names = tuple(dict.fromkeys(dependency_names))
         self._dependency_probes = {
-            name.lower(): probe for name, probe in (dependency_probes or {}).items()
+            name.lower(): probe for name, probe in resolved_probes.items()
         }
 
     def liveness(self) -> HealthSummary:
@@ -73,16 +87,19 @@ class HealthService:
         """Execute readiness probes for the database and configured dependencies."""
 
         db_task = asyncio.create_task(self._probe_database())
-        dependency_tasks: dict[str, asyncio.Task[str]] = {}
+        dependency_tasks: dict[str, asyncio.Task[DependencyStatus]] = {}
         for name in self._dependency_names:
             dependency_tasks[name] = asyncio.create_task(self._probe_dependency(name))
 
         database_status = await db_task
         dependencies: dict[str, str] = {}
+        dependency_states: dict[str, DependencyStatus] = {}
         for name, task in dependency_tasks.items():
-            dependencies[name] = await task
+            status = await task
+            dependency_states[name] = status
+            dependencies[name] = status.status
 
-        deps_ok = all(status == "up" for status in dependencies.values())
+        deps_ok = all(state.ok for state in dependency_states.values())
         db_ok = database_status == "up"
         ready = deps_ok and (db_ok or not self._config.require_database)
         return ReadinessResult(ok=ready, database=database_status, dependencies=dependencies)
@@ -112,13 +129,13 @@ class HealthService:
         finally:
             session.close()
 
-    async def _probe_dependency(self, name: str) -> str:
+    async def _probe_dependency(self, name: str) -> DependencyStatus:
         normalized = name.lower()
         timeout = max(0.1, self._config.dependency_timeout_ms / 1000.0)
         probe = self._dependency_probes.get(normalized)
         try:
             if probe is None:
-                awaitable: Awaitable[bool] = asyncio.to_thread(
+                awaitable: Awaitable[bool | str | DependencyStatus] = asyncio.to_thread(
                     self._default_dependency_probe, normalized
                 )
             else:
@@ -126,15 +143,16 @@ class HealthService:
                 if isinstance(result, Awaitable):
                     awaitable = result
                 else:
-                    awaitable = asyncio.sleep(0, result=bool(result))
-            success = await asyncio.wait_for(awaitable, timeout=timeout)
+                    awaitable = asyncio.sleep(0, result=result)
+            raw_status = await asyncio.wait_for(awaitable, timeout=timeout)
         except asyncio.TimeoutError:
             logger.warning("Dependency probe timed out", extra={"dependency": name})
-            return "down"
+            return DependencyStatus(ok=False, status="down")
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning("Dependency probe failed", exc_info=exc, extra={"dependency": name})
-            return "down"
-        return "up" if success else "down"
+            return DependencyStatus(ok=False, status="down")
+        normalized_status = self._normalise_dependency_status(raw_status)
+        return normalized_status
 
     def _default_dependency_probe(self, name: str) -> bool:
         session = self._session_factory()
@@ -146,6 +164,25 @@ class HealthService:
         finally:
             session.close()
         return health.status == "ok"
+
+    @staticmethod
+    def _normalise_dependency_status(value: bool | str | DependencyStatus) -> DependencyStatus:
+        if isinstance(value, DependencyStatus):
+            status = value.status.strip().lower() or ("up" if value.ok else "down")
+            return DependencyStatus(ok=value.ok, status=status)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if not normalized:
+                return DependencyStatus(ok=False, status="down")
+            if normalized in {"up", "ready", "running"}:
+                return DependencyStatus(ok=True, status="up")
+            if normalized in {"disabled", "skipped", "not_required"}:
+                return DependencyStatus(ok=True, status=normalized)
+            if normalized in {"down", "stopped", "failed", "error"}:
+                return DependencyStatus(ok=False, status=normalized)
+            return DependencyStatus(ok=False, status=normalized)
+        status = "up" if bool(value) else "down"
+        return DependencyStatus(ok=bool(value), status=status)
 
     @property
     def dependency_names(self) -> tuple[str, ...]:

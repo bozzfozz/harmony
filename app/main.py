@@ -40,7 +40,7 @@ from app.errors import (
     rate_limit_meta,
     to_response,
 )
-from app.services.health import HealthService
+from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
 from app.middleware.request_id import RequestIDMiddleware
@@ -185,6 +185,74 @@ def _mount_domain_routers(
         )
 
 
+def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
+    return {
+        "enabled_jobs": {
+            "sync": True,
+            "matching": True,
+            "retry": True,
+            "watchlist": True,
+            "artwork": artwork_enabled,
+            "lyrics": lyrics_enabled,
+        },
+        "scheduler_running": False,
+        "dispatcher_running": False,
+        "scheduler_expected": False,
+        "dispatcher_expected": False,
+    }
+
+
+def _ensure_orchestrator_status(app: FastAPI) -> dict[str, Any]:
+    status = getattr(app.state, "orchestrator_status", None)
+    if status is None:
+        feature_flags = getattr(app.state, "feature_flags", _config_snapshot.features)
+        status = _initial_orchestrator_status(
+            artwork_enabled=getattr(feature_flags, "enable_artwork", False),
+            lyrics_enabled=getattr(feature_flags, "enable_lyrics", False),
+        )
+        app.state.orchestrator_status = status
+    return status
+
+
+def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStatus]:
+    def _probe() -> DependencyStatus:
+        status = getattr(app.state, "orchestrator_status", None)
+        if status is None:
+            return DependencyStatus(ok=False, status="unknown")
+
+        if component == "scheduler":
+            expected = status.get("scheduler_expected", True)
+            if not expected:
+                return DependencyStatus(ok=True, status="disabled")
+            running = bool(status.get("scheduler_running"))
+            return DependencyStatus(ok=running, status="up" if running else "down")
+        if component == "dispatcher":
+            expected = status.get("dispatcher_expected", True)
+            if not expected:
+                return DependencyStatus(ok=True, status="disabled")
+            running = bool(status.get("dispatcher_running"))
+            return DependencyStatus(ok=running, status="up" if running else "down")
+
+        enabled_jobs = status.get("enabled_jobs", {})
+        enabled = enabled_jobs.get(component)
+        if enabled is None:
+            return DependencyStatus(ok=False, status="unknown")
+        return DependencyStatus(ok=True, status="enabled" if enabled else "disabled")
+
+    return _probe
+
+
+def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
+    jobs = ("sync", "matching", "retry", "watchlist", "artwork", "lyrics")
+    probes: dict[str, Callable[[], DependencyStatus]] = {
+        "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
+        "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),
+    }
+    for job in jobs:
+        probes[f"orchestrator:job:{job}"] = _orchestrator_component_probe(job)
+    return probes
+
+
 _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
 _LEGACY_ROUTES_ENABLED = _config_snapshot.features.enable_legacy_routes
@@ -281,6 +349,7 @@ async def _start_orchestrator_workers(
     soulseek_client = get_soulseek_client()
 
     state = app.state
+    orchestrator_status = _ensure_orchestrator_status(app)
     worker_status: dict[str, bool] = {
         "artwork": False,
         "lyrics": False,
@@ -298,12 +367,14 @@ async def _start_orchestrator_workers(
         )
         await state.artwork_worker.start()
         worker_status["artwork"] = True
+    orchestrator_status["enabled_jobs"]["artwork"] = bool(state.artwork_worker)
 
     state.lyrics_worker = None
     if enable_lyrics:
         state.lyrics_worker = LyricsWorker(spotify_client=spotify_client)
         await state.lyrics_worker.start()
         worker_status["lyrics"] = True
+    orchestrator_status["enabled_jobs"]["lyrics"] = bool(state.lyrics_worker)
 
     state.rich_metadata_worker = MetadataWorker(spotify_client=spotify_client)
     await state.rich_metadata_worker.start()
@@ -322,6 +393,12 @@ async def _start_orchestrator_workers(
     ]
     worker_status["orchestrator_scheduler"] = True
     worker_status["orchestrator_dispatcher"] = True
+    orchestrator_status["scheduler_running"] = True
+    orchestrator_status["dispatcher_running"] = True
+    orchestrator_status["scheduler_expected"] = True
+    orchestrator_status["dispatcher_expected"] = True
+    for job_type, enabled in orchestrator.enabled_jobs.items():
+        orchestrator_status["enabled_jobs"][job_type] = bool(enabled)
 
     return worker_status
 
@@ -356,6 +433,7 @@ async def _stop_worker(worker: Any) -> None:
 
 async def _stop_orchestrator_workers(app: FastAPI) -> None:
     state = app.state
+    orchestrator_status = getattr(state, "orchestrator_status", None)
 
     tasks = list(getattr(state, "orchestrator_tasks", []))
     stop_event: asyncio.Event | None = getattr(state, "orchestrator_stop_event", None)
@@ -380,6 +458,15 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
         if hasattr(state, attribute):
             delattr(state, attribute)
 
+    if orchestrator_status is not None:
+        orchestrator_status["scheduler_running"] = False
+        orchestrator_status["dispatcher_running"] = False
+        orchestrator_status["scheduler_expected"] = False
+        orchestrator_status["dispatcher_expected"] = False
+        enabled_jobs = orchestrator_status.get("enabled_jobs", {})
+        for job in ("artwork", "lyrics"):
+            enabled_jobs[job] = False
+
 
 async def _stop_background_workers(app: FastAPI) -> None:  # pragma: no cover - compatibility shim
     """Compatibility wrapper forwarding to orchestrator shutdown."""
@@ -401,10 +488,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.feature_flags = feature_flags
     app.state.api_base_path = config.api_base_path
     app.state.legacy_routes_enabled = feature_flags.enable_legacy_routes
+    orchestrator_status = _ensure_orchestrator_status(app)
 
     enable_artwork = feature_flags.enable_artwork
     enable_lyrics = feature_flags.enable_lyrics
     legacy_routes_enabled = feature_flags.enable_legacy_routes
+
+    enabled_jobs = orchestrator_status.setdefault("enabled_jobs", {})
+    enabled_jobs.update(
+        {
+            "sync": True,
+            "matching": True,
+            "retry": True,
+            "watchlist": True,
+            "artwork": enable_artwork,
+            "lyrics": enable_lyrics,
+        }
+    )
+    orchestrator_status["scheduler_running"] = False
+    orchestrator_status["dispatcher_running"] = False
+    orchestrator_status["scheduler_expected"] = workers_enabled
+    orchestrator_status["dispatcher_expected"] = workers_enabled
 
     worker_status: dict[str, bool] = {}
 
@@ -417,6 +521,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     else:
         logger.info("Background workers disabled via HARMONY_DISABLE_WORKERS")
+        worker_status = {
+            "artwork": False,
+            "lyrics": False,
+            "metadata": False,
+            "orchestrator_scheduler": False,
+            "orchestrator_dispatcher": False,
+        }
 
     router_status = {
         "spotify": True,
@@ -441,6 +552,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "legacy_routes": legacy_routes_enabled,
     }
 
+    orchestrator_jobs = dict(orchestrator_status.get("enabled_jobs", {}))
+
     enabled_providers = {name: True for name in config.integrations.enabled}
     logger.info(
         "wiring_summary routers=%s workers=%s flags=%s integrations=%s",
@@ -455,6 +568,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "flags": flag_status,
             "integrations": enabled_providers,
             "api_base_path": config.api_base_path,
+            "orchestrator_jobs": orchestrator_jobs,
+            "orchestrator_components": {
+                "scheduler": orchestrator_status.get("scheduler_running", False),
+                "dispatcher": orchestrator_status.get("dispatcher_running", False),
+            },
         },
     )
 
@@ -482,11 +600,16 @@ app = FastAPI(
 _apply_security_dependencies(app, _config_snapshot.security)
 
 app.state.start_time = _APP_START_TIME
+app.state.orchestrator_status = _initial_orchestrator_status(
+    artwork_enabled=_config_snapshot.features.enable_artwork,
+    lyrics_enabled=_config_snapshot.features.enable_lyrics,
+)
 app.state.health_service = HealthService(
     start_time=_APP_START_TIME,
     version=app.version,
     config=_config_snapshot.health,
     session_factory=get_session,
+    dependency_probes=_build_orchestrator_dependency_probes(),
 )
 app.state.secret_validation_service = SecretValidationService()
 
