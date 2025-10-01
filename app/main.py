@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -28,13 +29,7 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
 from app.api.router_registry import compose_prefix as build_router_prefix, get_domain_routers
 from app.config import AppConfig, SecurityConfig
 from app.core.config import DEFAULT_SETTINGS
-from app.dependencies import (
-    get_app_config,
-    get_matching_engine,
-    get_soulseek_client,
-    get_spotify_client,
-    require_api_key,
-)
+from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client, require_api_key
 from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
@@ -45,7 +40,6 @@ from app.errors import (
     rate_limit_meta,
     to_response,
 )
-from app.services.backfill_service import BackfillService
 from app.services.health import HealthService
 from app.services.secret_validation import SecretValidationService
 from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
@@ -53,17 +47,8 @@ from app.middleware.request_id import RequestIDMiddleware
 from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
-from app.workers import (
-    ArtworkWorker,
-    BackfillWorker,
-    LyricsWorker,
-    MatchingWorker,
-    MetadataWorker,
-    PlaylistSyncWorker,
-    SyncWorker,
-    WatchlistWorker,
-)
-from app.workers.retry_scheduler import RetryScheduler
+from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
+from app.workers import ArtworkWorker, LyricsWorker, MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
@@ -283,28 +268,25 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
     )
 
 
-async def _start_background_workers(
+async def _start_orchestrator_workers(
     app: FastAPI,
     config: AppConfig,
     *,
     enable_artwork: bool,
     enable_lyrics: bool,
 ) -> dict[str, bool]:
-    soulseek_client = get_soulseek_client()
-    matching_engine = get_matching_engine()
+    """Initialise orchestrator components and optional media workers."""
+
     spotify_client = get_spotify_client()
+    soulseek_client = get_soulseek_client()
 
     state = app.state
     worker_status: dict[str, bool] = {
         "artwork": False,
         "lyrics": False,
         "metadata": False,
-        "sync": False,
-        "retry_scheduler": False,
-        "matching": False,
-        "playlist_sync": False,
-        "backfill": False,
-        "watchlist": False,
+        "orchestrator_scheduler": False,
+        "orchestrator_dispatcher": False,
     }
 
     state.artwork_worker = None
@@ -323,48 +305,42 @@ async def _start_background_workers(
         await state.lyrics_worker.start()
         worker_status["lyrics"] = True
 
-    state.rich_metadata_worker = MetadataWorker(
-        spotify_client=spotify_client,
-    )
+    state.rich_metadata_worker = MetadataWorker(spotify_client=spotify_client)
     await state.rich_metadata_worker.start()
     worker_status["metadata"] = True
 
-    state.sync_worker = SyncWorker(
-        soulseek_client,
-        metadata_worker=state.rich_metadata_worker,
-        artwork_worker=state.artwork_worker,
-        lyrics_worker=state.lyrics_worker,
+    orchestrator = bootstrap_orchestrator(
+        metadata_service=state.rich_metadata_worker,
+        artwork_service=state.artwork_worker,
+        lyrics_service=state.lyrics_worker,
     )
-    await state.sync_worker.start()
-    worker_status["sync"] = True
+    state.orchestrator_runtime = orchestrator
+    state.orchestrator_stop_event = asyncio.Event()
+    state.orchestrator_tasks = [
+        asyncio.create_task(orchestrator.scheduler.run(state.orchestrator_stop_event)),
+        asyncio.create_task(orchestrator.dispatcher.run(state.orchestrator_stop_event)),
+    ]
+    worker_status["orchestrator_scheduler"] = True
+    worker_status["orchestrator_dispatcher"] = True
 
-    state.retry_scheduler = RetryScheduler(state.sync_worker)
-    await state.retry_scheduler.start()
-    worker_status["retry_scheduler"] = True
-
-    state.matching_worker = MatchingWorker(matching_engine)
-    await state.matching_worker.start()
-    worker_status["matching"] = True
-
-    state.playlist_worker = PlaylistSyncWorker(spotify_client)
-    await state.playlist_worker.start()
-    worker_status["playlist_sync"] = True
-
-    state.backfill_service = BackfillService(config.spotify, spotify_client)
-    state.backfill_worker = BackfillWorker(state.backfill_service)
-    await state.backfill_worker.start()
-    worker_status["backfill"] = True
-
-    interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
-    state.watchlist_worker = WatchlistWorker(
-        config=config.watchlist,
-        interval_seconds=interval_seconds,
-    )
-    await state.watchlist_worker.start()
-    worker_status["watchlist"] = True
-
-    state.metadata_worker = None
     return worker_status
+
+
+async def _start_background_workers(
+    app: FastAPI,
+    config: AppConfig,
+    *,
+    enable_artwork: bool,
+    enable_lyrics: bool,
+) -> dict[str, bool]:  # pragma: no cover - compatibility shim
+    """Compatibility wrapper forwarding to orchestrator worker startup."""
+
+    return await _start_orchestrator_workers(
+        app,
+        config,
+        enable_artwork=enable_artwork,
+        enable_lyrics=enable_lyrics,
+    )
 
 
 async def _stop_worker(worker: Any) -> None:
@@ -378,23 +354,37 @@ async def _stop_worker(worker: Any) -> None:
         await result
 
 
-async def _stop_background_workers(app: FastAPI) -> None:
+async def _stop_orchestrator_workers(app: FastAPI) -> None:
     state = app.state
-    for attribute in [
-        "artwork_worker",
-        "lyrics_worker",
-        "rich_metadata_worker",
-        "retry_scheduler",
-        "sync_worker",
-        "matching_worker",
-        "playlist_worker",
-        "backfill_worker",
-        "watchlist_worker",
-        "metadata_worker",
-    ]:
+
+    tasks = list(getattr(state, "orchestrator_tasks", []))
+    stop_event: asyncio.Event | None = getattr(state, "orchestrator_stop_event", None)
+    runtime: OrchestratorRuntime | None = getattr(state, "orchestrator_runtime", None)
+
+    if runtime is not None:
+        runtime.dispatcher.request_stop()
+        runtime.scheduler.request_stop()
+
+    if stop_event is not None:
+        stop_event.set()
+
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    for attribute in ("orchestrator_tasks", "orchestrator_stop_event", "orchestrator_runtime"):
+        if hasattr(state, attribute):
+            delattr(state, attribute)
+
+    for attribute in ("artwork_worker", "lyrics_worker", "rich_metadata_worker"):
         await _stop_worker(getattr(state, attribute, None))
         if hasattr(state, attribute):
             delattr(state, attribute)
+
+
+async def _stop_background_workers(app: FastAPI) -> None:  # pragma: no cover - compatibility shim
+    """Compatibility wrapper forwarding to orchestrator shutdown."""
+
+    await _stop_orchestrator_workers(app)
 
 
 @asynccontextmanager
@@ -419,7 +409,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     worker_status: dict[str, bool] = {}
 
     if workers_enabled:
-        worker_status = await _start_background_workers(
+        worker_status = await _start_orchestrator_workers(
             app,
             config,
             enable_artwork=enable_artwork,
@@ -472,7 +462,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await _stop_background_workers(app)
+        await _stop_orchestrator_workers(app)
         logger.info("Harmony application stopped")
 
 
