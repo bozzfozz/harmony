@@ -3,7 +3,7 @@ from sqlalchemy import select
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.models import Match, WorkerJob
+from app.models import Match, QueueJob, QueueJobStatus
 from app.utils.settings_store import read_setting
 from app.workers.matching_worker import MatchingWorker
 from app.workers.sync_worker import SyncWorker
@@ -32,8 +32,8 @@ async def test_sync_worker_persists_jobs() -> None:
     assert client.downloads, "Download should be triggered even when worker is stopped"
 
     with session_scope() as session:
-        job = session.execute(select(WorkerJob)).scalar_one()
-        assert job.state == "completed"
+        job = session.execute(select(QueueJob)).scalar_one()
+        assert job.status == QueueJobStatus.COMPLETED.value
         assert job.attempts == 1
 
     assert read_setting("metrics.sync.jobs_completed") == "1"

@@ -1,4 +1,4 @@
-"""Persistence helpers for worker job queues with leases and idempotency."""
+"""Persistence helpers for the generic `QueueJob` worker queue."""
 
 from __future__ import annotations
 
@@ -7,13 +7,14 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterable, List, Sequence
+from typing import Any, Iterable, List, Mapping, Sequence
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, func, select, update
+from sqlalchemy.orm import Session
 
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import WorkerJob
+from app.models import QueueJob, QueueJobStatus
 
 
 logger = get_logger(__name__)
@@ -23,342 +24,510 @@ def _utcnow() -> datetime:
     return datetime.utcnow()
 
 
-def _extract_priority(payload: dict) -> int:
-    value = payload.get("priority", 0)
+def _safe_int(value: Any, default: int) -> int:
     try:
-        return int(value)
-    except (TypeError, ValueError):  # pragma: no cover - defensive fallback
-        return 0
-
-
-def _coerce_int(value: object, default: int) -> int:
-    try:
-        candidate = int(value)  # type: ignore[arg-type]
+        parsed = int(value)
     except (TypeError, ValueError):
         return default
-    return candidate if candidate >= 0 else default
+    return parsed if parsed >= 0 else default
 
 
-def _load_visibility_timeout(payload: dict | None = None) -> int:
-    payload_value = (payload or {}).get("visibility_timeout")
+def _resolve_priority(payload: Mapping[str, Any]) -> int:
+    priority_value = payload.get("priority", 0)
+    return _safe_int(priority_value, 0)
+
+
+def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None = None) -> int:
+    if override is not None:
+        return max(5, int(override))
+
+    payload_value = payload.get("visibility_timeout")
     env_value = os.getenv("WORKER_VISIBILITY_TIMEOUT_S")
-    default_seconds = 60
-    resolved = _coerce_int(payload_value, _coerce_int(env_value, default_seconds))
+    resolved = _safe_int(payload_value, _safe_int(env_value, 60))
     return max(5, resolved)
 
 
-def _derive_job_key(worker: str, payload: dict) -> str | None:
-    key_candidate = payload.get("idempotency_key") or payload.get("job_id")
-    if key_candidate is None:
+def _derive_idempotency_key(job_type: str, payload: Mapping[str, Any]) -> str | None:
+    candidate = payload.get("idempotency_key") or payload.get("job_id")
+    if candidate is None:
         return None
 
-    if isinstance(key_candidate, (dict, list, tuple, set)):
-        serialised = json.dumps(key_candidate, sort_keys=True, default=str)
+    if isinstance(candidate, (dict, list, tuple, set)):
+        serialised = json.dumps(candidate, sort_keys=True, default=str)
     else:
-        serialised = str(key_candidate)
-    digest = hashlib.sha256(f"{worker}:{serialised}".encode("utf-8")).hexdigest()
+        serialised = str(candidate)
+    digest = hashlib.sha256(f"{job_type}:{serialised}".encode("utf-8")).hexdigest()
     return digest
 
 
 @dataclass(slots=True)
-class QueuedJob:
-    """In-memory representation of a worker job stored in the database."""
+class QueueJobDTO:
+    """Lightweight data transfer object for queue jobs."""
 
     id: int
-    payload: dict
-    priority: int = 0
-    attempts: int = 0
-    lease_expires_at: datetime | None = None
-    visibility_timeout: int = 60
-    job_key: str | None = None
+    type: str
+    payload: dict[str, Any]
+    priority: int
+    attempts: int
+    available_at: datetime
+    lease_expires_at: datetime | None
+    status: QueueJobStatus
+    idempotency_key: str | None
+    last_error: str | None = None
+    result_payload: dict[str, Any] | None = None
+    lease_timeout_seconds: int = 60
 
 
-class PersistentJobQueue:
-    """Provide CRUD helpers for worker job persistence with leasing semantics."""
+def _to_dto(record: QueueJob) -> QueueJobDTO:
+    payload = dict(record.payload or {})
+    return QueueJobDTO(
+        id=int(record.id),
+        type=str(record.type),
+        payload=payload,
+        priority=int(record.priority or 0),
+        attempts=int(record.attempts or 0),
+        available_at=record.available_at,
+        lease_expires_at=record.lease_expires_at,
+        status=QueueJobStatus(record.status),
+        idempotency_key=record.idempotency_key,
+        last_error=record.last_error,
+        result_payload=dict(record.result_payload or {}) if record.result_payload else None,
+        lease_timeout_seconds=_resolve_visibility_timeout(payload),
+    )
 
-    def __init__(self, worker_name: str) -> None:
-        self._worker = worker_name
 
-    # ------------------------------------------------------------------
-    # enqueue helpers
-    # ------------------------------------------------------------------
-    def enqueue(
-        self,
-        payload: dict,
-        *,
-        scheduled_at: datetime | None = None,
-        visibility_timeout: int | None = None,
-    ) -> QueuedJob:
-        """Persist a single job and return its representation."""
+def _refresh_instance(session: Session, record: QueueJob) -> QueueJobDTO:
+    session.flush()
+    session.refresh(record)
+    return _to_dto(record)
 
-        job_key = _derive_job_key(self._worker, payload)
-        effective_visibility = _load_visibility_timeout(payload)
-        if visibility_timeout is not None:
-            effective_visibility = max(5, int(visibility_timeout))
 
-        now = _utcnow()
-        scheduled_time = scheduled_at or now
+def enqueue(
+    job_type: str,
+    payload: Mapping[str, Any],
+    *,
+    priority: int | None = None,
+    available_at: datetime | None = None,
+    idempotency_key: str | None = None,
+) -> QueueJobDTO:
+    """Insert a new queue job or upsert by idempotency key."""
 
-        with session_scope() as session:
-            existing: WorkerJob | None = None
-            if job_key is not None:
-                stmt = (
-                    select(WorkerJob)
-                    .where(
-                        WorkerJob.worker == self._worker,
-                        WorkerJob.job_key == job_key,
-                    )
-                    .limit(1)
-                )
-                existing = session.execute(stmt).scalars().first()
+    now = _utcnow()
+    scheduled_for = available_at or now
+    payload_dict = dict(payload)
+    dedupe_key = idempotency_key or _derive_idempotency_key(job_type, payload_dict)
+    resolved_priority = priority if priority is not None else _resolve_priority(payload_dict)
 
-            if existing is not None:
-                existing.payload = dict(payload)
-                existing.state = "queued"
-                existing.scheduled_at = scheduled_time
-                existing.updated_at = now
-                existing.lease_expires_at = None
-                existing.last_error = None
-                existing.stop_reason = None
-                existing.visibility_timeout = effective_visibility
-                session.add(existing)
-                session.flush()
-                logger.info(
-                    "event=worker_enqueue worker=%s job_id=%s deduped=true",
-                    self._worker,
-                    existing.id,
-                )
-                return self._to_job(existing)
-
-            job = WorkerJob(
-                worker=self._worker,
-                payload=dict(payload),
-                scheduled_at=scheduled_time,
-                visibility_timeout=effective_visibility,
-                job_key=job_key,
-            )
-            session.add(job)
-            session.flush()
-            logger.info(
-                "event=worker_enqueue worker=%s job_id=%s deduped=false",
-                self._worker,
-                job.id,
-            )
-            return self._to_job(job)
-
-    def enqueue_many(self, payloads: Iterable[dict]) -> List[QueuedJob]:
-        """Persist a batch of payloads returning their job handles."""
-
-        jobs: List[QueuedJob] = []
-        for payload in payloads:
-            jobs.append(self.enqueue(payload))
-        return jobs
-
-    # ------------------------------------------------------------------
-    # query helpers
-    # ------------------------------------------------------------------
-    def list_pending(self) -> List[QueuedJob]:
-        """Return queued jobs and requeue any expired leases."""
-
-        now = _utcnow()
-        with session_scope() as session:
-            stmt = (
-                select(WorkerJob)
+    with session_scope() as session:
+        existing: QueueJob | None = None
+        if dedupe_key:
+            stmt: Select[QueueJob] = (
+                select(QueueJob)
                 .where(
-                    WorkerJob.worker == self._worker,
-                    or_(
-                        WorkerJob.state == "queued",
-                        and_(
-                            WorkerJob.state == "running",
-                            WorkerJob.lease_expires_at.is_not(None),
-                            WorkerJob.lease_expires_at <= now,
-                        ),
-                    ),
+                    QueueJob.type == job_type,
+                    QueueJob.idempotency_key == dedupe_key,
                 )
-                .order_by(WorkerJob.scheduled_at.asc())
+                .order_by(QueueJob.id.desc())
+                .limit(1)
             )
-            jobs = session.execute(stmt).scalars().all()
+            existing = session.execute(stmt).scalars().first()
 
-            queued: List[QueuedJob] = []
-            for db_job in jobs:
-                if db_job.state == "running":
-                    db_job.state = "queued"
-                    db_job.lease_expires_at = None
-                    db_job.updated_at = now
-                    session.add(db_job)
-                queued.append(self._to_job(db_job))
+        if existing and existing.status not in {
+            QueueJobStatus.COMPLETED.value,
+            QueueJobStatus.CANCELLED.value,
+        }:
+            logger.info(
+                "event=queue.enqueue job_type=%s job_id=%s deduped=true",
+                job_type,
+                existing.id,
+            )
+            existing.payload = payload_dict
+            existing.priority = resolved_priority
+            existing.available_at = scheduled_for
+            existing.status = QueueJobStatus.PENDING.value
+            existing.lease_expires_at = None
+            existing.last_error = None
+            existing.result_payload = None
+            existing.updated_at = now
+            session.add(existing)
+            return _refresh_instance(session, existing)
 
-            return queued
+        record = QueueJob(
+            type=job_type,
+            payload=payload_dict,
+            priority=resolved_priority,
+            available_at=scheduled_for,
+            idempotency_key=dedupe_key,
+            status=QueueJobStatus.PENDING.value,
+        )
+        session.add(record)
+        logger.info(
+            "event=queue.enqueue job_type=%s deduped=false",
+            job_type,
+        )
+        return _refresh_instance(session, record)
 
-    # ------------------------------------------------------------------
-    # lifecycle transitions
-    # ------------------------------------------------------------------
-    def mark_running(self, job_id: int, *, visibility_timeout: int | None = None) -> None:
-        with session_scope() as session:
-            job = session.get(WorkerJob, job_id)
-            if job is None:
-                return
+
+def enqueue_many(
+    job_type: str,
+    payloads: Iterable[Mapping[str, Any]],
+    *,
+    priority: int | None = None,
+) -> List[QueueJobDTO]:
+    """Persist a batch of jobs returning their DTO representations."""
+
+    jobs: List[QueueJobDTO] = []
+    for payload in payloads:
+        jobs.append(enqueue(job_type, payload, priority=priority))
+    return jobs
+
+
+def _release_expired_leases(session: Session, job_type: str, now: datetime) -> bool:
+    stmt: Select[QueueJob] = (
+        select(QueueJob)
+        .where(
+            QueueJob.type == job_type,
+            QueueJob.status == QueueJobStatus.LEASED.value,
+            QueueJob.lease_expires_at.is_not(None),
+            QueueJob.lease_expires_at <= now,
+        )
+        .with_for_update(skip_locked=True)
+    )
+    expired = session.execute(stmt).scalars().all()
+    if not expired:
+        return False
+
+    released_at = _utcnow()
+    for record in expired:
+        record.status = QueueJobStatus.PENDING.value
+        record.lease_expires_at = None
+        record.available_at = released_at
+        record.updated_at = released_at
+        session.add(record)
+
+    session.flush()
+    return True
+
+
+def fetch_ready(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
+    """Return queue jobs ready for processing (expired leases are reset)."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        released = _release_expired_leases(session, job_type, now)
+        if released:
             now = _utcnow()
-            effective_visibility = (
-                max(5, int(visibility_timeout))
-                if visibility_timeout is not None
-                else _load_visibility_timeout(job.payload or {})
+
+        stmt: Select[QueueJob] = (
+            select(QueueJob)
+            .where(
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.PENDING.value,
+                QueueJob.available_at <= now,
             )
-            job.state = "running"
-            job.attempts += 1
-            job.updated_at = now
-            job.visibility_timeout = effective_visibility
-            job.lease_expires_at = now + timedelta(seconds=effective_visibility)
-            session.add(job)
-
-    def extend_lease(self, job_id: int, *, visibility_timeout: int | None = None) -> bool:
-        with session_scope() as session:
-            job = session.get(WorkerJob, job_id)
-            if job is None or job.state != "running":
-                return False
-            now = _utcnow()
-            effective_visibility = (
-                max(5, int(visibility_timeout))
-                if visibility_timeout is not None
-                else (job.visibility_timeout or _load_visibility_timeout(job.payload or {}))
+            .order_by(
+                QueueJob.priority.desc(),
+                QueueJob.available_at.asc(),
+                QueueJob.id.asc(),
             )
-            job.visibility_timeout = effective_visibility
-            job.lease_expires_at = now + timedelta(seconds=effective_visibility)
-            job.updated_at = now
-            session.add(job)
-            logger.debug(
-                "event=worker_heartbeat worker=%s job_id=%s lease_expires_at=%s",
-                self._worker,
-                job_id,
-                job.lease_expires_at,
+            .limit(limit)
+        )
+        records = session.execute(stmt).scalars().all()
+        return [_to_dto(record) for record in records]
+
+
+def lease(
+    job_id: int,
+    *,
+    job_type: str,
+    lease_seconds: int | None = None,
+) -> QueueJobDTO | None:
+    """Attempt to lease a job for execution."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        stmt: Select[QueueJob] = (
+            select(QueueJob)
+            .where(QueueJob.id == job_id, QueueJob.type == job_type)
+            .with_for_update(skip_locked=True)
+        )
+        record = session.execute(stmt).scalars().first()
+        if record is None:
+            return None
+
+        if record.status not in {
+            QueueJobStatus.PENDING.value,
+            QueueJobStatus.LEASED.value,
+        }:
+            return None
+
+        if record.status == QueueJobStatus.PENDING.value and record.available_at > now:
+            return None
+
+        if record.status == QueueJobStatus.LEASED.value and record.lease_expires_at:
+            if record.lease_expires_at > now:
+                return None
+
+        timeout = _resolve_visibility_timeout(record.payload or {}, lease_seconds)
+        record.status = QueueJobStatus.LEASED.value
+        record.attempts = int(record.attempts or 0) + 1
+        record.lease_expires_at = now + timedelta(seconds=timeout)
+        record.updated_at = now
+        session.add(record)
+        return _refresh_instance(session, record)
+
+
+def heartbeat(
+    job_id: int,
+    *,
+    job_type: str,
+    lease_seconds: int | None = None,
+) -> bool:
+    """Extend the lease for an in-progress job."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        stmt: Select[QueueJob] = (
+            select(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
             )
-            return True
+            .with_for_update(skip_locked=True)
+        )
+        record = session.execute(stmt).scalars().first()
+        if record is None:
+            return False
 
-    def mark_completed(self, job_id: int) -> None:
-        with session_scope() as session:
-            job = session.get(WorkerJob, job_id)
-            if job is None:
-                return
-            job.state = "completed"
-            job.last_error = None
-            job.lease_expires_at = None
-            job.stop_reason = None
-            job.updated_at = _utcnow()
-            session.add(job)
+        if record.status != QueueJobStatus.LEASED.value:
+            return False
 
-    def mark_failed(
-        self,
-        job_id: int,
-        error: str,
-        *,
-        stop_reason: str | None = None,
-        redeliver: bool = False,
-        delay_seconds: int | None = None,
-    ) -> None:
-        with session_scope() as session:
-            job = session.get(WorkerJob, job_id)
-            if job is None:
-                return
-            now = _utcnow()
-            job.last_error = error
-            job.stop_reason = stop_reason
-            if redeliver:
-                job.state = "queued"
-                job.scheduled_at = now + timedelta(seconds=max(0, delay_seconds or 0))
-                job.lease_expires_at = None
-            else:
-                job.state = "failed"
-                job.lease_expires_at = None
-            job.updated_at = now
-            session.add(job)
+        if record.lease_expires_at and record.lease_expires_at <= now:
+            return False
 
-    def requeue_incomplete(self) -> None:
-        with session_scope() as session:
-            now = _utcnow()
-            stmt = select(WorkerJob).where(
-                WorkerJob.worker == self._worker,
-                WorkerJob.state == "running",
+        timeout = _resolve_visibility_timeout(record.payload or {}, lease_seconds)
+        record.lease_expires_at = now + timedelta(seconds=timeout)
+        record.updated_at = now
+        session.add(record)
+        return True
+
+
+def complete(
+    job_id: int,
+    *,
+    job_type: str,
+    result_payload: Mapping[str, Any] | None = None,
+) -> bool:
+    """Mark a leased job as completed."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        record = session.get(QueueJob, job_id)
+        if record is None or record.type != job_type:
+            return False
+
+        record.status = QueueJobStatus.COMPLETED.value
+        record.lease_expires_at = None
+        record.last_error = None
+        record.result_payload = dict(result_payload or {}) or None
+        record.updated_at = now
+        session.add(record)
+        return True
+
+
+def fail(
+    job_id: int,
+    *,
+    job_type: str,
+    error: str | None = None,
+    retry_in: int | None = None,
+    available_at: datetime | None = None,
+) -> bool:
+    """Mark a job as failed or requeue it for another attempt."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        record = session.get(QueueJob, job_id)
+        if record is None or record.type != job_type:
+            return False
+
+        record.last_error = error
+        record.updated_at = now
+        record.lease_expires_at = None
+
+        if retry_in is not None or available_at is not None:
+            delay = max(0, int(retry_in or 0))
+            next_available = available_at or (now + timedelta(seconds=delay))
+            record.available_at = next_available
+            record.status = QueueJobStatus.PENDING.value
+        else:
+            record.status = QueueJobStatus.FAILED.value
+        session.add(record)
+        return True
+
+
+def to_dlq(
+    job_id: int,
+    *,
+    job_type: str,
+    reason: str,
+    payload: Mapping[str, Any] | None = None,
+) -> bool:
+    """Move a job to the dead-letter queue state."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        record = session.get(QueueJob, job_id)
+        if record is None or record.type != job_type:
+            return False
+
+        record.status = QueueJobStatus.CANCELLED.value
+        record.lease_expires_at = None
+        record.last_error = reason
+        record.result_payload = dict(payload or {}) or None
+        record.updated_at = now
+        session.add(record)
+        return True
+
+
+def release_active_leases(job_type: str) -> None:
+    """Release all leases for a job type regardless of expiry."""
+
+    now = _utcnow()
+    with session_scope() as session:
+        stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.LEASED.value,
             )
-            jobs = session.execute(stmt).scalars().all()
-            for job in jobs:
-                if job.lease_expires_at and job.lease_expires_at > now:
-                    continue
-                job.state = "queued"
-                job.lease_expires_at = None
-                job.updated_at = now
-                session.add(job)
+            .values(
+                status=QueueJobStatus.PENDING.value,
+                lease_expires_at=None,
+                updated_at=now,
+            )
+        )
+        session.execute(stmt)
 
-    def update_priority(self, job_id: str, priority: int) -> bool:
-        try:
-            identifier = int(job_id)
-        except (TypeError, ValueError):
+
+def find_by_idempotency(job_type: str, idempotency_key: str) -> QueueJobDTO | None:
+    """Return a job matching the given idempotency key if available."""
+
+    with session_scope() as session:
+        stmt: Select[QueueJob] = (
+            select(QueueJob)
+            .where(
+                QueueJob.type == job_type,
+                QueueJob.idempotency_key == idempotency_key,
+            )
+            .order_by(QueueJob.id.desc())
+            .limit(1)
+        )
+        record = session.execute(stmt).scalars().first()
+        return _to_dto(record) if record else None
+
+
+def update_priority(
+    job_id: int | str,
+    priority: int,
+    *,
+    job_type: str,
+) -> bool:
+    """Update the priority of a pending job."""
+
+    try:
+        identifier = int(job_id)
+    except (TypeError, ValueError):
+        logger.error(
+            "event=queue.priority_update job_type=%s job_id=%s status=invalid_id",
+            job_type,
+            job_id,
+        )
+        return False
+
+    with session_scope() as session:
+        record = session.get(QueueJob, identifier)
+        if record is None or record.type != job_type:
             logger.error(
-                "event=worker_priority_update worker=%s job_id=%s status=invalid_id",
-                self._worker,
+                "event=queue.priority_update job_type=%s job_id=%s status=missing",
+                job_type,
                 job_id,
             )
             return False
 
-        with session_scope() as session:
-            job = session.get(WorkerJob, identifier)
-            if job is None or job.worker != self._worker:
-                logger.error(
-                    "event=worker_priority_update worker=%s job_id=%s status=missing",
-                    self._worker,
-                    job_id,
-                )
-                return False
+        if record.status not in {
+            QueueJobStatus.PENDING.value,
+            QueueJobStatus.FAILED.value,
+        }:
+            logger.error(
+                "event=queue.priority_update job_type=%s job_id=%s status=invalid_state state=%s",
+                job_type,
+                job_id,
+                record.status,
+            )
+            return False
 
-            if job.state not in {"queued", "retrying"}:
-                logger.error(
-                    "event=worker_priority_update worker=%s job_id=%s status=invalid_state state=%s",
-                    self._worker,
-                    job_id,
-                    job.state,
-                )
-                return False
+        payload = dict(record.payload or {})
+        payload["priority"] = int(priority)
 
-            payload = dict(job.payload or {})
-            payload["priority"] = int(priority)
+        files = payload.get("files")
+        if isinstance(files, Sequence):
+            updated_files: list[dict[str, Any]] = []
+            for file_info in files:
+                if isinstance(file_info, Mapping):
+                    item = dict(file_info)
+                    item["priority"] = int(priority)
+                    updated_files.append(item)
+                else:  # pragma: no cover - corrupted payload guard
+                    updated_files.append(file_info)  # type: ignore[arg-type]
+            payload["files"] = updated_files
 
-            files = payload.get("files")
-            if isinstance(files, Sequence):
-                updated_files: List[dict] = []
-                for file_info in files:
-                    if isinstance(file_info, dict):
-                        updated = dict(file_info)
-                        updated["priority"] = int(priority)
-                        updated_files.append(updated)
-                    else:  # pragma: no cover - guard against corrupted payloads
-                        updated_files.append(file_info)
-                payload["files"] = updated_files
+        now = _utcnow()
+        record.payload = payload
+        record.priority = int(priority)
+        record.status = QueueJobStatus.PENDING.value
+        record.available_at = now
+        record.updated_at = now
+        session.add(record)
 
-            job.payload = payload
-            job_priority = _extract_priority(payload)
-            now = _utcnow()
-            job.updated_at = now
-            job.scheduled_at = now
-            job.state = "queued"
-            session.add(job)
+    logger.info(
+        "event=queue.priority_update job_type=%s job_id=%s priority=%s status=success",
+        job_type,
+        job_id,
+        priority,
+    )
+    return True
 
-        logger.info(
-            "event=worker_priority_update worker=%s job_id=%s priority=%s status=success",
-            self._worker,
-            job_id,
-            job_priority,
+
+def count_active_leases(job_type: str) -> int:
+    """Return the number of currently leased jobs for the given type."""
+
+    with session_scope() as session:
+        result = session.execute(
+            select(func.count())
+            .select_from(QueueJob)
+            .where(
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.LEASED.value,
+            )
         )
-        return True
+        count = result.scalar_one_or_none()
+    return int(count or 0)
 
-    # ------------------------------------------------------------------
-    # internal helpers
-    # ------------------------------------------------------------------
-    def _to_job(self, record: WorkerJob) -> QueuedJob:
-        return QueuedJob(
-            id=int(record.id),
-            payload=dict(record.payload or {}),
-            priority=_extract_priority(record.payload or {}),
-            attempts=int(record.attempts or 0),
-            lease_expires_at=record.lease_expires_at,
-            visibility_timeout=int(record.visibility_timeout or _load_visibility_timeout()),
-            job_key=record.job_key,
-        )
+
+__all__ = [
+    "QueueJobDTO",
+    "enqueue",
+    "enqueue_many",
+    "fetch_ready",
+    "lease",
+    "heartbeat",
+    "complete",
+    "fail",
+    "to_dlq",
+    "release_active_leases",
+    "find_by_idempotency",
+    "update_priority",
+    "count_active_leases",
+]
+

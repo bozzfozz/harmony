@@ -31,7 +31,15 @@ from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
-from app.workers.persistence import PersistentJobQueue, QueuedJob
+from app.workers.persistence import (
+    QueueJobDTO,
+    complete,
+    enqueue,
+    fetch_ready,
+    fail,
+    lease,
+    release_active_leases,
+)
 
 logger = get_logger(__name__)
 
@@ -124,8 +132,8 @@ class SyncWorker:
         self._metadata_worker = metadata_worker
         self._artwork = artwork_worker
         self._lyrics = lyrics_worker
-        self._job_store = PersistentJobQueue("sync")
-        self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]] = (
+        self._job_type = "sync"
+        self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueueJobDTO]]] = (
             asyncio.PriorityQueue()
         )
         self._enqueue_sequence = 0
@@ -170,13 +178,13 @@ class SyncWorker:
         return SyncWorker._coerce_priority(file_info.get("priority"))
 
     @property
-    def queue(self) -> asyncio.PriorityQueue[Tuple[int, int, Optional[QueuedJob]]]:
+    def queue(self) -> asyncio.PriorityQueue[Tuple[int, int, Optional[QueueJobDTO]]]:
         return self._queue
 
     def is_running(self) -> bool:
         return self._running.is_set()
 
-    async def _put_job(self, job: QueuedJob | None) -> None:
+    async def _put_job(self, job: QueueJobDTO | None) -> None:
         self._enqueue_sequence += 1
         priority = 0 if job is None else max(self._coerce_priority(job.priority), 0)
         await self._queue.put((-priority, self._enqueue_sequence, job))
@@ -202,7 +210,7 @@ class SyncWorker:
     async def enqueue(self, job: Dict[str, Any]) -> None:
         """Submit a download job for processing."""
 
-        record = self._job_store.enqueue(job)
+        record = enqueue(self._job_type, job)
         job_identifier = str(record.id)
         files = job.get("files", [])
         if files:
@@ -252,7 +260,7 @@ class SyncWorker:
         write_setting("worker.sync.last_start", datetime.utcnow().isoformat())
         record_worker_heartbeat("sync")
         pending = sorted(
-            self._job_store.list_pending(),
+            fetch_ready(self._job_type),
             key=lambda job: self._coerce_priority(job.priority),
             reverse=True,
         )
@@ -277,7 +285,7 @@ class SyncWorker:
                     await self._poll_task
                 except asyncio.CancelledError:  # pragma: no cover - lifecycle cleanup
                     pass
-            self._job_store.requeue_incomplete()
+            release_active_leases(self._job_type)
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("sync", WORKER_STOPPED)
             record_worker_stopped("sync")
@@ -328,19 +336,22 @@ class SyncWorker:
             except asyncio.TimeoutError:
                 continue
 
-    async def _execute_job(self, job: QueuedJob) -> None:
-        self._job_store.mark_running(job.id)
+    async def _execute_job(self, job: QueueJobDTO) -> None:
+        leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
+        if leased is None:
+            logger.debug("Sync job %s skipped because it could not be leased", job.id)
+            return
         try:
-            await self._process_job(job.payload)
+            await self._process_job(leased.payload)
         except DownloadJobError as exc:
-            self._job_store.mark_failed(job.id, str(exc))
+            fail(job.id, job_type=self._job_type, error=str(exc))
             logger.debug("Download job %s marked as failed after scheduling retry", job.id)
             return
         except Exception as exc:
-            self._job_store.mark_failed(job.id, str(exc))
+            fail(job.id, job_type=self._job_type, error=str(exc))
             raise
         else:
-            self._job_store.mark_completed(job.id)
+            complete(job.id, job_type=self._job_type)
             increment_counter("metrics.sync.jobs_completed")
             self._record_heartbeat()
 

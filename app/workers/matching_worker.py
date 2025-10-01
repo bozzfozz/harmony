@@ -21,7 +21,15 @@ from app.utils.settings_store import (
     write_setting,
 )
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.workers.persistence import PersistentJobQueue, QueuedJob
+from app.workers.persistence import (
+    QueueJobDTO,
+    complete,
+    enqueue,
+    fetch_ready,
+    fail,
+    lease,
+    release_active_leases,
+)
 
 logger = get_logger(__name__)
 
@@ -39,8 +47,8 @@ class MatchingWorker:
         batch_wait_seconds: float = 0.1,
     ) -> None:
         self._engine = engine
-        self._job_store = PersistentJobQueue("matching")
-        self._queue: asyncio.Queue[QueuedJob | None] = asyncio.Queue()
+        self._job_type = "matching"
+        self._queue: asyncio.Queue[QueueJobDTO | None] = asyncio.Queue()
         self._manager_task: asyncio.Task | None = None
         self._worker_task: asyncio.Task | None = None
         self._running = asyncio.Event()
@@ -93,11 +101,11 @@ class MatchingWorker:
             await self._manager_task
 
     @property
-    def queue(self) -> asyncio.Queue[QueuedJob | None]:
+    def queue(self) -> asyncio.Queue[QueueJobDTO | None]:
         return self._queue
 
     async def enqueue(self, payload: Dict[str, Any]) -> None:
-        job = self._job_store.enqueue(payload)
+        job = enqueue(self._job_type, payload)
         if self._running.is_set():
             await self._queue.put(job)
         else:
@@ -107,7 +115,7 @@ class MatchingWorker:
         logger.info("MatchingWorker started")
         write_setting("worker.matching.last_start", datetime.utcnow().isoformat())
         record_worker_heartbeat("matching")
-        pending = self._job_store.list_pending()
+        pending = fetch_ready(self._job_type)
         for job in pending:
             await self._queue.put(job)
 
@@ -119,7 +127,7 @@ class MatchingWorker:
             await self._queue.put(None)
             if self._worker_task:
                 await self._worker_task
-            self._job_store.requeue_incomplete()
+            release_active_leases(self._job_type)
             self._running.clear()
             write_setting("worker.matching.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("matching", WORKER_STOPPED)
@@ -146,7 +154,7 @@ class MatchingWorker:
             for _ in batch:
                 self._queue.task_done()
 
-    async def _process_batch(self, jobs: List[QueuedJob]) -> None:
+    async def _process_batch(self, jobs: List[QueueJobDTO]) -> None:
         stored_scores: List[float] = []
         discarded = 0
 
@@ -183,23 +191,27 @@ class MatchingWorker:
         )
         self._record_heartbeat()
 
-    async def _execute_job(self, job: QueuedJob) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
-        self._job_store.mark_running(job.id)
-        payload = job.payload
+    async def _execute_job(self, job: QueueJobDTO) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
+        leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
+        if leased is None:
+            logger.debug("Matching job %s skipped because it could not be leased", job.id)
+            return [], 0
+
+        payload = leased.payload
         job_type = payload.get("type")
         spotify_track = payload.get("spotify_track")
         candidates = payload.get("candidates", [])
         if not spotify_track or not candidates:
             logger.warning("Invalid matching job received: %s", payload)
-            self._job_store.mark_failed(job.id, "invalid_payload")
+            fail(job.id, job_type=self._job_type, error="invalid_payload")
             return [], 0
 
         matches, discarded = self._evaluate_candidates(job_type, spotify_track, candidates)
         if matches:
             self._store_matches(job_type or "unknown", spotify_track, matches)
-            self._job_store.mark_completed(job.id)
+            complete(job.id, job_type=self._job_type)
         else:
-            self._job_store.mark_failed(job.id, "no_match")
+            fail(job.id, job_type=self._job_type, error="no_match")
         return matches, discarded
 
     def _evaluate_candidates(

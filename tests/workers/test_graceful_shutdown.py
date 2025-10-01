@@ -1,32 +1,31 @@
-"""Tests covering graceful shutdown behaviour of worker queues."""
+"""Tests covering graceful shutdown behaviour of queue leases."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
 from app.db import session_scope
-from app.models import WorkerJob
-from app.workers.persistence import PersistentJobQueue
+from app.models import QueueJob, QueueJobStatus
+from app.workers.persistence import enqueue, lease, release_active_leases
 
 
-def test_requeue_incomplete_respects_active_leases() -> None:
-    queue = PersistentJobQueue("watchlist")
-    active_job = queue.enqueue({"idempotency_key": "active"})
-    expired_job = queue.enqueue({"idempotency_key": "expired"})
+def test_release_active_leases_resets_all_jobs() -> None:
+    active_job = enqueue("watchlist", {"idempotency_key": "active"})
+    expired_job = enqueue("watchlist", {"idempotency_key": "expired"})
 
-    queue.mark_running(active_job.id, visibility_timeout=30)
-    queue.mark_running(expired_job.id, visibility_timeout=5)
-
-    with session_scope() as session:
-        exp = session.get(WorkerJob, expired_job.id)
-        assert exp is not None
-        exp.lease_expires_at = datetime.utcnow() - timedelta(seconds=1)
-        session.add(exp)
-
-    queue.requeue_incomplete()
+    assert lease(active_job.id, job_type="watchlist", lease_seconds=30) is not None
+    assert lease(expired_job.id, job_type="watchlist", lease_seconds=5) is not None
 
     with session_scope() as session:
-        active = session.get(WorkerJob, active_job.id)
-        expired = session.get(WorkerJob, expired_job.id)
-        assert active is not None and active.state == "running"
-        assert expired is not None and expired.state == "queued"
+        db_job = session.get(QueueJob, expired_job.id)
+        assert db_job is not None
+        db_job.lease_expires_at = datetime.utcnow() - timedelta(seconds=1)
+        session.add(db_job)
+
+    release_active_leases("watchlist")
+
+    with session_scope() as session:
+        active = session.get(QueueJob, active_job.id)
+        expired = session.get(QueueJob, expired_job.id)
+        assert active is not None and active.status == QueueJobStatus.PENDING.value
+        assert expired is not None and expired.status == QueueJobStatus.PENDING.value

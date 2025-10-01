@@ -447,6 +447,12 @@ class StubSoulseekClient:
             self.downloads[identifier] = entry
         return {"status": "queued"}
 
+    async def cancel_download(self, download_id: str) -> Dict[str, Any]:
+        identifier = int(download_id)
+        if identifier in self.downloads:
+            self.downloads[identifier]["state"] = "failed"
+        return {"cancelled": download_id}
+
 
 class StubSearchGateway:
     def __init__(self, spotify: StubSpotifyClient, soulseek: StubSoulseekClient) -> None:
