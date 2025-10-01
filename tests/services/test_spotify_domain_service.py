@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.config import load_config
 from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
-from app.services.spotify_domain import PlaylistItemsResult, SpotifyDomainService
+from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
 
 
 def _make_service(**overrides: Any) -> SpotifyDomainService:
@@ -115,7 +115,7 @@ async def test_free_import_uses_orchestrator_and_logs(monkeypatch: pytest.Monkey
         "app.orchestrator.handlers.enqueue_spotify_free_import",
         fake_enqueue,
     )
-    monkeypatch.setattr("app.services.spotify_domain.log_event", fake_log_event)
+    monkeypatch.setattr("app.services.spotify_domain_service.log_event", fake_log_event)
 
     service = _make_service()
 

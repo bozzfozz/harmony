@@ -4,6 +4,7 @@
 - feat(orchestrator): configurable priorities, pools, visibility, heartbeat, timer [CODX-ORCH-084]
   - Dokumentiert den Orchestrator im README, ergänzt Runtime-Guides (Prioritäten, Pools, Heartbeats) und verweist im PR-Template auf Migrations-/ENV-Hinweise.
 - refactor(spotify): consolidate domain service and routers via `SpotifyDomainService` + unified router [CODX-P1-SPOT-303]
+- feat(spotify): move Spotify domain service + routes into unified module, delegate legacy routers and extend tests/docs [CODX-P1-SPOT-203]
 - chore(config): centralize orchestrator/provider env parsing, add tests & docs [CODX-CONF-301]
 - feat!: remove the `/metrics` endpoint, Prometheus registry and related feature flags in favour of structured logs; update docs and tests accordingly. Migration: retire Prometheus scrapes and forward `event=request`, `event=worker_job` and `event=integration_call` logs to your observability stack.【F:app/main.py†L1-L910】【F:app/config.py†L1-L972】【F:app/services/dlq_service.py†L1-L360】【F:app/routers/dlq_router.py†L1-L228】【F:tests/test_health_ready.py†L1-L210】【F:tests/routers/test_defaults_flags.py†L1-L80】【F:tests/test_dlq_service.py†L1-L160】【F:README.md†L280-L582】【F:.env.example†L1-L80】【F:docs/observability.md†L1-L120】【F:docs/ops/runtime-config.md†L1-L83】【F:ToDo.md†L1-L120】
 

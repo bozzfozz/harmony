@@ -7,7 +7,7 @@ from app.db import session_scope
 from app.models import IngestItem, IngestJob
 from app.orchestrator.handlers import get_spotify_backfill_status
 from app.services.backfill_service import BackfillService
-from app.services.spotify_domain import SpotifyDomainService
+from app.services.spotify_domain_service import SpotifyDomainService
 
 
 def _create_job(job_id: str) -> None:
