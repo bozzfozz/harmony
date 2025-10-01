@@ -22,7 +22,9 @@ class StubPersistence:
         self.fetch_calls: list[str] = []
         self.lease_calls: list[tuple[int, str, int | None]] = []
 
-    def fetch_ready(self, job_type: str, *, limit: int = 100) -> list[QueueJobDTO]:  # noqa: D401 - signature parity
+    def fetch_ready(
+        self, job_type: str, *, limit: int = 100
+    ) -> list[QueueJobDTO]:  # noqa: D401 - signature parity
         self.fetch_calls.append(job_type)
         return list(self._ready.pop(job_type, []))
 
@@ -57,7 +59,7 @@ def make_job(job_id: int, job_type: str, priority: int, available_delta: int) ->
 
 def test_priority_config_prefers_json_over_csv() -> None:
     env = {
-        "ORCH_PRIORITY_JSON": "{\"sync\": 200, \"matching\": 100}",
+        "ORCH_PRIORITY_JSON": '{"sync": 200, "matching": 100}',
         "ORCH_PRIORITY_CSV": "sync:1,matching:1",
     }
     config = PriorityConfig.from_env(env)

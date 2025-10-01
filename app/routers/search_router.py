@@ -175,9 +175,7 @@ def _collect_candidates(
     return aggregated, failures
 
 
-def _build_candidates_from_track(
-    track: ProviderTrack, source: SourceLiteral
-) -> list[Candidate]:
+def _build_candidates_from_track(track: ProviderTrack, source: SourceLiteral) -> list[Candidate]:
     track_artists = [artist.name for artist in track.artists if artist.name]
     album_name = track.album.name if track.album else None
     track_metadata = _mapping_to_dict(track.metadata)

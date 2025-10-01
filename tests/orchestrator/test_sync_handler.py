@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 
 import pytest
 
@@ -291,4 +291,3 @@ async def test_fanout_download_completion_invokes_services(
         assert refreshed.state == "completed"
         assert refreshed.organized_path == str(organized_path)
         assert refreshed.artwork_url == "https://example.com/art.jpg"
-

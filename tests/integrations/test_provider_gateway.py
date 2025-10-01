@@ -40,14 +40,18 @@ class _StubProvider:
         return result
 
 
-def _make_config(*, retry_max: int = 2, backoff_ms: int = 10, jitter: float = 0.0) -> ProviderGatewayConfig:
+def _make_config(
+    *, retry_max: int = 2, backoff_ms: int = 10, jitter: float = 0.0
+) -> ProviderGatewayConfig:
     policy = ProviderRetryPolicy(
         timeout_ms=100,
         retry_max=retry_max,
         backoff_base_ms=backoff_ms,
         jitter_pct=jitter,
     )
-    return ProviderGatewayConfig(max_concurrency=5, default_policy=policy, provider_policies={"stub": policy})
+    return ProviderGatewayConfig(
+        max_concurrency=5, default_policy=policy, provider_policies={"stub": policy}
+    )
 
 
 def _search_query() -> SearchQuery:
@@ -89,8 +93,14 @@ async def test_gateway_times_out_long_running_provider() -> None:
     config = _make_config(retry_max=0)
     config = ProviderGatewayConfig(
         max_concurrency=1,
-        default_policy=ProviderRetryPolicy(timeout_ms=10, retry_max=0, backoff_base_ms=10, jitter_pct=0.0),
-        provider_policies={"stub": ProviderRetryPolicy(timeout_ms=10, retry_max=0, backoff_base_ms=10, jitter_pct=0.0)},
+        default_policy=ProviderRetryPolicy(
+            timeout_ms=10, retry_max=0, backoff_base_ms=10, jitter_pct=0.0
+        ),
+        provider_policies={
+            "stub": ProviderRetryPolicy(
+                timeout_ms=10, retry_max=0, backoff_base_ms=10, jitter_pct=0.0
+            )
+        },
     )
     gateway = ProviderGateway(providers={"stub": provider}, config=config)
 
@@ -102,7 +112,10 @@ async def test_gateway_times_out_long_running_provider() -> None:
 @pytest.mark.parametrize(
     "provider_error, expected_error",
     [
-        (ProviderValidationError("stub", "invalid", status_code=400), ProviderGatewayValidationError),
+        (
+            ProviderValidationError("stub", "invalid", status_code=400),
+            ProviderGatewayValidationError,
+        ),
         (
             ProviderRateLimitedError(
                 "stub",
@@ -125,4 +138,3 @@ async def test_gateway_maps_provider_errors(
 
     with pytest.raises(expected_error):
         await gateway.search_tracks("stub", _search_query())
-

@@ -137,4 +137,3 @@ __all__ = [
     "SearchQuery",
     "TrackProvider",
 ]
-

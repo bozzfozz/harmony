@@ -3,8 +3,9 @@ from __future__ import annotations
 # ruff: noqa: E402
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Sequence
 
 import os
 
@@ -41,6 +42,7 @@ from app.integrations.provider_gateway import (
 from app.logging import get_logger
 from app.main import app
 from app.orchestrator import bootstrap as orchestrator_bootstrap
+from app.models import QueueJobStatus
 from app.services.backfill_service import BackfillService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
@@ -84,9 +86,7 @@ class RecordingScheduler:
         waiters = [asyncio.create_task(self._stop_event.wait())]
         if lifespan is not None:
             waiters.append(asyncio.create_task(lifespan.wait()))
-        done, pending = await asyncio.wait(
-            waiters, return_when=asyncio.FIRST_COMPLETED
-        )
+        done, pending = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
         self.stopped.set()
@@ -100,9 +100,7 @@ class RecordingScheduler:
         ready: list[persistence.QueueJobDTO] = []
         for job_type in self._job_types:
             ready.extend(self._persistence.fetch_ready(job_type))
-        ready.sort(
-            key=lambda job: (-int(job.priority or 0), job.available_at, int(job.id))
-        )
+        ready.sort(key=lambda job: (-int(job.priority or 0), job.available_at, int(job.id)))
         leased: list[persistence.QueueJobDTO] = []
         for job in ready:
             record = self._persistence.lease(
@@ -141,9 +139,7 @@ class RecordingDispatcher:
         waiters = [asyncio.create_task(self._stop_event.wait())]
         if lifespan is not None:
             waiters.append(asyncio.create_task(lifespan.wait()))
-        done, pending = await asyncio.wait(
-            waiters, return_when=asyncio.FIRST_COMPLETED
-        )
+        done, pending = await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
         self.stop_requested = True
@@ -207,6 +203,137 @@ def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
         build_test_orchestrator,
     )
     monkeypatch.setattr("app.main.bootstrap_orchestrator", build_test_orchestrator, raising=False)
+
+
+class StubQueuePersistence:
+    """In-memory persistence stub for orchestrator specific tests."""
+
+    def __init__(self) -> None:
+        self.ready: dict[str, list[persistence.QueueJobDTO]] = {}
+        self.leases: list[tuple[int, str, int]] = []
+        self.heartbeats: list[tuple[int, str, int | None]] = []
+        self.heartbeat_overrides: dict[int, list[bool]] = {}
+        self.completed: list[int] = []
+        self.failed: list[dict[str, Any]] = []
+        self.dead_lettered: list[dict[str, Any]] = []
+
+    def add_ready(self, job: persistence.QueueJobDTO) -> None:
+        self.ready.setdefault(job.type, []).append(job)
+
+    def fetch_ready(self, job_type: str) -> list[persistence.QueueJobDTO]:
+        return list(self.ready.get(job_type, []))
+
+    def lease(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        lease_seconds: int,
+    ) -> persistence.QueueJobDTO | None:
+        self.leases.append((job_id, job_type, lease_seconds))
+        queue = self.ready.get(job_type)
+        if not queue:
+            return None
+        for index, job in enumerate(queue):
+            if job.id == job_id:
+                queue.pop(index)
+                return job
+        return None
+
+    def heartbeat(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        lease_seconds: int | None = None,
+    ) -> bool:
+        outcomes = self.heartbeat_overrides.get(job_id)
+        if outcomes:
+            result = outcomes.pop(0)
+        else:
+            result = True
+        self.heartbeats.append((job_id, job_type, lease_seconds))
+        return result
+
+    def complete(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        result_payload: Mapping[str, Any] | None = None,
+    ) -> bool:
+        self.completed.append(job_id)
+        return True
+
+    def fail(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        error: str | None = None,
+        retry_in: int | None = None,
+        available_at: datetime | None = None,
+    ) -> bool:
+        self.failed.append(
+            {
+                "job_id": job_id,
+                "job_type": job_type,
+                "error": error,
+                "retry_in": retry_in,
+                "available_at": available_at,
+            }
+        )
+        return True
+
+    def to_dlq(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        reason: str,
+        payload: Mapping[str, Any] | None = None,
+    ) -> bool:
+        self.dead_lettered.append(
+            {
+                "job_id": job_id,
+                "job_type": job_type,
+                "reason": reason,
+                "payload": dict(payload or {}),
+            }
+        )
+        return True
+
+
+@pytest.fixture
+def queue_job_factory() -> Callable[..., persistence.QueueJobDTO]:
+    def _factory(
+        *,
+        job_id: int,
+        job_type: str,
+        priority: int = 0,
+        attempts: int = 0,
+        available_at: datetime | None = None,
+        lease_timeout_seconds: int = 60,
+    ) -> persistence.QueueJobDTO:
+        return persistence.QueueJobDTO(
+            id=job_id,
+            type=job_type,
+            payload={},
+            priority=priority,
+            attempts=attempts,
+            available_at=available_at or datetime.utcnow(),
+            lease_expires_at=None,
+            status=QueueJobStatus.PENDING,
+            idempotency_key=None,
+            lease_timeout_seconds=lease_timeout_seconds,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def stub_queue_persistence() -> StubQueuePersistence:
+    return StubQueuePersistence()
 
 
 class StubSpotifyClient:
@@ -610,9 +737,7 @@ class StubSoulseekClient:
         return {"cancelled": download_id}
 
 
-async def _soulseek_get_download(
-    self: StubSoulseekClient, download_id: str
-) -> Dict[str, Any]:
+async def _soulseek_get_download(self: StubSoulseekClient, download_id: str) -> Dict[str, Any]:
     identifier = int(download_id)
     return self.downloads.get(identifier, {"id": identifier, "state": "unknown"})
 
@@ -668,18 +793,14 @@ async def _soulseek_enqueue(
     return {"status": "enqueued", "job": job}
 
 
-async def _soulseek_cancel_upload(
-    self: StubSoulseekClient, upload_id: str
-) -> Dict[str, Any]:
+async def _soulseek_cancel_upload(self: StubSoulseekClient, upload_id: str) -> Dict[str, Any]:
     upload = self.uploads.get(upload_id)
     if upload:
         upload["state"] = "cancelled"
     return {"cancelled": upload_id}
 
 
-async def _soulseek_get_upload(
-    self: StubSoulseekClient, upload_id: str
-) -> Dict[str, Any]:
+async def _soulseek_get_upload(self: StubSoulseekClient, upload_id: str) -> Dict[str, Any]:
     return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
 
 
@@ -700,23 +821,17 @@ async def _soulseek_remove_completed_uploads(
     return {"removed": removed}
 
 
-async def _soulseek_user_address(
-    self: StubSoulseekClient, username: str
-) -> Dict[str, Any]:
+async def _soulseek_user_address(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("address", {"host": None, "port": None})
 
 
-async def _soulseek_user_browse(
-    self: StubSoulseekClient, username: str
-) -> Dict[str, Any]:
+async def _soulseek_user_browse(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("browse", {"files": []})
 
 
-async def _soulseek_user_browsing_status(
-    self: StubSoulseekClient, username: str
-) -> Dict[str, Any]:
+async def _soulseek_user_browsing_status(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("browsing-status", {"state": "unknown"})
 
@@ -731,16 +846,12 @@ async def _soulseek_user_directory(
     return directory
 
 
-async def _soulseek_user_info(
-    self: StubSoulseekClient, username: str
-) -> Dict[str, Any]:
+async def _soulseek_user_info(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("info", {"username": username})
 
 
-async def _soulseek_user_status(
-    self: StubSoulseekClient, username: str
-) -> Dict[str, Any]:
+async def _soulseek_user_status(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("status", {"online": False})
 
@@ -819,9 +930,7 @@ class StubSearchGateway:
                 self.log_events.append(event_payload)
             elif normalized in {"slskd", "soulseek"}:
                 tracks = self._soulseek_tracks(query)
-                results.append(
-                    ProviderGatewaySearchResult(provider="slskd", tracks=tuple(tracks))
-                )
+                results.append(ProviderGatewaySearchResult(provider="slskd", tracks=tuple(tracks)))
                 event_payload = {
                     "event": "api.dependency",
                     "provider": "slskd",
@@ -889,7 +998,9 @@ class StubSearchGateway:
             if genre:
                 track_metadata["genre"] = genre
             duration_ms = raw.get("duration_ms")
-            external_ids = raw.get("external_ids") if isinstance(raw.get("external_ids"), dict) else {}
+            external_ids = (
+                raw.get("external_ids") if isinstance(raw.get("external_ids"), dict) else {}
+            )
             isrc = external_ids.get("isrc") if isinstance(external_ids, dict) else None
             results.append(
                 ProviderTrack(
@@ -933,7 +1044,9 @@ class StubSearchGateway:
                     metadata["artists"] = [artist_name]
                 bitrate_value = self._coerce_int(file_info.get("bitrate"))
                 size_value = self._coerce_int(
-                    file_info.get("size") or file_info.get("size_bytes") or file_info.get("filesize")
+                    file_info.get("size")
+                    or file_info.get("size_bytes")
+                    or file_info.get("filesize")
                 )
                 seeders = self._coerce_int(file_info.get("seeders"))
                 candidate = TrackCandidate(

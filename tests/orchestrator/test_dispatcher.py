@@ -11,7 +11,6 @@ from sqlalchemy import select
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.models import QueueJobStatus
-from app.orchestrator import dispatcher as dispatcher_module
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
 from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
 from app.workers import persistence

@@ -47,9 +47,12 @@ class SpotifyDomainService:
         spotify_client: SpotifyClient,
         soulseek_client: SoulseekClient,
         app_state: Any,
-        free_ingest_factory: Callable[[AppConfig, SoulseekClient, SyncWorker | None], FreeIngestService]
-        | None = None,
-        backfill_service_factory: Callable[[SpotifyConfig, SpotifyClient], BackfillService] | None = None,
+        free_ingest_factory: (
+            Callable[[AppConfig, SoulseekClient, SyncWorker | None], FreeIngestService] | None
+        ) = None,
+        backfill_service_factory: (
+            Callable[[SpotifyConfig, SpotifyClient], BackfillService] | None
+        ) = None,
         backfill_worker_factory: Callable[[BackfillService], BackfillWorker] | None = None,
     ) -> None:
         self._config = config
@@ -57,8 +60,12 @@ class SpotifyDomainService:
         self._soulseek = soulseek_client
         self._state = app_state
         self._free_ingest_factory = free_ingest_factory or self._default_free_ingest_factory
-        self._backfill_service_factory = backfill_service_factory or self._default_backfill_service_factory
-        self._backfill_worker_factory = backfill_worker_factory or self._default_backfill_worker_factory
+        self._backfill_service_factory = (
+            backfill_service_factory or self._default_backfill_service_factory
+        )
+        self._backfill_worker_factory = (
+            backfill_worker_factory or self._default_backfill_worker_factory
+        )
 
     # Factories ---------------------------------------------------------
 

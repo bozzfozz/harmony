@@ -39,6 +39,7 @@ from app.logging_events import log_event
 from app.models import Download, IngestItem, IngestItemState, Match
 from app.services.backfill_service import BackfillJobStatus
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
+
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
     from app.services.spotify_domain_service import SpotifyDomainService
@@ -238,8 +239,7 @@ class MetadataService(Protocol):
         *,
         payload: Mapping[str, Any] | None,
         request_payload: Mapping[str, Any] | None,
-    ) -> Mapping[str, Any]:
-        ...
+    ) -> Mapping[str, Any]: ...
 
 
 class ArtworkService(Protocol):
@@ -252,8 +252,7 @@ class ArtworkService(Protocol):
         spotify_track_id: str | None,
         spotify_album_id: str | None,
         artwork_url: str | None,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 class LyricsService(Protocol):
@@ -262,8 +261,7 @@ class LyricsService(Protocol):
         download_id: int,
         file_path: str,
         track_info: Mapping[str, Any],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 class SyncJobSubmitter(Protocol):
@@ -273,8 +271,7 @@ class SyncJobSubmitter(Protocol):
         *,
         priority: int | None = None,
         idempotency_key: str | None = None,
-    ) -> Mapping[str, Any] | None:
-        ...
+    ) -> Mapping[str, Any] | None: ...
 
 
 @dataclass(slots=True)
@@ -283,7 +280,9 @@ class MatchingHandlerDeps:
 
     engine: MusicMatchingEngine
     session_factory: Callable[[], AbstractContextManager[Session]] = session_scope
-    confidence_threshold: float = field(default_factory=lambda: load_matching_confidence_threshold())
+    confidence_threshold: float = field(
+        default_factory=lambda: load_matching_confidence_threshold()
+    )
     external_timeout_ms: int = field(
         default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
     )
@@ -345,7 +344,11 @@ async def handle_matching(
             "Matching job missing spotify_track payload",
             retry=False,
         )
-    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)) or not candidates:
+    if (
+        not isinstance(candidates, Sequence)
+        or isinstance(candidates, (str, bytes))
+        or not candidates
+    ):
         raise MatchingJobError(
             "invalid_payload",
             "Matching job missing candidates",
@@ -429,8 +432,7 @@ async def handle_matching(
         "discarded": discarded,
         "average_confidence": rounded_average,
         "matches": [
-            {"candidate": candidate, "score": round(score, 4)}
-            for candidate, score in qualifying
+            {"candidate": candidate, "score": round(score, 4)} for candidate, score in qualifying
         ],
     }
 
@@ -493,7 +495,9 @@ class RetryHandlerDeps:
 
     def __post_init__(self) -> None:
         self.batch_limit = _coerce_positive_int(self.batch_limit, _RETRY_DEFAULT_BATCH_LIMIT)
-        self.scan_interval = _coerce_positive_float(self.scan_interval, _RETRY_DEFAULT_SCAN_INTERVAL)
+        self.scan_interval = _coerce_positive_float(
+            self.scan_interval, _RETRY_DEFAULT_SCAN_INTERVAL
+        )
         self.external_timeout_ms = max(1_000, int(self.external_timeout_ms))
         if not self.retry_job_type:
             self.retry_job_type = "retry"
@@ -529,9 +533,7 @@ class WatchlistHandlerDeps:
         self.db_mode = "async" if mode == "async" else "thread"
         timeout_cap = max(1, int(self.external_timeout_ms))
         self.spotify_timeout_ms = min(timeout_cap, max(1, int(self.config.spotify_timeout_ms)))
-        self.search_timeout_ms = min(
-            timeout_cap, max(1, int(self.config.slskd_search_timeout_ms))
-        )
+        self.search_timeout_ms = min(timeout_cap, max(1, int(self.config.slskd_search_timeout_ms)))
         self.retry_budget = max(1, int(self.config.retry_budget_per_artist))
         self.cooldown_minutes = max(0, int(self.config.cooldown_minutes))
         self.backoff_base_ms = max(0, int(self.config.backoff_base_ms))
@@ -578,9 +580,7 @@ def _watchlist_cooldown_until(deps: WatchlistHandlerDeps) -> datetime:
     return now + timedelta(minutes=deps.cooldown_minutes)
 
 
-async def _watchlist_dao_call(
-    deps: WatchlistHandlerDeps, method_name: str, /, *args, **kwargs
-):
+async def _watchlist_dao_call(deps: WatchlistHandlerDeps, method_name: str, /, *args, **kwargs):
     method = getattr(deps.dao, method_name)
     if deps.db_mode == "thread":
         return await asyncio.to_thread(method, *args, **kwargs)
@@ -606,9 +606,7 @@ def _watchlist_build_search_query(
     return " ".join(part for part in parts if part)
 
 
-def _watchlist_primary_artist(
-    track: Mapping[str, Any], album: Mapping[str, Any]
-) -> str:
+def _watchlist_primary_artist(track: Mapping[str, Any], album: Mapping[str, Any]) -> str:
     def _extract_artist(collection: Iterable[Mapping[str, Any]] | None) -> str:
         if not collection:
             return ""
@@ -668,9 +666,7 @@ def _watchlist_extract_priority(payload: Mapping[str, Any]) -> int:
         return 0
 
 
-def _watchlist_is_new_release(
-    album: Mapping[str, Any], last_checked: datetime | None
-) -> bool:
+def _watchlist_is_new_release(album: Mapping[str, Any], last_checked: datetime | None) -> bool:
     if last_checked is None:
         return True
     release_date = _watchlist_parse_release_date(album)
@@ -696,9 +692,7 @@ def _watchlist_parse_release_date(album: Mapping[str, Any]) -> datetime | None:
     return None
 
 
-async def _watchlist_process_artist(
-    artist: WatchlistArtistRow, deps: WatchlistHandlerDeps
-) -> int:
+async def _watchlist_process_artist(artist: WatchlistArtistRow, deps: WatchlistHandlerDeps) -> int:
     try:
         albums = await _invoke_with_timeout(
             asyncio.to_thread(
@@ -728,9 +722,7 @@ async def _watchlist_process_artist(
 
     last_checked = artist.last_checked
     recent_albums = [
-        album
-        for album in album_list
-        if _watchlist_is_new_release(album, last_checked)
+        album for album in album_list if _watchlist_is_new_release(album, last_checked)
     ]
     if not recent_albums:
         return 0
@@ -779,9 +771,7 @@ async def _watchlist_process_artist(
     ]
     existing: set[str] = set()
     if track_ids:
-        fetched = await _watchlist_dao_call(
-            deps, "load_existing_track_ids", track_ids
-        )
+        fetched = await _watchlist_dao_call(deps, "load_existing_track_ids", track_ids)
         if fetched:
             existing = {str(item) for item in fetched}
 
@@ -835,12 +825,7 @@ async def _watchlist_schedule_download(
         return False
 
     payload = dict(file_info)
-    filename = str(
-        payload.get("filename")
-        or payload.get("name")
-        or track.get("name")
-        or "unknown"
-    )
+    filename = str(payload.get("filename") or payload.get("name") or track.get("name") or "unknown")
     priority = _watchlist_extract_priority(payload)
     track_id = str(track.get("id") or "").strip()
     album_id = str(album.get("id") or "").strip()
@@ -878,9 +863,7 @@ async def _watchlist_schedule_download(
     try:
         await deps.submit_sync_job(job_payload, priority=priority)
     except Exception as exc:  # pragma: no cover - defensive logging
-        await _watchlist_dao_call(
-            deps, "mark_download_failed", int(download_id), str(exc)
-        )
+        await _watchlist_dao_call(deps, "mark_download_failed", int(download_id), str(exc))
         raise WatchlistProcessingError(
             "dependency_error",
             f"failed to enqueue download {download_id}: {exc}",
@@ -899,9 +882,7 @@ async def _watchlist_schedule_download(
     return True
 
 
-async def handle_watchlist(
-    job: QueueJobDTO, deps: WatchlistHandlerDeps
-) -> Mapping[str, Any]:
+async def handle_watchlist(job: QueueJobDTO, deps: WatchlistHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -920,7 +901,12 @@ async def handle_watchlist(
             status="missing",
             artist_id=artist_pk,
         )
-        return {"status": "missing", "artist_id": artist_pk, "queued": 0, "attempts": int(job.attempts)}
+        return {
+            "status": "missing",
+            "artist_id": artist_pk,
+            "queued": 0,
+            "attempts": int(job.attempts),
+        }
 
     now = deps.now_factory()
     if artist.retry_block_until and artist.retry_block_until > now:
@@ -1169,19 +1155,13 @@ def _prepare_retry_candidate(record: Download) -> tuple[_RetryCandidate | None, 
     file_payload = dict(file_info)
     file_payload["download_id"] = int(record.id)
 
-    priority_source = (
-        file_payload.get("priority")
-        or payload.get("priority")
-        or record.priority
-    )
+    priority_source = file_payload.get("priority") or payload.get("priority") or record.priority
     priority = _coerce_priority(priority_source)
     if "priority" not in file_payload:
         file_payload["priority"] = priority
 
     job_payload: dict[str, Any] = {
-        key: value
-        for key, value in payload.items()
-        if key not in {"file", "files"}
+        key: value for key, value in payload.items() if key not in {"file", "files"}
     }
     job_payload.update(
         {
@@ -1442,9 +1422,7 @@ async def process_sync_payload(
 
     try:
         await _invoke_with_timeout(
-            deps.soulseek_client.download(
-                {"username": username, "files": filtered_files}
-            ),
+            deps.soulseek_client.download({"username": username, "files": filtered_files}),
             deps.external_timeout_ms,
         )
     except Exception as exc:
@@ -1807,9 +1785,7 @@ async def fanout_download_completion(
                         record.filename = file_path
                     else:
                         payload_copy: dict[str, Any] = dict(record.request_payload or {})
-                        nested_metadata: dict[str, Any] = dict(
-                            payload_copy.get("metadata") or {}
-                        )
+                        nested_metadata: dict[str, Any] = dict(payload_copy.get("metadata") or {})
                         for key, value in metadata.items():
                             if isinstance(value, (str, int, float)):
                                 text = str(value).strip()
@@ -1819,16 +1795,15 @@ async def fanout_download_completion(
                             payload_copy["metadata"] = nested_metadata
                             record.request_payload = payload_copy
                         try:
-                            target_dir = deps.music_dir or Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+                            target_dir = (
+                                deps.music_dir
+                                or Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+                            )
                             organized_path = organize_file(record, target_dir)
                         except FileNotFoundError:
-                            logger.debug(
-                                "Download file missing for organization: %s", file_path
-                            )
+                            logger.debug("Download file missing for organization: %s", file_path)
                         except Exception as exc:  # pragma: no cover - defensive
-                            logger.warning(
-                                "Failed to organise download %s: %s", download_id, exc
-                            )
+                            logger.warning("Failed to organise download %s: %s", download_id, exc)
                         else:
                             file_path = str(organized_path)
 

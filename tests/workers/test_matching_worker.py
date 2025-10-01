@@ -99,7 +99,11 @@ async def test_handle_matching_no_candidates_above_threshold() -> None:
 
     payload = {
         "type": "spotify-to-soulseek",
-        "spotify_track": {"id": "track-1", "name": "Sample Song", "artists": [{"name": "Sample Artist"}]},
+        "spotify_track": {
+            "id": "track-1",
+            "name": "Sample Song",
+            "artists": [{"name": "Sample Artist"}],
+        },
         "candidates": [
             {"id": "cand-1", "filename": "Sample Song.mp3", "username": "dj", "bitrate": 192},
         ],

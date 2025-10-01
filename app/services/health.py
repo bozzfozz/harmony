@@ -72,9 +72,7 @@ class HealthService:
             if normalized not in dependency_names:
                 dependency_names.append(normalized)
         self._dependency_names = tuple(dict.fromkeys(dependency_names))
-        self._dependency_probes = {
-            name.lower(): probe for name, probe in resolved_probes.items()
-        }
+        self._dependency_probes = {name.lower(): probe for name, probe in resolved_probes.items()}
 
     def liveness(self) -> HealthSummary:
         """Return process information for the liveness probe."""

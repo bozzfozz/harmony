@@ -44,7 +44,9 @@ class _StubRegistry:
             raise KeyError(name)
         return self._providers[normalized]
 
-    def track_providers(self) -> dict[str, _StubTrackProvider]:  # pragma: no cover - unused by tests
+    def track_providers(
+        self,
+    ) -> dict[str, _StubTrackProvider]:  # pragma: no cover - unused by tests
         return dict(self._providers)
 
     @property
@@ -146,4 +148,3 @@ async def test_integration_service_normalises_gateway_errors(
 
     with pytest.raises(expected_error):
         await service.search_tracks("slskd", "query")
-

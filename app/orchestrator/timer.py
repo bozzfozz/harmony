@@ -54,8 +54,9 @@ class WatchlistTimer:
         persistence_module=persistence,
         now_factory: Callable[[], datetime] = datetime.utcnow,
         time_source: Callable[[], float] = time.perf_counter,
-        on_jobs_enqueued: Callable[[Sequence[persistence.QueueJobDTO]], Awaitable[None] | None]
-        | None = None,
+        on_jobs_enqueued: (
+            Callable[[Sequence[persistence.QueueJobDTO]], Awaitable[None] | None] | None
+        ) = None,
     ) -> None:
         self._config = config
         self._interval = _coerce_interval(interval_seconds, _DEFAULT_INTERVAL_SECONDS)
@@ -252,9 +253,7 @@ class WatchlistTimer:
             cutoff=cutoff,
         )
 
-    async def _enqueue_artist(
-        self, artist: WatchlistArtistRow
-    ) -> persistence.QueueJobDTO | None:
+    async def _enqueue_artist(self, artist: WatchlistArtistRow) -> persistence.QueueJobDTO | None:
         payload: dict[str, object] = {"artist_id": int(artist.id)}
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
         if cutoff:
