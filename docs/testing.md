@@ -3,11 +3,11 @@
 ## Lifespan & Worker Lifecycle
 
 The FastAPI lifespan hook orchestrates worker start-up and shutdown. To verify
-the wiring without spawning the production workers, the test-suite provides a
-stub registry (`tests/fixtures/worker_stubs.py`) that records every lifecycle
-call and logs synthetic `event=worker.*` entries. Enable the suite with the
-`lifespan_workers` marker, which flips `HARMONY_DISABLE_WORKERS` to `0` and
-activates the fake worker wiring.
+the wiring without spawning the production workers, the test-suite installs a
+lightweight orchestrator harness in `tests/conftest.py` that records scheduler
+and dispatcher activity while patching media workers with async no-ops. Enable
+the suite with the `lifespan_workers` marker, which flips
+`HARMONY_DISABLE_WORKERS` to `0` and activates the fake orchestrator wiring.
 
 Key scenarios covered in `tests/test_lifespan_workers.py`:
 
@@ -21,7 +21,7 @@ Key scenarios covered in `tests/test_lifespan_workers.py`:
   crashes reported through structured logs.
 
 Helper utilities live in `tests/support/async_utils.py`, providing polling and safe
-task cancellation primitives that keep the tests deterministic. The worker stub
-registry exposes `log_events` so tests can assert structured log metadata
-(`event`, `status`, `duration_ms`) even though the production logging setup
-reconfigures handlers during the FastAPI lifespan startup.
+task cancellation primitives that keep the tests deterministic. The recording
+dispatcher collects processed jobs so tests can assert structured outcomes
+even though the production logging setup reconfigures handlers during the
+FastAPI lifespan startup.

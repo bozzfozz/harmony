@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -37,13 +38,18 @@ from app.integrations.provider_gateway import (
     ProviderGatewaySearchResponse,
     ProviderGatewaySearchResult,
 )
-from app.services.backfill_service import BackfillService
 from app.logging import get_logger
 from app.main import app
+from app.orchestrator import bootstrap as orchestrator_bootstrap
+from app.services.backfill_service import BackfillService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers import MatchingWorker, PlaylistSyncWorker, SyncWorker
+from app.workers import PlaylistSyncWorker, SyncWorker
+from app.workers.artwork_worker import ArtworkWorker
+from app.workers.lyrics_worker import LyricsWorker
+from app.workers.metadata_worker import MetadataWorker
 from app.workers.retry_scheduler import RetryScheduler
+from app.workers import persistence
 from tests.simple_client import SimpleTestClient
 
 
@@ -52,6 +58,155 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "lifespan_workers: enable worker lifecycle tests that re-enable background workers with test stubs.",
     )
+
+
+class RecordingScheduler:
+    """Test scheduler that records leased jobs without running a polling loop."""
+
+    def __init__(
+        self,
+        *,
+        job_types: Sequence[str] | None = None,
+        persistence_module=persistence,
+    ) -> None:
+        self._persistence = persistence_module
+        self._job_types = tuple(job_types or ("sync", "matching", "retry", "watchlist"))
+        self.poll_interval = 0.01
+        self.started = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self.stop_requested = False
+        self._stop_event: asyncio.Event | None = None
+        self.leased_jobs: list[list[persistence.QueueJobDTO]] = []
+
+    async def run(self, lifespan: asyncio.Event | None = None) -> None:
+        self.started.set()
+        self._stop_event = asyncio.Event()
+        waiters = [asyncio.create_task(self._stop_event.wait())]
+        if lifespan is not None:
+            waiters.append(asyncio.create_task(lifespan.wait()))
+        done, pending = await asyncio.wait(
+            waiters, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        self.stopped.set()
+
+    def request_stop(self) -> None:
+        self.stop_requested = True
+        if self._stop_event is not None:
+            self._stop_event.set()
+
+    def lease_ready_jobs(self) -> list[persistence.QueueJobDTO]:
+        ready: list[persistence.QueueJobDTO] = []
+        for job_type in self._job_types:
+            ready.extend(self._persistence.fetch_ready(job_type))
+        ready.sort(
+            key=lambda job: (-int(job.priority or 0), job.available_at, int(job.id))
+        )
+        leased: list[persistence.QueueJobDTO] = []
+        for job in ready:
+            record = self._persistence.lease(
+                job.id,
+                job_type=job.type,
+                lease_seconds=job.lease_timeout_seconds,
+            )
+            if record is not None:
+                leased.append(record)
+        if leased:
+            self.leased_jobs.append(leased)
+        return leased
+
+
+class RecordingDispatcher:
+    """Thin wrapper around the real dispatcher with manual draining helpers."""
+
+    def __init__(self, scheduler: RecordingScheduler, handlers: Mapping[str, Any]) -> None:
+        from app.orchestrator.dispatcher import Dispatcher as _Dispatcher
+
+        self._impl = _Dispatcher(scheduler, handlers, persistence_module=persistence)
+        self._stop_event: asyncio.Event | None = None
+        self.started = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self.stop_requested = False
+        self.processed_jobs: list[persistence.QueueJobDTO] = []
+
+        # Expose selected internals for tests.
+        self._handlers = self._impl._handlers
+        self._scheduler = self._impl._scheduler
+        self._persistence = self._impl._persistence
+
+    async def run(self, lifespan: asyncio.Event | None = None) -> None:
+        self.started.set()
+        self._stop_event = asyncio.Event()
+        waiters = [asyncio.create_task(self._stop_event.wait())]
+        if lifespan is not None:
+            waiters.append(asyncio.create_task(lifespan.wait()))
+        done, pending = await asyncio.wait(
+            waiters, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        self.stop_requested = True
+        self._impl.request_stop()
+        self.stopped.set()
+
+    def request_stop(self) -> None:
+        self.stop_requested = True
+        self._impl.request_stop()
+        if self._stop_event is not None:
+            self._stop_event.set()
+
+    async def drain_once(self) -> list[persistence.QueueJobDTO]:
+        leased = self._scheduler.lease_ready_jobs()
+        processed: list[persistence.QueueJobDTO] = []
+        for job in leased:
+            handler = self._handlers.get(job.type)
+            if handler is None:
+                self._persistence.to_dlq(
+                    job.id,
+                    job_type=job.type,
+                    reason="handler_missing",
+                    payload=job.payload,
+                )
+                continue
+            await self._impl._execute_job(job, handler)
+            processed.append(job)
+            self.processed_jobs.append(job)
+        return processed
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._impl, item)
+
+
+def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_bootstrap = orchestrator_bootstrap.bootstrap_orchestrator
+
+    def build_test_orchestrator(
+        *,
+        metadata_service=None,
+        artwork_service=None,
+        lyrics_service=None,
+    ) -> orchestrator_bootstrap.OrchestratorRuntime:
+        runtime = original_bootstrap(
+            metadata_service=metadata_service,
+            artwork_service=artwork_service,
+            lyrics_service=lyrics_service,
+        )
+        scheduler = RecordingScheduler(persistence_module=runtime.dispatcher._persistence)
+        dispatcher = RecordingDispatcher(scheduler, runtime.handlers)
+        return orchestrator_bootstrap.OrchestratorRuntime(
+            scheduler=scheduler,
+            dispatcher=dispatcher,
+            handlers=runtime.handlers,
+            enabled_jobs=runtime.enabled_jobs,
+        )
+
+    monkeypatch.setattr(
+        orchestrator_bootstrap,
+        "bootstrap_orchestrator",
+        build_test_orchestrator,
+    )
+    monkeypatch.setattr("app.main.bootstrap_orchestrator", build_test_orchestrator, raising=False)
 
 
 class StubSpotifyClient:
@@ -810,7 +965,11 @@ class StubLyricsWorker:
 
 
 @pytest.fixture(autouse=True)
-def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> None:
+def configure_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory,
+    request: pytest.FixtureRequest,
+) -> None:
     from app import dependencies as deps
 
     deps.get_app_config.cache_clear()
@@ -819,9 +978,13 @@ def configure_environment(monkeypatch: pytest.MonkeyPatch, tmp_path_factory) -> 
     deps.get_transfers_api.cache_clear()
     deps.get_matching_engine.cache_clear()
 
-    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
+    disable_workers = "1"
+    if request.node.get_closest_marker("lifespan_workers") is not None:
+        disable_workers = "0"
+    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", disable_workers)
     monkeypatch.setenv("ENABLE_ARTWORK", "1")
     monkeypatch.setenv("ENABLE_LYRICS", "1")
+    _install_recording_orchestrator(monkeypatch)
     db_dir = tmp_path_factory.mktemp("db")
     db_path = db_dir / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
@@ -865,21 +1028,22 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     engine = dependency_matching_engine()
     stub_gateway = StubSearchGateway(stub_spotify, stub_soulseek)
 
-    async def noop_start(self) -> None:  # type: ignore[override]
+    async def noop_async(self) -> None:  # type: ignore[override]
         return None
 
-    async def noop_stop(self) -> None:  # type: ignore[override]
-        return None
+    monkeypatch.setattr(MetadataWorker, "start", noop_async)
+    monkeypatch.setattr(MetadataWorker, "stop", noop_async)
+    monkeypatch.setattr(ArtworkWorker, "start", noop_async)
+    monkeypatch.setattr(ArtworkWorker, "stop", noop_async)
+    monkeypatch.setattr(LyricsWorker, "start", noop_async)
+    monkeypatch.setattr(LyricsWorker, "stop", noop_async)
 
-    # Prevent worker tasks during tests
-    monkeypatch.setattr(SyncWorker, "start", noop_start)
-    monkeypatch.setattr(MatchingWorker, "start", noop_start)
-    monkeypatch.setattr(PlaylistSyncWorker, "start", noop_start)
-    monkeypatch.setattr(RetryScheduler, "start", noop_start)
-    monkeypatch.setattr(SyncWorker, "stop", noop_stop)
-    monkeypatch.setattr(MatchingWorker, "stop", noop_stop)
-    monkeypatch.setattr(PlaylistSyncWorker, "stop", noop_stop)
-    monkeypatch.setattr(RetryScheduler, "stop", noop_stop)
+    _install_recording_orchestrator(monkeypatch)
+
+    async def enqueue_pending(self, job: Dict[str, Any]) -> None:  # type: ignore[override]
+        persistence.enqueue(self._job_type, job)
+
+    monkeypatch.setattr(SyncWorker, "enqueue", enqueue_pending, raising=False)
 
     from app import dependencies as deps
 
