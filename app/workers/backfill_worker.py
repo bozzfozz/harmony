@@ -52,7 +52,6 @@ class BackfillWorker:
         mark_worker_status("spotify_backfill", WORKER_STOPPED)
         if was_running:
             record_worker_stopped("spotify_backfill")
-        self._queue = None
         self._loop = None
 
     async def enqueue(self, job: BackfillJobSpec) -> None:
