@@ -69,7 +69,7 @@ FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registri
 - **MetadataWorker** (`app/workers/metadata_worker.py`): Reichert Downloads mit Spotify-Metadaten an.
 - **BackfillWorker** (`app/workers/backfill_worker.py`): Ergänzt Free-Ingest-Items über Spotify-APIs.
 - **WatchlistWorker** (`app/workers/watchlist_worker.py`): Überwacht gespeicherte Artists auf neue Releases.
-- **RetryScheduler** (`app/workers/retry_scheduler.py`): Plant fehlgeschlagene Downloads erneut ein.
+- **RetryScheduler** (`archive/workers/retry_scheduler.py`, archiviert): Frühere Loop-Implementierung zur Planung fehlgeschlagener Downloads (durch den Orchestrator ersetzt).
 
 Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Systemstatus nicht mehr angezeigt.
 

@@ -21,6 +21,8 @@ from app.utils.service_health import evaluate_all_service_health
 from app.utils.worker_health import (
     STALE_TIMEOUT_SECONDS,
     mark_worker_status,
+    orchestrator_component_status,
+    orchestrator_job_status,
     parse_timestamp,
     read_worker_status,
     resolve_status,
@@ -218,9 +220,11 @@ async def validate_secret(
 
 @dataclass(frozen=True)
 class WorkerDescriptor:
-    attr: str
+    attr: Optional[str]
     queue_fetcher: Optional[Callable[[Request], QueueValue]] = None
     queue_literal: Optional[QueueValue] = None
+    orchestrator_component: Optional[str] = None
+    orchestrator_job: Optional[str] = None
 
 
 def _sync_queue_size(_: Request) -> int:
@@ -258,7 +262,14 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
     "watchlist": WorkerDescriptor(attr="watchlist_worker", queue_literal="n/a"),
     "artwork": WorkerDescriptor(attr="artwork_worker", queue_literal="n/a"),
     "lyrics": WorkerDescriptor(attr="lyrics_worker", queue_literal="n/a"),
-    "retry_scheduler": WorkerDescriptor(attr="retry_scheduler", queue_literal="n/a"),
+    "scheduler": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_component="scheduler"),
+    "dispatcher": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_component="dispatcher"),
+    "watchlist_timer": WorkerDescriptor(
+        attr=None,
+        queue_literal="n/a",
+        orchestrator_component="watchlist_timer",
+    ),
+    "retry_scheduler": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_job="retry"),
 }
 
 
@@ -297,9 +308,22 @@ def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -
     if queue_value is not None:
         payload["queue_size"] = queue_value
 
-    worker_instance = getattr(request.app.state, descriptor.attr, None)
-    if worker_instance is None and stored_last_seen is None:
-        payload["status"] = "unavailable"
+    if descriptor.orchestrator_component:
+        component_status = orchestrator_component_status(
+            request.app, descriptor.orchestrator_component
+        )
+        payload["status"] = component_status
+        payload["component"] = descriptor.orchestrator_component
+    elif descriptor.orchestrator_job:
+        job_status = orchestrator_job_status(request.app, descriptor.orchestrator_job)
+        payload["status"] = job_status
+        payload["job"] = descriptor.orchestrator_job
+
+    worker_instance = None
+    if descriptor.attr:
+        worker_instance = getattr(request.app.state, descriptor.attr, None)
+        if worker_instance is None and stored_last_seen is None:
+            payload["status"] = "unavailable"
 
     return payload
 

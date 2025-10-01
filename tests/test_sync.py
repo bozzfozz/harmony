@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.utils.activity import activity_manager
 
-from app.workers import PlaylistSyncWorker
+from app.workers.playlist_sync_worker import PlaylistSyncWorker
 
 
 def test_sync_endpoint_triggers_workers(monkeypatch, client) -> None:

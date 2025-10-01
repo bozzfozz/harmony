@@ -44,11 +44,11 @@ from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.services.backfill_service import BackfillService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers import PlaylistSyncWorker, SyncWorker
+from app.workers.playlist_sync_worker import PlaylistSyncWorker
+from app.workers.sync_worker import SyncWorker
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
-from app.workers.retry_scheduler import RetryScheduler
 from app.workers import persistence
 from tests.simple_client import SimpleTestClient
 
@@ -483,6 +483,7 @@ class StubSoulseekClient:
             },
         }
         self.enqueued: list[Dict[str, Any]] = []
+        self._next_download_id = 1
         self.user_records: Dict[str, Dict[str, Any]] = {
             "tester": {
                 "address": {"host": "127.0.0.1", "port": 2234},
@@ -607,6 +608,182 @@ class StubSoulseekClient:
         if identifier in self.downloads:
             self.downloads[identifier]["state"] = "failed"
         return {"cancelled": download_id}
+
+
+async def _soulseek_get_download(
+    self: StubSoulseekClient, download_id: str
+) -> Dict[str, Any]:
+    identifier = int(download_id)
+    return self.downloads.get(identifier, {"id": identifier, "state": "unknown"})
+
+
+async def _soulseek_get_all_downloads(
+    self: StubSoulseekClient,
+) -> list[Dict[str, Any]]:
+    return list(self.downloads.values())
+
+
+async def _soulseek_remove_completed_downloads(
+    self: StubSoulseekClient,
+) -> Dict[str, Any]:
+    before = len(self.downloads)
+    self.downloads = {k: v for k, v in self.downloads.items() if v.get("state") != "completed"}
+    removed = before - len(self.downloads)
+    return {"removed": removed}
+
+
+async def _soulseek_get_queue_position(
+    self: StubSoulseekClient, download_id: str
+) -> Dict[str, Any]:
+    identifier = int(download_id)
+    return self.queue_positions.get(identifier, {"position": None})
+
+
+async def _soulseek_enqueue(
+    self: StubSoulseekClient, username: str, files: list[Dict[str, Any]]
+) -> Dict[str, Any]:
+    job_files: list[Dict[str, Any]] = []
+    for file_info in files:
+        entry = dict(file_info)
+        if "download_id" not in entry:
+            entry["download_id"] = self._next_download_id
+            self._next_download_id += 1
+        identifier = int(entry.get("download_id", 0))
+        if identifier <= 0:
+            continue
+        self.downloads.setdefault(
+            identifier,
+            {
+                "id": identifier,
+                "filename": entry.get("filename", "unknown"),
+                "progress": 0.0,
+                "state": "queued",
+            },
+        )
+        job_files.append(entry)
+    job = {"username": username, "files": job_files}
+    if job_files:
+        job["id"] = job_files[0]["download_id"]
+    self.enqueued.append(job)
+    return {"status": "enqueued", "job": job}
+
+
+async def _soulseek_cancel_upload(
+    self: StubSoulseekClient, upload_id: str
+) -> Dict[str, Any]:
+    upload = self.uploads.get(upload_id)
+    if upload:
+        upload["state"] = "cancelled"
+    return {"cancelled": upload_id}
+
+
+async def _soulseek_get_upload(
+    self: StubSoulseekClient, upload_id: str
+) -> Dict[str, Any]:
+    return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
+
+
+async def _soulseek_get_uploads(self: StubSoulseekClient) -> list[Dict[str, Any]]:
+    return [upload for upload in self.uploads.values() if upload.get("state") != "completed"]
+
+
+async def _soulseek_get_all_uploads(self: StubSoulseekClient) -> list[Dict[str, Any]]:
+    return list(self.uploads.values())
+
+
+async def _soulseek_remove_completed_uploads(
+    self: StubSoulseekClient,
+) -> Dict[str, Any]:
+    before = len(self.uploads)
+    self.uploads = {k: v for k, v in self.uploads.items() if v.get("state") != "completed"}
+    removed = before - len(self.uploads)
+    return {"removed": removed}
+
+
+async def _soulseek_user_address(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
+    record = self.user_records.get(username, {})
+    return record.get("address", {"host": None, "port": None})
+
+
+async def _soulseek_user_browse(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
+    record = self.user_records.get(username, {})
+    return record.get("browse", {"files": []})
+
+
+async def _soulseek_user_browsing_status(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
+    record = self.user_records.get(username, {})
+    return record.get("browsing-status", {"state": "unknown"})
+
+
+async def _soulseek_user_directory(
+    self: StubSoulseekClient, username: str, path: str
+) -> Dict[str, Any]:
+    record = self.user_records.setdefault(username, {})
+    directory = record.get("directory", {"path": path, "files": []})
+    directory = dict(directory)
+    directory["path"] = path
+    return directory
+
+
+async def _soulseek_user_info(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
+    record = self.user_records.get(username, {})
+    return record.get("info", {"username": username})
+
+
+async def _soulseek_user_status(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
+    record = self.user_records.get(username, {})
+    return record.get("status", {"online": False})
+
+
+def _soulseek_set_status(
+    self: StubSoulseekClient,
+    download_id: int,
+    *,
+    progress: float | None = None,
+    state: str | None = None,
+) -> None:
+    entry = self.downloads.setdefault(
+        download_id,
+        {
+            "id": download_id,
+            "filename": f"download-{download_id}",
+            "progress": 0.0,
+            "state": "queued",
+        },
+    )
+    if progress is not None:
+        entry["progress"] = progress
+    if state is not None:
+        entry["state"] = state
+
+
+StubSoulseekClient.get_download = _soulseek_get_download
+StubSoulseekClient.get_all_downloads = _soulseek_get_all_downloads
+StubSoulseekClient.remove_completed_downloads = _soulseek_remove_completed_downloads
+StubSoulseekClient.get_queue_position = _soulseek_get_queue_position
+StubSoulseekClient.enqueue = _soulseek_enqueue
+StubSoulseekClient.cancel_upload = _soulseek_cancel_upload
+StubSoulseekClient.get_upload = _soulseek_get_upload
+StubSoulseekClient.get_uploads = _soulseek_get_uploads
+StubSoulseekClient.get_all_uploads = _soulseek_get_all_uploads
+StubSoulseekClient.remove_completed_uploads = _soulseek_remove_completed_uploads
+StubSoulseekClient.user_address = _soulseek_user_address
+StubSoulseekClient.user_browse = _soulseek_user_browse
+StubSoulseekClient.user_browsing_status = _soulseek_user_browsing_status
+StubSoulseekClient.user_directory = _soulseek_user_directory
+StubSoulseekClient.user_info = _soulseek_user_info
+StubSoulseekClient.user_status = _soulseek_user_status
+StubSoulseekClient.set_status = _soulseek_set_status
 
 
 class StubSearchGateway:
@@ -1042,6 +1219,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
 
     async def enqueue_pending(self, job: Dict[str, Any]) -> None:  # type: ignore[override]
         persistence.enqueue(self._job_type, job)
+        await stub_soulseek.download(job)
 
     monkeypatch.setattr(SyncWorker, "enqueue", enqueue_pending, raising=False)
 
@@ -1064,7 +1242,6 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     app.state.spotify_stub = stub_spotify
     app.state.lyrics_worker = stub_lyrics
     app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
-    app.state.retry_scheduler = RetryScheduler(app.state.sync_worker)
     app.state.playlist_worker = PlaylistSyncWorker(stub_spotify, interval_seconds=0.1)
     app.state.provider_gateway_stub = stub_gateway
 

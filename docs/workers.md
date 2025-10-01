@@ -14,7 +14,7 @@ Harmony betreibt mehrere asynchrone Worker, die beim Lifespan-Start der FastAPI-
 | `MetadataWorker` | `app/workers/metadata_worker.py` | Ergänzt Metadaten wie Genres, Komponist:innen oder ISRC-Codes. |
 | `BackfillWorker` | `app/workers/backfill_worker.py` | Reichert FREE-Ingest-Daten mit Spotify-Informationen an. |
 | `WatchlistWorker` | `app/workers/watchlist_worker.py` | Überwacht Artists auf neue Releases und stößt automatische Downloads an. |
-| `RetryScheduler` | `app/workers/retry_scheduler.py` | Plant fehlgeschlagene Downloads mit Backoff neu ein. |
+| `RetryScheduler` | `archive/workers/retry_scheduler.py` (archiviert) | Historische Loop zum Neuplanen fehlgeschlagener Downloads; ersetzt durch den Orchestrator. |
 
 ## Lebenszyklus & Steuerung
 
@@ -22,6 +22,16 @@ Harmony betreibt mehrere asynchrone Worker, die beim Lifespan-Start der FastAPI-
 - `HARMONY_DISABLE_WORKERS=1` deaktiviert sämtliche Hintergrund-Worker – praktisch für Read-only-Demos oder Tests.
 - Einzelne Worker können über Feature-Flags deaktiviert werden (`ENABLE_ARTWORK`, `ENABLE_LYRICS`).
 - Beim Start emittiert die Anwendung ein strukturiertes Log-Event `worker.config` mit den wichtigsten Parametern (`component="bootstrap"`, `status="ok"`). Das Event enthält ausschließlich nicht-sensible Metadaten und erleichtert das Monitoring der aktiven Defaults.
+
+### Orchestrator-Komponenten
+
+Harmony betreibt einen Orchestrator, der das Starten und Stoppen der Worker kapselt und die folgenden Teile orchestriert:
+
+- **Scheduler (`app/orchestrator/scheduler.py`)** – Liest aktivierte Jobs aus der Konfiguration, erzeugt Worker-Aufgaben und startet sie im Hintergrund. Der Scheduler läuft als wiederverwendbarer Task, kann vor dem eigentlichen Start ein Stop-Signal entgegennehmen und setzt interne Status-Flags (`started`, `stopped`, `stop_requested`).
+- **Dispatcher (`app/orchestrator/dispatcher.py`)** – Verteilt `WorkerJob`-Einträge an die passenden Handler. Er wird bei Lifespan-Start zusammen mit dem Scheduler erstellt, respektiert Stop-Signale und wartet beim Shutdown auf laufende Dispatch-Loops.
+- **WatchlistTimer (`app/orchestrator/timer.py`)** – Startet periodische Watchlist-Läufe. Der Timer nutzt dieselbe Start/Stopp-Semantik wie Scheduler und Dispatcher, damit keine Ticks während des Shutdowns mehr ausgeführt werden.
+
+Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert. Der dort definierte `WORKERS_ENABLED`-Schalter entscheidet zur Laufzeit, ob der Orchestrator überhaupt gestartet wird. Dadurch können API-Instanzen ohne Hintergrundprozesse betrieben werden, ohne an anderer Stelle Code ändern zu müssen.
 
 ## ENV-Variablen & Defaults
 
