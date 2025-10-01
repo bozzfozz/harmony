@@ -10,13 +10,14 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 from fastapi import APIRouter, Depends, Request, status
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.dependencies import get_matching_engine, get_provider_gateway
+from app.dependencies import get_integration_service, get_matching_engine
 from app.errors import DependencyError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
-from app.integrations.provider_gateway import ProviderGateway, ProviderGatewaySearchResponse
+from app.integrations.provider_gateway import ProviderGatewaySearchResponse
+from app.services.integration_service import IntegrationService
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -85,7 +86,7 @@ async def smart_search(
     request: SearchRequest,
     raw_request: Request,
     matching_engine: MusicMatchingEngine = Depends(get_matching_engine),
-    gateway: ProviderGateway = Depends(get_provider_gateway),
+    service: IntegrationService = Depends(get_integration_service),
 ) -> SearchResponse:
     """Aggregate search results from Spotify and Soulseek with ranking."""
 
@@ -103,13 +104,10 @@ async def smart_search(
 
     started = time.perf_counter()
     try:
-        gateway_response = await gateway.search_many(provider_names, search_query)
-    except KeyError as exc:
+        gateway_response = await service.search_providers(provider_names, search_query)
+    except DependencyError as exc:
         logger.error("Requested provider not available", exc_info=exc)
-        raise DependencyError(
-            "Requested search source is not available",
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        ) from exc
+        raise
 
     aggregated, failures = _collect_candidates(gateway_response)
 

@@ -22,6 +22,9 @@ from app.errors import AppError, ErrorCode
 from app.logging import get_logger
 from app.services.integration_service import IntegrationService
 
+
+_integration_service_override: IntegrationService | None = None
+
 logger = get_logger(__name__)
 
 
@@ -61,7 +64,15 @@ def get_provider_gateway() -> ProviderGateway:
 
 @lru_cache()
 def get_integration_service() -> IntegrationService:
+    if _integration_service_override is not None:
+        return _integration_service_override
     return IntegrationService(registry=get_provider_registry())
+
+
+def set_integration_service_override(service: IntegrationService | None) -> None:
+    global _integration_service_override
+    _integration_service_override = service
+    get_integration_service.cache_clear()
 
 
 @lru_cache()

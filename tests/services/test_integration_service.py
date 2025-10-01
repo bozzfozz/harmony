@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 import pytest
 
@@ -19,6 +19,7 @@ from app.integrations.provider_gateway import (
     ProviderGatewayInternalError,
     ProviderGatewayNotFoundError,
     ProviderGatewayRateLimitedError,
+    ProviderGatewaySearchResponse,
     ProviderGatewayTimeoutError,
     ProviderGatewayValidationError,
 )
@@ -64,6 +65,15 @@ class _StubGateway:
         if isinstance(self._response, Exception):
             raise self._response
         return self._response
+
+
+class _StubGatewayMany:
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple[str, ...], SearchQuery]] = []
+
+    async def search_many(self, providers: Sequence[str], query: SearchQuery):
+        self.calls.append((tuple(providers), query))
+        return ProviderGatewaySearchResponse(results=())
 
 
 def _make_candidate() -> TrackCandidate:
@@ -148,3 +158,28 @@ async def test_integration_service_normalises_gateway_errors(
 
     with pytest.raises(expected_error):
         await service.search_tracks("slskd", "query")
+
+
+@pytest.mark.asyncio
+async def test_search_providers_deduplicates_and_validates() -> None:
+    registry = _StubRegistry(enabled=("spotify", "slskd"))
+    gateway = _StubGatewayMany()
+    service = IntegrationService(registry=registry, gateway=gateway)  # type: ignore[arg-type]
+
+    query = SearchQuery(text="Song", artist=None, limit=10)
+    response = await service.search_providers(["Spotify", "slskd", "spotify"], query)
+
+    assert response.results == ()
+    assert gateway.calls == [(("spotify", "slskd"), query)]
+
+
+@pytest.mark.asyncio
+async def test_search_providers_raises_dependency_error_for_unknown_provider() -> None:
+    registry = _StubRegistry(enabled=("spotify",))
+    gateway = _StubGatewayMany()
+    service = IntegrationService(registry=registry, gateway=gateway)  # type: ignore[arg-type]
+
+    query = SearchQuery(text="Song", artist=None, limit=10)
+
+    with pytest.raises(DependencyError):
+        await service.search_providers(["slskd"], query)

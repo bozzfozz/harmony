@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
 
 import os
 
@@ -26,8 +26,8 @@ import pytest
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.dependencies import (
+    get_integration_service as dependency_integration_service,
     get_matching_engine as dependency_matching_engine,
-    get_provider_gateway as dependency_provider_gateway,
     get_soulseek_client as dependency_soulseek_client,
     get_spotify_client as dependency_spotify_client,
     get_transfers_api as dependency_transfers_api,
@@ -44,6 +44,7 @@ from app.main import app
 from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.models import QueueJobStatus
 from app.services.backfill_service import BackfillService
+from app.services.integration_service import ProviderHealth
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
@@ -961,6 +962,7 @@ class StubSearchGateway:
                 self.log_events.append(event_payload)
         return ProviderGatewaySearchResponse(results=tuple(results))
 
+
     def _spotify_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
         payload = self._spotify.search_tracks(query.text, limit=query.limit)
         container = payload.get("tracks") if isinstance(payload, dict) else None
@@ -1201,6 +1203,41 @@ class StubSearchGateway:
             entry["state"] = state
 
 
+class StubIntegrationService:
+    def __init__(self, gateway: StubSearchGateway) -> None:
+        self._gateway = gateway
+        self._providers: tuple[str, ...] = ("spotify", "slskd")
+        self.calls: list[tuple[tuple[str, ...], SearchQuery]] = []
+
+    async def search_providers(
+        self, providers: Sequence[str], query: SearchQuery
+    ) -> ProviderGatewaySearchResponse:
+        self.calls.append((tuple(providers), query))
+        return await self._gateway.search_many(providers, query)
+
+    async def search_tracks(
+        self,
+        provider: str,
+        query: str,
+        *,
+        artist: str | None = None,
+        limit: int = 50,
+    ) -> list[TrackCandidate]:
+        query_model = SearchQuery(text=query, artist=artist, limit=limit)
+        response = await self.search_providers((provider,), query_model)
+        candidates: list[TrackCandidate] = []
+        for result in response.results:
+            for track in result.tracks:
+                candidates.extend(track.candidates)
+        return candidates
+
+    def providers(self) -> Iterable[object]:  # pragma: no cover - simple stub
+        return ()
+
+    def health(self) -> list[ProviderHealth]:  # pragma: no cover - simple stub
+        return [ProviderHealth(name=name, enabled=True, health="ok") for name in self._providers]
+
+
 class StubTransfersApi:
     def __init__(self, soulseek: StubSoulseekClient) -> None:
         self._soulseek = soulseek
@@ -1317,6 +1354,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     stub_lyrics = StubLyricsWorker()
     engine = dependency_matching_engine()
     stub_gateway = StubSearchGateway(stub_spotify, stub_soulseek)
+    stub_service = StubIntegrationService(stub_gateway)
 
     async def noop_async(self) -> None:  # type: ignore[override]
         return None
@@ -1342,27 +1380,33 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
     monkeypatch.setattr(deps, "get_soulseek_client", lambda: stub_soulseek)
     monkeypatch.setattr(deps, "get_transfers_api", lambda: stub_transfers)
     monkeypatch.setattr(deps, "get_matching_engine", lambda: engine)
-    monkeypatch.setattr(deps, "get_provider_gateway", lambda: stub_gateway)
-
-    app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
-    app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
-    app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
-    app.dependency_overrides[dependency_matching_engine] = lambda: engine
-    app.dependency_overrides[dependency_provider_gateway] = lambda: stub_gateway
-
-    app.state.soulseek_stub = stub_soulseek
-    app.state.transfers_stub = stub_transfers
-    app.state.spotify_stub = stub_spotify
-    app.state.lyrics_worker = stub_lyrics
-    app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
-    app.state.playlist_worker = PlaylistSyncWorker(stub_spotify, interval_seconds=0.1)
-    app.state.provider_gateway_stub = stub_gateway
+    deps.set_integration_service_override(stub_service)
 
     with SimpleTestClient(app) as test_client:
+        test_client.app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
+        test_client.app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
+        test_client.app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
+        test_client.app.dependency_overrides[dependency_matching_engine] = lambda: engine
+        test_client.app.dependency_overrides[dependency_integration_service] = (
+            lambda: stub_service
+        )
+
+        test_client.app.state.soulseek_stub = stub_soulseek
+        test_client.app.state.transfers_stub = stub_transfers
+        test_client.app.state.spotify_stub = stub_spotify
+        test_client.app.state.lyrics_worker = stub_lyrics
+        test_client.app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
+        test_client.app.state.playlist_worker = PlaylistSyncWorker(
+            stub_spotify, interval_seconds=0.1
+        )
+        test_client.app.state.provider_gateway_stub = stub_gateway
+        test_client.app.state.integration_service_stub = stub_service
         yield test_client
 
     app.dependency_overrides.clear()
     app.state.provider_gateway_stub = None
+    app.state.integration_service_stub = None
+    deps.set_integration_service_override(None)
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from app.errors import (
     DependencyError,
@@ -24,6 +24,7 @@ from app.integrations.provider_gateway import (
     ProviderGatewayRateLimitedError,
     ProviderGatewayTimeoutError,
     ProviderGatewayValidationError,
+    ProviderGatewaySearchResponse,
 )
 from app.integrations.registry import ProviderRegistry
 
@@ -109,6 +110,28 @@ class IntegrationService:
             raise InternalServerError(f"Unexpected error during {provider} search.") from exc
 
         return self._flatten_candidates(tracks)
+
+    async def search_providers(
+        self, providers: Sequence[str], query: SearchQuery
+    ) -> ProviderGatewaySearchResponse:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for provider in providers:
+            normalized_name = provider.strip().lower()
+            if not normalized_name:
+                raise ValidationAppError("provider must not be empty.")
+            if normalized_name in seen:
+                continue
+            try:
+                self._registry.get_track_provider(normalized_name)
+            except KeyError as exc:
+                raise DependencyError(
+                    "Requested search source is not available"
+                ) from exc
+            normalized.append(normalized_name)
+            seen.add(normalized_name)
+
+        return await self._gateway.search_many(normalized, query)
 
     def providers(self) -> Iterable[object]:
         return self._registry.track_providers().values()
