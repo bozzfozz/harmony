@@ -289,9 +289,11 @@ Starte eine Rückfrage, wenn **mindestens einer** der Punkte zutrifft:
 - Änderungen an Dateien (Neu/Geändert/Gelöscht) als Liste.
 - Testnachweise mit Befehlen/Logs/Screenshots.
 - Verweis auf AGENTS.md-Konformität und ggf. OpenAPI-/ENV-Updates.
+- Nicht triviale Architekturentscheidungen erfordern ein ADR (`docs/architecture/adr/`) inkl. Verweis in der PR.
 
 **PR-Checkliste (muss vollständig im PR abgehakt sein):**
 - [ ] AGENTS.md gelesen und Scope-Guard geprüft.
+- [ ] Architekturübersicht (`docs/architecture/overview.md`) gelesen und bei Änderungen an Flows/Contracts/Flags aktualisiert.
 - [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert.
 - [ ] Tests grün (`pytest`, `mypy`, `ruff`, `black --check`) bzw. begründete Ausnahme dokumentiert.
 - [ ] OpenAPI/Snapshots aktualisiert, falls API betroffen.
@@ -299,6 +301,7 @@ Starte eine Rückfrage, wenn **mindestens einer** der Punkte zutrifft:
 
 ### CI-/OpenAPI-Gates <a id="ci-openapi-gates"></a>
 
+- Architektur-Dokumentation (`docs/architecture/overview.md`, `docs/architecture/contracts.md`, `docs/architecture/diagrams.md`) muss Flows, Contracts und Feature-Flags widerspruchsfrei abbilden.
 **MUST PASS (lokal oder CI):**
 - `pytest`
 - `mypy`

@@ -1,4 +1,5 @@
 ## v2.0.0 — unreleased
+- docs(architecture): add overview, contracts, diagrams, ADR template [CODX-ARCH-DOC-301]
 - docs: enable Codex full write mode (default implement) [CODX-POL-092]
 - docs: enable Auto-FAST-TRACK for CODX-ORCH-* tasks in AGENTS.md [CODX-DOC-102]
 - feat(orchestrator): configurable priorities, pools, visibility, heartbeat, timer [CODX-ORCH-084]

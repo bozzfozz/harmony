@@ -4,6 +4,10 @@ Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene
 
 > **MVP-Hinweis:** Die früheren Plex- und Beets-Integrationen sind vorübergehend deaktiviert und der Quellcode wurde unter `archive/integrations/plex_beets/` abgelegt. Markierte Abschnitte in diesem Dokument beschreiben archivierte Funktionen.
 
+## Architecture
+
+Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain → Integrationen) mit einem zentralen Orchestrator für Hintergrundjobs. Verantwortlichkeiten, Flows, Fehler- und Logging-Verträge sowie Erweiterungspunkte sind in der [Architecture Overview](docs/architecture/overview.md) festgehalten und gelten als verbindliche Referenz für jede Änderung. Ergänzende Diagramme, Contracts und ADRs befinden sich im Ordner `docs/architecture/`.
+
 ## Features
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
