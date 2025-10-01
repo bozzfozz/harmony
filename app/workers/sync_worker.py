@@ -268,16 +268,20 @@ class SyncWorker:
         try:
             await self._stop_event.wait()
         finally:
-            self._running.clear()
-            for _ in self._worker_tasks:
-                await self._put_job(None)
-            await asyncio.gather(*self._worker_tasks, return_exceptions=True)
+            try:
+                for _ in self._worker_tasks:
+                    await self._put_job(None)
+                await asyncio.gather(*self._worker_tasks, return_exceptions=True)
+            finally:
+                self._worker_tasks = []
+                self._running.clear()
             if self._poll_task:
                 self._poll_task.cancel()
                 try:
                     await self._poll_task
                 except asyncio.CancelledError:  # pragma: no cover - lifecycle cleanup
                     pass
+                self._poll_task = None
             release_active_leases(self._job_type)
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("sync", WORKER_STOPPED)
