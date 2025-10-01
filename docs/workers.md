@@ -33,6 +33,18 @@ Harmony betreibt einen Orchestrator, der das Starten und Stoppen der Worker kaps
 
 Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert. Der dort definierte `WORKERS_ENABLED`-Schalter entscheidet zur Laufzeit, ob der Orchestrator überhaupt gestartet wird. Dadurch können API-Instanzen ohne Hintergrundprozesse betrieben werden, ohne an anderer Stelle Code ändern zu müssen.
 
+#### Prioritäten & Pools
+
+- Prioritäten können JSON-basiert (`ORCH_PRIORITY_JSON`) oder als CSV (`ORCH_PRIORITY_CSV`) konfiguriert werden. Höhere Zahlen bedeuten bevorzugte Abholung im Scheduler.
+- Der Dispatcher respektiert `ORCH_GLOBAL_CONCURRENCY` sowie optionale `ORCH_POOL_<JOB>` Limits (z. B. `ORCH_POOL_SYNC=3`). Pools fallen ohne eigenen Wert auf das globale Limit zurück.
+- Der Scheduler pollt in Abständen von `ORCH_POLL_INTERVAL_MS` Millisekunden. Werte kleiner als 10 ms werden automatisch auf 10 ms angehoben, Werte ≤0 deaktivieren das Schlafen.
+
+#### Sichtbarkeit & Heartbeats
+
+- `ORCH_VISIBILITY_TIMEOUT_S` definiert das Lease beim Leasing der Jobs, während `WORKER_VISIBILITY_TIMEOUT_S` weiterhin als Fallback beim Enqueue dient. Beide Werte sollten deckungsgleich sein, damit Heartbeats und Redelivery vorhersehbar bleiben.
+- Während der Job-Verarbeitung sendet der Dispatcher alle `lease_timeout_seconds * 0.5` Sekunden einen Heartbeat. Schlägt die Verlängerung fehl, wird ein `event=orchestrator.heartbeat` mit `status="lost"` protokolliert und der Job wird zur Sicherheit neu verteilt.
+- Handler können eine eigene `visibility_timeout` im Payload setzen, falls ein Job bewusst länger laufen darf. Der orchestratorische Timeout wirkt dann als Obergrenze.
+
 ## ENV-Variablen & Defaults
 
 ### Watchlist & Scheduling
@@ -52,7 +64,7 @@ Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert.
 | Variable | Default | Wirkung | Hinweise |
 | --- | ---: | --- | --- |
 | `WORKER_VISIBILITY_TIMEOUT_S` | `60` | Lease-Dauer für persistente Worker-Jobs. | Minimum sind 5 s; längere Jobs entsprechend erhöhen. |
-| `RETRY_MAX_ATTEMPTS` | `10` | Automatische Neuversuche pro Download. | Gilt für Sync/RetryScheduler. |
+| `RETRY_MAX_ATTEMPTS` | `10` | Automatische Neuversuche pro Download. | Gilt für Sync-Handler und orchestrierte Retry-Flows. |
 | `RETRY_BASE_SECONDS` | `60` | Basiswartezeit zwischen Retries. | Wird exponentiell mit `RETRY_JITTER_PCT` kombiniert. |
 | `RETRY_JITTER_PCT` | `0.2` | Zufallsanteil (±20 %) für Retry-Verzögerungen. | |
 | `DLQ_PAGE_SIZE_DEFAULT` | `25` | Standardpaginierung für DLQ-Listen. | Anpassbar bis `DLQ_PAGE_SIZE_MAX`. |

@@ -59,6 +59,8 @@ FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registri
 
 ### Hintergrund-Worker
 
+Der Lifespan startet zuerst den Orchestrator (Scheduler, Dispatcher, WatchlistTimer), der Queue-Jobs priorisiert, Heartbeats pflegt und Watchlist-Ticks kontrolliert. Anschließend werden – sofern `WORKERS_ENABLED` aktiv ist – die eigentlichen Worker registriert und vom Dispatcher anhand ihrer Job-Typen aufgerufen.
+
 `app/main.py` initialisiert beim Lifespan folgende Worker (deaktivierbar via `HARMONY_DISABLE_WORKERS=1`):
 
 - **SyncWorker** (`app/workers/sync_worker.py`): Steuert Soulseek-Downloads inkl. Retry-Strategie und Datei-Organisation.
@@ -69,7 +71,7 @@ FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registri
 - **MetadataWorker** (`app/workers/metadata_worker.py`): Reichert Downloads mit Spotify-Metadaten an.
 - **BackfillWorker** (`app/workers/backfill_worker.py`): Ergänzt Free-Ingest-Items über Spotify-APIs.
 - **WatchlistWorker** (`app/workers/watchlist_worker.py`): Überwacht gespeicherte Artists auf neue Releases.
-- **RetryScheduler** (`archive/workers/retry_scheduler.py`, archiviert): Frühere Loop-Implementierung zur Planung fehlgeschlagener Downloads (durch den Orchestrator ersetzt).
+- **RetryScheduler** (`archive/workers/retry_scheduler.py`, archiviert): Frühere Loop-Implementierung zur Planung fehlgeschlagener Downloads; wurde durch den neuen Orchestrator (Scheduler + Dispatcher) ersetzt.
 
 Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Systemstatus nicht mehr angezeigt.
 

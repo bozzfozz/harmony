@@ -21,9 +21,9 @@
 
 2. **Logging-Hilfsfunktion einführen (`log_event`)**  
    - **Beobachtung:** Cache nutzt `extra={"event": …}`, Watchlist-Worker und Search-Router codieren Schlüssel im Nachrichtentext.【F:app/services/cache.py†L70-L135】【F:app/workers/watchlist_worker.py†L93-L103】【F:app/routers/search_router.py†L127-L154】  
-   - **Schritte:**  
-     1. Utility `app.logging_events.log_event(logger, event, **fields)` bereitstellen.  
-     2. In kritischen Komponenten (Search, Watchlist, RetryScheduler) auf das neue Helper wechseln.  
+   - **Schritte:**
+     1. Utility `app.logging_events.log_event(logger, event, **fields)` bereitstellen.
+     2. In kritischen Komponenten (Search, Watchlist, Orchestrator) auf das neue Helper wechseln.
      3. Monitoring-Doku ergänzen (Event- und Pflichtfelder siehe Logging-Contract).  
    - **Impact:** Vereinheitlichte Logs → schnellere Observability-Gewinne.  
    - **Aufwand:** 1 PT.  
@@ -42,7 +42,7 @@
    - **Rollback:** Doc löschen.
 
 ### P1 – High Impact
-1. **Worker-Orchestrator als eigenständigen Service implementieren**  
+1. **Worker-Orchestrator als eigenständigen Service implementieren** *(erledigt – siehe `app/orchestrator/*` seit CODX-ORCH-084)*
    - **Beobachtung:** `_start_background_workers` erstellt Worker-Instanten direkt und speichert sie im App-State; Stop-Logik iteriert hartkodierte Attribute.【F:app/main.py†L239-L352】【F:app/main.py†L337-L352】  
    - **Schritte:**  
      1. Klasse `WorkerOrchestrator` erstellen (Konfiguration, Start/Stop, Health-Report).  
