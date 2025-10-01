@@ -48,6 +48,7 @@ from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
+from app.orchestrator.timer import WatchlistTimer
 from app.workers import ArtworkWorker, LyricsWorker, MetadataWorker
 
 logger = get_logger(__name__)
@@ -199,6 +200,8 @@ def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool)
         "dispatcher_running": False,
         "scheduler_expected": False,
         "dispatcher_expected": False,
+        "watchlist_timer_running": False,
+        "watchlist_timer_expected": False,
     }
 
 
@@ -232,6 +235,12 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
                 return DependencyStatus(ok=True, status="disabled")
             running = bool(status.get("dispatcher_running"))
             return DependencyStatus(ok=running, status="up" if running else "down")
+        if component == "watchlist_timer":
+            expected = status.get("watchlist_timer_expected", True)
+            if not expected:
+                return DependencyStatus(ok=True, status="disabled")
+            running = bool(status.get("watchlist_timer_running"))
+            return DependencyStatus(ok=running, status="up" if running else "down")
 
         enabled_jobs = status.get("enabled_jobs", {})
         enabled = enabled_jobs.get(component)
@@ -247,6 +256,7 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
     probes: dict[str, Callable[[], DependencyStatus]] = {
         "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
         "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),
+        "orchestrator:timer:watchlist": _orchestrator_component_probe("watchlist_timer"),
     }
     for job in jobs:
         probes[f"orchestrator:job:{job}"] = _orchestrator_component_probe(job)
@@ -281,6 +291,21 @@ def _resolve_watchlist_interval(raw_value: str | None) -> float:
         return default
 
 
+def _resolve_watchlist_timer_interval(raw_value: str | None) -> float:
+    default = 86_400.0
+    if not raw_value:
+        return default
+    try:
+        resolved = float(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid WATCHLIST_TIMER_INTERVAL_S value %s; falling back to default",
+            raw_value,
+        )
+        return default
+    return resolved if resolved >= 0 else 0.0
+
+
 def _resolve_visibility_timeout(raw_value: str | None) -> int:
     resolved = _env_as_int(raw_value, default=60)
     return max(5, resolved)
@@ -297,6 +322,8 @@ def _configure_application(config: AppConfig) -> None:
 def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
     watchlist_config = config.watchlist
     interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
+    timer_interval_seconds = _resolve_watchlist_timer_interval(os.getenv("WATCHLIST_TIMER_INTERVAL_S"))
+    timer_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
     visibility_timeout = _resolve_visibility_timeout(os.getenv("WORKER_VISIBILITY_TIMEOUT_S"))
 
     meta = {
@@ -307,6 +334,8 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
             "retry_budget_per_artist": watchlist_config.retry_budget_per_artist,
             "backoff_base_ms": watchlist_config.backoff_base_ms,
             "jitter_pct": watchlist_config.jitter_pct,
+            "timer_interval_s": timer_interval_seconds,
+            "timer_enabled": timer_enabled,
         },
         "queue": {
             "visibility_timeout_s": visibility_timeout,
@@ -356,6 +385,7 @@ async def _start_orchestrator_workers(
         "metadata": False,
         "orchestrator_scheduler": False,
         "orchestrator_dispatcher": False,
+        "orchestrator_watchlist_timer": False,
     }
 
     state.artwork_worker = None
@@ -400,6 +430,21 @@ async def _start_orchestrator_workers(
     for job_type, enabled in orchestrator.enabled_jobs.items():
         orchestrator_status["enabled_jobs"][job_type] = bool(enabled)
 
+    timer_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
+    timer_interval = _resolve_watchlist_timer_interval(os.getenv("WATCHLIST_TIMER_INTERVAL_S"))
+    watchlist_timer = WatchlistTimer(
+        config=config.watchlist,
+        interval_seconds=timer_interval,
+        enabled=timer_enabled,
+    )
+    state.watchlist_timer = watchlist_timer
+    orchestrator_status["watchlist_timer_expected"] = bool(timer_enabled)
+    timer_started = await watchlist_timer.start()
+    orchestrator_status["watchlist_timer_running"] = bool(timer_started)
+    worker_status["orchestrator_watchlist_timer"] = bool(timer_started)
+    if timer_started and watchlist_timer.task is not None:
+        state.orchestrator_tasks.append(watchlist_timer.task)
+
     return worker_status
 
 
@@ -438,6 +483,7 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     tasks = list(getattr(state, "orchestrator_tasks", []))
     stop_event: asyncio.Event | None = getattr(state, "orchestrator_stop_event", None)
     runtime: OrchestratorRuntime | None = getattr(state, "orchestrator_runtime", None)
+    timer: WatchlistTimer | None = getattr(state, "watchlist_timer", None)
 
     if runtime is not None:
         runtime.dispatcher.request_stop()
@@ -446,10 +492,13 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     if stop_event is not None:
         stop_event.set()
 
+    if timer is not None:
+        await timer.stop()
+
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    for attribute in ("orchestrator_tasks", "orchestrator_stop_event", "orchestrator_runtime"):
+    for attribute in ("orchestrator_tasks", "orchestrator_stop_event", "orchestrator_runtime", "watchlist_timer"):
         if hasattr(state, attribute):
             delattr(state, attribute)
 
@@ -463,6 +512,8 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
         orchestrator_status["dispatcher_running"] = False
         orchestrator_status["scheduler_expected"] = False
         orchestrator_status["dispatcher_expected"] = False
+        orchestrator_status["watchlist_timer_running"] = False
+        orchestrator_status["watchlist_timer_expected"] = False
         enabled_jobs = orchestrator_status.get("enabled_jobs", {})
         for job in ("artwork", "lyrics"):
             enabled_jobs[job] = False
@@ -509,6 +560,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     orchestrator_status["dispatcher_running"] = False
     orchestrator_status["scheduler_expected"] = workers_enabled
     orchestrator_status["dispatcher_expected"] = workers_enabled
+    timer_env_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
+    orchestrator_status["watchlist_timer_running"] = False
+    orchestrator_status["watchlist_timer_expected"] = workers_enabled and timer_env_enabled
 
     worker_status: dict[str, bool] = {}
 
@@ -527,6 +581,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "metadata": False,
             "orchestrator_scheduler": False,
             "orchestrator_dispatcher": False,
+            "orchestrator_watchlist_timer": False,
         }
 
     router_status = {
