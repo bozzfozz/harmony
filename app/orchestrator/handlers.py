@@ -5,18 +5,32 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import statistics
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Mapping, MutableMapping, Optional, Protocol, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Protocol,
+    Sequence,
+)
 
 from sqlalchemy.orm import Session
 
+from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
+from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
-from app.models import Download, IngestItem, IngestItemState
+from app.models import Download, IngestItem, IngestItemState, Match
 from app.services.backfill_service import BackfillJobStatus
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
@@ -28,7 +42,7 @@ from app.utils.events import (
     DOWNLOAD_RETRY_SCHEDULED,
 )
 from app.utils.file_utils import organize_file
-from app.workers import persistence
+from app.workers.persistence import QueueJobDTO
 
 
 logger = get_logger(__name__)
@@ -162,6 +176,175 @@ class LyricsService(Protocol):
 
 
 @dataclass(slots=True)
+class MatchingHandlerDeps:
+    """Dependencies required by the matching orchestrator handler."""
+
+    engine: MusicMatchingEngine
+    session_factory: Callable[[], AbstractContextManager[Session]] = session_scope
+    confidence_threshold: float = field(default_factory=lambda: load_matching_confidence_threshold())
+    external_timeout_ms: int = field(
+        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+    )
+
+
+class MatchingJobError(Exception):
+    """Raised when a matching job cannot be completed successfully."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str | None = None,
+        *,
+        retry: bool,
+        retry_in: int | None = None,
+    ) -> None:
+        super().__init__(message or code)
+        self.code = code
+        self.retry = retry
+        self.retry_in = retry_in
+
+
+def load_matching_confidence_threshold(
+    *,
+    setting_key: str = "matching_confidence_threshold",
+    env_key: str = "MATCHING_CONFIDENCE_THRESHOLD",
+    default: float = 0.65,
+) -> float:
+    from app.utils.settings_store import read_setting
+
+    setting_value = read_setting(setting_key)
+    env_value = os.getenv(env_key)
+    for raw in (setting_value, env_value):
+        if not raw:
+            continue
+        try:
+            parsed = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if 0 < parsed <= 1:
+            return parsed
+    return default
+
+
+async def handle_matching(
+    job: QueueJobDTO,
+    deps: MatchingHandlerDeps,
+) -> Mapping[str, Any]:
+    """Process a matching job and persist qualifying candidates."""
+
+    payload = dict(job.payload or {})
+    job_type = str(payload.get("type") or job.type or "matching")
+    spotify_track = payload.get("spotify_track")
+    candidates = payload.get("candidates")
+
+    if not isinstance(spotify_track, Mapping) or not spotify_track:
+        raise MatchingJobError(
+            "invalid_payload",
+            "Matching job missing spotify_track payload",
+            retry=False,
+        )
+    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)) or not candidates:
+        raise MatchingJobError(
+            "invalid_payload",
+            "Matching job missing candidates",
+            retry=False,
+        )
+
+    spotify_track_dto = normalize_spotify_track(spotify_track)
+    qualifying: list[tuple[dict[str, Any], float]] = []
+    discarded = 0
+    scores: list[float] = []
+
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            discarded += 1
+            continue
+        candidate_mapping = dict(candidate)
+        candidate_dto = normalize_slskd_candidate(candidate_mapping)
+        score = await _invoke_with_timeout(
+            asyncio.to_thread(
+                deps.engine.calculate_slskd_match_confidence,
+                spotify_track_dto,
+                candidate_dto,
+            ),
+            deps.external_timeout_ms,
+        )
+        if score >= deps.confidence_threshold:
+            qualifying.append((candidate_mapping, float(score)))
+            scores.append(float(score))
+        else:
+            discarded += 1
+
+    if not qualifying:
+        raise MatchingJobError(
+            "no_match",
+            "No candidates met the configured confidence threshold",
+            retry=False,
+        )
+
+    qualifying.sort(key=lambda item: item[1], reverse=True)
+
+    stored = 0
+    spotify_track_id = str(spotify_track.get("id") or "")
+    with deps.session_factory() as session:
+        for candidate, score in qualifying:
+            match = Match(
+                source=job_type,
+                spotify_track_id=spotify_track_id or None,
+                target_id=str(candidate.get("id")) if candidate.get("id") else None,
+                confidence=float(score),
+            )
+            session.add(match)
+            stored += 1
+
+    average_confidence = statistics.mean(scores) if scores else 0.0
+    rounded_average = round(average_confidence, 4)
+
+    from app.utils.settings_store import increment_counter, write_setting
+
+    write_setting("metrics.matching.last_average_confidence", f"{rounded_average:.4f}")
+    write_setting("metrics.matching.last_discarded", str(discarded))
+    increment_counter("metrics.matching.discarded_total", amount=discarded)
+    increment_counter("metrics.matching.saved_total", amount=stored)
+
+    record_activity(
+        "metadata",
+        "matching_batch",
+        details={
+            "job_id": job.id,
+            "job_type": job_type,
+            "batch_size": 1,
+            "stored": stored,
+            "discarded": discarded,
+            "average_confidence": rounded_average,
+        },
+    )
+
+    return {
+        "job_type": job_type,
+        "spotify_track_id": spotify_track_id or None,
+        "stored": stored,
+        "discarded": discarded,
+        "average_confidence": rounded_average,
+        "matches": [
+            {"candidate": candidate, "score": round(score, 4)}
+            for candidate, score in qualifying
+        ],
+    }
+
+
+def build_matching_handler(
+    deps: MatchingHandlerDeps,
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
+    """Return a dispatcher-compatible handler bound to matching dependencies."""
+
+    async def _handler(job: QueueJobDTO) -> Mapping[str, Any]:
+        return await handle_matching(job, deps)
+
+    return _handler
+
+
+@dataclass(slots=True)
 class SyncHandlerDeps:
     """Bundle dependencies required by the sync orchestrator handler."""
 
@@ -233,7 +416,7 @@ def _mark_downloading(
 
 
 async def handle_sync(
-    job: persistence.QueueJobDTO,
+    job: QueueJobDTO,
     deps: SyncHandlerDeps,
 ) -> Mapping[str, Any] | None:
     """Process a sync job via orchestrator dependencies."""
@@ -244,10 +427,10 @@ async def handle_sync(
 
 def build_sync_handler(
     deps: SyncHandlerDeps,
-) -> Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]:
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any] | None]]:
     """Return a dispatcher-compatible handler bound to the given dependencies."""
 
-    async def _handler(job: persistence.QueueJobDTO) -> Mapping[str, Any] | None:
+    async def _handler(job: QueueJobDTO) -> Mapping[str, Any] | None:
         return await handle_sync(job, deps)
 
     return _handler
@@ -798,6 +981,10 @@ def get_spotify_free_import_job(
 __all__ = [
     "SyncRetryPolicy",
     "SyncHandlerDeps",
+    "MatchingHandlerDeps",
+    "MatchingJobError",
+    "build_matching_handler",
+    "handle_matching",
     "build_sync_handler",
     "calculate_retry_backoff_seconds",
     "enqueue_spotify_backfill",
@@ -809,6 +996,7 @@ __all__ = [
     "handle_sync_download_failure",
     "handle_sync_retry_success",
     "load_sync_retry_policy",
+    "load_matching_confidence_threshold",
     "process_sync_payload",
     "truncate_error",
     "extract_ingest_item_id",
