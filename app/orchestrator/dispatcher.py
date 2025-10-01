@@ -22,6 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover - import for typing only
         MatchingHandlerDeps,
         RetryHandlerDeps,
         SyncHandlerDeps,
+        WatchlistHandlerDeps,
     )
 
 
@@ -33,6 +34,7 @@ def default_handlers(
     *,
     matching_deps: "MatchingHandlerDeps" | None = None,
     retry_deps: "RetryHandlerDeps" | None = None,
+    watchlist_deps: "WatchlistHandlerDeps" | None = None,
 ) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
@@ -40,6 +42,7 @@ def default_handlers(
         build_matching_handler,
         build_retry_handler,
         build_sync_handler,
+        build_watchlist_handler,
     )
 
     handlers: dict[str, JobHandler] = {"sync": build_sync_handler(sync_deps)}
@@ -47,6 +50,8 @@ def default_handlers(
         handlers["matching"] = build_matching_handler(matching_deps)
     if retry_deps is not None:
         handlers["retry"] = build_retry_handler(retry_deps)
+    if watchlist_deps is not None:
+        handlers["watchlist"] = build_watchlist_handler(watchlist_deps)
     return handlers
 
 _DEFAULT_GLOBAL_CONCURRENCY = 10
