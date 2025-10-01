@@ -33,7 +33,7 @@ from app.utils.events import (
     DOWNLOAD_BLOCKED,
 )
 from app.utils.service_health import collect_missing_credentials
-from app.workers.persistence import PersistentJobQueue
+from app.workers.persistence import update_priority
 from app.errors import AppError, ValidationAppError
 
 router = APIRouter(tags=["Download"])
@@ -178,14 +178,12 @@ def update_download_priority(
     )
 
     job_id = download.job_id
-    if job_id:
-        queue = PersistentJobQueue("sync")
-        if not queue.update_priority(job_id, new_priority):
-            logger.error(
-                "Failed to update worker job priority for download %s (job %s)",
-                download_id,
-                job_id,
-            )
+    if job_id and not update_priority(job_id, new_priority, job_type="sync"):
+        logger.error(
+            "Failed to update worker job priority for download %s (job %s)",
+            download_id,
+            job_id,
+        )
 
     return DownloadEntryResponse.model_validate(download)
 

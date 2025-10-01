@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.logging import get_logger
 from app.db import session_scope
-from app.models import Download, WorkerJob
+from app.models import Download, QueueJob, QueueJobStatus
 from app.dependencies import get_db
 from app.utils.activity import record_worker_stale
 from app.utils.events import WORKER_STALE
@@ -213,10 +213,12 @@ def _matching_queue_size(_: Request) -> int:
     with session_scope() as session:
         result = session.execute(
             select(func.count())
-            .select_from(WorkerJob)
+            .select_from(QueueJob)
             .where(
-                WorkerJob.worker == "matching",
-                WorkerJob.state.in_(["queued", "running"]),
+                QueueJob.type == "matching",
+                QueueJob.status.in_(
+                    [QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]
+                ),
             )
         )
         count = result.scalar_one_or_none()
