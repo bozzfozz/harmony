@@ -265,6 +265,64 @@ class WorkerJob(Base):
     )
 
 
+class QueueJobStatus(str, Enum):
+    """Lifecycle states for general purpose queue jobs."""
+
+    PENDING = "pending"
+    LEASED = "leased"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class QueueJob(Base):
+    __tablename__ = "queue_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "priority >= 0", name="ck_queue_jobs_priority_non_negative"
+        ),
+        CheckConstraint(
+            "attempts >= 0", name="ck_queue_jobs_attempts_non_negative"
+        ),
+        CheckConstraint(
+            "status IN ('pending','leased','completed','failed','cancelled')",
+            name="ck_queue_jobs_status_valid",
+        ),
+        Index(
+            "ix_queue_jobs_type_status_available_at",
+            "type",
+            "status",
+            "available_at",
+        ),
+        Index("ix_queue_jobs_lease_expires_at", "lease_expires_at"),
+        Index("ix_queue_jobs_idempotency_key", "idempotency_key"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(64), nullable=False, index=True)
+    status = Column(
+        String(32),
+        nullable=False,
+        default=QueueJobStatus.PENDING.value,
+        index=True,
+    )
+    payload = Column(JSON, nullable=False, default=dict)
+    priority = Column(Integer, nullable=False, default=0)
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    lease_expires_at = Column(DateTime, nullable=True)
+    idempotency_key = Column(String(128), nullable=True)
+    last_error = Column(Text, nullable=True)
+    result_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class AutoSyncSkippedTrack(Base):
     __tablename__ = "auto_sync_skipped_tracks"
 
