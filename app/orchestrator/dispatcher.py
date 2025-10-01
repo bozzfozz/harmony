@@ -113,7 +113,11 @@ class Dispatcher:
         self._pool_limits = limits.pool
         self._pool_semaphores: dict[str, asyncio.Semaphore] = {}
         self._tasks: set[asyncio.Task[None]] = set()
-        self._stop_event = asyncio.Event()
+        self._stop_event: asyncio.Event | None = None
+        self._pending_stop = False
+        self.started: asyncio.Event = asyncio.Event()
+        self.stopped: asyncio.Event = asyncio.Event()
+        self.stop_requested: bool = False
         self._retry_max = _parse_positive_int(
             os.getenv("EXTERNAL_RETRY_MAX"), _DEFAULT_RETRY_MAX
         )
@@ -127,8 +131,9 @@ class Dispatcher:
     async def run(self, lifespan: asyncio.Event | None = None) -> None:
         """Run the dispatcher loop until a stop signal or lifespan event is set."""
 
-        self._stop_event = asyncio.Event()
+        self._prepare_run_state()
         try:
+            self.started.set()
             while not self._should_stop(lifespan):
                 leased = self._scheduler.lease_ready_jobs()
                 for job in leased:
@@ -137,16 +142,37 @@ class Dispatcher:
                 if not leased:
                     await asyncio.sleep(self._scheduler.poll_interval)
         finally:
-            self._stop_event.set()
+            if self._stop_event is not None:
+                self._stop_event.set()
+            if not self.stop_requested:
+                self.stop_requested = True
+            self.stopped.set()
             await self._await_all_tasks()
 
     def request_stop(self) -> None:
         """Signal the dispatcher to exit the run loop."""
 
-        self._stop_event.set()
+        self.stop_requested = True
+        if self._stop_event is not None and self._stop_event.is_set():
+            return
+        if self._stop_event is not None:
+            self._stop_event.set()
+        else:
+            self._pending_stop = True
+
+    def _prepare_run_state(self) -> None:
+        self.started = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self._stop_event = asyncio.Event()
+        if self._pending_stop:
+            self.stop_requested = True
+            self._stop_event.set()
+            self._pending_stop = False
+        else:
+            self.stop_requested = False
 
     def _should_stop(self, lifespan: asyncio.Event | None) -> bool:
-        if self._stop_event.is_set():
+        if self._stop_event is not None and self._stop_event.is_set():
             return True
         if lifespan is not None and lifespan.is_set():
             return True

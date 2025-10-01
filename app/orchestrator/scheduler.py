@@ -109,6 +109,10 @@ class Scheduler:
         self._persistence = persistence_module
         self._logger = get_logger(__name__)
         self._stop_signal: asyncio.Event | None = None
+        self._pending_stop = False
+        self.started: asyncio.Event = asyncio.Event()
+        self.stopped: asyncio.Event = asyncio.Event()
+        self.stop_requested: bool = False
 
     @staticmethod
     def _resolve_poll_interval() -> int:
@@ -127,20 +131,38 @@ class Scheduler:
         return self._poll_interval
 
     def request_stop(self) -> None:
+        self.stop_requested = True
         if self._stop_signal is not None:
             self._stop_signal.set()
+        else:
+            self._pending_stop = True
 
     async def run(self, lifespan: asyncio.Event | None = None) -> None:
         """Run the scheduler loop until a stop or lifespan signal triggers."""
 
-        self._stop_signal = asyncio.Event()
+        self._prepare_run_state()
         try:
+            self.started.set()
             while not self._should_stop(lifespan):
                 await self._tick()
                 await self._sleep(lifespan)
         finally:
             if self._stop_signal is not None:
                 self._stop_signal.set()
+            if not self.stop_requested:
+                self.stop_requested = True
+            self.stopped.set()
+
+    def _prepare_run_state(self) -> None:
+        self.started = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self._stop_signal = asyncio.Event()
+        if self._pending_stop:
+            self.stop_requested = True
+            self._stop_signal.set()
+            self._pending_stop = False
+        else:
+            self.stop_requested = False
 
     def _should_stop(self, lifespan: asyncio.Event | None) -> bool:
         if self._stop_signal is not None and self._stop_signal.is_set():

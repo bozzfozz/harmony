@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 from app.utils.settings_store import read_setting, write_setting
 
@@ -89,6 +89,38 @@ def resolve_status(
     return status or "unknown"
 
 
+def orchestrator_state(container: Any) -> Mapping[str, Any]:
+    """Return the orchestrator status mapping stored on *container* if present."""
+
+    state = getattr(container, "state", None)
+    status = getattr(state, "orchestrator_status", None)
+    if isinstance(status, Mapping):
+        return status
+    return {}
+
+
+def orchestrator_component_status(container: Any, component: str) -> str:
+    """Resolve the lifecycle status for an orchestrator component."""
+
+    status = orchestrator_state(container)
+    running_key = f"{component}_running"
+    expected_key = f"{component}_expected"
+    expected = bool(status.get(expected_key, True))
+    if not expected:
+        return "disabled"
+    running = bool(status.get(running_key))
+    return "up" if running else "down"
+
+
+def orchestrator_job_status(container: Any, job: str) -> str:
+    """Return whether an orchestrator job is currently enabled."""
+
+    status = orchestrator_state(container)
+    enabled_jobs = status.get("enabled_jobs", {})
+    enabled = bool(enabled_jobs.get(job))
+    return "enabled" if enabled else "disabled"
+
+
 __all__ = [
     "HEARTBEAT_PREFIX",
     "LAST_SEEN_SUFFIX",
@@ -100,4 +132,7 @@ __all__ = [
     "read_worker_status",
     "parse_timestamp",
     "resolve_status",
+    "orchestrator_component_status",
+    "orchestrator_job_status",
+    "orchestrator_state",
 ]

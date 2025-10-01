@@ -49,7 +49,9 @@ from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.timer import WatchlistTimer
-from app.workers import ArtworkWorker, LyricsWorker, MetadataWorker
+from app.workers.artwork_worker import ArtworkWorker
+from app.workers.lyrics_worker import LyricsWorker
+from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
@@ -273,8 +275,13 @@ def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None
     app.openapi_schema = None
 
 
-def _should_start_workers() -> bool:
-    return os.getenv("HARMONY_DISABLE_WORKERS") not in {"1", "true", "TRUE"}
+def _should_start_workers(*, config: AppConfig | None = None) -> bool:
+    override = os.getenv("WORKERS_ENABLED")
+    if override is not None:
+        return _env_as_bool(override, default=True)
+    if os.getenv("HARMONY_DISABLE_WORKERS") in {"1", "true", "TRUE"}:
+        return False
+    return True
 
 
 def _resolve_watchlist_interval(raw_value: str | None) -> float:
@@ -353,6 +360,7 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
             "require_auth": config.security.require_auth,
             "rate_limiting": config.security.rate_limiting_enabled,
             "workers_disabled": not workers_enabled,
+            "workers_enabled_flag": os.getenv("WORKERS_ENABLED"),
         },
     }
 
@@ -532,7 +540,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _apply_security_dependencies(app, config.security)
 
-    workers_enabled = _should_start_workers()
+    workers_enabled = _should_start_workers(config=config)
     _emit_worker_config_event(config, workers_enabled=workers_enabled)
 
     feature_flags = config.features

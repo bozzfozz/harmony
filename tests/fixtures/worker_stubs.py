@@ -136,7 +136,6 @@ class WorkerRegistry:
         "lyrics": "LyricsWorker",
         "metadata": "MetadataWorker",
         "sync": "SyncWorker",
-        "retry_scheduler": "RetryScheduler",
         "matching": "MatchingWorker",
         "playlist_sync": "PlaylistSyncWorker",
         "backfill": "BackfillWorker",
