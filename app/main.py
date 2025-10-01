@@ -357,9 +357,6 @@ async def _start_background_workers(
 
     interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
     state.watchlist_worker = WatchlistWorker(
-        spotify_client=spotify_client,
-        soulseek_client=soulseek_client,
-        sync_worker=state.sync_worker,
         config=config.watchlist,
         interval_seconds=interval_seconds,
     )

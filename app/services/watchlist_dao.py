@@ -37,6 +37,24 @@ class WatchlistArtistRow:
 class WatchlistDAO:
     """Async-friendly access layer for watchlist related persistence."""
 
+    def get_artist(self, artist_id: int) -> WatchlistArtistRow | None:
+        """Return a single watchlist artist by primary key."""
+
+        def _query() -> WatchlistArtistRow | None:
+            with session_scope() as session:
+                record = session.get(WatchlistArtist, int(artist_id))
+                if record is None:
+                    return None
+                return WatchlistArtistRow(
+                    id=record.id,
+                    spotify_artist_id=record.spotify_artist_id,
+                    name=record.name,
+                    last_checked=record.last_checked,
+                    retry_block_until=record.retry_block_until,
+                )
+
+        return _query()
+
     def load_batch(
         self,
         limit: int,

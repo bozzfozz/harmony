@@ -29,7 +29,7 @@ class PriorityConfig:
 
     priorities: dict[str, int]
 
-    _DEFAULT_CSV = "sync:100,retry:20"
+    _DEFAULT_CSV = "sync:100,watchlist:60,retry:20"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "PriorityConfig":
