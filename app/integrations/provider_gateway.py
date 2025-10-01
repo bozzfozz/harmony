@@ -22,6 +22,7 @@ from app.integrations.contracts import (
     TrackProvider,
 )
 from app.logging import get_logger
+from app.logging_events import log_event
 
 
 logger = get_logger(__name__)
@@ -337,29 +338,32 @@ class ProviderGateway:
         error: ProviderGatewayError | None = None,
     ) -> None:
         duration_ms = int((perf_counter() - started) * 1000)
-        extra: dict[str, object] = {
-            "event": "api.dependency",
-            "provider": provider,
+        payload: dict[str, object] = {
+            "component": "provider_gateway",
+            "dependency": provider,
             "operation": "search_tracks",
-            "status": status,
+            "status": "ok" if status == "success" else "error",
             "attempt": attempt,
             "max_attempts": attempts,
             "duration_ms": duration_ms,
         }
         if error is not None:
-            extra["error"] = error.__class__.__name__
+            payload["error"] = error.__class__.__name__
             if isinstance(error, ProviderGatewayRateLimitedError):
-                extra["retry_after_ms"] = error.retry_after_ms
-            if isinstance(error, ProviderGatewayDependencyError):
-                extra["status_code"] = error.status_code
-            if isinstance(error, ProviderGatewayValidationError):
-                extra["status_code"] = error.status_code
-            if isinstance(error, ProviderGatewayNotFoundError):
-                extra["status_code"] = error.status_code
+                payload["retry_after_ms"] = error.retry_after_ms
+                if error.retry_after_header is not None:
+                    payload["retry_after_header"] = error.retry_after_header
+                if error.status_code is not None:
+                    payload["status_code"] = error.status_code
+            if isinstance(error, ProviderGatewayDependencyError) and error.status_code is not None:
+                payload["status_code"] = error.status_code
+            if isinstance(error, ProviderGatewayValidationError) and error.status_code is not None:
+                payload["status_code"] = error.status_code
+            if isinstance(error, ProviderGatewayNotFoundError) and error.status_code is not None:
+                payload["status_code"] = error.status_code
             if isinstance(error, ProviderGatewayTimeoutError):
-                extra["timeout_ms"] = error.timeout_ms
-        log = logger.info if status == "success" else logger.warning
-        log("provider call", extra=extra)
+                payload["timeout_ms"] = error.timeout_ms
+        log_event(logger, "api.dependency", **payload)
 
 
 __all__ = [
