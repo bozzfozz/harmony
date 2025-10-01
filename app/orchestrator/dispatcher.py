@@ -18,7 +18,11 @@ from app.orchestrator.scheduler import Scheduler
 from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
-    from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps
+    from app.orchestrator.handlers import (
+        MatchingHandlerDeps,
+        RetryHandlerDeps,
+        SyncHandlerDeps,
+    )
 
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]
@@ -28,14 +32,21 @@ def default_handlers(
     sync_deps: "SyncHandlerDeps",
     *,
     matching_deps: "MatchingHandlerDeps" | None = None,
+    retry_deps: "RetryHandlerDeps" | None = None,
 ) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
-    from app.orchestrator.handlers import build_matching_handler, build_sync_handler
+    from app.orchestrator.handlers import (
+        build_matching_handler,
+        build_retry_handler,
+        build_sync_handler,
+    )
 
     handlers: dict[str, JobHandler] = {"sync": build_sync_handler(sync_deps)}
     if matching_deps is not None:
         handlers["matching"] = build_matching_handler(matching_deps)
+    if retry_deps is not None:
+        handlers["retry"] = build_retry_handler(retry_deps)
     return handlers
 
 _DEFAULT_GLOBAL_CONCURRENCY = 10

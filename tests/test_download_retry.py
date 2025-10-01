@@ -7,13 +7,19 @@ import pytest
 import random
 
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.models import Download
+from app.models import Download, QueueJobStatus
+from app.orchestrator.handlers import (
+    RetryHandlerDeps,
+    SyncRetryPolicy,
+    calculate_retry_backoff_seconds,
+    handle_retry,
+)
 from app.utils.activity import activity_manager
 from app.utils.events import (
     DOWNLOAD_RETRY_FAILED,
     DOWNLOAD_RETRY_SCHEDULED,
 )
-from app.workers.retry_scheduler import RetryScheduler
+from app.workers.persistence import QueueJobDTO
 from app.workers.sync_worker import (
     DownloadJobError,
     RetryConfig,
@@ -128,27 +134,146 @@ async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
 
     captured: List[Dict[str, Any]] = []
 
-    class RecordingWorker:
-        async def enqueue(self, job: Dict[str, Any]) -> None:
-            captured.append(job)
+    async def submit_sync_job(
+        payload: Dict[str, Any],
+        *,
+        priority: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> None:
+        captured.append(
+            {
+                "payload": dict(payload),
+                "priority": priority,
+                "key": idempotency_key,
+            }
+        )
 
-    scheduler = RetryScheduler(
-        RecordingWorker(),
-        retry_config=RetryConfig(max_attempts=5, base_seconds=1.0, jitter_pct=0.0),
+    deps = RetryHandlerDeps(
+        submit_sync_job=submit_sync_job,
+        retry_policy=SyncRetryPolicy(max_attempts=5, base_seconds=1.0, jitter_pct=0.0),
+        rng=random.Random(0),
+        auto_reschedule=False,
     )
 
-    await scheduler._scan_and_enqueue()
+    job = QueueJobDTO(
+        id=1,
+        type="retry",
+        payload={"batch_limit": 5, "scan_interval": 0.0},
+        priority=0,
+        attempts=0,
+        available_at=datetime.utcnow(),
+        lease_expires_at=None,
+        status=QueueJobStatus.PENDING,
+        idempotency_key="retry-scan",
+        last_error=None,
+        result_payload=None,
+        lease_timeout_seconds=60,
+    )
+
+    result = await handle_retry(job, deps)
 
     assert len(captured) == 1
-    job = captured[0]
-    assert job["username"] == "tester"
-    assert job["files"][0]["download_id"] == download_id
+    submission = captured[0]
+    payload = submission["payload"]
+    assert payload["username"] == "tester"
+    assert payload["files"][0]["download_id"] == download_id
+    assert payload["idempotency_key"] == f"retry:{download_id}"
+    assert submission["key"] == f"retry:{download_id}"
+    assert result["scheduled"] == [
+        {"download_id": download_id, "retry_count": 1}
+    ]
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)
         assert refreshed is not None
         assert refreshed.state == "queued"
         assert refreshed.next_retry_at is None
+
+
+@pytest.mark.asyncio
+async def test_handle_retry_failure_sets_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "5")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "2")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "0")
+
+    with session_scope() as session:
+        download = Download(
+            filename="retry-failure.mp3",
+            state="failed",
+            progress=0.0,
+            priority=2,
+            username="tester",
+            retry_count=2,
+            next_retry_at=datetime.utcnow() - timedelta(seconds=30),
+            request_payload={
+                "file": {"filename": "retry-failure.mp3", "priority": 2},
+                "username": "tester",
+                "priority": 2,
+            },
+        )
+        session.add(download)
+        session.flush()
+        payload = dict(download.request_payload or {})
+        payload.setdefault("file", {})["download_id"] = download.id
+        download.request_payload = payload
+        session.add(download)
+        download_id = download.id
+
+    async def failing_submit(
+        payload: Dict[str, Any],
+        *,
+        priority: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> None:
+        raise RuntimeError("queue unavailable")
+
+    retry_policy = SyncRetryPolicy(max_attempts=5, base_seconds=2.0, jitter_pct=0.0)
+    rng_seed = 1
+    deps = RetryHandlerDeps(
+        submit_sync_job=failing_submit,
+        retry_policy=retry_policy,
+        rng=random.Random(rng_seed),
+        auto_reschedule=False,
+    )
+
+    job = QueueJobDTO(
+        id=2,
+        type="retry",
+        payload={"batch_limit": 5, "scan_interval": 0.0},
+        priority=0,
+        attempts=0,
+        available_at=datetime.utcnow(),
+        lease_expires_at=None,
+        status=QueueJobStatus.PENDING,
+        idempotency_key="retry-scan",
+        last_error=None,
+        result_payload=None,
+        lease_timeout_seconds=60,
+    )
+
+    before = datetime.utcnow()
+    result = await handle_retry(job, deps)
+
+    assert result["failed"] == [
+        {"download_id": download_id, "retry_count": 2, "error": "queue unavailable"}
+    ]
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.state == "failed"
+        assert refreshed.next_retry_at is not None
+        assert refreshed.next_retry_at > before
+        delay = (refreshed.next_retry_at - before).total_seconds()
+        expected_delay = calculate_retry_backoff_seconds(2, retry_policy, random.Random(rng_seed))
+        assert pytest.approx(delay, rel=0.2) == expected_delay
+
+    events = [entry["status"] for entry in activity_manager.list()]
+    assert DOWNLOAD_RETRY_FAILED in events
 
 
 @pytest.mark.asyncio

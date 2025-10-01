@@ -23,6 +23,7 @@ from typing import (
     Sequence,
 )
 
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
@@ -42,12 +43,15 @@ from app.utils.events import (
     DOWNLOAD_RETRY_SCHEDULED,
 )
 from app.utils.file_utils import organize_file
+from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
 
 
 logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_MS = 10_000
+_RETRY_DEFAULT_SCAN_INTERVAL = 60.0
+_RETRY_DEFAULT_BATCH_LIMIT = 100
 
 
 @dataclass(slots=True)
@@ -77,6 +81,43 @@ def _safe_float(value: str | None, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed >= 0 else default
+
+
+def _coerce_positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _coerce_positive_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _coerce_priority(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
 
 
 def load_sync_retry_policy(
@@ -139,6 +180,48 @@ def _resolve_timeout_ms(value: str | None) -> int:
     return max(1_000, timeout) if timeout > 0 else _DEFAULT_TIMEOUT_MS
 
 
+async def enqueue_sync_job(
+    payload: Mapping[str, Any],
+    *,
+    priority: int | None = None,
+    idempotency_key: str | None = None,
+) -> QueueJobDTO | None:
+    return await asyncio.to_thread(
+        persistence.enqueue,
+        "sync",
+        payload,
+        priority=priority,
+        idempotency_key=idempotency_key,
+    )
+
+
+async def enqueue_retry_scan_job(
+    *,
+    delay_seconds: float,
+    batch_limit: int,
+    scan_interval: float,
+    idempotency_key: str,
+    job_type: str,
+    auto_reschedule: bool = True,
+    now_factory: Callable[[], datetime] = datetime.utcnow,
+) -> QueueJobDTO:
+    delay = max(0.0, float(delay_seconds))
+    available_at = now_factory() + timedelta(seconds=delay)
+    payload = {
+        "batch_limit": int(batch_limit),
+        "scan_interval": float(scan_interval),
+        "idempotency_key": idempotency_key,
+        "auto_reschedule": bool(auto_reschedule),
+    }
+    return await asyncio.to_thread(
+        persistence.enqueue,
+        job_type,
+        payload,
+        available_at=available_at,
+        idempotency_key=idempotency_key,
+    )
+
+
 class MetadataService(Protocol):
     async def enqueue(
         self,
@@ -172,6 +255,17 @@ class LyricsService(Protocol):
         file_path: str,
         track_info: Mapping[str, Any],
     ) -> Any:
+        ...
+
+
+class SyncJobSubmitter(Protocol):
+    async def __call__(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        priority: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> Mapping[str, Any] | None:
         ...
 
 
@@ -363,6 +457,52 @@ class SyncHandlerDeps:
     )
 
 
+@dataclass(slots=True)
+class RetryHandlerDeps:
+    """Dependencies required by the orchestrated retry handler."""
+
+    session_factory: Callable[[], AbstractContextManager[Session]] = session_scope
+    submit_sync_job: SyncJobSubmitter = enqueue_sync_job
+    retry_policy: SyncRetryPolicy = field(default_factory=load_sync_retry_policy)
+    rng: random.Random = field(default_factory=random.Random)
+    batch_limit: int = field(
+        default_factory=lambda: _safe_int(
+            os.getenv("RETRY_SCAN_BATCH_LIMIT"), _RETRY_DEFAULT_BATCH_LIMIT
+        )
+    )
+    scan_interval: float = field(
+        default_factory=lambda: _safe_float(
+            os.getenv("RETRY_SCAN_INTERVAL_SEC"), _RETRY_DEFAULT_SCAN_INTERVAL
+        )
+    )
+    external_timeout_ms: int = field(
+        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+    )
+    now_factory: Callable[[], datetime] = datetime.utcnow
+    retry_job_type: str = "retry"
+    retry_job_idempotency_key: str = "retry-scan"
+    auto_reschedule: bool = True
+
+    def __post_init__(self) -> None:
+        self.batch_limit = _coerce_positive_int(self.batch_limit, _RETRY_DEFAULT_BATCH_LIMIT)
+        self.scan_interval = _coerce_positive_float(self.scan_interval, _RETRY_DEFAULT_SCAN_INTERVAL)
+        self.external_timeout_ms = max(1_000, int(self.external_timeout_ms))
+        if not self.retry_job_type:
+            self.retry_job_type = "retry"
+        if not self.retry_job_idempotency_key:
+            self.retry_job_idempotency_key = "retry-scan"
+
+
+@dataclass(slots=True)
+class _RetryCandidate:
+    download_id: int
+    retry_count: int
+    username: str
+    job_payload: dict[str, Any]
+    priority: int
+    idempotency_key: str
+
+
 async def _invoke_with_timeout(
     coro: Awaitable[Any], timeout_ms: int
 ) -> Any:  # pragma: no cover - thin wrapper
@@ -413,6 +553,268 @@ def _mark_downloading(
         download.last_error = None
         download.updated_at = now
         session.add(download)
+
+
+def _select_retriable_downloads(
+    session: Session,
+    *,
+    now: datetime,
+    limit: int,
+    max_attempts: int,
+) -> list[Download]:
+    stmt: Select[Download] = (
+        select(Download)
+        .where(
+            Download.state == "failed",
+            Download.next_retry_at.is_not(None),
+            Download.next_retry_at <= now,
+            Download.retry_count <= max_attempts,
+        )
+        .order_by(Download.next_retry_at.asc())
+        .limit(limit)
+    )
+    return session.execute(stmt).scalars().all()
+
+
+def _prepare_retry_candidate(record: Download) -> tuple[_RetryCandidate | None, str | None]:
+    payload = dict(record.request_payload or {})
+    file_info = payload.get("file")
+    if not isinstance(file_info, Mapping):
+        return None, "missing request payload for retry"
+
+    username = payload.get("username") or record.username
+    if not username:
+        return None, "missing username for retry"
+
+    file_payload = dict(file_info)
+    file_payload["download_id"] = int(record.id)
+
+    priority_source = (
+        file_payload.get("priority")
+        or payload.get("priority")
+        or record.priority
+    )
+    priority = _coerce_priority(priority_source)
+    if "priority" not in file_payload:
+        file_payload["priority"] = priority
+
+    job_payload: dict[str, Any] = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"file", "files"}
+    }
+    job_payload.update(
+        {
+            "username": username,
+            "files": [file_payload],
+            "priority": priority,
+        }
+    )
+    job_payload.setdefault("idempotency_key", f"retry:{record.id}")
+
+    candidate = _RetryCandidate(
+        download_id=int(record.id),
+        retry_count=int(record.retry_count or 0),
+        username=str(username),
+        job_payload=job_payload,
+        priority=priority,
+        idempotency_key=str(job_payload["idempotency_key"]),
+    )
+    return candidate, None
+
+
+async def _handle_retry_enqueue_failure(
+    candidate: _RetryCandidate,
+    error: Exception,
+    deps: RetryHandlerDeps,
+) -> None:
+    message = truncate_error(str(error))
+    logger.error(
+        "event=retry_enqueue download_id=%s result=error error=%s",
+        candidate.download_id,
+        error,
+    )
+
+    now = deps.now_factory()
+    with deps.session_factory() as session:
+        record = session.get(Download, candidate.download_id)
+        if record is None:
+            return
+        record.state = "failed"
+        record.last_error = message
+        delay = calculate_retry_backoff_seconds(
+            int(record.retry_count or candidate.retry_count),
+            deps.retry_policy,
+            deps.rng,
+        )
+        record.next_retry_at = now + timedelta(seconds=delay)
+        record.updated_at = now
+        session.add(record)
+
+    record_activity(
+        "download",
+        DOWNLOAD_RETRY_FAILED,
+        details={
+            "downloads": [
+                {
+                    "download_id": candidate.download_id,
+                    "retry_count": candidate.retry_count,
+                }
+            ],
+            "error": message,
+            "username": candidate.username,
+        },
+    )
+
+
+async def _reschedule_retry_scan(
+    *,
+    deps: RetryHandlerDeps,
+    delay_seconds: float,
+    batch_limit: int,
+    enabled: bool,
+) -> None:
+    if not enabled:
+        return
+    try:
+        await _invoke_with_timeout(
+            enqueue_retry_scan_job(
+                delay_seconds=delay_seconds,
+                batch_limit=batch_limit,
+                scan_interval=delay_seconds or deps.scan_interval,
+                idempotency_key=deps.retry_job_idempotency_key,
+                job_type=deps.retry_job_type,
+                auto_reschedule=enabled,
+                now_factory=deps.now_factory,
+            ),
+            deps.external_timeout_ms,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning("event=retry_reschedule result=error error=%s", exc)
+
+
+async def handle_retry(
+    job: QueueJobDTO,
+    deps: RetryHandlerDeps,
+) -> Mapping[str, Any]:
+    payload = dict(job.payload or {})
+    batch_limit = _coerce_positive_int(payload.get("batch_limit"), deps.batch_limit)
+    if batch_limit <= 0:
+        batch_limit = deps.batch_limit
+
+    scan_interval = _coerce_positive_float(payload.get("scan_interval"), deps.scan_interval)
+    reschedule_override = payload.get("reschedule_in")
+    if reschedule_override is not None:
+        try:
+            override_value = float(reschedule_override)
+        except (TypeError, ValueError):
+            override_value = scan_interval
+        else:
+            if override_value >= 0:
+                scan_interval = override_value
+
+    should_reschedule = _coerce_bool(payload.get("auto_reschedule"), deps.auto_reschedule)
+
+    now = deps.now_factory()
+    candidates: list[_RetryCandidate] = []
+    dead_letters: list[Mapping[str, Any]] = []
+
+    with deps.session_factory() as session:
+        records = _select_retriable_downloads(
+            session,
+            now=now,
+            limit=batch_limit,
+            max_attempts=deps.retry_policy.max_attempts,
+        )
+        for record in records:
+            candidate, error_message = _prepare_retry_candidate(record)
+            if candidate is None:
+                reason = truncate_error(error_message or "invalid retry payload")
+                record.state = "dead_letter"
+                record.next_retry_at = None
+                record.last_error = reason
+                record.updated_at = now
+                session.add(record)
+                dead_letters.append(
+                    {
+                        "download_id": int(record.id),
+                        "retry_count": int(record.retry_count or 0),
+                        "error": reason,
+                    }
+                )
+                logger.warning(
+                    "event=retry_dead_letter download_id=%s retry_count=%s result=dead_letter",
+                    record.id,
+                    record.retry_count,
+                )
+                continue
+
+            record.state = "queued"
+            record.next_retry_at = None
+            record.updated_at = now
+            session.add(record)
+            candidates.append(candidate)
+            logger.info(
+                "event=retry_claim download_id=%s retry_count=%s result=claimed",
+                candidate.download_id,
+                candidate.retry_count,
+            )
+
+    scheduled: list[Mapping[str, Any]] = []
+    failures: list[Mapping[str, Any]] = []
+
+    for candidate in candidates:
+        try:
+            await _invoke_with_timeout(
+                deps.submit_sync_job(
+                    candidate.job_payload,
+                    priority=candidate.priority,
+                    idempotency_key=candidate.idempotency_key,
+                ),
+                deps.external_timeout_ms,
+            )
+        except Exception as exc:
+            message = truncate_error(str(exc))
+            failures.append(
+                {
+                    "download_id": candidate.download_id,
+                    "retry_count": candidate.retry_count,
+                    "error": message,
+                }
+            )
+            await _handle_retry_enqueue_failure(candidate, exc, deps)
+        else:
+            scheduled.append(
+                {
+                    "download_id": candidate.download_id,
+                    "retry_count": candidate.retry_count,
+                }
+            )
+
+    await _reschedule_retry_scan(
+        deps=deps,
+        delay_seconds=max(0.0, scan_interval),
+        batch_limit=batch_limit,
+        enabled=should_reschedule,
+    )
+
+    return {
+        "claimed": len(candidates),
+        "scheduled": scheduled,
+        "dead_letter": dead_letters,
+        "failed": failures,
+        "batch_limit": batch_limit,
+        "rescheduled_in": max(0.0, scan_interval) if should_reschedule else None,
+    }
+
+
+def build_retry_handler(
+    deps: RetryHandlerDeps,
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
+    async def _handler(job: QueueJobDTO) -> Mapping[str, Any]:
+        return await handle_retry(job, deps)
+
+    return _handler
 
 
 async def handle_sync(
@@ -981,12 +1383,17 @@ def get_spotify_free_import_job(
 __all__ = [
     "SyncRetryPolicy",
     "SyncHandlerDeps",
+    "RetryHandlerDeps",
     "MatchingHandlerDeps",
     "MatchingJobError",
     "build_matching_handler",
     "handle_matching",
+    "build_retry_handler",
+    "handle_retry",
     "build_sync_handler",
     "calculate_retry_backoff_seconds",
+    "enqueue_sync_job",
+    "enqueue_retry_scan_job",
     "enqueue_spotify_backfill",
     "fanout_download_completion",
     "get_spotify_backfill_status",
