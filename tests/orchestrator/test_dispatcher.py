@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import pytest
 
 from app.models import QueueJobStatus
 from app.orchestrator import dispatcher as dispatcher_module
-from app.orchestrator.dispatcher import Dispatcher
+from app.orchestrator.dispatcher import Dispatcher, default_handlers
+from app.orchestrator.handlers import SyncHandlerDeps, SyncRetryPolicy
 from app.workers import persistence
+from app.utils.activity import activity_manager
+from app.db import init_db, reset_engine_for_tests, session_scope
+from app.models import Download
 
 
 class StubScheduler:
@@ -236,3 +242,58 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     event_name, payload = captured_events[-1]
     assert event_name == "orchestrator.dlq"
     assert payload["stop_reason"] == "max_retries_exhausted"
+
+
+@pytest.mark.asyncio
+async def test_default_handlers_bind_sync_job(tmp_path: Path) -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    class InlineSoulseekClient:
+        def __init__(self) -> None:
+            self.calls: list[Mapping[str, Any]] = []
+
+        async def download(self, payload: Mapping[str, Any]) -> None:
+            self.calls.append(dict(payload))
+
+    soulseek = InlineSoulseekClient()
+    deps = SyncHandlerDeps(
+        soulseek_client=soulseek,
+        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        rng=random.Random(0),
+        music_dir=tmp_path,
+    )
+    handlers = default_handlers(deps)
+    assert "sync" in handlers
+
+    with session_scope() as session:
+        record = Download(
+            filename="handler.mp3",
+            state="queued",
+            progress=0.0,
+            username="tester",
+            priority=1,
+        )
+        session.add(record)
+        session.flush()
+        download_id = record.id
+
+    job = make_job(
+        99,
+        "sync",
+        attempts=1,
+        payload={
+            "username": "tester",
+            "files": [{"download_id": download_id, "priority": 1, "filename": "handler.mp3"}],
+        },
+    )
+
+    result = await handlers["sync"](job)
+    assert result == {"username": "tester", "download_ids": [download_id]}
+    assert soulseek.calls
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download_id)
+        assert refreshed is not None
+        assert refreshed.state == "downloading"
