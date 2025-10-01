@@ -7,15 +7,17 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import pytest
+from sqlalchemy import select
 
+from app.core.matching_engine import MusicMatchingEngine
 from app.models import QueueJobStatus
 from app.orchestrator import dispatcher as dispatcher_module
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
-from app.orchestrator.handlers import SyncHandlerDeps, SyncRetryPolicy
+from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
 from app.workers import persistence
 from app.utils.activity import activity_manager
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.models import Download
+from app.models import Download, Match
 
 
 class StubScheduler:
@@ -297,3 +299,54 @@ async def test_default_handlers_bind_sync_job(tmp_path: Path) -> None:
         refreshed = session.get(Download, download_id)
         assert refreshed is not None
         assert refreshed.state == "downloading"
+
+
+@pytest.mark.asyncio
+async def test_default_handlers_bind_matching_job(tmp_path: Path) -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    class InlineSoulseekClient:
+        async def download(self, payload: Mapping[str, Any]) -> None:  # pragma: no cover - unused
+            return None
+
+    soulseek = InlineSoulseekClient()
+    deps = SyncHandlerDeps(
+        soulseek_client=soulseek,  # type: ignore[arg-type]
+        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        rng=random.Random(0),
+        music_dir=tmp_path,
+    )
+    matching_deps = MatchingHandlerDeps(
+        engine=MusicMatchingEngine(),
+        session_factory=session_scope,
+        confidence_threshold=0.3,
+    )
+    handlers = default_handlers(deps, matching_deps=matching_deps)
+
+    assert "matching" in handlers
+
+    payload = {
+        "type": "spotify-to-soulseek",
+        "spotify_track": {
+            "id": "track-1",
+            "name": "Sample Song",
+            "artists": [{"name": "Sample Artist"}],
+        },
+        "candidates": [
+            {"id": "cand-1", "filename": "Sample Song.mp3", "username": "dj", "bitrate": 320},
+            {"id": "cand-2", "filename": "Other.mp3", "username": "other", "bitrate": 128},
+        ],
+    }
+
+    job = make_job(100, "matching", attempts=1, payload=payload)
+    result = await handlers["matching"](job)
+
+    assert result["stored"] == 1
+    assert result["discarded"] == 1
+
+    with session_scope() as session:
+        matches = session.execute(select(Match)).scalars().all()
+        assert len(matches) == 1
+        assert matches[0].target_id == "cand-1"

@@ -13,22 +13,30 @@ from typing import TYPE_CHECKING, Any
 
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.orchestrator.handlers import MatchingJobError
 from app.orchestrator.scheduler import Scheduler
 from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
-    from app.orchestrator.handlers import SyncHandlerDeps
+    from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps
 
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]
 
 
-def default_handlers(deps: "SyncHandlerDeps") -> dict[str, JobHandler]:
+def default_handlers(
+    sync_deps: "SyncHandlerDeps",
+    *,
+    matching_deps: "MatchingHandlerDeps" | None = None,
+) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
-    from app.orchestrator.handlers import build_sync_handler
+    from app.orchestrator.handlers import build_matching_handler, build_sync_handler
 
-    return {"sync": build_sync_handler(deps)}
+    handlers: dict[str, JobHandler] = {"sync": build_sync_handler(sync_deps)}
+    if matching_deps is not None:
+        handlers["matching"] = build_matching_handler(matching_deps)
+    return handlers
 
 _DEFAULT_GLOBAL_CONCURRENCY = 10
 _DEFAULT_BACKOFF_BASE_MS = 500
@@ -170,6 +178,9 @@ class Dispatcher:
             )
             try:
                 result_payload = await handler(job)
+            except MatchingJobError as exc:
+                stop_heartbeat.set()
+                await self._handle_job_error(job, exc, start)
             except asyncio.CancelledError:
                 stop_heartbeat.set()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -206,6 +217,53 @@ class Dispatcher:
             status="succeeded",
             attempts=int(job.attempts),
             duration_ms=duration_ms,
+        )
+
+    async def _handle_job_error(
+        self,
+        job: persistence.QueueJobDTO,
+        exc: MatchingJobError,
+        start: float,
+    ) -> None:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        attempts = int(job.attempts)
+        if exc.retry:
+            retry_in = exc.retry_in
+            if retry_in is None:
+                retry_in = max(1, int(self._calculate_backoff_seconds(attempts)))
+            self._persistence.fail(
+                job.id,
+                job_type=job.type,
+                error=exc.code,
+                retry_in=retry_in,
+            )
+            log_event(
+                self._logger,
+                "orchestrator.commit",
+                job_type=job.type,
+                job_id=job.id,
+                status="retry",
+                attempts=attempts,
+                duration_ms=duration_ms,
+                retry_in=retry_in,
+                error=exc.code,
+            )
+            return
+
+        self._persistence.fail(
+            job.id,
+            job_type=job.type,
+            error=exc.code,
+        )
+        log_event(
+            self._logger,
+            "orchestrator.commit",
+            job_type=job.type,
+            job_id=job.id,
+            status="failed",
+            attempts=attempts,
+            duration_ms=duration_ms,
+            error=exc.code,
         )
 
     async def _handle_failure(

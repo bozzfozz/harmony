@@ -4,22 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import os
-import statistics
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, List
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
-from app.models import Match
+from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
 from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
-from app.utils.settings_store import (
-    increment_counter,
-    read_setting,
-    write_setting,
-)
+from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.persistence import (
     QueueJobDTO,
@@ -55,7 +49,16 @@ class MatchingWorker:
         self._stop_event = asyncio.Event()
         self._batch_wait = batch_wait_seconds
         self._batch_size = max(1, batch_size or self._resolve_batch_size())
-        self._confidence_threshold = confidence_threshold or self._resolve_threshold()
+        resolved_threshold: float | None = None
+        if confidence_threshold is not None and 0 < confidence_threshold <= 1:
+            resolved_threshold = confidence_threshold
+        if resolved_threshold is None:
+            resolved_threshold = self._resolve_threshold()
+        self._handler_deps = MatchingHandlerDeps(
+            engine=self._engine,
+            session_factory=session_scope,
+            confidence_threshold=resolved_threshold,
+        )
 
     def _resolve_batch_size(self) -> int:
         setting_value = read_setting("matching_worker_batch_size")
@@ -155,104 +158,43 @@ class MatchingWorker:
                 self._queue.task_done()
 
     async def _process_batch(self, jobs: List[QueueJobDTO]) -> None:
-        stored_scores: List[float] = []
-        discarded = 0
-
         for job in jobs:
+            leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
+            if leased is None:
+                logger.debug("Matching job %s skipped because it could not be leased", job.id)
+                continue
+
             try:
-                matches, rejected = await self._execute_job(job)
-                discarded += rejected
-                stored_scores.extend(score for _, score in matches)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to process matching job %s: %s", job.id, exc)
+                result = await handle_matching(leased, self._handler_deps)
+            except MatchingJobError as exc:
+                retry_in = exc.retry_in if exc.retry else None
+                fail(leased.id, job_type=self._job_type, error=exc.code, retry_in=retry_in)
                 record_activity(
                     "metadata",
                     "matching_job_failed",
-                    details={"job_id": job.id, "error": str(exc)},
+                    details={
+                        "job_id": leased.id,
+                        "error": exc.code,
+                        "retry": bool(exc.retry),
+                        "retry_in": retry_in,
+                    },
                 )
-
-        average_confidence = statistics.mean(stored_scores) if stored_scores else 0.0
-        write_setting(
-            "metrics.matching.last_average_confidence",
-            f"{average_confidence:.4f}",
-        )
-        write_setting("metrics.matching.last_discarded", str(discarded))
-        increment_counter("metrics.matching.discarded_total", amount=discarded)
-        increment_counter("metrics.matching.saved_total", amount=len(stored_scores))
-        record_activity(
-            "metadata",
-            "matching_batch",
-            details={
-                "batch_size": len(jobs),
-                "stored": len(stored_scores),
-                "discarded": discarded,
-                "average_confidence": round(average_confidence, 4),
-            },
-        )
-        self._record_heartbeat()
-
-    async def _execute_job(self, job: QueueJobDTO) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
-        leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
-        if leased is None:
-            logger.debug("Matching job %s skipped because it could not be leased", job.id)
-            return [], 0
-
-        payload = leased.payload
-        job_type = payload.get("type")
-        spotify_track = payload.get("spotify_track")
-        candidates = payload.get("candidates", [])
-        if not spotify_track or not candidates:
-            logger.warning("Invalid matching job received: %s", payload)
-            fail(job.id, job_type=self._job_type, error="invalid_payload")
-            return [], 0
-
-        matches, discarded = self._evaluate_candidates(job_type, spotify_track, candidates)
-        if matches:
-            self._store_matches(job_type or "unknown", spotify_track, matches)
-            complete(job.id, job_type=self._job_type)
-        else:
-            fail(job.id, job_type=self._job_type, error="no_match")
-        return matches, discarded
-
-    def _evaluate_candidates(
-        self,
-        job_type: str | None,
-        spotify_track: Dict[str, Any],
-        candidates: Iterable[Dict[str, Any]],
-    ) -> Tuple[List[Tuple[Dict[str, Any], float]], int]:
-        matches: List[Tuple[Dict[str, Any], float]] = []
-        rejected = 0
-        spotify_track_dto = normalize_spotify_track(spotify_track)
-        for candidate in candidates:
-            if not isinstance(candidate, dict):
-                rejected += 1
-                continue
-            candidate_dto = normalize_slskd_candidate(candidate)
-            score = self._engine.calculate_slskd_match_confidence(
-                spotify_track_dto, candidate_dto
-            )
-            if score >= self._confidence_threshold:
-                matches.append((candidate, score))
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to process matching job %s: %s", leased.id, exc)
+                fail(leased.id, job_type=self._job_type, error="internal_error")
+                record_activity(
+                    "metadata",
+                    "matching_job_failed",
+                    details={"job_id": leased.id, "error": str(exc)},
+                )
             else:
-                rejected += 1
-        matches.sort(key=lambda item: item[1], reverse=True)
-        return matches, rejected
-
-    def _store_matches(
-        self,
-        job_type: str,
-        spotify_track: Dict[str, Any],
-        matches: List[Tuple[Dict[str, Any], float]],
-    ) -> None:
-        with session_scope() as session:
-            for candidate, score in matches:
-                match = Match(
-                    source=job_type,
-                    spotify_track_id=str(spotify_track.get("id")),
-                    target_id=str(candidate.get("id")) if candidate.get("id") else None,
-                    confidence=score,
+                complete(
+                    leased.id,
+                    job_type=self._job_type,
+                    result_payload=result,
                 )
-                session.add(match)
+
+        self._record_heartbeat()
 
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("matching")
