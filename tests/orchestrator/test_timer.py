@@ -43,7 +43,8 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
     def fake_log(logger, event, **meta):
         logged.append((event, meta))
 
-    monkeypatch.setattr(timer_module, "log_event", fake_log)
+    monkeypatch.setattr("app.orchestrator.events.log_event", fake_log)
+    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
     artists = [
         WatchlistArtistRow(
@@ -142,7 +143,8 @@ async def test_trigger_disabled_logs(monkeypatch):
     def capture_log(logger, event, **meta):
         events.append(meta)
 
-    monkeypatch.setattr(timer_module, "log_event", capture_log)
+    monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
+    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
     timer = WatchlistTimer(config=_build_config(), enabled=False)
 
@@ -164,7 +166,8 @@ async def test_trigger_skips_when_busy(monkeypatch):
     def capture_log(logger, event, **meta):
         captured.append(meta)
 
-    monkeypatch.setattr(timer_module, "log_event", capture_log)
+    monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
+    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
     timer = WatchlistTimer(config=_build_config())
 

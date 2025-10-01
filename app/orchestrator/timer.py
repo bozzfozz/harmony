@@ -13,7 +13,7 @@ from typing import Sequence
 
 from app.config import WatchlistWorkerConfig
 from app.logging import get_logger
-from app.logging_events import log_event
+from app.orchestrator import events as orchestrator_events
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 from app.workers import persistence
 
@@ -123,11 +123,10 @@ class WatchlistTimer:
         """Execute a single timer tick, returning enqueued job DTOs."""
 
         if not self._enabled:
-            log_event(
+            orchestrator_events.emit_timer_event(
                 self._logger,
-                "orchestrator.timer_tick",
-                component=_LOG_COMPONENT,
                 status="disabled",
+                component=_LOG_COMPONENT,
                 jobs_total=0,
                 jobs_enqueued=0,
                 jobs_failed=0,
@@ -136,11 +135,10 @@ class WatchlistTimer:
             return []
 
         if self._lock.locked():
-            log_event(
+            orchestrator_events.emit_timer_event(
                 self._logger,
-                "orchestrator.timer_tick",
-                component=_LOG_COMPONENT,
                 status="skipped",
+                component=_LOG_COMPONENT,
                 reason="busy",
                 jobs_total=0,
                 jobs_enqueued=0,
@@ -156,11 +154,10 @@ class WatchlistTimer:
             except Exception:  # pragma: no cover - defensive logging
                 duration_ms = int((self._time_source() - start) * 1000)
                 self._logger.exception("Failed to load watchlist artists for timer")
-                log_event(
+                orchestrator_events.emit_timer_event(
                     self._logger,
-                    "orchestrator.timer_tick",
-                    component=_LOG_COMPONENT,
                     status="error",
+                    component=_LOG_COMPONENT,
                     error="load_failed",
                     jobs_total=0,
                     jobs_enqueued=0,
@@ -171,11 +168,10 @@ class WatchlistTimer:
 
             if not artists:
                 duration_ms = int((self._time_source() - start) * 1000)
-                log_event(
+                orchestrator_events.emit_timer_event(
                     self._logger,
-                    "orchestrator.timer_tick",
-                    component=_LOG_COMPONENT,
                     status="idle",
+                    component=_LOG_COMPONENT,
                     jobs_total=0,
                     jobs_enqueued=0,
                     jobs_failed=0,
@@ -204,11 +200,10 @@ class WatchlistTimer:
                 jobs_failed=failures,
             )
             status = "ok" if failures == 0 else "partial"
-            log_event(
+            orchestrator_events.emit_timer_event(
                 self._logger,
-                "orchestrator.timer_tick",
-                component=_LOG_COMPONENT,
                 status=status,
+                component=_LOG_COMPONENT,
                 jobs_total=stats.jobs_total,
                 jobs_enqueued=stats.jobs_enqueued,
                 jobs_failed=stats.jobs_failed,

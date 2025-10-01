@@ -89,7 +89,8 @@ def captured_events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Mapping[
     def recorder(logger: Any, event: str, /, **fields: Any) -> None:  # noqa: ANN401 - test helper
         events.append((event, dict(fields)))
 
-    monkeypatch.setattr(dispatcher_module, "log_event", recorder)
+    monkeypatch.setattr("app.orchestrator.events.log_event", recorder)
+    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
     return events
 
 
@@ -147,7 +148,7 @@ async def test_dispatcher_executes_job_and_marks_complete(
     event_name, payload = captured_events[-1]
     assert event_name == "orchestrator.commit"
     assert payload["job_type"] == "sync"
-    assert payload["job_id"] == 1
+    assert payload["entity_id"] == "1"
     assert payload["status"] == "succeeded"
     assert payload["attempts"] == 1
 
@@ -243,6 +244,7 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     assert captured_events
     event_name, payload = captured_events[-1]
     assert event_name == "orchestrator.dlq"
+    assert payload["status"] == "dead_letter"
     assert payload["stop_reason"] == "max_retries_exhausted"
 
 
