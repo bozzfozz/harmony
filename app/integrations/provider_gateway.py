@@ -64,7 +64,9 @@ class ProviderGatewayTimeoutError(ProviderGatewayError):
 
 
 class ProviderGatewayValidationError(ProviderGatewayError):
-    def __init__(self, provider: str, *, status_code: int | None, cause: Exception | None = None) -> None:
+    def __init__(
+        self, provider: str, *, status_code: int | None, cause: Exception | None = None
+    ) -> None:
         super().__init__(provider, f"{provider} rejected the request", cause=cause)
         self.status_code = status_code
 
@@ -86,13 +88,17 @@ class ProviderGatewayRateLimitedError(ProviderGatewayError):
 
 
 class ProviderGatewayNotFoundError(ProviderGatewayError):
-    def __init__(self, provider: str, *, status_code: int | None, cause: Exception | None = None) -> None:
+    def __init__(
+        self, provider: str, *, status_code: int | None, cause: Exception | None = None
+    ) -> None:
         super().__init__(provider, f"{provider} returned no results", cause=cause)
         self.status_code = status_code
 
 
 class ProviderGatewayDependencyError(ProviderGatewayError):
-    def __init__(self, provider: str, *, status_code: int | None, cause: Exception | None = None) -> None:
+    def __init__(
+        self, provider: str, *, status_code: int | None, cause: Exception | None = None
+    ) -> None:
         super().__init__(provider, f"{provider} dependency failure", cause=cause)
         self.status_code = status_code
 
@@ -206,7 +212,9 @@ class ProviderGateway:
                     tracks=tracks,
                 )
             except asyncio.TimeoutError as exc:
-                error = ProviderGatewayTimeoutError(track_provider.name, policy.timeout_ms, cause=exc)
+                error = ProviderGatewayTimeoutError(
+                    track_provider.name, policy.timeout_ms, cause=exc
+                )
             except ProviderTimeoutError as exc:
                 error = ProviderGatewayTimeoutError(track_provider.name, exc.timeout_ms, cause=exc)
             except ProviderValidationError as exc:
@@ -334,4 +342,3 @@ __all__ = [
     "ProviderGatewaySearchResult",
     "ProviderRetryPolicy",
 ]
-

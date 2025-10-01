@@ -210,4 +210,3 @@ __all__ = [
     "emit_timer_event",
     "format_datetime",
 ]
-

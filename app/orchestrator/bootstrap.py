@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from app.dependencies import get_app_config, get_matching_engine, get_soulseek_client, get_spotify_client
+from app.dependencies import (
+    get_app_config,
+    get_matching_engine,
+    get_soulseek_client,
+    get_spotify_client,
+)
 from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
 from app.orchestrator.scheduler import Scheduler
 from app.orchestrator.handlers import ArtworkService, LyricsService, MetadataService

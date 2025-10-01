@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -18,12 +18,7 @@ from app.utils.activity import (
     record_worker_started,
     record_worker_stopped,
 )
-from app.utils.events import (
-    DOWNLOAD_RETRY_COMPLETED,
-    DOWNLOAD_RETRY_FAILED,
-    DOWNLOAD_RETRY_SCHEDULED,
-    WORKER_STOPPED,
-)
+from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.artwork_worker import ArtworkWorker

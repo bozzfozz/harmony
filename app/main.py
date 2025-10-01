@@ -29,7 +29,12 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
 from app.api.router_registry import compose_prefix as build_router_prefix, get_domain_routers
 from app.config import AppConfig, SecurityConfig
 from app.core.config import DEFAULT_SETTINGS
-from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client, require_api_key
+from app.dependencies import (
+    get_app_config,
+    get_soulseek_client,
+    get_spotify_client,
+    require_api_key,
+)
 from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
@@ -329,7 +334,9 @@ def _configure_application(config: AppConfig) -> None:
 def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
     watchlist_config = config.watchlist
     interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
-    timer_interval_seconds = _resolve_watchlist_timer_interval(os.getenv("WATCHLIST_TIMER_INTERVAL_S"))
+    timer_interval_seconds = _resolve_watchlist_timer_interval(
+        os.getenv("WATCHLIST_TIMER_INTERVAL_S")
+    )
     timer_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
     visibility_timeout = _resolve_visibility_timeout(os.getenv("WORKER_VISIBILITY_TIMEOUT_S"))
 
@@ -506,7 +513,12 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    for attribute in ("orchestrator_tasks", "orchestrator_stop_event", "orchestrator_runtime", "watchlist_timer"):
+    for attribute in (
+        "orchestrator_tasks",
+        "orchestrator_stop_event",
+        "orchestrator_runtime",
+        "watchlist_timer",
+    ):
         if hasattr(state, attribute):
             delattr(state, attribute)
 

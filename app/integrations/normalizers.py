@@ -60,7 +60,9 @@ def _iter_sequence(obj: Any) -> Iterable[Any]:
     return (obj,)
 
 
-def normalize_spotify_track(payload: Mapping[str, Any] | Any, *, provider: str = "spotify") -> ProviderTrack:
+def normalize_spotify_track(
+    payload: Mapping[str, Any] | Any, *, provider: str = "spotify"
+) -> ProviderTrack:
     """Convert a Spotify track payload into :class:`ProviderTrack`."""
 
     def _get(value: Any, key: str, default: Any = None) -> Any:
@@ -97,11 +99,7 @@ def normalize_spotify_track(payload: Mapping[str, Any] | Any, *, provider: str =
         artist_metadata: dict[str, Any] = {}
         genres = _get(entry, "genres")
         if genres:
-            genre_list = [
-                str(item)
-                for item in _iter_sequence(genres)
-                if _coerce_str(item)
-            ]
+            genre_list = [str(item) for item in _iter_sequence(genres) if _coerce_str(item)]
             if genre_list:
                 artist_metadata["genres"] = tuple(genre_list)
                 aggregated_genres.update(genre_list)
@@ -137,11 +135,7 @@ def normalize_spotify_track(payload: Mapping[str, Any] | Any, *, provider: str =
             album_artist_metadata: dict[str, Any] = {}
             genres = _get(entry, "genres")
             if genres:
-                genre_list = [
-                    str(item)
-                    for item in _iter_sequence(genres)
-                    if _coerce_str(item)
-                ]
+                genre_list = [str(item) for item in _iter_sequence(genres) if _coerce_str(item)]
                 if genre_list:
                     album_artist_metadata["genres"] = tuple(genre_list)
             album_artists.append(
@@ -208,21 +202,14 @@ def normalize_slskd_candidate(
         or _coerce_str(payload.get("filename"))
         or "Unknown Track"
     )
-    artist = (
-        _coerce_str(payload.get("artist"))
-        or _coerce_str(payload.get("uploader"))
-    )
+    artist = _coerce_str(payload.get("artist")) or _coerce_str(payload.get("uploader"))
     format_name = _coerce_str(payload.get("format"))
     if format_name:
         format_name = format_name.upper()
     bitrate = _coerce_int(payload.get("bitrate") or payload.get("bitrate_kbps"))
     if bitrate is not None and bitrate <= 0:
         bitrate = None
-    size = _coerce_int(
-        payload.get("size")
-        or payload.get("size_bytes")
-        or payload.get("filesize")
-    )
+    size = _coerce_int(payload.get("size") or payload.get("size_bytes") or payload.get("filesize"))
     if size is not None and size < 0:
         size = None
     seeders = _coerce_int(

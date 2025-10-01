@@ -71,7 +71,9 @@ def _get_spotify_service(
 
 
 @router.get("/mode", response_model=SpotifyModeResponse)
-def get_spotify_mode(service: SpotifyDomainService = Depends(_get_spotify_service)) -> SpotifyModeResponse:
+def get_spotify_mode(
+    service: SpotifyDomainService = Depends(_get_spotify_service),
+) -> SpotifyModeResponse:
     return SpotifyModeResponse(mode=service.get_mode())
 
 

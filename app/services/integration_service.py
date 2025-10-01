@@ -100,7 +100,9 @@ class IntegrationService:
             raise DependencyError(f"{provider} search timed out.") from exc
         except ProviderGatewayDependencyError as exc:
             meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
-            raise DependencyError(f"{provider} search is currently unavailable.", meta=meta) from exc
+            raise DependencyError(
+                f"{provider} search is currently unavailable.", meta=meta
+            ) from exc
         except ProviderGatewayInternalError as exc:
             raise InternalServerError(f"Failed to process {provider} search results.") from exc
         except ProviderGatewayError as exc:  # pragma: no cover - defensive guard
@@ -132,4 +134,3 @@ class IntegrationService:
 
 
 __all__ = ["IntegrationService", "ProviderHealth"]
-

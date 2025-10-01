@@ -225,7 +225,9 @@ def _force_ready(job_id: int) -> None:
 
 
 @pytest.mark.asyncio
-async def test_watchlist_handler_moves_to_dlq_after_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_watchlist_handler_moves_to_dlq_after_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("EXTERNAL_RETRY_MAX", "2")
     artist_id = _insert_artist("artist-3")
 

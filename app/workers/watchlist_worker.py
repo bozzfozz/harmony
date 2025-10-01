@@ -76,7 +76,9 @@ class WatchlistWorker:
         task = self._task
         if task is not None:
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=self._config.shutdown_grace_ms / 1000.0)
+                await asyncio.wait_for(
+                    asyncio.shield(task), timeout=self._config.shutdown_grace_ms / 1000.0
+                )
             except asyncio.TimeoutError:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

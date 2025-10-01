@@ -179,9 +179,7 @@ async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["files"][0]["download_id"] == download_id
     assert payload["idempotency_key"] == f"retry:{download_id}"
     assert submission["key"] == f"retry:{download_id}"
-    assert result["scheduled"] == [
-        {"download_id": download_id, "retry_count": 1}
-    ]
+    assert result["scheduled"] == [{"download_id": download_id, "retry_count": 1}]
 
     with session_scope() as session:
         refreshed = session.get(Download, download_id)

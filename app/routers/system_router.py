@@ -245,9 +245,7 @@ def _matching_queue_size(_: Request) -> int:
             .select_from(QueueJob)
             .where(
                 QueueJob.type == "matching",
-                QueueJob.status.in_(
-                    [QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]
-                ),
+                QueueJob.status.in_([QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]),
             )
         )
         count = result.scalar_one_or_none()
@@ -262,8 +260,12 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
     "watchlist": WorkerDescriptor(attr="watchlist_worker", queue_literal="n/a"),
     "artwork": WorkerDescriptor(attr="artwork_worker", queue_literal="n/a"),
     "lyrics": WorkerDescriptor(attr="lyrics_worker", queue_literal="n/a"),
-    "scheduler": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_component="scheduler"),
-    "dispatcher": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_component="dispatcher"),
+    "scheduler": WorkerDescriptor(
+        attr=None, queue_literal="n/a", orchestrator_component="scheduler"
+    ),
+    "dispatcher": WorkerDescriptor(
+        attr=None, queue_literal="n/a", orchestrator_component="dispatcher"
+    ),
     "watchlist_timer": WorkerDescriptor(
         attr=None,
         queue_literal="n/a",

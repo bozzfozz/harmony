@@ -54,6 +54,7 @@ def default_handlers(
         handlers["watchlist"] = build_watchlist_handler(watchlist_deps)
     return handlers
 
+
 _DEFAULT_GLOBAL_CONCURRENCY = 10
 _DEFAULT_BACKOFF_BASE_MS = 500
 _DEFAULT_RETRY_MAX = 3
@@ -118,9 +119,7 @@ class Dispatcher:
         self.started: asyncio.Event = asyncio.Event()
         self.stopped: asyncio.Event = asyncio.Event()
         self.stop_requested: bool = False
-        self._retry_max = _parse_positive_int(
-            os.getenv("EXTERNAL_RETRY_MAX"), _DEFAULT_RETRY_MAX
-        )
+        self._retry_max = _parse_positive_int(os.getenv("EXTERNAL_RETRY_MAX"), _DEFAULT_RETRY_MAX)
         self._backoff_base_ms = _parse_positive_int(
             os.getenv("EXTERNAL_BACKOFF_BASE_MS"), _DEFAULT_BACKOFF_BASE_MS
         )
@@ -214,9 +213,7 @@ class Dispatcher:
                 attempts=int(job.attempts),
             )
             stop_heartbeat = asyncio.Event()
-            heartbeat_task = asyncio.create_task(
-                self._maintain_heartbeat(job, stop_heartbeat)
-            )
+            heartbeat_task = asyncio.create_task(self._maintain_heartbeat(job, stop_heartbeat))
             try:
                 result_payload = await handler(job)
             except MatchingJobError as exc:

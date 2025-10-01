@@ -466,8 +466,7 @@ class MusicMatchingEngine:
                 or getattr(soulseek_entry, "username", "")
             )
             candidate_artist = str(
-                candidate_mapping.get("artist")
-                or getattr(soulseek_entry, "artist", "")
+                candidate_mapping.get("artist") or getattr(soulseek_entry, "artist", "")
             )
             bitrate_value = (
                 candidate_mapping.get("bitrate")

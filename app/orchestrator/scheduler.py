@@ -102,8 +102,14 @@ class Scheduler:
         persistence_module=persistence,
     ) -> None:
         self._priority = priority_config or PriorityConfig.from_env()
-        poll_ms = poll_interval_ms if poll_interval_ms is not None else self._resolve_poll_interval()
-        timeout_s = visibility_timeout if visibility_timeout is not None else self._resolve_visibility_timeout()
+        poll_ms = (
+            poll_interval_ms if poll_interval_ms is not None else self._resolve_poll_interval()
+        )
+        timeout_s = (
+            visibility_timeout
+            if visibility_timeout is not None
+            else self._resolve_visibility_timeout()
+        )
         self._poll_interval = max(0.0, poll_ms / 1000.0)
         self._visibility_timeout = max(1, timeout_s)
         self._persistence = persistence_module

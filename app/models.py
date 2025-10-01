@@ -278,12 +278,8 @@ class QueueJobStatus(str, Enum):
 class QueueJob(Base):
     __tablename__ = "queue_jobs"
     __table_args__ = (
-        CheckConstraint(
-            "priority >= 0", name="ck_queue_jobs_priority_non_negative"
-        ),
-        CheckConstraint(
-            "attempts >= 0", name="ck_queue_jobs_attempts_non_negative"
-        ),
+        CheckConstraint("priority >= 0", name="ck_queue_jobs_priority_non_negative"),
+        CheckConstraint("attempts >= 0", name="ck_queue_jobs_attempts_non_negative"),
         CheckConstraint(
             "status IN ('pending','leased','completed','failed','cancelled')",
             name="ck_queue_jobs_status_valid",
