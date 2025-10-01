@@ -32,7 +32,7 @@ def test_free_import_invokes_orchestrator_and_logs(
         "app.orchestrator.handlers.enqueue_spotify_free_import",
         fake_enqueue,
     )
-    monkeypatch.setattr("app.services.spotify_domain_service.log_event", fake_log_event)
+    monkeypatch.setattr("app.services.spotify_domain.log_event", fake_log_event)
 
     response = client.post(
         "/spotify/import/free",

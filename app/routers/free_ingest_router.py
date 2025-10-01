@@ -15,7 +15,7 @@ from app.core.spotify_client import SpotifyClient
 from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
 from app.errors import NotFoundError, ValidationAppError
 from app.services.free_ingest_service import IngestSubmission, PlaylistValidationError
-from app.services.spotify_domain_service import SpotifyDomainService
+from app.services.spotify_domain import SpotifyDomainService
 
 
 router = APIRouter(prefix="/spotify/import", tags=["Spotify FREE Ingest"])

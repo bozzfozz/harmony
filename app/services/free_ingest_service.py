@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 
 from sqlalchemy import func, select
@@ -27,7 +27,8 @@ from app.models import (
     IngestJob,
     IngestJobState,
 )
-from app.workers.sync_worker import SyncWorker
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from app.workers.sync_worker import SyncWorker
 
 
 logger = get_logger(__name__)
@@ -116,7 +117,7 @@ class FreeIngestService:
         *,
         config: AppConfig,
         soulseek_client: SoulseekClient,
-        sync_worker: SyncWorker | None,
+        sync_worker: "SyncWorker | None",
     ) -> None:
         self._config = config
         self._soulseek = soulseek_client

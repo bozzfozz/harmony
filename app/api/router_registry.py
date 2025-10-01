@@ -6,6 +6,7 @@ from typing import Iterable
 
 from fastapi import APIRouter
 
+from app.api.spotify import router as spotify_domain_router
 from app.routers import (
     activity_router,
     download_router,
@@ -18,7 +19,6 @@ from app.routers import (
     search_router,
     settings_router,
     soulseek_router,
-    spotify_domain_router,
     sync_router,
     system_router,
     watchlist_router,
