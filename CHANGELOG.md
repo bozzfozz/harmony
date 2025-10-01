@@ -41,8 +41,8 @@
 ## v1.x.x
 - feat(match): Unicode/alias-normalisierte Matching-Pipeline inkl. Editions-Bonus, Confidence-Score und Album-Completion-Bewertung.【F:app/core/matching_engine.py†L1-L238】【F:app/services/library_service.py†L1-L156】【F:app/utils/text_normalization.py†L1-L215】【F:tests/test_matching_engine.py†L1-L93】【F:tests/test_text_normalization.py†L1-L38】
 - test(lifespan): add dedicated FastAPI lifespan and worker lifecycle coverage with
-  stubbed workers, including startup failures, idempotent shutdown and
-  cancellation scenarios.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
+  a recording orchestrator harness, including startup failures, idempotent shutdown and
+  cancellation scenarios.【F:tests/test_lifespan_workers.py†L1-L120】【F:tests/conftest.py†L1-L1100】
 - refactor(worker): make the watchlist worker async-safe with DAO backed
   database access, configurable timeouts/backoff and deterministic shutdown; see
   `docs/worker_watchlist.md` for the updated architecture.【F:app/workers/watchlist_worker.py†L1-L341】【F:app/services/watchlist_dao.py†L1-L189】【F:docs/worker_watchlist.md†L1-L74】

@@ -33,7 +33,7 @@
   - Downloads-Tab zeigt fehlgeschlagene Transfers mit Badge, Inline-Retry/Clear sowie optionalem „Alle erneut versuchen“-Dialog (TASK CODX-FE-068).【F:frontend/src/pages/Library/LibraryDownloads.tsx†L1-L620】【F:frontend/src/components/downloads/FailedBadge.tsx†L1-L60】【F:frontend/src/__tests__/downloads-failed-inline.test.tsx†L1-L260】
 - **Tests**
   - Die Pytest-Suite deckt u. a. Such-Filterlogik und Watchlist-Automatisierung ab und läuft vollständig grün mit 214 Tests.【F:tests/test_search.py†L39-L107】【F:tests/test_watchlist.py†L14-L141】【8a3823†L1-L34】
-  - Lifespan-Tests prüfen Worker-Start, Fehlerpfade, Idempotenz und Cancel-Verhalten mit dedizierten Stubs.【F:tests/test_lifespan_workers.py†L1-L165】【F:tests/fixtures/worker_stubs.py†L1-L154】
+  - Lifespan-Tests prüfen Worker-Start, Fehlerpfade, Idempotenz und Cancel-Verhalten mit einem Recording-Orchestrator-Harness.【F:tests/test_lifespan_workers.py†L1-L120】【F:tests/conftest.py†L1-L1100】
 - **Dokumentation**
   - README und CHANGELOG dokumentieren Smart Search, Worker, Watchlist, Release-Highlights sowie die aktuellen CI-Gates konsistent zum Code-Stand.【F:README.md†L101-L172】【F:CHANGELOG.md†L1-L18】
   - README & Ops-Doku konsolidieren sämtliche ENV-Variablen und liefern `.env.example` inklusive Logging-Hinweisen.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】
