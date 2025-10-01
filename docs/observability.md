@@ -64,11 +64,29 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 
 ## Logging Signals
 
-The following structured log events support monitoring and replace classic Prometheus scrapes:
+Structured logging is standardised via `app.logging_events.log_event` across the stack. Key event types:
 
-- `event=request` &rarr; includes `route`, `status`, `duration_ms` and optionally `cache_status` for every HTTP request.
-- `event=worker_job` &rarr; includes `job_id`, `attempt`, `status`, and `duration_ms` for background workers.
-- `event=integration_call` &rarr; includes `provider`, `status`, and `duration_ms` for outbound API calls.
-- `event=health.check` and `event=ready.check` &rarr; include probe specific metadata (`status`, `deps_up`, `deps_down`, `duration_ms`).
+- `api.request` – emitted by the FastAPI middleware for every request. Fields include `component`, `method`, `path`, `status_code`, `status`, `duration_ms`, and the `entity_id`/request id.
+- `api.dependency` – wraps outbound provider calls with `dependency`, `operation`, `status`, retry counters, `duration_ms`, and optional error metadata (`timeout_ms`, `status_code`, `retry_after_ms`).
+- `cache.*` – `cache.store`, `cache.hit`, `cache.miss`, `cache.expired`, `cache.invalidate`, `cache.evict` capture cache lifecycle actions with hashes instead of payloads.
+- `worker.job` – queue persistence lifecycle for `enqueued`, `leased`, `completed`, `dead_letter`, and `priority_updated` states. Includes `entity_id`, `job_type`, `attempts`, and context such as `lease_timeout_s` or `stop_reason`.
+- `worker.retry_exhausted` – emitted when retries are exhausted and the job moves to the DLQ.
+- `worker.tick` – periodic queue polling output with `job_type` and `count` of ready jobs.
+- `orchestrator.schedule|lease|dispatch|commit|heartbeat|dlq|timer_tick` – high level orchestration flow and timing, including `duration_ms`, `status`, and job identifiers.
 
-Forward these logs to your aggregation stack (Loki, ELK, etc.) and build dashboards/alerts based on the structured fields.
+A typical log record looks like:
+
+```json
+{
+  "event": "api.request",
+  "component": "api",
+  "method": "GET",
+  "path": "/api/v1/health",
+  "status": "ok",
+  "status_code": 200,
+  "duration_ms": 2.14,
+  "entity_id": "6a3f2d40-bd5d-4cb0-b089-75d6f8ebf2c1"
+}
+```
+
+Forward these logs to your aggregation stack (Loki, ELK, etc.) to build dashboards and alerts using the structured fields.

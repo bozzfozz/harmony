@@ -14,10 +14,51 @@ from sqlalchemy.orm import Session
 
 from app.db import session_scope
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import QueueJob, QueueJobStatus
 
 
 logger = get_logger(__name__)
+
+
+def _emit_worker_job_event(
+    job: "QueueJobDTO", status: str, *, deduped: bool | None = None, **extra: Any
+) -> None:
+    payload: dict[str, Any] = {
+        "component": "queue.persistence",
+        "entity_id": str(job.id),
+        "job_type": job.type,
+        "status": status,
+        "attempts": int(job.attempts),
+    }
+    if deduped is not None:
+        payload["deduped"] = deduped
+    payload.update({key: value for key, value in extra.items() if value is not None})
+    log_event(logger, "worker.job", **payload)
+
+
+def _emit_worker_tick(job_type: str, *, status: str, count: int | None = None) -> None:
+    payload: dict[str, Any] = {
+        "component": "queue.persistence",
+        "job_type": job_type,
+        "status": status,
+    }
+    if count is not None:
+        payload["count"] = count
+    log_event(logger, "worker.tick", **payload)
+
+
+def _emit_retry_exhausted(job: "QueueJobDTO", *, stop_reason: str) -> None:
+    log_event(
+        logger,
+        "worker.retry_exhausted",
+        component="queue.persistence",
+        entity_id=str(job.id),
+        job_type=job.type,
+        status="retry_exhausted",
+        stop_reason=stop_reason,
+        attempts=int(job.attempts),
+    )
 
 
 def _utcnow() -> datetime:
@@ -132,15 +173,11 @@ def enqueue(
             )
             existing = session.execute(stmt).scalars().first()
 
+        dto: QueueJobDTO
         if existing and existing.status not in {
             QueueJobStatus.COMPLETED.value,
             QueueJobStatus.CANCELLED.value,
         }:
-            logger.info(
-                "event=queue.enqueue job_type=%s job_id=%s deduped=true",
-                job_type,
-                existing.id,
-            )
             existing.payload = payload_dict
             existing.priority = resolved_priority
             existing.available_at = scheduled_for
@@ -150,7 +187,9 @@ def enqueue(
             existing.result_payload = None
             existing.updated_at = now
             session.add(existing)
-            return _refresh_instance(session, existing)
+            dto = _refresh_instance(session, existing)
+            _emit_worker_job_event(dto, "enqueued", deduped=True)
+            return dto
 
         record = QueueJob(
             type=job_type,
@@ -161,11 +200,9 @@ def enqueue(
             status=QueueJobStatus.PENDING.value,
         )
         session.add(record)
-        logger.info(
-            "event=queue.enqueue job_type=%s deduped=false",
-            job_type,
-        )
-        return _refresh_instance(session, record)
+        dto = _refresh_instance(session, record)
+        _emit_worker_job_event(dto, "enqueued", deduped=False)
+        return dto
 
 
 def enqueue_many(
@@ -233,7 +270,9 @@ def fetch_ready(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
             .limit(limit)
         )
         records = session.execute(stmt).scalars().all()
-        return [_to_dto(record) for record in records]
+        jobs = [_to_dto(record) for record in records]
+    _emit_worker_tick(job_type, status="ready", count=len(jobs))
+    return jobs
 
 
 def lease(
@@ -274,7 +313,9 @@ def lease(
         record.lease_expires_at = now + timedelta(seconds=timeout)
         record.updated_at = now
         session.add(record)
-        return _refresh_instance(session, record)
+        dto = _refresh_instance(session, record)
+    _emit_worker_job_event(dto, "leased", lease_timeout_s=timeout)
+    return dto
 
 
 def heartbeat(
@@ -321,6 +362,7 @@ def complete(
     """Mark a leased job as completed."""
 
     now = _utcnow()
+    dto: QueueJobDTO | None = None
     with session_scope() as session:
         record = session.get(QueueJob, job_id)
         if record is None or record.type != job_type:
@@ -332,7 +374,10 @@ def complete(
         record.result_payload = dict(result_payload or {}) or None
         record.updated_at = now
         session.add(record)
-        return True
+        dto = _refresh_instance(session, record)
+    assert dto is not None
+    _emit_worker_job_event(dto, "completed", has_result=dto.result_payload is not None)
+    return True
 
 
 def fail(
@@ -376,6 +421,7 @@ def to_dlq(
     """Move a job to the dead-letter queue state."""
 
     now = _utcnow()
+    dto: QueueJobDTO | None = None
     with session_scope() as session:
         record = session.get(QueueJob, job_id)
         if record is None or record.type != job_type:
@@ -387,7 +433,12 @@ def to_dlq(
         record.result_payload = dict(payload or {}) or None
         record.updated_at = now
         session.add(record)
-        return True
+        dto = _refresh_instance(session, record)
+    assert dto is not None
+    _emit_worker_job_event(dto, "dead_letter", stop_reason=reason)
+    if reason == "max_retries_exhausted":
+        _emit_retry_exhausted(dto, stop_reason=reason)
+    return True
 
 
 def release_active_leases(job_type: str) -> None:
@@ -438,20 +489,28 @@ def update_priority(
     try:
         identifier = int(job_id)
     except (TypeError, ValueError):
-        logger.error(
-            "event=queue.priority_update job_type=%s job_id=%s status=invalid_id",
-            job_type,
-            job_id,
+        log_event(
+            logger,
+            "worker.job",
+            component="queue.persistence",
+            status="priority_update_error",
+            job_type=job_type,
+            entity_id=str(job_id),
+            error="invalid_id",
         )
         return False
 
     with session_scope() as session:
         record = session.get(QueueJob, identifier)
         if record is None or record.type != job_type:
-            logger.error(
-                "event=queue.priority_update job_type=%s job_id=%s status=missing",
-                job_type,
-                job_id,
+            log_event(
+                logger,
+                "worker.job",
+                component="queue.persistence",
+                status="priority_update_error",
+                job_type=job_type,
+                entity_id=str(job_id),
+                error="missing",
             )
             return False
 
@@ -459,11 +518,15 @@ def update_priority(
             QueueJobStatus.PENDING.value,
             QueueJobStatus.FAILED.value,
         }:
-            logger.error(
-                "event=queue.priority_update job_type=%s job_id=%s status=invalid_state state=%s",
-                job_type,
-                job_id,
-                record.status,
+            log_event(
+                logger,
+                "worker.job",
+                component="queue.persistence",
+                status="priority_update_error",
+                job_type=job_type,
+                entity_id=str(job_id),
+                error="invalid_state",
+                state=record.status,
             )
             return False
 
@@ -489,13 +552,8 @@ def update_priority(
         record.available_at = now
         record.updated_at = now
         session.add(record)
-
-    logger.info(
-        "event=queue.priority_update job_type=%s job_id=%s priority=%s status=success",
-        job_type,
-        job_id,
-        priority,
-    )
+        dto = _refresh_instance(session, record)
+    _emit_worker_job_event(dto, "priority_updated", priority=int(priority))
     return True
 
 

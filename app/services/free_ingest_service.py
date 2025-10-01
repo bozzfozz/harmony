@@ -27,6 +27,7 @@ from app.models import (
     IngestJob,
     IngestJobState,
 )
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.workers.sync_worker import SyncWorker
 
