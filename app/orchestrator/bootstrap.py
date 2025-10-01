@@ -24,6 +24,7 @@ class OrchestratorRuntime:
     scheduler: Scheduler
     dispatcher: Dispatcher
     handlers: Mapping[str, JobHandler]
+    enabled_jobs: Mapping[str, bool]
 
 
 def bootstrap_orchestrator(
@@ -38,6 +39,12 @@ def bootstrap_orchestrator(
     soulseek_client = get_soulseek_client()
     spotify_client = get_spotify_client()
     matching_engine = get_matching_engine()
+
+    features = config.features
+    if not features.enable_artwork:
+        artwork_service = None
+    if not features.enable_lyrics:
+        lyrics_service = None
 
     sync_deps = build_sync_handler_deps(
         soulseek_client=soulseek_client,
@@ -62,10 +69,17 @@ def bootstrap_orchestrator(
     )
     dispatcher = Dispatcher(scheduler, handlers)
 
+    enabled_jobs: dict[str, bool] = {}
+    for job_type in ("sync", "matching", "retry", "watchlist"):
+        enabled_jobs[job_type] = job_type in handlers
+    enabled_jobs["artwork"] = bool(features.enable_artwork)
+    enabled_jobs["lyrics"] = bool(features.enable_lyrics)
+
     return OrchestratorRuntime(
         scheduler=scheduler,
         dispatcher=dispatcher,
         handlers=handlers,
+        enabled_jobs=enabled_jobs,
     )
 
 

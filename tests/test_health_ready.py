@@ -7,7 +7,7 @@ import pytest
 
 from app.config import HealthConfig
 from app.errors import ErrorCode
-from app.services.health import HealthService, ReadinessResult
+from app.services.health import DependencyStatus, HealthService, ReadinessResult
 from tests.helpers import api_path
 
 
@@ -64,6 +64,30 @@ async def test_health_service_readiness_success() -> None:
     assert result.ok is True
     assert result.database == "up"
     assert result.dependencies == {"spotify": "up"}
+
+
+@pytest.mark.asyncio
+async def test_health_service_readiness_handles_disabled_dependency() -> None:
+    config = HealthConfig(
+        db_timeout_ms=100,
+        dependency_timeout_ms=100,
+        dependencies=(),
+        require_database=True,
+    )
+    service = HealthService(
+        start_time=datetime.now(timezone.utc),
+        version="test",
+        config=config,
+        session_factory=_session_factory(),
+        dependency_probes={
+            "orchestrator:job:artwork": lambda: DependencyStatus(ok=True, status="disabled")
+        },
+    )
+
+    result = await service.readiness()
+
+    assert result.ok is True
+    assert result.dependencies == {"orchestrator:job:artwork": "disabled"}
 
 
 @pytest.mark.asyncio
@@ -173,6 +197,13 @@ def test_ready_endpoint_returns_200_when_ok(client) -> None:
         payload = response.json()
         assert payload["ok"] is True
         assert payload["data"]["db"] == "up"
+        assert "orchestrator" in payload["data"]
+        orchestrator = payload["data"]["orchestrator"]
+        assert "enabled_jobs" in orchestrator
+    else:
+        payload = response.json()
+        orchestrator_meta = payload["error"]["meta"].get("orchestrator")
+        assert orchestrator_meta is not None
 
 
 def test_metrics_endpoint_removed_returns_404(client) -> None:
