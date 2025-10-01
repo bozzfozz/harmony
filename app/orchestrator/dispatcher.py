@@ -9,15 +9,26 @@ import random
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.orchestrator.scheduler import Scheduler
 from app.workers import persistence
 
+if TYPE_CHECKING:  # pragma: no cover - import for typing only
+    from app.orchestrator.handlers import SyncHandlerDeps
+
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]
+
+
+def default_handlers(deps: "SyncHandlerDeps") -> dict[str, JobHandler]:
+    """Return the default orchestrator handler mapping."""
+
+    from app.orchestrator.handlers import build_sync_handler
+
+    return {"sync": build_sync_handler(deps)}
 
 _DEFAULT_GLOBAL_CONCURRENCY = 10
 _DEFAULT_BACKOFF_BASE_MS = 500
@@ -348,4 +359,4 @@ class Dispatcher:
         return text[: limit - 1] + "…"
 
 
-__all__ = ["Dispatcher", "JobHandler"]
+__all__ = ["Dispatcher", "JobHandler", "default_handlers"]
