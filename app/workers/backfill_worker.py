@@ -27,12 +27,15 @@ class BackfillWorker:
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
             return
-        self._queue = asyncio.Queue()
+        queue = self._queue
+        if queue is None:
+            queue = asyncio.Queue()
+            self._queue = queue
         self._loop = asyncio.get_running_loop()
         self._running = True
         record_worker_started("spotify_backfill")
         mark_worker_status("spotify_backfill", "running")
-        self._task = asyncio.create_task(self._run())
+        self._task = asyncio.create_task(self._run(queue))
 
     async def stop(self) -> None:
         was_running = self._running
@@ -66,10 +69,9 @@ class BackfillWorker:
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    async def _run(self) -> None:
+    async def _run(self, queue: asyncio.Queue[BackfillJobSpec]) -> None:
         logger.info("BackfillWorker started")
         record_worker_heartbeat("spotify_backfill")
-        queue = self._queue or asyncio.Queue()
         self._queue = queue
         try:
             while self._running:
