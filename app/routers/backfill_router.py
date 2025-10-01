@@ -14,7 +14,7 @@ from app.orchestrator.handlers import (
     get_spotify_backfill_status,
 )
 from app.services.backfill_service import BackfillJobStatus
-from app.services.spotify_domain_service import SpotifyDomainService
+from app.services.spotify_domain import SpotifyDomainService
 
 router = APIRouter()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.api.router_registry import compose_prefix, get_domain_routers
+from app.api.spotify import router as spotify_domain_router
 from app.routers import (
     activity_router,
     download_router,
@@ -13,7 +14,6 @@ from app.routers import (
     search_router,
     settings_router,
     soulseek_router,
-    spotify_domain_router,
     sync_router,
     system_router,
     watchlist_router,

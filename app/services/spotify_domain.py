@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Callable, Iterable, Literal, Optional, Sequence, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Optional, Sequence, cast
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,9 @@ from app.services.free_ingest_service import FreeIngestService, IngestSubmission
 from app.utils.settings_store import write_setting
 from app.dependencies import get_app_config
 from app.workers.backfill_worker import BackfillWorker
-from app.workers.sync_worker import SyncWorker
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from app.workers.sync_worker import SyncWorker
 
 
 logger = get_logger(__name__)
@@ -71,7 +73,7 @@ class SpotifyDomainService:
 
     @staticmethod
     def _default_free_ingest_factory(
-        config: AppConfig, soulseek: SoulseekClient, worker: SyncWorker | None
+        config: AppConfig, soulseek: SoulseekClient, worker: "SyncWorker | None"
     ) -> FreeIngestService:
         return FreeIngestService(config=config, soulseek_client=soulseek, sync_worker=worker)
 
@@ -366,6 +368,8 @@ class SpotifyDomainService:
     # Helpers -----------------------------------------------------------
 
     def _build_free_ingest_service(self) -> FreeIngestService:
+        from app.workers.sync_worker import SyncWorker  # Local import to avoid circular dependency
+
         sync_worker = getattr(self._state, "sync_worker", None)
         if not isinstance(sync_worker, SyncWorker):
             sync_worker = None

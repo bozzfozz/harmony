@@ -30,7 +30,7 @@ from app.schemas import (
     TrackDetailResponse,
     UserProfileResponse,
 )
-from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
+from app.services.spotify_domain import PlaylistItemsResult, SpotifyDomainService
 
 router = APIRouter()
 
