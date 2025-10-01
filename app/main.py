@@ -27,7 +27,7 @@ if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
 
 
 from app.api.router_registry import compose_prefix as build_router_prefix, get_domain_routers
-from app.config import AppConfig, SecurityConfig
+from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
     get_app_config,
@@ -286,7 +286,7 @@ def _should_start_workers(*, config: AppConfig | None = None) -> bool:
         return _env_as_bool(override, default=True)
     if os.getenv("HARMONY_DISABLE_WORKERS") in {"1", "true", "TRUE"}:
         return False
-    return True
+    return settings.orchestrator.workers_enabled
 
 
 def _resolve_watchlist_interval(raw_value: str | None) -> float:
@@ -301,21 +301,6 @@ def _resolve_watchlist_interval(raw_value: str | None) -> float:
             raw_value,
         )
         return default
-
-
-def _resolve_watchlist_timer_interval(raw_value: str | None) -> float:
-    default = 86_400.0
-    if not raw_value:
-        return default
-    try:
-        resolved = float(raw_value)
-    except (TypeError, ValueError):
-        logger.warning(
-            "Invalid WATCHLIST_TIMER_INTERVAL_S value %s; falling back to default",
-            raw_value,
-        )
-        return default
-    return resolved if resolved >= 0 else 0.0
 
 
 def _resolve_visibility_timeout(raw_value: str | None) -> int:
@@ -334,10 +319,9 @@ def _configure_application(config: AppConfig) -> None:
 def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
     watchlist_config = config.watchlist
     interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
-    timer_interval_seconds = _resolve_watchlist_timer_interval(
-        os.getenv("WATCHLIST_TIMER_INTERVAL_S")
-    )
-    timer_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
+    timer_settings = settings.watchlist_timer
+    timer_interval_seconds = timer_settings.interval_s
+    timer_enabled = timer_settings.enabled
     visibility_timeout = _resolve_visibility_timeout(os.getenv("WORKER_VISIBILITY_TIMEOUT_S"))
 
     meta = {
@@ -445,13 +429,12 @@ async def _start_orchestrator_workers(
     for job_type, enabled in orchestrator.enabled_jobs.items():
         orchestrator_status["enabled_jobs"][job_type] = bool(enabled)
 
-    timer_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
-    timer_interval = _resolve_watchlist_timer_interval(os.getenv("WATCHLIST_TIMER_INTERVAL_S"))
+    timer_settings = settings.watchlist_timer
     watchlist_timer = WatchlistTimer(
         config=config.watchlist,
-        interval_seconds=timer_interval,
-        enabled=timer_enabled,
+        timer_config=timer_settings,
     )
+    timer_enabled = watchlist_timer.enabled
     state.watchlist_timer = watchlist_timer
     orchestrator_status["watchlist_timer_expected"] = bool(timer_enabled)
     timer_started = await watchlist_timer.start()

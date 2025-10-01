@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.logging import get_logger
+from app.logging_events import log_event
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -120,6 +127,149 @@ class WatchlistWorkerConfig:
     cooldown_minutes: int
 
 
+@dataclass(slots=True, frozen=True)
+class ExternalCallPolicy:
+    timeout_ms: int
+    retry_max: int
+    backoff_base_ms: int
+    jitter_pct: float
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, Any]) -> "ExternalCallPolicy":
+        timeout_ms = _bounded_int(
+            env.get("EXTERNAL_TIMEOUT_MS"),
+            default=DEFAULT_EXTERNAL_TIMEOUT_MS,
+            minimum=100,
+        )
+        retry_max = _bounded_int(
+            env.get("EXTERNAL_RETRY_MAX"),
+            default=DEFAULT_EXTERNAL_RETRY_MAX,
+            minimum=0,
+        )
+        backoff_base = _bounded_int(
+            env.get("EXTERNAL_BACKOFF_BASE_MS"),
+            default=DEFAULT_EXTERNAL_BACKOFF_BASE_MS,
+            minimum=1,
+        )
+        jitter_pct = _parse_jitter_value(
+            env.get("EXTERNAL_JITTER_PCT"),
+            default_pct=DEFAULT_EXTERNAL_JITTER_PCT,
+        )
+        return cls(
+            timeout_ms=timeout_ms,
+            retry_max=retry_max,
+            backoff_base_ms=backoff_base,
+            jitter_pct=jitter_pct,
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class ProviderProfile:
+    name: str
+    policy: ExternalCallPolicy
+
+
+@dataclass(slots=True, frozen=True)
+class WatchlistTimerConfig:
+    enabled: bool
+    interval_s: float
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, Any]) -> "WatchlistTimerConfig":
+        enabled = _as_bool(
+            str(env.get("WATCHLIST_TIMER_ENABLED")) if "WATCHLIST_TIMER_ENABLED" in env else None,
+            default=DEFAULT_WATCHLIST_TIMER_ENABLED,
+        )
+        interval = _bounded_float(
+            env.get("WATCHLIST_TIMER_INTERVAL_S"),
+            default=DEFAULT_WATCHLIST_TIMER_INTERVAL_S,
+            minimum=0.0,
+        )
+        return cls(enabled=enabled, interval_s=interval)
+
+
+@dataclass(slots=True, frozen=True)
+class OrchestratorConfig:
+    workers_enabled: bool
+    global_concurrency: int
+    pool_sync: int
+    pool_matching: int
+    pool_retry: int
+    pool_watchlist: int
+    priority_map: dict[str, int]
+    visibility_timeout_s: int
+    heartbeat_s: int
+    poll_interval_ms: int
+
+    def pool_limits(self) -> dict[str, int]:
+        return {
+            "sync": max(1, self.pool_sync or self.global_concurrency),
+            "matching": max(1, self.pool_matching or self.global_concurrency),
+            "retry": max(1, self.pool_retry or self.global_concurrency),
+            "watchlist": max(1, self.pool_watchlist or self.global_concurrency),
+        }
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, Any]) -> "OrchestratorConfig":
+        workers_enabled = _as_bool(
+            str(env.get("WORKERS_ENABLED")) if "WORKERS_ENABLED" in env else None,
+            default=DEFAULT_ORCHESTRATOR_WORKERS_ENABLED,
+        )
+        global_limit = _bounded_int(
+            env.get("ORCH_GLOBAL_CONCURRENCY"),
+            default=DEFAULT_ORCH_GLOBAL_CONCURRENCY,
+            minimum=1,
+        )
+        pool_sync = _bounded_int(
+            env.get("ORCH_POOL_SYNC"),
+            default=DEFAULT_ORCH_POOL_SYNC,
+            minimum=1,
+        )
+        pool_matching = _bounded_int(
+            env.get("ORCH_POOL_MATCHING"),
+            default=DEFAULT_ORCH_POOL_MATCHING,
+            minimum=1,
+        )
+        pool_retry = _bounded_int(
+            env.get("ORCH_POOL_RETRY"),
+            default=DEFAULT_ORCH_POOL_RETRY,
+            minimum=1,
+        )
+        pool_watchlist = _bounded_int(
+            env.get("ORCH_POOL_WATCHLIST"),
+            default=DEFAULT_ORCH_POOL_WATCHLIST,
+            minimum=1,
+        )
+        visibility_timeout = _bounded_int(
+            env.get("ORCH_VISIBILITY_TIMEOUT_S"),
+            default=DEFAULT_ORCH_VISIBILITY_TIMEOUT_S,
+            minimum=5,
+        )
+        heartbeat_s = _bounded_int(
+            env.get("ORCH_HEARTBEAT_S"),
+            default=DEFAULT_ORCH_HEARTBEAT_S,
+            minimum=1,
+        )
+        poll_interval = _bounded_int(
+            env.get("ORCH_POLL_INTERVAL_MS"),
+            default=DEFAULT_ORCH_POLL_INTERVAL_MS,
+            minimum=10,
+        )
+        priority_map = _parse_priority_map(env)
+        return cls(
+            workers_enabled=workers_enabled,
+            global_concurrency=global_limit,
+            pool_sync=pool_sync,
+            pool_matching=pool_matching,
+            pool_retry=pool_retry,
+            pool_watchlist=pool_watchlist,
+            priority_map=priority_map,
+            visibility_timeout_s=visibility_timeout,
+            heartbeat_s=heartbeat_s,
+            poll_interval_ms=poll_interval,
+        )
+
+
 @dataclass(slots=True)
 class MatchingConfig:
     edition_aware: bool
@@ -154,6 +304,31 @@ class SecurityConfig:
     allowlist: tuple[str, ...]
     allowed_origins: tuple[str, ...]
     rate_limiting_enabled: bool
+
+
+@dataclass(slots=True, frozen=True)
+class Settings:
+    orchestrator: OrchestratorConfig
+    external: ExternalCallPolicy
+    watchlist_timer: WatchlistTimerConfig
+    provider_profiles: dict[str, ProviderProfile]
+
+    @classmethod
+    def load(cls, env: Mapping[str, Any] | None = None) -> "Settings":
+        if env is None:
+            env_map: dict[str, Any] = dict(os.environ)
+        else:
+            env_map = dict(env)
+        orchestrator = OrchestratorConfig.from_env(env_map)
+        external = ExternalCallPolicy.from_env(env_map)
+        watchlist_timer = WatchlistTimerConfig.from_env(env_map)
+        profiles = _load_provider_profiles(env_map, external)
+        return cls(
+            orchestrator=orchestrator,
+            external=external,
+            watchlist_timer=watchlist_timer,
+            provider_profiles=profiles,
+        )
 
 
 DEFAULT_DB_URL = "sqlite:///./harmony.db"
@@ -198,6 +373,30 @@ DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS = 12_000
 DEFAULT_WATCHLIST_TICK_BUDGET_MS = 8_000
 DEFAULT_WATCHLIST_BACKOFF_BASE_MS = 250
 DEFAULT_WATCHLIST_RETRY_MAX = 3
+
+DEFAULT_ORCHESTRATOR_WORKERS_ENABLED = True
+DEFAULT_ORCH_GLOBAL_CONCURRENCY = 8
+DEFAULT_ORCH_POOL_SYNC = 4
+DEFAULT_ORCH_POOL_MATCHING = 4
+DEFAULT_ORCH_POOL_RETRY = 2
+DEFAULT_ORCH_POOL_WATCHLIST = 2
+DEFAULT_ORCH_PRIORITY_MAP = {
+    "sync": 100,
+    "matching": 90,
+    "retry": 80,
+    "watchlist": 50,
+}
+DEFAULT_ORCH_VISIBILITY_TIMEOUT_S = 60
+DEFAULT_ORCH_HEARTBEAT_S = 20
+DEFAULT_ORCH_POLL_INTERVAL_MS = 200
+
+DEFAULT_EXTERNAL_TIMEOUT_MS = 10_000
+DEFAULT_EXTERNAL_RETRY_MAX = 3
+DEFAULT_EXTERNAL_BACKOFF_BASE_MS = 250
+DEFAULT_EXTERNAL_JITTER_PCT = 20.0
+
+DEFAULT_WATCHLIST_TIMER_ENABLED = True
+DEFAULT_WATCHLIST_TIMER_INTERVAL_S = 900.0
 DEFAULT_WATCHLIST_JITTER_PCT = 0.2
 DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
 DEFAULT_WATCHLIST_DB_IO_MODE = "thread"
@@ -224,11 +423,51 @@ def _as_int(value: Optional[str], *, default: int) -> int:
         return default
 
 
+def _coerce_int(value: Any, *, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bounded_int(
+    value: Any,
+    *,
+    default: int,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    resolved = _coerce_int(value, default=default)
+    if minimum is not None:
+        resolved = max(minimum, resolved)
+    if maximum is not None:
+        resolved = min(maximum, resolved)
+    return resolved
+
+
 def _parse_list(value: Optional[str]) -> list[str]:
     if value is None:
         return []
     candidates = value.replace("\n", ",").split(",")
     return [item.strip() for item in candidates if item.strip()]
+
+
+def _bounded_float(
+    value: Any,
+    *,
+    default: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    try:
+        resolved = float(value)
+    except (TypeError, ValueError):
+        resolved = default
+    if minimum is not None:
+        resolved = max(minimum, resolved)
+    if maximum is not None:
+        resolved = min(maximum, resolved)
+    return resolved
 
 
 def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
@@ -280,6 +519,134 @@ def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]
         except (TypeError, ValueError):
             continue
     return defaults
+
+
+def _parse_jitter_value(value: Any, *, default_pct: float) -> float:
+    resolved = default_pct
+    if value is not None:
+        try:
+            resolved = float(value)
+        except (TypeError, ValueError):
+            resolved = default_pct
+    if resolved < 0:
+        return 0.0
+    if resolved <= 1:
+        return resolved
+    return resolved / 100.0
+
+
+def _parse_priority_csv(value: Any) -> dict[str, int]:
+    if value is None:
+        return {}
+    text = str(value).strip()
+    if not text:
+        return {}
+    entries = {}
+    for chunk in text.split(","):
+        item = chunk.strip()
+        if not item or ":" not in item:
+            continue
+        name, raw_priority = item.split(":", 1)
+        normalized = name.strip()
+        if not normalized:
+            continue
+        entries[normalized] = _bounded_int(
+            raw_priority.strip(),
+            default=0,
+            minimum=0,
+        )
+    return entries
+
+
+def _parse_priority_map(env: Mapping[str, Any]) -> dict[str, int]:
+    raw_json = env.get("ORCH_PRIORITY_JSON")
+    if raw_json:
+        try:
+            parsed = json.loads(str(raw_json))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = None
+        if isinstance(parsed, Mapping):
+            mapping: dict[str, int] = {}
+            for key, value in parsed.items():
+                name = str(key).strip()
+                if not name:
+                    continue
+                mapping[name] = _bounded_int(value, default=0, minimum=0)
+            if mapping:
+                return mapping
+    csv_map = _parse_priority_csv(env.get("ORCH_PRIORITY_CSV"))
+    if csv_map:
+        return csv_map
+    return dict(DEFAULT_ORCH_PRIORITY_MAP)
+
+
+def _load_provider_profiles(
+    env: Mapping[str, Any], default_policy: ExternalCallPolicy
+) -> dict[str, ProviderProfile]:
+    profiles: dict[str, ProviderProfile] = {}
+    candidates = {"spotify", "slskd", "plex"}
+    for provider in candidates:
+        prefix = f"PROVIDER_{provider.upper()}"
+        keys = {
+            "timeout": f"{prefix}_TIMEOUT_MS",
+            "retry": f"{prefix}_RETRY_MAX",
+            "backoff": f"{prefix}_BACKOFF_BASE_MS",
+            "jitter": f"{prefix}_JITTER_PCT",
+        }
+        if not any(key in env for key in keys.values()):
+            continue
+        policy = ExternalCallPolicy(
+            timeout_ms=_bounded_int(
+                env.get(keys["timeout"]),
+                default=default_policy.timeout_ms,
+                minimum=100,
+            ),
+            retry_max=_bounded_int(
+                env.get(keys["retry"]),
+                default=default_policy.retry_max,
+                minimum=0,
+            ),
+            backoff_base_ms=_bounded_int(
+                env.get(keys["backoff"]),
+                default=default_policy.backoff_base_ms,
+                minimum=1,
+            ),
+            jitter_pct=_parse_jitter_value(
+                env.get(keys["jitter"]),
+                default_pct=default_policy.jitter_pct,
+            ),
+        )
+        profiles[provider] = ProviderProfile(name=provider, policy=policy)
+    return profiles
+
+
+settings = Settings.load()
+
+log_event(
+    logger,
+    "config.loaded",
+    component="config",
+    status="ok",
+    meta={
+        "orchestrator": {
+            "workers_enabled": settings.orchestrator.workers_enabled,
+            "global_concurrency": settings.orchestrator.global_concurrency,
+            "poll_interval_ms": settings.orchestrator.poll_interval_ms,
+            "visibility_timeout_s": settings.orchestrator.visibility_timeout_s,
+        },
+        "external": {
+            "timeout_ms": settings.external.timeout_ms,
+            "retry_max": settings.external.retry_max,
+            "backoff_base_ms": settings.external.backoff_base_ms,
+            "jitter_pct": settings.external.jitter_pct,
+        },
+        "watchlist_timer": {
+            "enabled": settings.watchlist_timer.enabled,
+            "interval_s": settings.watchlist_timer.interval_s,
+        },
+        "provider_profiles": sorted(settings.provider_profiles.keys()),
+    },
+)
 
 
 def _read_api_keys_from_file(path: str) -> list[str]:

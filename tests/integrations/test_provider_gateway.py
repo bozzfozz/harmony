@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from app.config import ExternalCallPolicy, ProviderProfile
 from app.integrations.contracts import (
     ProviderDependencyError,
     ProviderNotFoundError,
@@ -56,6 +57,42 @@ def _make_config(
 
 def _search_query() -> SearchQuery:
     return SearchQuery(text="song", artist=None, limit=10)
+
+
+def test_gateway_config_from_settings_builds_policies() -> None:
+    external = ExternalCallPolicy(
+        timeout_ms=50,
+        retry_max=-1,
+        backoff_base_ms=0,
+        jitter_pct=-0.5,
+    )
+    spotify_profile = ProviderProfile(
+        name="Spotify",
+        policy=ExternalCallPolicy(
+            timeout_ms=150,
+            retry_max=2,
+            backoff_base_ms=5,
+            jitter_pct=0.1,
+        ),
+    )
+
+    config = ProviderGatewayConfig.from_settings(
+        max_concurrency=0,
+        external_policy=external,
+        provider_profiles={"Spotify": spotify_profile},
+    )
+
+    assert config.max_concurrency == 1
+    assert config.default_policy.timeout_ms == 100
+    assert config.default_policy.retry_max == 0
+    assert config.default_policy.backoff_base_ms == 1
+    assert config.default_policy.jitter_pct == 0.0
+
+    spotify_policy = config.policy_for("spotify")
+    assert spotify_policy.timeout_ms == 150
+    assert spotify_policy.retry_max == 2
+    assert spotify_policy.backoff_base_ms == 5
+    assert spotify_policy.jitter_pct == 0.1
 
 
 @pytest.mark.asyncio

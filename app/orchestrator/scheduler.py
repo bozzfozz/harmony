@@ -4,23 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
-import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Mapping
+from typing import Any
 
+from app.config import OrchestratorConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.workers import persistence
-
-
-def _coerce_int(value: object, default: int) -> int:
-    try:
-        parsed = int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return parsed
 
 
 @dataclass(slots=True)
@@ -29,51 +21,17 @@ class PriorityConfig:
 
     priorities: dict[str, int]
 
-    _DEFAULT_CSV = "sync:100,watchlist:60,retry:20"
+    @classmethod
+    def from_config(cls, config: OrchestratorConfig) -> "PriorityConfig":
+        return cls(priorities=dict(config.priority_map))
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "PriorityConfig":
-        """Load a priority configuration from environment variables."""
-
-        source = env if env is not None else os.environ
-        json_blob = source.get("ORCH_PRIORITY_JSON")
-        if json_blob:
-            try:
-                parsed = json.loads(json_blob)
-            except json.JSONDecodeError:
-                parsed = None
-            else:
-                if isinstance(parsed, Mapping):
-                    mapping: dict[str, int] = {}
-                    for key, value in parsed.items():
-                        name = str(key).strip()
-                        if not name:
-                            continue
-                        mapping[name] = _coerce_int(value, 0)
-                    return cls(priorities=mapping)
-                parsed = None
-            if parsed is None:
-                # Invalid JSON falls back to CSV parsing.
-                pass
-
-        csv_blob = source.get("ORCH_PRIORITY_CSV", cls._DEFAULT_CSV)
-        return cls(priorities=cls._parse_csv(csv_blob))
-
-    @staticmethod
-    def _parse_csv(value: str | None) -> dict[str, int]:
-        priorities: dict[str, int] = {}
-        if not value:
-            return priorities
-        for chunk in value.split(","):
-            item = chunk.strip()
-            if not item or ":" not in item:
-                continue
-            name, priority_text = item.split(":", 1)
-            name = name.strip()
-            if not name:
-                continue
-            priorities[name] = _coerce_int(priority_text.strip(), 0)
-        return priorities
+    def from_env(
+        cls, env: Mapping[str, Any] | None = None
+    ) -> "PriorityConfig":  # pragma: no cover - compatibility shim
+        if env is None:
+            return cls.from_config(settings.orchestrator)
+        return cls(priorities=OrchestratorConfig.from_env(env).priority_map)
 
     @property
     def job_types(self) -> tuple[str, ...]:
@@ -96,19 +54,21 @@ class Scheduler:
     def __init__(
         self,
         *,
+        config: OrchestratorConfig | None = None,
         priority_config: PriorityConfig | None = None,
         poll_interval_ms: int | None = None,
         visibility_timeout: int | None = None,
         persistence_module=persistence,
     ) -> None:
-        self._priority = priority_config or PriorityConfig.from_env()
+        self._config = config or settings.orchestrator
+        self._priority = priority_config or PriorityConfig.from_config(self._config)
         poll_ms = (
-            poll_interval_ms if poll_interval_ms is not None else self._resolve_poll_interval()
+            poll_interval_ms if poll_interval_ms is not None else self._config.poll_interval_ms
         )
         timeout_s = (
             visibility_timeout
             if visibility_timeout is not None
-            else self._resolve_visibility_timeout()
+            else self._config.visibility_timeout_s
         )
         self._poll_interval = max(0.0, poll_ms / 1000.0)
         self._visibility_timeout = max(1, timeout_s)
@@ -119,16 +79,6 @@ class Scheduler:
         self.started: asyncio.Event = asyncio.Event()
         self.stopped: asyncio.Event = asyncio.Event()
         self.stop_requested: bool = False
-
-    @staticmethod
-    def _resolve_poll_interval() -> int:
-        env_value = os.getenv("ORCH_POLL_INTERVAL_MS")
-        return max(10, _coerce_int(env_value, 250))
-
-    @staticmethod
-    def _resolve_visibility_timeout() -> int:
-        env_value = os.getenv("ORCH_VISIBILITY_TIMEOUT_S")
-        return max(5, _coerce_int(env_value, 60))
 
     @property
     def poll_interval(self) -> float:

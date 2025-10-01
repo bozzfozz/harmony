@@ -7,6 +7,9 @@ import random
 
 import pytest
 
+from dataclasses import replace
+
+from app.config import settings
 from app.orchestrator.dispatcher import Dispatcher
 
 
@@ -70,11 +73,14 @@ async def test_dispatcher_respects_pool_limits(
     assert stub_queue_persistence.completed == [1, 2]
 
 
-def test_dispatcher_resolves_pool_limit_from_environment(
-    monkeypatch: pytest.MonkeyPatch,
+def test_dispatcher_resolves_pool_limit_from_configuration(
     stub_queue_persistence,
 ) -> None:
-    monkeypatch.setenv("ORCH_POOL_SYNC", "7")
+    orchestrator_config = replace(
+        settings.orchestrator,
+        pool_sync=7,
+        priority_map=dict(settings.orchestrator.priority_map),
+    )
 
     async def noop(job):  # type: ignore[no-untyped-def]
         return None
@@ -84,6 +90,7 @@ def test_dispatcher_resolves_pool_limit_from_environment(
         handlers={"sync": noop},
         persistence_module=stub_queue_persistence,
         global_concurrency=5,
+        orchestrator_config=orchestrator_config,
     )
 
     semaphore = dispatcher._get_pool_semaphore("sync")

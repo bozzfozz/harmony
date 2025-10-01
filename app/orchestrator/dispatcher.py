@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import random
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.config import ExternalCallPolicy, OrchestratorConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.orchestrator.handlers import MatchingJobError
@@ -55,12 +55,10 @@ def default_handlers(
     return handlers
 
 
-_DEFAULT_GLOBAL_CONCURRENCY = 10
 _DEFAULT_BACKOFF_BASE_MS = 500
 _DEFAULT_RETRY_MAX = 3
 _DEFAULT_JITTER = 0.2
 _MAX_BACKOFF_EXPONENT = 10
-_HEARTBEAT_FRACTION = 0.5
 _STOP_REASON_MAX_RETRIES = "max_retries_exhausted"
 
 
@@ -68,26 +66,6 @@ _STOP_REASON_MAX_RETRIES = "max_retries_exhausted"
 class _PoolLimits:
     global_limit: int
     pool: dict[str, int]
-
-
-def _parse_positive_int(value: str | None, default: int) -> int:
-    if value is None:
-        return default
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-    return parsed if parsed > 0 else default
-
-
-def _parse_non_negative_float(value: str | None, default: float) -> float:
-    if value is None:
-        return default
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    return parsed if parsed >= 0 else default
 
 
 class Dispatcher:
@@ -98,6 +76,8 @@ class Dispatcher:
         scheduler: Scheduler,
         handlers: Mapping[str, JobHandler],
         *,
+        orchestrator_config: OrchestratorConfig | None = None,
+        external_policy: ExternalCallPolicy | None = None,
         persistence_module=persistence,
         global_concurrency: int | None = None,
         pool_concurrency: Mapping[str, int] | None = None,
@@ -108,6 +88,8 @@ class Dispatcher:
         self._persistence = persistence_module
         self._logger = get_logger(__name__)
         self._rng = rng or random.Random()
+        self._config = orchestrator_config or settings.orchestrator
+        self._base_pool_limits = self._config.pool_limits()
         limits = self._resolve_limits(global_concurrency, pool_concurrency)
         self._global_limit = limits.global_limit
         self._global_semaphore = asyncio.Semaphore(self._global_limit)
@@ -119,13 +101,21 @@ class Dispatcher:
         self.started: asyncio.Event = asyncio.Event()
         self.stopped: asyncio.Event = asyncio.Event()
         self.stop_requested: bool = False
-        self._retry_max = _parse_positive_int(os.getenv("EXTERNAL_RETRY_MAX"), _DEFAULT_RETRY_MAX)
-        self._backoff_base_ms = _parse_positive_int(
-            os.getenv("EXTERNAL_BACKOFF_BASE_MS"), _DEFAULT_BACKOFF_BASE_MS
+        policy = external_policy or settings.external
+        self._retry_max = max(
+            0, policy.retry_max if policy.retry_max is not None else _DEFAULT_RETRY_MAX
         )
-        self._retry_jitter_pct = _parse_non_negative_float(
-            os.getenv("EXTERNAL_JITTER_PCT"), _DEFAULT_JITTER
+        self._backoff_base_ms = max(
+            1,
+            (
+                policy.backoff_base_ms
+                if policy.backoff_base_ms is not None
+                else _DEFAULT_BACKOFF_BASE_MS
+            ),
         )
+        jitter_pct = policy.jitter_pct if policy.jitter_pct is not None else _DEFAULT_JITTER
+        self._retry_jitter_pct = jitter_pct if jitter_pct >= 0 else 0.0
+        self._heartbeat_seconds = max(1.0, float(self._config.heartbeat_s))
 
     async def run(self, lifespan: asyncio.Event | None = None) -> None:
         """Run the dispatcher loop until a stop signal or lifespan event is set."""
@@ -372,8 +362,9 @@ class Dispatcher:
             break
 
     def _heartbeat_interval(self, job: persistence.QueueJobDTO) -> float:
-        timeout = max(1, int(job.lease_timeout_seconds or 60))
-        return max(1.0, timeout * _HEARTBEAT_FRACTION)
+        timeout = max(1, int(job.lease_timeout_seconds or self._config.visibility_timeout_s))
+        interval = min(self._heartbeat_seconds, timeout * 0.5)
+        return max(1.0, interval)
 
     def _collect_finished_tasks(self) -> None:
         finished = {task for task in self._tasks if task.done()}
@@ -416,21 +407,22 @@ class Dispatcher:
         global_concurrency: int | None,
         pool_concurrency: Mapping[str, int] | None,
     ) -> _PoolLimits:
-        resolved_global = global_concurrency or _parse_positive_int(
-            os.getenv("ORCH_GLOBAL_CONCURRENCY"), _DEFAULT_GLOBAL_CONCURRENCY
-        )
-        resolved_global = max(1, resolved_global)
-        pool: dict[str, int] = {}
+        resolved_global = max(1, global_concurrency or self._config.global_concurrency)
+        pool: dict[str, int] = {
+            name: max(1, limit) for name, limit in self._base_pool_limits.items()
+        }
         if pool_concurrency:
             for job_type, limit in pool_concurrency.items():
                 pool[job_type] = max(1, int(limit))
         return _PoolLimits(global_limit=resolved_global, pool=pool)
 
     def _resolve_pool_limit(self, job_type: str) -> int:
-        env_key = f"ORCH_POOL_{job_type.upper()}"
-        env_value = os.getenv(env_key)
-        limit = _parse_positive_int(env_value, self._global_limit)
-        return max(1, limit)
+        configured = self._base_pool_limits.get(job_type)
+        if configured is None:
+            configured = self._global_limit
+        limit = max(1, configured)
+        self._pool_limits[job_type] = limit
+        return limit
 
     def _calculate_backoff_seconds(self, attempts: int) -> float:
         exponent = max(0, min(attempts - 1, _MAX_BACKOFF_EXPONENT))

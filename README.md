@@ -469,13 +469,15 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `WATCHLIST_DB_IO_MODE` | string | `thread` | Datenbankmodus (`thread` oder `async`). | — |
 | `WATCHLIST_JITTER_PCT` | float | `0.2` | Zufallsjitter für Backoff-Delays. | — |
 | `WATCHLIST_SHUTDOWN_GRACE_MS` | int | `2000` | Grace-Periode beim Shutdown. | — |
+| `WATCHLIST_TIMER_ENABLED` | bool | `true` | Aktiviert den periodischen WatchlistTimer (siehe Orchestrator). | — |
+| `WATCHLIST_TIMER_INTERVAL_S` | float | `900` | Zielintervall in Sekunden zwischen zwei Timer-Ticks (≥0). | — |
 | `WORKERS_ENABLED` | bool | `true` | Globaler Schalter, der sämtliche Hintergrund-Worker deaktiviert, wenn `false`. | — |
 | `WORKER_MAX_CONCURRENCY` | int | `2` | Obergrenze für parallele Worker-Jobs (Fallback, wenn Worker-spezifische Werte fehlen). | — |
 | `MATCHING_EXECUTOR_MAX_WORKERS` | int | `2` | Maximalthreads für CPU-lastiges Matching innerhalb des Executors. | — |
 | `EXTERNAL_TIMEOUT_MS` | int | `10000` | Standard-Timeout für externe Aufrufe (Spotify, slskd), sofern keine Spezialspezifikation vorliegt. | — |
 | `EXTERNAL_RETRY_MAX` | int | `3` | Maximalzahl an Retries bei transienten Abhängigkeiten. | — |
 | `EXTERNAL_BACKOFF_BASE_MS` | int | `250` | Basiswert für exponentiellen Backoff externer Aufrufe. | — |
-| `EXTERNAL_JITTER_PCT` | int | `20` | Zufallsjitter (±%) für Backoff-Delays. | — |
+| `EXTERNAL_JITTER_PCT` | float | `20` | Zufallsjitter (±%) für Backoff-Delays; Werte `≤ 1` werden als Faktor interpretiert. | — |
 | `WORKER_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer, die beim Enqueue von Jobs als Default in das Payload geschrieben wird; sollte mit `ORCH_VISIBILITY_TIMEOUT_S` harmonieren. | — |
 | `SYNC_WORKER_CONCURRENCY` | int | `2` | Parallele Downloads (kann via Setting überschrieben werden). | — |
 | `RETRY_MAX_ATTEMPTS` | int | `10` | Max. automatische Neuversuche je Download. | — |
@@ -523,11 +525,12 @@ Harmony bündelt alle Hintergrundjobs in einem Orchestrator, der die Queue prior
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
 | `ORCH_PRIORITY_JSON` | json | _(leer)_ | Optionales Mapping `job_type → priority`. JSON besitzt Vorrang vor CSV. | — |
-| `ORCH_PRIORITY_CSV` | string | `sync:100,watchlist:60,retry:20` | Fallback für Prioritäten (`job:score`). Unbekannte Job-Typen werden ignoriert. | — |
-| `ORCH_POLL_INTERVAL_MS` | int | `250` | Wartezeit zwischen Scheduler-Ticks (mindestens 10 ms). | — |
+| `ORCH_PRIORITY_CSV` | string | `sync:100,matching:90,retry:80,watchlist:50` | Fallback für Prioritäten (`job:score`). Unbekannte Job-Typen werden ignoriert. | — |
+| `ORCH_POLL_INTERVAL_MS` | int | `200` | Wartezeit zwischen Scheduler-Ticks (mindestens 10 ms). | — |
 | `ORCH_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer beim Leasing aus der Queue (Minimum 5 s). | — |
-| `ORCH_GLOBAL_CONCURRENCY` | int | `10` | Globale Obergrenze paralleler Dispatcher-Tasks. | — |
-| `ORCH_POOL_<JOB>` | int | _(leer)_ | Optionale per-Job-Limits (z. B. `ORCH_POOL_SYNC=3`). Fällt ohne Wert auf das globale Limit zurück. | — |
+| `ORCH_GLOBAL_CONCURRENCY` | int | `8` | Globale Obergrenze paralleler Dispatcher-Tasks. | — |
+| `ORCH_HEARTBEAT_S` | int | `20` | Zielintervall für Dispatcher-Heartbeats (greift zusätzlich zur 50%-Lease-Regel). | — |
+| `ORCH_POOL_<JOB>` | int | `sync=4`, `matching=4`, `retry=2`, `watchlist=2` | Optionale per-Job-Limits (z. B. `ORCH_POOL_SYNC=3`). Fällt ohne Wert auf das globale Limit zurück. | — |
 
 ### Background Workers
 

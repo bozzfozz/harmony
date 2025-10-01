@@ -11,13 +11,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Sequence
 
-from app.config import WatchlistWorkerConfig
+from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 from app.workers import persistence
 
-_DEFAULT_INTERVAL_SECONDS = 86_400.0
 _LOG_COMPONENT = "orchestrator.watchlist_timer"
 
 
@@ -48,8 +47,9 @@ class WatchlistTimer:
         self,
         *,
         config: WatchlistWorkerConfig,
+        timer_config: WatchlistTimerConfig | None = None,
         interval_seconds: float | int | str | None = None,
-        enabled: bool = True,
+        enabled: bool | None = None,
         dao: WatchlistDAO | None = None,
         persistence_module=persistence,
         now_factory: Callable[[], datetime] = datetime.utcnow,
@@ -58,9 +58,15 @@ class WatchlistTimer:
             Callable[[Sequence[persistence.QueueJobDTO]], Awaitable[None] | None] | None
         ) = None,
     ) -> None:
+        timer_settings = timer_config or settings.watchlist_timer
         self._config = config
-        self._interval = _coerce_interval(interval_seconds, _DEFAULT_INTERVAL_SECONDS)
-        self._enabled = bool(enabled)
+        configured_interval = timer_settings.interval_s
+        self._interval = _coerce_interval(
+            interval_seconds if interval_seconds is not None else configured_interval,
+            configured_interval,
+        )
+        default_enabled = timer_settings.enabled
+        self._enabled = default_enabled if enabled is None else bool(enabled)
         self._dao = dao or WatchlistDAO()
         self._persistence = persistence_module
         self._now_factory = now_factory
