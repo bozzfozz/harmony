@@ -120,6 +120,12 @@ class Scheduler:
         env_value = os.getenv("ORCH_VISIBILITY_TIMEOUT_S")
         return max(5, _coerce_int(env_value, 60))
 
+    @property
+    def poll_interval(self) -> float:
+        """Return the currently configured polling interval in seconds."""
+
+        return self._poll_interval
+
     def request_stop(self) -> None:
         if self._stop_signal is not None:
             self._stop_signal.set()
@@ -144,7 +150,13 @@ class Scheduler:
         return False
 
     async def _tick(self) -> None:
+        self.lease_ready_jobs()
+
+    def lease_ready_jobs(self) -> list[persistence.QueueJobDTO]:
+        """Lease and return jobs that are ready for processing."""
+
         jobs = self._collect_ready_jobs()
+        leased_jobs: list[persistence.QueueJobDTO] = []
         for job in jobs:
             log_event(
                 self._logger,
@@ -170,6 +182,9 @@ class Scheduler:
                 priority=int(job.priority),
                 lease_timeout=self._visibility_timeout,
             )
+            if leased is not None:
+                leased_jobs.append(leased)
+        return leased_jobs
 
     def _collect_ready_jobs(self) -> list[persistence.QueueJobDTO]:
         ready: list[persistence.QueueJobDTO] = []
