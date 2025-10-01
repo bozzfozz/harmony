@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.logging import get_logger
-from app.logging_events import log_event
+from app.orchestrator import events as orchestrator_events
 from app.orchestrator.handlers import MatchingJobError
 from app.orchestrator.scheduler import Scheduler
 from app.workers import persistence
@@ -181,11 +181,10 @@ class Dispatcher:
     def _start_job(self, job: persistence.QueueJobDTO) -> None:
         handler = self._handlers.get(job.type)
         if handler is None:
-            log_event(
+            orchestrator_events.emit_dlq_event(
                 self._logger,
-                "orchestrator.dlq",
-                job_type=job.type,
                 job_id=job.id,
+                job_type=job.type,
                 status="missing_handler",
             )
             self._persistence.to_dlq(
@@ -207,11 +206,11 @@ class Dispatcher:
     ) -> None:
         async with self._acquire_slots(job.type):
             start = time.perf_counter()
-            log_event(
+            orchestrator_events.emit_dispatch_event(
                 self._logger,
-                "orchestrator.dispatch",
-                job_type=job.type,
                 job_id=job.id,
+                job_type=job.type,
+                status="started",
                 attempts=int(job.attempts),
             )
             stop_heartbeat = asyncio.Event()
@@ -251,11 +250,10 @@ class Dispatcher:
             job_type=job.type,
             result_payload=result_payload,
         )
-        log_event(
+        orchestrator_events.emit_commit_event(
             self._logger,
-            "orchestrator.commit",
-            job_type=job.type,
             job_id=job.id,
+            job_type=job.type,
             status="succeeded",
             attempts=int(job.attempts),
             duration_ms=duration_ms,
@@ -279,11 +277,10 @@ class Dispatcher:
                 error=exc.code,
                 retry_in=retry_in,
             )
-            log_event(
+            orchestrator_events.emit_commit_event(
                 self._logger,
-                "orchestrator.commit",
-                job_type=job.type,
                 job_id=job.id,
+                job_type=job.type,
                 status="retry",
                 attempts=attempts,
                 duration_ms=duration_ms,
@@ -297,11 +294,10 @@ class Dispatcher:
             job_type=job.type,
             error=exc.code,
         )
-        log_event(
+        orchestrator_events.emit_commit_event(
             self._logger,
-            "orchestrator.commit",
-            job_type=job.type,
             job_id=job.id,
+            job_type=job.type,
             status="failed",
             attempts=attempts,
             duration_ms=duration_ms,
@@ -324,11 +320,10 @@ class Dispatcher:
                 reason=_STOP_REASON_MAX_RETRIES,
                 payload={"error": message, "attempts": attempts},
             )
-            log_event(
+            orchestrator_events.emit_dlq_event(
                 self._logger,
-                "orchestrator.dlq",
-                job_type=job.type,
                 job_id=job.id,
+                job_type=job.type,
                 status="dead_letter",
                 attempts=attempts,
                 duration_ms=duration_ms,
@@ -344,11 +339,10 @@ class Dispatcher:
             error=message,
             retry_in=retry_delay,
         )
-        log_event(
+        orchestrator_events.emit_commit_event(
             self._logger,
-            "orchestrator.commit",
-            job_type=job.type,
             job_id=job.id,
+            job_type=job.type,
             status="retry",
             attempts=attempts,
             duration_ms=duration_ms,
@@ -370,12 +364,12 @@ class Dispatcher:
                     lease_seconds=job.lease_timeout_seconds,
                 )
                 if not ok:
-                    log_event(
+                    orchestrator_events.emit_heartbeat_event(
                         self._logger,
-                        "orchestrator.dispatch",
-                        job_type=job.type,
                         job_id=job.id,
-                        status="heartbeat_failed",
+                        job_type=job.type,
+                        status="lost",
+                        lease_timeout=int(job.lease_timeout_seconds or 0),
                     )
                 continue
             break

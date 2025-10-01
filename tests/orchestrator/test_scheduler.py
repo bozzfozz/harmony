@@ -109,14 +109,14 @@ async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCapture
     assert all(call[2] == 42 for call in stub.lease_calls)
 
     lease_events = [
-        (record.job_type, record.job_id, record.status)
+        (record.job_type, record.entity_id, record.status)
         for record in caplog.records
         if getattr(record, "event", "") == "orchestrator.lease"
     ]
     assert lease_events == [
-        ("matching", 3, "leased"),
-        ("sync", 1, "leased"),
-        ("sync", 2, "leased"),
+        ("matching", "3", "leased"),
+        ("sync", "1", "leased"),
+        ("sync", "2", "leased"),
     ]
 
 

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Mapping
 
 from app.logging import get_logger
-from app.logging_events import log_event
+from app.orchestrator import events as orchestrator_events
 from app.workers import persistence
 
 
@@ -180,14 +180,13 @@ class Scheduler:
         jobs = self._collect_ready_jobs()
         leased_jobs: list[persistence.QueueJobDTO] = []
         for job in jobs:
-            log_event(
+            orchestrator_events.emit_schedule_event(
                 self._logger,
-                "orchestrator.schedule",
-                job_type=job.type,
                 job_id=job.id,
-                priority=int(job.priority),
-                available_at=self._format_dt(job.available_at),
+                job_type=job.type,
                 attempts=int(job.attempts),
+                priority=int(job.priority),
+                available_at=orchestrator_events.format_datetime(job.available_at),
             )
             leased = self._persistence.lease(
                 job.id,
@@ -195,11 +194,10 @@ class Scheduler:
                 lease_seconds=self._visibility_timeout,
             )
             status = "leased" if leased is not None else "skipped"
-            log_event(
+            orchestrator_events.emit_lease_event(
                 self._logger,
-                "orchestrator.lease",
-                job_type=job.type,
                 job_id=job.id,
+                job_type=job.type,
                 status=status,
                 priority=int(job.priority),
                 lease_timeout=self._visibility_timeout,
@@ -222,12 +220,6 @@ class Scheduler:
     @staticmethod
     def _job_sort_key(job: persistence.QueueJobDTO) -> tuple[int, datetime, int]:
         return (-int(job.priority), job.available_at, int(job.id))
-
-    @staticmethod
-    def _format_dt(value: datetime | None) -> str | None:
-        if value is None:
-            return None
-        return value.isoformat()
 
     async def _sleep(self, lifespan: asyncio.Event | None) -> None:
         timeout = self._poll_interval
