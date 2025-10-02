@@ -82,6 +82,17 @@ class PlaylistSyncWorker:
             return
 
         now = datetime.utcnow()
+
+        try:
+            processed = await asyncio.to_thread(self._persist_playlists, items, now)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error("Failed to persist playlists: %s", exc)
+            return
+
+        logger.info("Synced %s playlists from Spotify", processed)
+        record_worker_heartbeat("playlist")
+
+    def _persist_playlists(self, items: list[dict[str, Any]], timestamp: datetime) -> int:
         processed = 0
 
         with session_scope() as session:
@@ -100,17 +111,16 @@ class PlaylistSyncWorker:
                         name=str(name),
                         track_count=track_count,
                     )
-                    playlist.updated_at = now
+                    playlist.updated_at = timestamp
                     session.add(playlist)
                 else:
                     playlist.name = str(name)
                     playlist.track_count = track_count
-                    playlist.updated_at = now
+                    playlist.updated_at = timestamp
 
                 processed += 1
 
-        logger.info("Synced %s playlists from Spotify", processed)
-        record_worker_heartbeat("playlist")
+        return processed
 
     @staticmethod
     def _extract_track_count(payload: dict[str, Any]) -> int:
