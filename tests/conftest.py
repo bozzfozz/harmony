@@ -962,7 +962,6 @@ class StubSearchGateway:
                 self.log_events.append(event_payload)
         return ProviderGatewaySearchResponse(results=tuple(results))
 
-
     def _spotify_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
         payload = self._spotify.search_tracks(query.text, limit=query.limit)
         container = payload.get("tracks") if isinstance(payload, dict) else None
@@ -1387,9 +1386,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
         test_client.app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
         test_client.app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
         test_client.app.dependency_overrides[dependency_matching_engine] = lambda: engine
-        test_client.app.dependency_overrides[dependency_integration_service] = (
-            lambda: stub_service
-        )
+        test_client.app.dependency_overrides[dependency_integration_service] = lambda: stub_service
 
         test_client.app.state.soulseek_stub = stub_soulseek
         test_client.app.state.transfers_stub = stub_transfers
