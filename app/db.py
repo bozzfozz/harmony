@@ -187,4 +187,4 @@ async def run_session(
 ) -> T:
     """Execute ``func`` with a database session in a worker thread."""
 
-    return await asyncio.to_thread(_call_with_session, func, factory)
+    return await asyncio.to_thread(_call_with_session, func, factory=factory)

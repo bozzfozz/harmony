@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import hmac
-from typing import Generator
+from typing import Any, Awaitable, Callable, Generator
 
 from fastapi import Depends, Request, status
 
@@ -15,7 +15,7 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
-from app.db import get_session
+from app.db import SessionCallable, get_session, run_session
 from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
 from app.errors import AppError, ErrorCode
@@ -88,6 +88,16 @@ def get_db() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
+
+
+def get_session_runner() -> SessionRunner:
+    async def runner(func: SessionCallable[Any]) -> Any:
+        return await run_session(func)
+
+    return runner
 
 
 def get_watchlist_service(session: Session = Depends(get_db)) -> WatchlistService:
