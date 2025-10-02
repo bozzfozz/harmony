@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Mapping, Sequence
@@ -23,6 +22,7 @@ from app.integrations.contracts import (
 )
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.utils.retry import RetryDirective, with_retry
 
 
 logger = get_logger(__name__)
@@ -244,82 +244,100 @@ class ProviderGateway:
         track_provider = self._providers[normalized]
         policy = self._config.policy_for(normalized)
         attempts = max(1, policy.retry_max + 1)
-        error: ProviderGatewayError | None = None
+        jitter_pct = self._jitter_pct(policy)
+        attempt_counter = 0
+        started = 0.0
+        last_error: ProviderGatewayError | None = None
 
-        for attempt in range(1, attempts + 1):
+        async def _call() -> tuple[ProviderTrack, ...]:
+            nonlocal attempt_counter, started
+            attempt_counter += 1
             started = perf_counter()
-            error = None
-            try:
-                async with self._semaphore:
-                    result = await asyncio.wait_for(
-                        track_provider.search_tracks(query),
-                        timeout=policy.timeout_ms / 1000,
-                    )
-                tracks = tuple(result)
-                self._log(track_provider.name, "success", attempt, attempts, started)
-                return ProviderGatewaySearchResult(
-                    provider=track_provider.name,
-                    tracks=tracks,
-                )
-            except asyncio.TimeoutError as exc:
-                error = ProviderGatewayTimeoutError(
-                    track_provider.name, policy.timeout_ms, cause=exc
-                )
-            except ProviderTimeoutError as exc:
-                error = ProviderGatewayTimeoutError(track_provider.name, exc.timeout_ms, cause=exc)
-            except ProviderValidationError as exc:
-                error = ProviderGatewayValidationError(
-                    track_provider.name,
-                    status_code=exc.status_code,
-                    cause=exc,
-                )
-            except ProviderRateLimitedError as exc:
-                error = ProviderGatewayRateLimitedError(
-                    track_provider.name,
-                    retry_after_ms=exc.retry_after_ms,
-                    retry_after_header=exc.retry_after_header,
-                    status_code=exc.status_code,
-                    cause=exc,
-                )
-            except ProviderNotFoundError as exc:
-                error = ProviderGatewayNotFoundError(
-                    track_provider.name,
-                    status_code=exc.status_code,
-                    cause=exc,
-                )
-            except ProviderDependencyError as exc:
-                error = ProviderGatewayDependencyError(
-                    track_provider.name,
-                    status_code=exc.status_code,
-                    cause=exc,
-                )
-            except ProviderInternalError as exc:
-                error = ProviderGatewayInternalError(track_provider.name, str(exc))
-                error.cause = exc
-            except ProviderError as exc:
-                error = ProviderGatewayInternalError(track_provider.name, str(exc))
-                error.cause = exc
-            except Exception as exc:  # pragma: no cover - defensive guard
-                error = ProviderGatewayInternalError(track_provider.name, "unexpected error")
-                error.cause = exc
+            async with self._semaphore:
+                result = await track_provider.search_tracks(query)
+            return tuple(result)
 
-            assert error is not None  # for type checkers
-            self._log(track_provider.name, "error", attempt, attempts, started, error)
+        def _classify(exc: Exception) -> RetryDirective:
+            nonlocal last_error
+            error = self._normalise_error(track_provider, policy, exc)
+            last_error = error
+            self._log(track_provider.name, "error", attempt_counter, attempts, started, error)
+            should_retry = self._should_retry(error) and attempt_counter < attempts
+            return RetryDirective(retry=should_retry, error=error)
 
-            should_retry = self._should_retry(error) and attempt < attempts
-            if not should_retry:
-                break
+        error: Exception | None = None
 
-            backoff_seconds = self._backoff_seconds(policy, attempt)
-            if backoff_seconds > 0:
-                await asyncio.sleep(backoff_seconds)
+        try:
+            tracks = await with_retry(
+                _call,
+                attempts=attempts,
+                base_ms=policy.backoff_base_ms,
+                jitter_pct=jitter_pct,
+                timeout_ms=policy.timeout_ms,
+                classify_err=_classify,
+            )
+        except ProviderGatewayError as exc:
+            error = exc
+        except Exception as exc:  # pragma: no cover - defensive guard
+            error = ProviderGatewayInternalError(track_provider.name, "unexpected error", cause=exc)
+        else:
+            self._log(track_provider.name, "success", attempt_counter, attempts, started)
+            return ProviderGatewaySearchResult(
+                provider=track_provider.name,
+                tracks=tracks,
+            )
 
-        assert error is not None
+        if isinstance(error, ProviderGatewayError):
+            return ProviderGatewaySearchResult(
+                provider=track_provider.name,
+                tracks=tuple(),
+                error=error,
+            )
+
+        assert last_error is not None
         return ProviderGatewaySearchResult(
             provider=track_provider.name,
             tracks=tuple(),
-            error=error,
+            error=last_error,
         )
+
+    @staticmethod
+    def _jitter_pct(policy: ProviderRetryPolicy) -> int:
+        value = max(0.0, policy.jitter_pct)
+        if value <= 1:
+            return int(round(value * 100))
+        return int(round(value))
+
+    def _normalise_error(
+        self,
+        provider: TrackProvider,
+        policy: ProviderRetryPolicy,
+        exc: Exception,
+    ) -> ProviderGatewayError:
+        name = provider.name
+        if isinstance(exc, asyncio.TimeoutError):
+            return ProviderGatewayTimeoutError(name, policy.timeout_ms, cause=exc)
+        if isinstance(exc, ProviderTimeoutError):
+            return ProviderGatewayTimeoutError(name, exc.timeout_ms, cause=exc)
+        if isinstance(exc, ProviderValidationError):
+            return ProviderGatewayValidationError(name, status_code=exc.status_code, cause=exc)
+        if isinstance(exc, ProviderRateLimitedError):
+            return ProviderGatewayRateLimitedError(
+                name,
+                retry_after_ms=exc.retry_after_ms,
+                retry_after_header=exc.retry_after_header,
+                status_code=exc.status_code,
+                cause=exc,
+            )
+        if isinstance(exc, ProviderNotFoundError):
+            return ProviderGatewayNotFoundError(name, status_code=exc.status_code, cause=exc)
+        if isinstance(exc, ProviderDependencyError):
+            return ProviderGatewayDependencyError(name, status_code=exc.status_code, cause=exc)
+        if isinstance(exc, ProviderInternalError):
+            return ProviderGatewayInternalError(name, str(exc), cause=exc)
+        if isinstance(exc, ProviderError):
+            return ProviderGatewayInternalError(name, str(exc), cause=exc)
+        return ProviderGatewayInternalError(name, "unexpected error", cause=exc)
 
     @staticmethod
     def _should_retry(error: ProviderGatewayError) -> bool:
@@ -331,17 +349,6 @@ class ProviderGateway:
                 ProviderGatewayDependencyError,
             ),
         )
-
-    @staticmethod
-    def _backoff_seconds(policy: ProviderRetryPolicy, attempt: int) -> float:
-        exponent = max(0, attempt - 1)
-        base_ms = policy.backoff_base_ms * (2**exponent)
-        jitter_range = base_ms * policy.jitter_pct
-        if jitter_range:
-            delay_ms = base_ms + random.uniform(-jitter_range, jitter_range)
-        else:
-            delay_ms = base_ms
-        return max(0.0, delay_ms / 1000)
 
     def _log(
         self,

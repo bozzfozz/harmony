@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -16,9 +14,16 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import QueueJob, QueueJobStatus
+from app.utils.idempotency import make_idempotency_key
+from app.utils.jsonx import safe_dumps
+from app.utils.time import now_utc
 
 
 logger = get_logger(__name__)
+
+
+def _utcnow() -> datetime:
+    return now_utc().replace(tzinfo=None)
 
 
 def _emit_worker_job_event(
@@ -61,31 +66,35 @@ def _emit_retry_exhausted(job: "QueueJobDTO", *, stop_reason: str) -> None:
     )
 
 
-def _utcnow() -> datetime:
-    return datetime.utcnow()
-
-
-def _safe_int(value: Any, default: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-    return parsed if parsed >= 0 else default
-
-
 def _resolve_priority(payload: Mapping[str, Any]) -> int:
     priority_value = payload.get("priority", 0)
-    return _safe_int(priority_value, 0)
+    try:
+        parsed = int(priority_value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
 
 
 def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None = None) -> int:
     if override is not None:
-        return max(5, int(override))
+        try:
+            resolved_override = int(override)
+        except (TypeError, ValueError):
+            resolved_override = 0
+        return max(5, resolved_override)
 
     payload_value = payload.get("visibility_timeout")
     env_value = os.getenv("WORKER_VISIBILITY_TIMEOUT_S")
-    resolved = _safe_int(payload_value, _safe_int(env_value, 60))
-    return max(5, resolved)
+    resolved_default = 60
+    try:
+        env_resolved = int(env_value) if env_value is not None else resolved_default
+    except (TypeError, ValueError):
+        env_resolved = resolved_default
+    try:
+        payload_resolved = int(payload_value) if payload_value is not None else env_resolved
+    except (TypeError, ValueError):
+        payload_resolved = env_resolved
+    return max(5, payload_resolved)
 
 
 def _derive_idempotency_key(job_type: str, payload: Mapping[str, Any]) -> str | None:
@@ -94,11 +103,10 @@ def _derive_idempotency_key(job_type: str, payload: Mapping[str, Any]) -> str | 
         return None
 
     if isinstance(candidate, (dict, list, tuple, set)):
-        serialised = json.dumps(candidate, sort_keys=True, default=str)
+        serialised = safe_dumps(candidate)
     else:
         serialised = str(candidate)
-    digest = hashlib.sha256(f"{job_type}:{serialised}".encode("utf-8")).hexdigest()
-    return digest
+    return make_idempotency_key(job_type, serialised)
 
 
 @dataclass(slots=True)
