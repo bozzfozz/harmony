@@ -3358,6 +3358,7 @@
         },
         "summary": "List Activity",
         "tags": [
+          "Activity",
           "Activity"
         ]
       }
@@ -3624,6 +3625,7 @@
         },
         "summary": "Export Activity History",
         "tags": [
+          "Activity",
           "Activity"
         ]
       }
@@ -4423,6 +4425,7 @@
         },
         "summary": "Start Download",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -4548,6 +4551,7 @@
         },
         "summary": "Cancel Download",
         "tags": [
+          "Download",
           "Download"
         ]
       },
@@ -4726,6 +4730,7 @@
         },
         "summary": "Get Download",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -4859,6 +4864,7 @@
         },
         "summary": "Update Download Priority",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -4984,6 +4990,7 @@
         },
         "summary": "Retry Download",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -5204,6 +5211,7 @@
         },
         "summary": "List Downloads",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -5431,6 +5439,7 @@
         },
         "summary": "Export Downloads",
         "tags": [
+          "Download",
           "Download"
         ]
       }
@@ -5572,7 +5581,6 @@
         },
         "summary": "Get Health",
         "tags": [
-          "System",
           "System"
         ]
       }
@@ -5988,6 +5996,7 @@
         },
         "summary": "Create Free Import",
         "tags": [
+          "Imports",
           "Imports"
         ]
       }
@@ -6146,6 +6155,7 @@
         },
         "summary": "Get Integrations",
         "tags": [
+          "Integrations",
           "Integrations"
         ]
       }
@@ -6429,6 +6439,7 @@
         },
         "summary": "Get Metadata Status",
         "tags": [
+          "Metadata",
           "Metadata"
         ]
       }
@@ -6533,6 +6544,7 @@
         },
         "summary": "Stop Metadata Update",
         "tags": [
+          "Metadata",
           "Metadata"
         ]
       }
@@ -6637,6 +6649,7 @@
         },
         "summary": "Start Metadata Update",
         "tags": [
+          "Metadata",
           "Metadata"
         ]
       }
@@ -6790,7 +6803,6 @@
         },
         "summary": "Get Readiness",
         "tags": [
-          "System",
           "System"
         ]
       }
@@ -6913,7 +6925,6 @@
         },
         "summary": "Smart Search",
         "tags": [
-          "Search",
           "Search"
         ]
       }
@@ -17193,7 +17204,6 @@
         },
         "summary": "Get Status",
         "tags": [
-          "System",
           "System"
         ]
       }
@@ -17298,6 +17308,7 @@
         },
         "summary": "Trigger Manual Sync",
         "tags": [
+          "Sync",
           "Sync"
         ]
       }
@@ -17459,7 +17470,6 @@
         },
         "summary": "Get System Stats",
         "tags": [
-          "System",
           "System"
         ]
       }
@@ -17619,7 +17629,6 @@
         },
         "summary": "List Watchlist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       },
@@ -17740,7 +17749,6 @@
         },
         "summary": "Add Watchlist Artist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       }
@@ -17857,7 +17865,6 @@
         },
         "summary": "Remove Watchlist Artist",
         "tags": [
-          "Watchlist",
           "Watchlist"
         ]
       }

@@ -418,6 +418,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _apply_security_dependencies(app, config.security)
 
+    response_cache = getattr(app.state, "response_cache", None)
+    if response_cache is not None:
+        await response_cache.clear()
+
     workers_enabled = _should_start_workers(config=config)
     _emit_worker_config_event(config, workers_enabled=workers_enabled)
 
@@ -561,28 +565,24 @@ async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
-_api_base_prefix = router_registry.compose_prefix("", _API_BASE_PATH)
-
 _versioned_router = APIRouter()
-router_registry.attach_domain_routers(
-    _versioned_router,
-    base_prefix=_api_base_prefix,
-    emit_log=True,
-    logger=logger,
-)
 _versioned_router.add_api_route("/", root, methods=["GET"], tags=["System"])
-app.include_router(_versioned_router, prefix=_api_base_prefix)
+router_registry.register_all(
+    app,
+    base_path=_API_BASE_PATH,
+    emit_log=True,
+    router=_versioned_router,
+)
 
 if _LEGACY_ROUTES_ENABLED:
     legacy_router = APIRouter(route_class=LegacyLoggingRoute)
-    router_registry.attach_domain_routers(
-        legacy_router,
-        base_prefix="",
-        emit_log=False,
-        logger=logger,
-    )
     legacy_router.add_api_route("/", root, methods=["GET"], tags=["System"])
-    app.include_router(legacy_router)
+    router_registry.register_all(
+        app,
+        base_path="",
+        emit_log=False,
+        router=legacy_router,
+    )
 
 
 def _is_allowlisted_path(path: str) -> bool:

@@ -154,6 +154,18 @@ class ResponseCache:
                 )
             return len(keys)
 
+    async def clear(self) -> None:
+        async with self._lock:
+            if not self._cache:
+                return
+            self._cache.clear()
+        log_event(
+            logger,
+            "cache.clear",
+            component="cache",
+            status="cleared",
+        )
+
     def _enforce_limit(self) -> None:
         while len(self._cache) > self._max_items:
             key, _ = self._cache.popitem(last=False)

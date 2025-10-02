@@ -29,3 +29,22 @@ def test_logging_api_request_emits_event_with_duration(monkeypatch) -> None:
     assert isinstance(payload["duration_ms"], float)
     assert payload["duration_ms"] >= 0.0
     assert payload["entity_id"]
+
+
+def test_health_endpoint_returns_status_snapshot() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["status"]
+    assert body["data"]["version"] == app.version
+
+
+def test_ready_endpoint_reports_dependencies() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert "deps" in body["data"]
