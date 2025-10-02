@@ -2,10 +2,17 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
-import { ApiError, exportDownloads, getDownloads, startDownload, updateDownloadPriority, useDownloadStats } from '../lib/api';
+import { ApiError } from '../api/client';
+import {
+  exportDownloads,
+  getDownloads,
+  startDownload,
+  updateDownloadPriority,
+  useDownloadStats
+} from '../api/services/downloads';
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/downloads', () => ({
+  ...jest.requireActual('../api/services/downloads'),
   getDownloads: jest.fn(),
   startDownload: jest.fn(),
   updateDownloadPriority: jest.fn(),
@@ -144,12 +151,15 @@ describe('LibraryDownloads', () => {
 
   it('shows a blocked toast when the backend rejects download requests with 503', async () => {
     mockedGetDownloads.mockResolvedValue([]);
-    mockedStartDownload.mockRejectedValue(new ApiError({
-      message: 'Credentials missing',
-      status: 503,
-      data: null,
-      originalError: new Error('credentials missing')
-    }));
+    mockedStartDownload.mockRejectedValue(
+      new ApiError({
+        code: 'CREDENTIALS_MISSING',
+        message: 'Credentials missing',
+        status: 503,
+        details: null,
+        cause: new Error('credentials missing')
+      })
+    );
 
     renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 

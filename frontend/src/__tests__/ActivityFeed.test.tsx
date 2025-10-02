@@ -2,10 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ActivityFeed from '../components/ActivityFeed';
 import { renderWithProviders } from '../test-utils';
-import { getActivityFeed } from '../lib/api';
+import { getActivityFeed } from '../api/services/system';
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/system', () => ({
+  ...jest.requireActual('../api/services/system'),
   getActivityFeed: jest.fn()
 }));
 

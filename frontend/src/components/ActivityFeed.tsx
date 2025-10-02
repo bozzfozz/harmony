@@ -3,7 +3,8 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/shadcn';
 import { Select } from './ui/select';
 import { useToast } from '../hooks/useToast';
-import { ApiError, getActivityFeed, ActivityItem, ActivityStatus, ActivityType } from '../lib/api';
+import { ApiError } from '../api/client';
+import { getActivityFeed, type ActivityItem, type ActivityStatus, type ActivityType } from '../api/services/system';
 import { useQuery } from '../lib/query';
 import { cn } from '../lib/utils';
 

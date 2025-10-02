@@ -10,8 +10,8 @@ import {
   SpotifyFreeUploadPayload,
   SpotifyMode,
   uploadSpotifyFreeFile
-} from '../lib/api';
-import { ApiError } from '../lib/api';
+} from '../api/services/spotify';
+import { ApiError } from '../api/client';
 import {
   Button,
   Card,

@@ -1,53 +1,20 @@
 import { useCallback, useState } from 'react';
 
-import { ApiEnvelope, ApiError, apiUrl, request } from './api';
-import { useMutation, useQuery, useQueryClient } from './query';
-
-export interface DownloadEntry {
-  id: number | string;
-  filename: string;
-  status: string;
-  progress: number;
-  created_at?: string;
-  updated_at?: string;
-  priority: number;
-  username?: string | null;
-}
-
-export interface FetchDownloadsOptions {
-  includeAll?: boolean;
-  limit?: number;
-  offset?: number;
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}
-
-export interface DownloadStats {
-  failed: number;
-  [key: string]: number;
-}
-
-export interface RetryAllFailedResponse {
-  requeued: number;
-  skipped: number;
-}
-
-export interface StartDownloadPayload {
-  track_id: string;
-}
-
-export interface DownloadExportFilters {
-  status?: string;
-  from?: string;
-  to?: string;
-}
+import { apiUrl, request } from '../client';
+import type {
+  ApiEnvelope,
+  DownloadEntry,
+  DownloadExportFilters,
+  DownloadStats,
+  FetchDownloadsOptions,
+  RetryAllFailedResponse,
+  StartDownloadPayload
+} from '../types';
+import { useMutation, useQuery, useQueryClient } from '../../lib/query';
+import { ApiError } from '../client';
+import { LIBRARY_POLL_INTERVAL_MS } from '../config';
 
 export const DOWNLOAD_STATS_QUERY_KEY = ['downloads', 'stats'] as const;
-
-const isDevEnvironment = () =>
-  ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NODE_ENV ?? '') !==
-  'production';
 
 const unwrapEnvelope = <T>(payload: unknown): T => {
   if (payload && typeof payload === 'object' && 'ok' in (payload as Record<string, unknown>)) {
@@ -56,10 +23,11 @@ const unwrapEnvelope = <T>(payload: unknown): T => {
       const code = envelope.error?.code ?? 'UNKNOWN_ERROR';
       const message = envelope.error?.message ?? code;
       throw new ApiError({
+        code,
         message,
         status: 400,
-        data: envelope,
-        originalError: new Error(code)
+        details: envelope,
+        body: envelope
       });
     }
     return (envelope.data ?? ({} as T)) as T;
@@ -198,77 +166,50 @@ export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise
     params.status = options.status;
   }
   if (typeof options.page === 'number' && Number.isFinite(options.page)) {
-    params.page = String(Math.max(1, Math.trunc(options.page)));
-  } else if (typeof options.offset === 'number' && Number.isFinite(options.offset)) {
-    if (typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
-      params.page = String(Math.floor(options.offset / options.limit) + 1);
-    }
+    params.page = String(options.page);
   }
-  if (typeof options.pageSize === 'number' && Number.isFinite(options.pageSize) && options.pageSize > 0) {
-    params.page_size = String(Math.trunc(options.pageSize));
-  } else if (typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
-    params.page_size = String(Math.trunc(options.limit));
+  if (typeof options.pageSize === 'number' && Number.isFinite(options.pageSize)) {
+    params.page_size = String(options.pageSize);
   }
-
-  const payload = await request<unknown>({
-    method: 'GET',
-    url: apiUrl('/downloads'),
-    params: Object.keys(params).length > 0 ? params : undefined
-  });
+  if (typeof options.limit === 'number' && Number.isFinite(options.limit)) {
+    params.limit = String(options.limit);
+  }
+  if (typeof options.offset === 'number' && Number.isFinite(options.offset)) {
+    params.offset = String(options.offset);
+  }
+  const payload = await request<unknown>({ method: 'GET', url: apiUrl('/downloads'), params });
   return extractDownloadArray(payload);
 };
 
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
-  const response = await request<unknown>({
-    method: 'POST',
-    url: apiUrl('/download'),
-    data: payload
+  const response = await request<unknown>({ method: 'POST', url: apiUrl('/downloads/start'), data: payload });
+  return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, {
+    filename: '',
+    status: 'queued',
+    progress: 0
   });
-  const [first] = extractDownloadArray(response);
-  return withDefaultDownload(first, { filename: '', status: 'queued', progress: 0, priority: 0 });
 };
 
 export const retryDownload = async (id: string | number): Promise<DownloadEntry> => {
-  const payload = await request<unknown>({
-    method: 'POST',
-    url: apiUrl(`/downloads/${id}/retry`)
-  });
-  const [first] = extractDownloadArray(payload);
-  const result = withDefaultDownload(first, { id });
-  if (isDevEnvironment()) {
-    console.debug('downloads.retry', { id: result.id, status: result.status });
-  }
-  return result;
+  const response = await request<unknown>({ method: 'POST', url: apiUrl(`/downloads/${id}/retry`) });
+  return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, { id });
 };
 
 export const cancelDownload = async (id: string | number): Promise<void> => {
-  await request<unknown>({
-    method: 'DELETE',
-    url: apiUrl(`/download/${id}`)
-  });
-  if (isDevEnvironment()) {
-    console.debug('downloads.cancel', { id });
-  }
+  await request<void>({ method: 'POST', url: apiUrl(`/downloads/${id}/cancel`), responseType: 'void' });
 };
 
 export const clearDownload = async (id: string | number): Promise<void> => {
-  await request<unknown>({
-    method: 'DELETE',
-    url: apiUrl(`/downloads/${id}`)
-  });
-  if (isDevEnvironment()) {
-    console.debug('downloads.clear', { id });
-  }
+  await request<void>({ method: 'POST', url: apiUrl(`/downloads/${id}/clear`), responseType: 'void' });
 };
 
 export const updateDownloadPriority = async (id: string | number, priority: number): Promise<DownloadEntry> => {
-  const payload = await request<unknown>({
-    method: 'PATCH',
-    url: apiUrl(`/download/${id}/priority`),
+  const response = await request<unknown>({
+    method: 'POST',
+    url: apiUrl(`/downloads/${id}/priority`),
     data: { priority }
   });
-  const [first] = extractDownloadArray(payload);
-  return withDefaultDownload(first, { id, priority });
+  return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, { id, priority });
 };
 
 export const exportDownloads = async (format: 'csv' | 'json', filters: DownloadExportFilters = {}) => {
@@ -291,25 +232,15 @@ export const exportDownloads = async (format: 'csv' | 'json', filters: DownloadE
 };
 
 export const getDownloadStats = async (): Promise<DownloadStats> => {
-  const payload = await request<unknown>({
-    method: 'GET',
-    url: apiUrl('/downloads/stats')
-  });
+  const payload = await request<unknown>({ method: 'GET', url: apiUrl('/downloads/stats') });
   const data = unwrapEnvelope<unknown>(payload);
   return normalizeStats(data);
 };
 
 export const retryAllFailed = async (): Promise<RetryAllFailedResponse> => {
-  const payload = await request<unknown>({
-    method: 'POST',
-    url: apiUrl('/downloads/retry-failed')
-  });
+  const payload = await request<unknown>({ method: 'POST', url: apiUrl('/downloads/retry-failed') });
   const data = unwrapEnvelope<unknown>(payload);
-  const result = normalizeRetryAllResponse(data);
-  if (isDevEnvironment()) {
-    console.debug('downloads.retry_all', result);
-  }
-  return result;
+  return normalizeRetryAllResponse(data);
 };
 
 interface UseDownloadStatsOptions {
@@ -320,45 +251,39 @@ export const useDownloadStats = (options: UseDownloadStatsOptions = {}) =>
   useQuery<DownloadStats>({
     queryKey: [...DOWNLOAD_STATS_QUERY_KEY],
     queryFn: getDownloadStats,
-    enabled: options.enabled ?? true
+    enabled: options.enabled
   });
 
-export interface RetryDownloadVariables {
-  id: string;
-  filename?: string | null;
-}
-
 interface UseRetryDownloadOptions {
-  onSuccess?: (data: DownloadEntry, variables: RetryDownloadVariables) => void;
-  onError?: (error: unknown, variables: RetryDownloadVariables) => void;
+  onSuccess?: (entry: DownloadEntry, variables: { id: string | number; filename: string }) => void;
+  onError?: (error: unknown, variables: { id: string | number; filename: string }) => void;
 }
 
 export const useRetryDownload = (options: UseRetryDownloadOptions = {}) =>
-  useMutation<RetryDownloadVariables, DownloadEntry>({
-    mutationFn: ({ id }) => retryDownload(id),
-    onSuccess: (data, variables) => {
-      options.onSuccess?.(data, variables);
-    },
-    onError: (error, variables) => {
-      options.onError?.(error, variables);
-    }
+  useMutation({
+    mutationFn: async ({ id }: { id: string | number; filename: string }) => retryDownload(id),
+    onSuccess: options.onSuccess,
+    onError: options.onError
   });
 
-export interface ClearDownloadVariables {
-  id: string;
-  filename?: string | null;
+export interface ClearDownloadInput {
+  id: string | number;
+  filename?: string;
 }
 
 interface UseClearDownloadOptions {
-  onSuccess?: (variables: ClearDownloadVariables) => void;
-  onError?: (error: unknown, variables: ClearDownloadVariables) => void;
+  onSuccess?: (result: ClearDownloadInput, variables: ClearDownloadInput) => void;
+  onError?: (error: unknown, variables: ClearDownloadInput) => void;
 }
 
 export const useClearDownload = (options: UseClearDownloadOptions = {}) =>
-  useMutation<ClearDownloadVariables, void>({
-    mutationFn: ({ id }) => clearDownload(id),
-    onSuccess: (_, variables) => {
-      options.onSuccess?.(variables);
+  useMutation<ClearDownloadInput, ClearDownloadInput>({
+    mutationFn: async (variables) => {
+      await clearDownload(variables.id);
+      return variables;
+    },
+    onSuccess: (result, variables) => {
+      options.onSuccess?.(result, variables);
     },
     onError: (error, variables) => {
       options.onError?.(error, variables);
@@ -366,38 +291,33 @@ export const useClearDownload = (options: UseClearDownloadOptions = {}) =>
   });
 
 interface UseRetryAllFailedOptions {
-  onSuccess?: (data: RetryAllFailedResponse) => void;
+  onSuccess?: (response: RetryAllFailedResponse) => void;
   onError?: (error: unknown) => void;
 }
 
 export const useRetryAllFailed = (options: UseRetryAllFailedOptions = {}) => {
   const queryClient = useQueryClient();
-  const [isSupported, setIsSupported] = useState(true);
+  const [isPending, setIsPending] = useState(false);
 
-  const mutation = useMutation<void, RetryAllFailedResponse>({
-    mutationFn: () => retryAllFailed(),
-    onSuccess: (data) => {
-      setIsSupported(true);
-      queryClient.invalidateQueries({ queryKey: [...DOWNLOAD_STATS_QUERY_KEY] });
-      options.onSuccess?.(data);
-    },
-    onError: (error) => {
-      if (error instanceof ApiError) {
-        if (error.status === 404 || error.status === 405 || error.status === 501) {
-          setIsSupported(false);
-        }
-      }
+  const mutateAsync = useCallback(async () => {
+    setIsPending(true);
+    try {
+      const result = await retryAllFailed();
+      await queryClient.invalidateQueries({ queryKey: [...DOWNLOAD_STATS_QUERY_KEY] });
+      options.onSuccess?.(result);
+      return result;
+    } catch (error) {
       options.onError?.(error);
+      throw error;
+    } finally {
+      setIsPending(false);
     }
-  });
-
-  const mutate = useCallback(() => mutation.mutate(undefined as void), [mutation]);
-  const mutateAsync = useCallback(() => mutation.mutateAsync(undefined as void), [mutation]);
+  }, [options, queryClient]);
 
   return {
-    ...mutation,
-    mutate,
     mutateAsync,
-    isSupported
+    isPending
   };
 };
+
+export { LIBRARY_POLL_INTERVAL_MS };

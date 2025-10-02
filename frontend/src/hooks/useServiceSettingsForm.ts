@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useForm, UseFormReturn } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '../lib/query';
-import { ApiError, getSettings, updateSettings } from '../lib/api';
+import { ApiError } from '../api/client';
+import { getSettings, updateSettings } from '../api/services/system';
 import { useToast } from './useToast';
 
 export interface SettingsFieldDefinition {

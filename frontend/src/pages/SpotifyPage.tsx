@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react';
 import { Loader2, ShieldCheck } from 'lucide-react';
 
 import SpotifyFreeImport from '../components/SpotifyFreeImport';
-import {
-  getSpotifyMode,
-  setSpotifyMode,
-  SpotifyMode
-} from '../lib/api';
-import { ApiError } from '../lib/api';
+import { getSpotifyMode, setSpotifyMode, type SpotifyMode } from '../api/services/spotify';
+import { ApiError } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import {
   Button,

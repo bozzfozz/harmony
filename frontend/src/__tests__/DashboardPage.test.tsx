@@ -2,14 +2,14 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/DashboardPage';
 import { renderWithProviders } from '../test-utils';
-import { getActivityFeed, getSystemStatus, triggerManualSync } from '../lib/api';
+import { getActivityFeed, getSystemStatus, triggerManualSync } from '../api/services/system';
 
 type GetSystemStatusMock = jest.MockedFunction<typeof getSystemStatus>;
 type GetActivityFeedMock = jest.MockedFunction<typeof getActivityFeed>;
 type TriggerManualSyncMock = jest.MockedFunction<typeof triggerManualSync>;
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/system', () => ({
+  ...jest.requireActual('../api/services/system'),
   getSystemStatus: jest.fn(),
   getActivityFeed: jest.fn(),
   triggerManualSync: jest.fn()

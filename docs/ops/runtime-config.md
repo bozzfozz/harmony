@@ -42,7 +42,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 ## Frontend & Runtime Injection
 
-- `VITE_API_URL` und `VITE_API_BASE_PATH` definieren die Basis-URL des Axios-Clients.
+- `VITE_API_BASE_URL` und `VITE_API_BASE_PATH` definieren die Basis-URL des Frontend-Clients.
 - `VITE_REQUIRE_AUTH`/`VITE_AUTH_HEADER_MODE` spiegeln die Backend-Einstellungen (`FEATURE_REQUIRE_AUTH`, bevorzugter Header) und verhindern fehlkonfigurierte Browser-Clients.
 - `VITE_RUNTIME_API_KEY` erlaubt das Injezieren eines Schlüssels via `<script>` – praktisch für statische Deployments hinter einem Secret-Store.
 - `VITE_LIBRARY_POLL_INTERVAL_MS` steuert Poll-Intervalle der Library-Ansicht; das Backend selbst bleibt durch Watchlist-Intervalle geschützt.

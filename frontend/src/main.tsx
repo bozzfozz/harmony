@@ -13,11 +13,13 @@ declare global {
     __HARMONY_REQUIRE_AUTH__?: string | boolean;
     __HARMONY_AUTH_HEADER_MODE__?: string;
     __HARMONY_RUNTIME_API_KEY__?: string;
+    __HARMONY_IMPORT_META_ENV__?: ImportMetaEnv;
   }
 }
 
 if (typeof window !== 'undefined') {
-  window.__HARMONY_API_URL__ = import.meta.env?.VITE_API_URL;
+  window.__HARMONY_IMPORT_META_ENV__ = import.meta.env;
+  window.__HARMONY_API_URL__ = import.meta.env?.VITE_API_BASE_URL ?? import.meta.env?.VITE_API_URL;
   window.__HARMONY_API_BASE_PATH__ = import.meta.env?.VITE_API_BASE_PATH;
   window.__HARMONY_LIBRARY_POLL_INTERVAL_MS__ = import.meta.env?.VITE_LIBRARY_POLL_INTERVAL_MS;
   window.__HARMONY_REQUIRE_AUTH__ = import.meta.env?.VITE_REQUIRE_AUTH;

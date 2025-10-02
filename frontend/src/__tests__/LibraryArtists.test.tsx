@@ -7,13 +7,13 @@ import {
   getArtistReleases,
   getFollowedArtists,
   saveArtistPreferences,
-  ArtistPreferenceEntry,
-  SpotifyArtist,
-  SpotifyArtistRelease
-} from '../lib/api';
+  type ArtistPreferenceEntry,
+  type SpotifyArtist,
+  type SpotifyArtistRelease
+} from '../api/services/spotify';
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/spotify', () => ({
+  ...jest.requireActual('../api/services/spotify'),
   getFollowedArtists: jest.fn(),
   getArtistReleases: jest.fn(),
   getArtistPreferences: jest.fn(),

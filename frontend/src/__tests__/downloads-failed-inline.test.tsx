@@ -3,23 +3,20 @@ import userEvent from '@testing-library/user-event';
 
 import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
+import { ApiError } from '../api/client';
 import {
-  ApiError,
-  DownloadEntry,
-  DownloadStats,
-  ClearDownloadVariables,
-  RetryDownloadVariables,
-  RetryAllFailedResponse,
   getDownloads,
   useClearDownload,
   useDownloadStats,
   useRetryAllFailed,
-  useRetryDownload
-} from '../lib/api';
+  useRetryDownload,
+  type ClearDownloadInput
+} from '../api/services/downloads';
+import type { DownloadEntry, DownloadStats, RetryAllFailedResponse } from '../api/types';
 import { useQuery } from '../lib/query';
 
-jest.mock('../lib/api', () => {
-  const actual = jest.requireActual('../lib/api');
+jest.mock('../api/services/downloads', () => {
+  const actual = jest.requireActual('../api/services/downloads');
   return {
     ...actual,
     getDownloads: jest.fn(),
@@ -54,8 +51,8 @@ type QueryResult<TData> = {
 };
 
 const createMutationResult = <TInput, TOutput>() => {
-  const mutate = jest.fn(async (_input: TInput) => undefined);
-  const mutateAsync = jest.fn(async (_input: TInput) => ({} as TOutput));
+  const mutate = jest.fn(async (_input: TInput): Promise<void> => {});
+  const mutateAsync = jest.fn(async (_input: TInput): Promise<TOutput> => ({} as TOutput));
   const result = {
     mutate,
     mutateAsync,
@@ -69,7 +66,7 @@ const createMutationResult = <TInput, TOutput>() => {
 };
 
 const createRetryDownloadMutation = () => {
-  const { mutate, mutateAsync, result } = createMutationResult<RetryDownloadVariables, DownloadEntry>();
+  const { mutate, mutateAsync, result } = createMutationResult<{ id: string | number; filename: string }, DownloadEntry>();
   return {
     mutate,
     mutateAsync,
@@ -78,7 +75,7 @@ const createRetryDownloadMutation = () => {
 };
 
 const createClearDownloadMutation = () => {
-  const { mutate, mutateAsync, result } = createMutationResult<ClearDownloadVariables, void>();
+  const { mutate, mutateAsync, result } = createMutationResult<ClearDownloadInput, ClearDownloadInput>();
   return {
     mutate,
     mutateAsync,
@@ -87,18 +84,12 @@ const createClearDownloadMutation = () => {
 };
 
 const createRetryAllFailedMutation = () => {
-  const mutate = jest.fn(async () => undefined);
   const mutateAsync = jest.fn(async () => ({ requeued: 0, skipped: 0 } as RetryAllFailedResponse));
   const result = {
-    mutate,
     mutateAsync,
-    reset: jest.fn(),
-    data: undefined as RetryAllFailedResponse | undefined,
-    error: undefined as unknown,
-    isPending: false,
-    isSupported: true
+    isPending: false
   } as ReturnType<typeof useRetryAllFailed>;
-  return { mutate, mutateAsync, result };
+  return { mutateAsync, result };
 };
 
 interface MockQueryOptions {
@@ -315,17 +306,18 @@ describe('downloads failed inline controls', () => {
     await user.click(retryAllButton);
 
     expect(confirmSpy).toHaveBeenCalled();
-    expect(retryAllMutation.mutate).toHaveBeenCalledTimes(1);
+    expect(retryAllMutation.mutateAsync).toHaveBeenCalledTimes(1);
 
     confirmSpy.mockRestore();
   });
 
   it('handles_error_envelopes_without_toast_spam', async () => {
     const error = new ApiError({
+      code: 'DEPENDENCY_ERROR',
       message: 'Backend down',
       status: 503,
-      data: null,
-      originalError: new Error('DEPENDENCY_ERROR')
+      details: null,
+      cause: new Error('DEPENDENCY_ERROR')
     });
     error.markHandled();
 

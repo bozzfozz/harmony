@@ -12,13 +12,8 @@ import {
 } from '../../components/ui/shadcn';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../hooks/useToast';
-import {
-  ApiError,
-  WatchlistArtistEntry,
-  addWatchlistArtist,
-  getWatchlist,
-  removeWatchlistArtist
-} from '../../lib/api';
+import { ApiError } from '../../api/client';
+import { addWatchlistArtist, getWatchlist, removeWatchlistArtist, type WatchlistArtistEntry } from '../../api/services/search';
 import { useMutation, useQuery } from '../../lib/query';
 
 interface LibraryWatchlistProps {
@@ -29,7 +24,7 @@ const LibraryWatchlist = ({ isActive = true }: LibraryWatchlistProps = {}) => {
   const { toast } = useToast();
   const [spotifyArtistId, setSpotifyArtistId] = useState('');
   const [artistName, setArtistName] = useState('');
-  const [removalId, setRemovalId] = useState<number | null>(null);
+  const [removalId, setRemovalId] = useState<string | number | null>(null);
 
   const isActiveRef = useRef(isActive);
 

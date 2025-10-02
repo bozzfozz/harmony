@@ -5,7 +5,8 @@ import ServiceStatusCard from '../components/ServiceStatusCard';
 import WorkerHealthCard from '../components/WorkerHealthCard';
 import { useToast } from '../hooks/useToast';
 import { useMutation, useQuery, useQueryClient } from '../lib/query';
-import { getSystemStatus, triggerManualSync, type WorkerHealth } from '../lib/api';
+import { getSystemStatus, triggerManualSync } from '../api/services/system';
+import type { WorkerHealth } from '../api/types';
 import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle } from '../components/ui/shadcn';
 
 const DashboardPage = () => {

@@ -129,7 +129,7 @@ const useQuery = <TData,>({
       }
       errorHandlerRef.current?.(err);
     }
-  }, [enabled, queryFn, onError]);
+    }, [enabled, queryFn]);
 
   useEffect(() => {
     void execute();
