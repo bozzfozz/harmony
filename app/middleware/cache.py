@@ -74,7 +74,10 @@ class CacheMiddleware(BaseHTTPMiddleware):
             return response
 
         path_template = self._path_template(request)
-        if not self._is_cacheable(path_template):
+        raw_path = request.url.path
+        base_path = getattr(request.app.state, "api_base_path", "") or ""
+        trimmed_path = self._trim_base_path(raw_path, base_path)
+        if not self._is_cacheable(path_template, raw_path, trimmed_path):
             response = await call_next(request)
             return self._ensure_head_semantics(self._ensure_headers(response), method)
 
@@ -127,10 +130,32 @@ class CacheMiddleware(BaseHTTPMiddleware):
         route = request.scope.get("route")
         return getattr(route, "path_format", request.url.path)
 
-    def _is_cacheable(self, path_template: str) -> bool:
+    def _is_cacheable(
+        self,
+        path_template: str,
+        raw_path: str,
+        trimmed_path: str,
+    ) -> bool:
         if not self._patterns:
             return False
-        return any(pattern.search(path_template) for pattern in self._patterns)
+        candidates = {path_template, raw_path, trimmed_path}
+        return any(
+            any(pattern.fullmatch(candidate) for candidate in candidates)
+            for pattern in self._patterns
+        )
+
+    @staticmethod
+    def _trim_base_path(path: str, base_path: str) -> str:
+        if not base_path or base_path == "/":
+            return path
+        normalized = base_path.rstrip("/") or "/"
+        if path == normalized:
+            return "/"
+        prefix = f"{normalized}/"
+        if path.startswith(prefix):
+            remainder = path[len(normalized) :]
+            return remainder or "/"
+        return path
 
     def _build_cache_key(self, request: Request, path_template: str) -> str:
         path_params = {key: str(value) for key, value in request.path_params.items()}

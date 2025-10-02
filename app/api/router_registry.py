@@ -1,69 +1,42 @@
-"""Central registry for domain routers exposed by the Harmony API."""
+"""Central registry for Harmony FastAPI routers."""
 
 from __future__ import annotations
 
-import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Iterable, List, Protocol
+from typing import Iterator, Sequence
 
 from fastapi import APIRouter, FastAPI
 
-from app.api.routers import search_router, spotify_router, system_router, watchlist_router
 from app.logging import get_logger
-from app.routers import (
-    activity_router,
-    download_router,
-    dlq_router,
-    health_router,
-    imports_router,
-    integrations_router,
-    matching_router,
-    metadata_router,
-    settings_router,
-    soulseek_router,
-    sync_router,
-)
 
-RouterEntry = tuple[str, APIRouter, list[str]]
+__all__ = [
+    "RouterConfig",
+    "compose_prefix",
+    "iter_domain_routers",
+    "iter_registered_routers",
+    "register_all",
+    "register_domain",
+    "register_router",
+]
 
 
 @dataclass(frozen=True)
-class _Entry:
-    prefix: str
+class RouterConfig:
+    """Configuration describing how a router should be exposed."""
+
+    key: str
     router: APIRouter
-    tags: tuple[str, ...] = ()
+    prefix: str
+    tags: tuple[str, ...]
+    base: str
+    kind: str
 
 
-class _RouterHost(Protocol):
-    def include_router(
-        self,
-        router: APIRouter,
-        *,
-        prefix: str | None = None,
-        tags: list[str] | None = None,
-    ) -> None: ...
-
-
-_DOMAIN_ROUTERS: tuple[_Entry, ...] = (
-    _Entry("", spotify_router, ()),
-    _Entry("", imports_router, ()),
-    _Entry("/soulseek", soulseek_router, ("Soulseek",)),
-    _Entry("/matching", matching_router, ("Matching",)),
-    _Entry("/settings", settings_router, ("Settings",)),
-    _Entry("", metadata_router, ()),
-    _Entry("/dlq", dlq_router, ("DLQ",)),
-    _Entry("", sync_router, ()),
-    _Entry("", system_router, ("System",)),
-    _Entry("", download_router, ()),
-    _Entry("", activity_router, ()),
-    _Entry("", integrations_router, ()),
-    _Entry("/health", health_router, ("Health",)),
-    _Entry("", watchlist_router, ("Watchlist",)),
-    _Entry("", search_router, ("Search",)),
-)
-
+_registry: "OrderedDict[str, RouterConfig]" = OrderedDict()
 _logger = get_logger(__name__)
+_DEFAULT_BASE = "/api/v1"
 
 
 def compose_prefix(base: str, *parts: str) -> str:
@@ -88,75 +61,151 @@ def compose_prefix(base: str, *parts: str) -> str:
     return ""
 
 
-def _entries() -> Iterable[_Entry]:
-    return _DOMAIN_ROUTERS
+def _register(entry: RouterConfig) -> RouterConfig:
+    if entry.key in _registry:
+        raise ValueError(f"Router '{entry.key}' is already registered")
+    _registry[entry.key] = entry
+    return entry
 
 
-def get_domain_routers() -> list[RouterEntry]:
-    """Return the domain routers with their prefixes and tags."""
-
-    return [(entry.prefix, entry.router, list(entry.tags)) for entry in _entries()]
-
-
-def attach_domain_routers(
-    host: _RouterHost,
+def register_domain(
+    key: str,
+    router: APIRouter,
     *,
-    base_prefix: str = "",
-    emit_log: bool = False,
-    logger: logging.Logger | None = None,
-) -> List[str]:
-    """Include all domain routers on the given host and return their effective prefixes."""
+    base: str = _DEFAULT_BASE,
+    prefix: str | None = None,
+    tags: Sequence[str] | None = None,
+) -> RouterConfig:
+    """Register a domain router that should live under the API base path."""
 
-    effective_base = compose_prefix("", base_prefix)
-    prefixes: list[str] = []
+    resolved_prefix = prefix if prefix is not None else router.prefix or ""
+    resolved_tags: tuple[str, ...]
+    if tags is None:
+        inferred = list(router.tags or [])
+        if not inferred:
+            inferred = [key.replace("_", " ").title()]
+        resolved_tags = tuple(inferred)
+    else:
+        resolved_tags = tuple(tags)
+    entry = RouterConfig(
+        key=key,
+        router=router,
+        prefix=resolved_prefix,
+        tags=resolved_tags,
+        base=base,
+        kind="domain",
+    )
+    return _register(entry)
+
+
+def register_router(
+    key: str,
+    router: APIRouter,
+    *,
+    prefix: str = "",
+    tags: Sequence[str] | None = None,
+    base: str = _DEFAULT_BASE,
+    kind: str = "shared",
+) -> RouterConfig:
+    """Register an additional router that participates in the registry."""
+
+    resolved_tags = tuple(tags or router.tags or ())
+    entry = RouterConfig(
+        key=key,
+        router=router,
+        prefix=prefix,
+        tags=resolved_tags,
+        base=base,
+        kind=kind,
+    )
+    return _register(entry)
+
+
+def iter_registered_routers() -> Iterator[RouterConfig]:
+    """Yield all registered routers in registration order."""
+
+    return iter(_registry.values())
+
+
+def iter_domain_routers() -> Iterator[RouterConfig]:
+    """Yield only routers registered as domain routers."""
+
+    return (entry for entry in _registry.values() if entry.kind == "domain")
+
+
+def register_all(
+    app: FastAPI,
+    *,
+    base_path: str | None = None,
+    emit_log: bool = False,
+    route_class: type | None = None,
+    router: APIRouter | None = None,
+) -> APIRouter:
+    """Include all registered routers on the FastAPI application."""
+
+    aggregator = router or APIRouter(route_class=route_class)
     start = perf_counter()
-    for entry in _entries():
+    for entry in _registry.values():
         include_kwargs: dict[str, object] = {}
         if entry.prefix:
             include_kwargs["prefix"] = entry.prefix
         if entry.tags:
             include_kwargs["tags"] = list(entry.tags)
-        host.include_router(entry.router, **include_kwargs)  # type: ignore[arg-type]
-        raw_prefix = entry.prefix or entry.router.prefix or ""
-        prefixes.append(compose_prefix(effective_base, raw_prefix) or "/")
+        aggregator.include_router(entry.router, **include_kwargs)  # type: ignore[arg-type]
+    effective_base = base_path if base_path is not None else _DEFAULT_BASE
+    app.include_router(aggregator, prefix=compose_prefix("", effective_base))
     if emit_log:
-        resolved_logger = logger or _logger
         duration_ms = (perf_counter() - start) * 1_000
-        preview = prefixes[:5]
-        if len(prefixes) > 5:
-            preview = preview + ["…"]
-        resolved_logger.info(
-            "Mounted %d domain routers",
-            len(prefixes),
+        preview = [
+            compose_prefix(effective_base, entry.prefix) or "/" for entry in _registry.values()
+        ][:5]
+        if len(_registry) > 5:
+            preview.append("…")
+        _logger.info(
+            "Mounted %d routers",
+            len(_registry),
             extra={
                 "event": "router_registry.mounted",
-                "count": len(prefixes),
+                "count": len(_registry),
                 "prefixes": preview,
                 "duration_ms": round(duration_ms, 3),
             },
         )
-    return prefixes
+    return aggregator
 
 
-def register(
-    app: FastAPI,
-    *,
-    base_path: str = "",
-    emit_log: bool = False,
-    route_class: type | None = None,
-) -> APIRouter:
-    """Create a router with all domain routes and mount it on the application."""
+# ---------------------------------------------------------------------------
+# Built-in router registrations
+# ---------------------------------------------------------------------------
 
-    router = APIRouter(route_class=route_class)
-    attach_domain_routers(router, base_prefix=base_path, emit_log=emit_log)
-    app.include_router(router, prefix=compose_prefix("", base_path))
-    return router
+from app.api import search, spotify, system  # noqa: E402
+from app.api.routers import watchlist as watchlist_domain  # noqa: E402
+from app.routers import (  # noqa: E402
+    activity_router,
+    download_router,
+    dlq_router,
+    health_router,
+    imports_router,
+    integrations_router,
+    matching_router,
+    metadata_router,
+    settings_router,
+    soulseek_router,
+    sync_router,
+)
 
-
-__all__ = [
-    "RouterEntry",
-    "attach_domain_routers",
-    "compose_prefix",
-    "get_domain_routers",
-    "register",
-]
+register_domain("spotify", spotify.router, tags=())
+register_router("imports", imports_router)
+register_router("soulseek", soulseek_router, prefix="/soulseek", tags=("Soulseek",))
+register_router("matching", matching_router, prefix="/matching", tags=("Matching",))
+register_router("settings", settings_router, prefix="/settings", tags=("Settings",))
+register_router("metadata", metadata_router)
+register_router("dlq", dlq_router, prefix="/dlq", tags=("DLQ",))
+register_router("sync", sync_router)
+register_domain("system", system.router, tags=())
+register_router("download", download_router)
+register_router("activity", activity_router)
+register_router("integrations", integrations_router)
+register_router("health", health_router, prefix="/health", tags=("Health",))
+register_domain("watchlist", watchlist_domain.router, prefix="", tags=())
+register_domain("search", search.router, prefix="", tags=())

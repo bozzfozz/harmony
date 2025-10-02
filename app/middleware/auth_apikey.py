@@ -38,7 +38,8 @@ def _extract_presented_key(request: Request) -> str | None:
     if not authorization:
         return None
     scheme, _, value = authorization.partition(" ")
-    if scheme.lower() != "apikey":
+    scheme = scheme.lower()
+    if scheme not in {"apikey", "bearer"}:
         return None
     candidate = value.strip()
     return candidate or None

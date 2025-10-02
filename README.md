@@ -619,7 +619,14 @@ Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und 
 
 ### API-Schicht
 
-- Domain-Router leben unter `app/api/routers/` und bündeln thematisch verwandte Endpunkte (z. B. `spotify`, `search`, `watchlist`, `system`). Legacy-Module in `app/routers/` delegieren nur noch.
+#### API-Struktur & Routen
+
+- Die Domänenrouter leben unter `app/api/<domain>.py` (aktuell `search`, `spotify`, `system`) und werden über `router_registry.register_domain` konsistent unter dem API-Basis-Pfad `/api/v1` registriert.
+- Die zentrale Registry `app/api/router_registry.py` fasst alle Domain- und Unterstützungsrouter zusammen und stellt `register_all(app, base_path, router=...)` bereit, um sie auf das FastAPI-Objekt zu montieren.
+- Bestehende Router unter `app/routers/*` wurden auf schlanke Re-Exports reduziert und verweisen auf die neuen Domänenmodule.
+
+
+- Domänenrouter liegen in `app/api/<domain>.py` (z. B. `spotify`, `search`, `system`, `watchlist` als optionales Modul) und kapseln die öffentlich erreichbaren Endpunkte. Legacy-Module in `app/routers/` dienen ausschließlich als Thin-Reexports.
 - `app/api/router_registry.py` registriert sämtliche Domain-Router und vergibt konsistente Prefixes sowie OpenAPI-Tags – Tests können die Liste zentral prüfen.
 - `app/middleware/__init__.py` bündelt die komplette HTTP-Pipeline (Request-ID, Logging, optionale Auth/Rate-Limits, Cache, CORS/GZip, Error-Mapper).
 
