@@ -9,8 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
+from sqlalchemy.orm import Session
+
 from app.core.soulseek_client import SoulseekClient
-from app.db import session_scope
+from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.utils.activity import (
@@ -208,7 +210,8 @@ class SyncWorker:
         files = job.get("files", [])
         if files:
             now = datetime.utcnow()
-            with session_scope() as session:
+
+            def _update_downloads(session: Session) -> None:
                 for file_info in files:
                     identifier = file_info.get("download_id") or file_info.get("id")
                     try:
@@ -234,6 +237,8 @@ class SyncWorker:
                     download.next_retry_at = None
                     download.updated_at = now
                     session.add(download)
+
+            await run_session(_update_downloads)
 
         if self.is_running():
             await self._put_job(record)
@@ -423,7 +428,13 @@ class SyncWorker:
 
         to_cancel: List[int] = []
         completed_downloads: List[Tuple[int, Dict[str, Any]]] = []
-        with session_scope() as session:
+        def _update_progress(
+            session: Session,
+        ) -> tuple[bool, List[int], List[Tuple[int, Dict[str, Any]]]]:
+            active_flag = False
+            to_cancel_local: List[int] = []
+            completed_local: List[Tuple[int, Dict[str, Any]]] = []
+
             for payload in downloads:
                 download_id = payload.get("download_id") or payload.get("id")
                 if download_id is None:
@@ -456,20 +467,24 @@ class SyncWorker:
                 elif state == "completed":
                     progress = 100.0
                 elif state in {"queued", "downloading"}:
-                    active = True
+                    active_flag = True
 
                 if int(download_id) in pending_cancels:
                     if state in {"queued", "downloading"}:
-                        to_cancel.append(int(download_id))
+                        to_cancel_local.append(int(download_id))
                     state = "cancelled"
                     pending_cancels.discard(int(download_id))
-                    active = False
+                    active_flag = False
 
                 download.state = state
                 download.progress = progress
                 download.updated_at = datetime.utcnow()
                 if state == "completed" and previous_state != "completed":
-                    completed_downloads.append((int(download_id), dict(payload)))
+                    completed_local.append((int(download_id), dict(payload)))
+
+            return active_flag, to_cancel_local, completed_local
+
+        active, to_cancel, completed_downloads = await run_session(_update_progress)
 
         if active:
             write_setting("metrics.sync.active_downloads", "1")
