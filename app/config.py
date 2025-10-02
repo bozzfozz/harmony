@@ -472,7 +472,7 @@ def _bounded_float(
 
 def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
     if not value:
-        return ("spotify",)
+        return ("spotify", "slskd")
     items = [entry.strip().lower() for entry in value.replace("\n", ",").split(",")]
     deduplicated: list[str] = []
     seen: set[str] = set()
@@ -482,7 +482,7 @@ def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
         if item not in seen:
             seen.add(item)
             deduplicated.append(item)
-    return tuple(deduplicated or ("spotify",))
+    return tuple(deduplicated or ("spotify", "slskd"))
 
 
 def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:

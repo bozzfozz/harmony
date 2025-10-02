@@ -42,12 +42,20 @@ class ProviderTrack:
 
     name: str
     provider: str
+    id: str | None = None
     artists: tuple[ProviderArtist, ...] = ()
     album: ProviderAlbum | None = None
     duration_ms: int | None = None
     isrc: str | None = None
+    score: float | None = None
     candidates: tuple[TrackCandidate, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
+
+    @property
+    def source(self) -> str:
+        """Compatibility alias for consumers expecting a ``source`` field."""
+
+        return self.provider
 
 
 class ProviderError(RuntimeError):

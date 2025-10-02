@@ -216,8 +216,23 @@ class ProviderGateway:
         async def _run(name: str) -> ProviderGatewaySearchResult:
             return await self._search_provider(name, query)
 
-        tasks = [asyncio.create_task(_run(provider)) for provider in providers]
-        results = await asyncio.gather(*tasks)
+        provider_list = list(providers)
+        tasks = [asyncio.create_task(_run(provider)) for provider in provider_list]
+        gathered = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[ProviderGatewaySearchResult] = []
+        for name, item in zip(provider_list, gathered):
+            if isinstance(item, ProviderGatewaySearchResult):
+                results.append(item)
+                continue
+            if isinstance(item, Exception):
+                logger.exception("Provider task failed", exc_info=item)
+            results.append(
+                ProviderGatewaySearchResult(
+                    provider=name,
+                    tracks=tuple(),
+                    error=ProviderGatewayInternalError(name, "unexpected task failure"),
+                )
+            )
         return ProviderGatewaySearchResponse(results=tuple(results))
 
     async def _search_provider(
@@ -338,31 +353,37 @@ class ProviderGateway:
         error: ProviderGatewayError | None = None,
     ) -> None:
         duration_ms = int((perf_counter() - started) * 1000)
+        meta: dict[str, object] = {"attempt": attempt, "max_attempts": attempts}
         payload: dict[str, object] = {
             "component": "provider_gateway",
             "dependency": provider,
             "operation": "search_tracks",
             "status": "ok" if status == "success" else "error",
-            "attempt": attempt,
-            "max_attempts": attempts,
             "duration_ms": duration_ms,
+            "meta": meta,
         }
         if error is not None:
-            payload["error"] = error.__class__.__name__
+            meta["error"] = error.__class__.__name__
             if isinstance(error, ProviderGatewayRateLimitedError):
-                payload["retry_after_ms"] = error.retry_after_ms
+                meta["retry_after_ms"] = error.retry_after_ms
                 if error.retry_after_header is not None:
-                    payload["retry_after_header"] = error.retry_after_header
+                    meta["retry_after_header"] = error.retry_after_header
                 if error.status_code is not None:
-                    payload["status_code"] = error.status_code
-            if isinstance(error, ProviderGatewayDependencyError) and error.status_code is not None:
-                payload["status_code"] = error.status_code
-            if isinstance(error, ProviderGatewayValidationError) and error.status_code is not None:
-                payload["status_code"] = error.status_code
-            if isinstance(error, ProviderGatewayNotFoundError) and error.status_code is not None:
-                payload["status_code"] = error.status_code
+                    meta["status_code"] = error.status_code
+            if (
+                isinstance(
+                    error,
+                    (
+                        ProviderGatewayDependencyError,
+                        ProviderGatewayValidationError,
+                        ProviderGatewayNotFoundError,
+                    ),
+                )
+                and error.status_code is not None
+            ):
+                meta["status_code"] = error.status_code
             if isinstance(error, ProviderGatewayTimeoutError):
-                payload["timeout_ms"] = error.timeout_ms
+                meta["timeout_ms"] = error.timeout_ms
         log_event(logger, "api.dependency", **payload)
 
 

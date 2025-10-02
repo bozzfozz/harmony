@@ -64,8 +64,9 @@ async def test_logging_dependency_wraps_provider_calls_and_sets_status(
     assert payload["dependency"] == "Dummy"
     assert payload["status"] == "ok"
     assert payload["operation"] == "search_tracks"
-    assert payload["attempt"] == 1
-    assert payload["max_attempts"] == 1
+    meta = payload["meta"]
+    assert meta["attempt"] == 1
+    assert meta["max_attempts"] == 1
     assert isinstance(payload["duration_ms"], int)
 
 
@@ -89,6 +90,7 @@ async def test_logging_dependency_records_errors(monkeypatch, gateway_policy) ->
     assert event_name == "api.dependency"
     assert payload["status"] == "error"
     assert payload["dependency"] == "Dummy"
-    assert payload["error"] == "ProviderGatewayTimeoutError"
-    assert payload["timeout_ms"] == 42
-    assert payload["attempt"] == 1
+    meta = payload["meta"]
+    assert meta["error"] == "ProviderGatewayTimeoutError"
+    assert meta["timeout_ms"] == 42
+    assert meta["attempt"] == 1

@@ -160,13 +160,17 @@ def normalize_spotify_track(
     if aggregated_genres and "genres" not in metadata:
         metadata["genres"] = tuple(sorted(aggregated_genres))
 
+    popularity_score = _coerce_float(_get(payload, "popularity"))
+
     return ProviderTrack(
         name=name,
         provider=provider,
+        id=track_id,
         artists=tuple(artist_entries),
         album=album,
         duration_ms=duration_ms,
         isrc=isrc,
+        score=popularity_score,
         candidates=tuple(),
         metadata=metadata,
     )
@@ -319,13 +323,18 @@ def normalize_slskd_track(
         if key in metadata and metadata[key] is not None:
             track_metadata[key] = metadata[key]
 
+    track_id = _coerce_str(metadata.get("id"))
+    score = _coerce_float(metadata.get("score"))
+
     return ProviderTrack(
         name=candidate.title,
         provider=provider,
+        id=track_id,
         artists=provider_artists,
         album=album,
         duration_ms=None,
         isrc=None,
+        score=score,
         candidates=(candidate,),
         metadata=track_metadata,
     )

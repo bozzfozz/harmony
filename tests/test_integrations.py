@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from app.config import _parse_enabled_providers, _parse_provider_timeouts
 from app.integrations.contracts import TrackProvider
+import pytest
+
 from app.services.integration_service import IntegrationService
 
 
@@ -29,6 +31,9 @@ class _StubProvider(TrackProvider):
     async def search_tracks(self, query):  # pragma: no cover - unused here
         return []
 
+    async def check_health(self):  # pragma: no cover - simple stub
+        return {"status": "ok"}
+
 
 class _StubRegistry:
     def __init__(self, providers: dict[str, TrackProvider]) -> None:
@@ -54,12 +59,13 @@ class _NullGateway:
         raise NotImplementedError
 
 
-def test_integration_service_health_marks_enabled() -> None:
+@pytest.mark.asyncio
+async def test_integration_service_health_marks_enabled() -> None:
     registry = _StubRegistry({"stub": _StubProvider()})
     service = IntegrationService(registry=registry, gateway=_NullGateway())  # type: ignore[arg-type]
 
-    health = service.health()
+    report = await service.health()
 
-    assert health[0].name == "stub"
-    assert health[0].enabled is True
-    assert health[0].health == "ok"
+    assert report.overall == "ok"
+    assert report.providers[0].provider == "stub"
+    assert report.providers[0].status == "ok"
