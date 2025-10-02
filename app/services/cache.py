@@ -72,33 +72,23 @@ class ResponseCache:
         async with self._lock:
             entry = self._cache.get(key)
             if entry is None:
-                log_event(
-                    logger,
-                    "cache.miss",
-                    component="cache",
-                    status="miss",
-                    key_hash=key,
-                )
+                _log_cache_event("miss", "miss", key_hash=key)
                 return None
             now = self._now()
             if entry.is_expired(now):
                 self._cache.pop(key, None)
-                log_event(
-                    logger,
-                    "cache.expired",
-                    component="cache",
-                    status="expired",
+                _log_cache_event(
+                    "expired",
+                    "expired",
                     key_hash=key,
                     path=entry.path_template,
                     age_s=round(now - entry.created_at, 3),
                 )
                 return None
             self._cache.move_to_end(key)
-            log_event(
-                logger,
-                "cache.hit",
-                component="cache",
-                status="hit",
+            _log_cache_event(
+                "hit",
+                "hit",
                 key_hash=key,
                 path=entry.path_template,
             )
@@ -116,11 +106,9 @@ class ResponseCache:
                 self._cache.pop(key)
             self._cache[key] = entry
             self._enforce_limit()
-        log_event(
-            logger,
-            "cache.store",
-            component="cache",
-            status="stored",
+        _log_cache_event(
+            "store",
+            "stored",
             key_hash=key,
             ttl_s=ttl_value,
             path=entry.path_template,
@@ -130,13 +118,7 @@ class ResponseCache:
         async with self._lock:
             if key in self._cache:
                 self._cache.pop(key, None)
-                log_event(
-                    logger,
-                    "cache.invalidate",
-                    component="cache",
-                    status="invalidated",
-                    key_hash=key,
-                )
+                _log_cache_event("invalidate", "invalidated", key_hash=key)
 
     async def invalidate_prefix(self, prefix: str) -> int:
         async with self._lock:
@@ -144,11 +126,9 @@ class ResponseCache:
             for key in keys:
                 self._cache.pop(key, None)
             if keys:
-                log_event(
-                    logger,
-                    "cache.invalidate",
-                    component="cache",
-                    status="invalidated",
+                _log_cache_event(
+                    "invalidate",
+                    "invalidated",
                     key_hash=prefix,
                     count=len(keys),
                 )
@@ -159,23 +139,12 @@ class ResponseCache:
             if not self._cache:
                 return
             self._cache.clear()
-        log_event(
-            logger,
-            "cache.clear",
-            component="cache",
-            status="cleared",
-        )
+        _log_cache_event("clear", "cleared")
 
     def _enforce_limit(self) -> None:
         while len(self._cache) > self._max_items:
             key, _ = self._cache.popitem(last=False)
-            log_event(
-                logger,
-                "cache.evict",
-                component="cache",
-                status="evicted",
-                key_hash=key,
-            )
+            _log_cache_event("evict", "evicted", key_hash=key)
 
     def _resolve_ttl(self, ttl: float | None) -> float:
         if ttl is None:
@@ -233,3 +202,22 @@ def resolve_auth_variant(authorization_header: str | None) -> str:
         return "anon"
     digest = hashlib.blake2b(authorization_header.encode("utf-8"), digest_size=16)
     return digest.hexdigest()
+
+
+def _log_cache_event(operation: str, status: str, **fields: object) -> None:
+    legacy_payload = dict(fields)
+    legacy_payload.setdefault("component", "service.cache")
+    legacy_payload["status"] = status
+    log_event(
+        logger,
+        f"cache.{operation}",
+        **legacy_payload,
+    )
+    log_event(
+        logger,
+        "service.cache",
+        component="service.cache",
+        operation=operation,
+        status=status,
+        **fields,
+    )
