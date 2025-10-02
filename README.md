@@ -627,6 +627,7 @@ Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und 
 
 
 - Domänenrouter liegen in `app/api/<domain>.py` (z. B. `spotify`, `search`, `system`, `watchlist` als optionales Modul) und kapseln die öffentlich erreichbaren Endpunkte. Legacy-Module in `app/routers/` dienen ausschließlich als Thin-Reexports.
+- Der Watchlist-Endpunkt nutzt `app/services/watchlist_service.py`, um Datenbankzugriffe zu kapseln und strukturierte `service.call`-Events zu emittieren. Router arbeiten damit ausschließlich gegen Services statt rohe Sessions zu verwenden.
 - `app/api/router_registry.py` registriert sämtliche Domain-Router und vergibt konsistente Prefixes sowie OpenAPI-Tags – Tests können die Liste zentral prüfen.
 - `app/middleware/__init__.py` bündelt die komplette HTTP-Pipeline (Request-ID, Logging, optionale Auth/Rate-Limits, Cache, CORS/GZip, Error-Mapper).
 
