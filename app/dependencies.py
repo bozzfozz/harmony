@@ -6,7 +6,7 @@ from functools import lru_cache
 import hmac
 from typing import Generator
 
-from fastapi import Request, status
+from fastapi import Depends, Request, status
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.integrations.registry import ProviderRegistry
 from app.errors import AppError, ErrorCode
 from app.logging import get_logger
 from app.services.integration_service import IntegrationService
+from app.services.watchlist_service import WatchlistService
 
 
 _integration_service_override: IntegrationService | None = None
@@ -86,6 +87,10 @@ def get_db() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+def get_watchlist_service(session: Session = Depends(get_db)) -> WatchlistService:
+    return WatchlistService(session=session)
 
 
 def _is_allowlisted(path: str, allowlist: tuple[str, ...]) -> bool:
