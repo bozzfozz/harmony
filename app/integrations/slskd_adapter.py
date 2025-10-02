@@ -1,22 +1,29 @@
-"""Soulseek (slskd) adapter implementing asynchronous track search."""
+"""Soulseek (slskd) track provider implementation."""
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import random
 import re
 import unicodedata
 from dataclasses import dataclass
-from time import perf_counter
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlparse
 
 import httpx
 
-from app.errors import rate_limit_meta
-from app.integrations.base import MusicProviderAdapter, TrackCandidate
+from app.integrations.base import TrackCandidate
+from app.integrations.contracts import (
+    ProviderDependencyError,
+    ProviderInternalError,
+    ProviderNotFoundError,
+    ProviderRateLimitedError,
+    ProviderTimeoutError,
+    ProviderTrack,
+    ProviderValidationError,
+    SearchQuery,
+    TrackProvider,
+)
+from app.integrations.normalizers import normalize_slskd_track
 from app.logging import get_logger
 from app.utils.text_normalization import clean_track_title, normalize_quotes
 
@@ -24,62 +31,8 @@ from app.utils.text_normalization import clean_track_title, normalize_quotes
 logger = get_logger(__name__)
 
 _DEFAULT_SEARCH_PATH = "/api/v0/search/tracks"
-_BACKOFF_CAP_MS = 2_000
+_DEFAULT_HEALTH_PATH = "/health"
 _ALLOWED_SCHEMES = {"http", "https"}
-_EMPTY_METADATA = MappingProxyType({})
-
-
-class SlskdAdapterError(RuntimeError):
-    """Base exception raised for adapter level failures."""
-
-
-class SlskdAdapterValidationError(SlskdAdapterError):
-    """Raised when the upstream service rejected the request as invalid."""
-
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-
-
-class SlskdAdapterRateLimitedError(SlskdAdapterError):
-    """Raised when slskd rejected the request due to rate limits."""
-
-    def __init__(
-        self,
-        *,
-        headers: Mapping[str, str] | None,
-        fallback_retry_after_ms: int,
-    ) -> None:
-        normalized_headers = {str(key): str(value) for key, value in (headers or {}).items()}
-        meta, safe_headers = rate_limit_meta(normalized_headers)
-        retry_after_ms = meta.get("retry_after_ms") if meta else None
-        if retry_after_ms is None:
-            retry_after_ms = max(0, fallback_retry_after_ms)
-        retry_after_header = safe_headers.get("Retry-After")
-        super().__init__("slskd rate limited the request")
-        self.retry_after_ms = retry_after_ms
-        self.retry_after_header = retry_after_header
-        self.headers = normalized_headers
-
-
-class SlskdAdapterDependencyError(SlskdAdapterError):
-    """Raised when upstream dependency errors occur."""
-
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-
-
-class SlskdAdapterNotFoundError(SlskdAdapterError):
-    """Raised when slskd reported that the resource could not be found."""
-
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-
-
-class SlskdAdapterInternalError(SlskdAdapterError):
-    """Raised when the adapter failed to normalise results."""
 
 
 def _coerce_str(value: Any) -> str | None:
@@ -101,7 +54,7 @@ def _coerce_int(value: Any) -> int | None:
         if cleaned.lstrip("-+").isdigit():
             try:
                 return int(cleaned)
-            except ValueError:  # pragma: no cover - defensive guard
+            except ValueError:
                 return None
     return None
 
@@ -156,10 +109,6 @@ def _iter_files(payload: Any) -> Iterable[Mapping[str, Any]]:
         yield payload
 
 
-def _compact_whitespace(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
-
-
 def _normalize_base_url(value: str) -> str:
     trimmed = (value or "").strip()
     if not trimmed:
@@ -199,16 +148,14 @@ def _normalise_search_value(value: str) -> str:
         cleaned,
         flags=re.IGNORECASE,
     )
-    cleaned = re.sub(r"\(\s*\)", "", cleaned)
-    cleaned = cleaned.strip(" -")
-    return _compact_whitespace(cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def _combine_terms(query: str, artist: str | None) -> str:
-    parts = [part for part in (artist, query) if part]
-    if not parts:
-        return ""
-    return _compact_whitespace(" - ".join(parts))
+    if artist:
+        return f"{artist} {query}".strip()
+    return query
 
 
 def _format_rankings(preferred_formats: Sequence[str]) -> Mapping[str, int]:
@@ -317,7 +264,7 @@ def _extract_metadata(entry: Mapping[str, Any]) -> Mapping[str, Any]:
     if artist:
         metadata.setdefault("artists", []).append(artist)
     if not metadata:
-        return _EMPTY_METADATA
+        return MappingProxyType({})
     return MappingProxyType(metadata)
 
 
@@ -334,7 +281,13 @@ def _build_candidate(entry: Mapping[str, Any]) -> TrackCandidate:
     seeders = _extract_seeders(entry)
     username = _coerce_str(entry.get("username") or entry.get("user"))
     availability = _extract_availability(entry, seeders)
-    download_uri = _coerce_str(entry.get("magnet") or entry.get("magnet_uri") or entry.get("path"))
+    download_uri = _coerce_str(
+        entry.get("download_uri")
+        or entry.get("magnet")
+        or entry.get("magnet_uri")
+        or entry.get("path")
+        or entry.get("filename")
+    )
     metadata = _extract_metadata(entry)
     return TrackCandidate(
         title=title,
@@ -366,19 +319,28 @@ def _sort_candidates(
     return sorted(candidates, key=sort_key)
 
 
+def _parse_retry_after_ms(headers: Mapping[str, str]) -> int | None:
+    retry_after = headers.get("Retry-After")
+    if not retry_after:
+        return None
+    numeric = _coerce_int(retry_after)
+    if numeric is not None:
+        return max(0, numeric * 1000)
+    return None
+
+
 @dataclass(slots=True)
-class SlskdAdapter(MusicProviderAdapter):
-    """Adapter mapping slskd search results to Harmony's track candidate schema."""
+class SlskdAdapter(TrackProvider):
+    """Adapter mapping slskd search results to Harmony's track provider contract."""
 
     base_url: str
     api_key: str | None
     timeout_ms: int
-    max_retries: int
-    backoff_base_ms: int
-    jitter_pct: float
-    preferred_formats: tuple[str, ...]
+    preferred_formats: Sequence[str]
     max_results: int
     client: httpx.AsyncClient | None = None
+    search_path: str = _DEFAULT_SEARCH_PATH
+    health_path: str = _DEFAULT_HEALTH_PATH
 
     def __post_init__(self) -> None:
         normalized_base = _normalize_base_url(self.base_url)
@@ -391,18 +353,6 @@ class SlskdAdapter(MusicProviderAdapter):
 
         timeout_ms = max(200, int(self.timeout_ms))
         object.__setattr__(self, "_timeout_ms", timeout_ms)
-
-        retries = max(0, int(self.max_retries))
-        object.__setattr__(self, "_max_retries", retries)
-
-        backoff = max(50, int(self.backoff_base_ms))
-        object.__setattr__(self, "_backoff_base_ms", backoff)
-
-        jitter_fraction = float(self.jitter_pct)
-        if jitter_fraction > 1:
-            jitter_fraction = jitter_fraction / 100.0
-        jitter_fraction = max(0.0, min(jitter_fraction, 1.0))
-        object.__setattr__(self, "_jitter_pct", jitter_fraction)
 
         normalized_formats: list[str] = []
         seen_formats: set[str] = set()
@@ -421,279 +371,107 @@ class SlskdAdapter(MusicProviderAdapter):
         headers = {"Accept": "application/json", "X-API-Key": api_key}
         object.__setattr__(self, "_headers", headers)
 
-        object.__setattr__(self, "_search_path", _normalize_path(_DEFAULT_SEARCH_PATH))
+        timeout = httpx.Timeout(timeout_ms / 1000, connect=min(timeout_ms / 1000, 5.0))
+        client = self.client or httpx.AsyncClient(
+            base_url=normalized_base,
+            headers=headers,
+            timeout=timeout,
+        )
+        object.__setattr__(self, "_client", client)
+        object.__setattr__(self, "_owns_client", self.client is None)
 
-        if self.client is not None:
-            object.__setattr__(self, "_client", self.client)
-            object.__setattr__(self, "_owns_client", False)
-        else:
-            timeout = self._build_timeout(timeout_ms)
-            client = httpx.AsyncClient(
-                base_url=self._base_url,
-                headers=headers,
-                timeout=timeout,
-            )
-            object.__setattr__(self, "_client", client)
-            object.__setattr__(self, "_owns_client", True)
+        object.__setattr__(self, "_search_path", _normalize_path(self.search_path))
+        object.__setattr__(self, "_health_path", _normalize_path(self.health_path))
 
     name = "slskd"
 
     async def aclose(self) -> None:
-        """Close the underlying HTTP client when owned by the adapter."""
-
         if getattr(self, "_owns_client", False):
             await self._client.aclose()
 
-    async def search_tracks(
-        self,
-        query: str,
-        *,
-        artist: str | None = None,
-        limit: int = 50,
-    ) -> list[TrackCandidate]:
-        trimmed_query = query.strip()
+    async def search_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
+        trimmed_query = query.text.strip()
         if not trimmed_query:
-            raise SlskdAdapterValidationError("query must not be empty")
+            raise ProviderValidationError(self.name, "query must not be empty", status_code=400)
+
         normalized_query = _normalise_search_value(trimmed_query)
-        normalized_artist = _normalise_search_value(artist) if artist else None
+        normalized_artist = _normalise_search_value(query.artist) if query.artist else None
         combined = _combine_terms(normalized_query, normalized_artist)
         if not combined:
-            raise SlskdAdapterValidationError("query must not be empty after normalization")
-        effective_limit = max(1, min(int(limit), self._max_results))
-        preferred_formats = self._format_ranking
+            raise ProviderValidationError(
+                self.name, "query must not be empty after normalization", status_code=400
+            )
+
+        effective_limit = max(1, min(int(query.limit), self._max_results))
         params = {"query": combined, "limit": effective_limit, "type": "track"}
-        q_hash = hashlib.sha1(combined.encode("utf-8")).hexdigest()[:12]
-        max_attempts = self._max_retries + 1
-        path = self._search_path
-        method = "GET"
-        overall_started = perf_counter()
 
-        for attempt in range(1, max_attempts + 1):
-            attempt_started = perf_counter()
-            status_code: int | None = None
-            error: SlskdAdapterError | None = None
-            response: httpx.Response | None = None
-            status_label = "error"
+        try:
+            response = await self._client.get(
+                self._search_path, params=params, headers=self._headers
+            )
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError(self.name, self._timeout_ms, cause=exc) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderDependencyError(self.name, "slskd request failed", cause=exc) from exc
 
+        status_code = response.status_code
+        if status_code == httpx.codes.OK:
             try:
-                response = await self._client.get(
-                    path,
-                    params=params,
-                    headers=self._headers,
-                )
-                status_code = response.status_code
-                status_label = str(status_code)
-            except httpx.TimeoutException:
-                status_label = "timeout"
-                error = SlskdAdapterDependencyError("slskd search request timed out")
-            except httpx.HTTPError:
-                status_label = "network-error"
-                error = SlskdAdapterDependencyError("slskd search request failed")
+                payload = response.json()
+            except ValueError as exc:  # pragma: no cover - defensive guard
+                raise ProviderInternalError(
+                    self.name, "slskd returned invalid JSON", cause=exc
+                ) from exc
+            candidates = [_build_candidate(entry) for entry in _iter_files(payload)]
+            if not candidates:
+                raise ProviderNotFoundError(self.name, "slskd returned no results", status_code=404)
+            ranked = _sort_candidates(candidates, self._format_ranking)
+            limited = ranked[:effective_limit]
+            return [normalize_slskd_track(candidate, provider=self.name) for candidate in limited]
 
-            duration_ms = int((perf_counter() - attempt_started) * 1000)
-            self._log_attempt(
-                method=method,
-                path=path,
-                status=status_label,
+        if status_code in {httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY}:
+            raise ProviderValidationError(
+                self.name, "slskd rejected the search request", status_code=status_code
+            )
+
+        if status_code == httpx.codes.TOO_MANY_REQUESTS:
+            retry_after = _parse_retry_after_ms(response.headers)
+            raise ProviderRateLimitedError(
+                self.name,
+                "slskd rate limited the request",
+                retry_after_ms=retry_after,
+                retry_after_header=response.headers.get("Retry-After"),
                 status_code=status_code,
-                attempt=attempt,
-                max_attempts=max_attempts,
-                duration_ms=duration_ms,
-                query_hash=q_hash,
             )
 
-            if response is not None:
-                if status_code == httpx.codes.OK:
-                    try:
-                        payload = response.json()
-                    except ValueError as exc:  # pragma: no cover - defensive guard
-                        self._log_complete(
-                            status="error",
-                            query_hash=q_hash,
-                            retries_used=attempt - 1,
-                            duration_ms=int((perf_counter() - overall_started) * 1000),
-                            error="invalid-json",
-                            upstream_status=status_code,
-                        )
-                        raise SlskdAdapterInternalError("slskd returned invalid JSON") from exc
-                    try:
-                        candidates = [_build_candidate(entry) for entry in _iter_files(payload)]
-                    except Exception as exc:  # pragma: no cover - defensive safeguard
-                        self._log_complete(
-                            status="error",
-                            query_hash=q_hash,
-                            retries_used=attempt - 1,
-                            duration_ms=int((perf_counter() - overall_started) * 1000),
-                            error="normalisation-failed",
-                            upstream_status=status_code,
-                        )
-                        raise SlskdAdapterInternalError(
-                            "Failed to normalise slskd results"
-                        ) from exc
-                    filtered = [
-                        candidate
-                        for candidate in candidates
-                        if isinstance(candidate, TrackCandidate)
-                    ]
-                    sorted_candidates = _sort_candidates(filtered, preferred_formats)
-                    limited = sorted_candidates[:effective_limit]
-                    self._log_complete(
-                        status="ok",
-                        query_hash=q_hash,
-                        retries_used=attempt - 1,
-                        duration_ms=int((perf_counter() - overall_started) * 1000),
-                        results_count=len(limited),
-                        upstream_status=status_code,
-                    )
-                    return limited
-
-                if status_code == httpx.codes.TOO_MANY_REQUESTS:
-                    backoff_ms = self._compute_backoff_ms(attempt)
-                    error = SlskdAdapterRateLimitedError(
-                        headers=response.headers,
-                        fallback_retry_after_ms=backoff_ms,
-                    )
-                elif status_code == httpx.codes.NOT_FOUND:
-                    error = SlskdAdapterNotFoundError(
-                        "slskd did not find any results for the search query",
-                        status_code=status_code,
-                    )
-                elif status_code == httpx.codes.REQUEST_TIMEOUT:
-                    error = SlskdAdapterDependencyError(
-                        "slskd search request timed out upstream",
-                        status_code=status_code,
-                    )
-                elif status_code is not None and 500 <= status_code < 600:
-                    error = SlskdAdapterDependencyError(
-                        "slskd returned a server error",
-                        status_code=status_code,
-                    )
-                elif status_code is not None and 400 <= status_code < 500:
-                    self._log_complete(
-                        status="error",
-                        query_hash=q_hash,
-                        retries_used=attempt - 1,
-                        duration_ms=int((perf_counter() - overall_started) * 1000),
-                        error="validation",
-                        upstream_status=status_code,
-                    )
-                    raise SlskdAdapterValidationError(
-                        "slskd rejected the search request",
-                        status_code=status_code,
-                    )
-                else:
-                    error = SlskdAdapterDependencyError(
-                        "slskd responded with an unexpected status",
-                        status_code=status_code,
-                    )
-
-            if error is None:
-                continue
-
-            should_retry = attempt < max_attempts and isinstance(
-                error, (SlskdAdapterDependencyError, SlskdAdapterRateLimitedError)
+        if status_code == httpx.codes.NOT_FOUND:
+            raise ProviderNotFoundError(
+                self.name, "slskd returned no results", status_code=status_code
             )
-            if not should_retry:
-                self._log_complete(
-                    status="error",
-                    query_hash=q_hash,
-                    retries_used=attempt - 1,
-                    duration_ms=int((perf_counter() - overall_started) * 1000),
-                    error=error.__class__.__name__,
-                    upstream_status=getattr(error, "status_code", status_code),
-                )
-                raise error
 
-            backoff_ms = self._compute_backoff_ms(attempt)
-            await asyncio.sleep(backoff_ms / 1000)
+        if 500 <= status_code < 600:
+            raise ProviderDependencyError(
+                self.name, "slskd dependency error", status_code=status_code
+            )
 
-        self._log_complete(
-            status="error",
-            query_hash=q_hash,
-            retries_used=max_attempts - 1,
-            duration_ms=int((perf_counter() - overall_started) * 1000),
-            error="exhausted",
-        )
-        raise SlskdAdapterDependencyError("slskd search failed after retries")
-
-    def _log_attempt(
-        self,
-        *,
-        method: str,
-        path: str,
-        status: str,
-        status_code: int | None,
-        attempt: int,
-        max_attempts: int,
-        duration_ms: int,
-        query_hash: str,
-    ) -> None:
-        extra = {
-            "event": "slskd.request",
-            "provider": "slskd",
-            "method": method,
-            "path": path,
-            "status": status,
-            "status_code": status_code,
-            "attempt": attempt,
-            "max_attempts": max_attempts,
-            "duration_ms": duration_ms,
-            "query_hash": query_hash,
-        }
-        logger.info("slskd request attempt", extra=extra)
-
-    def _log_complete(
-        self,
-        *,
-        status: str,
-        query_hash: str,
-        retries_used: int,
-        duration_ms: int,
-        results_count: int | None = None,
-        error: str | None = None,
-        upstream_status: int | None = None,
-    ) -> None:
-        extra = {
-            "event": "slskd.complete",
-            "provider": "slskd",
-            "status": status,
-            "query_hash": query_hash,
-            "retries_used": retries_used,
-            "duration_ms": duration_ms,
-            "upstream_status": upstream_status,
-        }
-        if results_count is not None:
-            extra["results_count"] = results_count
-        if error is not None:
-            extra["error"] = error
-        if status == "ok":
-            logger.info("slskd request complete", extra=extra)
-        else:
-            logger.warning("slskd request complete", extra=extra)
-
-    def _compute_backoff_ms(self, attempt: int) -> int:
-        exponent = max(0, attempt - 1)
-        base_delay = self._backoff_base_ms * (2**exponent)
-        capped = min(base_delay, _BACKOFF_CAP_MS)
-        jitter_range = capped * self._jitter_pct
-        delay = capped + random.uniform(-jitter_range, jitter_range)
-        return max(0, int(delay))
-
-    @staticmethod
-    def _build_timeout(timeout_ms: int) -> httpx.Timeout:
-        total_seconds = timeout_ms / 1000
-        connect_timeout = min(total_seconds, 5.0)
-        return httpx.Timeout(
-            total_seconds, connect=connect_timeout, read=total_seconds, write=total_seconds
+        raise ProviderInternalError(
+            self.name, f"slskd responded with an unexpected status ({status_code})"
         )
 
+    async def check_health(self) -> Mapping[str, Any]:
+        try:
+            response = await self._client.get(self._health_path, headers=self._headers)
+        except httpx.TimeoutException:
+            return {"status": "degraded", "details": {"reason": "timeout"}}
+        except httpx.HTTPError as exc:  # pragma: no cover - defensive guard
+            return {"status": "down", "details": {"error": str(exc)}}
 
-__all__ = [
-    "SlskdAdapter",
-    "SlskdAdapterDependencyError",
-    "SlskdAdapterError",
-    "SlskdAdapterInternalError",
-    "SlskdAdapterNotFoundError",
-    "SlskdAdapterRateLimitedError",
-    "SlskdAdapterValidationError",
-]
+        status_code = response.status_code
+        if status_code >= 500:
+            return {"status": "down", "details": {"status_code": status_code}}
+        if status_code >= 400:
+            return {"status": "degraded", "details": {"status_code": status_code}}
+        return {"status": "ok", "details": {"status_code": status_code}}
+
+
+__all__ = ["SlskdAdapter"]

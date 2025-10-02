@@ -15,7 +15,7 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
 - **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
-- **Integrationen-Adapter** erzwingen ein gemeinsames `MusicProvider`-Interface für Spotify, Plex (Stub) und slskd. Aktivierung erfolgt zentral über `INTEGRATIONS_ENABLED`, Fehler werden vereinheitlicht gemeldet und ein Diagnose-Endpoint listet Health-Status pro Provider.
+- **Integrations-Gateway** kapselt Spotify/slskd-Aufrufe hinter einem gemeinsamen `TrackProvider`-Contract. Retries, Timeout/Jitter, strukturiertes Logging (`api.dependency`) und Health-Checks laufen zentral; aktivierte Provider werden über `INTEGRATIONS_ENABLED` registriert.
 - **Automatische Metadaten-Anreicherung**: Nach jedem Download ergänzt Harmony Genre, Komponist, Produzent, ISRC und Copyright, bettet Cover in höchster verfügbarer Auflösung ein und stellt die Tags per API bereit.
 - **Globale API-Key-Authentifizierung** schützt sämtliche Produktiv-Endpunkte (`X-API-Key` oder `Authorization: Bearer`). Keys werden über `HARMONY_API_KEYS`/`HARMONY_API_KEYS_FILE` verwaltet, Ausnahmen via `AUTH_ALLOWLIST`, CORS über `ALLOWED_ORIGINS` restriktiv konfiguriert.
 - **Automatic Lyrics** *(Feature-Flag `ENABLE_LYRICS`, Default: deaktiviert)*: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten. Die Lyrics stammen vorrangig aus der Spotify-API; falls dort keine Texte verfügbar sind, greift Harmony auf externe Provider wie Musixmatch oder lyrics.ovh zurück.
@@ -23,6 +23,13 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
+
+### Integrations-Gateway
+
+- **Contracts & DTOs:** Spotify- und slskd-Adapter liefern `ProviderTrack`-, `ProviderAlbum`- und `ProviderArtist`-Modelle mit optionalen Kandidaten (`TrackCandidate`). Normalizer (`app/integrations/normalizers.py`) sorgen für defensive Konvertierung.
+- **ProviderGateway:** Kapselt Timeout, Retry (exponentiell mit symmetrischem Jitter), strukturierte Logs (`api.dependency`) und ein zentrales Fehler-Mapping. Die maximale Parallelität wird über `PROVIDER_MAX_CONCURRENCY` begrenzt.
+- **Registry:** `INTEGRATIONS_ENABLED` steuert, welche Provider instanziiert werden. Pro Provider greift eine eigene Retry-Policy auf Basis der ENV-Defaults (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`, `SLSKD_RETRY_*`).
+- **Health-Monitor:** `ProviderHealthMonitor` führt optionale `check_health()`-Probes aus und emittiert `integration.health`-Logs. Der Diagnoseroute `/integrations` liefert den aggregierten Status (`overall=ok|degraded|down`).
 
 ### Matching-Engine
 
@@ -387,7 +394,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SPOTIFY_REDIRECT_URI` | string | _(leer)_ | Registrierte Redirect-URI für den OAuth-Flow. | — |
 | `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
 | `SPOTIFY_MODE` | `FREE`\|`PRO` | `PRO` | Betriebsmodus – `FREE` benötigt keinen OAuth-Flow. | — |
-| `INTEGRATIONS_ENABLED` | csv | `spotify` | Aktivierte Provider (`spotify`, `slskd`, `plex`). | — |
+| `INTEGRATIONS_ENABLED` | csv | `spotify,slskd` | Aktivierte Provider (z. B. `spotify,slskd`). | — |
 | `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
 | `SPOTIFY_TIMEOUT_MS` | int | `15000` | Timeout für Spotify-API-Aufrufe. | — |

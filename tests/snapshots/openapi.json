@@ -1207,6 +1207,10 @@
       },
       "IntegrationsData": {
         "properties": {
+          "overall": {
+            "title": "Overall",
+            "type": "string"
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ProviderInfo"
@@ -1216,6 +1220,7 @@
           }
         },
         "required": [
+          "overall",
           "providers"
         ],
         "title": "IntegrationsData",
@@ -1654,23 +1659,30 @@
       },
       "ProviderInfo": {
         "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "health": {
-            "title": "Health",
-            "type": "string"
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
             "type": "string"
           }
         },
         "required": [
           "name",
-          "enabled",
-          "health"
+          "status"
         ],
         "title": "ProviderInfo",
         "type": "object"

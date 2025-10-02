@@ -44,7 +44,7 @@ from app.main import app
 from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.models import QueueJobStatus
 from app.services.backfill_service import BackfillService
-from app.services.integration_service import ProviderHealth
+from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
@@ -1233,8 +1233,11 @@ class StubIntegrationService:
     def providers(self) -> Iterable[object]:  # pragma: no cover - simple stub
         return ()
 
-    def health(self) -> list[ProviderHealth]:  # pragma: no cover - simple stub
-        return [ProviderHealth(name=name, enabled=True, health="ok") for name in self._providers]
+    async def health(self) -> IntegrationHealth:  # pragma: no cover - simple stub
+        providers = tuple(
+            ProviderHealth(provider=name, status="ok", details={}) for name in self._providers
+        )
+        return IntegrationHealth(overall="ok", providers=providers)
 
 
 class StubTransfersApi:

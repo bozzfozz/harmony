@@ -2,38 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterable, Sequence
 
-from app.errors import (
-    DependencyError,
-    InternalServerError,
-    NotFoundError,
-    RateLimitedError,
-    ValidationAppError,
-)
+from app.errors import DependencyError, ValidationAppError
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import ProviderTrack, SearchQuery
+from app.integrations.contracts import ProviderTrack, SearchQuery, TrackProvider
+from app.integrations.errors import to_application_error
+from app.integrations.health import IntegrationHealth, ProviderHealthMonitor
 from app.integrations.provider_gateway import (
     ProviderGateway,
     ProviderGatewayConfig,
-    ProviderGatewayDependencyError,
     ProviderGatewayError,
-    ProviderGatewayInternalError,
-    ProviderGatewayNotFoundError,
-    ProviderGatewayRateLimitedError,
-    ProviderGatewayTimeoutError,
-    ProviderGatewayValidationError,
     ProviderGatewaySearchResponse,
 )
 from app.integrations.registry import ProviderRegistry
-
-
-@dataclass(slots=True)
-class ProviderHealth:
-    name: str
-    enabled: bool
-    health: str
 
 
 class IntegrationService:
@@ -47,11 +29,21 @@ class IntegrationService:
     ) -> None:
         self._registry = registry
         self._registry.initialise()
+        initialise = getattr(self._registry, "initialise", None)
         if gateway is None:
+            if callable(initialise):
+                initialise()
             providers = self._registry.track_providers()
             config: ProviderGatewayConfig = self._registry.gateway_config
-            gateway = ProviderGateway(providers=providers, config=config)
-        self._gateway = gateway
+            self._gateway = ProviderGateway(providers=providers, config=config)
+        else:
+            self._gateway = gateway
+            if callable(initialise):
+                try:
+                    initialise()
+                except TypeError:
+                    pass
+        self._health_monitor = ProviderHealthMonitor(self._registry)
 
     async def search_tracks(
         self,
@@ -86,28 +78,9 @@ class IntegrationService:
 
         try:
             tracks = await self._gateway.search_tracks(normalized_provider, query_model)
-        except ProviderGatewayValidationError as exc:
-            meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
-            raise ValidationAppError(f"{provider} rejected the search request.", meta=meta) from exc
-        except ProviderGatewayRateLimitedError as exc:
-            raise RateLimitedError(
-                f"{provider} rate limited the search request.",
-                retry_after_ms=exc.retry_after_ms,
-                retry_after_header=exc.retry_after_header,
-            ) from exc
-        except ProviderGatewayNotFoundError as exc:
-            raise NotFoundError(f"{provider} returned no matching results.") from exc
-        except ProviderGatewayTimeoutError as exc:
-            raise DependencyError(f"{provider} search timed out.") from exc
-        except ProviderGatewayDependencyError as exc:
-            meta = {"provider_status": exc.status_code} if exc.status_code is not None else None
-            raise DependencyError(
-                f"{provider} search is currently unavailable.", meta=meta
-            ) from exc
-        except ProviderGatewayInternalError as exc:
-            raise InternalServerError(f"Failed to process {provider} search results.") from exc
-        except ProviderGatewayError as exc:  # pragma: no cover - defensive guard
-            raise InternalServerError(f"Unexpected error during {provider} search.") from exc
+        except ProviderGatewayError as exc:
+            mapped = to_application_error(provider, exc)
+            raise mapped from exc
 
         return self._flatten_candidates(tracks)
 
@@ -131,20 +104,11 @@ class IntegrationService:
 
         return await self._gateway.search_many(normalized, query)
 
-    def providers(self) -> Iterable[object]:
+    def providers(self) -> Iterable[TrackProvider]:
         return self._registry.track_providers().values()
 
-    def health(self) -> list[ProviderHealth]:
-        status: list[ProviderHealth] = []
-        enabled = set(self._registry.enabled_names)
-        for name in enabled:
-            try:
-                provider = self._registry.get_track_provider(name)
-            except KeyError:
-                status.append(ProviderHealth(name=name, enabled=False, health="disabled"))
-                continue
-            status.append(ProviderHealth(name=provider.name, enabled=True, health="ok"))
-        return status
+    async def health(self) -> IntegrationHealth:
+        return await self._health_monitor.check_all()
 
     @staticmethod
     def _flatten_candidates(tracks: Iterable[ProviderTrack]) -> list[TrackCandidate]:
@@ -154,4 +118,4 @@ class IntegrationService:
         return candidates
 
 
-__all__ = ["IntegrationService", "ProviderHealth"]
+__all__ = ["IntegrationService"]

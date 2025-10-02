@@ -7,16 +7,18 @@ from pydantic import BaseModel
 
 from app.dependencies import get_integration_service
 from app.errors import InternalServerError
-from app.services.integration_service import IntegrationService, ProviderHealth
+from app.integrations.health import IntegrationHealth
+from app.services.integration_service import IntegrationService
 
 
 class ProviderInfo(BaseModel):
     name: str
-    enabled: bool
-    health: str
+    status: str
+    details: dict[str, object] | None = None
 
 
 class IntegrationsData(BaseModel):
+    overall: str
     providers: list[ProviderInfo]
 
 
@@ -30,14 +32,17 @@ router = APIRouter(tags=["Integrations"])
 
 
 @router.get("/integrations", response_model=IntegrationsResponse, status_code=status.HTTP_200_OK)
-def get_integrations(
+async def get_integrations(
     service: IntegrationService = Depends(get_integration_service),
 ) -> IntegrationsResponse:
     try:
-        health: list[ProviderHealth] = service.health()
+        report: IntegrationHealth = await service.health()
     except Exception as exc:  # pragma: no cover - defensive guard
         raise InternalServerError("Failed to retrieve integration status.") from exc
     providers = [
-        ProviderInfo(name=item.name, enabled=item.enabled, health=item.health) for item in health
+        ProviderInfo(name=item.provider, status=item.status, details=dict(item.details))
+        for item in report.providers
     ]
-    return IntegrationsResponse(ok=True, data=IntegrationsData(providers=providers))
+    return IntegrationsResponse(
+        ok=True, data=IntegrationsData(overall=report.overall, providers=providers)
+    )
