@@ -291,6 +291,7 @@ class AppConfig:
     features: FeatureFlags
     integrations: IntegrationsConfig
     security: "SecurityConfig"
+    middleware: MiddlewareConfig
     api_base_path: str
     health: HealthConfig
     watchlist: WatchlistWorkerConfig
@@ -304,6 +305,48 @@ class SecurityConfig:
     allowlist: tuple[str, ...]
     allowed_origins: tuple[str, ...]
     rate_limiting_enabled: bool
+
+
+@dataclass(slots=True)
+class RequestMiddlewareConfig:
+    header_name: str
+
+
+@dataclass(slots=True)
+class RateLimitMiddlewareConfig:
+    enabled: bool
+    bucket_capacity: int
+    refill_per_second: float
+
+
+@dataclass(slots=True)
+class CacheMiddlewareConfig:
+    enabled: bool
+    default_ttl: int
+    max_items: int
+    etag_strategy: str
+    cacheable_paths: tuple[str, ...]
+
+
+@dataclass(slots=True)
+class CorsMiddlewareConfig:
+    allowed_origins: tuple[str, ...]
+    allowed_headers: tuple[str, ...]
+    allowed_methods: tuple[str, ...]
+
+
+@dataclass(slots=True)
+class GZipMiddlewareConfig:
+    min_size: int
+
+
+@dataclass(slots=True)
+class MiddlewareConfig:
+    request_id: RequestMiddlewareConfig
+    rate_limit: RateLimitMiddlewareConfig
+    cache: CacheMiddlewareConfig
+    cors: CorsMiddlewareConfig
+    gzip: GZipMiddlewareConfig
 
 
 @dataclass(slots=True, frozen=True)
@@ -1272,17 +1315,70 @@ def load_config() -> AppConfig:
     allowlist_entries = _deduplicate_preserve_order(
         entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
     )
-    allowed_origins = _deduplicate_preserve_order(_parse_list(os.getenv("ALLOWED_ORIGINS")))
+
+    request_id_config = RequestMiddlewareConfig(
+        header_name=(os.getenv("REQUEST_ID_HEADER") or "X-Request-ID").strip() or "X-Request-ID"
+    )
+
+    rate_limit_enabled = _as_bool(os.getenv("FEATURE_RATE_LIMITING"), default=False)
+    rate_limit_config = RateLimitMiddlewareConfig(
+        enabled=rate_limit_enabled,
+        bucket_capacity=max(1, _as_int(os.getenv("RATE_LIMIT_BUCKET_CAP"), default=60)),
+        refill_per_second=_bounded_float(
+            os.getenv("RATE_LIMIT_REFILL_PER_SEC"),
+            default=1.0,
+            minimum=0.0,
+        ),
+    )
+
+    cacheable_paths_raw = _parse_list(os.getenv("CACHEABLE_PATHS"))
+    cache_config = CacheMiddlewareConfig(
+        enabled=_as_bool(os.getenv("CACHE_ENABLED"), default=True),
+        default_ttl=max(0, _as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)),
+        max_items=max(1, _as_int(os.getenv("CACHE_MAX_ITEMS"), default=5_000)),
+        etag_strategy=(os.getenv("CACHE_STRATEGY_ETAG") or "strong").strip().lower() or "strong",
+        cacheable_paths=_deduplicate_preserve_order(cacheable_paths_raw),
+    )
+
+    cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
+    if cors_origins_env is None:
+        cors_origins_env = os.getenv("ALLOWED_ORIGINS")
+    cors_origins = _parse_list(cors_origins_env)
+    if not cors_origins:
+        cors_origins = ["*"]
+    cors_headers = _parse_list(os.getenv("CORS_ALLOWED_HEADERS")) or ["*"]
+    cors_methods = _parse_list(os.getenv("CORS_ALLOWED_METHODS")) or [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ]
+    cors_config = CorsMiddlewareConfig(
+        allowed_origins=_deduplicate_preserve_order(cors_origins),
+        allowed_headers=_deduplicate_preserve_order(cors_headers),
+        allowed_methods=_deduplicate_preserve_order(cors_methods),
+    )
+
+    gzip_config = GZipMiddlewareConfig(
+        min_size=max(0, _as_int(os.getenv("GZIP_MIN_SIZE"), default=1_024)),
+    )
+
+    middleware_config = MiddlewareConfig(
+        request_id=request_id_config,
+        rate_limit=rate_limit_config,
+        cache=cache_config,
+        cors=cors_config,
+        gzip=gzip_config,
+    )
 
     security = SecurityConfig(
         require_auth=_as_bool(os.getenv("FEATURE_REQUIRE_AUTH"), default=False),
         api_keys=api_keys,
         allowlist=allowlist_entries,
-        allowed_origins=allowed_origins,
-        rate_limiting_enabled=_as_bool(
-            os.getenv("FEATURE_RATE_LIMITING"),
-            default=False,
-        ),
+        allowed_origins=middleware_config.cors.allowed_origins,
+        rate_limiting_enabled=rate_limit_config.enabled,
     )
 
     return AppConfig(
@@ -1296,6 +1392,7 @@ def load_config() -> AppConfig:
         features=features,
         integrations=integrations,
         security=security,
+        middleware=middleware_config,
         api_base_path=api_base_path,
         health=health,
         watchlist=watchlist_config,

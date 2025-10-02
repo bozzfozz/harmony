@@ -1,4 +1,4 @@
-"""Middleware that ensures every request has a request id."""
+"""Middleware for generating and propagating request identifiers."""
 
 from __future__ import annotations
 
@@ -11,23 +11,22 @@ from starlette.types import ASGIApp
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Populate ``request.state.request_id`` for downstream handlers."""
+    """Ensure each request has a deterministic request identifier."""
 
-    header_name = "X-Request-ID"
-
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, header_name: str = "X-Request-ID") -> None:
         super().__init__(app)
+        self._header_name = header_name
 
-    async def dispatch(
+    async def dispatch(  # type: ignore[override]
         self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:  # type: ignore[override]
-        incoming = request.headers.get(self.header_name, "").strip()
+    ) -> Response:
+        incoming = request.headers.get(self._header_name, "").strip()
         request_id = incoming or str(uuid4())
         request.state.request_id = request_id
 
         response = await call_next(request)
-        if self.header_name not in response.headers:
-            response.headers[self.header_name] = request_id
+        if self._header_name not in response.headers:
+            response.headers[self._header_name] = request_id
         return response
 
 
