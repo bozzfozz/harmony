@@ -6,6 +6,7 @@ import asyncio
 from typing import Optional
 
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.services.backfill_service import BackfillJobSpec, BackfillService
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
@@ -69,7 +70,13 @@ class BackfillWorker:
         return self._task is not None and not self._task.done()
 
     async def _run(self, queue: asyncio.Queue[BackfillJobSpec]) -> None:
-        logger.info("BackfillWorker started")
+        log_event(
+            logger,
+            "worker.lifecycle",
+            component="worker.spotify_backfill",
+            status="ok",
+            meta={"state": "started"},
+        )
         record_worker_heartbeat("spotify_backfill")
         self._queue = queue
         try:
@@ -81,7 +88,15 @@ class BackfillWorker:
 
                 try:
                     await self._service.execute(job)
-                except Exception:  # pragma: no cover - defensive logging
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    log_event(
+                        logger,
+                        "worker.job",
+                        component="worker.spotify_backfill",
+                        status="error",
+                        entity_id=job.id,
+                        meta={"error": exc.__class__.__name__},
+                    )
                     logger.exception("Backfill job failed", extra={"job_id": job.id})
                 finally:
                     queue.task_done()
@@ -91,7 +106,13 @@ class BackfillWorker:
             raise
         finally:
             self._running = False
-            logger.info("BackfillWorker stopped")
+            log_event(
+                logger,
+                "worker.lifecycle",
+                component="worker.spotify_backfill",
+                status="ok",
+                meta={"state": "stopped"},
+            )
 
 
 __all__ = ["BackfillWorker"]
