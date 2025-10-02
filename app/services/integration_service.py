@@ -125,9 +125,7 @@ class IntegrationService:
             try:
                 self._registry.get_track_provider(normalized_name)
             except KeyError as exc:
-                raise DependencyError(
-                    "Requested search source is not available"
-                ) from exc
+                raise DependencyError("Requested search source is not available") from exc
             normalized.append(normalized_name)
             seen.add(normalized_name)
 

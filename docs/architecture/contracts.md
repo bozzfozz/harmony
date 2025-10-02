@@ -71,6 +71,30 @@ Alle Router wandeln Exceptions in einen Fehler-Envelope (`{"ok": false, "error":
 
 Gateway-Adapter müssen DTOs vor Rückgabe validieren, fehlende Pflichtfelder führen zu `VALIDATION_ERROR`.
 
+### Core Matching DTOs
+
+Die Matching-Engine verarbeitet providerunabhängige DTOs aus `app.core.types`:
+
+| Typ | Pflichtfelder | Optionale Felder |
+| --- | --- | --- |
+| `ProviderTrackDTO` | `title`, `artists`, `source` | `album`, `duration_ms`, `source_id`, `popularity`, `year`, `edition_tags`, `metadata` |
+| `ProviderArtistDTO` | `name`, `source` | `source_id`, `aliases`, `popularity`, `metadata` |
+| `ProviderAlbumDTO` | `title`, `source` | `artists`, `source_id`, `year`, `total_tracks`, `edition_tags`, `metadata` |
+
+Edition-Marker (`edition_tags`) werden bei Track- und Album-Titeln automatisch erkannt (Keywords wie „deluxe“, „live“, „remastered“). Das Ranking erfolgt deterministisch anhand `(score DESC, title_norm, source, source_id)`.
+
+### Matching-Parameter
+
+Die Engine erhält Schwellenwerte als Funktionsargumente (Defaults aus `load_matching_config()`):
+
+- `min_artist_sim` (`MATCH_MIN_ARTIST_SIM`)
+- `complete_thr` (`MATCH_COMPLETE_THRESHOLD`)
+- `nearly_thr` (`MATCH_NEARLY_THRESHOLD`)
+- `fuzzy_max` (`MATCH_FUZZY_MAX_CANDIDATES`)
+- `edition_aware` (`FEATURE_MATCHING_EDITION_AWARE`)
+
+Konfiguration wird im Aufrufer injiziert (Dependency `MusicMatchingEngine`), die Engine selbst führt keine I/O-Operationen aus.
+
 ## Idempotenz, Visibility & Heartbeats
 - **API-Requests:** Header `Idempotency-Key` wird in Persistence (z. B. `ingest_jobs.idempotency_key`) gespeichert. Schlüssel-Format: `<domain>:<entity-id>:<epoch-ms>`. Kollisionen führen zu `409` mit bestehender Response.
 - **Queue-Jobs:** Jeder Job enthält `idempotency_key` (gleiche Struktur). Services prüfen vor Enqueue auf bestehende Jobs (persistierte `job_keys`).

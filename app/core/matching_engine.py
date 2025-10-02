@@ -1,507 +1,353 @@
-"""Music matching logic used by Harmony."""
+"""Pure matching logic operating on provider DTOs."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Dict, Iterable, Mapping, Optional
+import re
+import unicodedata
+from typing import Any, Iterable, Mapping, Sequence
 
 from app.config import MatchingConfig, load_matching_config
-from app.logging import get_logger
-from app.integrations.base import TrackCandidate
-from app.integrations.contracts import ProviderTrack
-from app.services.library_service import LibraryAlbum, LibraryService, LibraryTrack
-from app.utils.text_normalization import (
-    clean_album_title,
-    clean_track_title,
-    expand_artist_aliases,
-    extract_editions,
-    generate_album_variants,
-    generate_track_variants,
-    normalize_unicode,
+
+from .errors import InvalidInputError
+from .types import (
+    MatchResult,
+    MatchScore,
+    ProviderTrackDTO,
+    ensure_track_dto,
 )
 
-logger = get_logger(__name__)
+_DEFAULT_MATCHING_CONFIG = load_matching_config()
 
 
-@dataclass(slots=True)
-class MatchResult:
-    candidate: LibraryTrack | LibraryAlbum | None
-    score: float
-    path: str
+@dataclass(slots=True, frozen=True)
+class _QueryParts:
+    raw: str
+    title: str
+    artists: tuple[str, ...]
+    edition_tags: tuple[str, ...]
+
+
+def _strip_accents(value: str) -> str:
+    return "".join(
+        ch for ch in unicodedata.normalize("NFKD", value) if not unicodedata.combining(ch)
+    )
+
+
+def _normalize_text(value: str) -> str:
+    if not value:
+        return ""
+    normalised = unicodedata.normalize("NFKC", value)
+    normalised = _strip_accents(normalised).casefold()
+    return " ".join(normalised.split())
+
+
+def _ratio(left: str, right: str) -> float:
+    if not left or not right:
+        return 0.0
+    return SequenceMatcher(None, left, right).ratio()
+
+
+def _parse_query(query: str) -> _QueryParts:
+    raw = (query or "").strip()
+    if not raw:
+        raise InvalidInputError("Query must not be empty.")
+    working = raw
+    for separator in (" – ", " — "):
+        if separator in working:
+            working = working.replace(separator, " - ")
+    artists: list[str] = []
+    title = working
+    if " - " in working:
+        prefix, suffix = working.split(" - ", 1)
+        if prefix.strip() and suffix.strip():
+            artists.append(prefix.strip())
+            title = suffix.strip()
+    edition_tags = _extract_edition_tags(title)
+    return _QueryParts(raw=raw, title=title, artists=tuple(artists), edition_tags=edition_tags)
+
+
+_EDITION_PATTERN = re.compile(
+    r"\b(anniversary|collector|deluxe|expanded|live|remaster(?:ed|d)?|special|super|ultimate)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_edition_tags(text: str) -> tuple[str, ...]:
+    if not text:
+        return ()
+    return tuple(sorted({match.group(0).lower() for match in _EDITION_PATTERN.finditer(text)}))
+
+
+def _candidate_artist_names(track: ProviderTrackDTO) -> tuple[str, ...]:
+    names: list[str] = []
+    for artist in track.artists:
+        names.append(_normalize_text(artist.name))
+        for alias in artist.aliases:
+            names.append(_normalize_text(alias))
+    username = track.metadata.get("username")
+    if isinstance(username, str):
+        names.append(_normalize_text(username))
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in names:
+        if not name:
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        deduped.append(name)
+    return tuple(deduped)
+
+
+def _artist_similarity(query_artists: Sequence[str], track: ProviderTrackDTO) -> float:
+    if not query_artists:
+        return 1.0 if track.artists else 0.5
+    candidates = _candidate_artist_names(track)
+    if not candidates:
+        return 0.0
+    best = 0.0
+    for artist in query_artists:
+        normalised = _normalize_text(artist)
+        if not normalised:
+            continue
+        for candidate in candidates:
+            best = max(best, _ratio(normalised, candidate))
+    return best
+
+
+def _album_similarity(query: _QueryParts, track: ProviderTrackDTO) -> float:
+    if track.album is None:
+        return 0.0
+    return _ratio(_normalize_text(query.title), _normalize_text(track.album.title))
+
+
+def _edition_bonus(query_tags: set[str], track_tags: set[str]) -> float:
+    if not query_tags:
+        return 0.0
+    if not track_tags:
+        return -0.05
+    overlap = query_tags & track_tags
+    if overlap:
+        return min(0.1, 0.05 + 0.02 * (len(overlap) - 1))
+    return -0.08
+
+
+def _extract_year_from_text(text: str) -> int | None:
+    if not text:
+        return None
+    match = re.search(r"(19|20)\d{2}", text)
+    if match:
+        return int(match.group(0))
+    return None
+
+
+def _score_candidate(
+    query: _QueryParts,
+    track: ProviderTrackDTO,
+    *,
+    min_artist_sim: float,
+    edition_aware: bool,
+) -> MatchScore:
+    normalised_query_title = _normalize_text(query.title)
+    title_score = _ratio(normalised_query_title, _normalize_text(track.title))
+    artist_score = _artist_similarity(query.artists, track)
+    album_score = _album_similarity(query, track)
+    penalty = 0.0
+    if query.artists and artist_score < min_artist_sim:
+        penalty = min(0.4, (min_artist_sim - artist_score) * 0.75)
+    bonus = 0.0
+    if edition_aware:
+        bonus += _edition_bonus(set(query.edition_tags), set(track.combined_edition_tags))
+    query_year = _extract_year_from_text(query.raw)
+    track_year = track.year
+    if query_year is not None and track_year is not None:
+        delta = abs(track_year - query_year)
+        if delta == 0:
+            bonus += 0.02
+        elif delta <= 1:
+            bonus += 0.01
+        elif delta > 5:
+            penalty += 0.05
+    return MatchScore(
+        title=title_score, artist=artist_score, album=album_score, bonus=bonus, penalty=penalty
+    )
+
+
+def _confidence_label(score: float, *, complete: float, nearly: float) -> str:
+    if score >= complete:
+        return "complete"
+    if score >= nearly:
+        return "nearly"
+    if score <= 0.0:
+        return "miss"
+    return "partial"
+
+
+def _sort_key(result: MatchResult, total: float) -> tuple[Any, ...]:
+    track = result.track
+    return (
+        -total,
+        _normalize_text(track.title),
+        track.source,
+        track.source_id or "",
+    )
+
+
+def rank_candidates(
+    query: str,
+    candidates: Sequence[Any],
+    *,
+    min_artist_sim: float = _DEFAULT_MATCHING_CONFIG.min_artist_similarity,
+    complete_thr: float = _DEFAULT_MATCHING_CONFIG.complete_threshold,
+    nearly_thr: float = _DEFAULT_MATCHING_CONFIG.nearly_threshold,
+    fuzzy_max: int = _DEFAULT_MATCHING_CONFIG.fuzzy_max_candidates,
+    edition_aware: bool = _DEFAULT_MATCHING_CONFIG.edition_aware,
+) -> list[MatchResult]:
+    """Score and rank track candidates for the supplied query."""
+
+    parsed_query = _parse_query(query)
+    track_candidates = [ensure_track_dto(candidate) for candidate in candidates]
+    enriched: list[tuple[MatchResult, float]] = []
+    for track in track_candidates:
+        score = _score_candidate(
+            parsed_query, track, min_artist_sim=min_artist_sim, edition_aware=edition_aware
+        )
+        total = score.total
+        confidence = _confidence_label(total, complete=complete_thr, nearly=nearly_thr)
+        enriched.append((MatchResult(track=track, score=score, confidence=confidence), total))
+    enriched.sort(key=lambda item: _sort_key(item[0], item[1]))
+    limit = len(enriched)
+    if fuzzy_max >= 0:
+        limit = min(limit, fuzzy_max)
+    return [result for result, _ in enriched[:limit]]
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) -> float:
+    """Return a confidence score between a Spotify track and a Soulseek candidate."""
+
+    track = ensure_track_dto(spotify_track, default_source="spotify")
+    candidate = ensure_track_dto(soulseek_entry, default_source="slskd")
+    title_score = _ratio(_normalize_text(track.title), _normalize_text(candidate.title))
+    artist_score = 0.0
+    primary_artist = track.primary_artist
+    if primary_artist:
+        for name in _candidate_artist_names(candidate) or (_normalize_text(primary_artist),):
+            artist_score = max(artist_score, _ratio(_normalize_text(primary_artist), name))
+    else:
+        artist_score = 0.5
+    bitrate_value = _as_int(
+        candidate.metadata.get("bitrate_kbps") or candidate.metadata.get("bitrate")
+    )
+    if bitrate_value is None:
+        bitrate_score = 0.3
+    elif bitrate_value >= 256:
+        bitrate_score = 1.0
+    elif bitrate_value >= 192:
+        bitrate_score = 0.7
+    else:
+        bitrate_score = 0.4
+    result = (title_score * 0.6) + (artist_score * 0.25) + (bitrate_score * 0.15)
+    return max(0.0, min(1.0, round(result, 4)))
+
+
+def _ensure_iterable(obj: Any) -> Iterable[Any]:
+    if obj is None:
+        return ()
+    if isinstance(obj, (list, tuple)):
+        return obj
+    return (obj,)
+
+
+def compute_relevance_score(query: str, candidate: Mapping[str, Any]) -> float:
+    """Return a lightweight similarity score for arbitrary music items."""
+
+    normalised_query = _normalize_text(query)
+    if not normalised_query:
+        return 0.0
+    title = _normalize_text(str(candidate.get("title", "")))
+    album = _normalize_text(str(candidate.get("album", "")))
+    artist_entries = _ensure_iterable(candidate.get("artists"))
+    artists = [
+        _normalize_text(str(entry)) for entry in artist_entries if _normalize_text(str(entry))
+    ]
+    title_score = _ratio(normalised_query, title)
+    album_score = _ratio(normalised_query, album)
+    artist_score = max((_ratio(normalised_query, artist) for artist in artists), default=0.0)
+    composite_terms = " ".join(filter(None, [title, album, " ".join(artists)]))
+    composite_score = _ratio(normalised_query, composite_terms)
+    type_hint = str(candidate.get("type") or "").lower()
+    if type_hint == "track":
+        weights = (0.55, 0.25, 0.15, 0.05)
+    elif type_hint == "album":
+        weights = (0.35, 0.15, 0.4, 0.1)
+    elif type_hint == "artist":
+        weights = (0.2, 0.6, 0.1, 0.1)
+    else:
+        weights = (0.4, 0.3, 0.2, 0.1)
+    score = (
+        (title_score * weights[0])
+        + (artist_score * weights[1])
+        + (album_score * weights[2])
+        + (composite_score * weights[3])
+    )
+    if title and title == normalised_query:
+        score += 0.05
+    elif album and album == normalised_query:
+        score += 0.03
+    return max(0.0, min(1.0, round(score, 4)))
 
 
 class MusicMatchingEngine:
-    """Provides fuzzy matching utilities across Spotify and Soulseek."""
+    """Wrapper exposing the pure matching utilities with injected configuration."""
 
-    def __init__(
-        self,
-        *,
-        library_service: LibraryService | None = None,
-        config: MatchingConfig | None = None,
-    ) -> None:
-        self.library = library_service or LibraryService()
-        self.config = config or load_matching_config()
-        self._last_completion_label: str | None = None
-        self._last_track_path: str | None = None
-        self._last_album_path: str | None = None
-
-    # ------------------------------------------------------------------
-    # Common helpers
-
-    @staticmethod
-    def _normalise(value: Optional[str]) -> str:
-        return normalize_unicode(value or "")
-
-    @staticmethod
-    def _ratio(left: str, right: str) -> float:
-        if not left or not right:
-            return 0.0
-        return SequenceMatcher(None, left, right).ratio()
-
-    def _artist_similarity(self, query_artist: str, candidate_artist: str) -> float:
-        query_aliases = expand_artist_aliases(query_artist)
-        candidate_aliases = expand_artist_aliases(candidate_artist)
-        if not query_aliases or not candidate_aliases:
-            return 0.0
-        best = 0.0
-        for query in query_aliases:
-            for candidate in candidate_aliases:
-                best = max(best, self._ratio(query, candidate))
-        return best
-
-    def _track_title_similarity(self, query: str, candidate: str) -> float:
-        raw = self._ratio(self._normalise(query), self._normalise(candidate))
-        cleaned_query = clean_track_title(query) or query
-        cleaned_candidate = clean_track_title(candidate) or candidate
-        cleaned = self._ratio(self._normalise(cleaned_query), self._normalise(cleaned_candidate))
-        return max(raw, cleaned)
-
-    def _album_title_similarity(self, query: str, candidate: str) -> float:
-        raw = self._ratio(self._normalise(query), self._normalise(candidate))
-        cleaned_query = clean_album_title(query) or query
-        cleaned_candidate = clean_album_title(candidate) or candidate
-        cleaned = self._ratio(self._normalise(cleaned_query), self._normalise(cleaned_candidate))
-        return max(raw, cleaned)
-
-    def _penalise_artist(self, score: float, artist_similarity: float) -> float:
-        if artist_similarity < self.config.min_artist_similarity:
-            return score * 0.5
-        return score
-
-    @staticmethod
-    def _clamp(score: float) -> float:
-        return max(0.0, min(score, 1.0))
-
-    def _log_result(self, entity: str, result: MatchResult, candidates: int) -> None:
-        logger.info(
-            "%s matching pipeline completed",  # pragma: no cover - logging side effect
-            entity,
-            extra={
-                "event": f"match.{entity}",
-                "best_score": result.score,
-                "path": result.path,
-                "candidates": candidates,
-            },
-        )
-
-    # ------------------------------------------------------------------
-    # Track matching
-
-    def _score_track(self, query_title: str, query_artist: str, candidate: LibraryTrack) -> float:
-        title_similarity = self._track_title_similarity(query_title, candidate.title)
-        artist_similarity = self._artist_similarity(query_artist, candidate.artist)
-        score = (title_similarity * 0.5) + (artist_similarity * 0.5)
-        return self._clamp(self._penalise_artist(score, artist_similarity))
-
-    def _score_track_candidates(
-        self,
-        title: str,
-        artist: str,
-        candidates: Iterable[LibraryTrack],
-    ) -> MatchResult:
-        best_candidate: LibraryTrack | None = None
-        best_score = 0.0
-        for candidate in candidates:
-            score = self._score_track(title, artist, candidate)
-            if score > best_score:
-                best_candidate = candidate
-                best_score = score
-        return MatchResult(best_candidate, round(best_score, 4), "")
-
-    def match_track(self, title: str, artist: str) -> tuple[LibraryTrack | None, float]:
-        """Resolve a track candidate using the staged search pipeline."""
-
-        if not title:
-            return None, 0.0
-
-        title_variants = generate_track_variants(title)
-        artist_variants = [artist] if artist else []
-        artist_variants.extend(expand_artist_aliases(artist))
-        best = MatchResult(None, 0.0, "like")
-        candidate_counter = 0
-
-        for path, search in (
-            ("like", self.library.search_tracks_like),
-            ("normalized", self.library.search_tracks_like_normalized),
-        ):
-            candidates = search(
-                title_variants, artist_variants, limit=self.config.fuzzy_max_candidates
-            )
-            candidate_counter += len(candidates)
-            result = self._score_track_candidates(title, artist, candidates)
-            result.path = path
-            if result.score > best.score:
-                best = result
-            if best.score >= 0.92:
-                break
-
-        if best.score < 0.92:
-            fuzzy_title = clean_track_title(title) or title
-            candidates = self.library.search_tracks_fuzzy(
-                fuzzy_title,
-                artist,
-                limit=self.config.fuzzy_max_candidates,
-            )
-            candidate_counter += len(candidates)
-            result = self._score_track_candidates(title, artist, candidates)
-            result.path = "fuzzy"
-            if result.score > best.score:
-                best = result
-
-        self._log_result("track", best, candidate_counter)
-        self._last_track_path = best.path
-        return best.candidate, best.score
-
-    # ------------------------------------------------------------------
-    # Album matching
-
-    def _edition_adjustment(self, query_editions: set[str], candidate_editions: set[str]) -> float:
-        if not query_editions and not candidate_editions:
-            return 0.0
-        if query_editions and candidate_editions:
-            if query_editions & candidate_editions:
-                return 0.08
-            return -0.18
-        if query_editions and not candidate_editions:
-            return -0.08
-        return -0.05
-
-    def _track_count_adjustment(
-        self,
-        expected: Optional[int],
-        candidate: Optional[int],
-        *,
-        edition_mismatch: bool = False,
-    ) -> float:
-        if not expected or not candidate:
-            return 0.0
-        if expected <= 0 or candidate <= 0:
-            return 0.0
-        ratio = candidate / expected
-        if ratio >= 1.05:
-            bonus = 0.08
-        elif ratio >= self.config.complete_threshold:
-            bonus = 0.05
-        elif ratio >= self.config.nearly_threshold:
-            bonus = 0.02
-        else:
-            return -min(0.15, (1.0 - ratio) * 0.3)
-        if edition_mismatch and bonus > 0:
-            return 0.0
-        return bonus
-
-    def _score_album(
-        self,
-        title: str,
-        artist: str,
-        candidate: LibraryAlbum,
-        expected_tracks: Optional[int],
-    ) -> float:
-        title_similarity = self._album_title_similarity(title, candidate.title)
-        artist_similarity = self._artist_similarity(artist, candidate.artist)
-        query_editions: set[str] = set()
-        candidate_editions: set[str] = set()
-        if self.config.edition_aware:
-            query_editions = extract_editions(title)
-            candidate_editions = extract_editions(candidate.title)
-
-        score = (title_similarity * 0.6) + (artist_similarity * 0.4)
-        score = self._penalise_artist(score, artist_similarity)
-
-        if self.config.edition_aware:
-            score += self._edition_adjustment(query_editions, candidate_editions)
-
-        edition_mismatch = False
-        if self.config.edition_aware:
-            edition_mismatch = bool(
-                (query_editions or candidate_editions) and not (query_editions & candidate_editions)
-            )
-
-        score += self._track_count_adjustment(
-            expected_tracks or candidate.track_count,
-            candidate.track_count,
-            edition_mismatch=edition_mismatch,
-        )
-        return self._clamp(score)
-
-    def _score_album_candidates(
-        self,
-        title: str,
-        artist: str,
-        candidates: Iterable[LibraryAlbum],
-        expected_tracks: Optional[int],
-    ) -> MatchResult:
-        best_candidate: LibraryAlbum | None = None
-        best_score = 0.0
-        for candidate in candidates:
-            score = self._score_album(title, artist, candidate, expected_tracks)
-            if score > best_score:
-                best_candidate = candidate
-                best_score = score
-        return MatchResult(best_candidate, round(best_score, 4), "")
-
-    def match_album(
-        self,
-        title: str,
-        artist: str,
-        expected_tracks: Optional[int] | None = None,
-    ) -> tuple[LibraryAlbum | None, float]:
-        """Resolve an album candidate considering edition metadata."""
-
-        if not title:
-            return None, 0.0
-
-        title_variants = generate_album_variants(title)
-        artist_variants = [artist] if artist else []
-        artist_variants.extend(expand_artist_aliases(artist))
-        best = MatchResult(None, 0.0, "like")
-        candidate_counter = 0
-
-        for path, search in (
-            ("like", self.library.search_albums_like),
-            ("normalized", self.library.search_albums_like_normalized),
-        ):
-            candidates = search(
-                title_variants, artist_variants, limit=self.config.fuzzy_max_candidates
-            )
-            candidate_counter += len(candidates)
-            result = self._score_album_candidates(title, artist, candidates, expected_tracks)
-            result.path = path
-            if result.score > best.score:
-                best = result
-            if best.score >= 0.9:
-                break
-
-        if best.score < 0.9:
-            fuzzy_title = clean_album_title(title) or title
-            candidates = self.library.search_albums_fuzzy(
-                fuzzy_title,
-                artist,
-                limit=self.config.fuzzy_max_candidates,
-            )
-            candidate_counter += len(candidates)
-            result = self._score_album_candidates(title, artist, candidates, expected_tracks)
-            result.path = "fuzzy"
-            if result.score > best.score:
-                best = result
-
-        self._log_result("album", best, candidate_counter)
-        self._last_album_path = best.path
-        return best.candidate, best.score
-
-    # ------------------------------------------------------------------
-    # Completion helpers
-
-    def album_completion(self, album_id: int) -> tuple[int, int, bool]:
-        album = self.library.get_album(album_id)
-        if album is None:
-            self._last_completion_label = "missing"
-            return 0, 0, False
-
-        owned = max(0, album.owned_tracks if album.owned_tracks is not None else album.track_count)
-        expected = max(owned, album.track_count)
-        ratio = (owned / expected) if expected else 0.0
-
-        if ratio >= self.config.complete_threshold:
-            self._last_completion_label = "complete"
-            return owned, expected, True
-        if ratio >= self.config.nearly_threshold:
-            self._last_completion_label = "nearly"
-        else:
-            self._last_completion_label = "incomplete"
-        return owned, expected, False
+    def __init__(self, *, config: MatchingConfig | None = None) -> None:
+        self._config = config or load_matching_config()
 
     @property
-    def last_completion_label(self) -> str | None:
-        return self._last_completion_label
+    def config(self) -> MatchingConfig:
+        return self._config
 
-    @property
-    def last_track_path(self) -> str | None:
-        return self._last_track_path
-
-    @property
-    def last_album_path(self) -> str | None:
-        return self._last_album_path
-
-    # ------------------------------------------------------------------
-    # Legacy helpers preserved for compatibility
-
-    def compute_relevance_score(self, query: str, candidate: Dict[str, Any]) -> float:
-        """Return a lightweight similarity score for arbitrary music items."""
-
-        normalised_query = self._normalise(query)
-        if not normalised_query:
-            return 0.0
-
-        title = candidate.get("title")
-        album = candidate.get("album")
-        artists_raw = candidate.get("artists")
-        if isinstance(artists_raw, str):
-            artists: list[str] = [artists_raw]
-        elif isinstance(artists_raw, Iterable):
-            artists = [str(entry) for entry in artists_raw if entry]
-        else:
-            artists = []
-
-        title_score = self._ratio(self._normalise(query), self._normalise(title))
-        album_score = self._ratio(self._normalise(query), self._normalise(album))
-        artist_score = 0.0
-        for artist in artists:
-            artist_score = max(
-                artist_score, self._ratio(self._normalise(query), self._normalise(artist))
-            )
-
-        composite_terms = [title or "", album or "", " ".join(artists)]
-        composite_target = " ".join(term for term in composite_terms if term)
-        composite_score = self._ratio(self._normalise(query), self._normalise(composite_target))
-
-        type_hint = str(candidate.get("type") or "").lower()
-        if type_hint == "track":
-            weights = (0.55, 0.25, 0.15, 0.05)
-        elif type_hint == "album":
-            weights = (0.35, 0.15, 0.4, 0.1)
-        elif type_hint == "artist":
-            weights = (0.15, 0.65, 0.1, 0.1)
-        else:
-            weights = (0.4, 0.3, 0.2, 0.1)
-
-        score = (
-            (title_score * weights[0])
-            + (artist_score * weights[1])
-            + (album_score * weights[2])
-            + (composite_score * weights[3])
+    def rank_candidates(self, query: str, candidates: Sequence[Any]) -> list[MatchResult]:
+        return rank_candidates(
+            query,
+            candidates,
+            min_artist_sim=self._config.min_artist_similarity,
+            complete_thr=self._config.complete_threshold,
+            nearly_thr=self._config.nearly_threshold,
+            fuzzy_max=self._config.fuzzy_max_candidates,
+            edition_aware=self._config.edition_aware,
         )
 
-        normalised_title = self._normalise(title)
-        normalised_album = self._normalise(album)
-        if normalised_title and normalised_title == normalised_query:
-            score += 0.1
-        elif normalised_album and normalised_album == normalised_query:
-            score += 0.05
+    @staticmethod
+    def compute_relevance_score(query: str, candidate: Mapping[str, Any]) -> float:
+        return compute_relevance_score(query, candidate)
 
-        return round(min(score, 1.0), 4)
+    @staticmethod
+    def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) -> float:
+        return calculate_slskd_match_confidence(spotify_track, soulseek_entry)
 
-    def calculate_slskd_match_confidence(
-        self,
-        spotify_track: ProviderTrack | Mapping[str, Any],
-        soulseek_entry: TrackCandidate | Mapping[str, Any],
-    ) -> float:
-        """Return a confidence score comparing Spotify and Soulseek payloads."""
 
-        def _first_artist_from_mapping(payload: Mapping[str, Any]) -> str:
-            artists_value = payload.get("artists")
-            if isinstance(artists_value, list) and artists_value:
-                first = artists_value[0]
-                if isinstance(first, Mapping):
-                    return str(first.get("name") or first.get("artist") or "")
-                return str(first or "")
-            if isinstance(artists_value, Mapping):
-                return str(artists_value.get("name") or "")
-            return str(payload.get("artist") or "")
-
-        track_name: str
-        track_artist: str
-        if isinstance(spotify_track, ProviderTrack):
-            track_name = spotify_track.name
-            if spotify_track.artists:
-                track_artist = spotify_track.artists[0].name
-            else:
-                track_artist = ""
-                metadata_artists = spotify_track.metadata.get("artists")
-                if isinstance(metadata_artists, (list, tuple)) and metadata_artists:
-                    track_artist = str(metadata_artists[0])
-        elif isinstance(spotify_track, Mapping):
-            track_name = str(spotify_track.get("name") or "")
-            track_artist = _first_artist_from_mapping(spotify_track)
-        else:
-            track_name = str(getattr(spotify_track, "name", "") or "")
-            track_artist = str(getattr(spotify_track, "artist", "") or "")
-
-        if isinstance(soulseek_entry, TrackCandidate):
-            candidate_title_raw = soulseek_entry.metadata.get("filename")
-            if not candidate_title_raw:
-                candidate_title_raw = soulseek_entry.download_uri or soulseek_entry.title
-            candidate_username = soulseek_entry.username or ""
-            candidate_artist = soulseek_entry.artist or ""
-            candidate_bitrate = soulseek_entry.bitrate_kbps or 0
-            candidate_metadata = soulseek_entry.metadata
-        else:
-            candidate_mapping: Mapping[str, Any]
-            if isinstance(soulseek_entry, Mapping):
-                candidate_mapping = soulseek_entry
-            else:
-                candidate_mapping = {}
-            candidate_title_raw = (
-                candidate_mapping.get("filename")
-                or candidate_mapping.get("title")
-                or candidate_mapping.get("name")
-                or getattr(soulseek_entry, "filename", None)
-                or getattr(soulseek_entry, "title", None)
-                or ""
-            )
-            candidate_username = str(
-                candidate_mapping.get("username")
-                or candidate_mapping.get("user")
-                or getattr(soulseek_entry, "username", "")
-            )
-            candidate_artist = str(
-                candidate_mapping.get("artist") or getattr(soulseek_entry, "artist", "")
-            )
-            bitrate_value = (
-                candidate_mapping.get("bitrate")
-                or candidate_mapping.get("bitrate_kbps")
-                or getattr(soulseek_entry, "bitrate_kbps", None)
-            )
-            candidate_bitrate = int(bitrate_value or 0)
-            candidate_metadata = candidate_mapping.get("metadata")
-            if not isinstance(candidate_metadata, Mapping):
-                candidate_metadata = {}
-
-        candidate_title_text = str(candidate_title_raw or "")
-        normalized_track_title = self._normalise(track_name)
-        normalized_candidate_title = self._normalise(candidate_title_text)
-        alternate_title = ""
-        if " - " in candidate_title_text:
-            alternate_title = candidate_title_text.split(" - ", 1)[1]
-        elif isinstance(candidate_metadata, Mapping):
-            filename = candidate_metadata.get("filename")
-            if filename and " - " in str(filename):
-                alternate_title = str(filename).split(" - ", 1)[1]
-        title_score = max(
-            self._ratio(normalized_track_title, normalized_candidate_title),
-            self._ratio(normalized_track_title, self._normalise(alternate_title)),
-        )
-
-        candidate_artist_name = candidate_artist
-        if not candidate_artist_name and isinstance(candidate_metadata, Mapping):
-            artists_meta = candidate_metadata.get("artists")
-            if isinstance(artists_meta, list) and artists_meta:
-                candidate_artist_name = str(artists_meta[0])
-
-        artist_score = self._ratio(
-            self._normalise(track_artist),
-            self._normalise(candidate_username or candidate_artist_name),
-        )
-        bitrate_score = 1.0 if candidate_bitrate >= 256 else 0.5
-        return round((title_score * 0.6) + (artist_score * 0.2) + (bitrate_score * 0.2), 4)
+__all__ = [
+    "MusicMatchingEngine",
+    "calculate_slskd_match_confidence",
+    "compute_relevance_score",
+    "rank_candidates",
+]

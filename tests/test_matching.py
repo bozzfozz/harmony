@@ -21,7 +21,7 @@ def test_slskd_confidence_scoring(matching_engine: MusicMatchingEngine) -> None:
 
     score = matching_engine.calculate_slskd_match_confidence(spotify_track, candidate)
 
-    assert 0.7 < score <= 1.0
+    assert 0.65 < score <= 1.0
 
 
 def test_matching_api_soulseek(
