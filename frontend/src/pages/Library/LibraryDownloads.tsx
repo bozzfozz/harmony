@@ -14,9 +14,8 @@ import { Progress } from '../../components/ui/progress';
 import { Select } from '../../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../hooks/useToast';
+import { ApiError } from '../../api/client';
 import {
-  ApiError,
-  DownloadEntry,
   DOWNLOAD_STATS_QUERY_KEY,
   LIBRARY_POLL_INTERVAL_MS,
   cancelDownload,
@@ -27,7 +26,8 @@ import {
   useClearDownload,
   useRetryAllFailed,
   useRetryDownload
-} from '../../lib/api';
+} from '../../api/services/downloads';
+import type { DownloadEntry } from '../../api/types';
 import { useMutation, useQuery, useQueryClient } from '../../lib/query';
 import { mapProgressToPercent } from '../../lib/utils';
 
@@ -500,35 +500,33 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {retryAllFailedMutation.isSupported ? (
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (failedCount === 0 || retryAllFailedMutation.isPending) {
-                    return;
-                  }
-                  const message =
-                    failedCount === 1
-                      ? 'Soll der fehlgeschlagene Download erneut gestartet werden?'
-                      : `Sollen ${failedCount} fehlgeschlagene Downloads erneut gestartet werden?`;
-                  const confirmed = window.confirm(message);
-                  if (!confirmed) {
-                    return;
-                  }
-                  void retryAllFailedMutation.mutate();
-                }}
-                disabled={failedCount === 0 || retryAllFailedMutation.isPending}
-              >
-                {retryAllFailedMutation.isPending ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Wird neu gestartet...
-                  </span>
-                ) : (
-                  'Alle fehlgeschlagenen erneut versuchen'
-                )}
-              </Button>
-            ) : null}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (failedCount === 0 || retryAllFailedMutation.isPending) {
+                  return;
+                }
+                const message =
+                  failedCount === 1
+                    ? 'Soll der fehlgeschlagene Download erneut gestartet werden?'
+                    : `Sollen ${failedCount} fehlgeschlagene Downloads erneut gestartet werden?`;
+                const confirmed = window.confirm(message);
+                if (!confirmed) {
+                  return;
+                }
+                void retryAllFailedMutation.mutateAsync();
+              }}
+              disabled={failedCount === 0 || retryAllFailedMutation.isPending}
+            >
+              {retryAllFailedMutation.isPending ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Wird neu gestartet...
+                </span>
+              ) : (
+                'Alle fehlgeschlagenen erneut versuchen'
+              )}
+            </Button>
             <Button
               variant="outline"
               size="sm"

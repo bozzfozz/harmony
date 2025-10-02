@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '../ui/shadcn';
-import { useDownloadStats } from '../../lib/api';
+import { useDownloadStats } from '../../api/services/downloads';
 
 interface FailedBadgeProps {
   isActive: boolean;

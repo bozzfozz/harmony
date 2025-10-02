@@ -1,5 +1,3 @@
-import { AxiosHeaders, type AxiosRequestConfig } from 'axios';
-
 const ensureEnv = (): Record<string, string | undefined> => {
   const scope = globalThis as { process?: { env?: Record<string, string | undefined> } };
   if (!scope.process) {
@@ -13,6 +11,7 @@ const ensureEnv = (): Record<string, string | undefined> => {
 
 describe('auth header integration', () => {
   const originalEnv = { ...ensureEnv() };
+  let originalFetch: typeof fetch | undefined;
 
   const resetEnv = () => {
     const env = ensureEnv();
@@ -26,6 +25,8 @@ describe('auth header integration', () => {
 
   beforeEach(() => {
     jest.resetModules();
+    originalFetch = globalThis.fetch;
+    (globalThis as typeof globalThis & { fetch: jest.Mock }).fetch = jest.fn();
     localStorage.clear();
     delete window.__HARMONY_AUTH_HEADER_MODE__;
     delete window.__HARMONY_REQUIRE_AUTH__;
@@ -34,6 +35,11 @@ describe('auth header integration', () => {
 
   afterEach(() => {
     resetEnv();
+    if (originalFetch) {
+      (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = originalFetch;
+    } else {
+      delete (globalThis as Record<string, unknown>).fetch;
+    }
   });
 
   it('prefers VITE_API_KEY over other sources when resolving the key', async () => {
@@ -70,28 +76,22 @@ describe('auth header integration', () => {
   it('applies X-API-Key header and removes bearer header in x-api-key mode', async () => {
     await jest.isolateModulesAsync(async () => {
       const { applyAuth } = await import('../lib/auth');
-      const config: AxiosRequestConfig = {
-        headers: AxiosHeaders.from({ Authorization: 'Bearer legacy' })
-      };
-      const applied = applyAuth(config, 'local-key', 'x-api-key');
-      const headers = config.headers as AxiosHeaders;
+      const headers = new Headers({ Authorization: 'Bearer legacy' });
+      const applied = applyAuth(headers, 'local-key', 'x-api-key');
       expect(applied).toBe(true);
       expect(headers.get('X-API-Key')).toBe('local-key');
-      expect(headers.get('Authorization')).toBeUndefined();
+      expect(headers.get('Authorization')).toBeNull();
     });
   });
 
   it('applies bearer token and removes X-API-Key header in bearer mode', async () => {
     await jest.isolateModulesAsync(async () => {
       const { applyAuth } = await import('../lib/auth');
-      const config: AxiosRequestConfig = {
-        headers: AxiosHeaders.from({ 'X-API-Key': 'legacy' })
-      };
-      const applied = applyAuth(config, 'bearer-key', 'bearer');
-      const headers = config.headers as AxiosHeaders;
+      const headers = new Headers({ 'X-API-Key': 'legacy' });
+      const applied = applyAuth(headers, 'bearer-key', 'bearer');
       expect(applied).toBe(true);
       expect(headers.get('Authorization')).toBe('Bearer bearer-key');
-      expect(headers.get('X-API-Key')).toBeUndefined();
+      expect(headers.get('X-API-Key')).toBeNull();
     });
   });
 
@@ -101,29 +101,27 @@ describe('auth header integration', () => {
     env.VITE_AUTH_HEADER_MODE = 'bearer';
     env.VITE_REQUIRE_AUTH = 'true';
 
-    const calls: AxiosRequestConfig[] = [];
-
     await jest.isolateModulesAsync(async () => {
-      const { api } = await import('../lib/api');
-      api.defaults.adapter = async (config) => {
-        calls.push(config);
-        return {
-          data: { ok: true },
-          status: 200,
-          statusText: 'OK',
-          headers: new AxiosHeaders(),
-          config
-        };
-      };
+      const fetchMock = (globalThis as typeof globalThis & { fetch: jest.Mock }).fetch;
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        json: jest.fn().mockResolvedValue({ ok: true }),
+        text: jest.fn().mockResolvedValue(''),
+        blob: jest.fn()
+      });
 
-      await api.get('/protected');
+      const { request } = await import('../api/client');
+      await request({ url: '/protected', method: 'GET', responseType: 'json' });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Headers;
+      expect(headers.get('Authorization')).toBe('Bearer token-123');
+      expect(headers.get('X-API-Key')).toBeNull();
     });
-
-    expect(calls).toHaveLength(1);
-    const requestConfig = calls[0];
-    const headers = requestConfig.headers as AxiosHeaders;
-    expect(headers.get('Authorization')).toBe('Bearer token-123');
-    expect(headers.get('X-API-Key')).toBeUndefined();
   });
 
   it('omits auth headers when authentication is disabled', async () => {
@@ -132,60 +130,43 @@ describe('auth header integration', () => {
     env.VITE_AUTH_HEADER_MODE = 'bearer';
     env.VITE_REQUIRE_AUTH = 'false';
 
-    const calls: AxiosRequestConfig[] = [];
-
     await jest.isolateModulesAsync(async () => {
-      const { api } = await import('../lib/api');
-      api.defaults.adapter = async (config) => {
-        calls.push(config);
-        return {
-          data: { ok: true },
-          status: 200,
-          statusText: 'OK',
-          headers: new AxiosHeaders(),
-          config
-        };
-      };
+      const fetchMock = (globalThis as typeof globalThis & { fetch: jest.Mock }).fetch;
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        json: jest.fn().mockResolvedValue({ ok: true }),
+        text: jest.fn().mockResolvedValue(''),
+        blob: jest.fn()
+      });
 
-      await api.get('/protected');
+      const { request } = await import('../api/client');
+      await request({ url: '/protected', method: 'GET', responseType: 'json' });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Headers;
+      expect(headers.get('Authorization')).toBeNull();
+      expect(headers.get('X-API-Key')).toBeNull();
     });
-
-    expect(calls).toHaveLength(1);
-    const requestConfig = calls[0];
-    const headers = requestConfig.headers as AxiosHeaders;
-    expect(headers.get('Authorization')).toBeUndefined();
-    expect(headers.get('X-API-Key')).toBeUndefined();
   });
 
   it('blocks requests when auth is required but no key is available', async () => {
     ensureEnv().VITE_REQUIRE_AUTH = 'true';
 
-    let adapterCalled = false;
-
     await jest.isolateModulesAsync(async () => {
-      const { ApiError, api } = await import('../lib/api');
-      api.defaults.adapter = async (config) => {
-        adapterCalled = true;
-        return {
-          data: { ok: true },
-          status: 200,
-          statusText: 'OK',
-          headers: new AxiosHeaders(),
-          config
-        };
-      };
+      const fetchMock = (globalThis as typeof globalThis & { fetch: jest.Mock }).fetch;
+      const { ApiError, request } = await import('../api/client');
 
-      await expect(api.get('/protected')).rejects.toBeInstanceOf(ApiError);
-      await expect(api.get('/protected')).rejects.toMatchObject({
-        message: 'API key missing',
-        data: {
-          ok: false,
-          error: { code: 'AUTH_REQUIRED', message: 'API key missing' }
-        }
+      await expect(request({ url: '/protected', method: 'GET', responseType: 'json' })).rejects.toBeInstanceOf(ApiError);
+      await expect(request({ url: '/protected', method: 'GET', responseType: 'json' })).rejects.toMatchObject({
+        code: 'AUTH_REQUIRED',
+        message: 'API key missing'
       });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
-
-    expect(adapterCalled).toBe(false);
   });
 });
 

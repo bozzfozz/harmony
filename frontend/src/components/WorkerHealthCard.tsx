@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/shadcn';
 import { cn } from '../lib/utils';
-import type { WorkerStatus } from '../lib/api';
+import type { WorkerStatus } from '../api/types';
 
 export interface WorkerHealthCardProps {
   workerName: string;

@@ -1,6 +1,6 @@
 import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
-import { LIBRARY_POLL_INTERVAL_MS } from '../lib/api';
+import { LIBRARY_POLL_INTERVAL_MS } from '../api/services/downloads';
 import { useQuery } from '../lib/query';
 
 type MockedUseQuery = jest.MockedFunction<typeof useQuery>;

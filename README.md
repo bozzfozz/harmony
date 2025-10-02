@@ -186,7 +186,7 @@ npm install
 npm run dev
 ```
 
-Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_URL` (Host, z. B. `http://127.0.0.1:8000`) und optional `VITE_API_BASE_PATH` (Default: `/api/v1`) angebunden werden.
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_BASE_URL` (Host, z. B. `http://127.0.0.1:8000`) und optional `VITE_API_BASE_PATH` (Default: kein Präfix) angebunden werden.
 
 ### API-Key-Authentifizierung im Frontend
 
@@ -552,8 +552,10 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `VITE_API_URL` | string | `http://127.0.0.1:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
-| `VITE_API_BASE_PATH` | string | `/api/v1` | Präfix für alle REST-Aufrufe (z. B. `/api/v1`). | — |
+| `VITE_API_BASE_URL` | string | `http://127.0.0.1:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
+| `VITE_API_BASE_PATH` | string | _(leer)_ | Optionales Präfix für alle REST-Aufrufe (z. B. `/api`). | — |
+| `VITE_API_TIMEOUT_MS` | int | `8000` | Timeout (in Millisekunden) für HTTP-Requests des Frontends. | — |
+| `VITE_USE_OPENAPI_CLIENT` | bool | `false` | Aktiviert den optionalen OpenAPI-Client (falls generiert). | — |
 | `VITE_REQUIRE_AUTH` | bool | `false` | Blockt Frontend-Requests ohne API-Key. | — |
 | `VITE_AUTH_HEADER_MODE` | `x-api-key`\|`bearer` | `x-api-key` | Wählt den HTTP-Header für den Key. | — |
 | `VITE_API_KEY` | string | _(leer)_ | Optionaler Build-Time-Key für lokale Entwicklung. | 🔒 |
@@ -568,7 +570,7 @@ DATABASE_URL=sqlite:///./harmony.db
 HARMONY_API_KEYS=local-dev-key
 FEATURE_REQUIRE_AUTH=false
 WATCHLIST_MAX_CONCURRENCY=3
-VITE_API_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000
 VITE_AUTH_HEADER_MODE=x-api-key
 ```
 

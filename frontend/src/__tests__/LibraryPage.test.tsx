@@ -4,23 +4,29 @@ import { screen, waitFor } from '@testing-library/react';
 import LibraryPage from '../pages/Library';
 import { renderWithProviders } from '../test-utils';
 import {
-  addWatchlistArtist,
   getArtistPreferences,
   getArtistReleases,
-  getDownloads,
   getFollowedArtists,
-  getWatchlist,
-  removeWatchlistArtist,
   saveArtistPreferences
-} from '../lib/api';
+} from '../api/services/spotify';
+import { getDownloads } from '../api/services/downloads';
+import { addWatchlistArtist, getWatchlist, removeWatchlistArtist } from '../api/services/search';
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/spotify', () => ({
+  ...jest.requireActual('../api/services/spotify'),
   getFollowedArtists: jest.fn(),
   getArtistPreferences: jest.fn(),
   getArtistReleases: jest.fn(),
-  saveArtistPreferences: jest.fn(),
-  getDownloads: jest.fn(),
+  saveArtistPreferences: jest.fn()
+}));
+
+jest.mock('../api/services/downloads', () => ({
+  ...jest.requireActual('../api/services/downloads'),
+  getDownloads: jest.fn()
+}));
+
+jest.mock('../api/services/search', () => ({
+  ...jest.requireActual('../api/services/search'),
   getWatchlist: jest.fn(),
   addWatchlistArtist: jest.fn(),
   removeWatchlistArtist: jest.fn()

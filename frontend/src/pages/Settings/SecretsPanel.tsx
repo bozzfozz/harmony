@@ -2,7 +2,9 @@ import { useState } from 'react';
 
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/shadcn';
 import { useToast } from '../../hooks/useToast';
-import { ApiError, type SecretProvider, type SecretValidationData, validateSecret } from '../../lib/api';
+import { ApiError } from '../../api/client';
+import { validateSecret } from '../../api/services/system';
+import type { SecretProvider, SecretValidationData } from '../../api/types';
 
 const PROVIDERS: { id: SecretProvider; label: string; description: string }[] = [
   {

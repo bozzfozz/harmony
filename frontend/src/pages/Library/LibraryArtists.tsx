@@ -15,16 +15,16 @@ import { ScrollArea } from '../../components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Switch } from '../../components/ui/switch';
 import { useToast } from '../../hooks/useToast';
+import { ApiError } from '../../api/client';
 import {
-  ApiError,
-  ArtistPreferenceEntry,
   getArtistPreferences,
   getArtistReleases,
   getFollowedArtists,
   saveArtistPreferences,
-  SpotifyArtist,
-  SpotifyArtistRelease
-} from '../../lib/api';
+  type ArtistPreferenceEntry,
+  type SpotifyArtist,
+  type SpotifyArtistRelease
+} from '../../api/services/spotify';
 import { useMutation, useQuery } from '../../lib/query';
 
 type ReleaseFilterValue = 'all' | 'album' | 'single' | 'ep';

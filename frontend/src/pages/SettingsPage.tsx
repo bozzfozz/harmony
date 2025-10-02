@@ -19,14 +19,10 @@ import useServiceSettingsForm from '../hooks/useServiceSettingsForm';
 import { useToast } from '../hooks/useToast';
 import AuthKeyPanel from './Settings/AuthKeyPanel';
 import SecretsPanel from './Settings/SecretsPanel';
-import {
-  ApiError,
-  getSpotifyMode,
-  setSpotifyMode,
-  testServiceConnection,
-  type ServiceIdentifier,
-  type SpotifyMode
-} from '../lib/api';
+import { ApiError } from '../api/client';
+import { getSpotifyMode, setSpotifyMode, type SpotifyMode } from '../api/services/spotify';
+import { testServiceConnection } from '../api/services/system';
+import type { ServiceIdentifier } from '../api/types';
 
 const spotifyFields = [
   { key: 'SPOTIFY_CLIENT_ID', label: 'Client ID', placeholder: 'Spotify client ID' },
@@ -162,12 +158,15 @@ const SettingsPage = () => {
           error.markHandled();
           return;
         }
-      if (error.handled) {
-        return;
+
+        if (error.handled) {
+          return;
+        }
+
+        error.markHandled();
       }
-      error.markHandled();
-    }
-    toast({
+
+      toast({
         title: `❌ ${label}-Verbindung konnte nicht geprüft werden`,
         description: 'Der Health-Endpoint ist derzeit nicht erreichbar.',
         variant: 'destructive'

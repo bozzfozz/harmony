@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { subscribeToApiErrors } from '../lib/api';
+import { subscribeToApiErrors } from '../api/client';
 import { useToast } from '../hooks/useToast';
 
 const ApiErrorListener = () => {

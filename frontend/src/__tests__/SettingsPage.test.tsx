@@ -2,14 +2,14 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SettingsPage from '../pages/SettingsPage';
 import { renderWithProviders } from '../test-utils';
-import { getSettings, updateSettings, testServiceConnection } from '../lib/api';
+import { getSettings, updateSettings, testServiceConnection } from '../api/services/system';
 
 type GetSettingsMock = jest.MockedFunction<typeof getSettings>;
 type UpdateSettingsMock = jest.MockedFunction<typeof updateSettings>;
 type TestServiceConnectionMock = jest.MockedFunction<typeof testServiceConnection>;
 
-jest.mock('../lib/api', () => ({
-  ...jest.requireActual('../lib/api'),
+jest.mock('../api/services/system', () => ({
+  ...jest.requireActual('../api/services/system'),
   getSettings: jest.fn(),
   updateSettings: jest.fn(),
   testServiceConnection: jest.fn()
