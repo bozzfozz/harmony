@@ -609,12 +609,18 @@ Alle Fehler folgen dem kanonischen Envelope und enthalten die Fehlercodes `VALID
 
 Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und wird automatisch in Swagger (`/docs`) sowie ReDoc (`/redoc`) gespiegelt. Änderungen am öffentlichen Vertrag müssen stets das OpenAPI-Gate passieren.
 
+### API-Schicht
+
+- Domain-Router leben unter `app/api/routers/` und bündeln thematisch verwandte Endpunkte (z. B. `spotify`, `search`, `watchlist`, `system`). Legacy-Module in `app/routers/` delegieren nur noch.
+- `app/api/router_registry.py` registriert sämtliche Domain-Router und vergibt konsistente Prefixes sowie OpenAPI-Tags – Tests können die Liste zentral prüfen.
+- `app/api/middleware.py` installiert Request-ID- und Request-Logging-Middleware, den ETag-Cache sowie optionale Auth- und Rate-Limit-Prüfungen.
+
 ### Auth, CORS & Rate Limiting
 
-- Standardmäßig verlangt jede Route (außer Allowlist) einen gültigen API-Key via `X-API-Key` oder `Authorization: Bearer`. Hinterlegte Keys können aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`) stammen.
+- Standardmäßig sind sowohl Authentifizierung (`FEATURE_REQUIRE_AUTH`) als auch globales Request-Limiting (`FEATURE_RATE_LIMITING`) deaktiviert. Wird Auth aktiviert, erwartet jede nicht allowlistete Route einen gültigen API-Key via `X-API-Key` oder `Authorization: Bearer`. Keys stammen aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`).
 - Health-, Readiness-, Docs- und OpenAPI-Pfade werden automatisch freigestellt. Zusätzliche Pfade lassen sich über `AUTH_ALLOWLIST` definieren.
 - `ALLOWED_ORIGINS` kontrolliert CORS; leere Konfiguration blockiert Browser-Anfragen.
-- Das Backend selbst führt kein globales Request-Rate-Limiting durch, setzt aber für sensible Pfade (`/system/secrets/*`) das interne Limit `SECRET_VALIDATE_MAX_PER_MIN` durch. Externe 429-Antworten (z. B. slskd) werden als `RATE_LIMITED` propagiert.
+- Optionales globales Rate-Limiting wird per `FEATURE_RATE_LIMITING` aktiviert; `OPTIONS`-Requests und Allowlist-Pfade bleiben ausgenommen. Sensible Systempfade (`/system/secrets/*`) behalten zusätzlich ihr internes Limit `SECRET_VALIDATE_MAX_PER_MIN`.
 
 ### Logging & Observability
 
@@ -650,7 +656,7 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 ### Spotify-Domäne (intern)
 
 - **Service-Layer:** `SpotifyDomainService` bündelt Statusabfragen, Playlist-Operationen, FREE-Import und Backfill-Trigger in `app/services/spotify_domain_service.py`.
-- **Router-Bündelung:** Spotify-Endpunkte werden im Sammelrouter `app/api/spotify.py` registriert; die Legacy-Router delegieren lediglich.
+- **Router-Bündelung:** Spotify-Endpunkte werden im Sammelrouter `app/api/routers/spotify.py` registriert; die Legacy-Router delegieren lediglich.
 - **Orchestrator-Anbindung:** FREE-Import- und Backfill-Flows nutzen ausschließlich die Orchestrator-Handler; direkte Worker-Initiierung aus Routern entfällt.
 
 Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.

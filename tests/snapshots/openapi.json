@@ -1761,50 +1761,6 @@
         "title": "SavedTracksResponse",
         "type": "object"
       },
-      "SearchFilterPayload": {
-        "description": "Payload model for optional search filters.",
-        "properties": {
-          "genre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optionales Genre-Filter",
-            "title": "Genre"
-          },
-          "quality": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optionale Qualit\u00e4tsanforderung (z. B. FLAC, 320kbps)",
-            "title": "Quality"
-          },
-          "year": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optionales Jahr-Filter",
-            "title": "Year"
-          }
-        },
-        "title": "SearchFilterPayload",
-        "type": "object"
-      },
       "SearchItem": {
         "description": "Normalised search result entry.",
         "properties": {
@@ -1915,6 +1871,127 @@
           "title"
         ],
         "title": "SearchItem",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "description": "Schema describing the smart search payload.",
+        "properties": {
+          "format_priority": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preferred audio formats used for secondary sorting",
+            "title": "Format Priority"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional genre filter (case-insensitive, diacritic agnostic)",
+            "title": "Genre"
+          },
+          "limit": {
+            "default": 25,
+            "description": "Maximum number of items to return",
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "min_bitrate": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum acceptable bitrate in kbps",
+            "title": "Min Bitrate"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset for pagination",
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Free-text search query",
+            "title": "Query",
+            "type": "string"
+          },
+          "sources": {
+            "description": "Sources to query",
+            "items": {
+              "enum": [
+                "spotify",
+                "soulseek"
+              ],
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "type": {
+            "default": "mixed",
+            "description": "Result type filter (artist/album/track/mixed)",
+            "enum": [
+              "track",
+              "album",
+              "artist",
+              "mixed"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "maximum": 2099.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lower bound of the release year (inclusive)",
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "maximum": 2099.0,
+                "minimum": 1900.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upper bound of the release year (inclusive)",
+            "title": "Year To"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
         "type": "object"
       },
       "SearchResponse": {
@@ -2865,171 +2942,6 @@
           "items"
         ],
         "title": "WatchlistListResponse",
-        "type": "object"
-      },
-      "app__routers__sync_router__SearchRequest": {
-        "description": "Request payload for the global search endpoint.",
-        "properties": {
-          "filters": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SearchFilterPayload"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optionale Filter f\u00fcr Genre, Jahr und Qualit\u00e4t"
-          },
-          "query": {
-            "description": "Freitext-Suchbegriff",
-            "title": "Query",
-            "type": "string"
-          },
-          "sources": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optionale Quellenauswahl (spotify, soulseek)",
-            "title": "Sources"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "title": "SearchRequest",
-        "type": "object"
-      },
-      "app__schemas_search__SearchRequest": {
-        "description": "Schema describing the smart search payload.",
-        "properties": {
-          "format_priority": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Preferred audio formats used for secondary sorting",
-            "title": "Format Priority"
-          },
-          "genre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional genre filter (case-insensitive, diacritic agnostic)",
-            "title": "Genre"
-          },
-          "limit": {
-            "default": 25,
-            "description": "Maximum number of items to return",
-            "minimum": 1.0,
-            "title": "Limit",
-            "type": "integer"
-          },
-          "min_bitrate": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Minimum acceptable bitrate in kbps",
-            "title": "Min Bitrate"
-          },
-          "offset": {
-            "default": 0,
-            "description": "Offset for pagination",
-            "minimum": 0.0,
-            "title": "Offset",
-            "type": "integer"
-          },
-          "query": {
-            "description": "Free-text search query",
-            "title": "Query",
-            "type": "string"
-          },
-          "sources": {
-            "description": "Sources to query",
-            "items": {
-              "enum": [
-                "spotify",
-                "soulseek"
-              ],
-              "type": "string"
-            },
-            "title": "Sources",
-            "type": "array"
-          },
-          "type": {
-            "default": "mixed",
-            "description": "Result type filter (artist/album/track/mixed)",
-            "enum": [
-              "track",
-              "album",
-              "artist",
-              "mixed"
-            ],
-            "title": "Type",
-            "type": "string"
-          },
-          "year_from": {
-            "anyOf": [
-              {
-                "maximum": 2099.0,
-                "minimum": 1900.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Lower bound of the release year (inclusive)",
-            "title": "Year From"
-          },
-          "year_to": {
-            "anyOf": [
-              {
-                "maximum": 2099.0,
-                "minimum": 1900.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Upper bound of the release year (inclusive)",
-            "title": "Year To"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "title": "SearchRequest",
         "type": "object"
       }
     },
@@ -5648,6 +5560,7 @@
         },
         "summary": "Get Health",
         "tags": [
+          "System",
           "System"
         ]
       }
@@ -6865,19 +6778,20 @@
         },
         "summary": "Get Readiness",
         "tags": [
+          "System",
           "System"
         ]
       }
     },
     "/api/v1/search": {
       "post": {
-        "description": "Perform a combined search across Spotify and Soulseek.",
-        "operationId": "global_search_api_v1_search_post",
+        "description": "Aggregate search results from Spotify and Soulseek with ranking.",
+        "operationId": "smart_search_api_v1_search_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/app__routers__sync_router__SearchRequest"
+                "$ref": "#/components/schemas/SearchRequest"
               }
             }
           },
@@ -6888,9 +6802,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Global Search Api V1 Search Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SearchResponse"
                 }
               }
             },
@@ -6987,9 +6899,10 @@
             "description": "Gateway timeout"
           }
         },
-        "summary": "Global Search",
+        "summary": "Smart Search",
         "tags": [
-          "Sync"
+          "Search",
+          "Search"
         ]
       }
     },
@@ -17268,6 +17181,7 @@
         },
         "summary": "Get Status",
         "tags": [
+          "System",
           "System"
         ]
       }
@@ -17533,6 +17447,7 @@
         },
         "summary": "Get System Stats",
         "tags": [
+          "System",
           "System"
         ]
       }
@@ -17692,6 +17607,7 @@
         },
         "summary": "List Watchlist",
         "tags": [
+          "Watchlist",
           "Watchlist"
         ]
       },
@@ -17812,6 +17728,7 @@
         },
         "summary": "Add Watchlist Artist",
         "tags": [
+          "Watchlist",
           "Watchlist"
         ]
       }
@@ -17928,6 +17845,7 @@
         },
         "summary": "Remove Watchlist Artist",
         "tags": [
+          "Watchlist",
           "Watchlist"
         ]
       }
