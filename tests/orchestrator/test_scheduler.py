@@ -132,3 +132,44 @@ async def test_scheduler_stops_when_lifespan_signal_set() -> None:
     task = asyncio.create_task(scheduler.run(lifespan))
     lifespan.set()
     await asyncio.wait_for(task, timeout=1)
+
+
+def test_scheduler_backpressure_increases_interval() -> None:
+    config = PriorityConfig(priorities={"sync": 1})
+    stub = StubPersistence({"sync": []})
+    scheduler = Scheduler(
+        priority_config=config,
+        poll_interval_ms=10,
+        poll_interval_max_ms=40,
+        idle_backoff_multiplier=2.0,
+        persistence_module=stub,
+    )
+
+    assert scheduler.poll_interval == pytest.approx(0.01)
+
+    scheduler.lease_ready_jobs()
+    assert scheduler.poll_interval == pytest.approx(0.02)
+
+    scheduler.lease_ready_jobs()
+    assert scheduler.poll_interval == pytest.approx(0.04)
+
+    scheduler.lease_ready_jobs()
+    assert scheduler.poll_interval == pytest.approx(0.04)
+
+
+def test_scheduler_backpressure_resets_after_work() -> None:
+    config = PriorityConfig(priorities={"sync": 1})
+    stub = StubPersistence({"sync": [make_job(1, "sync", 100, 0)]})
+    scheduler = Scheduler(
+        priority_config=config,
+        poll_interval_ms=10,
+        poll_interval_max_ms=40,
+        idle_backoff_multiplier=2.0,
+        persistence_module=stub,
+    )
+
+    scheduler.lease_ready_jobs()
+    assert scheduler.poll_interval == pytest.approx(0.01)
+
+    scheduler.lease_ready_jobs()
+    assert scheduler.poll_interval > 0.01

@@ -517,7 +517,7 @@ Harmony bündelt alle Hintergrundjobs in einem Orchestrator, der die Queue prior
 
 **Komponenten**
 
-- **Scheduler** (`app/orchestrator/scheduler.py`) liest `queue_jobs`, sortiert sie nach konfigurierbaren Prioritäten und leased sie mit einem gemeinsamen Sichtbarkeits-Timeout. Stop-Signale werden über Ereignisse propagiert, sodass der Scheduler ohne Race-Conditions endet.
+- **Scheduler** (`app/orchestrator/scheduler.py`) liest `queue_jobs`, sortiert sie nach konfigurierbaren Prioritäten und leased sie mit einem gemeinsamen Sichtbarkeits-Timeout. Stop-Signale werden über Ereignisse propagiert, sodass der Scheduler ohne Race-Conditions endet. Bei Leerlauf erhöht ein Backoff die Polling-Intervalle bis zum in `ORCH_POLL_INTERVAL_MAX_MS` gesetzten Limit, wodurch Datenbank-Last reduziert wird.
 - **Dispatcher** (`app/orchestrator/dispatcher.py`) respektiert globale und Pool-bezogene Parallelitätsgrenzen, startet Handler pro Job-Typ und pflegt Heartbeats. Jeder Lauf emittiert strukturierte `event=orchestrator.*` Logs für Schedule-, Lease-, Dispatch- und Commit-Phasen.
 - **WatchlistTimer** (`app/orchestrator/timer.py`) triggert periodisch neue Watchlist-Jobs, respektiert dabei dieselben Stop-Events und wartet beim Shutdown auf laufende Ticks. Das verhindert, dass nach einem Shutdown noch neue Artists eingeplant werden.
 
@@ -537,7 +537,8 @@ Harmony bündelt alle Hintergrundjobs in einem Orchestrator, der die Queue prior
 | --- | --- | --- | --- | --- |
 | `ORCH_PRIORITY_JSON` | json | _(leer)_ | Optionales Mapping `job_type → priority`. JSON besitzt Vorrang vor CSV. | — |
 | `ORCH_PRIORITY_CSV` | string | `sync:100,matching:90,retry:80,watchlist:50` | Fallback für Prioritäten (`job:score`). Unbekannte Job-Typen werden ignoriert. | — |
-| `ORCH_POLL_INTERVAL_MS` | int | `200` | Wartezeit zwischen Scheduler-Ticks (mindestens 10 ms). | — |
+| `ORCH_POLL_INTERVAL_MS` | int | `200` | Minimales Warteintervall zwischen Scheduler-Ticks (mindestens 10 ms). | — |
+| `ORCH_POLL_INTERVAL_MAX_MS` | int | `2000` | Obergrenze für das dynamisch hochgeregelte Scheduler-Intervall bei Leerlauf. | — |
 | `ORCH_VISIBILITY_TIMEOUT_S` | int | `60` | Lease-Dauer beim Leasing aus der Queue (Minimum 5 s). | — |
 | `ORCH_GLOBAL_CONCURRENCY` | int | `8` | Globale Obergrenze paralleler Dispatcher-Tasks. | — |
 | `ORCH_HEARTBEAT_S` | int | `20` | Zielintervall für Dispatcher-Heartbeats (greift zusätzlich zur 50%-Lease-Regel). | — |
