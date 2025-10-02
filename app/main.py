@@ -7,50 +7,29 @@ import inspect
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-import sys
 from datetime import datetime, timezone
-from time import perf_counter
 from typing import Any, Mapping
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
-if sys.version_info < (3, 11):  # pragma: no cover - Python <3.11 fallback
-
-    class ExceptionGroup(Exception):  # type: ignore[override]
-        """Compatibility stub for Python versions without ExceptionGroup."""
-
-
-from app.api.router_registry import compose_prefix as build_router_prefix, get_domain_routers
+from app.api import router_registry
+from app.api.errors import setup_exception_handlers
+from app.api.middleware import install_api_middlewares
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
     get_app_config,
     get_soulseek_client,
     get_spotify_client,
-    require_api_key,
 )
 from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
-from app.errors import (
-    AppError,
-    ErrorCode,
-    InternalServerError,
-    rate_limit_meta,
-    to_response,
-)
 from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService
-from app.middleware.cache_conditional import CachePolicy, ConditionalCacheMiddleware
-from app.middleware.request_id import RequestIDMiddleware
-from app.middleware.request_logging import RequestLoggingMiddleware
-from app.services.cache import ResponseCache
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
@@ -61,19 +40,6 @@ from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
-
-
-def _compose_subpath(base_path: str, suffix: str) -> str:
-    cleaned_suffix = suffix if suffix.startswith("/") else f"/{suffix}"
-    if not base_path or base_path == "/":
-        return cleaned_suffix
-    return f"{base_path.rstrip('/')}{cleaned_suffix}"
-
-
-def _format_router_prefix(base_path: str) -> str:
-    if not base_path or base_path == "/":
-        return ""
-    return base_path
 
 
 def _env_as_bool(value: str | None, *, default: bool) -> bool:
@@ -89,47 +55,6 @@ def _env_as_int(value: str | None, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
-
-
-def _normalise_cache_path(raw_path: str, base_path: str) -> str:
-    path = raw_path.strip()
-    if not path:
-        return ""
-    if not path.startswith("/"):
-        path = f"/{path}"
-    if not base_path or base_path == "/":
-        return path
-    if path.startswith(base_path):
-        return path
-    return f"{base_path.rstrip('/')}{path}"
-
-
-def _parse_cache_policies(
-    raw_value: str | None,
-    *,
-    base_path: str,
-    default_ttl: int,
-    default_stale: int,
-) -> dict[str, CachePolicy]:
-    if not raw_value:
-        return {}
-    policies: dict[str, CachePolicy] = {}
-    for chunk in raw_value.split(","):
-        entry = chunk.strip()
-        if not entry:
-            continue
-        parts = [component.strip() for component in entry.split("|") if component.strip()]
-        if not parts:
-            continue
-        path = _normalise_cache_path(parts[0], base_path)
-        max_age = default_ttl
-        stale = default_stale
-        if len(parts) > 1:
-            max_age = _env_as_int(parts[1], default=default_ttl)
-        if len(parts) > 2:
-            stale = _env_as_int(parts[2], default=default_stale)
-        policies[path] = CachePolicy(path=path, max_age=max_age, stale_while_revalidate=stale)
-    return policies
 
 
 class LegacyLoggingRoute(APIRoute):
@@ -151,47 +76,6 @@ class LegacyLoggingRoute(APIRoute):
             return response
 
         return logging_route_handler
-
-
-def _mount_domain_routers(
-    router: APIRouter,
-    *,
-    base_prefix: str,
-    emit_log: bool,
-) -> None:
-    start_time = perf_counter()
-    entries = get_domain_routers()
-    registered_prefixes: list[str] = []
-
-    for prefix, domain_router, tags in entries:
-        if prefix and tags:
-            router.include_router(domain_router, prefix=prefix, tags=tags)
-        elif prefix:
-            router.include_router(domain_router, prefix=prefix)
-        elif tags:
-            router.include_router(domain_router, tags=tags)
-        else:
-            router.include_router(domain_router)
-
-        effective_prefix = prefix or domain_router.prefix or ""
-        combined_prefix = build_router_prefix(base_prefix, effective_prefix)
-        registered_prefixes.append(combined_prefix or "/")
-
-    if emit_log:
-        duration_ms = (perf_counter() - start_time) * 1_000
-        preview = registered_prefixes[:5]
-        if len(registered_prefixes) > 5:
-            preview = preview + ["…"]
-        logger.info(
-            "Mounted %d domain routers",
-            len(entries),
-            extra={
-                "event": "router_registry.mounted",
-                "count": len(entries),
-                "prefixes": preview,
-                "duration_ms": round(duration_ms, 3),
-            },
-        )
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
@@ -643,9 +527,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Harmony application stopped")
 
 
-_docs_url = _compose_subpath(_API_BASE_PATH, "/docs")
-_redoc_url = _compose_subpath(_API_BASE_PATH, "/redoc")
-_openapi_url = _compose_subpath(_API_BASE_PATH, "/openapi.json")
+_docs_url = router_registry.compose_prefix(_API_BASE_PATH, "/docs")
+_redoc_url = router_registry.compose_prefix(_API_BASE_PATH, "/redoc")
+_openapi_url = router_registry.compose_prefix(_API_BASE_PATH, "/openapi.json")
 
 app = FastAPI(
     title="Harmony Backend",
@@ -674,9 +558,6 @@ app.state.secret_validation_service = SecretValidationService()
 
 _initial_security = _config_snapshot.security
 
-app.add_middleware(RequestIDMiddleware)
-app.add_middleware(RequestLoggingMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(_initial_security.allowed_origins),
@@ -686,265 +567,37 @@ app.add_middleware(
     expose_headers=[],
 )
 
-_cache_enabled = _env_as_bool(os.getenv("CACHE_ENABLED"), default=True)
-_cache_default_ttl = _env_as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)
-_cache_default_stale = _env_as_int(
-    os.getenv("CACHE_STALE_WHILE_REVALIDATE_S"), default=_cache_default_ttl * 2
-)
-_cache_max_items = _env_as_int(os.getenv("CACHE_MAX_ITEMS"), default=5_000)
-_cache_fail_open = _env_as_bool(os.getenv("CACHE_FAIL_OPEN"), default=True)
-_cache_etag_strategy = os.getenv("CACHE_STRATEGY_ETAG", "strong")
-_cacheable_paths_raw = os.getenv("CACHEABLE_PATHS")
-
-_cache_policies = _parse_cache_policies(
-    _cacheable_paths_raw,
-    base_path=_format_router_prefix(_API_BASE_PATH) or "/",
-    default_ttl=_cache_default_ttl,
-    default_stale=_cache_default_stale,
-)
-_cache_default_policy = CachePolicy(
-    path="*",
-    max_age=_cache_default_ttl,
-    stale_while_revalidate=_cache_default_stale,
-)
-_response_cache = ResponseCache(
-    max_items=_cache_max_items,
-    default_ttl=float(_cache_default_ttl),
-    fail_open=_cache_fail_open,
-)
-app.state.response_cache = _response_cache
-app.state.cache_policies = _cache_policies
-
-app.add_middleware(
-    ConditionalCacheMiddleware,
-    cache=_response_cache,
-    enabled=_cache_enabled,
-    policies=_cache_policies,
-    default_policy=_cache_default_policy,
-    etag_strategy=_cache_etag_strategy,
-    vary_headers=("Authorization", "X-API-Key", "Origin", "Accept-Encoding"),
-)
-
-
-@app.middleware("http")
-async def enforce_api_key(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    security_config = getattr(request.app.state, "security_config", _config_snapshot.security)
-    if security_config.require_auth:
-        try:
-            require_api_key(request)
-        except AppError as exc:
-            return exc.as_response(request_path=request.url.path, method=request.method)
-    return await call_next(request)
+install_api_middlewares(app, _config_snapshot, base_path=_API_BASE_PATH)
 
 
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
-_api_base_prefix = _format_router_prefix(_API_BASE_PATH)
+_api_base_prefix = router_registry.compose_prefix("", _API_BASE_PATH)
 
 _versioned_router = APIRouter()
-_mount_domain_routers(
+router_registry.attach_domain_routers(
     _versioned_router,
     base_prefix=_api_base_prefix,
     emit_log=True,
+    logger=logger,
 )
 _versioned_router.add_api_route("/", root, methods=["GET"], tags=["System"])
 app.include_router(_versioned_router, prefix=_api_base_prefix)
 
 if _LEGACY_ROUTES_ENABLED:
     legacy_router = APIRouter(route_class=LegacyLoggingRoute)
-    _mount_domain_routers(legacy_router, base_prefix="", emit_log=False)
+    router_registry.attach_domain_routers(
+        legacy_router,
+        base_prefix="",
+        emit_log=False,
+        logger=logger,
+    )
     legacy_router.add_api_route("/", root, methods=["GET"], tags=["System"])
     app.include_router(legacy_router)
 
-
-def _format_validation_field(raw_loc: list[Any]) -> str:
-    location: list[str] = [str(part) for part in raw_loc]
-    if location and location[0] in {"body", "query", "path", "header", "cookie"}:
-        location = location[1:]
-    return ".".join(location) if location else ""
-
-
-def _extract_detail_message(detail: Any, default: str) -> str:
-    if isinstance(detail, str) and detail.strip():
-        return detail
-    if isinstance(detail, Mapping):
-        for key in ("message", "detail", "error"):
-            candidate = detail.get(key)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate
-    return default
-
-
-def _extract_detail_meta(detail: Any) -> Mapping[str, Any] | None:
-    if isinstance(detail, Mapping):
-        candidate = detail.get("meta")
-        if isinstance(candidate, Mapping):
-            return candidate
-        extras = {k: v for k, v in detail.items() if k not in {"message", "detail", "error"}}
-        if extras:
-            return extras
-    return None
-
-
-@app.exception_handler(RequestValidationError)
-async def handle_request_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
-    fields: list[dict[str, str]] = []
-    for error in exc.errors():
-        raw_loc = error.get("loc", [])
-        if isinstance(raw_loc, (list, tuple)):
-            components = list(raw_loc)
-        else:
-            components = [raw_loc]
-        location = _format_validation_field(components)
-        if not location:
-            location = ".".join(str(component) for component in components if component is not None)
-        message = error.get("msg", "Invalid input.")
-        fields.append({"name": location or "?", "message": message})
-    meta = {"fields": fields} if fields else None
-    return to_response(
-        message="Request validation failed.",
-        code=ErrorCode.VALIDATION_ERROR,
-        status_code=status.HTTP_400_BAD_REQUEST,
-        request_path=request.url.path,
-        method=request.method,
-        meta=meta,
-    )
-
-
-async def _render_http_exception(
-    request: Request,
-    *,
-    status_code: int,
-    detail: Any,
-    headers: Mapping[str, str] | None,
-) -> JSONResponse:
-    effective_status = status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
-    header_map = dict(headers or {})
-
-    if effective_status == status.HTTP_404_NOT_FOUND:
-        message = _extract_detail_message(detail, "Resource not found.")
-        return to_response(
-            message=message,
-            code=ErrorCode.NOT_FOUND,
-            status_code=effective_status,
-            request_path=request.url.path,
-            method=request.method,
-            headers=header_map or None,
-        )
-
-    if effective_status == status.HTTP_429_TOO_MANY_REQUESTS:
-        message = _extract_detail_message(detail, "Too many requests.")
-        base_meta = _extract_detail_meta(detail)
-        meta, retry_headers = rate_limit_meta(header_map)
-        if base_meta:
-            meta = {**base_meta, **(meta or {})}
-        combined_headers = {**header_map, **retry_headers}
-        return to_response(
-            message=message,
-            code=ErrorCode.RATE_LIMITED,
-            status_code=effective_status,
-            request_path=request.url.path,
-            method=request.method,
-            meta=meta,
-            headers=combined_headers or None,
-        )
-
-    if effective_status in {424, 502, 503, 504}:
-        message = _extract_detail_message(detail, "Upstream service is unavailable.")
-        meta = _extract_detail_meta(detail)
-        return to_response(
-            message=message,
-            code=ErrorCode.DEPENDENCY_ERROR,
-            status_code=effective_status,
-            request_path=request.url.path,
-            method=request.method,
-            meta=meta,
-            headers=header_map or None,
-        )
-
-    if effective_status == status.HTTP_400_BAD_REQUEST:
-        message = _extract_detail_message(detail, "Request validation failed.")
-        meta = _extract_detail_meta(detail)
-        return to_response(
-            message=message,
-            code=ErrorCode.VALIDATION_ERROR,
-            status_code=effective_status,
-            request_path=request.url.path,
-            method=request.method,
-            meta=meta,
-            headers=header_map or None,
-        )
-
-    if effective_status >= 500:
-        message = _extract_detail_message(detail, "An unexpected error occurred.")
-        meta = _extract_detail_meta(detail)
-        return to_response(
-            message=message,
-            code=ErrorCode.INTERNAL_ERROR,
-            status_code=effective_status,
-            request_path=request.url.path,
-            method=request.method,
-            meta=meta,
-        )
-
-    message = _extract_detail_message(detail, "Request could not be completed.")
-    meta = _extract_detail_meta(detail)
-    return to_response(
-        message=message,
-        code=ErrorCode.INTERNAL_ERROR,
-        status_code=effective_status,
-        request_path=request.url.path,
-        method=request.method,
-        meta=meta,
-        headers=header_map or None,
-    )
-
-
-@app.exception_handler(HTTPException)
-async def handle_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
-    return await _render_http_exception(
-        request,
-        status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=exc.detail,
-        headers=exc.headers,
-    )
-
-
-@app.exception_handler(StarletteHTTPException)
-async def handle_starlette_http_exception(
-    request: Request, exc: StarletteHTTPException
-) -> JSONResponse:
-    return await _render_http_exception(
-        request,
-        status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=exc.detail,
-        headers=exc.headers,
-    )
-
-
-@app.exception_handler(AppError)
-async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
-    return exc.as_response(request_path=request.url.path, method=request.method)
-
-
-@app.exception_handler(Exception)
-async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled application error", exc_info=exc)
-    error = InternalServerError()
-    return error.as_response(request_path=request.url.path, method=request.method)
-
-
-if sys.version_info >= (3, 11):  # pragma: no branch - version guard
-
-    @app.exception_handler(ExceptionGroup)  # type: ignore[arg-type]
-    async def handle_exception_group(request: Request, exc: ExceptionGroup) -> JSONResponse:
-        logger.exception("Unhandled application error group", exc_info=exc)
-        error = InternalServerError()
-        return error.as_response(request_path=request.url.path, method=request.method)
+setup_exception_handlers(app)
 
 
 def _is_allowlisted_path(path: str) -> bool:
@@ -1149,8 +802,8 @@ def custom_openapi() -> dict[str, Any]:
                 content = existing.setdefault("content", {})
                 content.setdefault("application/json", {"schema": error_ref})
 
-    health_path = _compose_subpath(config.api_base_path, "/health")
-    ready_path = _compose_subpath(config.api_base_path, "/ready")
+    health_path = router_registry.compose_prefix(config.api_base_path, "/health")
+    ready_path = router_registry.compose_prefix(config.api_base_path, "/ready")
     health_item = paths.get(health_path)
     if isinstance(health_item, dict):
         health_operation = health_item.get("get")

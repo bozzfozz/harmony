@@ -5,6 +5,7 @@
 - docs: enable Auto-FAST-TRACK for CODX-ORCH-* tasks in AGENTS.md [CODX-DOC-102]
 - feat(orchestrator): configurable priorities, pools, visibility, heartbeat, timer [CODX-ORCH-084]
   - Dokumentiert den Orchestrator im README, ergänzt Runtime-Guides (Prioritäten, Pools, Heartbeats) und verweist im PR-Template auf Migrations-/ENV-Hinweise.
+- refactor(api): domain router registry, unified middleware chain & error handlers; remove `/metrics` wiring [CODX-API-REF-312]
 - refactor(spotify): consolidate domain service and routers via `SpotifyDomainService` + unified router [CODX-P1-SPOT-303]
 - feat(spotify): move Spotify domain service + routes into unified module, delegate legacy routers and extend tests/docs [CODX-P1-SPOT-203]
 - chore(config): centralize orchestrator/provider env parsing, add tests & docs [CODX-CONF-301]

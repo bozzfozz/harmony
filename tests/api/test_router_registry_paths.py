@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from app.api.router_registry import compose_prefix, get_domain_routers
 from app.api.spotify import router as spotify_domain_router
+from app.api.routers import search as search_domain_module
+from app.api.routers import system as system_domain_module
+from app.api.routers import watchlist as watchlist_domain_module
 from app.routers import (
     activity_router,
     download_router,
@@ -11,12 +14,9 @@ from app.routers import (
     integrations_router,
     matching_router,
     metadata_router,
-    search_router,
     settings_router,
     soulseek_router,
     sync_router,
-    system_router,
-    watchlist_router,
 )
 
 
@@ -41,14 +41,14 @@ def test_get_domain_routers_matches_expected_configuration() -> None:
         ("/settings", settings_router, ["Settings"]),
         ("", metadata_router, []),
         ("/dlq", dlq_router, ["DLQ"]),
-        ("", search_router, []),
         ("", sync_router, []),
-        ("", system_router, []),
+        ("", system_domain_module.router, ["System"]),
         ("", download_router, []),
         ("", activity_router, []),
         ("", integrations_router, []),
         ("/health", health_router, ["Health"]),
-        ("", watchlist_router, []),
+        ("", watchlist_domain_module.router, ["Watchlist"]),
+        ("", search_domain_module.router, ["Search"]),
     ]
 
     assert get_domain_routers() == expected

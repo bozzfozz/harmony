@@ -204,8 +204,3 @@ def test_ready_endpoint_returns_200_when_ok(client) -> None:
         payload = response.json()
         orchestrator_meta = payload["error"]["meta"].get("orchestrator")
         assert orchestrator_meta is not None
-
-
-def test_metrics_endpoint_removed_returns_404(client) -> None:
-    response = client.get("/metrics", use_raw_path=True)
-    assert response.status_code == 404

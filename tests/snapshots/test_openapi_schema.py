@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.main import app
 
-SNAPSHOT_PATH = Path(__file__).parent / "snapshots" / "openapi.json"
+SNAPSHOT_PATH = Path(__file__).parent / "openapi.json"
 
 
 def test_openapi_snapshot() -> None:
