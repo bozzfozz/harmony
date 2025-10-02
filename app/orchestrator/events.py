@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from app.logging_events import log_event
 from app.utils.settings_store import increment_counter
+
+
+logger = logging.getLogger("app.orchestrator.metrics")
 
 
 def format_datetime(value: datetime | None) -> str | None:
@@ -197,7 +201,18 @@ def _increment_metric(event: str, status: str | None) -> None:
     try:
         increment_counter(key)
     except Exception:  # pragma: no cover - defensive metrics hook
-        pass
+        if logger.disabled:
+            logger.disabled = False
+        logger.warning(
+            "Failed to increment orchestrator metric",
+            exc_info=True,
+            extra={
+                "event": "orchestrator.metrics.increment_failed",
+                "status": "error",
+                "metric_key": key,
+                "metric_status": status or "total",
+            },
+        )
 
 
 __all__ = [
