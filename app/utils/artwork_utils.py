@@ -414,7 +414,6 @@ def fetch_caa_artwork(
         if allowed_remote_host(url):
             return url
         logger.debug("Discarding fallback url with disallowed host: %s", url)
-        return None
 
     return None
 
