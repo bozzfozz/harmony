@@ -37,9 +37,15 @@ class CacheEntry:
     vary: tuple[str, ...]
     created_at: float
     expires_at: float | None
+    ttl: float
+    stale_while_revalidate: float | None
+    stale_expires_at: float | None
 
     def is_expired(self, now: float) -> bool:
         return self.expires_at is not None and now >= self.expires_at
+
+    def is_stale(self, now: float) -> bool:
+        return self.stale_expires_at is not None and now >= self.stale_expires_at
 
 
 class ResponseCache:
@@ -69,77 +75,113 @@ class ResponseCache:
         return self._default_ttl
 
     async def get(self, key: str) -> CacheEntry | None:
-        async with self._lock:
-            entry = self._cache.get(key)
-            if entry is None:
-                _log_cache_event("miss", "miss", key_hash=key)
-                return None
-            now = self._now()
-            if entry.is_expired(now):
-                self._cache.pop(key, None)
+        try:
+            async with self._lock:
+                entry = self._cache.get(key)
+                if entry is None:
+                    _log_cache_event("miss", "miss", key_hash=key)
+                    return None
+                now = self._now()
+                if entry.is_expired(now):
+                    self._cache.pop(key, None)
+                    _log_cache_event(
+                        "expired",
+                        "expired",
+                        key_hash=key,
+                        path=entry.path_template,
+                        age_s=round(now - entry.created_at, 3),
+                    )
+                    return None
+                self._cache.move_to_end(key)
                 _log_cache_event(
-                    "expired",
-                    "expired",
+                    "hit",
+                    "hit",
                     key_hash=key,
                     path=entry.path_template,
-                    age_s=round(now - entry.created_at, 3),
                 )
+                return entry
+        except Exception:
+            if self._fail_open:
+                _log_cache_event("error", "error", key_hash=key)
                 return None
-            self._cache.move_to_end(key)
-            _log_cache_event(
-                "hit",
-                "hit",
-                key_hash=key,
-                path=entry.path_template,
-            )
-            return entry
+            raise
 
     async def set(self, key: str, entry: CacheEntry, *, ttl: float | None = None) -> None:
         ttl_value = self._resolve_ttl(ttl)
-        async with self._lock:
-            now = self._now()
-            expires_at = now + ttl_value if ttl_value > 0 else None
-            entry.key = key
-            entry.created_at = now
-            entry.expires_at = expires_at
-            if key in self._cache:
-                self._cache.pop(key)
-            self._cache[key] = entry
-            self._enforce_limit()
-        _log_cache_event(
-            "store",
-            "stored",
-            key_hash=key,
-            ttl_s=ttl_value,
-            path=entry.path_template,
-        )
+        try:
+            async with self._lock:
+                now = self._now()
+                expires_at = now + ttl_value if ttl_value > 0 else None
+                entry.key = key
+                entry.created_at = now
+                entry.expires_at = expires_at
+                entry.ttl = ttl_value
+                stale = entry.stale_while_revalidate
+                if stale is not None:
+                    entry.stale_expires_at = (expires_at or now) + max(0.0, stale)
+                else:
+                    entry.stale_expires_at = None
+                if key in self._cache:
+                    self._cache.pop(key)
+                self._cache[key] = entry
+                self._enforce_limit()
+            _log_cache_event(
+                "store",
+                "stored",
+                key_hash=key,
+                ttl_s=ttl_value,
+                path=entry.path_template,
+            )
+        except Exception:
+            if self._fail_open:
+                _log_cache_event("error", "error", key_hash=key)
+                return
+            raise
 
     async def invalidate(self, key: str) -> None:
-        async with self._lock:
-            if key in self._cache:
-                self._cache.pop(key, None)
-                _log_cache_event("invalidate", "invalidated", key_hash=key)
+        try:
+            async with self._lock:
+                if key in self._cache:
+                    self._cache.pop(key, None)
+                    _log_cache_event("invalidate", "invalidated", key_hash=key)
+        except Exception:
+            if self._fail_open:
+                _log_cache_event("error", "error", key_hash=key)
+                return
+            raise
 
     async def invalidate_prefix(self, prefix: str) -> int:
-        async with self._lock:
-            keys = [key for key in self._cache if key.startswith(prefix)]
-            for key in keys:
-                self._cache.pop(key, None)
-            if keys:
-                _log_cache_event(
-                    "invalidate",
-                    "invalidated",
-                    key_hash=prefix,
-                    count=len(keys),
-                )
-            return len(keys)
+        try:
+            async with self._lock:
+                keys = [key for key in self._cache if key.startswith(prefix)]
+                for key in keys:
+                    self._cache.pop(key, None)
+                if keys:
+                    _log_cache_event(
+                        "invalidate",
+                        "invalidated",
+                        key_hash=prefix,
+                        count=len(keys),
+                    )
+                return len(keys)
+        except Exception:
+            if self._fail_open:
+                _log_cache_event("error", "error", key_hash=prefix)
+                return 0
+            raise
 
     async def clear(self) -> None:
-        async with self._lock:
-            if not self._cache:
+        try:
+            async with self._lock:
+                if not self._cache:
+                    return
+                self._cache.clear()
+            _log_cache_event("clear", "cleared")
+        except Exception:
+            if self._fail_open:
+                _log_cache_event("error", "error")
                 return
-            self._cache.clear()
-        _log_cache_event("clear", "cleared")
+            raise
 
     def _enforce_limit(self) -> None:
         while len(self._cache) > self._max_items:

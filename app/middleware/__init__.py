@@ -26,6 +26,7 @@ def install_middleware(app: FastAPI, config: AppConfig) -> None:
     response_cache = ResponseCache(
         max_items=middleware_cfg.cache.max_items,
         default_ttl=float(middleware_cfg.cache.default_ttl),
+        fail_open=middleware_cfg.cache.fail_open,
     )
     app.state.response_cache = response_cache
 

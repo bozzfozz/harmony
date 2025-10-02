@@ -31,6 +31,9 @@ def _entry() -> CacheEntry:
         vary=tuple(),
         created_at=0.0,
         expires_at=None,
+        ttl=0.0,
+        stale_while_revalidate=None,
+        stale_expires_at=None,
     )
 
 

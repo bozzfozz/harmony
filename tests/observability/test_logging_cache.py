@@ -35,6 +35,9 @@ async def test_cache_logs_use_contract(monkeypatch) -> None:
         vary=(),
         created_at=0.0,
         expires_at=None,
+        ttl=0.0,
+        stale_while_revalidate=None,
+        stale_expires_at=None,
     )
 
     await cache.set("demo", entry)
