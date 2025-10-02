@@ -64,7 +64,7 @@ class PlaylistSyncWorker:
         """Fetch playlists from Spotify and persist them."""
 
         try:
-            response = self._client.get_user_playlists()
+            response = await asyncio.to_thread(self._client.get_user_playlists)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error("Failed to fetch playlists from Spotify: %s", exc)
             return
