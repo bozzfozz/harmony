@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from sqlalchemy.orm import Session
 
 from app import dependencies
-from app.db import session_scope
+from app.dependencies import SessionRunner, get_session_runner
 from app.logging import get_logger
 from app.utils.activity import record_activity
 from app.utils.events import SYNC_BLOCKED
@@ -22,10 +24,13 @@ REQUIRED_SERVICES: tuple[str, ...] = ("spotify", "soulseek")
 
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
-async def trigger_manual_sync(request: Request) -> dict[str, Any]:
+async def trigger_manual_sync(
+    request: Request,
+    session_runner: SessionRunner = Depends(get_session_runner),
+) -> dict[str, Any]:
     """Run playlist and library synchronisation tasks on demand."""
 
-    missing = _missing_credentials()
+    missing = await _missing_credentials(session_runner)
     if missing:
         missing_payload = {service: list(values) for service, values in missing.items()}
         logger.warning("Manual sync blocked due to missing credentials: %s", missing_payload)
@@ -108,6 +113,10 @@ def _get_playlist_worker(request: Request) -> PlaylistSyncWorker | None:
     return worker
 
 
-def _missing_credentials() -> dict[str, tuple[str, ...]]:
-    with session_scope() as session:
+async def _missing_credentials(
+    session_runner: SessionRunner,
+) -> dict[str, tuple[str, ...]]:
+    def _query(session: Session) -> dict[str, tuple[str, ...]]:
         return collect_missing_credentials(session, REQUIRED_SERVICES)
+
+    return await session_runner(_query)

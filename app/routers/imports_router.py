@@ -9,9 +9,10 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
+from sqlalchemy.orm import Session
+
 from app.config import AppConfig
-from app.dependencies import get_app_config
-from app.db import session_scope
+from app.dependencies import SessionRunner, get_app_config, get_session_runner
 from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.models import ImportBatch, ImportSession
@@ -34,6 +35,7 @@ def _generate_id(prefix: str) -> str:
 async def create_free_import(
     request: Request,
     config: AppConfig = Depends(get_app_config),
+    run_in_session: SessionRunner = Depends(get_session_runner),
 ) -> JSONResponse:
     limits = {
         "max_links": config.spotify.free_import_max_playlist_links,
@@ -96,7 +98,7 @@ async def create_free_import(
         "skipped": len(parse_result.skipped),
     }
 
-    with session_scope() as db_session:
+    def _persist_records(db_session: Session) -> None:
         db_session.add(
             ImportSession(
                 id=session_id,
@@ -106,6 +108,8 @@ async def create_free_import(
         )
         for record in batch_records:
             db_session.add(record)
+
+    await run_in_session(_persist_records)
 
     logger.info(
         "processed FREE ingest request",
