@@ -15,6 +15,7 @@ from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
+from app.utils.time import sleep_jitter_ms
 from app.workers import persistence
 
 _LOG_COMPONENT = "orchestrator.watchlist_timer"
@@ -80,6 +81,11 @@ class WatchlistTimer:
         self._max_per_tick = max(0, int(config.max_per_tick))
         mode = (config.db_io_mode or "thread").strip().lower()
         self._db_mode = "async" if mode == "async" else "thread"
+        jitter_value = max(0.0, float(getattr(config, "jitter_pct", 0.0)))
+        if jitter_value <= 1:
+            self._sleep_jitter_pct = int(round(jitter_value * 100))
+        else:
+            self._sleep_jitter_pct = int(round(jitter_value))
 
     @property
     def interval(self) -> float:
@@ -239,10 +245,23 @@ class WatchlistTimer:
         if self._interval <= 0:
             await asyncio.sleep(0)
             return
-        try:
-            await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
-        except asyncio.TimeoutError:
-            return
+        delay_ms = int(self._interval * 1000)
+        sleep_task = asyncio.create_task(
+            sleep_jitter_ms(delay_ms, self._sleep_jitter_pct),
+            name="watchlist-timer-sleep",
+        )
+        wait_task = asyncio.create_task(self._stop_event.wait())
+        done, pending = await asyncio.wait(
+            {sleep_task, wait_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in done:
+            with contextlib.suppress(asyncio.CancelledError):
+                task.result()
+        for task in pending:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
     async def _load_due_artists(self) -> list[WatchlistArtistRow]:
         if self._max_per_tick <= 0:

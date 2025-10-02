@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.utils.priority import parse_priority_map
 
 
 logger = get_logger(__name__)
@@ -586,49 +586,21 @@ def _parse_jitter_value(value: Any, *, default_pct: float) -> float:
     return resolved / 100.0
 
 
-def _parse_priority_csv(value: Any) -> dict[str, int]:
-    if value is None:
-        return {}
-    text = str(value).strip()
-    if not text:
-        return {}
-    entries = {}
-    for chunk in text.split(","):
-        item = chunk.strip()
-        if not item or ":" not in item:
-            continue
-        name, raw_priority = item.split(":", 1)
-        normalized = name.strip()
-        if not normalized:
-            continue
-        entries[normalized] = _bounded_int(
-            raw_priority.strip(),
-            default=0,
-            minimum=0,
-        )
-    return entries
-
-
 def _parse_priority_map(env: Mapping[str, Any]) -> dict[str, int]:
+    default_map = dict(DEFAULT_ORCH_PRIORITY_MAP)
     raw_json = env.get("ORCH_PRIORITY_JSON")
     if raw_json:
-        try:
-            parsed = json.loads(str(raw_json))
-        except (TypeError, ValueError, json.JSONDecodeError):
-            parsed = None
-        if isinstance(parsed, Mapping):
-            mapping: dict[str, int] = {}
-            for key, value in parsed.items():
-                name = str(key).strip()
-                if not name:
-                    continue
-                mapping[name] = _bounded_int(value, default=0, minimum=0)
-            if mapping:
-                return mapping
-    csv_map = _parse_priority_csv(env.get("ORCH_PRIORITY_CSV"))
-    if csv_map:
-        return csv_map
-    return dict(DEFAULT_ORCH_PRIORITY_MAP)
+        mapping = parse_priority_map(str(raw_json), {})
+        filtered = {key: value for key, value in mapping.items() if key in default_map}
+        if filtered:
+            return filtered
+    raw_csv = env.get("ORCH_PRIORITY_CSV")
+    if raw_csv:
+        mapping = parse_priority_map(str(raw_csv), {})
+        filtered = {key: value for key, value in mapping.items() if key in default_map}
+        if filtered:
+            return filtered
+    return default_map
 
 
 def _load_provider_profiles(

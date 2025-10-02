@@ -15,6 +15,8 @@ from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.orchestrator.handlers import MatchingJobError
 from app.orchestrator.scheduler import Scheduler
+from app.utils.concurrency import BoundedPools
+from app.utils.retry import exp_backoff_delays
 from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
@@ -57,8 +59,7 @@ def default_handlers(
 
 _DEFAULT_BACKOFF_BASE_MS = 500
 _DEFAULT_RETRY_MAX = 3
-_DEFAULT_JITTER = 0.2
-_MAX_BACKOFF_EXPONENT = 10
+_DEFAULT_JITTER_PCT = 20
 _STOP_REASON_MAX_RETRIES = "max_retries_exhausted"
 
 
@@ -92,9 +93,11 @@ class Dispatcher:
         self._base_pool_limits = self._config.pool_limits()
         limits = self._resolve_limits(global_concurrency, pool_concurrency)
         self._global_limit = limits.global_limit
-        self._global_semaphore = asyncio.Semaphore(self._global_limit)
-        self._pool_limits = limits.pool
-        self._pool_semaphores: dict[str, asyncio.Semaphore] = {}
+        self._pools = BoundedPools(
+            global_limit=self._global_limit,
+            pool_limits=limits.pool,
+        )
+        self._pool_limits = dict(limits.pool)
         self._tasks: set[asyncio.Task[None]] = set()
         self._stop_event: asyncio.Event | None = None
         self._pending_stop = False
@@ -113,8 +116,16 @@ class Dispatcher:
                 else _DEFAULT_BACKOFF_BASE_MS
             ),
         )
-        jitter_pct = policy.jitter_pct if policy.jitter_pct is not None else _DEFAULT_JITTER
-        self._retry_jitter_pct = jitter_pct if jitter_pct >= 0 else 0.0
+        jitter_value = (
+            policy.jitter_pct if policy.jitter_pct is not None else _DEFAULT_JITTER_PCT / 100
+        )
+        if jitter_value < 0:
+            jitter_value = 0
+        if jitter_value <= 1:
+            jitter_pct = int(round(jitter_value * 100))
+        else:
+            jitter_pct = int(round(jitter_value))
+        self._retry_jitter_pct = max(0, jitter_pct)
         self._heartbeat_seconds = max(1.0, float(self._config.heartbeat_s))
 
     async def run(self, lifespan: asyncio.Event | None = None) -> None:
@@ -385,21 +396,15 @@ class Dispatcher:
 
     @contextlib.asynccontextmanager
     async def _acquire_slots(self, job_type: str):
-        async with self._global_semaphore:
-            pool_sem = self._get_pool_semaphore(job_type)
-            async with pool_sem:
-                yield
+        async with self._pools.acquire(job_type):
+            yield
 
     def _get_pool_semaphore(self, job_type: str) -> asyncio.Semaphore:
-        semaphore = self._pool_semaphores.get(job_type)
-        if semaphore is not None:
-            return semaphore
-        limit = self._pool_limits.get(job_type)
-        if limit is None:
-            limit = self._resolve_pool_limit(job_type)
-            self._pool_limits[job_type] = limit
-        semaphore = asyncio.Semaphore(limit)
-        self._pool_semaphores[job_type] = semaphore
+        """Return the semaphore for ``job_type`` (legacy compatibility)."""
+
+        semaphore = self._pools.semaphore_for(job_type)
+        if job_type not in self._pool_limits:
+            self._pool_limits[job_type] = self._pools.limit_for(job_type)
         return semaphore
 
     def _resolve_limits(
@@ -416,23 +421,17 @@ class Dispatcher:
                 pool[job_type] = max(1, int(limit))
         return _PoolLimits(global_limit=resolved_global, pool=pool)
 
-    def _resolve_pool_limit(self, job_type: str) -> int:
-        configured = self._base_pool_limits.get(job_type)
-        if configured is None:
-            configured = self._global_limit
-        limit = max(1, configured)
-        self._pool_limits[job_type] = limit
-        return limit
-
     def _calculate_backoff_seconds(self, attempts: int) -> float:
-        exponent = max(0, min(attempts - 1, _MAX_BACKOFF_EXPONENT))
-        base_ms = max(1, self._backoff_base_ms)
-        delay_ms = base_ms * (2**exponent)
-        if self._retry_jitter_pct:
-            jitter = self._rng.uniform(1 - self._retry_jitter_pct, 1 + self._retry_jitter_pct)
-        else:
-            jitter = 1.0
-        return max(0.0, delay_ms * jitter) / 1000.0
+        schedule = exp_backoff_delays(self._backoff_base_ms, max(1, attempts), 0)
+        index = min(len(schedule) - 1, max(0, attempts - 1))
+        delay_ms = schedule[index]
+        jitter_pct = self._retry_jitter_pct
+        if jitter_pct > 0:
+            jitter = delay_ms * jitter_pct / 100.0
+            lower = max(0.0, delay_ms - jitter)
+            upper = delay_ms + jitter
+            delay_ms = self._rng.uniform(lower, upper)
+        return max(0.0, delay_ms / 1000.0)
 
     @staticmethod
     def _truncate_error(message: str, limit: int = 512) -> str:
