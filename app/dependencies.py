@@ -20,6 +20,7 @@ from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
 from app.errors import AppError, ErrorCode
 from app.logging import get_logger
+from app.services.download_service import DownloadService
 from app.services.integration_service import IntegrationService
 from app.services.watchlist_service import WatchlistService
 
@@ -91,6 +92,13 @@ def get_db() -> Generator[Session, None, None]:
 
 def get_watchlist_service(session: Session = Depends(get_db)) -> WatchlistService:
     return WatchlistService(session=session)
+
+
+def get_download_service(
+    session: Session = Depends(get_db),
+    transfers: TransfersApi = Depends(get_transfers_api),
+) -> DownloadService:
+    return DownloadService(session=session, transfers=transfers)
 
 
 def _is_allowlisted(path: str, allowlist: tuple[str, ...]) -> bool:
