@@ -11,13 +11,10 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from fastapi import APIRouter, FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
 from app.api import router_registry
-from app.api.errors import setup_exception_handlers
-from app.api.middleware import install_api_middlewares
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
@@ -28,6 +25,7 @@ from app.dependencies import (
 from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
+from app.middleware import install_middleware
 from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
@@ -556,18 +554,7 @@ app.state.health_service = HealthService(
 )
 app.state.secret_validation_service = SecretValidationService()
 
-_initial_security = _config_snapshot.security
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=list(_initial_security.allowed_origins),
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["X-API-Key", "Authorization", "Content-Type", "Accept"],
-    allow_credentials=False,
-    expose_headers=[],
-)
-
-install_api_middlewares(app, _config_snapshot, base_path=_API_BASE_PATH)
+install_middleware(app, _config_snapshot)
 
 
 async def root() -> dict[str, str]:
@@ -596,8 +583,6 @@ if _LEGACY_ROUTES_ENABLED:
     )
     legacy_router.add_api_route("/", root, methods=["GET"], tags=["System"])
     app.include_router(legacy_router)
-
-setup_exception_handlers(app)
 
 
 def _is_allowlisted_path(path: str) -> bool:

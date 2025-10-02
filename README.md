@@ -620,13 +620,36 @@ Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und 
 
 - Domain-Router leben unter `app/api/routers/` und bündeln thematisch verwandte Endpunkte (z. B. `spotify`, `search`, `watchlist`, `system`). Legacy-Module in `app/routers/` delegieren nur noch.
 - `app/api/router_registry.py` registriert sämtliche Domain-Router und vergibt konsistente Prefixes sowie OpenAPI-Tags – Tests können die Liste zentral prüfen.
-- `app/api/middleware.py` installiert Request-ID- und Request-Logging-Middleware, den ETag-Cache sowie optionale Auth- und Rate-Limit-Prüfungen.
+- `app/middleware/__init__.py` bündelt die komplette HTTP-Pipeline (Request-ID, Logging, optionale Auth/Rate-Limits, Cache, CORS/GZip, Error-Mapper).
+
+### Middleware-Pipeline
+
+- **CORS & GZip:** werden stets zuerst registriert und respektieren `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_HEADERS`, `CORS_ALLOWED_METHODS` sowie `GZIP_MIN_SIZE` (Bytes).
+- **Request-ID:** erzeugt bzw. propagiert `REQUEST_ID_HEADER` (Default `X-Request-ID`) und legt den Wert in `request.state.request_id` ab.
+- **Logging:** emittiert strukturierte `api.request`-Events mit `duration_ms`, `status_code`, `method`, `path` und optional `entity_id` (Request-ID).
+- **API-Key Auth:** nur aktiv, wenn `FEATURE_REQUIRE_AUTH=true`; Schlüssel stammen aus `HARMONY_API_KEYS` oder `HARMONY_API_KEYS_FILE` und werden über `Authorization: ApiKey <key>` oder `X-API-Key` übermittelt. Allowlist-Pfade lassen sich via `AUTH_ALLOWLIST` ergänzen.
+- **Rate-Limiting:** optional (`FEATURE_RATE_LIMITING`), Token-Bucket pro `IP|Key|Route`; Parameter `RATE_LIMIT_BUCKET_CAP` und `RATE_LIMIT_REFILL_PER_SEC` steuern das Verhalten. Limit-Verstöße erzeugen `RATE_LIMITED`-Fehler inklusive `Retry-After`-Hinweisen.
+- **Conditional Cache:** gesteuert über `CACHE_ENABLED`, `CACHE_DEFAULT_TTL_S`, `CACHE_MAX_ITEMS`, `CACHE_STRATEGY_ETAG` (`strong`/`weak`) und `CACHEABLE_PATHS` (Regex/CSV). Unterstützt GET/HEAD, liefert ETags und 304-Antworten.
+- **Error-Mapping:** zentral registriert; mappt Validation-, HTTP- und Dependency-Fehler konsistent auf `VALIDATION_ERROR`, `NOT_FOUND`, `DEPENDENCY_ERROR`, `RATE_LIMITED` oder `INTERNAL_ERROR`.
+
+Beispielkonfiguration (dev-friendly Defaults):
+
+```
+FEATURE_REQUIRE_AUTH=false
+FEATURE_RATE_LIMITING=false
+CACHE_ENABLED=true
+CACHEABLE_PATHS=/api/v1/library/.+
+CACHE_DEFAULT_TTL_S=60
+REQUEST_ID_HEADER=X-Request-ID
+CORS_ALLOWED_ORIGINS=*
+GZIP_MIN_SIZE=1024
+```
 
 ### Auth, CORS & Rate Limiting
 
-- Standardmäßig sind sowohl Authentifizierung (`FEATURE_REQUIRE_AUTH`) als auch globales Request-Limiting (`FEATURE_RATE_LIMITING`) deaktiviert. Wird Auth aktiviert, erwartet jede nicht allowlistete Route einen gültigen API-Key via `X-API-Key` oder `Authorization: Bearer`. Keys stammen aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`).
+- Standardmäßig sind sowohl Authentifizierung (`FEATURE_REQUIRE_AUTH`) als auch globales Request-Limiting (`FEATURE_RATE_LIMITING`) deaktiviert. Wird Auth aktiviert, erwartet jede nicht allowlistete Route einen gültigen API-Key via `X-API-Key` oder `Authorization: ApiKey <key>`. Keys stammen aus ENV (`HARMONY_API_KEYS`) oder einer Datei (`HARMONY_API_KEYS_FILE`).
 - Health-, Readiness-, Docs- und OpenAPI-Pfade werden automatisch freigestellt. Zusätzliche Pfade lassen sich über `AUTH_ALLOWLIST` definieren.
-- `ALLOWED_ORIGINS` kontrolliert CORS; leere Konfiguration blockiert Browser-Anfragen.
+- `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_HEADERS` und `CORS_ALLOWED_METHODS` kontrollieren CORS; leere Konfiguration blockiert Browser-Anfragen.
 - Optionales globales Rate-Limiting wird per `FEATURE_RATE_LIMITING` aktiviert; `OPTIONS`-Requests und Allowlist-Pfade bleiben ausgenommen. Sensible Systempfade (`/system/secrets/*`) behalten zusätzlich ihr internes Limit `SECRET_VALIDATE_MAX_PER_MIN`.
 
 ### Logging & Observability
