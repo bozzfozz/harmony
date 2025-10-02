@@ -302,13 +302,14 @@ class QueueJob(Base):
         default=QueueJobStatus.PENDING.value,
         index=True,
     )
-    payload = Column(JSON, nullable=False, default=dict)
+    payload = Column("payload_json", JSON, nullable=False, default=dict)
     priority = Column(Integer, nullable=False, default=0)
     attempts = Column(Integer, nullable=False, default=0)
     available_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     lease_expires_at = Column(DateTime, nullable=True)
     idempotency_key = Column(String(128), nullable=True)
     last_error = Column(Text, nullable=True)
+    stop_reason = Column(String(64), nullable=True)
     result_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(

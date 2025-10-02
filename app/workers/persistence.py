@@ -116,6 +116,7 @@ class QueueJobDTO:
     idempotency_key: str | None
     last_error: str | None = None
     result_payload: dict[str, Any] | None = None
+    stop_reason: str | None = None
     lease_timeout_seconds: int = 60
 
 
@@ -133,6 +134,7 @@ def _to_dto(record: QueueJob) -> QueueJobDTO:
         idempotency_key=record.idempotency_key,
         last_error=record.last_error,
         result_payload=dict(record.result_payload or {}) if record.result_payload else None,
+        stop_reason=record.stop_reason,
         lease_timeout_seconds=_resolve_visibility_timeout(payload),
     )
 
@@ -185,6 +187,7 @@ def enqueue(
             existing.lease_expires_at = None
             existing.last_error = None
             existing.result_payload = None
+            existing.stop_reason = None
             existing.updated_at = now
             session.add(existing)
             dto = _refresh_instance(session, existing)
@@ -198,6 +201,7 @@ def enqueue(
             available_at=scheduled_for,
             idempotency_key=dedupe_key,
             status=QueueJobStatus.PENDING.value,
+            stop_reason=None,
         )
         session.add(record)
         dto = _refresh_instance(session, record)
@@ -372,6 +376,7 @@ def complete(
         record.lease_expires_at = None
         record.last_error = None
         record.result_payload = dict(result_payload or {}) or None
+        record.stop_reason = None
         record.updated_at = now
         session.add(record)
         dto = _refresh_instance(session, record)
@@ -387,6 +392,7 @@ def fail(
     error: str | None = None,
     retry_in: int | None = None,
     available_at: datetime | None = None,
+    stop_reason: str | None = None,
 ) -> bool:
     """Mark a job as failed or requeue it for another attempt."""
 
@@ -405,8 +411,10 @@ def fail(
             next_available = available_at or (now + timedelta(seconds=delay))
             record.available_at = next_available
             record.status = QueueJobStatus.PENDING.value
+            record.stop_reason = None
         else:
             record.status = QueueJobStatus.FAILED.value
+            record.stop_reason = stop_reason
         session.add(record)
         return True
 
@@ -431,6 +439,7 @@ def to_dlq(
         record.lease_expires_at = None
         record.last_error = reason
         record.result_payload = dict(payload or {}) or None
+        record.stop_reason = reason
         record.updated_at = now
         session.add(record)
         dto = _refresh_instance(session, record)

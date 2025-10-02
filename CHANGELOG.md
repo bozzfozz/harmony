@@ -4,6 +4,8 @@
 - docs(architecture): add overview, contracts, diagrams, ADR template [CODX-ARCH-DOC-301]
 - docs: enable Codex full write mode (default implement) [CODX-POL-092]
 - docs: enable Auto-FAST-TRACK for CODX-ORCH-* tasks in AGENTS.md [CODX-DOC-102]
+- chore(db): align Alembic environment, migrations and queue job schema with the
+  current ORM (additive, idempotent) [CODX-P0-MIG-105]
 - feat(orchestrator): configurable priorities, pools, visibility, heartbeat, timer [CODX-ORCH-084]
   - Dokumentiert den Orchestrator im README, ergänzt Runtime-Guides (Prioritäten, Pools, Heartbeats) und verweist im PR-Template auf Migrations-/ENV-Hinweise.
 - refactor(api): domain router registry, unified middleware chain & error handlers; remove `/metrics` wiring [CODX-API-REF-312]

@@ -10,7 +10,7 @@ from alembic.config import Config
 from sqlalchemy import engine_from_config, pool
 
 from app.config import load_config
-from app.db import Base
+from app.db import metadata
 
 # Import models for metadata registration
 from app import models  # noqa: F401
@@ -21,7 +21,7 @@ config = _context_config if _context_config is not None else Config()
 if getattr(config, "config_file_name", None):
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = metadata
 
 
 def _resolve_database_url(alembic_config: Optional[Config]) -> str:

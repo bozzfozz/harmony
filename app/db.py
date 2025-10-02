@@ -24,6 +24,10 @@ class Base(DeclarativeBase):
     pass
 
 
+# Expose metadata so Alembic can import a single canonical reference.
+metadata = Base.metadata
+
+
 _engine: Optional[Engine] = None
 SessionLocal: Optional[sessionmaker[Session]] = None
 _configured_database_url: Optional[str] = None
@@ -153,6 +157,7 @@ def _configure_alembic(database_url: str) -> Config:
 
 __all__ = [
     "Base",
+    "metadata",
     "SessionLocal",
     "get_session",
     "session_scope",
