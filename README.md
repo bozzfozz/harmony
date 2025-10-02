@@ -697,6 +697,13 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - **Router-Bündelung:** Spotify-Endpunkte werden im Sammelrouter `app/api/routers/spotify.py` registriert; die Legacy-Router delegieren lediglich.
 - **Orchestrator-Anbindung:** FREE-Import- und Backfill-Flows nutzen ausschließlich die Orchestrator-Handler; direkte Worker-Initiierung aus Routern entfällt.
 
+### Service-Schicht
+
+- `IntegrationService` delegiert sämtliche Provider-Aufrufe an den `ProviderGateway` und hebt Fehler konsistent via `ServiceError` mit `ApiError`-Payload aus `app/schemas/errors.py` aus.
+- `SearchService` orchestriert die Suche (Query → Gateway → Matching) und liefert `SearchResponse`-DTOs; der Matching-Score stammt aus dem `MusicMatchingEngine`.
+- `LibraryService` verwaltet Bibliotheksdaten auf Basis der Pydantic-Provider-DTOs und liefert weiterhin Fuzzy-/LIKE-Suchen.
+- Logging erfolgt über `log_event(..., event="service.call")` bzw. `event="service.cache"` mit `component=service.<name>` und strukturierten Feldern für Status, Dauer, Provider und Trefferanzahl.
+
 Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.
 
 ## Contributing

@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Iterable, Sequence
 
-from app.errors import DependencyError, ValidationAppError
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery, TrackProvider
-from app.integrations.errors import to_application_error
 from app.integrations.health import IntegrationHealth, ProviderHealthMonitor
 from app.integrations.provider_gateway import (
     ProviderGateway,
     ProviderGatewayConfig,
-    ProviderGatewayError,
     ProviderGatewaySearchResponse,
 )
 from app.integrations.registry import ProviderRegistry
+from app.logging import get_logger
+from app.logging_events import log_event
+from app.schemas.errors import ApiError, ErrorCode
+from app.services.errors import ServiceError, to_api_error
+from app.services.types import ProviderGatewayProtocol
 
 
 class IntegrationService:
@@ -25,25 +28,21 @@ class IntegrationService:
         self,
         *,
         registry: ProviderRegistry,
-        gateway: ProviderGateway | None = None,
+        gateway: ProviderGatewayProtocol | None = None,
     ) -> None:
         self._registry = registry
-        self._registry.initialise()
+        # ``initialise`` can be a no-op for tests; call if present for backwards compat.
         initialise = getattr(self._registry, "initialise", None)
+        if callable(initialise):
+            initialise()
+        providers = self._registry.track_providers()
         if gateway is None:
-            if callable(initialise):
-                initialise()
-            providers = self._registry.track_providers()
             config: ProviderGatewayConfig = self._registry.gateway_config
             self._gateway = ProviderGateway(providers=providers, config=config)
         else:
             self._gateway = gateway
-            if callable(initialise):
-                try:
-                    initialise()
-                except TypeError:
-                    pass
         self._health_monitor = ProviderHealthMonitor(self._registry)
+        self._logger = get_logger(__name__)
 
     async def search_tracks(
         self,
@@ -55,16 +54,36 @@ class IntegrationService:
     ) -> list[TrackCandidate]:
         normalized_provider = provider.strip().lower()
         if not normalized_provider:
-            raise ValidationAppError("provider must not be empty.")
+            raise ServiceError(
+                ApiError.from_components(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="provider must not be empty.",
+                )
+            )
 
         trimmed_query = query.strip()
         if not trimmed_query:
-            raise ValidationAppError("query must not be empty.")
+            raise ServiceError(
+                ApiError.from_components(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="query must not be empty.",
+                )
+            )
         if len(trimmed_query) > 256:
-            raise ValidationAppError("query must not exceed 256 characters.")
+            raise ServiceError(
+                ApiError.from_components(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="query must not exceed 256 characters.",
+                )
+            )
 
         if limit <= 0:
-            raise ValidationAppError("limit must be greater than zero.")
+            raise ServiceError(
+                ApiError.from_components(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="limit must be greater than zero.",
+                )
+            )
         clamped_limit = min(limit, 100)
 
         normalized_artist = artist.strip() if artist and artist.strip() else None
@@ -72,15 +91,44 @@ class IntegrationService:
         try:
             self._registry.get_track_provider(normalized_provider)
         except KeyError as exc:
-            raise ValidationAppError(f"provider '{provider}' is not enabled.") from exc
+            raise ServiceError(
+                ApiError.from_components(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message=f"provider '{provider}' is not enabled.",
+                )
+            ) from exc
 
         query_model = SearchQuery(text=trimmed_query, artist=normalized_artist, limit=clamped_limit)
 
+        started = perf_counter()
         try:
             tracks = await self._gateway.search_tracks(normalized_provider, query_model)
-        except ProviderGatewayError as exc:
-            mapped = to_application_error(provider, exc)
-            raise mapped from exc
+        except Exception as exc:
+            api_error = to_api_error(exc, provider=normalized_provider)
+            duration_ms = int((perf_counter() - started) * 1000)
+            log_event(
+                self._logger,
+                "service.call",
+                component="service.integration",
+                operation="search_tracks",
+                status="error",
+                provider=normalized_provider,
+                duration_ms=duration_ms,
+                error=exc.__class__.__name__,
+            )
+            raise ServiceError(api_error) from exc
+
+        duration_ms = int((perf_counter() - started) * 1000)
+        log_event(
+            self._logger,
+            "service.call",
+            component="service.integration",
+            operation="search_tracks",
+            status="ok",
+            provider=normalized_provider,
+            duration_ms=duration_ms,
+            result_count=len(tracks),
+        )
 
         return self._flatten_candidates(tracks)
 
@@ -92,17 +140,60 @@ class IntegrationService:
         for provider in providers:
             normalized_name = provider.strip().lower()
             if not normalized_name:
-                raise ValidationAppError("provider must not be empty.")
+                raise ServiceError(
+                    ApiError.from_components(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message="provider must not be empty.",
+                    )
+                )
             if normalized_name in seen:
                 continue
             try:
                 self._registry.get_track_provider(normalized_name)
             except KeyError as exc:
-                raise DependencyError("Requested search source is not available") from exc
+                raise ServiceError(
+                    ApiError.from_components(
+                        code=ErrorCode.DEPENDENCY_ERROR,
+                        message="Requested search source is not available.",
+                        details={"provider": provider},
+                    )
+                ) from exc
             normalized.append(normalized_name)
             seen.add(normalized_name)
 
-        return await self._gateway.search_many(normalized, query)
+        started = perf_counter()
+        try:
+            response = await self._gateway.search_many(normalized, query)
+        except Exception as exc:
+            api_error = to_api_error(exc)
+            duration_ms = int((perf_counter() - started) * 1000)
+            providers_value = ",".join(normalized)
+            log_event(
+                self._logger,
+                "service.call",
+                component="service.integration",
+                operation="search_many",
+                status="error",
+                duration_ms=duration_ms,
+                providers=providers_value,
+                error=exc.__class__.__name__,
+            )
+            raise ServiceError(api_error) from exc
+
+        duration_ms = int((perf_counter() - started) * 1000)
+        providers_value = ",".join(normalized)
+        total_tracks = sum(len(item.tracks) for item in response.results)
+        log_event(
+            self._logger,
+            "service.call",
+            component="service.integration",
+            operation="search_many",
+            status=response.status,
+            duration_ms=duration_ms,
+            providers=providers_value,
+            result_count=total_tracks,
+        )
+        return response
 
     def providers(self) -> Iterable[TrackProvider]:
         return self._registry.track_providers().values()

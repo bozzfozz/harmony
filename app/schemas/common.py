@@ -18,7 +18,7 @@ class ID(str):
         yield cls.validate
 
     @classmethod
-    def validate(cls, value: Any) -> "ID":
+    def validate(cls, value: Any, _: Any = None) -> "ID":
         if isinstance(value, cls):
             return value
         if isinstance(value, (bytes, bytearray)):
@@ -39,7 +39,7 @@ class URI(str):
         yield cls.validate
 
     @classmethod
-    def validate(cls, value: Any) -> "URI":
+    def validate(cls, value: Any, _: Any = None) -> "URI":
         if isinstance(value, cls):
             return value
         if isinstance(value, (bytes, bytearray)):
@@ -63,7 +63,7 @@ class ISODateTime(str):
         yield cls.validate
 
     @classmethod
-    def validate(cls, value: Any) -> "ISODateTime":
+    def validate(cls, value: Any, _: Any = None) -> "ISODateTime":
         if isinstance(value, cls):
             return value
         if isinstance(value, datetime):
@@ -119,7 +119,9 @@ class ProblemDetail(BaseModel):
     code: str
     message: str
     details: Optional[Dict[str, Any]] = None
-    timestamp: ISODateTime = Field(default_factory=lambda: ISODateTime.validate(datetime.now(timezone.utc)))
+    timestamp: ISODateTime = Field(
+        default_factory=lambda: ISODateTime.validate(datetime.now(timezone.utc))
+    )
 
     @field_validator("code", "message")
     @classmethod
