@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 
+pytest_plugins = ["tests.fixtures.async_client"]
+
 import asyncio
 from datetime import datetime
 from pathlib import Path
