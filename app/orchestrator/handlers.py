@@ -32,7 +32,7 @@ from app.config import WatchlistWorkerConfig
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
-from app.db import session_scope
+from app.db import run_session, session_scope
 from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -389,9 +389,10 @@ async def handle_matching(
 
     qualifying.sort(key=lambda item: item[1], reverse=True)
 
-    stored = 0
     spotify_track_id = str(spotify_track.get("id") or "")
-    with deps.session_factory() as session:
+
+    def _persist_matches(session: Session) -> int:
+        stored_local = 0
         for candidate, score in qualifying:
             match = Match(
                 source=job_type,
@@ -400,7 +401,10 @@ async def handle_matching(
                 confidence=float(score),
             )
             session.add(match)
-            stored += 1
+            stored_local += 1
+        return stored_local
+
+    stored = await run_session(_persist_matches, factory=deps.session_factory)
 
     average_confidence = statistics.mean(scores) if scores else 0.0
     rounded_average = round(average_confidence, 4)

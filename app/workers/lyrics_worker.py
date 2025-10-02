@@ -11,9 +11,10 @@ from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
 from urllib.parse import quote
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.spotify_client import SpotifyClient
-from app.db import session_scope
+from app.db import run_session
 from app.logging import get_logger
 from app.models import Download
 from app.utils import lyrics_utils
@@ -144,18 +145,18 @@ class LyricsWorker:
     async def _process_job(self, job: LyricsJob) -> None:
         download_id = job.download_id
         if download_id is not None:
-            self._update_download(download_id, status="pending", path=None)
+            await self._update_download(download_id, status="pending", path=None)
 
         try:
             lrc_path = await self._create_lrc(job)
         except Exception as exc:
             if download_id is not None:
-                self._update_download(download_id, status="failed", path=None)
+                await self._update_download(download_id, status="failed", path=None)
             logger.debug("Lyrics generation failed for %s: %s", download_id, exc)
             return
 
         if download_id is not None:
-            self._update_download(download_id, status="done", path=str(lrc_path))
+            await self._update_download(download_id, status="done", path=str(lrc_path))
 
     async def _create_lrc(self, job: LyricsJob) -> Path:
         audio_path = Path(job.file_path)
@@ -189,8 +190,11 @@ class LyricsWorker:
             return {"lyrics": result}
         return None
 
-    def _update_download(self, download_id: int, *, status: str, path: str | None) -> None:
-        with session_scope() as session:
+    async def _update_download(
+        self, download_id: int, *, status: str, path: str | None
+    ) -> None:
+
+        def _apply(session: Session) -> None:
             download = session.get(Download, int(download_id))
             if download is None:
                 return
@@ -199,6 +203,8 @@ class LyricsWorker:
             download.has_lyrics = bool(path and status == "done")
             download.updated_at = datetime.utcnow()
             session.add(download)
+
+        await run_session(_apply)
 
     @staticmethod
     def _extract_spotify_id(track_info: Mapping[str, Any]) -> Optional[str]:

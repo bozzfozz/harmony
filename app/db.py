@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional, TypeVar
 
 try:  # pragma: no cover - optional dependency support for local tooling
     from alembic import command
@@ -36,6 +37,11 @@ _initializing_db: bool = False
 _logger = logging.getLogger(__name__)
 _ALEMBIC_INI_PATH = Path(__file__).resolve().parents[1] / "alembic.ini"
 _ALEMBIC_SCRIPT_LOCATION = Path(__file__).resolve().parent / "migrations"
+
+T = TypeVar("T")
+
+SessionCallable = Callable[[Session], T]
+SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -161,7 +167,24 @@ __all__ = [
     "SessionLocal",
     "get_session",
     "session_scope",
+    "run_session",
     "init_db",
     "reset_engine_for_tests",
     "_engine",
 ]
+
+
+def _call_with_session(
+    func: SessionCallable[T], *, factory: SessionFactory | None = None
+) -> T:
+    context = factory() if factory is not None else session_scope()
+    with context as session:
+        return func(session)
+
+
+async def run_session(
+    func: SessionCallable[T], *, factory: SessionFactory | None = None
+) -> T:
+    """Execute ``func`` with a database session in a worker thread."""
+
+    return await asyncio.to_thread(_call_with_session, func, factory)
