@@ -200,6 +200,7 @@ class OrchestratorConfig:
     visibility_timeout_s: int
     heartbeat_s: int
     poll_interval_ms: int
+    poll_interval_max_ms: int
 
     def pool_limits(self) -> dict[str, int]:
         return {
@@ -255,6 +256,11 @@ class OrchestratorConfig:
             default=DEFAULT_ORCH_POLL_INTERVAL_MS,
             minimum=10,
         )
+        poll_interval_max = _bounded_int(
+            env.get("ORCH_POLL_INTERVAL_MAX_MS"),
+            default=DEFAULT_ORCH_POLL_INTERVAL_MAX_MS,
+            minimum=poll_interval,
+        )
         priority_map = _parse_priority_map(env)
         return cls(
             workers_enabled=workers_enabled,
@@ -267,6 +273,7 @@ class OrchestratorConfig:
             visibility_timeout_s=visibility_timeout,
             heartbeat_s=heartbeat_s,
             poll_interval_ms=poll_interval,
+            poll_interval_max_ms=poll_interval_max,
         )
 
 
@@ -432,6 +439,7 @@ DEFAULT_ORCH_PRIORITY_MAP = {
 DEFAULT_ORCH_VISIBILITY_TIMEOUT_S = 60
 DEFAULT_ORCH_HEARTBEAT_S = 20
 DEFAULT_ORCH_POLL_INTERVAL_MS = 200
+DEFAULT_ORCH_POLL_INTERVAL_MAX_MS = 2000
 
 DEFAULT_EXTERNAL_TIMEOUT_MS = 10_000
 DEFAULT_EXTERNAL_RETRY_MAX = 3
@@ -675,6 +683,7 @@ log_event(
             "workers_enabled": settings.orchestrator.workers_enabled,
             "global_concurrency": settings.orchestrator.global_concurrency,
             "poll_interval_ms": settings.orchestrator.poll_interval_ms,
+            "poll_interval_max_ms": settings.orchestrator.poll_interval_max_ms,
             "visibility_timeout_s": settings.orchestrator.visibility_timeout_s,
         },
         "external": {

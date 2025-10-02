@@ -57,6 +57,8 @@ class Scheduler:
         config: OrchestratorConfig | None = None,
         priority_config: PriorityConfig | None = None,
         poll_interval_ms: int | None = None,
+        poll_interval_max_ms: int | None = None,
+        idle_backoff_multiplier: float | None = None,
         visibility_timeout: int | None = None,
         persistence_module=persistence,
     ) -> None:
@@ -65,12 +67,22 @@ class Scheduler:
         poll_ms = (
             poll_interval_ms if poll_interval_ms is not None else self._config.poll_interval_ms
         )
+        max_poll_ms = (
+            poll_interval_max_ms
+            if poll_interval_max_ms is not None
+            else getattr(self._config, "poll_interval_max_ms", poll_ms)
+        )
+        max_poll_ms = max(poll_ms, max_poll_ms)
         timeout_s = (
             visibility_timeout
             if visibility_timeout is not None
             else self._config.visibility_timeout_s
         )
         self._poll_interval = max(0.0, poll_ms / 1000.0)
+        self._max_poll_interval = max(0.0, max_poll_ms / 1000.0)
+        self._current_poll_interval = self._poll_interval
+        multiplier = idle_backoff_multiplier if idle_backoff_multiplier is not None else 2.0
+        self._backoff_multiplier = multiplier if multiplier > 1 else 2.0
         self._visibility_timeout = max(1, timeout_s)
         self._persistence = persistence_module
         self._logger = get_logger(__name__)
@@ -84,7 +96,7 @@ class Scheduler:
     def poll_interval(self) -> float:
         """Return the currently configured polling interval in seconds."""
 
-        return self._poll_interval
+        return self._current_poll_interval
 
     def request_stop(self) -> None:
         self.stop_requested = True
@@ -160,6 +172,7 @@ class Scheduler:
             )
             if leased is not None:
                 leased_jobs.append(leased)
+        self._adjust_poll_interval(bool(leased_jobs))
         return leased_jobs
 
     def _collect_ready_jobs(self) -> list[persistence.QueueJobDTO]:
@@ -178,7 +191,7 @@ class Scheduler:
         return (-int(job.priority), job.available_at, int(job.id))
 
     async def _sleep(self, lifespan: asyncio.Event | None) -> None:
-        timeout = self._poll_interval
+        timeout = self._current_poll_interval
         if timeout <= 0:
             await asyncio.sleep(0)
             return
@@ -210,6 +223,20 @@ class Scheduler:
                     task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await task
+
+    def _adjust_poll_interval(self, has_jobs: bool) -> None:
+        if has_jobs:
+            self._current_poll_interval = self._poll_interval
+            return
+
+        if self._current_poll_interval >= self._max_poll_interval:
+            self._current_poll_interval = self._max_poll_interval
+            return
+
+        next_interval = self._current_poll_interval * self._backoff_multiplier
+        if next_interval <= self._current_poll_interval:
+            next_interval = self._current_poll_interval + self._poll_interval
+        self._current_poll_interval = min(self._max_poll_interval, next_interval)
 
 
 __all__ = ["PriorityConfig", "Scheduler"]
