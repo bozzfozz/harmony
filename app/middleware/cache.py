@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.config import CacheMiddlewareConfig
+from app.config import CacheMiddlewareConfig, CacheRule
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.services.cache import (
@@ -26,17 +26,18 @@ from app.services.cache import (
 _logger = get_logger(__name__)
 
 
-def _compile_patterns(patterns: Iterable[str]) -> tuple[re.Pattern[str], ...]:
-    compiled: list[re.Pattern[str]] = []
-    for pattern in patterns:
+def _compile_rules(rules: Iterable[CacheRule]) -> tuple[tuple[re.Pattern[str], CacheRule], ...]:
+    compiled: list[tuple[re.Pattern[str], CacheRule]] = []
+    for rule in rules:
+        pattern = rule.pattern
         if not pattern:
             continue
         try:
-            compiled.append(re.compile(pattern))
+            compiled.append((re.compile(pattern), rule))
         except re.error:
             # Treat invalid regex as literal string match.
             escaped = re.escape(pattern)
-            compiled.append(re.compile(escaped))
+            compiled.append((re.compile(escaped), rule))
     return tuple(compiled)
 
 
@@ -60,7 +61,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
         self._cache = cache
         self._config = config
         self._vary_headers = vary_headers
-        self._patterns = _compile_patterns(config.cacheable_paths)
+        self._rules = _compile_rules(config.cacheable_paths)
 
     async def dispatch(  # type: ignore[override]
         self, request: Request, call_next: RequestResponseEndpoint
@@ -77,7 +78,8 @@ class CacheMiddleware(BaseHTTPMiddleware):
         raw_path = request.url.path
         base_path = getattr(request.app.state, "api_base_path", "") or ""
         trimmed_path = self._trim_base_path(raw_path, base_path)
-        if not self._is_cacheable(path_template, raw_path, trimmed_path):
+        rule = self._match_rule(path_template, raw_path, trimmed_path)
+        if rule is None:
             response = await call_next(request)
             return self._ensure_head_semantics(self._ensure_headers(response), method)
 
@@ -93,7 +95,10 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 path=path_template,
                 key_hash=cache_key,
             )
-            cached = None
+            if self._config.fail_open:
+                cached = None
+            else:
+                raise
         if cached is not None:
             if self._is_not_modified(request, cached):
                 log_event(
@@ -123,6 +128,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
             response,
             cache_key,
             path_template,
+            rule=rule,
             method=method,
         )
 
@@ -130,19 +136,19 @@ class CacheMiddleware(BaseHTTPMiddleware):
         route = request.scope.get("route")
         return getattr(route, "path_format", request.url.path)
 
-    def _is_cacheable(
+    def _match_rule(
         self,
         path_template: str,
         raw_path: str,
         trimmed_path: str,
-    ) -> bool:
-        if not self._patterns:
-            return False
+    ) -> CacheRule | None:
+        if not self._rules:
+            return None
         candidates = {path_template, raw_path, trimmed_path}
-        return any(
-            any(pattern.fullmatch(candidate) for candidate in candidates)
-            for pattern in self._patterns
-        )
+        for pattern, rule in self._rules:
+            if any(pattern.fullmatch(candidate) for candidate in candidates):
+                return rule
+        return None
 
     @staticmethod
     def _trim_base_path(path: str, base_path: str) -> str:
@@ -177,18 +183,21 @@ class CacheMiddleware(BaseHTTPMiddleware):
         cache_key: str,
         path_template: str,
         *,
+        rule: CacheRule,
         method: str,
     ) -> Response:
         if response.status_code >= 400 or method != "GET":
-            enriched = self._ensure_headers(response)
+            enriched = self._ensure_headers(response, rule)
             return self._ensure_head_semantics(enriched, method)
 
-        entry = await self._prepare_entry(response, path_template)
+        ttl, stale = self._resolve_durations(rule)
+        entry = await self._prepare_entry(response, path_template, ttl=ttl, stale=stale)
         if entry is None:
-            return self._ensure_head_semantics(response, method)
+            enriched = self._ensure_headers(response, rule)
+            return self._ensure_head_semantics(enriched, method)
 
         try:
-            await self._cache.set(cache_key, entry, ttl=float(self._config.default_ttl))
+            await self._cache.set(cache_key, entry, ttl=float(ttl))
         except Exception:  # pragma: no cover - defensive guard
             log_event(
                 _logger,
@@ -198,7 +207,10 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 path=path_template,
                 key_hash=cache_key,
             )
-            return self._ensure_head_semantics(response, method)
+            if self._config.fail_open:
+                enriched = self._ensure_headers(response, rule)
+                return self._ensure_head_semantics(enriched, method)
+            raise
 
         log_event(
             _logger,
@@ -212,7 +224,14 @@ class CacheMiddleware(BaseHTTPMiddleware):
         cached_response.background = response.background
         return cached_response
 
-    async def _prepare_entry(self, response: Response, path_template: str) -> CacheEntry | None:
+    async def _prepare_entry(
+        self,
+        response: Response,
+        path_template: str,
+        *,
+        ttl: int,
+        stale: int | None,
+    ) -> CacheEntry | None:
         body = await self._read_body(response)
         if body is None:
             return None
@@ -233,7 +252,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
         headers = dict(response.headers)
         headers["ETag"] = etag
         headers["Last-Modified"] = format_datetime(now, usegmt=True)
-        headers.setdefault("Cache-Control", f"public, max-age={self._config.default_ttl}")
+        headers.setdefault("Cache-Control", self._build_cache_control(ttl, stale))
         if self._vary_headers:
             headers["Vary"] = ", ".join(self._vary_headers)
         headers["Content-Length"] = str(len(body))
@@ -252,6 +271,9 @@ class CacheMiddleware(BaseHTTPMiddleware):
             vary=self._vary_headers,
             created_at=0.0,
             expires_at=None,
+            ttl=float(ttl),
+            stale_while_revalidate=float(stale) if stale is not None else None,
+            stale_expires_at=None,
         )
         return entry
 
@@ -273,10 +295,11 @@ class CacheMiddleware(BaseHTTPMiddleware):
             return f'W/"{digest}"'
         return f'"{digest}"'
 
-    def _ensure_headers(self, response: Response) -> Response:
+    def _ensure_headers(self, response: Response, rule: CacheRule | None = None) -> Response:
         if self._vary_headers:
             response.headers.setdefault("Vary", ", ".join(self._vary_headers))
-        response.headers.setdefault("Cache-Control", f"public, max-age={self._config.default_ttl}")
+        ttl, stale = self._resolve_durations(rule)
+        response.headers.setdefault("Cache-Control", self._build_cache_control(ttl, stale))
         return response
 
     def _ensure_head_semantics(self, response: Response, method: str) -> Response:
@@ -312,6 +335,21 @@ class CacheMiddleware(BaseHTTPMiddleware):
     def _age(self, entry: CacheEntry) -> float:
         now = datetime.now(timezone.utc).timestamp()
         return max(0.0, now - entry.created_at)
+
+    def _resolve_durations(self, rule: CacheRule | None) -> tuple[int, int | None]:
+        ttl = rule.ttl if rule and rule.ttl is not None else self._config.default_ttl
+        stale = (
+            rule.stale_while_revalidate
+            if rule and rule.stale_while_revalidate is not None
+            else self._config.stale_while_revalidate
+        )
+        return max(0, int(ttl)), None if stale is None else max(0, int(stale))
+
+    def _build_cache_control(self, ttl: int, stale: int | None) -> str:
+        directives = [f"public, max-age={max(0, ttl)}"]
+        if stale is not None:
+            directives.append(f"stale-while-revalidate={max(0, stale)}")
+        return ", ".join(directives)
 
     def _is_not_modified(self, request: Request, entry: CacheEntry) -> bool:
         if_none_match = request.headers.get("if-none-match")

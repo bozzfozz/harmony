@@ -39,6 +39,9 @@ def _make_entry(path: str, body: bytes, *, last_modified: datetime | None = None
         vary=("Authorization",),
         created_at=0.0,
         expires_at=None,
+        ttl=1.0,
+        stale_while_revalidate=None,
+        stale_expires_at=None,
     )
 
 

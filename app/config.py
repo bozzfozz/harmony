@@ -326,13 +326,22 @@ class RateLimitMiddlewareConfig:
     refill_per_second: float
 
 
+@dataclass(slots=True, frozen=True)
+class CacheRule:
+    pattern: str
+    ttl: int | None
+    stale_while_revalidate: int | None
+
+
 @dataclass(slots=True)
 class CacheMiddlewareConfig:
     enabled: bool
     default_ttl: int
     max_items: int
     etag_strategy: str
-    cacheable_paths: tuple[str, ...]
+    fail_open: bool
+    stale_while_revalidate: int | None
+    cacheable_paths: tuple[CacheRule, ...]
 
 
 @dataclass(slots=True)
@@ -691,6 +700,35 @@ def _deduplicate_preserve_order(values: Iterable[str]) -> tuple[str, ...]:
             seen.add(value)
             result.append(value)
     return tuple(result)
+
+
+def _parse_optional_duration(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, parsed)
+
+
+def _parse_cache_rules(values: Iterable[str]) -> tuple[CacheRule, ...]:
+    rules: list[CacheRule] = []
+    for raw_value in values:
+        if not raw_value:
+            continue
+        segments = raw_value.split("|")
+        pattern = segments[0].strip()
+        if not pattern:
+            continue
+        ttl = None
+        stale = None
+        if len(segments) > 1:
+            ttl = _parse_optional_duration(segments[1].strip() or None)
+        if len(segments) > 2:
+            stale = _parse_optional_duration(segments[2].strip() or None)
+        rules.append(CacheRule(pattern=pattern, ttl=ttl, stale_while_revalidate=stale))
+    return tuple(rules)
 
 
 def _normalise_prefix(value: str) -> str:
@@ -1312,13 +1350,18 @@ def load_config() -> AppConfig:
         ),
     )
 
-    cacheable_paths_raw = _parse_list(os.getenv("CACHEABLE_PATHS"))
+    cacheable_paths_raw = _deduplicate_preserve_order(_parse_list(os.getenv("CACHEABLE_PATHS")))
+    cache_rules = _parse_cache_rules(cacheable_paths_raw)
     cache_config = CacheMiddlewareConfig(
         enabled=_as_bool(os.getenv("CACHE_ENABLED"), default=True),
         default_ttl=max(0, _as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)),
         max_items=max(1, _as_int(os.getenv("CACHE_MAX_ITEMS"), default=5_000)),
         etag_strategy=(os.getenv("CACHE_STRATEGY_ETAG") or "strong").strip().lower() or "strong",
-        cacheable_paths=_deduplicate_preserve_order(cacheable_paths_raw),
+        fail_open=_as_bool(os.getenv("CACHE_FAIL_OPEN"), default=True),
+        stale_while_revalidate=_parse_optional_duration(
+            (os.getenv("CACHE_STALE_WHILE_REVALIDATE_S") or "").strip() or None
+        ),
+        cacheable_paths=cache_rules,
     )
 
     cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
