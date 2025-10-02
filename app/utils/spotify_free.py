@@ -189,12 +189,27 @@ def _normalise_playlist_link(
         parts = link.split(":")
         if len(parts) < 3:
             return None, "INVALID_URL"
-        if parts[1].lower() != "playlist":
-            return None, "NOT_A_PLAYLIST_URL"
-        playlist_id = parts[2]
-        if not _is_valid_playlist_id(playlist_id):
-            return None, "INVALID_PLAYLIST_ID"
-        return playlist_id, None
+
+        kind = parts[1].lower()
+        if kind == "playlist":
+            playlist_id = parts[2]
+            if not _is_valid_playlist_id(playlist_id):
+                return None, "INVALID_PLAYLIST_ID"
+            return playlist_id, None
+
+        if kind == "user":
+            if not allow_user_urls:
+                return None, "NOT_A_PLAYLIST_URL"
+            if len(parts) < 5:
+                return None, "INVALID_URL"
+            if parts[3].lower() != "playlist":
+                return None, "NOT_A_PLAYLIST_URL"
+            playlist_id = parts[4]
+            if not _is_valid_playlist_id(playlist_id):
+                return None, "INVALID_PLAYLIST_ID"
+            return playlist_id, None
+
+        return None, "NOT_A_PLAYLIST_URL"
 
     if lowered.startswith("http://") or lowered.startswith("https://"):
         parsed = urlparse(link)
@@ -208,19 +223,30 @@ def _normalise_playlist_link(
             return None, "NOT_A_PLAYLIST_URL"
 
         kind = segments[0].lower()
-        if kind != "playlist":
-            if kind == "user" and allow_user_urls:
-                return None, "UNSUPPORTED_URL"
-            return None, "NOT_A_PLAYLIST_URL"
+        if kind == "playlist":
+            if len(segments) < 2:
+                return None, "INVALID_PLAYLIST_ID"
 
-        if len(segments) < 2:
-            return None, "INVALID_PLAYLIST_ID"
+            playlist_id = segments[1]
+            playlist_id = playlist_id.split("?")[0].split("#")[0]
+            if not _is_valid_playlist_id(playlist_id):
+                return None, "INVALID_PLAYLIST_ID"
+            return playlist_id, None
 
-        playlist_id = segments[1]
-        playlist_id = playlist_id.split("?")[0].split("#")[0]
-        if not _is_valid_playlist_id(playlist_id):
-            return None, "INVALID_PLAYLIST_ID"
-        return playlist_id, None
+        if kind == "user":
+            if not allow_user_urls:
+                return None, "NOT_A_PLAYLIST_URL"
+            if len(segments) < 4:
+                return None, "INVALID_PLAYLIST_ID"
+            if segments[2].lower() != "playlist":
+                return None, "NOT_A_PLAYLIST_URL"
+            playlist_id = segments[3]
+            playlist_id = playlist_id.split("?")[0].split("#")[0]
+            if not _is_valid_playlist_id(playlist_id):
+                return None, "INVALID_PLAYLIST_ID"
+            return playlist_id, None
+
+        return None, "NOT_A_PLAYLIST_URL"
 
     if "spotify" in lowered:
         return None, "INVALID_URL"
