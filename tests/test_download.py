@@ -230,7 +230,9 @@ def test_cancel_download_returns_502_when_transfers_unavailable(client) -> None:
     transfers_stub.raise_cancel = TransfersApiError("offline")
 
     response = client.delete(f"/download/{original_id}")
-    assert response.status_code == 502
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "DEPENDENCY_ERROR"
 
     with session_scope() as session:
         download = session.get(Download, original_id)
@@ -304,7 +306,9 @@ def test_retry_download_returns_502_when_enqueue_fails(client) -> None:
     transfers_stub.raise_enqueue = TransfersApiError("offline")
 
     response = client.post(f"/download/{original_id}/retry")
-    assert response.status_code == 502
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "DEPENDENCY_ERROR"
 
     with session_scope() as session:
         downloads = session.query(Download).all()
@@ -341,7 +345,9 @@ def test_retry_download_returns_502_when_cancel_fails(client) -> None:
     transfers_stub.raise_cancel = TransfersApiError("offline")
 
     response = client.post(f"/download/{original_id}/retry")
-    assert response.status_code == 502
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "DEPENDENCY_ERROR"
 
     with session_scope() as session:
         downloads = session.query(Download).all()

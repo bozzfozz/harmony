@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 import asyncio
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 
+from app.errors import DependencyError, NotFoundError
 from app.models import Download
 from app.schemas import DownloadPriorityUpdate, SoulseekDownloadRequest
 from app.services.download_service import DownloadService
@@ -51,10 +49,8 @@ def test_list_downloads_filters_active_states(db_session) -> None:
 def test_get_download_missing_raises(db_session) -> None:
     service = _service(db_session)
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(NotFoundError):
         service.get_download(999)
-
-    assert excinfo.value.status_code == 404
 
 
 def test_update_priority_persists_and_notifies_worker(monkeypatch, db_session) -> None:
@@ -111,7 +107,5 @@ async def test_queue_downloads_without_worker_raises(db_session) -> None:
 
     payload = SoulseekDownloadRequest(username="tester", files=[{"filename": "track.mp3"}])
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(DependencyError):
         await service.queue_downloads(payload, worker=None)
-
-    assert excinfo.value.status_code == 503
