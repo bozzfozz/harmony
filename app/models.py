@@ -17,7 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
+    text,
 )
 
 # JSON is optional depending on database backend; fall back to Text if unavailable
@@ -293,10 +293,13 @@ class QueueJob(Base):
         ),
         Index("ix_queue_jobs_lease_expires_at", "lease_expires_at"),
         Index("ix_queue_jobs_idempotency_key", "idempotency_key"),
-        UniqueConstraint(
+        Index(
+            "ix_queue_jobs_type_idempotency_key_not_null",
             "type",
             "idempotency_key",
-            name="uq_queue_jobs_type_idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+            sqlite_where=text("idempotency_key IS NOT NULL"),
         ),
     )
 
