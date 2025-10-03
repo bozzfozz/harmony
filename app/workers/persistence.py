@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
 
 from sqlalchemy import Select, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -158,6 +160,90 @@ def _refresh_instance(session: Session, record: QueueJob) -> QueueJobDTO:
     return _to_dto(record)
 
 
+def _upsert_queue_job(
+    session: Session,
+    *,
+    job_type: str,
+    dedupe_key: str,
+    payload: Mapping[str, Any],
+    priority: int,
+    scheduled_for: datetime,
+    now: datetime,
+) -> tuple[QueueJob, bool]:
+    """Insert or update a queue job guarded by the idempotency key."""
+
+    bind = session.get_bind()
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
+
+    insert_values = {
+        "type": job_type,
+        "payload": dict(payload),
+        "priority": priority,
+        "available_at": scheduled_for,
+        "idempotency_key": dedupe_key,
+        "status": QueueJobStatus.PENDING.value,
+        "stop_reason": None,
+        "lease_expires_at": None,
+        "last_error": None,
+        "result_payload": None,
+        "attempts": 0,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    if dialect_name in {"postgresql", "sqlite"}:
+        insert_fn = pg_insert if dialect_name == "postgresql" else sqlite_insert
+        insert_stmt = (
+            insert_fn(QueueJob)
+            .values(**insert_values)
+            .on_conflict_do_nothing(
+                index_elements=[QueueJob.type, QueueJob.idempotency_key]
+            )
+        )
+        result = session.execute(insert_stmt)
+        if result.rowcount:
+            stmt = select(QueueJob).where(
+                QueueJob.type == job_type,
+                QueueJob.idempotency_key == dedupe_key,
+            )
+            record = session.execute(stmt).scalars().one()
+            return record, False
+
+    stmt: Select[QueueJob] = select(QueueJob).where(
+        QueueJob.type == job_type,
+        QueueJob.idempotency_key == dedupe_key,
+    )
+    if dialect_name not in {"", "sqlite"}:
+        stmt = stmt.with_for_update()
+
+    existing = session.execute(stmt).scalars().first()
+    if existing is not None:
+        previous_status = existing.status
+        existing.payload = dict(payload)
+        existing.priority = priority
+        existing.available_at = scheduled_for
+        existing.status = QueueJobStatus.PENDING.value
+        existing.lease_expires_at = None
+        existing.last_error = None
+        existing.result_payload = None
+        existing.stop_reason = None
+        existing.updated_at = now
+        if previous_status in {
+            QueueJobStatus.COMPLETED.value,
+            QueueJobStatus.CANCELLED.value,
+        }:
+            existing.attempts = 0
+            deduped = False
+        else:
+            deduped = True
+        session.add(existing)
+        return existing, deduped
+
+    record = QueueJob(**insert_values)
+    session.add(record)
+    return record, False
+
+
 def enqueue(
     job_type: str,
     payload: Mapping[str, Any],
@@ -175,50 +261,37 @@ def enqueue(
     resolved_priority = priority if priority is not None else _resolve_priority(payload_dict)
 
     with session_scope() as session:
-        existing: QueueJob | None = None
         if dedupe_key:
-            stmt: Select[QueueJob] = (
-                select(QueueJob)
-                .where(
-                    QueueJob.type == job_type,
-                    QueueJob.idempotency_key == dedupe_key,
-                )
-                .order_by(QueueJob.id.desc())
-                .limit(1)
+            record, deduped = _upsert_queue_job(
+                session,
+                job_type=job_type,
+                dedupe_key=dedupe_key,
+                payload=payload_dict,
+                priority=resolved_priority,
+                scheduled_for=scheduled_for,
+                now=now,
             )
-            existing = session.execute(stmt).scalars().first()
+        else:
+            record = QueueJob(
+                type=job_type,
+                payload=payload_dict,
+                priority=resolved_priority,
+                available_at=scheduled_for,
+                idempotency_key=None,
+                status=QueueJobStatus.PENDING.value,
+                stop_reason=None,
+                lease_expires_at=None,
+                last_error=None,
+                result_payload=None,
+                attempts=0,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(record)
+            deduped = False
 
-        dto: QueueJobDTO
-        if existing and existing.status not in {
-            QueueJobStatus.COMPLETED.value,
-            QueueJobStatus.CANCELLED.value,
-        }:
-            existing.payload = payload_dict
-            existing.priority = resolved_priority
-            existing.available_at = scheduled_for
-            existing.status = QueueJobStatus.PENDING.value
-            existing.lease_expires_at = None
-            existing.last_error = None
-            existing.result_payload = None
-            existing.stop_reason = None
-            existing.updated_at = now
-            session.add(existing)
-            dto = _refresh_instance(session, existing)
-            _emit_worker_job_event(dto, "enqueued", deduped=True)
-            return dto
-
-        record = QueueJob(
-            type=job_type,
-            payload=payload_dict,
-            priority=resolved_priority,
-            available_at=scheduled_for,
-            idempotency_key=dedupe_key,
-            status=QueueJobStatus.PENDING.value,
-            stop_reason=None,
-        )
-        session.add(record)
         dto = _refresh_instance(session, record)
-        _emit_worker_job_event(dto, "enqueued", deduped=False)
+        _emit_worker_job_event(dto, "enqueued", deduped=deduped)
         return dto
 
 
