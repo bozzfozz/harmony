@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Mapping, Optional
 
 from app.dependencies import (
     get_app_config,
     get_matching_engine,
     get_soulseek_client,
     get_spotify_client,
+    get_session_runner,
 )
 from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
 from app.orchestrator.scheduler import Scheduler
@@ -20,6 +21,8 @@ from app.orchestrator.providers import (
     build_sync_handler_deps,
     build_watchlist_handler_deps,
 )
+from app.services.free_ingest_service import FreeIngestService
+from app.workers.import_worker import ImportWorker
 
 
 @dataclass(slots=True)
@@ -30,6 +33,7 @@ class OrchestratorRuntime:
     dispatcher: Dispatcher
     handlers: Mapping[str, JobHandler]
     enabled_jobs: Mapping[str, bool]
+    import_worker: Optional[ImportWorker]
 
 
 def bootstrap_orchestrator(
@@ -74,6 +78,15 @@ def bootstrap_orchestrator(
     )
     dispatcher = Dispatcher(scheduler, handlers)
 
+    session_runner = get_session_runner()
+    free_ingest_service = FreeIngestService(
+        config=config,
+        soulseek_client=soulseek_client,
+        sync_worker=None,
+        session_runner=session_runner,
+    )
+    import_worker = ImportWorker(free_ingest_service=free_ingest_service)
+
     enabled_jobs: dict[str, bool] = {}
     for job_type in ("sync", "matching", "retry", "watchlist"):
         enabled_jobs[job_type] = job_type in handlers
@@ -85,6 +98,7 @@ def bootstrap_orchestrator(
         dispatcher=dispatcher,
         handlers=handlers,
         enabled_jobs=enabled_jobs,
+        import_worker=import_worker,
     )
 
 

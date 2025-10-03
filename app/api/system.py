@@ -263,6 +263,7 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
     "watchlist": WorkerDescriptor(attr="watchlist_worker", queue_literal="n/a"),
     "artwork": WorkerDescriptor(attr="artwork_worker", queue_literal="n/a"),
     "lyrics": WorkerDescriptor(attr="lyrics_worker", queue_literal="n/a"),
+    "import": WorkerDescriptor(attr="import_worker", queue_literal="n/a"),
     "scheduler": WorkerDescriptor(
         attr=None, queue_literal="n/a", orchestrator_component="scheduler"
     ),

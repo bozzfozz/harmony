@@ -231,11 +231,13 @@ async def _start_orchestrator_workers(
         "artwork": False,
         "lyrics": False,
         "metadata": False,
+        "import": False,
         "orchestrator_scheduler": False,
         "orchestrator_dispatcher": False,
         "orchestrator_watchlist_timer": False,
     }
 
+    state.import_worker = None
     state.artwork_worker = None
     if enable_artwork:
         state.artwork_worker = ArtworkWorker(
@@ -269,6 +271,10 @@ async def _start_orchestrator_workers(
         asyncio.create_task(orchestrator.scheduler.run(state.orchestrator_stop_event)),
         asyncio.create_task(orchestrator.dispatcher.run(state.orchestrator_stop_event)),
     ]
+    state.import_worker = orchestrator.import_worker
+    if state.import_worker is not None:
+        await state.import_worker.start()
+        worker_status["import"] = True
     worker_status["orchestrator_scheduler"] = True
     worker_status["orchestrator_dispatcher"] = True
     orchestrator_status["scheduler_running"] = True
@@ -353,6 +359,10 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     ):
         if hasattr(state, attribute):
             delattr(state, attribute)
+
+    await _stop_worker(getattr(state, "import_worker", None))
+    if hasattr(state, "import_worker"):
+        delattr(state, "import_worker")
 
     for attribute in ("artwork_worker", "lyrics_worker", "rich_metadata_worker"):
         await _stop_worker(getattr(state, attribute, None))
@@ -442,6 +452,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "artwork": False,
             "lyrics": False,
             "metadata": False,
+            "import": False,
             "orchestrator_scheduler": False,
             "orchestrator_dispatcher": False,
             "orchestrator_watchlist_timer": False,
