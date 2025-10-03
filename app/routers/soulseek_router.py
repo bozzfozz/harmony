@@ -128,7 +128,8 @@ async def soulseek_download(
     job_files: List[Dict[str, Any]] = []
     try:
         for file_info in payload.files:
-            filename = str(file_info.get("filename") or file_info.get("name") or "unknown")
+            file_payload = file_info.to_payload()
+            filename = str(file_payload.get("filename") or "unknown")
             download = Download(
                 filename=filename,
                 state="queued",
@@ -141,16 +142,12 @@ async def soulseek_download(
             session.add(download)
             session.flush()
 
-            payload_copy = dict(file_info)
-            payload_copy.setdefault("filename", filename)
+            payload_copy = dict(file_payload)
             payload_copy["download_id"] = download.id
 
-            try:
-                priority_value = int(payload_copy.get("priority", download.priority) or 0)
-            except (TypeError, ValueError):
-                priority_value = 0
+            priority_value = file_info.priority if file_info.priority is not None else 0
 
-            download.priority = priority_value or download.priority
+            download.priority = priority_value
             download.request_payload = {
                 "file": dict(payload_copy),
                 "username": payload.username,
@@ -735,7 +732,8 @@ async def soulseek_enqueue(
     client: SoulseekClient = Depends(get_soulseek_client),
 ) -> Dict[str, Any]:
     try:
-        return await client.enqueue(payload.username, payload.files)
+        files = [file_info.to_payload() for file_info in payload.files]
+        return await client.enqueue(payload.username, files)
     except SoulseekClientError as exc:
         raise _translate_error("Failed to enqueue downloads", exc) from exc
 

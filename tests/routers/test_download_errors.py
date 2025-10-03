@@ -43,6 +43,24 @@ def test_start_download_without_files_returns_validation_error(
     assert body["error"]["message"] == "No files supplied"
 
 
+def test_start_download_missing_username_returns_422(client: SimpleTestClient) -> None:
+    payload = {"files": [{"filename": "track.mp3"}]}
+
+    response = client.post(api_path("/download"), json=payload)
+
+    assert response.status_code == 422
+
+
+def test_start_download_invalid_file_entry_returns_422(
+    client: SimpleTestClient,
+) -> None:
+    payload = {"username": "tester", "files": [{"priority": "high"}]}
+
+    response = client.post(api_path("/download"), json=payload)
+
+    assert response.status_code == 422
+
+
 def test_get_download_not_found_returns_standard_error(client: SimpleTestClient) -> None:
     response = client.get(api_path("/download/999999"))
 
