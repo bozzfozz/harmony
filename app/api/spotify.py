@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.cache_policy import CACHEABLE_RESPONSES
-from app.config import AppConfig, load_config
+from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -1221,25 +1221,10 @@ router.include_router(backfill_router)
 router.include_router(free_ingest_router)
 router.include_router(free_router)
 
-
-_config = load_config()
-_legacy_router: APIRouter | None = None
-if _config.features.enable_legacy_routes:
-    alias = APIRouter()
-    alias.include_router(core_router)
-    alias.include_router(backfill_router)
-    alias.include_router(free_ingest_router)
-    alias.include_router(free_router)
-    _legacy_router = alias
-
-legacy_router = _legacy_router
-
-
 __all__ = [
     "router",
     "core_router",
     "backfill_router",
     "free_router",
     "free_ingest_router",
-    "legacy_router",
 ]

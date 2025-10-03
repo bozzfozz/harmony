@@ -11,7 +11,6 @@ from typing import Any, Mapping
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
-from fastapi.routing import APIRoute
 
 from app.api import router_registry
 from app.config import AppConfig, SecurityConfig, settings
@@ -37,27 +36,6 @@ from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
-
-
-class LegacyLoggingRoute(APIRoute):
-    """Route implementation that records access to legacy API endpoints."""
-
-    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
-        original_handler = super().get_route_handler()
-
-        async def logging_route_handler(request: Request) -> Response:
-            response = await original_handler(request)
-            logger.info(
-                "Legacy API route accessed",
-                extra={
-                    "event": "api.legacy.hit",
-                    "path": request.url.path,
-                    "status": response.status_code,
-                },
-            )
-            return response
-
-        return logging_route_handler
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
@@ -139,7 +117,6 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
 
 _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
-_LEGACY_ROUTES_ENABLED = _config_snapshot.features.enable_legacy_routes
 
 
 def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None:
@@ -417,12 +394,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     feature_flags = config.features
     app.state.feature_flags = feature_flags
     app.state.api_base_path = config.api_base_path
-    app.state.legacy_routes_enabled = feature_flags.enable_legacy_routes
     orchestrator_status = _ensure_orchestrator_status(app)
 
     enable_artwork = feature_flags.enable_artwork
     enable_lyrics = feature_flags.enable_lyrics
-    legacy_routes_enabled = feature_flags.enable_legacy_routes
 
     enabled_jobs = orchestrator_status.setdefault("enabled_jobs", {})
     enabled_jobs.update(
@@ -486,13 +461,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "activity": True,
         "health": True,
         "watchlist": True,
-        "legacy_alias": legacy_routes_enabled,
     }
 
     flag_status = {
         "artwork": enable_artwork,
         "lyrics": enable_lyrics,
-        "legacy_routes": legacy_routes_enabled,
     }
 
     orchestrator_jobs = dict(orchestrator_status.get("enabled_jobs", {}))
@@ -571,16 +544,6 @@ router_registry.register_all(
     emit_log=True,
     router=_versioned_router,
 )
-
-if _LEGACY_ROUTES_ENABLED:
-    legacy_router = APIRouter(route_class=LegacyLoggingRoute)
-    legacy_router.add_api_route("/", root, methods=["GET"], tags=["System"])
-    router_registry.register_all(
-        app,
-        base_path="",
-        emit_log=False,
-        router=legacy_router,
-    )
 
 
 def _is_allowlisted_path(path: str) -> bool:
