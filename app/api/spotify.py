@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
@@ -127,8 +127,8 @@ def search_tracks(
     query: str = Query(..., min_length=1),
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> SpotifySearchResponse:
-    items = service.search_tracks(query)
-    return SpotifySearchResponse(items=list(items))
+    items = [asdict(track) for track in service.search_tracks(query)]
+    return SpotifySearchResponse(items=items)
 
 
 @core_router.get("/search/artists", response_model=SpotifySearchResponse)
@@ -193,7 +193,8 @@ def get_playlist_items(
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> PlaylistItemsResponse:
     result: PlaylistItemsResult = service.get_playlist_items(playlist_id, limit=limit)
-    return PlaylistItemsResponse(items=list(result.items), total=result.total)
+    normalized_items = [asdict(track) for track in result.items]
+    return PlaylistItemsResponse(items=normalized_items, total=result.total)
 
 
 @core_router.post(

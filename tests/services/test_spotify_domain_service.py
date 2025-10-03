@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import load_config
+from app.integrations.contracts import ProviderTrack
 from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
 from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
 
@@ -29,14 +30,87 @@ def _make_service(**overrides: Any) -> SpotifyDomainService:
 
 def test_get_playlist_items_uses_fallback_total() -> None:
     spotify_client = MagicMock()
-    spotify_client.get_playlist_items.return_value = {"items": [{"id": 1}, {"id": 2}]}
+    spotify_client.get_playlist_items.return_value = {
+        "items": [
+            {
+                "track": {
+                    "id": "t1",
+                    "name": "Track One",
+                    "duration_ms": 123000,
+                    "artists": [{"name": "Artist One"}],
+                },
+                "added_at": "2024-01-01T00:00:00Z",
+                "is_local": False,
+                "added_by": {
+                    "id": "user-1",
+                    "type": "user",
+                    "uri": "spotify:user:user-1",
+                },
+            },
+            {
+                "track": {
+                    "id": "t2",
+                    "name": "Track Two",
+                    "duration_ms": 456000,
+                    "artists": [{"name": "Artist Two"}],
+                },
+                "added_at": "2024-01-02T00:00:00Z",
+            },
+        ]
+    }
     service = _make_service(spotify_client=spotify_client)
 
     result = service.get_playlist_items("playlist", limit=10)
 
     assert isinstance(result, PlaylistItemsResult)
     assert result.total == 2
-    assert list(result.items) == [{"id": 1}, {"id": 2}]
+    assert all(isinstance(item, ProviderTrack) for item in result.items)
+    first_track = result.items[0]
+    assert first_track.metadata["id"] == "t1"
+    assert first_track.metadata["duration_ms"] == 123000
+    playlist_metadata = first_track.metadata.get("playlist_item", {})
+    assert playlist_metadata["added_at"] == "2024-01-01T00:00:00Z"
+    assert playlist_metadata["added_by"]["id"] == "user-1"
+    assert playlist_metadata["is_local"] is False
+
+
+def test_search_tracks_normalizes_results() -> None:
+    spotify_client = MagicMock()
+    spotify_client.search_tracks.return_value = {
+        "tracks": {
+            "items": [
+                {
+                    "id": "track-1",
+                    "name": "Song Title",
+                    "duration_ms": 78900,
+                    "artists": [
+                        {
+                            "id": "artist-1",
+                            "name": "Artist",
+                            "genres": ["rock"],
+                        }
+                    ],
+                    "album": {
+                        "id": "album-1",
+                        "name": "Album",
+                        "artists": [{"name": "Artist"}],
+                        "release_year": 1999,
+                    },
+                }
+            ]
+        }
+    }
+    service = _make_service(spotify_client=spotify_client)
+
+    results = service.search_tracks("Song Title")
+
+    assert len(results) == 1
+    track = results[0]
+    assert isinstance(track, ProviderTrack)
+    assert track.name == "Song Title"
+    assert track.metadata["id"] == "track-1"
+    assert track.metadata["duration_ms"] == 78900
+    assert track.artists[0].metadata["genres"] == ("rock",)
 
 
 def test_get_artist_discography_merges_tracks() -> None:
