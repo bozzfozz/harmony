@@ -56,7 +56,7 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         security_state = getattr(request.app.state, "security_config", self._security)
-        if not security_state.require_auth:
+        if not security_state.resolve_require_auth():
             return await call_next(request)
 
         path = request.url.path
