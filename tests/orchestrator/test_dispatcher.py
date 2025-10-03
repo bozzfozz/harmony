@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
@@ -178,13 +179,25 @@ async def test_dispatcher_executes_job_and_marks_complete(
     assert storage.fail_calls == []
     assert storage.dlq_calls == []
 
-    assert captured_events
-    event_name, payload = captured_events[-1]
-    assert event_name == "orchestrator.commit"
+    commit_events = [
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.commit"
+    ]
+    assert commit_events
+    payload = commit_events[-1]
     assert payload["job_type"] == "sync"
     assert payload["entity_id"] == "1"
     assert payload["status"] == "succeeded"
     assert payload["attempts"] == 1
+
+    heartbeat_events = [
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.heartbeat"
+    ]
+    assert heartbeat_events
+    assert heartbeat_events[-1]["status"] == "stopped"
 
 
 @pytest.mark.asyncio
@@ -224,9 +237,13 @@ async def test_dispatcher_retries_with_backoff(
     assert storage.dlq_calls == []
     assert storage.complete_calls == []
 
-    assert captured_events
-    event_name, payload = captured_events[-1]
-    assert event_name == "orchestrator.commit"
+    commit_events = [
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.commit"
+    ]
+    assert commit_events
+    payload = commit_events[-1]
     assert payload["status"] == "retry"
     assert payload["retry_in"] == 1
 
@@ -282,9 +299,13 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     assert storage.fail_calls == []
     assert storage.complete_calls == []
 
-    assert captured_events
-    event_name, payload = captured_events[-1]
-    assert event_name == "orchestrator.dlq"
+    dlq_events = [
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.dlq"
+    ]
+    assert dlq_events
+    payload = dlq_events[-1]
     assert payload["status"] == "dead_letter"
     assert payload["stop_reason"] == "max_retries_exhausted"
 
@@ -335,13 +356,49 @@ async def test_dispatcher_stops_job_when_lease_lost(
         record for record in caplog.records if record.getMessage() == "orchestrator.heartbeat"
     ]
     assert heartbeat_records, "Expected lease loss heartbeat log"
-    heartbeat_record = heartbeat_records[-1]
-    assert heartbeat_record.status == "lost"
-    assert heartbeat_record.job_type == "sync"
+    heartbeat_statuses = [record.status for record in heartbeat_records]
+    assert heartbeat_statuses[-1] == "aborted"
+    assert "lost" in heartbeat_statuses
+    assert heartbeat_records[-1].job_type == "sync"
 
     assert not any(
         record.getMessage() == "orchestrator.commit" for record in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_failure_skips_when_lease_lost(
+    captured_events: list[tuple[str, Mapping[str, Any]]]
+) -> None:
+    scheduler = StubScheduler([[]])
+    storage = StubPersistence()
+
+    dispatcher = Dispatcher(
+        scheduler,
+        {},
+        persistence_module=storage,
+    )
+
+    job = make_job(99, "sync", attempts=2)
+    start = time.perf_counter()
+
+    await dispatcher._handle_failure(
+        job,
+        RuntimeError("lease lost"),
+        start,
+        lease_lost=True,
+    )
+
+    assert storage.fail_calls == []
+    assert storage.dlq_calls == []
+
+    heartbeat_events = [
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.heartbeat"
+    ]
+    assert heartbeat_events
+    assert heartbeat_events[-1]["status"] == "skip_failure"
 
 
 @pytest.mark.asyncio
