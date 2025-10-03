@@ -28,7 +28,7 @@ from typing import (
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from app.config import WatchlistWorkerConfig
+from app.config import WatchlistWorkerConfig, settings
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -137,21 +137,21 @@ def load_sync_retry_policy(
 ) -> SyncRetryPolicy:
     """Resolve the retry policy from parameters or environment defaults."""
 
-    resolved_max = max_attempts
-    if resolved_max is None:
-        resolved_max = _safe_int(os.getenv("RETRY_MAX_ATTEMPTS"), 10)
-    if resolved_max <= 0:
-        resolved_max = 10
+    defaults = settings.retry_policy
+    resolved_max = _coerce_positive_int(
+        defaults.max_attempts if max_attempts is None else max_attempts,
+        defaults.max_attempts,
+    )
+    resolved_base = _coerce_positive_float(
+        defaults.base_seconds if base_seconds is None else base_seconds,
+        defaults.base_seconds,
+    )
 
-    resolved_base = base_seconds
-    if resolved_base is None:
-        resolved_base = _safe_float(os.getenv("RETRY_BASE_SECONDS"), 60.0)
-    if resolved_base <= 0:
-        resolved_base = 60.0
-
-    resolved_jitter = jitter_pct
-    if resolved_jitter is None:
-        resolved_jitter = _safe_float(os.getenv("RETRY_JITTER_PCT"), 0.2)
+    resolved_jitter = jitter_pct if jitter_pct is not None else defaults.jitter_pct
+    try:
+        resolved_jitter = float(resolved_jitter)
+    except (TypeError, ValueError):
+        resolved_jitter = defaults.jitter_pct
     if resolved_jitter < 0:
         resolved_jitter = 0.0
 

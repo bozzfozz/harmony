@@ -7,6 +7,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 1. **Code-Defaults** – sind in `app/config.py` hinterlegt (z. B. `DEFAULT_WATCHLIST_MAX_CONCURRENCY`).
 2. **Datenbank-Settings** – bestimmte Schlüssel (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_MODE`, `SLSKD_URL`, `SLSKD_API_KEY`, `ENABLE_ARTWORK`, `ENABLE_LYRICS`) werden beim Start aus der Tabelle `settings` geladen und haben Vorrang vor ENV-Werten.
 3. **Umgebungsvariablen** – werden zuletzt ausgewertet und überschreiben Defaults, sofern kein Datenbankwert existiert. Während der Laufzeit cached `get_app_config()` die Werte; Änderungen an `.env` erfordern daher einen Neustart.
+4. **Runtime-Profile & Worker-Overrides** – `get_app_config().environment` bündelt `APP_ENV`, `HARMONY_DISABLE_WORKERS`, `WORKER_VISIBILITY_TIMEOUT_S`, `WATCHLIST_INTERVAL` sowie `WATCHLIST_TIMER_ENABLED`. Statt direkter `os.getenv()`-Zugriffe greifen Bootstrap, Queue-Persistence und Tests nun auf diese Single Source zurück.
 
 > Tipp: Nutze `/settings` (GET/PUT), um Spotify- und slskd-Credentials zentral zu verwalten. Die API schreibt in die Datenbank und greift sofort für neue Requests.
 
@@ -38,6 +39,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 - Spotify/slskd-Zeitlimits (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`) greifen sowohl in REST-Endpunkten als auch in Workern (z. B. Watchlist).
 - `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn SQLite-Locks auftreten, oder schalte auf `WATCHLIST_DB_IO_MODE=async`, sobald eine asynchrone Datenbank verwendet wird.
 - Download-Retries (`RETRY_*`) konfigurieren die Sync-/Retry-Handler des Orchestrators; die historischen `RETRY_SCAN_*`-Werte werden nur noch für Legacy-Fallbacks gelesen.
+- Die Retry-Defaults (`RETRY_MAX_ATTEMPTS`, `RETRY_BASE_SECONDS`, `RETRY_JITTER_PCT`) liegen gesammelt in `settings.retry_policy` und speisen sowohl den Orchestrator als auch Worker.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
 
 ## Frontend & Runtime Injection
