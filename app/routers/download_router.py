@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from app.dependencies import get_download_service
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.schemas import (
     DownloadEntryResponse,
     DownloadListResponse,
@@ -48,12 +49,16 @@ def list_downloads(
     """Return downloads with optional status filtering."""
 
     status_label = status_filter.strip() if status_filter else None
-    logger.info(
-        "Download list requested (all=%s, status=%s, limit=%s, offset=%s)",
-        all,
-        status_label,
-        limit,
-        offset,
+    log_event(
+        logger,
+        "api.download.list",
+        component="router.download",
+        status="requested",
+        entity_id=None,
+        include_all=all,
+        status_filter=status_label,
+        limit=limit,
+        offset=offset,
     )
     downloads = service.list_downloads(
         include_all=all,
@@ -71,7 +76,13 @@ def get_download(
 ) -> DownloadEntryResponse:
     """Return the persisted state of a single download."""
 
-    logger.info("Download detail requested for id=%s", download_id)
+    log_event(
+        logger,
+        "api.download.detail",
+        component="router.download",
+        status="requested",
+        entity_id=download_id,
+    )
     download = service.get_download(download_id)
     return DownloadEntryResponse.model_validate(download)
 
@@ -84,7 +95,14 @@ def update_download_priority(
 ) -> DownloadEntryResponse:
     """Update the priority of a persisted download."""
 
-    logger.info("Priority update requested for download %s", download_id)
+    log_event(
+        logger,
+        "api.download.priority",
+        component="router.download",
+        status="requested",
+        entity_id=download_id,
+        priority=payload.priority,
+    )
     download = service.update_priority(download_id, payload)
     return DownloadEntryResponse.model_validate(download)
 
@@ -108,7 +126,13 @@ async def cancel_download(
 ) -> Dict[str, Any]:
     """Cancel a queued or running download."""
 
-    logger.info("Cancellation requested for download id=%s", download_id)
+    log_event(
+        logger,
+        "api.download.cancel",
+        component="router.download",
+        status="requested",
+        entity_id=download_id,
+    )
     return await service.cancel_download(download_id)
 
 
@@ -153,5 +177,11 @@ async def retry_download(
 ) -> Dict[str, Any]:
     """Retry a failed or cancelled download by creating a new entry."""
 
-    logger.info("Retry requested for download id=%s", download_id)
+    log_event(
+        logger,
+        "api.download.retry",
+        component="router.download",
+        status="requested",
+        entity_id=download_id,
+    )
     return await service.retry_download(download_id)

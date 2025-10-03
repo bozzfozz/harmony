@@ -15,6 +15,7 @@ from app.config import AppConfig
 from app.dependencies import SessionRunner, get_app_config, get_session_runner
 from app.errors import ValidationAppError
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import ImportBatch, ImportSession
 from app.utils.spotify_free import (
     InvalidPayloadError,
@@ -111,15 +112,16 @@ async def create_free_import(
 
     await run_in_session(_persist_records)
 
-    logger.info(
-        "processed FREE ingest request",
-        extra={
-            "event": "free_ingest",
-            "session_id": session_id,
-            "accepted": len(parse_result.accepted),
-            "rejected": len(parse_result.rejected),
-            "skipped": len(parse_result.skipped),
-        },
+    log_event(
+        logger,
+        "api.import.free",
+        component="router.imports",
+        status="ok",
+        entity_id=session_id,
+        accepted=len(parse_result.accepted),
+        rejected=len(parse_result.rejected),
+        skipped=len(parse_result.skipped),
+        provided=parse_result.total_links,
     )
 
     response_payload = {

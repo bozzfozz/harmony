@@ -17,6 +17,7 @@ from app.db import session_scope
 from app.dependencies import get_db, get_soulseek_client
 from app.errors import DependencyError
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import DiscographyJob, Download
 from app.schemas import (
     DiscographyDownloadRequest,
@@ -74,7 +75,14 @@ async def soulseek_status(
     try:
         await client.get_download_status()
     except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Soulseek status check failed: %s", exc)
+        log_event(
+            logger,
+            "api.soulseek.status",
+            component="router.soulseek",
+            status="error",
+            entity_id=None,
+            error=str(exc),
+        )
         return StatusResponse(status="disconnected")
     return StatusResponse(status="connected")
 

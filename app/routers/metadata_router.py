@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.logging import get_logger
+from app.logging_events import log_event
 
 router = APIRouter(prefix="/metadata", tags=["Metadata"])
 logger = get_logger(__name__)
@@ -14,7 +15,14 @@ logger = get_logger(__name__)
 async def start_metadata_update(request: Request) -> dict[str, object]:
     """Kick off a metadata update job."""
 
-    logger.info("Metadata update requested but legacy integration is disabled")
+    log_event(
+        logger,
+        "api.metadata.request",
+        component="router.metadata",
+        status="blocked",
+        entity_id=None,
+        action="update",
+    )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Metadata update disabled while legacy integration is archived",
@@ -25,7 +33,14 @@ async def start_metadata_update(request: Request) -> dict[str, object]:
 async def get_metadata_status(request: Request) -> dict[str, object]:
     """Return the current metadata job status."""
 
-    logger.info("Metadata status requested but legacy integration is disabled")
+    log_event(
+        logger,
+        "api.metadata.request",
+        component="router.metadata",
+        status="blocked",
+        entity_id=None,
+        action="status",
+    )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Metadata update disabled while legacy integration is archived",
@@ -36,7 +51,14 @@ async def get_metadata_status(request: Request) -> dict[str, object]:
 async def stop_metadata_update(request: Request) -> dict[str, object]:
     """Request to stop the running metadata job."""
 
-    logger.info("Metadata stop requested but legacy integration is disabled")
+    log_event(
+        logger,
+        "api.metadata.request",
+        component="router.metadata",
+        status="blocked",
+        entity_id=None,
+        action="stop",
+    )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Metadata update disabled while legacy integration is archived",
