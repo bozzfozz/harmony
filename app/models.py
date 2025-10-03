@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 
 # JSON is optional depending on database backend; fall back to Text if unavailable
@@ -292,6 +293,11 @@ class QueueJob(Base):
         ),
         Index("ix_queue_jobs_lease_expires_at", "lease_expires_at"),
         Index("ix_queue_jobs_idempotency_key", "idempotency_key"),
+        UniqueConstraint(
+            "type",
+            "idempotency_key",
+            name="uq_queue_jobs_type_idempotency_key",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
