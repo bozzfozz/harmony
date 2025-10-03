@@ -13,6 +13,7 @@ import aiohttp
 
 from app.config import SoulseekConfig
 from app.logging import get_logger
+from app.utils.retry import RetryDirective, with_retry
 
 
 logger = get_logger(__name__)
@@ -47,7 +48,10 @@ class SoulseekClient:
         self._session_owner = session is None
         self._timestamps: deque[float] = deque(maxlen=self.RATE_LIMIT_COUNT)
         self._lock = asyncio.Lock()
-        self._max_retries = 3
+        self._retry_attempts = max(1, int(config.retry_max) + 1)
+        self._retry_backoff_base_ms = max(1, int(config.retry_backoff_base_ms))
+        self._retry_jitter_pct = self._resolve_jitter_pct(config.retry_jitter_pct)
+        self._timeout_ms = max(0, int(config.timeout_ms))
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -75,6 +79,24 @@ class SoulseekClient:
                     await asyncio.sleep(wait_time)
             self._timestamps.append(time.monotonic())
 
+    @staticmethod
+    def _resolve_jitter_pct(value: float) -> int:
+        jitter = max(0.0, float(value))
+        if jitter <= 1:
+            return int(round(jitter * 100))
+        return int(round(jitter))
+
+    @staticmethod
+    def _should_retry(error: "SoulseekClientError") -> bool:
+        status = error.status_code
+        if status is None:
+            return True
+        if status >= 500:
+            return True
+        if status in {408, 429}:
+            return True
+        return False
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         await self._respect_rate_limit()
         session = await self._ensure_session()
@@ -82,8 +104,7 @@ class SoulseekClient:
         headers = kwargs.pop("headers", {})
         headers = {**self._build_headers(), **headers}
 
-        backoff = 0.5
-        for attempt in range(1, self._max_retries + 1):
+        async def _perform_request() -> Any:
             try:
                 async with session.request(method, url, headers=headers, **kwargs) as response:
                     content_type = response.headers.get("Content-Type", "")
@@ -111,16 +132,40 @@ class SoulseekClient:
                                 status_code=response.status,
                             ) from decode_error
                     return body_text
-            except SoulseekClientError as exc:
-                if attempt == self._max_retries:
-                    logger.error("Soulseek request failed: %s", exc)
-                    raise
+            except aiohttp.ClientResponseError as exc:
+                raise SoulseekClientError(str(exc), status_code=exc.status) from exc
             except aiohttp.ClientError as exc:
-                if attempt == self._max_retries:
-                    logger.error("Soulseek request failed: %s", exc)
-                    raise SoulseekClientError(str(exc)) from exc
-            await asyncio.sleep(backoff)
-            backoff *= 2
+                raise SoulseekClientError(str(exc)) from exc
+
+        def _classify(exc: Exception) -> RetryDirective:
+            if isinstance(exc, asyncio.TimeoutError):
+                message = (
+                    f"slskd request timed out after {self._timeout_ms}ms"
+                    if self._timeout_ms > 0
+                    else "slskd request timed out"
+                )
+                error = SoulseekClientError(message, status_code=408)
+            elif isinstance(exc, SoulseekClientError):
+                error = exc
+            else:
+                error = SoulseekClientError(str(exc))
+            should_retry = self._should_retry(error)
+            return RetryDirective(retry=should_retry, error=error)
+
+        timeout_ms = self._timeout_ms if self._timeout_ms > 0 else None
+
+        try:
+            return await with_retry(
+                _perform_request,
+                attempts=self._retry_attempts,
+                base_ms=self._retry_backoff_base_ms,
+                jitter_pct=self._retry_jitter_pct,
+                timeout_ms=timeout_ms,
+                classify_err=_classify,
+            )
+        except SoulseekClientError as exc:
+            logger.error("Soulseek request failed: %s", exc)
+            raise
 
     async def close(self) -> None:
         if self._session_owner and self._session and not self._session.closed:
