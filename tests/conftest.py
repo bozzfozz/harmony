@@ -22,7 +22,6 @@ os.environ.setdefault("ALLOWED_ORIGINS", "https://app.local")
 os.environ.setdefault("CACHE_ENABLED", "true")
 os.environ.setdefault("CACHE_DEFAULT_TTL_S", "30")
 os.environ.setdefault("CACHE_MAX_ITEMS", "256")
-os.environ.setdefault("CACHEABLE_PATHS", "/|30|60")
 
 import pytest
 from app.core.transfers_api import TransfersApiError

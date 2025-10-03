@@ -446,6 +446,12 @@ DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
+DEFAULT_CACHEABLE_PATH_PATTERNS = (
+    "^/$|30|120",
+    "^/activity$|60|180",
+    "^/activity/export$|300|600",
+    "^/spotify(?:/.*)?$|45|180",
+)
 DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
 DEFAULT_SLSKD_TIMEOUT_MS = 8_000
 DEFAULT_SLSKD_RETRY_MAX = 3
@@ -1537,8 +1543,11 @@ def load_config() -> AppConfig:
         ),
     )
 
-    cacheable_paths_raw = _deduplicate_preserve_order(_parse_list(os.getenv("CACHEABLE_PATHS")))
-    cache_rules = _parse_cache_rules(cacheable_paths_raw)
+    cacheable_paths_env = _parse_list(os.getenv("CACHEABLE_PATHS"))
+    merged_cacheable_paths = _deduplicate_preserve_order(
+        [*cacheable_paths_env, *DEFAULT_CACHEABLE_PATH_PATTERNS]
+    )
+    cache_rules = _parse_cache_rules(merged_cacheable_paths)
     cache_config = CacheMiddlewareConfig(
         enabled=_as_bool(os.getenv("CACHE_ENABLED"), default=True),
         default_ttl=max(0, _as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)),

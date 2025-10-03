@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.api.cache_policy import CACHEABLE_RESPONSES
 from app.config import AppConfig, load_config
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -55,7 +56,7 @@ from app.utils.settings_store import write_setting
 from app.workers.sync_worker import SyncWorker
 
 router = APIRouter()
-core_router = APIRouter(prefix="/spotify", tags=["Spotify"])
+core_router = APIRouter(prefix="/spotify", tags=["Spotify"], responses=CACHEABLE_RESPONSES)
 backfill_router = APIRouter(prefix="/spotify/backfill", tags=["Spotify Backfill"])
 free_router = APIRouter(prefix="/spotify/free", tags=["Spotify FREE"])
 free_ingest_router = APIRouter(prefix="/spotify/import", tags=["Spotify FREE Ingest"])
