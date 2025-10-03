@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
@@ -668,6 +669,86 @@ def count_active_leases(job_type: str) -> int:
     return int(count or 0)
 
 
+async def enqueue_async(
+    job_type: str,
+    payload: Mapping[str, Any],
+    *,
+    priority: int | None = None,
+    available_at: datetime | None = None,
+    idempotency_key: str | None = None,
+) -> QueueJobDTO:
+    """Async wrapper around :func:`enqueue` using a worker thread."""
+
+    return await asyncio.to_thread(
+        enqueue,
+        job_type,
+        payload,
+        priority=priority,
+        available_at=available_at,
+        idempotency_key=idempotency_key,
+    )
+
+
+async def fetch_ready_async(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
+    """Async wrapper around :func:`fetch_ready`."""
+
+    return await asyncio.to_thread(fetch_ready, job_type, limit=limit)
+
+
+async def lease_async(
+    job_id: int,
+    *,
+    job_type: str,
+    lease_seconds: int | None = None,
+) -> QueueJobDTO | None:
+    """Async wrapper around :func:`lease`."""
+
+    return await asyncio.to_thread(
+        lease, job_id, job_type=job_type, lease_seconds=lease_seconds
+    )
+
+
+async def complete_async(
+    job_id: int,
+    *,
+    job_type: str,
+    result_payload: Mapping[str, Any] | None = None,
+) -> bool:
+    """Async wrapper around :func:`complete`."""
+
+    return await asyncio.to_thread(
+        complete, job_id, job_type=job_type, result_payload=result_payload
+    )
+
+
+async def fail_async(
+    job_id: int,
+    *,
+    job_type: str,
+    error: str | None = None,
+    retry_in: int | None = None,
+    available_at: datetime | None = None,
+    stop_reason: str | None = None,
+) -> bool:
+    """Async wrapper around :func:`fail`."""
+
+    return await asyncio.to_thread(
+        fail,
+        job_id,
+        job_type=job_type,
+        error=error,
+        retry_in=retry_in,
+        available_at=available_at,
+        stop_reason=stop_reason,
+    )
+
+
+async def release_active_leases_async(job_type: str) -> None:
+    """Async wrapper around :func:`release_active_leases`."""
+
+    await asyncio.to_thread(release_active_leases, job_type)
+
+
 __all__ = [
     "QueueJobDTO",
     "enqueue",
@@ -682,4 +763,10 @@ __all__ = [
     "find_by_idempotency",
     "update_priority",
     "count_active_leases",
+    "enqueue_async",
+    "fetch_ready_async",
+    "lease_async",
+    "complete_async",
+    "fail_async",
+    "release_active_leases_async",
 ]

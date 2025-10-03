@@ -7,7 +7,7 @@ import os
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -28,13 +28,57 @@ from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
 from app.workers.persistence import (
     QueueJobDTO,
-    complete,
-    enqueue,
-    fetch_ready,
-    fail,
-    lease,
-    release_active_leases,
+    complete_async,
+    enqueue_async,
+    fetch_ready_async,
+    fail_async,
+    lease_async,
+    release_active_leases_async,
 )
+
+AsyncEnqueue = Callable[[str, Mapping[str, Any]], Awaitable[QueueJobDTO]]
+AsyncFetchReady = Callable[[str], Awaitable[List[QueueJobDTO]]]
+AsyncLease = Callable[[int, str, Optional[int]], Awaitable[QueueJobDTO | None]]
+AsyncComplete = Callable[[int, str, Optional[Mapping[str, Any]]], Awaitable[bool]]
+AsyncFail = Callable[
+    [int, str, Optional[str], Optional[int], Optional[datetime], Optional[str]],
+    Awaitable[bool],
+]
+AsyncRelease = Callable[[str], Awaitable[None]]
+
+
+async def _default_lease_job(
+    job_id: int, job_type: str, lease_seconds: int | None = None
+) -> QueueJobDTO | None:
+    return await lease_async(job_id, job_type=job_type, lease_seconds=lease_seconds)
+
+
+async def _default_complete_job(
+    job_id: int, job_type: str, result_payload: Mapping[str, Any] | None = None
+) -> bool:
+    return await complete_async(job_id, job_type=job_type, result_payload=result_payload)
+
+
+async def _default_fail_job(
+    job_id: int,
+    job_type: str,
+    error: str | None = None,
+    retry_in: int | None = None,
+    available_at: datetime | None = None,
+    stop_reason: str | None = None,
+) -> bool:
+    return await fail_async(
+        job_id,
+        job_type=job_type,
+        error=error,
+        retry_in=retry_in,
+        available_at=available_at,
+        stop_reason=stop_reason,
+    )
+
+
+async def _default_release_active_leases(job_type: str) -> None:
+    await release_active_leases_async(job_type)
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
     SyncRetryPolicy,
@@ -111,6 +155,12 @@ class SyncWorker:
         metadata_worker: MetadataWorker | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
+        enqueue_fn: AsyncEnqueue | None = None,
+        fetch_ready_fn: AsyncFetchReady | None = None,
+        lease_fn: AsyncLease | None = None,
+        complete_fn: AsyncComplete | None = None,
+        fail_fn: AsyncFail | None = None,
+        release_active_leases_fn: AsyncRelease | None = None,
     ) -> None:
         self._client = soulseek_client
         self._metadata_worker = metadata_worker
@@ -135,6 +185,14 @@ class SyncWorker:
         self._music_dir = Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
         self._retry_config = _load_retry_config()
         self._retry_rng = random.Random()
+        self._enqueue_job = enqueue_fn or enqueue_async
+        self._fetch_ready_jobs = fetch_ready_fn or fetch_ready_async
+        self._lease_job = lease_fn or _default_lease_job
+        self._complete_job = complete_fn or _default_complete_job
+        self._fail_job = fail_fn or _default_fail_job
+        self._release_active_leases = (
+            release_active_leases_fn or _default_release_active_leases
+        )
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -205,7 +263,7 @@ class SyncWorker:
     async def enqueue(self, job: Dict[str, Any]) -> None:
         """Submit a download job for processing."""
 
-        record = enqueue(self._job_type, job)
+        record = await self._enqueue_job(self._job_type, job)
         job_identifier = str(record.id)
         files = job.get("files", [])
         if files:
@@ -258,7 +316,7 @@ class SyncWorker:
         write_setting("worker.sync.last_start", datetime.utcnow().isoformat())
         record_worker_heartbeat("sync")
         pending = sorted(
-            fetch_ready(self._job_type),
+            await self._fetch_ready_jobs(self._job_type),
             key=lambda job: self._coerce_priority(job.priority),
             reverse=True,
         )
@@ -287,7 +345,7 @@ class SyncWorker:
                 except asyncio.CancelledError:  # pragma: no cover - lifecycle cleanup
                     pass
                 self._poll_task = None
-            release_active_leases(self._job_type)
+            await self._release_active_leases(self._job_type)
             write_setting("worker.sync.last_stop", datetime.utcnow().isoformat())
             mark_worker_status("sync", WORKER_STOPPED)
             record_worker_stopped("sync")
@@ -339,21 +397,43 @@ class SyncWorker:
                 continue
 
     async def _execute_job(self, job: QueueJobDTO) -> None:
-        leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
+        leased = await self._lease_job(
+            job.id,
+            self._job_type,
+            job.lease_timeout_seconds,
+        )
         if leased is None:
             logger.debug("Sync job %s skipped because it could not be leased", job.id)
             return
         try:
             await self._process_job(leased.payload)
         except DownloadJobError as exc:
-            fail(job.id, job_type=self._job_type, error=str(exc))
+            await self._fail_job(
+                job.id,
+                self._job_type,
+                str(exc),
+                retry_in=None,
+                available_at=None,
+                stop_reason=None,
+            )
             logger.debug("Download job %s marked as failed after scheduling retry", job.id)
             return
         except Exception as exc:
-            fail(job.id, job_type=self._job_type, error=str(exc))
+            await self._fail_job(
+                job.id,
+                self._job_type,
+                str(exc),
+                retry_in=None,
+                available_at=None,
+                stop_reason=None,
+            )
             raise
         else:
-            complete(job.id, job_type=self._job_type)
+            await self._complete_job(
+                job.id,
+                self._job_type,
+                result_payload=None,
+            )
             increment_counter("metrics.sync.jobs_completed")
             self._record_heartbeat()
 
