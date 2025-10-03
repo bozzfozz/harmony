@@ -197,6 +197,7 @@ def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
             dispatcher=dispatcher,
             handlers=runtime.handlers,
             enabled_jobs=runtime.enabled_jobs,
+            import_worker=runtime.import_worker,
         )
 
     monkeypatch.setattr(
