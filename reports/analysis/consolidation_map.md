@@ -11,6 +11,6 @@
 | Config-Landschaft (ENV) | Viele `os.getenv` ohne Profile, Defaults verstreut | Profile + Dokumentation (siehe Config-Matrix) | Entkoppeln | `app/config.py`【F:app/config.py†L120-L299】<br>`app/main.py`【F:app/main.py†L239-L323】 | 1) Profile definieren; 2) Loader anpassen; 3) Docs/Deployment-Skripte updaten |
 
 ## Entfernen / Abschalten
-- **Legacy-Routen-Logging (`LegacyLoggingRoute`)** – Prüfen, ob `feature.enable_legacy_routes` dauerhaft benötigt wird; falls nicht, Feature-Flag abschalten und Route entfernen.【F:app/main.py†L157-L205】
+- **Legacy-Routen-Logging (`LegacyLoggingRoute`)** – Entfernt; Legacy-Router wird nicht mehr registriert, das Feature-Flag beeinflusst die API-Pfade nicht länger.【F:app/main.py†L520-L571】
 - **Free Import In-Memory File Store** – Ersatz durch persistente Storage (z. B. S3/DB) evaluieren; aktuell nur in API-State gehalten.【F:app/routers/spotify_free_router.py†L63-L120】
 

@@ -5,7 +5,6 @@ from app.api.spotify import (
     core_router,
     free_ingest_router,
     free_router,
-    legacy_router,
     router,
 )
 
@@ -15,5 +14,4 @@ __all__ = [
     "backfill_router",
     "free_router",
     "free_ingest_router",
-    "legacy_router",
 ]

@@ -64,6 +64,8 @@ def compose_prefix(base: str, *parts: str) -> str:
 def _register(entry: RouterConfig) -> RouterConfig:
     if entry.key in _registry:
         raise ValueError(f"Router '{entry.key}' is already registered")
+    if not entry.router.routes:
+        raise ValueError(f"Router '{entry.key}' does not expose any routes")
     _registry[entry.key] = entry
     return entry
 
