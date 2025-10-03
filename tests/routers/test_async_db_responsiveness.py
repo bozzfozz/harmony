@@ -114,3 +114,91 @@ async def test_manual_sync_checks_credentials_off_thread(
         assert elapsed() >= delay
     finally:
         client.app.dependency_overrides.pop(get_session_runner, None)
+
+
+@pytest.mark.anyio("asyncio")
+async def test_download_queue_uses_async_session(
+    client: SimpleTestClient,
+    async_client: AsyncClient,
+    time_budget: TimeBudget,
+) -> None:
+    delay = 0.2
+    original_runner = get_session_runner()
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
+
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "queued.mp3", "size": 1024}],
+    }
+
+    try:
+        async with time_budget.limit(0.75) as elapsed:
+            response = await async_client.post(api_path("/download"), json=payload)
+        assert response.status_code == 202
+        assert elapsed() >= delay
+    finally:
+        client.app.dependency_overrides.pop(get_session_runner, None)
+
+
+@pytest.mark.anyio("asyncio")
+async def test_download_cancel_uses_async_session(
+    client: SimpleTestClient,
+    async_client: AsyncClient,
+    time_budget: TimeBudget,
+) -> None:
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "cancel.mp3", "size": 256}],
+    }
+
+    start_response = await async_client.post(api_path("/download"), json=payload)
+    download_id = start_response.json()["download_id"]
+
+    delay = 0.2
+    original_runner = get_session_runner()
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
+
+    try:
+        async with time_budget.limit(0.75) as elapsed:
+            response = await async_client.delete(api_path(f"/download/{download_id}"))
+        assert response.status_code == 200
+        assert elapsed() >= delay
+    finally:
+        client.app.dependency_overrides.pop(get_session_runner, None)
+
+
+@pytest.mark.anyio("asyncio")
+async def test_download_retry_uses_async_session(
+    client: SimpleTestClient,
+    async_client: AsyncClient,
+    time_budget: TimeBudget,
+) -> None:
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "retry.mp3", "size": 512}],
+    }
+
+    start_response = await async_client.post(api_path("/download"), json=payload)
+    download_id = start_response.json()["download_id"]
+    cancel_response = await async_client.delete(api_path(f"/download/{download_id}"))
+    assert cancel_response.status_code == 200
+
+    delay = 0.2
+    original_runner = get_session_runner()
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
+
+    try:
+        async with time_budget.limit(0.75) as elapsed:
+            response = await async_client.post(
+                api_path(f"/download/{download_id}/retry")
+            )
+        assert response.status_code == 202
+        assert elapsed() >= delay
+    finally:
+        client.app.dependency_overrides.pop(get_session_runner, None)
