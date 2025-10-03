@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 
 from fastapi import status
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from app.errors import (
 )
 from app.logging import get_logger
 from app.models import Download
+from app.db import SessionCallable
 from app.schemas import DownloadPriorityUpdate, SoulseekDownloadRequest
 from app.schemas.errors import ApiError
 from app.services.errors import to_api_error
@@ -59,11 +61,55 @@ def _app_error_from_api_error(api_error: ApiError) -> AppError:
     )
 
 
+@dataclass
+class DownloadSummary:
+    id: int
+    filename: str
+    state: str
+    progress: float
+    priority: int
+    username: Optional[str]
+    request_payload: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class QueueDownloadsResult:
+    downloads: List[DownloadSummary]
+    job_files: List[Dict[str, Any]]
+    job_priority: int
+
+
+@dataclass
+class RetryPreparation:
+    original: DownloadSummary
+    filename: str
+    payload: Dict[str, Any]
+    priority: int
+
+
+@dataclass
+class RetryPersistenceResult:
+    download: DownloadSummary
+    payload: Dict[str, Any]
+    filename: str
+    username: Optional[str]
+
+
+SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
+
+
 class DownloadService:
     """Encapsulates persistence and worker coordination for downloads."""
 
-    def __init__(self, *, session: Session, transfers: TransfersApi) -> None:
+    def __init__(
+        self,
+        *,
+        session: Session,
+        session_runner: SessionRunner,
+        transfers: TransfersApi,
+    ) -> None:
         self._session = session
+        self._run_session = session_runner
         self._transfers = transfers
 
     # ------------------------------------------------------------------
@@ -159,9 +205,13 @@ class DownloadService:
             logger.warning("Download request without files rejected")
             raise ValidationAppError("No files supplied")
 
-        missing_credentials = collect_missing_credentials(self._session, ("soulseek",))
+        missing_credentials = await self._run_session(
+            lambda session: collect_missing_credentials(session, ("soulseek",))
+        )
         if missing_credentials:
-            missing_payload = {service: list(values) for service, values in missing_credentials.items()}
+            missing_payload = {
+                service: list(values) for service, values in missing_credentials.items()
+            }
             logger.warning("Download blocked due to missing credentials: %s", missing_payload)
             record_activity(
                 "download",
@@ -176,50 +226,27 @@ class DownloadService:
             record_activity("download", "failed", details={"reason": "worker_unavailable"})
             raise DependencyError("Download worker unavailable")
 
-        download_records: List[Download] = []
-        job_files: List[Dict[str, Any]] = []
-        job_priorities: List[int] = []
         try:
-            for file_info in payload.files:
-                file_payload = file_info.to_payload()
-                filename = str(file_payload.get("filename") or "unknown")
-                priority = determine_priority(file_payload)
-                download = Download(
-                    filename=filename,
-                    state="queued",
-                    progress=0.0,
-                    username=payload.username,
-                    priority=priority,
-                )
-                self._session.add(download)
-                self._session.flush()
-
-                payload_copy = dict(file_payload)
-                payload_copy["download_id"] = download.id
-                payload_copy["priority"] = priority
-                download.request_payload = payload_copy
-                job_files.append(payload_copy)
-
-                download_records.append(download)
-                job_priorities.append(priority)
-            self._session.commit()
+            result = await self._run_session(
+                lambda session: _queue_downloads_with_session(session, payload)
+            )
         except Exception as exc:  # pragma: no cover - defensive persistence handling
-            self._session.rollback()
             logger.exception("Failed to persist download request: %s", exc)
             record_activity("download", "failed", details={"reason": "persistence_error"})
             raise InternalServerError("Failed to queue download") from exc
 
-        job_priority = max(job_priorities or [0])
-        job = {"username": payload.username, "files": job_files, "priority": job_priority}
+        job = {
+            "username": payload.username,
+            "files": result.job_files,
+            "priority": result.job_priority,
+        }
         try:
             await enqueue(job)  # type: ignore[func-returns-value]
         except Exception as exc:  # pragma: no cover - defensive worker error
             logger.exception("Failed to enqueue download job: %s", exc)
-            now = datetime.utcnow()
-            for download in download_records:
-                download.state = "failed"
-                download.updated_at = now
-            self._session.commit()
+            await self._run_session(
+                lambda session: _mark_downloads_failed(session, [d.id for d in result.downloads])
+            )
             record_activity("download", "failed", details={"reason": "enqueue_error"})
             raise DependencyError("Failed to enqueue download") from exc
 
@@ -227,12 +254,12 @@ class DownloadService:
             "download",
             "queued",
             details={
-                "download_ids": [download.id for download in download_records],
+                "download_ids": [download.id for download in result.downloads],
                 "username": payload.username,
             },
         )
 
-        logger.info("Queued %d download(s) for %s", len(download_records), payload.username)
+        logger.info("Queued %d download(s) for %s", len(result.downloads), payload.username)
 
         download_payload = [
             {
@@ -243,16 +270,18 @@ class DownloadService:
                 "priority": download.priority,
                 "username": download.username,
             }
-            for download in download_records
+            for download in result.downloads
         ]
 
         response: Dict[str, Any] = {"status": "queued", "downloads": download_payload}
-        if download_records:
-            response["download_id"] = download_records[0].id
+        if result.downloads:
+            response["download_id"] = result.downloads[0].id
         return response
 
     async def cancel_download(self, download_id: int) -> Dict[str, Any]:
-        download = self.get_download(download_id)
+        download = await self._run_session(
+            lambda session: _get_download_summary(session, download_id)
+        )
 
         if download.state not in {"queued", "running", "downloading"}:
             logger.warning(
@@ -273,13 +302,9 @@ class DownloadService:
             api_error = to_api_error(exc, provider="slskd")
             raise _app_error_from_api_error(api_error) from exc
 
-        download.state = "cancelled"
-        download.updated_at = datetime.utcnow()
-
         try:
-            self._session.commit()
+            await self._run_session(lambda session: _mark_download_cancelled(session, download_id))
         except Exception as exc:  # pragma: no cover - defensive persistence handling
-            self._session.rollback()
             logger.exception("Failed to persist cancellation for download %s: %s", download_id, exc)
             raise InternalServerError("Failed to cancel download") from exc
 
@@ -322,84 +347,55 @@ class DownloadService:
         }
 
     async def retry_download(self, download_id: int) -> Dict[str, Any]:
-        original = self.get_download(download_id)
-
-        if original.state not in {"failed", "cancelled"}:
-            logger.warning(
-                "Retry rejected for download %s due to invalid state %s",
-                download_id,
-                original.state,
-            )
-            raise AppError(
-                "Download cannot be retried in its current state",
-                code=ErrorCode.VALIDATION_ERROR,
-                http_status=status.HTTP_409_CONFLICT,
-            )
-
-        if not original.username or not original.request_payload:
-            logger.error("Retry rejected for download %s due to missing payload", download_id)
-            raise ValidationAppError(
-                "Download cannot be retried because original request data is missing"
-            )
-
-        payload_copy = dict(original.request_payload or {})
-        filename = payload_copy.get("filename") or original.filename
-        if not filename:
-            logger.error("Retry rejected for download %s due to missing filename", download_id)
-            raise ValidationAppError("Download cannot be retried because filename is unknown")
-
-        filesize = (
-            payload_copy.get("filesize")
-            or payload_copy.get("size")
-            or payload_copy.get("file_size")
+        original = await self._run_session(
+            lambda session: _prepare_retry(session, download_id)
         )
-        if filesize is not None:
-            payload_copy.setdefault("filesize", filesize)
-
-        priority = coerce_priority(payload_copy.get("priority"))
-        if priority is None:
-            priority = original.priority
-
-        new_download = Download(
-            filename=filename,
-            state="queued",
-            progress=0.0,
-            username=original.username,
-            priority=priority,
-        )
-        self._session.add(new_download)
-        self._session.flush()
-
-        payload_copy["download_id"] = new_download.id
-        payload_copy.setdefault("filename", filename)
-        payload_copy["priority"] = priority
-        new_download.request_payload = payload_copy
 
         try:
             await self._transfers.cancel_download(download_id)
         except TransfersApiError as exc:
-            self._session.rollback()
             logger.error("slskd cancellation before retry failed for %s: %s", download_id, exc)
             api_error = to_api_error(exc, provider="slskd")
             raise _app_error_from_api_error(api_error) from exc
 
         try:
-            await self._transfers.enqueue(username=original.username, files=[payload_copy])
+            persistence = await self._run_session(
+                lambda session: _create_retry_download(session, original)
+            )
+        except Exception as exc:  # pragma: no cover - defensive persistence handling
+            logger.exception("Failed to persist retry download for %s: %s", download_id, exc)
+            raise InternalServerError("Failed to retry download") from exc
+
+        try:
+            await self._transfers.enqueue(
+                username=persistence.username or "", files=[persistence.payload]
+            )
         except TransfersApiError as exc:
-            self._session.rollback()
+            try:
+                await self._run_session(
+                    lambda session: _delete_download(session, persistence.download.id)
+                )
+            except Exception as cleanup_exc:  # pragma: no cover - defensive cleanup
+                logger.exception(
+                    "Failed to remove retry download %s after enqueue error: %s",
+                    persistence.download.id,
+                    cleanup_exc,
+                )
             logger.error("Failed to enqueue retry for download %s: %s", download_id, exc)
             api_error = to_api_error(exc, provider="slskd")
             raise _app_error_from_api_error(api_error) from exc
         except Exception as exc:  # pragma: no cover - defensive unexpected failure
-            self._session.rollback()
+            try:
+                await self._run_session(
+                    lambda session: _delete_download(session, persistence.download.id)
+                )
+            except Exception as cleanup_exc:  # pragma: no cover - defensive cleanup
+                logger.exception(
+                    "Failed to remove retry download %s after unexpected error: %s",
+                    persistence.download.id,
+                    cleanup_exc,
+                )
             logger.exception("Unexpected error while retrying download %s: %s", download_id, exc)
-            raise InternalServerError("Failed to retry download") from exc
-
-        try:
-            self._session.commit()
-        except Exception as exc:  # pragma: no cover - defensive persistence handling
-            self._session.rollback()
-            logger.exception("Failed to persist retry download for %s: %s", download_id, exc)
             raise InternalServerError("Failed to retry download") from exc
 
         record_activity(
@@ -407,13 +403,222 @@ class DownloadService:
             "download_retried",
             details={
                 "original_download_id": download_id,
-                "retry_download_id": new_download.id,
-                "username": original.username,
-                "filename": filename,
+                "retry_download_id": persistence.download.id,
+                "username": persistence.username,
+                "filename": persistence.filename,
             },
         )
 
-        return {"status": "queued", "download_id": new_download.id}
+        return {"status": "queued", "download_id": persistence.download.id}
 
 
 ResponsePayload = Dict[str, Any]
+
+
+def _queue_downloads_with_session(
+    session: Session, payload: SoulseekDownloadRequest
+) -> QueueDownloadsResult:
+    download_summaries: List[DownloadSummary] = []
+    job_files: List[Dict[str, Any]] = []
+    job_priorities: List[int] = []
+
+    try:
+        for file_info in payload.files:
+            file_payload = file_info.to_payload()
+            filename = str(file_payload.get("filename") or "unknown")
+            priority = determine_priority(file_payload)
+            download = Download(
+                filename=filename,
+                state="queued",
+                progress=0.0,
+                username=payload.username,
+                priority=priority,
+            )
+            session.add(download)
+            session.flush()
+
+            payload_copy = dict(file_payload)
+            payload_copy["download_id"] = download.id
+            payload_copy["priority"] = priority
+            download.request_payload = payload_copy
+            job_files.append(payload_copy)
+            job_priorities.append(priority)
+
+            download_summaries.append(
+                DownloadSummary(
+                    id=download.id,
+                    filename=download.filename,
+                    state=download.state,
+                    progress=download.progress,
+                    priority=download.priority,
+                    username=download.username,
+                )
+            )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    job_priority = max(job_priorities or [0])
+    return QueueDownloadsResult(
+        downloads=download_summaries,
+        job_files=job_files,
+        job_priority=job_priority,
+    )
+
+
+def _mark_downloads_failed(session: Session, download_ids: Sequence[int]) -> None:
+    if not download_ids:
+        return
+
+    try:
+        downloads = (
+            session.query(Download).filter(Download.id.in_(tuple(download_ids))).all()
+        )
+        now = datetime.utcnow()
+        for download in downloads:
+            download.state = "failed"
+            download.updated_at = now
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
+def _get_download_summary(session: Session, download_id: int) -> DownloadSummary:
+    download = session.get(Download, download_id)
+    if download is None:
+        logger.warning("Download %s not found", download_id)
+        raise NotFoundError("Download not found")
+
+    request_payload = dict(download.request_payload or {}) if download.request_payload else None
+    return DownloadSummary(
+        id=download.id,
+        filename=download.filename,
+        state=download.state,
+        progress=download.progress,
+        priority=download.priority,
+        username=download.username,
+        request_payload=request_payload,
+    )
+
+
+def _mark_download_cancelled(session: Session, download_id: int) -> None:
+    download = session.get(Download, download_id)
+    if download is None:
+        logger.warning("Download %s not found for cancellation", download_id)
+        raise NotFoundError("Download not found")
+
+    try:
+        download.state = "cancelled"
+        download.updated_at = datetime.utcnow()
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
+def _prepare_retry(session: Session, download_id: int) -> RetryPreparation:
+    download = _get_download_summary(session, download_id)
+
+    if download.state not in {"failed", "cancelled"}:
+        logger.warning(
+            "Retry rejected for download %s due to invalid state %s",
+            download_id,
+            download.state,
+        )
+        raise AppError(
+            "Download cannot be retried in its current state",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=status.HTTP_409_CONFLICT,
+        )
+
+    if not download.username or not download.request_payload:
+        logger.error("Retry rejected for download %s due to missing payload", download_id)
+        raise ValidationAppError(
+            "Download cannot be retried because original request data is missing"
+        )
+
+    payload_copy = dict(download.request_payload)
+    filename = payload_copy.get("filename") or download.filename
+    if not filename:
+        logger.error("Retry rejected for download %s due to missing filename", download_id)
+        raise ValidationAppError(
+            "Download cannot be retried because filename is unknown"
+        )
+
+    filesize = (
+        payload_copy.get("filesize")
+        or payload_copy.get("size")
+        or payload_copy.get("file_size")
+    )
+    if filesize is not None:
+        payload_copy.setdefault("filesize", filesize)
+
+    priority = coerce_priority(payload_copy.get("priority"))
+    if priority is None:
+        priority = download.priority
+
+    payload_copy.setdefault("filename", filename)
+    payload_copy["priority"] = priority
+
+    return RetryPreparation(
+        original=download,
+        filename=filename,
+        payload=payload_copy,
+        priority=priority,
+    )
+
+
+def _create_retry_download(
+    session: Session, preparation: RetryPreparation
+) -> RetryPersistenceResult:
+    download = Download(
+        filename=preparation.filename,
+        state="queued",
+        progress=0.0,
+        username=preparation.original.username,
+        priority=preparation.priority,
+    )
+    try:
+        session.add(download)
+        session.flush()
+
+        payload_copy = dict(preparation.payload)
+        payload_copy["download_id"] = download.id
+        payload_copy.setdefault("filename", preparation.filename)
+        payload_copy["priority"] = preparation.priority
+        download.request_payload = payload_copy
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    summary = DownloadSummary(
+        id=download.id,
+        filename=download.filename,
+        state=download.state,
+        progress=download.progress,
+        priority=download.priority,
+        username=download.username,
+        request_payload=dict(download.request_payload or {}),
+    )
+    return RetryPersistenceResult(
+        download=summary,
+        payload=payload_copy,
+        filename=preparation.filename,
+        username=preparation.original.username,
+    )
+
+
+def _delete_download(session: Session, download_id: int) -> None:
+    download = session.get(Download, download_id)
+    if download is None:
+        return
+
+    try:
+        session.delete(download)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise

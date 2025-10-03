@@ -106,9 +106,14 @@ def get_watchlist_service(session: Session = Depends(get_db)) -> WatchlistServic
 
 def get_download_service(
     session: Session = Depends(get_db),
+    session_runner: SessionRunner = Depends(get_session_runner),
     transfers: TransfersApi = Depends(get_transfers_api),
 ) -> DownloadService:
-    return DownloadService(session=session, transfers=transfers)
+    return DownloadService(
+        session=session,
+        session_runner=session_runner,
+        transfers=transfers,
+    )
 
 
 def _is_allowlisted(path: str, allowlist: tuple[str, ...]) -> bool:

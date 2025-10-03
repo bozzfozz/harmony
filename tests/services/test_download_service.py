@@ -31,7 +31,14 @@ class StubWorker:
 
 
 def _service(db_session, transfers: StubTransfersApi | None = None) -> DownloadService:
-    return DownloadService(session=db_session, transfers=transfers or StubTransfersApi())
+    async def runner(func):
+        return func(db_session)
+
+    return DownloadService(
+        session=db_session,
+        session_runner=runner,
+        transfers=transfers or StubTransfersApi(),
+    )
 
 
 def test_list_downloads_filters_active_states(db_session) -> None:
