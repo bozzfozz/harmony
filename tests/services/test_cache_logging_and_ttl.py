@@ -74,6 +74,21 @@ async def test_cache_logging_and_ttl(monkeypatch) -> None:
     assert last["status"] == "expired"
 
 
+@pytest.mark.asyncio
+async def test_zero_ttl_entry_expires_immediately(monkeypatch) -> None:
+    clock = _Clock()
+    cache = ResponseCache(max_items=2, default_ttl=5, time_func=clock)
+
+    entry = _entry()
+    entry.stale_while_revalidate = 10.0
+
+    await cache.set("key", entry, ttl=0)
+
+    assert entry.expires_at == clock.value
+    assert entry.stale_expires_at == pytest.approx(entry.expires_at + 10.0)
+
+    assert await cache.get("key") is None
+
 def _last_service_event(events: list[tuple[str, dict[str, object]]]) -> dict[str, object]:
     for name, payload in reversed(events):
         if name == "service.cache":

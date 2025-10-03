@@ -111,14 +111,14 @@ class ResponseCache:
         try:
             async with self._lock:
                 now = self._now()
-                expires_at = now + ttl_value if ttl_value > 0 else None
+                expires_at = now + ttl_value
                 entry.key = key
                 entry.created_at = now
                 entry.expires_at = expires_at
                 entry.ttl = ttl_value
                 stale = entry.stale_while_revalidate
                 if stale is not None:
-                    entry.stale_expires_at = (expires_at or now) + max(0.0, stale)
+                    entry.stale_expires_at = expires_at + max(0.0, stale)
                 else:
                     entry.stale_expires_at = None
                 if key in self._cache:
