@@ -214,12 +214,12 @@ class Dispatcher:
                 attempts=int(job.attempts),
             )
             stop_heartbeat = asyncio.Event()
-            lease_lost = asyncio.Event()
+            lease_lost_signal = asyncio.Event()
             heartbeat_task = asyncio.create_task(
-                self._maintain_heartbeat(job, stop_heartbeat, lease_lost)
+                self._maintain_heartbeat(job, stop_heartbeat, lease_lost_signal)
             )
             handler_task = asyncio.create_task(handler(job))
-            lease_wait_task = asyncio.create_task(lease_lost.wait())
+            lease_wait_task = asyncio.create_task(lease_lost_signal.wait())
             result_payload: Mapping[str, Any] | None = None
             lease_lost_triggered = False
             try:
@@ -248,7 +248,9 @@ class Dispatcher:
                 raise
             except Exception as exc:
                 stop_heartbeat.set()
-                await self._handle_failure(job, exc, start)
+                lease_lost_event = lease_lost_signal
+                lease_lost = bool(lease_lost_event.is_set()) if lease_lost_event is not None else False
+                await self._handle_failure(job, exc, start, lease_lost=lease_lost)
             else:
                 if lease_lost_triggered:
                     return
@@ -332,7 +334,17 @@ class Dispatcher:
         job: persistence.QueueJobDTO,
         exc: Exception,
         start: float,
+        *,
+        lease_lost: bool = False,
     ) -> None:
+        if lease_lost:
+            orchestrator_events.emit_heartbeat_event(
+                self._logger,
+                job_id=job.id,
+                job_type=job.type,
+                status="skip_failure",
+            )
+            return
         duration_ms = int((time.perf_counter() - start) * 1000)
         message = self._truncate_error(str(exc))
         attempts = int(job.attempts)
@@ -380,9 +392,11 @@ class Dispatcher:
         lease_lost_signal: asyncio.Event | None = None,
     ) -> None:
         interval = self._heartbeat_interval(job)
+        lease_lost = False
         while True:
             try:
                 await asyncio.wait_for(stop_signal.wait(), timeout=interval)
+                break
             except asyncio.TimeoutError:
                 ok = self._persistence.heartbeat(
                     job.id,
@@ -390,6 +404,7 @@ class Dispatcher:
                     lease_seconds=job.lease_timeout_seconds,
                 )
                 if not ok:
+                    lease_lost = True
                     orchestrator_events.emit_heartbeat_event(
                         self._logger,
                         job_id=job.id,
@@ -397,11 +412,18 @@ class Dispatcher:
                         status="lost",
                         lease_timeout=int(job.lease_timeout_seconds or 0),
                     )
+                    stop_signal.set()
                     if lease_lost_signal is not None:
                         lease_lost_signal.set()
                     break
                 continue
-            break
+        final_status = "aborted" if lease_lost else "stopped"
+        orchestrator_events.emit_heartbeat_event(
+            self._logger,
+            job_id=job.id,
+            job_type=job.type,
+            status=final_status,
+        )
 
     def _heartbeat_interval(self, job: persistence.QueueJobDTO) -> float:
         timeout = max(1, int(job.lease_timeout_seconds or self._config.visibility_timeout_s))
