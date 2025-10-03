@@ -64,7 +64,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         security_state = getattr(request.app.state, "security_config", self._security)
-        enabled = bool(getattr(security_state, "rate_limiting_enabled", False))
+        enabled = security_state.resolve_rate_limiting_enabled()
         if not enabled:
             return await call_next(request)
 
@@ -118,7 +118,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _is_enabled(self, request: Request) -> bool:
         security_state = getattr(request.app.state, "security_config", self._security)
-        return bool(getattr(security_state, "rate_limiting_enabled", False))
+        return security_state.resolve_rate_limiting_enabled()
 
     def _build_identity(self, request: Request) -> str:
         client_host = "unknown"

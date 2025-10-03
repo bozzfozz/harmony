@@ -333,13 +333,118 @@ class AppConfig:
     environment: EnvironmentConfig
 
 
+@dataclass(slots=True, frozen=True)
+class SecurityProfileDefaults:
+    name: str
+    require_auth: bool
+    rate_limiting: bool
+
+
+DEFAULT_SECURITY_PROFILE = "default"
+_SECURITY_PROFILE_DEFAULTS: Mapping[str, SecurityProfileDefaults] = {
+    "default": SecurityProfileDefaults(
+        name="default",
+        require_auth=False,
+        rate_limiting=False,
+    ),
+    "dev": SecurityProfileDefaults(
+        name="dev",
+        require_auth=False,
+        rate_limiting=False,
+    ),
+    "test": SecurityProfileDefaults(
+        name="test",
+        require_auth=False,
+        rate_limiting=False,
+    ),
+    "staging": SecurityProfileDefaults(
+        name="staging",
+        require_auth=False,
+        rate_limiting=False,
+    ),
+    "prod": SecurityProfileDefaults(
+        name="prod",
+        require_auth=True,
+        rate_limiting=True,
+    ),
+}
+
+_SECURITY_PROFILE_ALIASES: Mapping[str, str] = {
+    "production": "prod",
+    "live": "prod",
+    "development": "dev",
+    "local": "dev",
+    "testing": "test",
+}
+
+
 @dataclass(slots=True)
 class SecurityConfig:
-    require_auth: bool
+    profile: str
     api_keys: tuple[str, ...]
     allowlist: tuple[str, ...]
     allowed_origins: tuple[str, ...]
-    rate_limiting_enabled: bool
+    _require_auth_default: bool
+    _rate_limiting_default: bool
+    _require_auth_override: bool | None = None
+    _rate_limiting_override: bool | None = None
+
+    @property
+    def require_auth_default(self) -> bool:
+        return self._require_auth_default
+
+    @property
+    def rate_limiting_default(self) -> bool:
+        return self._rate_limiting_default
+
+    def resolve_require_auth(self) -> bool:
+        if self._require_auth_override is not None:
+            return self._require_auth_override
+        return self._require_auth_default
+
+    def resolve_rate_limiting_enabled(self) -> bool:
+        if self._rate_limiting_override is not None:
+            return self._rate_limiting_override
+        return self._rate_limiting_default
+
+    @property
+    def require_auth(self) -> bool:
+        return self.resolve_require_auth()
+
+    @require_auth.setter
+    def require_auth(self, value: bool | None) -> None:
+        self._require_auth_override = bool(value) if value is not None else None
+
+    @property
+    def rate_limiting_enabled(self) -> bool:
+        return self.resolve_rate_limiting_enabled()
+
+    @rate_limiting_enabled.setter
+    def rate_limiting_enabled(self, value: bool | None) -> None:
+        self._rate_limiting_override = bool(value) if value is not None else None
+
+    def clear_profile_overrides(self) -> None:
+        self._require_auth_override = None
+        self._rate_limiting_override = None
+
+
+def _resolve_security_profile(env: Mapping[str, Any]) -> tuple[str, SecurityProfileDefaults]:
+    raw = str(env.get("HARMONY_PROFILE") or "").strip().lower()
+    if not raw:
+        key = DEFAULT_SECURITY_PROFILE
+    else:
+        candidate = _SECURITY_PROFILE_ALIASES.get(raw, raw)
+        if candidate not in _SECURITY_PROFILE_DEFAULTS:
+            logger.warning(
+                "Unknown HARMONY_PROFILE value %s; defaulting to %s",
+                raw,
+                DEFAULT_SECURITY_PROFILE,
+            )
+            key = DEFAULT_SECURITY_PROFILE
+        else:
+            key = candidate
+    defaults = _SECURITY_PROFILE_DEFAULTS[key]
+    return defaults.name, defaults
 
 
 @dataclass(slots=True)
@@ -1532,7 +1637,15 @@ def load_config() -> AppConfig:
         header_name=(os.getenv("REQUEST_ID_HEADER") or "X-Request-ID").strip() or "X-Request-ID"
     )
 
-    rate_limit_enabled = _as_bool(os.getenv("FEATURE_RATE_LIMITING"), default=False)
+    security_profile, security_defaults = _resolve_security_profile(os.environ)
+    require_auth_override = _parse_bool_override(os.getenv("FEATURE_REQUIRE_AUTH"))
+    rate_limit_override = _parse_bool_override(os.getenv("FEATURE_RATE_LIMITING"))
+    rate_limit_enabled = (
+        security_defaults.rate_limiting
+        if rate_limit_override is None
+        else rate_limit_override
+    )
+
     rate_limit_config = RateLimitMiddlewareConfig(
         enabled=rate_limit_enabled,
         bucket_capacity=max(1, _as_int(os.getenv("RATE_LIMIT_BUCKET_CAP"), default=60)),
@@ -1594,11 +1707,14 @@ def load_config() -> AppConfig:
     )
 
     security = SecurityConfig(
-        require_auth=_as_bool(os.getenv("FEATURE_REQUIRE_AUTH"), default=False),
+        profile=security_profile,
         api_keys=api_keys,
         allowlist=allowlist_entries,
         allowed_origins=middleware_config.cors.allowed_origins,
-        rate_limiting_enabled=rate_limit_config.enabled,
+        _require_auth_default=security_defaults.require_auth,
+        _rate_limiting_default=security_defaults.rate_limiting,
+        _require_auth_override=require_auth_override,
+        _rate_limiting_override=rate_limit_override,
     )
 
     return AppConfig(
