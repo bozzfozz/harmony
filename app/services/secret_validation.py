@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Deque, Dict, Literal, Optional
-from urllib.parse import urljoin
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from fastapi import status
@@ -276,9 +276,20 @@ class SecretValidationService:
         return httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False)
 
     async def _request_slskd(self, api_key: str, base_url: str) -> httpx.Response:
-        url = urljoin(f"{base_url}/", "api/v2/me")
+        parsed = urlparse(base_url.strip())
+        base_segments = [segment for segment in parsed.path.split("/") if segment]
+        target_segments = ["api", "v2", "me"]
+        overlap = 0
+        max_overlap = min(len(base_segments), len(target_segments))
+        for size in range(max_overlap, 0, -1):
+            if base_segments[-size:] == target_segments[:size]:
+                overlap = size
+                break
+        combined_segments = base_segments + target_segments[overlap:]
+        path = "/" + "/".join(combined_segments)
+        normalized_url = urlunparse(parsed._replace(path=path, params="", query="", fragment=""))
         async with self._client_factory() as client:
-            return await client.get(url, headers={"X-API-Key": api_key})
+            return await client.get(normalized_url, headers={"X-API-Key": api_key})
 
     async def _request_spotify(self, client_id: str, client_secret: str) -> httpx.Response:
         data = {"grant_type": "client_credentials"}
