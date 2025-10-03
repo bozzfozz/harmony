@@ -20,8 +20,10 @@ from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.dependencies import (
+    SessionRunner,
     get_app_config,
     get_db,
+    get_session_runner,
     get_soulseek_client,
     get_spotify_client,
 )
@@ -90,12 +92,14 @@ def _get_spotify_service(
     config=Depends(get_app_config),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
     soulseek_client: SoulseekClient = Depends(get_soulseek_client),
+    session_runner: SessionRunner = Depends(get_session_runner),
 ) -> SpotifyDomainService:
     return SpotifyDomainService(
         config=config,
         spotify_client=spotify_client,
         soulseek_client=soulseek_client,
         app_state=request.app.state,
+        session_runner=session_runner,
     )
 
 

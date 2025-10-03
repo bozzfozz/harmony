@@ -151,9 +151,12 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
 
     created: dict[str, Any] = {}
 
-    def factory(config, soulseek, worker) -> StubFreeIngestService:  # type: ignore[override]
+    def factory(
+        config, soulseek, worker, session_runner
+    ) -> StubFreeIngestService:  # type: ignore[override]
         created["worker"] = worker
         created["config"] = config
+        created["session_runner"] = session_runner
         return StubFreeIngestService()
 
     service = _make_service(free_ingest_factory=factory)
@@ -162,6 +165,7 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
 
     assert result == "submission"
     assert created["worker"] is None
+    assert "session_runner" in created
     submit_mock.assert_awaited()
 
 

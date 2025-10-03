@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import (
     TYPE_CHECKING,
     Any,
+    Awaitable,
     Callable,
     Iterable,
     Literal,
@@ -24,6 +25,7 @@ from app.core.spotify_client import SpotifyClient
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Playlist
+from app.db import SessionCallable
 from app.integrations.contracts import ProviderTrack
 from app.integrations.normalizers import normalize_spotify_track
 from app.services.backfill_service import (
@@ -62,12 +64,22 @@ class SpotifyDomainService:
         soulseek_client: SoulseekClient,
         app_state: Any,
         free_ingest_factory: (
-            Callable[[AppConfig, SoulseekClient, SyncWorker | None], FreeIngestService] | None
+            Callable[
+                [
+                    AppConfig,
+                    SoulseekClient,
+                    SyncWorker | None,
+                    Callable[[SessionCallable[Any]], Awaitable[Any]] | None,
+                ],
+                FreeIngestService,
+            ]
+            | None
         ) = None,
         backfill_service_factory: (
             Callable[[SpotifyConfig, SpotifyClient], BackfillService] | None
         ) = None,
         backfill_worker_factory: Callable[[BackfillService], BackfillWorker] | None = None,
+        session_runner: Callable[[SessionCallable[Any]], Awaitable[Any]] | None = None,
     ) -> None:
         self._config = config
         self._spotify = spotify_client
@@ -80,14 +92,23 @@ class SpotifyDomainService:
         self._backfill_worker_factory = (
             backfill_worker_factory or self._default_backfill_worker_factory
         )
+        self._session_runner = session_runner
 
     # Factories ---------------------------------------------------------
 
     @staticmethod
     def _default_free_ingest_factory(
-        config: AppConfig, soulseek: SoulseekClient, worker: "SyncWorker | None"
+        config: AppConfig,
+        soulseek: SoulseekClient,
+        worker: "SyncWorker | None",
+        session_runner: Callable[[SessionCallable[Any]], Awaitable[Any]] | None = None,
     ) -> FreeIngestService:
-        return FreeIngestService(config=config, soulseek_client=soulseek, sync_worker=worker)
+        return FreeIngestService(
+            config=config,
+            soulseek_client=soulseek,
+            sync_worker=worker,
+            session_runner=session_runner,
+        )
 
     @staticmethod
     def _default_backfill_service_factory(
@@ -433,7 +454,12 @@ class SpotifyDomainService:
         sync_worker = getattr(self._state, "sync_worker", None)
         if not isinstance(sync_worker, SyncWorker):
             sync_worker = None
-        return self._free_ingest_factory(self._config, self._soulseek, sync_worker)
+        return self._free_ingest_factory(
+            self._config,
+            self._soulseek,
+            sync_worker,
+            self._session_runner,
+        )
 
     @staticmethod
     def _extract_items(response: Any, key: str) -> Sequence[dict[str, Any]]:
