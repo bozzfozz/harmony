@@ -40,7 +40,25 @@ from app.utils.normalize import (
 logger = get_logger(__name__)
 
 DEFAULT_SOURCES: tuple[SourceLiteral, ...] = ("spotify", "soulseek")
-SEARCH_MAX_LIMIT = int(os.getenv("SEARCH_MAX_LIMIT", "100") or "100")
+
+
+def _resolve_search_max_limit(default: int = 100) -> int:
+    """Load the maximum page size for search requests with validation."""
+
+    raw_value = os.getenv("SEARCH_MAX_LIMIT")
+    if raw_value is None:
+        return default
+
+    trimmed_value = raw_value.strip()
+    if not trimmed_value:
+        return default
+    try:
+        return int(trimmed_value)
+    except (TypeError, ValueError):
+        return default
+
+
+SEARCH_MAX_LIMIT = _resolve_search_max_limit()
 TOTAL_RESULT_CAP = 1000
 PER_SOURCE_FETCH_LIMIT = 60
 
