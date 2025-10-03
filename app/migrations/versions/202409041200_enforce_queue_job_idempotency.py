@@ -29,27 +29,29 @@ def upgrade() -> None:
     if not _has_table(connection):
         return
 
-    # Remove duplicate entries that would violate the new uniqueness guarantee.
-    op.execute(
-        sa.text(
-            """
-            DELETE FROM queue_jobs
-            WHERE id IN (
-                SELECT id
-                FROM (
-                    SELECT id,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY type, idempotency_key
-                               ORDER BY id
-                           ) AS rn
-                    FROM queue_jobs
-                    WHERE idempotency_key IS NOT NULL
-                ) AS duplicates
-                WHERE duplicates.rn > 1
-            )
-            """
+    dedupe_statement = sa.text(
+        """
+        DELETE FROM queue_jobs
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY type, idempotency_key
+                           ORDER BY id
+                       ) AS rn
+                FROM queue_jobs
+                WHERE idempotency_key IS NOT NULL
+            ) AS duplicates
+            WHERE duplicates.rn > 1
         )
+        """
     )
+    op.execute(dedupe_statement)
+
+    if connection.dialect.name == "sqlite":
+        # SQLite does not support ALTER TABLE ADD CONSTRAINT operations.
+        return
 
     existing_constraints = _get_unique_constraints(connection)
     if _CONSTRAINT_NAME not in existing_constraints:
@@ -63,6 +65,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     if not _has_table(connection):
+        return
+
+    if connection.dialect.name == "sqlite":
         return
 
     existing_constraints = _get_unique_constraints(connection)
