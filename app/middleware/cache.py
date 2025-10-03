@@ -9,6 +9,7 @@ from email.utils import format_datetime, parsedate_to_datetime
 from typing import Iterable
 
 from fastapi import Request
+from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
@@ -279,11 +280,18 @@ class CacheMiddleware(BaseHTTPMiddleware):
 
     async def _read_body(self, response: Response) -> bytes | None:
         if hasattr(response, "body_iterator"):
-            data = b""
-            async for chunk in response.body_iterator:  # type: ignore[attr-defined]
-                data += chunk
-            response.body_iterator = iter([data])  # type: ignore[attr-defined]
-            return data
+            iterator = getattr(response, "body_iterator")  # type: ignore[attr-defined]
+            if iterator is not None:
+                chunks = []
+                async for chunk in iterator:
+                    chunk_bytes = chunk if isinstance(chunk, (bytes, bytearray)) else bytes(chunk)
+                    chunks.append(bytes(chunk_bytes))
+                if not chunks:
+                    chunks.append(b"")
+                data = b"".join(chunks)
+                response.body = data
+                response.body_iterator = iterate_in_threadpool(iter(chunks))  # type: ignore[attr-defined]
+                return data
         body = response.body
         if body is None:
             return None

@@ -5,6 +5,7 @@ from collections.abc import Callable
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.responses import StreamingResponse
 
 from app.config import load_config
 from app.middleware.cache import CacheMiddleware
@@ -117,3 +118,31 @@ def test_cache_fail_closed_propagates_errors(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(RuntimeError):
         client.get("/boom")
+
+
+def test_cache_fail_open_streaming_body_preserved_on_store_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {
+        "DATABASE_URL": "sqlite:///:memory:",
+        "CACHE_FAIL_OPEN": "true",
+        "CACHEABLE_PATHS": "^/stream$|10|",
+    }
+
+    def streaming_route() -> StreamingResponse:
+        async def iterator():
+            yield b"streamed"
+
+        return StreamingResponse(iterator(), media_type="text/plain")
+
+    client, _, cache = _create_app(env, {"/stream": streaming_route}, monkeypatch)
+
+    async def explode(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("store failed")
+
+    monkeypatch.setattr(cache, "set", explode, raising=False)
+
+    response = client.get("/stream")
+
+    assert response.status_code == 200
+    assert response.text == "streamed"
