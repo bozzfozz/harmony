@@ -4,7 +4,8 @@ import asyncio
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+import logging
+from typing import Any, Callable, Iterable, Mapping
 
 import pytest
 from sqlalchemy import select
@@ -82,6 +83,34 @@ class StubPersistence:
         return True
 
 
+class LeaseLosingStubPersistence(StubPersistence):
+    """Persistence stub that reports a single heartbeat failure."""
+
+    def __init__(
+        self,
+        *,
+        on_lease_lost: Callable[[], None] | None = None,
+    ) -> None:
+        super().__init__()
+        self._on_lease_lost = on_lease_lost
+        self._lease_lost_reported = False
+
+    def heartbeat(
+        self,
+        job_id: int,
+        *,
+        job_type: str,
+        lease_seconds: int | None = None,
+    ) -> bool:
+        self.heartbeat_calls.append((job_id, job_type, lease_seconds))
+        if not self._lease_lost_reported:
+            self._lease_lost_reported = True
+            if self._on_lease_lost is not None:
+                self._on_lease_lost()
+            return False
+        return True
+
+
 @pytest.fixture
 def captured_events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Mapping[str, Any]]]:
     events: list[tuple[str, Mapping[str, Any]]] = []
@@ -92,6 +121,11 @@ def captured_events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Mapping[
     monkeypatch.setattr("app.orchestrator.events.log_event", recorder)
     monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
     return events
+
+
+async def _wait_for_heartbeat(storage: StubPersistence, interval: float = 0.01) -> None:
+    while not storage.heartbeat_calls:
+        await asyncio.sleep(interval)
 
 
 def make_job(
@@ -253,6 +287,61 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     assert event_name == "orchestrator.dlq"
     assert payload["status"] == "dead_letter"
     assert payload["stop_reason"] == "max_retries_exhausted"
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_stops_job_when_lease_lost(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO", logger="app.orchestrator.dispatcher")
+    logging.getLogger("app.orchestrator.dispatcher").disabled = False
+
+    job = make_job(4, "sync", attempts=1, lease_timeout=2)
+    scheduler = StubScheduler([[job], []])
+
+    handler_started = asyncio.Event()
+    handler_cancelled = asyncio.Event()
+    handler_release = asyncio.Event()
+
+    storage = LeaseLosingStubPersistence()
+
+    async def handler(_: persistence.QueueJobDTO) -> Mapping[str, Any]:
+        handler_started.set()
+        try:
+            await handler_release.wait()
+        except asyncio.CancelledError:
+            handler_cancelled.set()
+            raise
+        return {"handled": "unexpected"}
+
+    dispatcher = Dispatcher(scheduler, {"sync": handler}, persistence_module=storage)
+
+    run_task = asyncio.create_task(dispatcher.run())
+
+    try:
+        await asyncio.wait_for(handler_started.wait(), timeout=1)
+        await asyncio.wait_for(_wait_for_heartbeat(storage), timeout=2)
+        await asyncio.wait_for(handler_cancelled.wait(), timeout=2)
+    finally:
+        handler_release.set()
+        dispatcher.request_stop()
+        await asyncio.wait_for(run_task, timeout=2)
+
+    assert storage.complete_calls == []
+    assert storage.fail_calls == []
+    assert storage.dlq_calls == []
+
+    heartbeat_records = [
+        record for record in caplog.records if record.getMessage() == "orchestrator.heartbeat"
+    ]
+    assert heartbeat_records, "Expected lease loss heartbeat log"
+    heartbeat_record = heartbeat_records[-1]
+    assert heartbeat_record.status == "lost"
+    assert heartbeat_record.job_type == "sync"
+
+    assert not any(
+        record.getMessage() == "orchestrator.commit" for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
