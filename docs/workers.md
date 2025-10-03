@@ -47,6 +47,8 @@ Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert.
 
 ## ENV-Variablen & Defaults
 
+> **Single Source:** `get_app_config().environment.workers` spiegelt `WATCHLIST_INTERVAL`, `WORKER_VISIBILITY_TIMEOUT_S`, `WATCHLIST_TIMER_ENABLED` und den Kill-Switch `HARMONY_DISABLE_WORKERS`. Worker-Code sollte diese Werte nicht mehr direkt via `os.getenv()` lesen.
+
 ### Watchlist & Scheduling
 
 | Variable | Default | Wirkung | Hinweise |

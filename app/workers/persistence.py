@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
@@ -10,6 +9,7 @@ from typing import Any, Iterable, List, Mapping, Sequence
 from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import session_scope
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -84,16 +84,21 @@ def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None
         return max(5, resolved_override)
 
     payload_value = payload.get("visibility_timeout")
-    env_value = os.getenv("WORKER_VISIBILITY_TIMEOUT_S")
-    resolved_default = 60
+    from app.dependencies import get_app_config  # lazy import to avoid circular dependency
+    config = get_app_config()
+    worker_env = config.environment.workers
+    env_override = worker_env.visibility_timeout_s
+    resolved_default = (
+        env_override
+        if env_override is not None
+        else settings.orchestrator.visibility_timeout_s
+    )
     try:
-        env_resolved = int(env_value) if env_value is not None else resolved_default
+        payload_resolved = (
+            int(payload_value) if payload_value is not None else resolved_default
+        )
     except (TypeError, ValueError):
-        env_resolved = resolved_default
-    try:
-        payload_resolved = int(payload_value) if payload_value is not None else env_resolved
-    except (TypeError, ValueError):
-        payload_resolved = env_resolved
+        payload_resolved = resolved_default
     return max(5, payload_resolved)
 
 

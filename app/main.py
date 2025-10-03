@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -38,21 +37,6 @@ from app.workers.metadata_worker import MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
-
-
-def _env_as_bool(value: str | None, *, default: bool) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _env_as_int(value: str | None, *, default: int) -> int:
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 class LegacyLoggingRoute(APIRoute):
@@ -164,30 +148,28 @@ def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None
 
 
 def _should_start_workers(*, config: AppConfig | None = None) -> bool:
-    override = os.getenv("WORKERS_ENABLED")
-    if override is not None:
-        return _env_as_bool(override, default=True)
-    if os.getenv("HARMONY_DISABLE_WORKERS") in {"1", "true", "TRUE"}:
+    resolved_config = config or get_app_config()
+    worker_env = resolved_config.environment.workers
+    if worker_env.enabled_override is not None:
+        return worker_env.enabled_override
+    if worker_env.disable_workers:
         return False
     return settings.orchestrator.workers_enabled
 
 
-def _resolve_watchlist_interval(raw_value: str | None) -> float:
+def _resolve_watchlist_interval(override: float | None) -> float:
     default = 86_400.0
-    if not raw_value:
+    if override is None:
         return default
-    try:
-        return float(raw_value)
-    except (TypeError, ValueError):
-        logger.warning(
-            "Invalid WATCHLIST_INTERVAL value %s; falling back to default",
-            raw_value,
-        )
-        return default
+    return override
 
 
-def _resolve_visibility_timeout(raw_value: str | None) -> int:
-    resolved = _env_as_int(raw_value, default=60)
+def _resolve_visibility_timeout(override: int | None) -> int:
+    resolved = (
+        override
+        if override is not None
+        else settings.orchestrator.visibility_timeout_s
+    )
     return max(5, resolved)
 
 
@@ -201,11 +183,16 @@ def _configure_application(config: AppConfig) -> None:
 
 def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
     watchlist_config = config.watchlist
-    interval_seconds = _resolve_watchlist_interval(os.getenv("WATCHLIST_INTERVAL"))
+    worker_env = config.environment.workers
+    interval_seconds = _resolve_watchlist_interval(worker_env.watchlist_interval_s)
     timer_settings = settings.watchlist_timer
     timer_interval_seconds = timer_settings.interval_s
-    timer_enabled = timer_settings.enabled
-    visibility_timeout = _resolve_visibility_timeout(os.getenv("WORKER_VISIBILITY_TIMEOUT_S"))
+    timer_enabled = (
+        worker_env.watchlist_timer_enabled
+        if worker_env.watchlist_timer_enabled is not None
+        else timer_settings.enabled
+    )
+    visibility_timeout = _resolve_visibility_timeout(worker_env.visibility_timeout_s)
 
     meta = {
         "watchlist": {
@@ -234,7 +221,9 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
             "require_auth": config.security.require_auth,
             "rate_limiting": config.security.rate_limiting_enabled,
             "workers_disabled": not workers_enabled,
-            "workers_enabled_flag": os.getenv("WORKERS_ENABLED"),
+            "workers_disabled_flag": worker_env.disable_workers,
+            "workers_enabled_flag": worker_env.enabled_raw,
+            "workers_enabled_override": worker_env.enabled_override,
         },
     }
 
@@ -450,7 +439,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     orchestrator_status["dispatcher_running"] = False
     orchestrator_status["scheduler_expected"] = workers_enabled
     orchestrator_status["dispatcher_expected"] = workers_enabled
-    timer_env_enabled = _env_as_bool(os.getenv("WATCHLIST_TIMER_ENABLED"), default=True)
+    worker_env = config.environment.workers
+    timer_override = worker_env.watchlist_timer_enabled
+    timer_env_enabled = (
+        timer_override if timer_override is not None else settings.watchlist_timer.enabled
+    )
     orchestrator_status["watchlist_timer_running"] = False
     orchestrator_status["watchlist_timer_expected"] = workers_enabled and timer_env_enabled
 
@@ -464,7 +457,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             enable_lyrics=enable_lyrics,
         )
     else:
-        logger.info("Background workers disabled via HARMONY_DISABLE_WORKERS")
+        disable_reason = "runtime config"
+        if worker_env.disable_workers:
+            disable_reason = "HARMONY_DISABLE_WORKERS"
+        elif worker_env.enabled_override is not None:
+            disable_reason = "WORKERS_ENABLED override"
+        logger.info("Background workers disabled (%s)", disable_reason)
         worker_status = {
             "artwork": False,
             "lyrics": False,

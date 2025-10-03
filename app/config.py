@@ -277,6 +277,13 @@ class OrchestratorConfig:
         )
 
 
+@dataclass(slots=True, frozen=True)
+class RetryPolicyConfig:
+    max_attempts: int
+    base_seconds: float
+    jitter_pct: float
+
+
 @dataclass(slots=True)
 class MatchingConfig:
     edition_aware: bool
@@ -284,6 +291,26 @@ class MatchingConfig:
     min_artist_similarity: float
     complete_threshold: float
     nearly_threshold: float
+
+
+@dataclass(slots=True, frozen=True)
+class WorkerEnvironmentConfig:
+    disable_workers: bool
+    enabled_override: bool | None
+    enabled_raw: str | None
+    visibility_timeout_s: int | None
+    watchlist_interval_s: float | None
+    watchlist_timer_enabled: bool | None
+
+
+@dataclass(slots=True, frozen=True)
+class EnvironmentConfig:
+    profile: str
+    is_dev: bool
+    is_test: bool
+    is_staging: bool
+    is_prod: bool
+    workers: WorkerEnvironmentConfig
 
 
 @dataclass(slots=True)
@@ -303,6 +330,7 @@ class AppConfig:
     health: HealthConfig
     watchlist: WatchlistWorkerConfig
     matching: MatchingConfig
+    environment: EnvironmentConfig
 
 
 @dataclass(slots=True)
@@ -371,6 +399,7 @@ class Settings:
     external: ExternalCallPolicy
     watchlist_timer: WatchlistTimerConfig
     provider_profiles: dict[str, ProviderProfile]
+    retry_policy: "RetryPolicyConfig"
 
     @classmethod
     def load(cls, env: Mapping[str, Any] | None = None) -> "Settings":
@@ -387,6 +416,7 @@ class Settings:
             external=external,
             watchlist_timer=watchlist_timer,
             provider_profiles=profiles,
+            retry_policy=_load_retry_policy(env_map),
         )
 
 
@@ -466,6 +496,9 @@ DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
 DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
 DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
 DEFAULT_MATCH_NEARLY_THRESHOLD = 0.8
+DEFAULT_RETRY_MAX_ATTEMPTS = 10
+DEFAULT_RETRY_BASE_SECONDS = 60.0
+DEFAULT_RETRY_JITTER_PCT = 0.2
 
 
 def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
@@ -527,6 +560,69 @@ def _bounded_float(
         resolved = max(minimum, resolved)
     if maximum is not None:
         resolved = min(maximum, resolved)
+    return resolved
+
+
+def _parse_bool_override(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered in {"1", "true", "yes", "on"}:
+        return True
+    if lowered in {"0", "false", "no", "off"}:
+        return False
+    logger.warning("Ignoring invalid boolean override value: %s", value)
+    return None
+
+
+def _parse_optional_int(
+    value: Any,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int | None:
+    if value is None:
+        return None
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid integer override value: %s", value)
+        return None
+    if minimum is not None and resolved < minimum:
+        logger.warning(
+            "Integer override %s below minimum %s; clamping", value, minimum
+        )
+        resolved = minimum
+    if maximum is not None and resolved > maximum:
+        resolved = maximum
+    return resolved
+
+
+def _parse_optional_float(
+    value: Any,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
+    if value is None:
+        return None
+    try:
+        resolved = float(value)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid float override value: %s", value)
+        return None
+    if minimum is not None and resolved < minimum:
+        logger.warning(
+            "Float override %s below minimum %s; clamping", value, minimum
+        )
+        resolved = minimum
+    if maximum is not None and resolved > maximum:
+        resolved = maximum
     return resolved
 
 
@@ -652,6 +748,90 @@ def _load_provider_profiles(
     return profiles
 
 
+def _resolve_environment_profile(env: Mapping[str, Any]) -> tuple[str, dict[str, bool]]:
+    raw = str(env.get("APP_ENV") or env.get("ENVIRONMENT") or "").strip()
+    if not raw and env.get("PYTEST_CURRENT_TEST"):
+        raw = "test"
+    normalized = raw.lower()
+    aliases = {
+        "development": "dev",
+        "local": "dev",
+        "production": "prod",
+        "live": "prod",
+        "stage": "staging",
+    }
+    normalized = aliases.get(normalized, normalized)
+    valid = {"dev", "staging", "prod", "test"}
+    if normalized not in valid:
+        if normalized:
+            logger.warning("Unknown APP_ENV value %s; defaulting to dev", raw)
+        normalized = "dev"
+    flags = {
+        "is_dev": normalized == "dev",
+        "is_test": normalized == "test",
+        "is_staging": normalized == "staging",
+        "is_prod": normalized == "prod",
+    }
+    return normalized, flags
+
+
+def _load_environment_config(env: Mapping[str, Any]) -> EnvironmentConfig:
+    profile, flags = _resolve_environment_profile(env)
+    workers_enabled_raw = env.get("WORKERS_ENABLED")
+    workers_enabled_override = _parse_bool_override(workers_enabled_raw)
+    disable_workers = _as_bool(
+        str(env.get("HARMONY_DISABLE_WORKERS"))
+        if "HARMONY_DISABLE_WORKERS" in env
+        else None,
+        default=False,
+    )
+    visibility_override = _parse_optional_int(
+        env.get("WORKER_VISIBILITY_TIMEOUT_S"), minimum=5
+    )
+    watchlist_interval = _parse_optional_float(env.get("WATCHLIST_INTERVAL"))
+    watchlist_timer_enabled = _parse_bool_override(env.get("WATCHLIST_TIMER_ENABLED"))
+
+    workers = WorkerEnvironmentConfig(
+        disable_workers=disable_workers,
+        enabled_override=workers_enabled_override,
+        enabled_raw=str(workers_enabled_raw) if workers_enabled_raw is not None else None,
+        visibility_timeout_s=visibility_override,
+        watchlist_interval_s=watchlist_interval,
+        watchlist_timer_enabled=watchlist_timer_enabled,
+    )
+
+    return EnvironmentConfig(
+        profile=profile,
+        is_dev=flags["is_dev"],
+        is_test=flags["is_test"],
+        is_staging=flags["is_staging"],
+        is_prod=flags["is_prod"],
+        workers=workers,
+    )
+
+
+def _load_retry_policy(env: Mapping[str, Any]) -> RetryPolicyConfig:
+    max_attempts = _bounded_int(
+        env.get("RETRY_MAX_ATTEMPTS"),
+        default=DEFAULT_RETRY_MAX_ATTEMPTS,
+        minimum=1,
+    )
+    base_seconds = _bounded_float(
+        env.get("RETRY_BASE_SECONDS"),
+        default=DEFAULT_RETRY_BASE_SECONDS,
+        minimum=1e-3,
+    )
+    jitter_pct = _parse_jitter_value(
+        env.get("RETRY_JITTER_PCT"),
+        default_pct=DEFAULT_RETRY_JITTER_PCT,
+    )
+    return RetryPolicyConfig(
+        max_attempts=max_attempts,
+        base_seconds=base_seconds,
+        jitter_pct=jitter_pct,
+    )
+
+
 settings = Settings.load()
 
 log_event(
@@ -678,6 +858,11 @@ log_event(
             "interval_s": settings.watchlist_timer.interval_s,
         },
         "provider_profiles": sorted(settings.provider_profiles.keys()),
+        "retry_policy": {
+            "max_attempts": settings.retry_policy.max_attempts,
+            "base_seconds": settings.retry_policy.base_seconds,
+            "jitter_pct": settings.retry_policy.jitter_pct,
+        },
     },
 )
 
@@ -918,6 +1103,8 @@ def load_config() -> AppConfig:
     legacy_slskd_url = _legacy_slskd_url()
     if legacy_slskd_url is not None:
         db_settings.pop("SLSKD_URL", None)
+
+    environment_config = _load_environment_config(os.environ)
 
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
@@ -1421,6 +1608,7 @@ def load_config() -> AppConfig:
         health=health,
         watchlist=watchlist_config,
         matching=matching_config,
+        environment=environment_config,
     )
 
 

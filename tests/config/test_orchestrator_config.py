@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from app.config import DEFAULT_ORCH_PRIORITY_MAP, OrchestratorConfig
+from app.config import DEFAULT_ORCH_PRIORITY_MAP, OrchestratorConfig, Settings, load_config
+from app.orchestrator import handlers as orchestrator_handlers
 
 
 def test_priority_json_and_csv_fallback() -> None:
@@ -43,3 +44,52 @@ def test_bounds_and_defaults_applied() -> None:
     assert config.visibility_timeout_s == 5
     assert config.heartbeat_s == 1
     assert config.poll_interval_ms == 10
+
+
+def test_settings_retry_policy_from_env() -> None:
+    env = {
+        "RETRY_MAX_ATTEMPTS": "7",
+        "RETRY_BASE_SECONDS": "120",
+        "RETRY_JITTER_PCT": "50",
+    }
+    config = Settings.load(env)
+
+    assert config.retry_policy.max_attempts == 7
+    assert config.retry_policy.base_seconds == 120.0
+    assert config.retry_policy.jitter_pct == 0.5
+
+
+def test_load_sync_retry_policy_uses_settings(monkeypatch) -> None:
+    env = {
+        "RETRY_MAX_ATTEMPTS": "4",
+        "RETRY_BASE_SECONDS": "45",
+        "RETRY_JITTER_PCT": "10",
+    }
+    config = Settings.load(env)
+    monkeypatch.setattr(orchestrator_handlers, "settings", config)
+
+    policy = orchestrator_handlers.load_sync_retry_policy()
+
+    assert policy.max_attempts == 4
+    assert policy.base_seconds == 45.0
+    assert policy.jitter_pct == 0.1
+
+
+def test_load_config_exposes_environment(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "true")
+    monkeypatch.setenv("WORKER_VISIBILITY_TIMEOUT_S", "75")
+    monkeypatch.setenv("WATCHLIST_INTERVAL", "123.5")
+    monkeypatch.setenv("WATCHLIST_TIMER_ENABLED", "0")
+
+    config = load_config()
+    environment = config.environment
+
+    assert environment.profile == "prod"
+    assert environment.is_prod is True
+    assert environment.is_dev is False
+    assert environment.workers.disable_workers is True
+    assert environment.workers.visibility_timeout_s == 75
+    assert environment.workers.watchlist_interval_s == 123.5
+    assert environment.workers.watchlist_timer_enabled is False
