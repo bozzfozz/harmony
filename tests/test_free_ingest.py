@@ -66,7 +66,8 @@ def _add_items(job_id: str, state: IngestItemState, count: int) -> None:
             session.add(item)
 
 
-def test_partial_and_skip_preserves_partial_error(
+@pytest.mark.anyio("asyncio")
+async def test_partial_and_skip_preserves_partial_error(
     free_ingest_service: FreeIngestService,
 ) -> None:
     job_id = "job_partial_skip"
@@ -74,7 +75,7 @@ def test_partial_and_skip_preserves_partial_error(
     _add_items(job_id, IngestItemState.QUEUED, 3)
     _add_items(job_id, IngestItemState.FAILED, 2)
 
-    free_ingest_service._finalise_job_state(
+    await free_ingest_service._finalise_job_state(
         job_id,
         total_tracks=5,
         queued_tracks=3,
@@ -99,13 +100,14 @@ def test_partial_and_skip_preserves_partial_error(
         assert job.error == "partial queued=3 failed=2||skip_reason=limit"
 
 
-def test_only_skip_sets_error_to_reason_without_partial(
+@pytest.mark.anyio("asyncio")
+async def test_only_skip_sets_error_to_reason_without_partial(
     free_ingest_service: FreeIngestService,
 ) -> None:
     job_id = "job_only_skip"
     _create_job(job_id, skipped_tracks=10, error="duplicate")
 
-    free_ingest_service._finalise_job_state(
+    await free_ingest_service._finalise_job_state(
         job_id,
         total_tracks=0,
         queued_tracks=0,
@@ -130,14 +132,15 @@ def test_only_skip_sets_error_to_reason_without_partial(
         assert job.error == "duplicate"
 
 
-def test_only_fail_sets_state_failed(
+@pytest.mark.anyio("asyncio")
+async def test_only_fail_sets_state_failed(
     free_ingest_service: FreeIngestService,
 ) -> None:
     job_id = "job_only_fail"
     _create_job(job_id, skipped_tracks=0, error=None)
     _add_items(job_id, IngestItemState.FAILED, 5)
 
-    free_ingest_service._finalise_job_state(
+    await free_ingest_service._finalise_job_state(
         job_id,
         total_tracks=5,
         queued_tracks=0,

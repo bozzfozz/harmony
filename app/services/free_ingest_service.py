@@ -11,14 +11,25 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 from urllib.parse import urlparse
 
 from sqlalchemy import func, select
 
 from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
-from app.db import session_scope
+from app.db import SessionCallable, run_session, session_scope
 from app.logging import get_logger
 from app.models import (
     Download,
@@ -110,6 +121,9 @@ class JobStatus:
     skip_reason: Optional[str]
 
 
+SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
+
+
 class FreeIngestService:
     """Coordinate ingestion of playlist links and track lists for FREE mode."""
 
@@ -119,10 +133,12 @@ class FreeIngestService:
         config: AppConfig,
         soulseek_client: SoulseekClient,
         sync_worker: "SyncWorker | None",
+        session_runner: "SessionRunner | None" = None,
     ) -> None:
         self._config = config
         self._soulseek = soulseek_client
         self._sync_worker = sync_worker
+        self._run_session: SessionRunner = session_runner or run_session
 
     async def submit(
         self,
@@ -155,7 +171,8 @@ class FreeIngestService:
         accepted_tracks = list(normalised_tracks)
         job_error: Optional[str] = None
 
-        if not self._has_capacity() and (accepted_playlists or accepted_tracks):
+        has_capacity = await self._has_capacity()
+        if not has_capacity and (accepted_playlists or accepted_tracks):
             job_error = "backpressure"
             skip_reason = skip_reason or job_error
             skipped_playlists += len(accepted_playlists)
@@ -179,7 +196,7 @@ class FreeIngestService:
 
         job_note = job_error or skip_reason
 
-        self._persist_job(
+        await self._persist_job(
             job_id=job_id,
             playlists=accepted_playlists,
             tracks=accepted_tracks,
@@ -200,16 +217,16 @@ class FreeIngestService:
                 )
             except Exception as exc:  # pragma: no cover - defensive guard
                 logger.error("event=ingest_enqueue_failed job_id=%s error=%s", job_id, exc)
-                self._update_job_state(job_id, IngestJobState.FAILED, error=str(exc))
+                await self._update_job_state(job_id, IngestJobState.FAILED, error=str(exc))
                 raise
         else:
-            self._update_job_state(
+            await self._update_job_state(
                 job_id,
                 IngestJobState.NORMALIZED,
                 error=job_note,
             )
 
-        self._finalise_job_state(
+        await self._finalise_job_state(
             job_id,
             total_tracks=total_tracks,
             queued_tracks=queued_tracks,
@@ -476,8 +493,8 @@ class FreeIngestService:
 
     # Persistence helpers --------------------------------------------------
 
-    def _has_capacity(self) -> bool:
-        with session_scope() as session:
+    async def _has_capacity(self) -> bool:
+        def _query(session) -> int:
             pending = session.execute(
                 select(func.count())
                 .select_from(IngestJob)
@@ -491,9 +508,12 @@ class FreeIngestService:
                     )
                 )
             ).scalar_one()
-        return pending < self._config.ingest.max_pending_jobs
+            return int(pending)
 
-    def _persist_job(
+        pending_jobs = await self._run_session(_query)
+        return pending_jobs < self._config.ingest.max_pending_jobs
+
+    async def _persist_job(
         self,
         *,
         job_id: str,
@@ -503,7 +523,8 @@ class FreeIngestService:
         skipped_tracks: int,
     ) -> None:
         now = datetime.utcnow()
-        with session_scope() as session:
+
+        def _persist(session) -> None:
             job = IngestJob(
                 id=job_id,
                 source="FREE",
@@ -569,14 +590,16 @@ class FreeIngestService:
             job.state = IngestJobState.NORMALIZED.value
             session.add(job)
 
-    def _update_job_state(
+        await self._run_session(_persist)
+
+    async def _update_job_state(
         self,
         job_id: str,
         state: IngestJobState | str,
         *,
         error: str | None = None,
     ) -> None:
-        with session_scope() as session:
+        def _update(session) -> None:
             job = session.get(IngestJob, job_id)
             if job is None:
                 return
@@ -584,7 +607,9 @@ class FreeIngestService:
             job.error = error
             session.add(job)
 
-    def _finalise_job_state(
+        await self._run_session(_update)
+
+    async def _finalise_job_state(
         self,
         job_id: str,
         *,
@@ -614,7 +639,7 @@ class FreeIngestService:
         elif skip_reason and not final_error:
             stored_error = skip_reason
 
-        self._update_job_state(job_id, final_state, error=stored_error)
+        await self._update_job_state(job_id, final_state, error=stored_error)
         logger.info(
             "event=ingest_completed source=FREE job_id=%s state=%s queued=%s failed=%s skipped=%s skip_reason=%s",
             job_id,
@@ -662,7 +687,7 @@ class FreeIngestService:
         if not tracks:
             return 0, 0
 
-        self._update_job_state(job_id, IngestJobState.QUEUED)
+        await self._update_job_state(job_id, IngestJobState.QUEUED)
         queued = 0
         failed = 0
 
@@ -677,7 +702,7 @@ class FreeIngestService:
                         track.item_id,
                         exc,
                     )
-                    self._set_item_state(
+                    await self._set_item_state(
                         track.item_id,
                         IngestItemState.FAILED,
                         error=str(exc),
@@ -720,11 +745,11 @@ class FreeIngestService:
                 break
 
         if not username or not candidate or not query_used:
-            self._set_item_state(track.item_id, IngestItemState.FAILED, error="no_match")
+            await self._set_item_state(track.item_id, IngestItemState.FAILED, error="no_match")
             return False
 
         priority = 10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
-        download_id = self._create_download_record(
+        download_id = await self._create_download_record(
             job_id=job_id,
             track=track,
             username=username,
@@ -745,13 +770,13 @@ class FreeIngestService:
             else:
                 await self._soulseek.download(job_payload)
         except Exception:
-            self._set_item_state(track.item_id, IngestItemState.FAILED, error="queue_error")
+            await self._set_item_state(track.item_id, IngestItemState.FAILED, error="queue_error")
             raise
 
-        self._set_item_state(track.item_id, IngestItemState.QUEUED, error=None)
+        await self._set_item_state(track.item_id, IngestItemState.QUEUED, error=None)
         return True
 
-    def _create_download_record(
+    async def _create_download_record(
         self,
         *,
         job_id: str,
@@ -761,7 +786,7 @@ class FreeIngestService:
         priority: int,
         query: str,
     ) -> int:
-        with session_scope() as session:
+        def _create(session) -> int:
             download = Download(
                 filename=file_info.get("filename")
                 or file_info.get("name")
@@ -792,6 +817,8 @@ class FreeIngestService:
             download.job_id = job_id
             session.add(download)
             return download.id
+
+        return await self._run_session(_create)
 
     @staticmethod
     def _generate_search_queries(track: NormalizedTrack) -> List[str]:
@@ -865,20 +892,22 @@ class FreeIngestService:
         _, _, _, username, candidate = best
         return username, candidate
 
-    def _set_item_state(
+    async def _set_item_state(
         self,
         item_id: int,
         state: IngestItemState | str,
         *,
         error: str | None,
     ) -> None:
-        with session_scope() as session:
+        def _update(session) -> None:
             item = session.get(IngestItem, item_id)
             if item is None:
                 return
             item.state = state.value if isinstance(state, IngestItemState) else str(state)
             item.error = error
             session.add(item)
+
+        await self._run_session(_update)
 
     @staticmethod
     def _chunk(items: Sequence[NormalizedTrack], size: int) -> Iterable[Sequence[NormalizedTrack]]:
