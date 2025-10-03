@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from app.core.transfers_api import TransfersApiError
 from app.errors import AppError
 from app.integrations.provider_gateway import (
     ProviderGatewayDependencyError,
@@ -51,6 +52,20 @@ def to_api_error(exc: Exception, *, provider: str | None = None) -> ApiError:
             code=ErrorCode(exc.code.value),
             message=exc.message,
             details=_details_with_provider(provider, exc.meta),
+        )
+    if isinstance(exc, TransfersApiError):
+        extra: dict[str, Any] | None = None
+        if exc.details is not None:
+            extra = dict(exc.details)
+        if exc.status_code is not None:
+            if extra is None:
+                extra = {}
+            extra.setdefault("status_code", exc.status_code)
+        details = _details_with_provider(provider or "slskd", extra)
+        return ApiError.from_components(
+            code=ErrorCode(exc.code.value),
+            message=str(exc),
+            details=details,
         )
     if isinstance(exc, ProviderGatewayTimeoutError):
         details = _details_with_provider(

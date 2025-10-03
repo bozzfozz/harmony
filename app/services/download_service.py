@@ -5,14 +5,23 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, status
+from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.core.transfers_api import TransfersApi, TransfersApiError
-from app.errors import AppError
+from app.errors import (
+    AppError,
+    DependencyError,
+    ErrorCode,
+    InternalServerError,
+    NotFoundError,
+    ValidationAppError,
+)
 from app.logging import get_logger
 from app.models import Download
 from app.schemas import DownloadPriorityUpdate, SoulseekDownloadRequest
+from app.schemas.errors import ApiError
+from app.services.errors import to_api_error
 from app.utils.activity import record_activity
 from app.utils.downloads import (
     ACTIVE_STATES,
@@ -28,6 +37,26 @@ from app.workers.persistence import update_priority as update_worker_priority
 
 
 logger = get_logger(__name__)
+
+
+_ERROR_STATUS_BY_CODE: dict[ErrorCode, int] = {
+    ErrorCode.VALIDATION_ERROR: status.HTTP_400_BAD_REQUEST,
+    ErrorCode.NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
+    ErrorCode.DEPENDENCY_ERROR: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+}
+
+
+def _app_error_from_api_error(api_error: ApiError) -> AppError:
+    code = ErrorCode(api_error.error.code)
+    status_code = _ERROR_STATUS_BY_CODE.get(code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return AppError(
+        api_error.error.message,
+        code=code,
+        http_status=status_code,
+        meta=api_error.error.details,
+    )
 
 
 class DownloadService:
@@ -75,30 +104,24 @@ class DownloadService:
                 include_all=include_all, status_filter=status_filter
             )
             return query.offset(offset).limit(limit).all()
-        except (HTTPException, AppError):
+        except AppError:
             raise
         except Exception as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to list downloads: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to fetch downloads",
-            ) from exc
+            raise InternalServerError("Failed to fetch downloads") from exc
 
     def get_download(self, download_id: int) -> Download:
         try:
             download = self._session.get(Download, download_id)
-        except (HTTPException, AppError):
+        except AppError:
             raise
         except Exception as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to load download %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to fetch download",
-            ) from exc
+            raise InternalServerError("Failed to fetch download") from exc
 
         if download is None:
             logger.warning("Download %s not found", download_id)
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Download not found")
+            raise NotFoundError("Download not found")
         return download
 
     def update_priority(self, download_id: int, payload: DownloadPriorityUpdate) -> Download:
@@ -134,7 +157,7 @@ class DownloadService:
     ) -> Dict[str, Any]:
         if not payload.files:
             logger.warning("Download request without files rejected")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files supplied")
+            raise ValidationAppError("No files supplied")
 
         missing_credentials = collect_missing_credentials(self._session, ("soulseek",))
         if missing_credentials:
@@ -145,19 +168,13 @@ class DownloadService:
                 DOWNLOAD_BLOCKED,
                 details={"missing": missing_payload, "username": payload.username},
             )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Download blocked", "missing": missing_payload},
-            )
+            raise DependencyError("Download blocked", meta={"missing": missing_payload})
 
         enqueue = getattr(worker, "enqueue", None) if worker else None
         if enqueue is None:
             logger.error("Download worker unavailable for request from %s", payload.username)
             record_activity("download", "failed", details={"reason": "worker_unavailable"})
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Download worker unavailable",
-            )
+            raise DependencyError("Download worker unavailable")
 
         download_records: List[Download] = []
         job_files: List[Dict[str, Any]] = []
@@ -190,10 +207,7 @@ class DownloadService:
             self._session.rollback()
             logger.exception("Failed to persist download request: %s", exc)
             record_activity("download", "failed", details={"reason": "persistence_error"})
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to queue download",
-            ) from exc
+            raise InternalServerError("Failed to queue download") from exc
 
         job_priority = max(job_priorities or [0])
         job = {"username": payload.username, "files": job_files, "priority": job_priority}
@@ -207,10 +221,7 @@ class DownloadService:
                 download.updated_at = now
             self._session.commit()
             record_activity("download", "failed", details={"reason": "enqueue_error"})
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to enqueue download",
-            ) from exc
+            raise DependencyError("Failed to enqueue download") from exc
 
         record_activity(
             "download",
@@ -249,19 +260,18 @@ class DownloadService:
                 download_id,
                 download.state,
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Download cannot be cancelled in its current state",
+            raise AppError(
+                "Download cannot be cancelled in its current state",
+                code=ErrorCode.VALIDATION_ERROR,
+                http_status=status.HTTP_409_CONFLICT,
             )
 
         try:
             await self._transfers.cancel_download(download_id)
         except TransfersApiError as exc:
             logger.error("slskd cancellation failed for %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to cancel download via slskd",
-            ) from exc
+            api_error = to_api_error(exc, provider="slskd")
+            raise _app_error_from_api_error(api_error) from exc
 
         download.state = "cancelled"
         download.updated_at = datetime.utcnow()
@@ -271,10 +281,7 @@ class DownloadService:
         except Exception as exc:  # pragma: no cover - defensive persistence handling
             self._session.rollback()
             logger.exception("Failed to persist cancellation for download %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to cancel download",
-            ) from exc
+            raise InternalServerError("Failed to cancel download") from exc
 
         record_activity(
             "download",
@@ -300,14 +307,11 @@ class DownloadService:
                 created_to=created_to,
             )
             downloads = query.all()
-        except (HTTPException, AppError):
+        except AppError:
             raise
         except Exception as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to export downloads: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to export downloads",
-            ) from exc
+            raise InternalServerError("Failed to export downloads") from exc
 
         payload = [serialise_download(item) for item in downloads]
         if format == "csv":
@@ -326,26 +330,23 @@ class DownloadService:
                 download_id,
                 original.state,
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Download cannot be retried in its current state",
+            raise AppError(
+                "Download cannot be retried in its current state",
+                code=ErrorCode.VALIDATION_ERROR,
+                http_status=status.HTTP_409_CONFLICT,
             )
 
         if not original.username or not original.request_payload:
             logger.error("Retry rejected for download %s due to missing payload", download_id)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Download cannot be retried because original request data is missing",
+            raise ValidationAppError(
+                "Download cannot be retried because original request data is missing"
             )
 
         payload_copy = dict(original.request_payload or {})
         filename = payload_copy.get("filename") or original.filename
         if not filename:
             logger.error("Retry rejected for download %s due to missing filename", download_id)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Download cannot be retried because filename is unknown",
-            )
+            raise ValidationAppError("Download cannot be retried because filename is unknown")
 
         filesize = (
             payload_copy.get("filesize")
@@ -379,37 +380,27 @@ class DownloadService:
         except TransfersApiError as exc:
             self._session.rollback()
             logger.error("slskd cancellation before retry failed for %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to cancel existing download via slskd",
-            ) from exc
+            api_error = to_api_error(exc, provider="slskd")
+            raise _app_error_from_api_error(api_error) from exc
 
         try:
             await self._transfers.enqueue(username=original.username, files=[payload_copy])
         except TransfersApiError as exc:
             self._session.rollback()
             logger.error("Failed to enqueue retry for download %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to enqueue download via slskd",
-            ) from exc
+            api_error = to_api_error(exc, provider="slskd")
+            raise _app_error_from_api_error(api_error) from exc
         except Exception as exc:  # pragma: no cover - defensive unexpected failure
             self._session.rollback()
             logger.exception("Unexpected error while retrying download %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to retry download",
-            ) from exc
+            raise InternalServerError("Failed to retry download") from exc
 
         try:
             self._session.commit()
         except Exception as exc:  # pragma: no cover - defensive persistence handling
             self._session.rollback()
             logger.exception("Failed to persist retry download for %s: %s", download_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to retry download",
-            ) from exc
+            raise InternalServerError("Failed to retry download") from exc
 
         record_activity(
             "download",
