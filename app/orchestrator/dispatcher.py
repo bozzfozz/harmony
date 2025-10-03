@@ -214,14 +214,35 @@ class Dispatcher:
                 attempts=int(job.attempts),
             )
             stop_heartbeat = asyncio.Event()
-            heartbeat_task = asyncio.create_task(self._maintain_heartbeat(job, stop_heartbeat))
+            lease_lost = asyncio.Event()
+            heartbeat_task = asyncio.create_task(
+                self._maintain_heartbeat(job, stop_heartbeat, lease_lost)
+            )
+            handler_task = asyncio.create_task(handler(job))
+            lease_wait_task = asyncio.create_task(lease_lost.wait())
+            result_payload: Mapping[str, Any] | None = None
+            lease_lost_triggered = False
             try:
-                result_payload = await handler(job)
+                done, _ = await asyncio.wait(
+                    {handler_task, lease_wait_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if lease_wait_task in done and handler_task not in done:
+                    lease_lost_triggered = True
+                    stop_heartbeat.set()
+                    handler_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await handler_task
+                else:
+                    result_payload = await handler_task
             except MatchingJobError as exc:
                 stop_heartbeat.set()
                 await self._handle_job_error(job, exc, start)
             except asyncio.CancelledError:
                 stop_heartbeat.set()
+                handler_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await handler_task
                 with contextlib.suppress(asyncio.CancelledError):
                     await heartbeat_task
                 raise
@@ -229,10 +250,14 @@ class Dispatcher:
                 stop_heartbeat.set()
                 await self._handle_failure(job, exc, start)
             else:
+                if lease_lost_triggered:
+                    return
                 stop_heartbeat.set()
                 await self._handle_success(job, result_payload, start)
             finally:
-                heartbeat_task.cancel()
+                lease_wait_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await lease_wait_task
                 with contextlib.suppress(asyncio.CancelledError):
                     await heartbeat_task
 
@@ -349,7 +374,10 @@ class Dispatcher:
         )
 
     async def _maintain_heartbeat(
-        self, job: persistence.QueueJobDTO, stop_signal: asyncio.Event
+        self,
+        job: persistence.QueueJobDTO,
+        stop_signal: asyncio.Event,
+        lease_lost_signal: asyncio.Event | None = None,
     ) -> None:
         interval = self._heartbeat_interval(job)
         while True:
@@ -369,6 +397,9 @@ class Dispatcher:
                         status="lost",
                         lease_timeout=int(job.lease_timeout_seconds or 0),
                     )
+                    if lease_lost_signal is not None:
+                        lease_lost_signal.set()
+                    break
                 continue
             break
 
