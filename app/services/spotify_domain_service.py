@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Optional, Sequence, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
 
 from sqlalchemy.orm import Session
 
@@ -14,6 +24,8 @@ from app.core.spotify_client import SpotifyClient
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Playlist
+from app.integrations.contracts import ProviderTrack
+from app.integrations.normalizers import normalize_spotify_track
 from app.services.backfill_service import (
     BackfillJobSpec,
     BackfillJobStatus,
@@ -35,7 +47,7 @@ logger = get_logger(__name__)
 class PlaylistItemsResult:
     """Normalized representation of playlist items for API responses."""
 
-    items: Sequence[dict[str, Any]]
+    items: Sequence[ProviderTrack]
     total: int
 
 
@@ -109,9 +121,16 @@ class SpotifyDomainService:
         except Exception:  # pragma: no cover - defensive guard
             return False
 
-    def search_tracks(self, query: str) -> Sequence[dict[str, Any]]:
+    def search_tracks(self, query: str) -> Sequence[ProviderTrack]:
         response = self._spotify.search_tracks(query)
-        return self._extract_items(response, "tracks")
+        tracks_section = response.get("tracks") if isinstance(response, Mapping) else None
+        raw_items = tracks_section.get("items") if isinstance(tracks_section, Mapping) else None
+        normalized: list[ProviderTrack] = []
+        if isinstance(raw_items, Iterable):
+            for entry in raw_items:
+                if isinstance(entry, Mapping):
+                    normalized.append(normalize_spotify_track(entry, provider="spotify"))
+        return tuple(normalized)
 
     def search_artists(self, query: str) -> Sequence[dict[str, Any]]:
         response = self._spotify.search_artists(query)
@@ -167,16 +186,57 @@ class SpotifyDomainService:
         return session.query(Playlist).order_by(Playlist.updated_at.desc()).all()
 
     def get_playlist_items(self, playlist_id: str, *, limit: int) -> PlaylistItemsResult:
-        items = self._spotify.get_playlist_items(playlist_id, limit=limit)
-        total = items.get("total")
-        if total is None:
-            total = items.get("tracks", {}).get("total") if isinstance(items, dict) else None
-        if total is None:
-            raw_items = items.get("items", []) if isinstance(items, dict) else []
-            total = len(raw_items) if isinstance(raw_items, Iterable) else 0
-        raw_items = items.get("items", []) if isinstance(items, dict) else []
-        sequence: Sequence[dict[str, Any]] = [item for item in raw_items if isinstance(item, dict)]
-        return PlaylistItemsResult(items=sequence, total=int(total or 0))
+        payload = self._spotify.get_playlist_items(playlist_id, limit=limit)
+        total = payload.get("total") if isinstance(payload, Mapping) else None
+        if total is None and isinstance(payload, Mapping):
+            tracks_payload = payload.get("tracks")
+            if isinstance(tracks_payload, Mapping):
+                total = tracks_payload.get("total")
+
+        raw_items = payload.get("items") if isinstance(payload, Mapping) else None
+        iterable_items = raw_items if isinstance(raw_items, Iterable) else ()
+        filtered_items: list[Mapping[str, Any]] = [
+            entry for entry in iterable_items if isinstance(entry, Mapping)
+        ]
+
+        normalized_tracks: list[ProviderTrack] = []
+        for entry in filtered_items:
+            track_payload = entry.get("track")
+            if not isinstance(track_payload, Mapping):
+                continue
+            track = normalize_spotify_track(track_payload, provider="spotify")
+            metadata = dict(track.metadata or {})
+            playlist_metadata: dict[str, Any] = {}
+
+            added_at = entry.get("added_at")
+            if isinstance(added_at, str) and added_at.strip():
+                playlist_metadata["added_at"] = added_at
+
+            is_local = entry.get("is_local")
+            if isinstance(is_local, bool):
+                playlist_metadata["is_local"] = is_local
+
+            added_by = entry.get("added_by")
+            added_by_mapping = added_by if isinstance(added_by, Mapping) else None
+            if added_by_mapping:
+                added_by_meta: dict[str, Any] = {}
+                for key in ("id", "type", "uri"):
+                    value = added_by_mapping.get(key)
+                    if isinstance(value, str) and value.strip():
+                        added_by_meta[key] = value
+                display_name = added_by_mapping.get("display_name")
+                if isinstance(display_name, str) and display_name.strip():
+                    added_by_meta["display_name"] = display_name
+                if added_by_meta:
+                    playlist_metadata["added_by"] = added_by_meta
+
+            if playlist_metadata:
+                metadata["playlist_item"] = playlist_metadata
+
+            normalized_tracks.append(replace(track, metadata=metadata))
+
+        fallback_total = total if total is not None else len(filtered_items)
+        return PlaylistItemsResult(items=tuple(normalized_tracks), total=int(fallback_total or 0))
 
     def add_tracks_to_playlist(self, playlist_id: str, uris: Sequence[str]) -> None:
         self._spotify.add_tracks_to_playlist(playlist_id, list(uris))
