@@ -5,7 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 
 class StatusResponse(BaseModel):
@@ -118,9 +125,61 @@ class SoulseekSearchRequest(BaseModel):
     query: str
 
 
+class DownloadFileRequest(BaseModel):
+    """Input payload for an individual download request."""
+
+    filename: Optional[str] = Field(
+        None, description="Resolved filename that should be stored for the download"
+    )
+    name: Optional[str] = Field(
+        None, description="Original filename reported by the client (fallback field)"
+    )
+    priority: Optional[int] = Field(
+        None, description="Explicit priority override for this download"
+    )
+    source: Optional[str] = Field(
+        None, description="Origin of the download request, e.g. spotify_saved"
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("filename", "name")
+    @classmethod
+    def _normalise_filename(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @model_validator(mode="after")
+    def _ensure_identifier(self) -> "DownloadFileRequest":
+        if self.filename or self.name:
+            return self
+        raise ValueError("filename or name must be provided")
+
+    @property
+    def resolved_filename(self) -> str:
+        return (self.filename or self.name or "unknown")
+
+    def to_payload(self) -> Dict[str, Any]:
+        payload = self.model_dump(by_alias=True, exclude_none=True)
+        payload.setdefault("filename", self.resolved_filename)
+        return payload
+
+
 class SoulseekDownloadRequest(BaseModel):
     username: str = Field(..., description="Soulseek username hosting the files")
-    files: List[Dict[str, Any]] = Field(..., description="List of files to download")
+    files: List[DownloadFileRequest] = Field(
+        ..., description="List of files to download"
+    )
+
+    @field_validator("username")
+    @classmethod
+    def _ensure_username(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("username must not be empty")
+        return stripped
 
 
 class DiscographyDownloadRequest(BaseModel):

@@ -108,7 +108,7 @@ def test_purge_endpoint_supports_ids(client: SimpleTestClient) -> None:
 
 def test_purge_validates_payload(client: SimpleTestClient) -> None:
     response = client.post("/api/v1/dlq/purge", json={"reason": "network"})
-    assert response.status_code == 400
+    assert response.status_code == 422
     payload = response.json()
     assert payload["error"]["code"] == "VALIDATION_ERROR"
 

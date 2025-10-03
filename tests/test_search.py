@@ -170,7 +170,7 @@ def test_search_validation_errors(client) -> None:
         "year_to": 2010,
     }
     response = client.post("/search", json=payload)
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 

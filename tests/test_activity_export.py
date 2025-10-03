@@ -74,7 +74,7 @@ def test_activity_export_filters(client) -> None:
 
 def test_activity_export_invalid_format(client) -> None:
     response = client.get("/activity/export", params={"format": "xml"})
-    assert response.status_code == 400
+    assert response.status_code == 422
     payload = response.json()
     assert payload["error"]["code"] == "VALIDATION_ERROR"
 

@@ -181,8 +181,9 @@ class DownloadService:
         job_priorities: List[int] = []
         try:
             for file_info in payload.files:
-                filename = str(file_info.get("filename") or file_info.get("name") or "unknown")
-                priority = determine_priority(file_info)
+                file_payload = file_info.to_payload()
+                filename = str(file_payload.get("filename") or "unknown")
+                priority = determine_priority(file_payload)
                 download = Download(
                     filename=filename,
                     state="queued",
@@ -193,8 +194,7 @@ class DownloadService:
                 self._session.add(download)
                 self._session.flush()
 
-                payload_copy = dict(file_info)
-                payload_copy.setdefault("filename", filename)
+                payload_copy = dict(file_payload)
                 payload_copy["download_id"] = download.id
                 payload_copy["priority"] = priority
                 download.request_payload = payload_copy

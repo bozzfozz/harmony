@@ -164,7 +164,7 @@ def test_error_mapping_validation_and_dependency_error(
     client = TestClient(app)
 
     validation = client.get("/validate", params={"required": "bad"})
-    assert validation.status_code == 400
+    assert validation.status_code == 422
     body = validation.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
 
