@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app import dependencies
 from app.dependencies import SessionRunner, get_session_runner
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.utils.activity import record_activity
 from app.utils.events import SYNC_BLOCKED
 from app.utils.service_health import collect_missing_credentials
@@ -33,7 +34,14 @@ async def trigger_manual_sync(
     missing = await _missing_credentials(session_runner)
     if missing:
         missing_payload = {service: list(values) for service, values in missing.items()}
-        logger.warning("Manual sync blocked due to missing credentials: %s", missing_payload)
+        log_event(
+            logger,
+            "api.sync.trigger",
+            component="router.sync",
+            status="blocked",
+            entity_id=None,
+            meta={"missing": missing_payload},
+        )
         record_activity(
             "sync",
             SYNC_BLOCKED,
