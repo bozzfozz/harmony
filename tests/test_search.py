@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict
 
 import pytest
@@ -11,6 +12,22 @@ from app.integrations.provider_gateway import (
     ProviderGatewaySearchResponse,
     ProviderGatewaySearchResult,
 )
+
+
+def test_search_max_limit_invalid_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.api.search as search_module
+
+    original_limit = search_module.SEARCH_MAX_LIMIT
+
+    monkeypatch.setenv("SEARCH_MAX_LIMIT", "invalid")
+    reloaded = importlib.reload(search_module)
+
+    assert reloaded.SEARCH_MAX_LIMIT == 100
+
+    monkeypatch.delenv("SEARCH_MAX_LIMIT", raising=False)
+    restored = importlib.reload(search_module)
+
+    assert restored.SEARCH_MAX_LIMIT == original_limit
 
 
 def _prepare_soulseek_results(client) -> None:
