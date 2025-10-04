@@ -144,17 +144,8 @@ export interface SpotifyFreeParsePayload {
   file_token?: string | null;
 }
 
-export interface SpotifyFreeUploadPayload {
-  filename: string;
-  content: string;
-}
-
 export interface SpotifyFreeParseResponse {
   items: NormalizedTrack[];
-}
-
-export interface SpotifyFreeUploadResponse {
-  file_token: string;
 }
 
 export interface SpotifyFreeEnqueuePayload {

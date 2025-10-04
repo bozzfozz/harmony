@@ -13,8 +13,6 @@ import type {
   SpotifyFreeEnqueueResponse,
   SpotifyFreeParsePayload,
   SpotifyFreeParseResponse,
-  SpotifyFreeUploadPayload,
-  SpotifyFreeUploadResponse,
   SpotifyImage,
   SpotifyStatusResponse,
   SpotifyRawAlbum,
@@ -196,11 +194,6 @@ export const enqueueSpotifyFreeTracks = async (
 ): Promise<SpotifyFreeEnqueueResponse> =>
   request<SpotifyFreeEnqueueResponse>({ method: 'POST', url: apiUrl('/spotify/free/enqueue'), data: payload });
 
-export const uploadSpotifyFreeFile = async (
-  payload: SpotifyFreeUploadPayload
-): Promise<SpotifyFreeUploadResponse> =>
-  request<SpotifyFreeUploadResponse>({ method: 'POST', url: apiUrl('/spotify/free/upload'), data: payload });
-
 export type {
   ArtistPreferenceEntry,
   NormalizedTrack,
@@ -212,8 +205,6 @@ export type {
   SpotifyFreeEnqueueResponse,
   SpotifyFreeParsePayload,
   SpotifyFreeParseResponse,
-  SpotifyFreeUploadPayload,
-  SpotifyFreeUploadResponse,
   SpotifySearchResults,
   SpotifyStatusResponse,
   SpotifyTrackSearchResult
