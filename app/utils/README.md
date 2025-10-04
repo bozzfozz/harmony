@@ -14,8 +14,6 @@ Orchestrator, Integrationen und Services gemeinsam genutzt werden.
   `acquire_pair`).
 - `jsonx.py` – Sichere JSON Serialisierung (`safe_dumps`, `safe_loads`,
   `try_parse_json_or_none`).
-- `validate.py` – Primitive Validatoren (`clamp_int`, `require_non_empty`,
-  `positive_int`).
 
 ## Beispiele
 
