@@ -7,7 +7,7 @@ import type {
   StartDownloadPayload,
   DownloadFilePayload
 } from '../types';
-import { useMutation, useQuery } from '../../lib/query';
+import { useMutation } from '../../lib/query';
 import { ApiError } from '../client';
 import { LIBRARY_POLL_INTERVAL_MS } from '../config';
 
