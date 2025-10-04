@@ -191,9 +191,7 @@ def _confidence_label(score: float, *, complete: float, nearly: float) -> str:
         return "complete"
     if score >= nearly:
         return "nearly"
-    if score <= 0.0:
-        return "miss"
-    return "partial"
+    return "incomplete"
 
 
 def _sort_key(result: MatchResult, total: float) -> tuple[Any, ...]:
@@ -264,6 +262,83 @@ def _album_total_tracks_from_dto(track: ProviderTrackDTO) -> int | None:
             if total is not None:
                 return total
     return None
+
+
+def _album_total_tracks_from_metadata(metadata: Mapping[str, Any]) -> int | None:
+    for key in _TRACK_COUNT_META_KEYS:
+        if key in metadata:
+            total = _as_int(metadata.get(key))
+            if total is not None:
+                return total
+    return None
+
+
+def _track_identity_for_completion(track: ProviderTrackDTO) -> tuple[Any, ...]:
+    metadata = track.metadata
+    disc_candidates = (
+        metadata.get("disc_number"),
+        metadata.get("discnumber"),
+        metadata.get("disc_no"),
+        metadata.get("disc"),
+    )
+    track_candidates = (
+        metadata.get("track_number"),
+        metadata.get("tracknumber"),
+        metadata.get("track"),
+        metadata.get("number"),
+        metadata.get("position"),
+    )
+    disc_number = None
+    for candidate in disc_candidates:
+        disc_number = _as_int(candidate)
+        if disc_number is not None:
+            break
+    track_number = None
+    for candidate in track_candidates:
+        track_number = _as_int(candidate)
+        if track_number is not None:
+            break
+    if track_number is not None:
+        return (disc_number or 1, track_number)
+    if track.source_id:
+        return (track.source, track.source_id)
+    return (
+        _normalize_text(track.title),
+        tuple(_normalize_text(artist.name) for artist in track.artists),
+    )
+
+
+def calculate_album_completion(
+    matched_tracks: Iterable[Any],
+    *,
+    expected_total_tracks: int | None = None,
+    complete_thr: float = _DEFAULT_MATCHING_CONFIG.complete_threshold,
+    nearly_thr: float = _DEFAULT_MATCHING_CONFIG.nearly_threshold,
+) -> tuple[float, str]:
+    """Return album completion ratio and label for a collection of tracks."""
+
+    tracks = [ensure_track_dto(track) for track in matched_tracks]
+    if expected_total_tracks is None:
+        totals: list[int] = []
+        for track in tracks:
+            total = _album_total_tracks_from_dto(track)
+            if total is None:
+                total = _album_total_tracks_from_metadata(track.metadata)
+            if total is not None:
+                totals.append(total)
+        if totals:
+            expected_total_tracks = max(totals)
+
+    unique_tracks = {_track_identity_for_completion(track) for track in tracks}
+    matched_count = len(unique_tracks)
+
+    if expected_total_tracks is None or expected_total_tracks <= 0:
+        ratio = 1.0 if matched_count else 0.0
+    else:
+        ratio = matched_count / expected_total_tracks
+    ratio = max(0.0, min(1.0, round(ratio, 4)))
+    label = _confidence_label(ratio, complete=complete_thr, nearly=nearly_thr)
+    return ratio, label
 
 
 def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) -> float:
@@ -372,6 +447,19 @@ class MusicMatchingEngine:
             edition_aware=self._config.edition_aware,
         )
 
+    def calculate_album_completion(
+        self,
+        matched_tracks: Iterable[Any],
+        *,
+        expected_total_tracks: int | None = None,
+    ) -> tuple[float, str]:
+        return calculate_album_completion(
+            matched_tracks,
+            expected_total_tracks=expected_total_tracks,
+            complete_thr=self._config.complete_threshold,
+            nearly_thr=self._config.nearly_threshold,
+        )
+
     @staticmethod
     def compute_relevance_score(query: str, candidate: Mapping[str, Any]) -> float:
         return compute_relevance_score(query, candidate)
@@ -383,6 +471,7 @@ class MusicMatchingEngine:
 
 __all__ = [
     "MusicMatchingEngine",
+    "calculate_album_completion",
     "calculate_slskd_match_confidence",
     "compute_relevance_score",
     "rank_candidates",
