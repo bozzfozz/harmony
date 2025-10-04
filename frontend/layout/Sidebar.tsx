@@ -1,22 +1,9 @@
 import { Fragment, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Music,
-  Radio,
-  Sparkles,
-  Settings,
-  X
-} from 'lucide-react';
+import { X } from 'lucide-react';
 
-const navigationItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/spotify', label: 'Spotify', icon: Music },
-  { to: '/soulseek', label: 'Soulseek', icon: Radio },
-  { to: '/matching', label: 'Matching', icon: Sparkles },
-  { to: '/settings', label: 'Settings', icon: Settings }
-] as const;
+import { navigationItems } from '../src/config/navigation';
 
 export interface SidebarProps {
   open: boolean;

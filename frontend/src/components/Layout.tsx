@@ -1,19 +1,12 @@
 import { ReactNode, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { CircleDot, Download, Menu, Moon, Music, Settings, Sun, Users } from 'lucide-react';
+import { CircleDot, Menu, Moon, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/shadcn';
 import { ScrollArea } from './ui/scroll-area';
 import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
-
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: CircleDot },
-  { to: '/downloads', label: 'Downloads', icon: Download },
-  { to: '/artists', label: 'Artists', icon: Users },
-  { to: '/spotify', label: 'Spotify', icon: Music },
-  { to: '/settings', label: 'Settings', icon: Settings }
-] as const;
+import { navigationItems } from '../config/navigation';
 
 interface LayoutProps {
   children: ReactNode;
@@ -25,7 +18,7 @@ const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
 
   const activeTitle = useMemo(() => {
-    const match = navItems.find((item) => location.pathname.startsWith(item.to));
+    const match = navigationItems.find((item) => location.pathname.startsWith(item.to));
     return match?.label ?? 'Harmony';
   }, [location.pathname]);
 
@@ -46,7 +39,7 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
         <ScrollArea className="h-[calc(100vh-4rem)]">
           <nav className="flex flex-col gap-1 p-4">
-            {navItems.map((item) => {
+            {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
