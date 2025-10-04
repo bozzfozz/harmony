@@ -72,9 +72,8 @@ Der Lifespan startet zuerst den Orchestrator (Scheduler, Dispatcher, WatchlistTi
 - **MetadataWorker** (`app/workers/metadata_worker.py`): Reichert Downloads mit Spotify-Metadaten an.
 - **BackfillWorker** (`app/workers/backfill_worker.py`): Ergänzt Free-Ingest-Items über Spotify-APIs.
 - **WatchlistWorker** (`app/workers/watchlist_worker.py`): Überwacht gespeicherte Artists auf neue Releases.
-- **RetryScheduler** (`archive/workers/retry_scheduler.py`, archiviert): Frühere Loop-Implementierung zur Planung fehlgeschlagener Downloads; wurde durch den neuen Orchestrator (Scheduler + Dispatcher) ersetzt.
 
-Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Systemstatus nicht mehr angezeigt.
+Fehlgeschlagene Downloads werden ausschließlich über den orchestrierten `retry`-Job verarbeitet, der den gleichen Backoff wie der Sync-Worker verwendet und keine dedizierte Worker-Schleife mehr benötigt. Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Systemstatus nicht mehr angezeigt.
 
 ### Datenbank & Persistenz
 
