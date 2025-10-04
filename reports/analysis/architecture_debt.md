@@ -127,6 +127,6 @@ AppState hält nur Handles
 **Trade-offs:** + Klare Start/Stopp-API, + Tests isolierbar; − Umbau der bestehenden `app.state`-Nutzung, − ggf. Migrationsaufwand für Admin-Endpunkte.
 
 ## Weitere Beobachtungen
-- Frontend `frontend/src/lib/api.ts` dupliziert Endpoint-Pfade, die Backend-Basis `/api/v1` erst zur Laufzeit erhält; spätere Konsolidierung mit generiertem Client empfohlen.【F:frontend/src/lib/api.ts†L1-L610】【F:app/main.py†L178-L201】
+- Frontend-Client (`frontend/src/api/client.ts` plus `frontend/src/api/services/*.ts`) pflegt Routenstrings manuell, während die Backend-Basis `/api/v1` erst zur Laufzeit gesetzt wird; spätere Konsolidierung mit generiertem Client empfohlen.【F:frontend/src/api/client.ts†L18-L97】【F:frontend/src/api/services/downloads.ts†L180-L241】【F:app/main.py†L178-L201】
 - `MatchingWorker` und `SyncWorker` beziehen Retry/Backoff-Werte aus ENV (`MATCHING_WORKER_BATCH_SIZE`, `RETRY_*`); eine zentrale Konfigurationsmatrix (s. separate Datei) reduziert Fehlkonfiguration.
 

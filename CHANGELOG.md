@@ -18,7 +18,7 @@
 ## v1.0.1 — 2025-09-25
 - chore(config): default authentication, rate limiting and metrics to off,
   bind the API to 127.0.0.1 and update docs, frontend defaults and
-  regression tests for the new behaviour.【F:app/config.py†L930-L952】【F:app/main.py†L600-L748】【F:README.md†L168-L210】【F:.env.example†L1-L80】【F:frontend/src/lib/runtime-config.ts†L17-L82】【F:frontend/src/lib/api.ts†L37-L71】【F:tests/routers/test_defaults_flags.py†L1-L56】
+  regression tests for the new behaviour.【F:app/config.py†L930-L952】【F:app/main.py†L600-L748】【F:README.md†L168-L210】【F:.env.example†L1-L80】【F:frontend/src/api/config.ts†L76-L177】【F:frontend/src/api/client.ts†L28-L97】【F:tests/routers/test_defaults_flags.py†L1-L56】
 - feat(workers): add queue visibility timeouts with heartbeats, idempotent
   enqueueing, jittered retries and structured persistence logs; expand worker
   environment documentation and add regression tests for redelivery,
