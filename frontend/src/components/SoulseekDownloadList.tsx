@@ -1,3 +1,5 @@
+import { Loader2 } from 'lucide-react';
+
 import StatusBadge from './StatusBadge';
 import { Progress } from './ui/progress';
 import { Button } from './ui/shadcn';
@@ -56,6 +58,7 @@ export interface SoulseekDownloadListProps {
   onRetryFetch?: () => void;
   onRetryDownload?: (download: NormalizedSoulseekDownload) => void;
   retryingDownloadId?: string | null;
+  isRetryPending?: boolean;
 }
 
 const SoulseekDownloadList = ({
@@ -64,7 +67,8 @@ const SoulseekDownloadList = ({
   isError,
   onRetryFetch,
   onRetryDownload,
-  retryingDownloadId
+  retryingDownloadId,
+  isRetryPending = false
 }: SoulseekDownloadListProps) => {
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Downloads werden geladen …</p>;
@@ -110,9 +114,15 @@ const SoulseekDownloadList = ({
           const normalizedState = download.state.toLowerCase();
           const normalizedId = typeof download.id === 'string' ? download.id.trim() : null;
           const hasIdentifier = Boolean(normalizedId);
-          const canRetry = hasIdentifier && RETRYABLE_STATES.has(normalizedState);
-          const isRetrying =
-            hasIdentifier && retryingDownloadId != null && normalizedId === retryingDownloadId;
+          const isDeadLetter = normalizedState === 'dead_letter';
+          const canRetry =
+            Boolean(onRetryDownload) && hasIdentifier && !isDeadLetter && RETRYABLE_STATES.has(normalizedState);
+          const isQueuedForRetry = Boolean(
+            hasIdentifier && retryingDownloadId != null && normalizedId === retryingDownloadId
+          );
+          const isRetrying = Boolean(isQueuedForRetry && isRetryPending);
+          const shouldDisableButton =
+            !canRetry || isRetrying || isQueuedForRetry || (isRetryPending && (!retryingDownloadId || !hasIdentifier));
           const queuedLabel = formatTimestamp(download.queuedAt);
           const startedLabel = formatTimestamp(download.startedAt);
           const completedLabel = formatTimestamp(download.completedAt);
@@ -186,10 +196,17 @@ const SoulseekDownloadList = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!onRetryDownload || !canRetry || isRetrying}
+                  disabled={shouldDisableButton}
                   onClick={() => onRetryDownload?.(download)}
                 >
-                  {isRetrying ? 'Wird erneut gestartet …' : 'Retry'}
+                  {isRetrying ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Wird erneut gestartet …
+                    </span>
+                  ) : (
+                    'Retry'
+                  )}
                 </Button>
               </TableCell>
             </TableRow>
