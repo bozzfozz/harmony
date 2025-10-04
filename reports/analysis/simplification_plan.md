@@ -8,12 +8,12 @@
 ## Maßnahmen nach Priorität
 
 ### P0 – Quick Wins
-1. **Router-Gruppierung & gemeinsame Prefix-Factory aufsetzen**  
-   - **Beobachtung:** `app/main.py` registriert 17 Router manuell; Prefix-Logik (z. B. `/spotify`, `/spotify/backfill`) wird dupliziert.【F:app/main.py†L178-L201】  
+1. **Router-Registry absichern & dokumentieren**  
+   - **Beobachtung:** `router_registry.register_all` hängt die registrierten Router bereits zentral an die FastAPI-App, und die Konfigurationen (`register_domain`/`register_router`) leben gesammelt in `app/api/router_registry.py`; `app/main.py` nutzt ausschließlich diesen Pfad inklusive `compose_prefix` für die Standard-URLs.【F:app/api/router_registry.py†L73-L213】【F:app/main.py†L527-L570】  
    - **Schritte:**  
-     1. Neues Modul `app/api/router_registry.py` anlegen, das Router nach Domänen (Spotify, Soulseek, System) bündelt.  
-     2. Einheitliche Prefix-Factory einführen (`compose_prefix(base_path, suffix)`), die sowohl in `main` als auch Tests genutzt wird.  
-     3. `app/main.py` auf Registry umstellen, damit spätere Konsolidierung nur an einer Stelle erfolgt.  
+     1. Developer-Doku ergänzen (z. B. unter `docs/architecture`), die erklärt, wie neue Router über `register_domain` bzw. `register_router` eingehängt werden und warum direkte `include_router`-Aufrufe in `main` tabu sind.【F:app/api/router_registry.py†L73-L123】  
+     2. Einen gezielten Test schreiben, der `router_registry.register_all` gegen ein frisches `FastAPI`-Objekt ausführt und sicherstellt, dass die erwarteten Domain-Prefixe montiert werden (Regression-Guard für zukünftige Router).【F:app/api/router_registry.py†L138-L176】  
+     3. Im Registry-Modul eine kurze Kommentar-Sektion/Checkliste ergänzen, die beim Hinzufügen neuer Router an Tag-Etiketten und Prefix-Standards erinnert (Low-cost Governance im Code selbst).【F:app/api/router_registry.py†L179-L213】  
    - **Impact:** Weniger Boilerplate, sauberer Ausgangspunkt für Domänen-Module.  
    - **Aufwand:** 0.5–1 PT.  
    - **Risiko:** Niedrig (nur Verkabelung).  
