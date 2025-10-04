@@ -7,6 +7,32 @@ import { ScrollArea } from './ui/scroll-area';
 import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
 import { navigationItems } from '../config/navigation';
+import { useIntegrationHealth, type ServiceHealthState } from '../hooks/useIntegrationHealth';
+
+interface IndicatorMeta {
+  variant: 'warning' | 'danger';
+  badge: string;
+  message: string;
+}
+
+const getIndicatorMeta = (serviceHealth?: ServiceHealthState): IndicatorMeta | null => {
+  if (!serviceHealth || !serviceHealth.degraded) {
+    return null;
+  }
+  if (serviceHealth.misconfigured || !serviceHealth.online) {
+    const message = serviceHealth.misconfigured ? 'Konfiguration prüfen' : 'Dienst offline';
+    return {
+      variant: 'danger',
+      badge: serviceHealth.misconfigured ? 'Fehler' : 'Offline',
+      message
+    };
+  }
+  return {
+    variant: 'warning',
+    badge: 'Eingeschränkt',
+    message: 'Dienst eingeschränkt'
+  };
+};
 
 interface LayoutProps {
   children: ReactNode;
@@ -17,6 +43,7 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
+  const { services } = useIntegrationHealth();
 
   const activeTitle = useMemo(() => {
     const match = navigationItems.find((item) => location.pathname.startsWith(item.to));
@@ -56,11 +83,17 @@ const Layout = ({ children }: LayoutProps) => {
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 const iconTestId = `nav-icon-${item.label.toLowerCase().replace(/\s+/g, '-')}`;
+                const tooltipTestId = `nav-tooltip-${item.label.toLowerCase().replace(/\s+/g, '-')}`;
+                const serviceHealth = item.service ? services[item.service] : undefined;
+                const indicatorMeta = getIndicatorMeta(serviceHealth);
+                const ariaLabel = indicatorMeta
+                  ? `${item.label} – Warnung: ${indicatorMeta.message}`
+                  : item.label;
                 return (
                   <Tooltip key={item.to}>
                     <TooltipTrigger asChild>
                       <NavLink
-                        aria-label={item.label}
+                        aria-label={ariaLabel}
                         to={item.to}
                         className={({ isActive }) =>
                           cn(
@@ -82,9 +115,45 @@ const Layout = ({ children }: LayoutProps) => {
                         >
                           {item.label}
                         </span>
+                        {indicatorMeta ? (
+                          <span
+                            className={cn(
+                              'ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
+                              indicatorMeta.variant === 'danger'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200',
+                              sidebarCollapsed && 'ml-0 px-1'
+                            )}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                'h-2 w-2 rounded-full',
+                                indicatorMeta.variant === 'danger' ? 'bg-rose-500' : 'bg-amber-500'
+                              )}
+                            />
+                            <span className={cn(sidebarCollapsed && 'sr-only')}>{indicatorMeta.badge}</span>
+                          </span>
+                        ) : null}
                       </NavLink>
                     </TooltipTrigger>
-                    <TooltipContent side="right">{item.label}</TooltipContent>
+                    <TooltipContent side="right" data-testid={tooltipTestId}>
+                      <div className="flex flex-col">
+                        <span>{item.label}</span>
+                        {indicatorMeta ? (
+                          <span
+                            className={cn(
+                              'text-xs',
+                              indicatorMeta.variant === 'danger'
+                                ? 'text-rose-200'
+                                : 'text-amber-200'
+                            )}
+                          >
+                            Warnung: {indicatorMeta.message}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TooltipContent>
                   </Tooltip>
                 );
               })}

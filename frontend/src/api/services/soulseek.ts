@@ -147,7 +147,7 @@ export const getSoulseekUploads = async ({
   return uploads.map(normalizeUpload).filter((entry): entry is NormalizedSoulseekUpload => entry !== null);
 };
 
-export const getIntegrationsReport = async (): Promise<IntegrationsData> => {
+export const getIntegrations = async (): Promise<IntegrationsData> => {
   const payload = await request<IntegrationsResponse>({ method: 'GET', url: apiUrl('/integrations') });
   if (!payload.ok || !payload.data) {
     throw new Error('Integrations response missing data');

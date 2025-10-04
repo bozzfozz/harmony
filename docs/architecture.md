@@ -70,6 +70,7 @@ Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompa
   - In der Konfiguration kennzeichnet ein rotes Badge fehlende Pflichtwerte. Maskierte Secrets erscheinen als `••••••`; Operator:innen können so prüfen, ob Werte grundsätzlich gesetzt sind, ohne sie offenzulegen.
   - Die Upload-Tabelle zeigt jeden aktiven Share mit Status, Fortschritt, Transfergröße und Geschwindigkeit. Bei leerem Ergebnis informiert der Hinweis „Aktuell sind keine Uploads aktiv“, Fehlerzustände liefern einen Retry-Button, der erneut `/soulseek/uploads` aufruft.
 - Die Seite dient als Operations-Dashboard für den Soulseek-Daemon: Warnhinweise bei Ausfällen oder fehlender Konfiguration helfen, bevor Sync-Worker oder Upload-Freigaben ins Stocken geraten.
+- **Navigation-Warnhinweise:** Die linke Seitenleiste übernimmt die gleichen Integrationssignale. Ein gelbes Badge „Eingeschränkt“ weist auf degradierte Dienste hin (z. B. wenn `/integrations` `degraded` meldet), rote Badges „Offline“ bzw. „Fehler“ kennzeichnen fehlende Konfiguration oder nicht erreichbare Services. Tooltips und Screenreader-Texte wiederholen die Warnung – auch im eingeklappten Zustand der Navigation – damit Operator:innen die Soulseek- und Matching-Dashboards gezielt aufrufen können.
 
 #### Matching UI Dashboard
 

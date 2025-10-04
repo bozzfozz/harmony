@@ -38,6 +38,29 @@ Dependencies: Keine
 Verweise: PR TBD
 Subtasks:
 - Normalisierung der Service-Namen implementieren.
+- Tests für gemischte Service-Namen ergänzen.
+
+ID: TD-20251013-001
+Titel: UI Navigation signalisiert Integrationswarnungen
+Status: done
+Priorität: P2
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-13T08:30:00Z
+Updated_at: 2025-10-13T08:30:00Z
+Tags: ui, operations, accessibility
+Beschreibung: Die Seitenleiste zeigt bislang keinen technischen Zustand der Integrationen an. Operator:innen mussten das Soulseek- oder Matching-Dashboard öffnen, um Degradierungen zu erkennen, was bei Ausfällen Zeit kostet. Ein kompaktes Health-Badge direkt in der Navigation reduziert Klickwege, hebt kritische Zustände hervor und bleibt auch im eingeklappten Zustand des Menüs verfügbar.
+Akzeptanzkriterien:
+- Navigation blendet bei degradierten Diensten ein auffälliges Badge (Gelb für eingeschränkt, Rot für Offline/Konfigurationsfehler) ein.
+- Tooltips und Screenreader-Texte erläutern die Warnung unabhängig vom Sidebar-Zustand.
+- Tests decken Normalfall und Fehlerszenarien ab und stellen Accessibility sicher.
+Risiko/Impact: Niedrig; reine UI-Anpassung mit zusätzlicher Informationsdichte.
+Dependencies: Integrations-/Systemstatus-Endpunkte müssen weiterhin liefern.
+Verweise: PR TBD
+Subtasks:
+- Integrations-Health-Hook implementieren und querverweisen.
+- Navigation erweitern und Badges gestalten.
+- Tests und Dokumentation aktualisieren.
 
 ID: TD-20251012-001
 Titel: Soulseek- und Matching-Ansichten mit Live-Daten versorgen
