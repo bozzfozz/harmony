@@ -55,29 +55,99 @@ const normalizeProgress = (value: unknown): number => {
   return 0;
 };
 
-const normalizeStatus = (entry: Record<string, unknown>): string => {
-  const rawStatus = entry.status ?? entry.state ?? 'unknown';
+const normalizeStatus = (entry: Record<string, unknown>, fallback: string = 'unknown'): string => {
+  const rawStatus = entry.status ?? entry.state ?? fallback;
   return typeof rawStatus === 'string' ? rawStatus : String(rawStatus);
 };
 
 const normalizeDownloadEntry = (value: unknown): DownloadEntry | null => {
-  if (!value || typeof value !== 'object') {
+  const data = unwrapEnvelope<unknown>(value);
+
+  if (Array.isArray(data)) {
+    for (const entry of data) {
+      const normalized = normalizeDownloadEntry(entry);
+      if (normalized) {
+        return normalized;
+      }
+    }
     return null;
   }
-  const record = value as Record<string, unknown>;
-  if (record.id === undefined) {
+
+  if (!data || typeof data !== 'object') {
     return null;
   }
+
+  const record = data as Record<string, unknown>;
+
+  if (Array.isArray(record.downloads) && record.downloads.length > 0) {
+    for (const candidate of record.downloads) {
+      if (candidate === record) {
+        continue;
+      }
+      const normalized = normalizeDownloadEntry(candidate);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+
+  const rawId = record.id ?? record.download_id ?? record.downloadId;
+  if (rawId === undefined || rawId === null) {
+    return null;
+  }
+
+  const id = typeof rawId === 'number' || typeof rawId === 'string' ? rawId : String(rawId);
+
   return {
-    id: record.id as number | string,
+    id,
     filename: typeof record.filename === 'string' ? record.filename : '',
-    status: normalizeStatus(record),
+    status: normalizeStatus(record, 'queued'),
     progress: normalizeProgress(record.progress),
     created_at: typeof record.created_at === 'string' ? record.created_at : undefined,
     updated_at: typeof record.updated_at === 'string' ? record.updated_at : undefined,
     priority: normalizePriority(record.priority),
     username: typeof record.username === 'string' ? record.username : null
   };
+};
+
+const extractDownloadId = (value: unknown): string | number | undefined => {
+  const data = unwrapEnvelope<unknown>(value);
+
+  if (Array.isArray(data)) {
+    for (const entry of data) {
+      const id = extractDownloadId(entry);
+      if (id !== undefined) {
+        return id;
+      }
+    }
+    return undefined;
+  }
+
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+
+  const record = data as Record<string, unknown>;
+
+  if (Array.isArray(record.downloads) && record.downloads.length > 0) {
+    for (const candidate of record.downloads) {
+      if (candidate === record) {
+        continue;
+      }
+      const id = extractDownloadId(candidate);
+      if (id !== undefined) {
+        return id;
+      }
+    }
+  }
+
+  const rawId = record.download_id ?? record.downloadId ?? record.id;
+
+  if (rawId === undefined || rawId === null) {
+    return undefined;
+  }
+
+  return typeof rawId === 'number' || typeof rawId === 'string' ? rawId : String(rawId);
 };
 
 const extractDownloadArray = (value: unknown): DownloadEntry[] => {
@@ -203,16 +273,48 @@ export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
   const requestPayload = normalizeStartDownloadPayload(payload);
   const response = await request<unknown>({ method: 'POST', url: apiUrl('/download'), data: requestPayload });
-  return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, {
+  const entry = normalizeDownloadEntry(response) ?? undefined;
+  const responseId = extractDownloadId(response);
+
+  if (entry) {
+    const fallback: Partial<DownloadEntry> = {};
+    if (responseId !== undefined) {
+      fallback.id = responseId;
+    }
+    return withDefaultDownload(entry, fallback);
+  }
+
+  const fallback: Partial<DownloadEntry> = {
     filename: '',
     status: 'queued',
     progress: 0
-  });
+  };
+
+  if (responseId !== undefined) {
+    fallback.id = responseId;
+  }
+
+  return withDefaultDownload(undefined, fallback);
 };
 
 export const retryDownload = async (id: string | number): Promise<DownloadEntry> => {
   const response = await request<unknown>({ method: 'POST', url: apiUrl(`/download/${id}/retry`) });
-  return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, { id });
+  const entry = normalizeDownloadEntry(response) ?? undefined;
+  const responseId = extractDownloadId(response);
+
+  if (entry) {
+    const fallback: Partial<DownloadEntry> = {};
+    if (responseId !== undefined) {
+      fallback.id = responseId;
+    }
+    return withDefaultDownload(entry, fallback);
+  }
+
+  const fallback: Partial<DownloadEntry> = { id, status: 'queued', progress: 0 };
+  if (responseId !== undefined) {
+    fallback.id = responseId;
+  }
+  return withDefaultDownload(undefined, fallback);
 };
 
 export const cancelDownload = async (id: string | number): Promise<void> => {
