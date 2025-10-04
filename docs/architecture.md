@@ -50,13 +50,13 @@ Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Plex-
 
 FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registriert. Aktiv sind u. a.:
 
-- [`app/api/spotify.py`](../app/api/spotify.py#L60-L1233): bündelt die Spotify-Domain und stellt `core_router`, `backfill_router`, `free_router` und `free_ingest_router` für Suche, Moduswechsel, Backfill sowie FREE-Import-Flows bereit.
-- [`app/api/routers/spotify.py`](../app/api/routers/spotify.py): dient als Kompatibilitäts-Layer und exportiert die konsolidierten Router unter dem bisherigen Modul-Namespace.
-- `app/routers/soulseek_router.py`: Download- und Upload-Management, Warteschlangen, Status und Artefakt-Endpunkte.
-- `app/routers/search_router.py`: Aggregierte Suche über Spotify und Soulseek.
-- `app/routers/matching_router.py`: Persistiertes Matching (`/matching/spotify-to-soulseek`) inkl. Legacy-404-Checks für Plex.
-- `app/routers/metadata_router.py`: Metadata-Refresh-Routen geben 503 zurück, solange die archivierten Integrationen deaktiviert bleiben.
-- `app/routers/settings_router.py`, `app/routers/system_router.py`, `app/routers/health_router.py`, `app/routers/watchlist_router.py` und `app/routers/activity_router.py` decken Settings, Systemstatus, Health-Checks, Watchlist und Activity-Feed ab.
+- [`app/api/spotify.py`](../app/api/spotify.py): bündelt die Spotify-Domain und stellt `router`, `core_router`, `backfill_router`, `free_router` und `free_ingest_router` für Suche, Moduswechsel, Backfill sowie FREE-Import-Flows bereit.
+- [`app/api/search.py`](../app/api/search.py): aggregiert Suchanfragen über Spotify und Soulseek inklusive Score-Normalisierung und Event-Logging.
+- [`app/api/system.py`](../app/api/system.py): liefert Health-/Readiness-Endpunkte, Secret-Validierung und Worker-Monitoring für das Dashboard.
+- [`app/api/routers/watchlist.py`](../app/api/routers/watchlist.py): verwaltet die Watchlist-API (CRUD auf `/watchlist`).
+- [`app/api/router_registry.py`](../app/api/router_registry.py): führt die Domains zusammen, registriert Soulseek-, Matching-, Metadata-, Settings-, Activity- und Download-Router und kapselt Legacy-Namespace-Weiterleitungen.
+
+Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompatibilitäts-Shims und re-exportieren die eigentlichen Router aus `app/api/…`.
 
 ### Hintergrund-Worker
 
