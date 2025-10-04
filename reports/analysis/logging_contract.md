@@ -7,8 +7,8 @@
 
 ## Aktueller Status
 - Response-Cache nutzt strukturierte `extra`-Payloads (`event=cache.hit/miss/...`).【F:app/services/cache.py†L70-L135】  
-- Search-Router mischt strukturierte Felder mit Text (`logger.info("Smart search completed", extra={...})`).【F:app/routers/search_router.py†L127-L154】  
-- Watchlist-Worker kodiert Felder direkt im Nachrichtenstring (`"event=watchlist.start interval=..."`).【F:app/workers/watchlist_worker.py†L93-L103】  
+- Search-API nutzt den `log_event`-Helper (über `_emit_api_event`) und übergibt strukturierte Felder für `api.request`-Events, während Logger-Errors für Totalausfälle bestehen bleiben.【F:app/api/search.py†L103-L180】
+- Watchlist-Worker emittiert Lifecycle- und Ergebnis-Events über `log_event` statt manuell serialisierter Strings, z. B. für `worker.start`, `worker.stop` und Tick-Ergebnisse.【F:app/workers/watchlist_worker.py†L52-L195】
 → Ergebnis: Uneinheitliche JSON-Keys, erschwerte Aggregation.
 
 ## Vorschlag für kanonische Events
