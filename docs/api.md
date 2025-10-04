@@ -18,7 +18,9 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | Methode | Route | Beschreibung |
 | ------- | ----- | ------------ |
 | `GET` | `/spotify/status` | Verbindungsstatus & gespeicherte Credentials. |
-| `POST` | `/spotify/search` | Suche nach Tracks, Alben, Artists (OAuth erforderlich). |
+| `GET` | `/spotify/search/tracks` | Suche nach Tracks via `query`-Parameter (OAuth erforderlich). |
+| `GET` | `/spotify/search/artists` | Suche nach Artists via `query`-Parameter (OAuth erforderlich). |
+| `GET` | `/spotify/search/albums` | Suche nach Alben via `query`-Parameter (OAuth erforderlich). |
 | `POST` | `/spotify/backfill/run` | Startet den Backfill-Worker für FREE-Ingest-Daten. Antwortet mit `202` und Job-ID. |
 | `GET` | `/spotify/backfill/jobs/{id}` | Liefert Fortschritt/Statistiken eines Backfill-Jobs. |
 | `POST` | `/spotify/import/free` | Parserbasierte Ingest-API (Links/Tracklisten). |
@@ -66,7 +68,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
 | `POST` | `/watchlist` | Fügt Artist zur Watchlist hinzu. |
 | `GET` | `/watchlist` | Listet alle Watchlist-Einträge. |
-| `DELETE` | `/watchlist/{spotify_artist_id}` | Entfernt Eintrag. |
+| `DELETE` | `/watchlist/{id}` | Entfernt Eintrag (`{id}` = interne Watchlist-ID). |
 
 ## Settings & System
 
@@ -74,7 +76,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | ------- | ----- | ------------ |
 | `GET` | `/settings` | Liste gespeicherter Key-Value Settings. |
 | `POST` | `/settings` | Setzt/aktualisiert einen Setting-Wert. |
-| `GET` | `/settings/history/{key}` | Versionsverlauf eines Settings. |
+| `GET` | `/settings/history` | Versionsverlauf der letzten Änderungen. |
 | `GET` | `/status` | Dashboard-Daten (Version, Uptime, Worker-/Connection-Status). |
 | `GET` | `/system/stats` | Systemmetriken (CPU, RAM, Disk). |
 | `GET` | `/integrations` | Liste aktiver Provider inkl. Health-Status. |
