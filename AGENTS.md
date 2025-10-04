@@ -1,124 +1,88 @@
 # AGENTS.md — Neutrale Richtlinien für Agenten und Menschen
 
-Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-Agenten für Software- und Wissensprojekte.
+Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-Agenten für Software- und Wissensprojekte. Dieses Dokument regelt **Schreibrechte, Scope, Qualität, Sicherheitsvorgaben, Fast-Track** und **Arbeitsabläufe**.
+
+---
 
 ## 1. Geltungsbereich und Rollen
-- Agent: Automatisierter Beitragender, deterministisch und auditierbar.
-- Maintainer: Review, Freigabe, Sicherheit.
-- Contributor: Menschliche Beitragende.
+- **Agent**: Automatisierter Beitragender, deterministisch und auditierbar.
+- **Maintainer**: Review, Freigabe, Sicherheit, Releases.
+- **Contributor**: Menschliche Beitragende (intern/extern).
 
 ## 2. Leitprinzipien
-- Klarheit: Explizite Absichten, kleine Schritte, überprüfbare Effekte.
-- Simplicity First: Einfache, gut erklärbare Lösungen statt cleverer Komplexität.
-- Reproduzierbarkeit: Gleicher Input führt zu gleichem Output.
-- Nachvollziehbarkeit: Lückenlose Historie; ADRs für nicht-offensichtliche Entscheidungen.
-- Qualität vor Umfang: DRY, KISS, keine toten Strukturen.
-- Sicherheit: Least-Privilege, keine Secrets im Repo.
-- Kontinuierliche Verbesserung: Dieses Dokument ist lebend.
+- **Klarheit**: Explizite Absichten, kleine Schritte, überprüfbare Effekte.
+- **Simplicity First**: Einfache Lösungen vor cleverer Komplexität.
+- **Reproduzierbarkeit**: Gleicher Input ⇒ gleiches Ergebnis.
+- **Nachvollziehbarkeit**: Lückenlose Historie; ADRs für nicht-offensichtliche Entscheidungen.
+- **Qualität vor Umfang**: DRY, KISS, keine toten Strukturen.
+- **Sicherheit**: Least-Privilege, keine Secrets im Repo.
+- **Kontinuierliche Verbesserung**: Dieses Dokument ist lebend.
 
 ## 3. Arbeitsablauf (End-to-End)
-1. Issue: Problem, Nutzen, Akzeptanzkriterien, Risiken, Done-Definition.
-2. Branching: type/short-topic, z. B. feat/add-login, fix/restore-tests. Ein Branch = ein kohärentes Ziel.
-3. Commit Hygiene:
-   - Conventional Commits: feat, fix, docs, test, chore.
-   - Ein Commit pro fokussierter Änderung. Beschreibe Was, Warum, Scope.
-   - Beispiel: feat/add-auth: implement token-based login flow.
-4. PR-Disziplin:
-   - Klein und fokussiert. Issue referenzieren. TASK_ID im Titel und im Body.
-   - Erkläre was und warum, inkl. Testnachweisen.
-5. Review: Zwei-Augen-Prinzip bei risikoreichen Änderungen.
-6. CI-Quality Gates: Lint, Typen, Tests, Security-Scans müssen grün sein.
-7. Merge: Squash-Merge bevorzugt. CHANGELOG pflegen.
-8. Release: SemVer, Tags, Release-Notes, Rollback-Plan.
-9. Post-merge: Monitoring, Metriken, Incident-Prozess.
+1. **Issue**: Problem, Nutzen, Akzeptanzkriterien, Risiken, Definition of Done.
+2. **Branching**: `type/short-topic` (z. B. `feat/add-login`, `fix/restore-tests`); ein Branch = ein kohärentes Ziel.
+3. **Commit Hygiene**
+   - Conventional Commits: `feat|fix|docs|test|chore`.
+   - Ein Commit pro fokussierter Änderung (Was/Warum/Scope).
+4. **PR-Disziplin**
+   - Klein & fokussiert. Issue referenzieren. **TASK_ID** im Titel/Body.
+   - Erkläre Was/Warum inkl. Testnachweisen.
+5. **Review**: Zwei-Augen-Prinzip bei risiko-/vertragsrelevanten Änderungen.
+6. **CI-Quality Gates**: Lint, Typen, Tests, Security-Scans müssen grün sein.
+7. **Merge**: Squash-Merge bevorzugt. CHANGELOG pflegen.
+8. **Release**: SemVer, Tags, Notes, Rollback-Plan.
+9. **Post-merge**: Monitoring, Metriken, Incident-Prozess.
 
 ## 4. Qualitätsstandards
-- Coding: PEP 8, Type Hints, Docstrings (PEP 257), keine Magic Numbers, klare Fehlerbehandlung.
-- Design-Prinzipien: Konsistente Struktur; Namenskonventionen (snake_case, PascalCase, kebab-case) einhalten; Duplikate vermeiden; Architektur respektieren.
-- Testing Expectations:
-  - Relevante Suites vor jedem Commit/PR ausführen.
-  - Neue Features/Fixes erfordern neue Unit- und Integrationstests.
-  - Coverage nicht senken ohne Plan zur Wiederherstellung.
-- Quality Gates & Tools:
-  - Python: ruff oder flake8, black, isort, mypy.
-  - JS/TS (falls vorhanden): eslint, prettier.
-  - Lint-Warnungen beheben, toten Code entfernen.
+- **Coding**: PEP 8, Type Hints, Docstrings (PEP 257), keine Magic Numbers, klare Fehlerbehandlung.
+- **Design**: Konsistente Struktur; Namenskonventionen (snake_case, PascalCase, kebab-case); Duplikate vermeiden; Architektur respektieren.
+- **Testing**
+  - Relevante Suites vor PR ausführen.
+  - Features/Fixes ⇒ neue Unit- & Integrationstests.
+  - Coverage nicht senken ohne Plan.
+- **Quality Tools**
+  - Python: `ruff`, `black`, `isort`, `mypy`, `bandit`.
+  - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
+- Lint-Warnungen beheben, toten Code entfernen.
 
-## 5. Prompt- und Agent-Spezifika
-- Prompt-Design: Ziel, Eingaben, Ausgaben, Constraints, Abbruchkriterien; Idempotenz; Trennung Instruktion/Daten.
-- Konfiguration: Prompts versionieren unter prompts/<name>@vX.Y.Z.md; Parameter und Limits (Timeout, Retries, Rate-Limits) deklarieren.
-- Werkzeugnutzung: Nur freigegebene Tools; Minimalrechte; auditierbare Aufrufe; Schreibzugriff auf alle Repository-Pfade; Schutzregeln siehe §19 Scope-Guard und §15 Prohibited.
-- Beweise/Logs: Eingaben-Hash, Artefakt-Hashes, Laufzeit, Retries, Exit-Status; keine personenbezogenen Daten.
-- AI-spezifische Verantwortlichkeiten:
-  - AI-generierter Code ist vollständig, ausführbar, mit bestandenen Tests.
-  - Human Maintainer Review ist vor Merge obligatorisch.
+## 5. Prompt- & Agent-Spezifika
+- **Prompt-Design**: Ziel, Eingaben, Ausgaben, Constraints, Abbruchkriterien; Idempotenz; Trennung Instruktion/Daten.
+- **Konfiguration**: Prompts versionieren unter `prompts/<name>@vX.Y.Z.md`; Parameter & Limits (Timeout, Retries, Rate-Limits) deklarieren.
+- **Werkzeugnutzung**: Nur freigegebene Tools; Minimalrechte; auditierbare Aufrufe.
+- **Beweise/Logs**: Eingaben-Hash, Artefakt-Hashes, Laufzeit, Retries, Exit-Status; keine personenbezogenen Daten.
+- **AI-Verantwortung**
+  - AI-Code ist vollständig, ausführbar, **mit bestandenen Tests**.
+  - Human-Review vor Merge obligatorisch.
 
-### 5.a Execution Modes & Precedence
+### 5.1 Codex **Write Mode** – Vollzugriff (**Default**)
+**Modus**: `RUN_MODE=write` (Standard).  
+**Rechte**:
+- **Schreibzugriff auf alle Pfade** im Repository (Erstellen/Ändern/Löschen/Reorganisation).
+- Branch/PR jederzeit erlaubt; Direkt-Push auf `main` nur falls Repo-Policy es zulässt (empfohlen: Branch + PR).
+- Ausführung üblicher Build-/Test-/Lint-Befehle erlaubt.
 
-- **Execution Modes:**
-  - `implement` (Default)
-  - `qa`
-  - `dry-run`
-- **Präzedenz (höchste Regel gewinnt):**
-  1. **Task-Header:** `FAST-TRACK: true` ⇒ **Modus = implement (erzwingen)**.
-  2. **Task-Header:** `EXECUTION_MODE: implement|qa|dry-run`.
-  3. **Repo-Default** (siehe `.codex/permissions.yaml`): `implement`.
-  4. **Externe Sitzungsmarker** (Portal/Runner): **rein hinweisend**, ohne verbindliche Schreibsperre.
-- **Hinweis auf Plattform-Sperren:** Wenn Schreiboperationen technisch blockiert sind, **Blockade klar melden** ("platform write lock") und die Arbeit **nicht beenden**: Erstelle stattdessen **Patch-Dateien** unter `patches/` und führe Code-Änderungen als Diffs fort.
+**Pflichten & Grenzen**:
+- **Keine Secrets** in Code/Repo (§6).
+- **§15 Prohibited** gilt (z. B. keine Lizenz-/BACKUP-Dateien verändern).
+- **§19 Scope/Clarification** beachten.
+- **§14 Completion Gates** sind Merge-Gates (Schreiben erlaubt, Merge nur grün/mit Freigabe).
 
-## 5.1 Codex Write Mode – Vollzugriff (Default)
-**Modus:** Implement (Standard)
+### 5.2 Codex **QA Read-only Mode** (opt-in)
+**Nur aktiv**, wenn Task/PR **explizit** `RUN_MODE=qa_readonly` setzt.  
+Ohne explizites Flag gilt **Write Mode**.
 
-**Rechteumfang:**
-- Schreiben, Erstellen und Löschen in **allen Pfaden** des Repositories (Reorganisation inklusive), solange §15 (Prohibited) und §19 (Scope-Guard) respektiert werden.
-- Branch- und PR-Erstellung jederzeit erlaubt; Direkt-Push auf `main` nur, wenn Repo-Policy es zulässt (empfohlen: Branch + PR).
-- Ausführung üblicher Build-/Test-/Lint-/Tool-Befehle ist erlaubt.
-
-**Pflichten & Grenzen:**
-- **Keine Secrets** oder Zugangsdaten in den Code/Repo schreiben (§6).
-- **Prohibited** (§15) bleibt verbindlich (keine `BACKUP`-/Lizenz-Dateien anfassen).
-- **Scope-/Clarification-Regeln** (§19) anwenden: Bei Unklarheit Draft-PR mit „Clarification Request“.
-- **Commit-/PR-Standards** (§18) einhalten (Conventional Commits, TASK_ID, Testnachweise; Vorlage siehe `docs/task-template.md`).
-- Schreiben ist **nicht** CI-gekoppelt; Merge bleibt durch CI-Gates (§14) blockiert oder erfordert Maintainer-Freigabe.
-
-**Empfohlener Flow:**
-- Feature-Branch (`feat/<topic>`), kleine Commits, PR mit Task-Referenz und Testnachweisen.
-- Keine direkten API-/DB-Breaking-Changes ohne dokumentierte Migration (§7) und Maintainer-Bestätigung.
-
-## 5.2 FAST-TRACK-Policy (Auto-Erkennung)
-
-- **Zweck:** Bestimmte Aufgabenpräfixe dürfen unabhängig von „Read-only QA“-Sitzungen in den **Write Mode** wechseln. CI-/Review-Gates bleiben **Merge-blockierend**, nicht **Write-blockierend**.
-- **Auto-Aktivierung (Regex auf `TASK_ID`):**
-  - `^CODX-ORCH-`   → FAST-TRACK: true  
-  - `^CODX-P1-SPOT-` → FAST-TRACK: true  
-  - `^CODX-P1-GW-`   → FAST-TRACK: true  
-- **Wirkung bei FAST-TRACK: true**
-  - Read-only-Session-Flags werden ignoriert; Codex darf Branches anlegen, Dateien ändern/löschen, Commits/PRs erstellen, Builds/Tests/Lints ausführen.
-  - **Unverändert verpflichtend:** §14 Completion Gates (pytest/mypy/ruff/black), §15 Prohibited, §19 Scope-Guard, §18 Commit-/PR-Standards.
-  - Optionaler Header `FAST-TRACK: true` im Task ist weiterhin möglich, aber nicht erforderlich, wenn das Präfix matcht.
-- **Sicherheitsgeländer:** Keine Secrets, keine `BACKUP`-/Lizenzdateien, keine Public-API-/Schema-Breaker ohne explizite Freigabe + Migration.
-- **Audit:** PR-Body nennt die Auto-FAST-TRACK-Auslösung (z. B. „Auto via Präfix CODX-P1-GW-*“) und enthält Testnachweise.
-
-## 5.3 SPLIT_ALLOWED (Task-Splitting)
-**Zweck:** Erlaubt Subtasks oder mehrere PRs zu einem Task, um große Umfänge in kleine, überprüfbare Einheiten zu schneiden.
-
-**Regeln:**
-- Jeder Subtask erfüllt eigenständig die DoD, Tests und Dokumentationsanforderungen.
-- PR-Benennung: `feat(<scope>): <kurz> [<TASK_ID>-A]`, `...-B`, etc. (Konvention gemäß `docs/task-template.md`).
-- Haupt-PR oder Follow-up-Task referenziert alle Sub-PRs und fasst den Gesamtstatus zusammen.
-- Scope- und Prohibited-Regeln gelten unverändert; Subtasks dürfen sie nicht umgehen.
-- FAST-TRACK (Auto) gilt je Subtask gemäß Task-Header.
+---
 
 ## 6. Daten, Geheimnisse, Compliance
-- Secrets: Niemals im Code oder Commit; Secret-Manager nutzen; Rotation dokumentieren.
-- Security-Scanner: Python bandit; JS/TS npm audit oder Äquivalent. Findings adressieren.
-- Datenschutz: Datenminimierung, Zweckbindung, Löschkonzepte.
-- Lizenzen und Header: Drittcode nur mit kompatibler Lizenz. Bis zur Lizenzwahl: Datei-Header "Copyright <year> Contributors".
+- **Secrets**: Niemals im Code/Commit; Secret-Manager nutzen; Rotation dokumentieren.
+- **Security-Scanner**: Python `bandit`; JS/TS `npm audit` o. Ä.; Findings adressieren.
+- **Datenschutz**: Datenminimierung, Zweckbindung, Löschkonzepte.
+- **Lizenzen**: Drittcode nur mit kompatibler Lizenz; bis zur Wahl: Datei-Header „Copyright <year> Contributors“.
 
 ## 7. Release, Rollback, Migration
-- SemVer: MAJOR inkompatibel, MINOR Feature, PATCH Fix.
-- Migrationen: Reversibel, Dry-Run, Backups.
-- Rollback: Definierter Trigger, RTO/RPO, automatisiertes Zurücksetzen.
+- **SemVer**: MAJOR inkompatibel, MINOR Feature, PATCH Fix.
+- **Migrationen**: Reversibel, Dry-Run, Backups.
+- **Rollback**: Trigger, RTO/RPO, automatisiertes Zurücksetzen.
 
 ## 8. Incident-Prozess
 1. Erkennen: Monitoring, Alerts, SLO/SLI.
@@ -127,201 +91,156 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 4. Postmortem: Ursachen, Maßnahmen, Fristen.
 
 ## 9. Checklisten
-PR-Checkliste:
-- [ ] Issue verlinkt und Beschreibung vollständig
-- [ ] Kleine, fokussierte Änderung
-- [ ] TASK_ID im Titel und PR-Body (verweist auf docs/task-template.md)
-- [ ] AGENTS.md gelesen & Scope-Guard bestätigt
-- [ ] Keine Secrets, `BACKUP`- oder Lizenz-Dateien verändert
-- [ ] Tests/Linting grün (`pytest`, `mypy`, `ruff`, `black --check`) oder Ausnahme begründet
-- [ ] Security-Scan ohne Blocker
-- [ ] OpenAPI/Snapshots aktualisiert (falls API betroffen)
-- [ ] Doku-/ENV-Drift behoben (README, CHANGELOG, ADRs)
-- [ ] Rollback-Plan vorhanden
-- [ ] Testnachweise dokumentiert (Logs, Screens, Coverage)
 
-Agent-Ausführung:
-- [ ] Eingaben validiert, Schema geprüft
-- [ ] Schreibpfade erlaubt
-- [ ] Rate-Limit und Retry-Policy gesetzt
-- [ ] Logs ohne personenbezogene Daten
-- [ ] Artefakte gehasht und abgelegt
+### PR-Checkliste
+- [ ] Issue verlinkt, Beschreibung vollständig.
+- [ ] Kleine, fokussierte Änderung.
+- [ ] **TASK_ID** im Titel & Body (Template genutzt).
+- [ ] **AGENTS.md** gelesen & Scope-Guard bestätigt.
+- [ ] Keine Secrets, keine Lizenz-/`BACKUP`-Dateien verändert.
+- [ ] Tests/Lint grün (`pytest`, `mypy`, `ruff`, `black --check`) oder Ausnahme begründet.
+- [ ] Security-Scan ohne Blocker.
+- [ ] OpenAPI/Snapshots aktualisiert (falls API betroffen).
+- [ ] Doku-/ENV-Drift behoben (README, CHANGELOG, ADRs).
+- [ ] Rollback-Plan vorhanden.
+- [ ] Testnachweise dokumentiert (Logs, Screens, Coverage).
+- [ ] **Change-Impact-Scan** (❯ §20) durchgeführt.
+
+### Agent-Ausführung
+- [ ] Eingaben validiert, Schema geprüft.
+- [ ] Passender **SCOPE_MODE** gewählt (§19.1).
+- [ ] Retry/Rate-Limits gesetzt.
+- [ ] Logs ohne personenbezogene Daten.
+- [ ] Artefakte gehasht/abgelegt.
 
 ## 10. Vorlagen
-Issue:
-- Titel: kurz, präzise
-- Beschreibung: Problem, Nutzen
-- Akzeptanzkriterien: messbar
-- Risiken/Annahmen: Stichpunkte
-- Fertig wenn: Kriterien
-
-PR-Beschreibung:
-- Änderung: was, warum
-- Scope: module/paket
-- Breaking changes: ja/nein und welche
-- Tests: neu/angepasst, Abdeckung, Testnachweise
-- Security: Scan-Ergebnis, Secrets
-- Rollback: Strategie
-- TASK_ID: z. B. TASK-123 (siehe docs/task-template.md)
-
-ADR (Kurzform):
-- Titel, Datum, Kontext, Entscheidung, Alternativen, Folgen
+- **Issue**: Titel; Beschreibung (Problem/Nutzen); Akzeptanzkriterien; Risiken/Annahmen; DoD.
+- **PR**: Was/Warum; Dateiänderungen (Neu/Geändert/Gelöscht); Migrationshinweise; Tests; Risiken/Limitierungen; Verweis auf AGENTS.md/Template; **ToDo-Update** Nachweis.
+- **ADR (Kurz)**: Titel, Datum, Kontext, Entscheidung, Alternativen, Folgen.
 
 ## 11. Durchsetzung
-- CI-Gates erzwingen Lint, Typen, Tests, Security-Scans.
-- Schreibrechte von Codex sind nicht CI-gekoppelt; CI bleibt ausschließlich Merge-Gate. Auto-FAST-TRACK-Tasks (`CODX-ORCH-*`) folgen derselben Regel; PR-/Branch-Flow empfohlen.
-- Pre-Commit Hooks empfohlen: ruff, black, isort.
-- PR wird geblockt, wenn TASK_ID oder Testnachweise fehlen.
-- Merge nur bei erfüllten Checklisten.
-- Wiederholte Verstöße führen zu Review-Pflicht und ggf. Rechtemanagement.
+- CI erzwingt Lint, Typen, Tests, Security-Scans.
+- **Schreibrechte sind nicht CI-gekoppelt**; Merge nur bei erfüllten Gates/Explizit-Freigabe.
+- Pre-Commit Hooks empfohlen: `ruff`, `black`, `isort`.
+- PR blockiert, wenn **TASK_ID** oder Testnachweise fehlen.
 
 ## 12. Task-Template-Pflicht
-Alle Aufgaben **müssen** auf Basis von [`docs/task-template.md`](docs/task-template.md) erstellt, umgesetzt und reviewed werden.
-
-- Issues nutzen das Markdown-Template [`Task (Codex-ready)`](.github/ISSUE_TEMPLATE/task.md) und übernehmen FAST-TRACK- sowie SPLIT_ALLOWED-Flags aus der Vorlage unverändert.
-- Abweichungen sind nur mit ausdrücklicher Maintainer-Freigabe zulässig und müssen im PR begründet werden.
-- PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) nachvollziehbar aus.
-- TASK_ID bleibt im Titel und Body verpflichtend und verweist auf das ausgefüllte Template.
+Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
+- Abweichungen nur mit Maintainer-Freigabe (im PR begründen).
+- PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) aus.
+- **TASK_ID** bleibt im Titel/Body und verweist auf Template.
 
 ## 13. ToDo-Pflege (verbindlich)
 Nach Abschluss **jedes Tasks** ist `ToDo.md` zu pflegen.
+- Erledigte Punkte abhaken/entfernen; Folgeaufgaben dokumentieren.
+- PR-Beschreibung enthält **Nachweis des ToDo-Updates** (Link/Hash/Screenshot).
 
-- Erledigte Punkte entfernen oder abhaken, Folgeaufgaben dokumentieren.
-- PR-Beschreibung enthält einen expliziten **Nachweis des ToDo-Updates** (z. B. Link/Commit-Hash, Screenshot des Boards).
-- Ohne ToDo-Nachweis erfolgt kein Merge.
-
-## 14. Completion Gates (Pflicht)
-Vor dem Merge müssen alle relevanten Checks erfolgreich durchlaufen. Gates prüfen Qualität; fehlgeschlagene Gates dürfen das Schreiben nicht verhindern, wohl aber den Merge.
-
-- Backend: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
-- Frontend (falls vorhanden): `npm test`, `tsc --noEmit`.
-- OpenAPI-Gate: Änderungen am Schema geprüft; API-Verträge (Statuscodes, Strukturen) eingehalten.
-- Coverage-Ziel: ≥ 85 % in geänderten Modulen oder begründete Ausnahme im PR.
+## 14. Completion Gates (Pflicht, Merge-Gate)
+- **Backend**: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
+- **Frontend**: `npm test`, `tsc --noEmit`.
+- **OpenAPI-Gate**: Schema/Verträge (Statuscodes/Strukturen) geprüft.
+- **Coverage-Ziel**: ≥ 85 % in geänderten Modulen oder begründete Ausnahme.
 
 ## 15. Prohibited
 - Keine `BACKUP`-Dateien anlegen oder verändern.
-- Keine Lizenzdateien ändern oder hinzufügen ohne Maintainer-Freigabe.
-- Keine Secrets oder Access-Tokens im Repo ablegen (nur über ENV/Secret-Store).
-- Keine stillen Breaking Changes; nur mit Major-Bump und dokumentierter Migration zulässig.
+- Keine Lizenzdateien ändern/hinzufügen ohne Maintainer-Freigabe.
+- Keine Secrets oder Access-Tokens ins Repo (nur ENV/Secret-Store).
+- Keine stillen Breaking Changes; nur mit Major-Bump + Migration.
 
 ## 16. Frontend-Standards
-- `docs/ui-design-guidelines.md` ist verbindlich (Farben, Typografie, Spacing, Komponenten, Interaktionen).
-- TypeScript strikt: `tsc --noEmit` muss erfolgreich sein; API-Clients defensiv implementieren.
-- UI-Änderungen nutzen die vorgegebenen Komponentenbibliotheken (z. B. shadcn/ui, Radix) und etablierten Patterns (Tabs, Cards, Toasts).
+- `docs/ui-design-guidelines.md` verbindlich (Farben, Typografie, Spacing, Komponenten, Interaktionen).
+- TypeScript strikt: `tsc --noEmit` grün; API-Clients defensiv.
+- UI nutzt vorgegebene Libs/Patterns (z. B. shadcn/ui, Radix).
 
 ## 17. Backend-Standards
 - Public-API-Verträge dokumentieren; Fehlercodes: `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMITED`, `DEPENDENCY_ERROR`, `INTERNAL_ERROR`.
-- Idempotenz und Nebenläufigkeit sicherstellen (Queues, Locks, Backoff-Strategien).
-- Logging strukturiert mit `event`, `entity_id`, `status`, `duration_ms`; Fehlermeldungen aussagekräftig halten.
+- Idempotenz & Nebenläufigkeit sicherstellen (Queues, Locks, Backoff).
+- Strukturierte Logs: `event`, `component`, `status`, `duration_ms`, `entity_id`, `meta`.
 
 ## 18. Review & PR
-- Commits folgen Conventional-Commit-Standards (feat/fix/docs/test/chore).
-- Nutze die strukturierte PR-Vorlage [`PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md); alle Felder sind entsprechend der Deliverables aus `docs/task-template.md` (inkl. DoD/Checkliste) auszufüllen.
-- PR-Beschreibung MUSS enthalten: Was/Warum, Dateiänderungen (Neu/Geändert/Gelöscht), Migrationshinweise, Testnachweise (Logs/Screens), Risiken/Limitierungen, Verweis auf AGENTS.md/Template-Konformität sowie den **Nachweis des ToDo-Updates**.
-- Review achtet auf vollständige Template-Erfüllung und Einhaltung aller Completion Gates.
+- Commits nach Conventional-Commit (optional Scope).
+- PR MUSS enthalten: Was/Warum, geänderte Dateien (Neu/Geändert/Gelöscht), Migration, Tests/Abdeckung, Risiken/Limitierungen, Verweis auf AGENTS.md/Template, **ToDo-Nachweis**.
 
-## 19. Initiative-, Scope- und Clarification-Regeln <a id="initiative-scope-clarification"></a>
+## 19. Initiative-, Scope- & Clarification-Regeln
 
-**Quick Reference:** Prüfe vor jeder Änderung `Zulässige Initiative` → `Scope-Guard` → `Clarification-Trigger` → `Commit-/PR-Standards` → `CI-/OpenAPI-Gates` → `Beispiele (Do/Don't)`.
+### 19.1 **SCOPE_MODE (binär)**
+Wähle **genau einen** Scope pro PR/Task: **`backend`** oder **`frontend`**.  
+**Default:** `backend`, wenn im Task nicht gesetzt.
 
-### Zulässige Initiative (DRIFT-FIX) <a id="zulassige-initiative"></a>
+**SCOPE_MODE = backend**  
+_Fokus-Pfade (nicht exklusiv):_
+- `app/**` (core, api, services, integrations, orchestrator, workers, middleware, schemas, utils, migrations)
+- `tests/**`, `reports/**`, `docs/**`
+- `.github/workflows/**` (Backend-CI)
+- Build/Infra: `pyproject.toml`, `requirements*.txt`, `Makefile`, `Dockerfile*`, `ruff.toml`, `mypy.ini`
 
-**Darf ohne Rückfrage (`MAY`, Commits optional mit `[DRIFT-FIX]` taggen):**
-- Defekte Tests, Lints oder Typprüfungen reparieren, solange Ursache eindeutig ist und **keine** Public-API beeinflusst wird.
-- Offensichtliche Lint-/Type-/Import-Fehler oder fehlerhafte Pfade beheben; tote Importe entfernen.
-- Doku-Drift in README/ENV/OpenAPI-Beispielen korrigieren, wenn die Codequelle eindeutig ist.
-- Snapshots/OpenAPI regenerieren, sofern der veröffentlichte Vertrag unverändert bleibt.
-- Vorhandene Migrationen verdrahten oder ausführen, **wenn** die Aufgabe es explizit verlangt.
+**SCOPE_MODE = frontend**  
+_Fokus-Pfade (nicht exklusiv):_
+- `frontend/**`, `tests/frontend/**`, `public/**`, `static/**`
+- `.github/workflows/**` (Frontend-CI)
+- `reports/**`, `docs/**`
+- Tooling: `package*.json`, `pnpm-lock.yaml|yarn.lock`, `tsconfig*.json`, `.eslintrc*`, `.prettier*`, `vite|next|webpack|rollup|postcss|tailwind`-Configs
 
-**Mini-Checkliste (nur wenn alle Kästchen `true` → Initiative zulässig):**
-- [ ] Änderung ist rein mechanisch (keine neue Business-Logik).
-- [ ] Öffentliche APIs, DB-Schemas und Konfiguration bleiben identisch.
-- [ ] Quelle der Wahrheit ist eindeutig (kein Ratespiel, keine Divergenz zu Docs/Code).
+> Änderungen **außerhalb** der Fokus-Pfade sind zulässig, wenn sie für Build, Tests, Doku oder einen kohärenten Refactor **zwingend erforderlich** sind. §15 gilt immer.
 
-**Darf nur mit Task-Update oder Freigabe nach Clarification:**
-- Schema-/API-Änderungen, neue Endpunkte oder zusätzliche Felder.
-- Migrationslogik, die Daten manipuliert oder Verlust riskieren könnte.
-- UI-Flows, Feature-Flags oder Konfiguration mit Nutzerwirkung.
-- Änderungen mit potenziellem Performance- oder Semantik-Einfluss.
+### 19.2 Zulässige Initiative (DRIFT-FIX)
+**Ohne Rückfrage (MAY; optional `[DRIFT-FIX]`)**
+- Defekte Tests/Lints/Typen reparieren, sofern **keine** Public-API betroffen.
+- Offensichtliche Import-/Pfad-Fehler, tote Importe entfernen.
+- Doku-Drift (README/ENV/OpenAPI-Beispiele) korrigieren, wenn Quelle eindeutig.
+- Snapshots/OpenAPI **ohne Vertragsänderung** regenerieren.
 
-### Scope-Guard <a id="scope-guard"></a>
+**Nur mit Task-Update/Freigabe**
+- Schema-/API-Änderungen, neue Endpunkte/Felder.
+- Migrationslogik mit Datenmanipulation/-verlust-Risiko.
+- UI-Flows, Feature-Flags, Konfiguration mit Nutzerwirkung.
+- Änderungen mit Performance-/Semantik-Einfluss.
 
-**MUST NOT:**
-- `BACKUP`-, `LICENSE`- oder andere geschützte Dateien anfassen.
-- Secrets, Tokens oder personenbezogene Daten ins Repository schreiben.
-- Public-APIs brechen, DB-Schemata ohne Migration ändern oder Datenverlust riskieren.
+### 19.3 Clarification-Trigger (zwingend nachfragen)
+- Widerspruch zwischen Task und Code/Dokumentation/Guards.
+- Unklare Zielmetrik/ENV/Secrets.
+- Änderung berührt Public-API/DB/Migrationen.
+- Tests verlangen undokumentiertes Verhalten.
+- Externe Abhängigkeit unspezifiziert.
 
-**MUST:**
-- Migrationen idempotent halten; Rollback-Pfade dokumentieren.
-- Feature-Flags mit sicheren Defaults versehen (failsafe/off), wenn sie Teil des Tasks sind.
-- OpenAPI-Spezifikation, Tests und Dokumentation synchron halten.
+**Prozess**: Draft-PR „Clarification Request: <TASK_ID>“ → Beobachtung, Blocker (Logs/Diffs), Minimalvorschlag (reversibel), Impact → Label `needs-owner-decision`.
 
-**Scope-Checkliste (vor jedem Commit prüfen):**
-- [ ] Geänderte Pfade liegen vollständig innerhalb des Task-Scopes.
-- [ ] Kein neuer oder geänderter Contract ohne explizite Freigabe.
-- [ ] Secrets/geschützte Dateien unverändert.
+## 20. **Change-Impact-Scan & Auto-Repair (Pflicht)**
+Bei Änderungen im gewählten **SCOPE_MODE**:
+1. **Suche & Korrektur** von offensichtlichen Fehlern (Build-Fehler, Typfehler, kaputte Imports).
+2. **Ref-Update**: Alle Aufrufer/Exports anpassen (Repo-weiter Grep).
+3. **Backcompat**: Abgelehnte/verschobene APIs mit Deprecation-Hinweis oder Adapter.
+4. **Tests**: Betroffene Tests aktualisieren/ergänzen; Snapshots/Fixtures synchronisieren.
+5. **Cross-Module-Verträglichkeit**: Sicherstellen, dass angrenzende Bausteine weiterhin funktionieren (z. B. `api` ↔ `services` ↔ `integrations`).
+6. **Docs/ENV**: README/Docs/ENV synchron halten.
 
-### Clarification-Trigger (zwingend nachfragen) <a id="clarification-trigger"></a>
+## 21. **Auto-Task-Splitting (erlaubt)**
+- Agent darf große Aufgaben in **Subtasks**/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).
+- Jeder Subtask enthält Ziel, Scope, DoD, Tests, Rollback.
+- Subtasks sollen **inkrementell** merge-bar sein.
 
-Starte eine Rückfrage, wenn **mindestens einer** der Punkte zutrifft:
-- Task widerspricht bestehendem Code, Dokumentation oder den Scope-Guards.
-- Zielmetrik, gewünschtes Verhalten oder benötigte ENV/Secrets sind unklar oder fehlen.
-- Die Umsetzung würde Public-API, DB-Schema oder migrationsrelevante Daten berühren.
-- Tests verlangen Verhalten, das in keinem Vertrag dokumentiert ist.
-- Externe Abhängigkeit oder Integrationsdetail (z. B. slskd/Spotify) ist nicht spezifiziert.
+## 22. **FAST-TRACK**
+- **Automatisch `FAST-TRACK: true`**, wenn **TASK_ID** eines der Präfixe matcht:
+  - `CODX-ORCH-*`
+  - `CODX-P1-GW-*`
+  - `CODX-P1-SPOT-*`
+- Wirkung:
+  - Agent darf **ohne weitere Rückfrage** implementieren, sofern §15/§19 eingehalten sind und Public-Contracts ungebrochen bleiben.
+  - Merge-Gates (§14) bleiben bestehen (Fast-Track beschleunigt Abstimmungen, **hebt Qualitätsschranken nicht auf**).
+- Manuelles Override im Task erlaubt: `FAST-TRACK: false`.
 
-**Hinweis Auto-FAST-TRACK (`CODX-ORCH-*`):** Minimal-invasive, reversible Änderungen dürfen ohne Rückfrage erfolgen. Bei potentiellen Contract-, Schema- oder Sicherheitsänderungen ist weiterhin eine Draft-PR als „Clarification Request“ zu eröffnen.
-
-**Clarification-Prozess:**
-1. PR in Draft setzen und Titel `Clarification Request: <TASK_ID>` nutzen.
-2. Inhalt strukturieren: **Beobachtung**, **Blocker (Logs/Diffs)**, **Minimalvorschlag** (reversibel), **Impact**.
-3. Label `needs-owner-decision` setzen und auf Antwort warten. Ohne Freigabe **keine** Abweichung umsetzen.
-
-### Commit-/PR-Standards <a id="commit-pr-standards"></a>
-
-**Commits:**
-- Conventional Commits nutzen (`feat:`, `fix:`, `docs:`, `test:`, `chore:`) optional mit Scope (`feat(api): …`).
-- TASK-ID anfügen (`… [CODX-123]`), `[DRIFT-FIX]` bei reinem Drift-Fix optional ergänzen.
-- Ein Commit = ein fokussiertes Thema mit kurzer „Was/Warum“-Beschreibung.
-
-**PR-Beschreibung (Pflichtinhalte):**
-- Kurzfassung (Was/Warum) und Risiko/Limitierungen.
-- Änderungen an Dateien (Neu/Geändert/Gelöscht) als Liste.
-- Testnachweise mit Befehlen/Logs/Screenshots.
-- Verweis auf AGENTS.md-Konformität und ggf. OpenAPI-/ENV-Updates.
-- Nicht triviale Architekturentscheidungen erfordern ein ADR (`docs/architecture/adr/`) inkl. Verweis in der PR.
-
-**PR-Checkliste (muss vollständig im PR abgehakt sein):**
-- [ ] AGENTS.md gelesen und Scope-Guard geprüft.
-- [ ] Architekturübersicht (`docs/architecture/overview.md`) gelesen und bei Änderungen an Flows/Contracts/Flags aktualisiert.
-- [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert.
-- [ ] Tests grün (`pytest`, `mypy`, `ruff`, `black --check`) bzw. begründete Ausnahme dokumentiert.
-- [ ] OpenAPI/Snapshots aktualisiert, falls API betroffen.
-- [ ] Doku-/ENV-Drift geprüft und behoben.
-
-### CI-/OpenAPI-Gates <a id="ci-openapi-gates"></a>
-
-- Architektur-Dokumentation (`docs/architecture/overview.md`, `docs/architecture/contracts.md`, `docs/architecture/diagrams.md`) muss Flows, Contracts und Feature-Flags widerspruchsfrei abbilden.
-**MUST PASS (lokal oder CI):**
-- `pytest`
-- `mypy`
-- `ruff`
-- `black --check`
-
-**Zusätzliche Gates (nur bei Relevanz, dürfen nicht rot sein):**
-- OpenAPI-Snapshot (`/openapi.json`) aktualisieren, wenn Verträge sich ändern.
-- Beispiel-Responses und Doku synchronisieren (README/Docs, API-Referenzen).
-- `scope_guard`, `api_guard`, `db_guard`, `deps_guard` dürfen keine Blocker melden.
-
-### Beispiele (Do/Don't) <a id="initiative-examples"></a>
+## 23. Beispiele (Do/Don't)
 
 | Do | Don't |
 | --- | --- |
-| ENV-Variable in README ergänzen, wenn `app/config.py` die Quelle klar vorgibt. | Schema-Feld „klein“ erweitern ohne Migration oder Task-Freigabe. |
-| Fehlenden Test importieren und Pfad korrigieren, weil `pytest` bricht. | Tests löschen oder abschwächen, um CI grün zu bekommen. |
-| OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route implementieren, weil sie „praktisch wäre“, ohne Scope-Anpassung. |
-| Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern, ohne dass der Task dies verlangt. |
+| ENV-Variable in README ergänzen, wenn `app/config.py` Quelle klar vorgibt. | Schema-Feld „klein“ erweitern ohne Migration/Task-Freigabe. |
+| Fehlenden Test importieren/Pfad korrigieren, weil `pytest` bricht. | Tests löschen/abschächen, um CI grün zu bekommen. |
+| OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route „weil praktisch“ ohne Scope/Task. |
+| Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern, ohne dass der Task es verlangt. |
 
-### Durchsetzung & Glossar
-- PRs, die gegen „MUST NOT“ verstoßen oder Gates reißen, werden nicht gemerged; Wiederholung erfordert Policy-Update.
-- **DRIFT-FIX:** kleinste mechanische Korrekturen, die Build/Lint/Tests wiederherstellen, ohne Public Contracts zu ändern.
+## 24. Durchsetzung & Glossar
+- PRs, die gegen „MUST NOT“ verstoßen oder Gates reißen, werden nicht gemerged; Wiederholung ⇒ Policy-Update/Restriktion.
+- **DRIFT-FIX**: kleinste mechanische Korrekturen zur Wiederherstellung von Build/Lint/Tests, ohne Public-Contracts zu ändern.
+
+---
+```0
