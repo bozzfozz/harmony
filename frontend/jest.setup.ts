@@ -1,4 +1,3 @@
-import '@testing-library/jest-dom';
 import * as React from 'react';
 
 jest.mock('@radix-ui/react-tooltip', () => {
@@ -61,12 +60,3 @@ const importMetaEnv = {
   ...importMetaEnv
 };
 
-if (typeof (globalThis as typeof globalThis & { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
-  class ResizeObserverStub {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-
-  (globalThis as typeof globalThis & { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
-}

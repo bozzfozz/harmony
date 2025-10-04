@@ -2,7 +2,11 @@ const config = {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'jsdom',
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  setupFilesAfterEnv: [
+    '<rootDir>/src/test/setup-dom-polyfills.ts',
+    '<rootDir>/src/test/setup-testing-library.ts',
+    '<rootDir>/jest.setup.ts'
+  ],
   globals: {
     'ts-jest': {
       useESM: true,
