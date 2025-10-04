@@ -3,41 +3,26 @@ import userEvent from '@testing-library/user-event';
 import LibraryDownloads from '../pages/Library/LibraryDownloads';
 import { renderWithProviders } from '../test-utils';
 import { ApiError } from '../api/client';
-import {
-  exportDownloads,
-  getDownloads,
-  startDownload,
-  updateDownloadPriority,
-  useDownloadStats
-} from '../api/services/downloads';
+import { exportDownloads, getDownloads, startDownload, updateDownloadPriority } from '../api/services/downloads';
 
 jest.mock('../api/services/downloads', () => ({
   ...jest.requireActual('../api/services/downloads'),
   getDownloads: jest.fn(),
   startDownload: jest.fn(),
   updateDownloadPriority: jest.fn(),
-  exportDownloads: jest.fn(),
-  useDownloadStats: jest.fn()
+  exportDownloads: jest.fn()
 }));
 
 const mockedGetDownloads = getDownloads as jest.MockedFunction<typeof getDownloads>;
 const mockedStartDownload = startDownload as jest.MockedFunction<typeof startDownload>;
 const mockedUpdatePriority = updateDownloadPriority as jest.MockedFunction<typeof updateDownloadPriority>;
 const mockedExportDownloads = exportDownloads as jest.MockedFunction<typeof exportDownloads>;
-const mockedUseDownloadStats = useDownloadStats as jest.MockedFunction<typeof useDownloadStats>;
 
 const toastMock = jest.fn();
 
 describe('LibraryDownloads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedUseDownloadStats.mockImplementation(() => ({
-      data: { failed: 0 },
-      isLoading: false,
-      error: undefined,
-      isError: false,
-      refetch: jest.fn()
-    }));
   });
 
   it('filters downloads by status', async () => {
@@ -69,7 +54,7 @@ describe('LibraryDownloads', () => {
     await userEvent.selectOptions(screen.getByLabelText('Status'), ['failed']);
 
     await waitFor(() =>
-      expect(mockedGetDownloads).toHaveBeenLastCalledWith({ includeAll: false, status: 'failed' })
+      expect(mockedGetDownloads).toHaveBeenLastCalledWith({ includeAll: true, status: 'failed' })
     );
     expect(await screen.findByText('Failed File.mp3')).toBeInTheDocument();
   });
