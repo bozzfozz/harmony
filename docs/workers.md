@@ -14,7 +14,6 @@ Harmony betreibt mehrere asynchrone Worker, die beim Lifespan-Start der FastAPI-
 | `MetadataWorker` | `app/workers/metadata_worker.py` | Ergänzt Metadaten wie Genres, Komponist:innen oder ISRC-Codes. |
 | `BackfillWorker` | `app/workers/backfill_worker.py` | Reichert FREE-Ingest-Daten mit Spotify-Informationen an. |
 | `WatchlistWorker` | `app/workers/watchlist_worker.py` | Überwacht Artists auf neue Releases und stößt automatische Downloads an. |
-| `RetryScheduler` | `archive/workers/retry_scheduler.py` (archiviert) | Historische Loop zum Neuplanen fehlgeschlagener Downloads; ersetzt durch den Orchestrator. |
 
 ## Lebenszyklus & Steuerung
 
@@ -30,6 +29,8 @@ Harmony betreibt einen Orchestrator, der das Starten und Stoppen der Worker kaps
 - **Scheduler (`app/orchestrator/scheduler.py`)** – Liest aktivierte Jobs aus der Konfiguration, erzeugt Worker-Aufgaben und startet sie im Hintergrund. Der Scheduler läuft als wiederverwendbarer Task, kann vor dem eigentlichen Start ein Stop-Signal entgegennehmen und setzt interne Status-Flags (`started`, `stopped`, `stop_requested`).
 - **Dispatcher (`app/orchestrator/dispatcher.py`)** – Verteilt `WorkerJob`-Einträge an die passenden Handler. Er wird bei Lifespan-Start zusammen mit dem Scheduler erstellt, respektiert Stop-Signale und wartet beim Shutdown auf laufende Dispatch-Loops.
 - **WatchlistTimer (`app/orchestrator/timer.py`)** – Startet periodische Watchlist-Läufe. Der Timer nutzt dieselbe Start/Stopp-Semantik wie Scheduler und Dispatcher, damit keine Ticks während des Shutdowns mehr ausgeführt werden.
+
+Der Scheduler plant orchestrierte Jobs (`sync`, `matching`, `retry`, `watchlist`) und sorgt dafür, dass fehlgeschlagene Downloads ausschließlich über den `retry`-Job erneut eingeplant werden. Damit entfällt die frühere dedizierte Retry-Schleife aus dem Archiv vollständig.
 
 Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert. Der dort definierte `WORKERS_ENABLED`-Schalter entscheidet zur Laufzeit, ob der Orchestrator überhaupt gestartet wird. Dadurch können API-Instanzen ohne Hintergrundprozesse betrieben werden, ohne an anderer Stelle Code ändern zu müssen.
 

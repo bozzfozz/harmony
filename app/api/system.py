@@ -275,7 +275,6 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
         queue_literal="n/a",
         orchestrator_component="watchlist_timer",
     ),
-    "retry_scheduler": WorkerDescriptor(attr=None, queue_literal="n/a", orchestrator_job="retry"),
 }
 
 
