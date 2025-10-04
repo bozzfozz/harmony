@@ -1,24 +1,24 @@
 # Architektur-Schuldenanalyse – Harmony Backend & Schnittstellen
 
 ## Executive Summary
-- Die API-Schicht umfasst 17 Router, die in `app/main.py` direkt zusammengebaut werden und stellenweise Datenbank- und Worker-Instanzen selbst verwalten, was zu enger Kopplung und redundanten Initialisierungspfaden führt.【F:app/main.py†L178-L323】【F:app/api/spotify.py†L181-L215】【F:app/api/spotify.py†L1024-L1050】
+- Die API-Schicht umfasst 15 Router, die über die Registry in `app/api/router_registry.py` aggregiert werden; Domain-Router wie `search` und `spotify` behalten dennoch direkte DB- und `app.state`-Abhängigkeiten bei, wodurch Kopplung und redundante Initialisierungspfad bestehen bleiben.【F:app/api/router_registry.py†L148-L213】【F:app/main.py†L527-L567】【F:app/api/spotify.py†L181-L187】【F:app/api/spotify.py†L811-L816】【F:app/api/spotify.py†L999-L1026】
 - Hintergrundprozesse werden im FastAPI-Lebenszyklus aufgebaut; die Geschäftslogik für Watchlist-, Backfill- und Sync-Worker hängt an `app.state` und erschwert Testbarkeit, Idempotenz und das Abschalten einzelner Worker.【F:app/main.py†L239-L352】【F:app/workers/persistence.py†L50-L191】【F:app/workers/watchlist_worker.py†L61-L118】
-- Die Such- und Matching-Pipeline verzahnt Router, Integrations-Service, Matching-Engine und Library-Service eng miteinander; Konfigurationsgrenzen (Timeouts, Kandidatenlimits) sind mehrfach verteilt.【F:app/routers/search_router.py†L76-L176】【F:app/services/integration_service.py†L31-L86】【F:app/core/matching_engine.py†L74-L209】【F:app/services/library_service.py†L45-L126】
-- Logging- und Observability-Pattern divergieren: Einige Komponenten liefern strukturierte `extra`-Felder, andere formatieren Schlüssel/Werte im Nachrichtentext, wodurch Korrelation und Metrik-Auswertung erschwert wird.【F:app/services/cache.py†L70-L135】【F:app/workers/watchlist_worker.py†L93-L103】【F:app/routers/search_router.py†L127-L154】
+- Die Such- und Matching-Pipeline verzahnt Router, Integrations-Service, Matching-Engine und Library-Service eng miteinander; Konfigurationsgrenzen (Timeouts, Kandidatenlimits) sind mehrfach verteilt.【F:app/api/search.py†L116-L188】【F:app/services/integration_service.py†L31-L86】【F:app/core/matching_engine.py†L74-L209】【F:app/services/library_service.py†L45-L126】
+- Logging- und Observability-Pattern divergieren: Einige Komponenten liefern strukturierte `extra`-Felder, andere formatieren Schlüssel/Werte im Nachrichtentext, wodurch Korrelation und Metrik-Auswertung erschwert wird.【F:app/services/cache.py†L70-L135】【F:app/workers/watchlist_worker.py†L93-L103】【F:app/api/search.py†L141-L180】
 
 ## Detailanalyse der Haupt-Schulden
 
 ### 1. Router- und Service-Sprawl
-**Beobachtung.** `app/main.py` importiert und registriert 17 Router einzeln. Router wie `spotify_router` greifen direkt auf DB-Sessions oder `SpotifyClient` zu, ohne einen Zwischenservice zu nutzen. `backfill_router` baut Worker-Instanzen innerhalb der Request-Handler auf und cached sie in `app.state`.
+**Beobachtung.** Die Router-Registry (`app/api/router_registry.py`) meldet 15 Router an, mischt aber neue Domain-Router mit Legacy-Shims. Module wie `app/api/spotify.py` greifen weiterhin direkt auf Datenbank-Sessions zu und legen eigene Helfer (z. B. File-Store, Worker-Handles) in `app.state` ab.
 
 **Evidenz.**
-- Router-Registrierung & Tagging: `app/main.py` Zeilen 178–200.【F:app/main.py†L178-L201】
+- Router-Registrierung & Aggregation: `app/api/router_registry.py` Zeilen 148–213; Einbindung in `app/main.py`.【F:app/api/router_registry.py†L148-L213】【F:app/main.py†L527-L567】
 - Direktzugriff auf SQLAlchemy-Session im Router: `app/api/spotify.py` Zeilen 181–187.【F:app/api/spotify.py†L181-L187】
-- Zugriff auf Worker-Instanz über `app.state`: `app/api/spotify.py` Zeilen 1024–1044.【F:app/api/spotify.py†L1024-L1044】
+- Stateful Helper/Worker-Handle im `app.state`: `app/api/spotify.py` Zeilen 811–816 und 1024–1026.【F:app/api/spotify.py†L811-L816】【F:app/api/spotify.py†L1024-L1026】
 
 **Auswirkungen.**
 - Harte Kopplung zwischen API und Infrastruktur (DB/Worker) erschwert das Stubben in Tests und die spätere Extraktion in Microservices.
-- Mehrfach-Initialisierung (z. B. Backfill Worker) droht bei parallelen Requests zu Race Conditions.
+- Router verwalten Hilfsobjekte eigenständig im `app.state`, was bei konkurrierenden Initialisierungen schwer nachvollziehbare Lebenszyklen und potenzielle Race Conditions erzeugt.
 - Fehlende Bündelung der Spotify-Domäne (Router `spotify`, `spotify/free`, `backfill`, `free_ingest`) erhöht Duplikate.
 
 **Schuldenklasse.** Struktur-/Layer-Verletzung, mittleres Risiko.
@@ -42,7 +42,7 @@
 **Beobachtung.** `smart_search` erstellt pro Quelle Tasks, orchestriert Timeout-Handling, Score-Normalisierung und Matching. `IntegrationService.search_tracks` unterstützt nur `SlskdAdapter` und kapselt Timeout/Retry eigenständig, obwohl `ProviderRegistry` weitere Adapter baut.
 
 **Evidenz.**
-- Parallele Quellenverarbeitung & Logging: `app/routers/search_router.py` Zeilen 76–176.【F:app/routers/search_router.py†L76-L176】
+- Parallele Quellenverarbeitung & Logging: `app/api/search.py` Zeilen 116–188.【F:app/api/search.py†L116-L188】
 - Provider-spezifisches Timeout/Retry-Handling: `app/services/integration_service.py` Zeilen 31–86.【F:app/services/integration_service.py†L31-L86】
 - Matching-Engine & Library-Service mit konfigurativen Schwellenwerten: `app/core/matching_engine.py` Zeilen 74–209; `app/services/library_service.py` Zeilen 45–126.【F:app/core/matching_engine.py†L74-L209】【F:app/services/library_service.py†L45-L126】
 
@@ -59,7 +59,7 @@
 **Evidenz.**
 - Strukturierte Cache-Events: `app/services/cache.py` Zeilen 70–135.【F:app/services/cache.py†L70-L135】
 - Watchlist-Worker formatiert Logtext manuell: `app/workers/watchlist_worker.py` Zeilen 93–103.【F:app/workers/watchlist_worker.py†L93-L103】
-- Search-Router Logging mischt strukturierte und unstrukturierte Felder: `app/routers/search_router.py` Zeilen 127–154.【F:app/routers/search_router.py†L127-L154】
+- Search-Router Logging mischt strukturierte und unstrukturierte Felder: `app/api/search.py` Zeilen 141–180.【F:app/api/search.py†L141-L180】
 
 **Auswirkungen.**
 - Querying/Alerting via ELK o. Ä. erschwert; keine durchgängige `event`-Taxonomie.
@@ -127,6 +127,6 @@ AppState hält nur Handles
 **Trade-offs:** + Klare Start/Stopp-API, + Tests isolierbar; − Umbau der bestehenden `app.state`-Nutzung, − ggf. Migrationsaufwand für Admin-Endpunkte.
 
 ## Weitere Beobachtungen
-- Frontend-Client (`frontend/src/api/client.ts` plus `frontend/src/api/services/*.ts`) pflegt Routenstrings manuell, während die Backend-Basis `/api/v1` erst zur Laufzeit gesetzt wird; spätere Konsolidierung mit generiertem Client empfohlen.【F:frontend/src/api/client.ts†L18-L97】【F:frontend/src/api/services/downloads.ts†L180-L241】【F:app/main.py†L178-L201】
+- Frontend-Client (`frontend/src/api/client.ts` plus `frontend/src/api/services/*.ts`) pflegt Routenstrings manuell, während die Backend-Basis `/api/v1` erst zur Laufzeit gesetzt wird; spätere Konsolidierung mit generiertem Client empfohlen.【F:frontend/src/api/client.ts†L18-L97】【F:frontend/src/api/services/downloads.ts†L180-L241】【F:app/main.py†L119-L167】【F:app/main.py†L527-L567】
 - `MatchingWorker` und `SyncWorker` beziehen Retry/Backoff-Werte aus ENV (`MATCHING_WORKER_BATCH_SIZE`, `RETRY_*`); eine zentrale Konfigurationsmatrix (s. separate Datei) reduziert Fehlkonfiguration.
 
