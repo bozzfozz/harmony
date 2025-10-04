@@ -134,6 +134,80 @@ describe('LibraryDownloads', () => {
     createElementSpy.mockRestore();
   });
 
+  it('submits download payload with username and file metadata', async () => {
+    mockedGetDownloads.mockResolvedValue([]);
+    mockedStartDownload.mockResolvedValue({
+      id: 10,
+      filename: 'Song.mp3',
+      status: 'queued',
+      progress: 0,
+      priority: 0,
+      username: 'SoulUser'
+    } as never);
+
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
+
+    const usernameInput = await screen.findByLabelText('Soulseek-Benutzername');
+    const fileInput = screen.getByLabelText('Datei oder Track');
+
+    await userEvent.type(usernameInput, 'SoulUser');
+    await userEvent.type(fileInput, 'Song.mp3');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download starten' }));
+
+    await waitFor(() =>
+      expect(mockedStartDownload).toHaveBeenCalledWith({
+        username: 'SoulUser',
+        files: [
+          {
+            filename: 'Song.mp3',
+            name: 'Song.mp3',
+            source: 'library_manual'
+          }
+        ]
+      })
+    );
+
+    await waitFor(() => expect(fileInput).toHaveValue(''));
+  });
+
+  it('derives username from soulseek uri input when omitted', async () => {
+    mockedGetDownloads.mockResolvedValue([]);
+    mockedStartDownload.mockResolvedValue({
+      id: 11,
+      filename: 'folder/song.mp3',
+      status: 'queued',
+      progress: 0,
+      priority: 0,
+      username: 'DerivedUser'
+    } as never);
+
+    renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
+
+    const usernameInput = await screen.findByLabelText('Soulseek-Benutzername');
+    const fileInput = screen.getByLabelText('Datei oder Track');
+
+    expect(usernameInput).toHaveValue('');
+
+    await userEvent.type(fileInput, 'soulseek://DerivedUser/folder/song.mp3');
+    await userEvent.click(screen.getByRole('button', { name: 'Download starten' }));
+
+    await waitFor(() =>
+      expect(mockedStartDownload).toHaveBeenCalledWith({
+        username: 'DerivedUser',
+        files: [
+          {
+            filename: 'folder/song.mp3',
+            name: 'soulseek://DerivedUser/folder/song.mp3',
+            source: 'library_manual'
+          }
+        ]
+      })
+    );
+
+    await waitFor(() => expect(usernameInput).toHaveValue('DerivedUser'));
+  });
+
   it('shows a blocked toast when the backend rejects download requests with 503', async () => {
     mockedGetDownloads.mockResolvedValue([]);
     mockedStartDownload.mockRejectedValue(
@@ -148,8 +222,11 @@ describe('LibraryDownloads', () => {
 
     renderWithProviders(<LibraryDownloads />, { toastFn: toastMock, route: '/library?tab=downloads' });
 
-    const input = await screen.findByLabelText('Track-ID');
-    await userEvent.type(input, 'Song.mp3');
+    const usernameInput = await screen.findByLabelText('Soulseek-Benutzername');
+    const fileInput = screen.getByLabelText('Datei oder Track');
+
+    await userEvent.type(usernameInput, 'SoulUser');
+    await userEvent.type(fileInput, 'Song.mp3');
 
     const submitButton = screen.getByRole('button', { name: 'Download starten' });
     await userEvent.click(submitButton);
