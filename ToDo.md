@@ -41,21 +41,21 @@ Subtasks:
 
 ID: TD-20251012-001
 Titel: Soulseek- und Matching-Ansichten mit Live-Daten versorgen
-Status: in-progress
+Status: done
 Priorität: P2
 Scope: frontend
 Owner: codex
 Created_at: 2025-10-12T09:00:00Z
-Updated_at: 2025-10-12T19:45:00Z
+Updated_at: 2025-10-12T20:45:00Z
 Tags: navigation, integrations, soulseek, matching
-Beschreibung: Die neuen Navigationspunkte für Soulseek und Matching zeigen aktuell nur Platzhaltertexte. Für ein vollständiges Nutzererlebnis müssen die Komponenten API-Aufrufe der Downloader- und Matching-Services integrieren. Zusätzlich soll die Navigation den aktuellen Integrationsstatus widerspiegeln und Rückmeldungen bei Fehlern geben. Dokumentation und Monitoring-Hooks müssen mit den neuen Ansichten abgeglichen werden. Die Soulseek-Ansicht ist inklusive Dashboard-Logik, Tests und Dokumentation umgesetzt; die Matching-Ansicht steht weiterhin aus.
+Beschreibung: Die neuen Navigationspunkte für Soulseek und Matching zeigen aktuell nur Platzhaltertexte. Für ein vollständiges Nutzererlebnis müssen die Komponenten API-Aufrufe der Downloader- und Matching-Services integrieren. Zusätzlich soll die Navigation den aktuellen Integrationsstatus widerspiegeln und Rückmeldungen bei Fehlern geben. Dokumentation und Monitoring-Hooks müssen mit den neuen Ansichten abgeglichen werden. Soulseek- und Matching-Dashboards liefern nun Live-Daten inklusive Fehlerbehandlung, Tests und Betriebsdokumentation.
 Akzeptanzkriterien:
 - SoulseekPage lädt Status- und Konfigurationsdaten aus dem Backend und visualisiert aktive Freigaben.
 - MatchingPage zeigt laufende und ausstehende Zuordnungen inklusive Fehlerzuständen an.
 - Navigation spiegelt den Integrationsstatus (z. B. Warnhinweise) wider und wird in der Doku beschrieben.
 Risiko/Impact: Mittel; unvollständige Daten-Anbindung könnte zu verwirrenden Statusanzeigen führen.
 Dependencies: Backend-Endpunkte für Soulseek- und Matching-Status.
-Verweise: TASK TBD
+Verweise: PR TBD (Matching Dashboard)
 Subtasks:
 - API-Clients für Soulseek- und Matching-Status implementieren.
 - UI-Komponenten zur Visualisierung der Statusdaten ergänzen.

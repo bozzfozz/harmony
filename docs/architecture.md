@@ -71,6 +71,18 @@ Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompa
   - Die Upload-Tabelle zeigt jeden aktiven Share mit Status, Fortschritt, Transfergröße und Geschwindigkeit. Bei leerem Ergebnis informiert der Hinweis „Aktuell sind keine Uploads aktiv“, Fehlerzustände liefern einen Retry-Button, der erneut `/soulseek/uploads` aufruft.
 - Die Seite dient als Operations-Dashboard für den Soulseek-Daemon: Warnhinweise bei Ausfällen oder fehlender Konfiguration helfen, bevor Sync-Worker oder Upload-Freigaben ins Stocken geraten.
 
+#### Matching UI Dashboard
+
+- Die Ansicht **„Matching“** ergänzt das Operations-Cockpit um den `MatchingWorker` und die Score-Qualität der gespeicherten Zuordnungen.
+  - Der Kartenbereich **„Worker-Status“** zeigt Heartbeat, Queue-Größe und Status-Badge des Matching-Workers. Ein gelbes Banner weist bei `stale`/`blocked`-Zuständen auf ausstehende Heartbeats oder blockierte Jobs hin, ein rotes Banner markiert `stopped`/`errored`-Zustände mit Handlungsempfehlung (Worker neu starten, Logs prüfen).
+  - Sobald `queue_size > 0` gemeldet wird, erscheint ein zusätzlicher Hinweis mit dem Backlog-Wert, damit Operator:innen den Dispatcher oder die Matching-Konfiguration überprüfen können.
+- **Matching-Metriken** berechnen die zuletzt gespeicherte Durchschnitts-Konfidenz sowie kumulierte `saved_total`/`discarded_total`-Zähler.
+  - Hohe Werte (> 85 %) werden grün hervorgehoben, niedrige Scores (< 45 %) lösen eine rote Markierung aus. So lässt sich erkennen, ob die Matching-Konfiguration (z. B. Schwellenwerte) angepasst werden muss.
+  - Der Wert **„Verworfen in letzter Charge“** signalisiert, ob eine Charge komplett verworfen wurde und liefert damit einen direkten Trigger zur Ursachenanalyse (fehlende Kandidaten, falsche Thresholds).
+- Der Abschnitt **„Letzte Matching-Batches“** zieht die Activity-Logs (`type=metadata`, `status=matching_batch`).
+  - Jede Charge zeigt gespeicherte und verworfene Kandidaten sowie die durchschnittliche Konfidenz. Wenn alles verworfen wurde, erscheint ein rotes Badge „Alles verworfen“ und der Eintrag wandert an die Spitze der Ereignisliste.
+  - Die Timeline hilft beim Correlieren von Fehlerspitzen mit Konfigurationsänderungen oder Worker-Ausfällen; bei Bedarf lassen sich Queue- und Score-Hinweise direkt daneben ablesen.
+
 ### Hintergrund-Worker
 
 Der Lifespan startet zuerst den Orchestrator (Scheduler, Dispatcher, WatchlistTimer), der Queue-Jobs priorisiert, Heartbeats pflegt und Watchlist-Ticks kontrolliert. Anschließend werden – sofern `WORKERS_ENABLED` aktiv ist – die eigentlichen Worker registriert und vom Dispatcher anhand ihrer Job-Typen aufgerufen.
