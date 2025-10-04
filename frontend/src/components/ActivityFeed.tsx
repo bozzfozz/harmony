@@ -1,7 +1,14 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/shadcn';
-import { Select } from './ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
 import { useToast } from '../hooks/useToast';
 import { ApiError } from '../api/client';
 import { getActivityFeed, type ActivityItem, type ActivityStatus, type ActivityType } from '../api/services/system';
@@ -580,16 +587,22 @@ const ActivityFeed = () => {
             Event-Typ
           </label>
           <Select
-            id="activity-type-filter"
             value={filter}
-            onChange={(event) => setFilter(event.target.value as ActivityFilter)}
+            onValueChange={(value) => setFilter(value as ActivityFilter)}
             disabled={isLoading || rows.length === 0}
           >
-            {ACTIVITY_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <SelectTrigger id="activity-type-filter" aria-label="Event-Typ">
+              <SelectValue placeholder="Alle" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {ACTIVITY_FILTER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
           </Select>
         </div>
         {isLoading ? (

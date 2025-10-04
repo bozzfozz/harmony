@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Button,
@@ -10,7 +10,14 @@ import {
   Input
 } from '../../components/ui/shadcn';
 import { Progress } from '../../components/ui/progress';
-import { Select } from '../../components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../hooks/useToast';
 import { ApiError } from '../../api/client';
@@ -308,8 +315,7 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
     });
   };
 
-  const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const nextStatus = event.target.value;
+  const handleStatusChange = (nextStatus: string) => {
     setStatusFilter(nextStatus);
     if (nextStatus === 'failed') {
       setShowAllDownloads(true);
@@ -475,12 +481,19 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="flex flex-col gap-2 text-sm font-medium">
               Status
-              <Select value={statusFilter} onChange={handleStatusChange} aria-label="Status filtern">
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+              <Select value={statusFilter} onValueChange={handleStatusChange}>
+                <SelectTrigger aria-label="Status filtern">
+                  <SelectValue placeholder="Alle Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
               </Select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium sm:col-span-2">

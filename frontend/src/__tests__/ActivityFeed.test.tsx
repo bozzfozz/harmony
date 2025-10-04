@@ -264,12 +264,13 @@ describe('ActivityFeed', () => {
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
-    const filterSelect = await screen.findByLabelText('Event-Typ');
-    expect(filterSelect).toBeInTheDocument();
+    const filterTrigger = await screen.findByRole('combobox', { name: 'Event-Typ' });
+    expect(filterTrigger).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getAllByTestId('activity-entry')).toHaveLength(4));
 
-    await user.selectOptions(filterSelect, 'download');
+    await user.click(filterTrigger);
+    await user.click(await screen.findByRole('option', { name: 'Download' }));
 
     await waitFor(() => {
       const filteredEntries = screen.getAllByTestId('activity-entry');
@@ -277,7 +278,8 @@ describe('ActivityFeed', () => {
       expect(within(filteredEntries[0]).getByText('Download')).toBeInTheDocument();
     });
 
-    await user.selectOptions(filterSelect, 'all');
+    await user.click(filterTrigger);
+    await user.click(await screen.findByRole('option', { name: 'Alle' }));
 
     await waitFor(() => expect(screen.getAllByTestId('activity-entry')).toHaveLength(4));
   });
@@ -287,8 +289,8 @@ describe('ActivityFeed', () => {
 
     renderWithProviders(<ActivityFeed />, { toastFn: toastMock });
 
-    const filterSelect = await screen.findByLabelText('Event-Typ');
-    expect(filterSelect).toBeDisabled();
+    const filterTrigger = await screen.findByRole('combobox', { name: 'Event-Typ' });
+    expect(filterTrigger).toHaveAttribute('aria-disabled', 'true');
 
     await waitFor(() => expect(screen.getByText('Keine Aktivitäten vorhanden.')).toBeInTheDocument());
   });
