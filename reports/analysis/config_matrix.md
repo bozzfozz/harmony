@@ -2,8 +2,8 @@
 
 | Variable | Default / Quelle | Wirkung | Empfehlung / Profil |
 | --- | --- | --- | --- |
-| `FEATURE_REQUIRE_AUTH` | `False` (ENV-Fallback)【F:app/config.py†L910-L918】 | API erfordert ohne Setzen keine Authentifizierung; nur Allowlist greift. | **prod:** `true` setzen und API-Keys pflegen.<br>**dev/test:** `false` für lokale Tests. |
-| `FEATURE_RATE_LIMITING` | `False` (ENV-Fallback)【F:app/config.py†L910-L918】 | Rate-Limit-Logik abgeschaltet ⇒ Gefahr ungebremster Clients. | **prod:** aktivieren und Limits in Middleware bündeln.<br>**dev:** `false` für Debugging. |
+| `FEATURE_REQUIRE_AUTH` | Profil-Defaults aus `_SECURITY_PROFILE_DEFAULTS` (Default-/Dev-Profile `false`, Prod `true`) mit optionalem ENV-Override via `FEATURE_REQUIRE_AUTH`.【F:app/config.py†L345-L456】【F:app/config.py†L1665-L1742】 | API setzt ohne Override auf Profil-Defaults; ohne Auth greift nur die Allowlist. | **prod:** `HARMONY_PROFILE=prod` belässt `true`; nur bei Ausnahmen überschreiben und API-Keys pflegen.<br>**dev/test:** Default-/Dev-Profile liefern `false`, Override nur für Auth-Tests setzen. |
+| `FEATURE_RATE_LIMITING` | Profil-Defaults aus `_SECURITY_PROFILE_DEFAULTS` (Default-/Dev-Profile `false`, Prod `true`) mit optionalem ENV-Override via `FEATURE_RATE_LIMITING`.【F:app/config.py†L345-L456】【F:app/config.py†L1665-L1742】 | Rate-Limit greift gemäß Profil oder Override; deaktiviert ⇒ Gefahr ungebremster Clients. | **prod:** `HARMONY_PROFILE=prod` nutzt `true`; Limits nur gezielt anpassen.<br>**dev:** Default-/Dev-Profile halten `false`; bei Testbedarf gezielt aktivieren. |
 | `FEATURE_ENABLE_LEGACY_ROUTES` | `False`【F:app/config.py†L720-L726】 | Aktiviert Legacy-Endpunkte + Logging-Route. | Nur setzen, wenn Alt-Clients nötig; langfristig entfernen. |
 | `HARMONY_DISABLE_WORKERS` | Nur wenn gesetzt (keine Defaults)【F:app/main.py†L213-L215】 | Deaktiviert alle Hintergrund-Worker beim Start. | Für lokale Tests ohne Worker nutzen; in prod unset lassen. |
 | `WATCHLIST_INTERVAL` | `86400s` Default【F:app/main.py†L217-L228】 | Polling-Intervall des Watchlist-Workers. | **prod:** 86400 (1× täglich) oder kleiner für häufigere Scans.<br>**dev:** 300–600 zum Testen. |
