@@ -51,7 +51,9 @@ describe('LibraryDownloads', () => {
       }
     ]);
 
-    await userEvent.selectOptions(screen.getByLabelText('Status'), ['failed']);
+    const statusTrigger = await screen.findByRole('combobox', { name: 'Status' });
+    await userEvent.click(statusTrigger);
+    await userEvent.click(await screen.findByRole('option', { name: 'Fehlgeschlagen' }));
 
     await waitFor(() =>
       expect(mockedGetDownloads).toHaveBeenLastCalledWith({ includeAll: true, status: 'failed' })

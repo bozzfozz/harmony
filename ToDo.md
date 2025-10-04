@@ -126,3 +126,25 @@ Subtasks:
 - Persistenz-Hook oder Utility implementieren.
 - Layout-Komponente aktualisieren und auf Konsistenz testen.
 - Jest-Tests für gespeicherten Zustand ergänzen.
+
+ID: TD-20251012-006
+Titel: Toaster auf Radix UI migrieren
+Status: todo
+Priorität: P3
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-12T20:00:00Z
+Updated_at: 2025-10-12T20:00:00Z
+Tags: ui, feedback, toast
+Beschreibung: Der aktuelle Toast-Stack nutzt eine Eigenimplementierung mit DOM-Knoten. Für einheitliche Accessibility und Fokus-Management sollte der Toaster auf `@radix-ui/react-toast` umgestellt werden. Die Migration reduziert Wartungsaufwand und sorgt für konsistente Animationen.
+Akzeptanzkriterien:
+- Toast-Komponenten basieren auf `@radix-ui/react-toast` inklusive Provider/Viewport.
+- Bestehende Toast-Hooks (`useToast`) bleiben API-kompatibel und decken Varianten/Timeouts ab.
+- Tests prüfen Rendering, Autoclose und Dismiss-Verhalten mit Radix.
+Risiko/Impact: Niedrig; UI-only, aber Toast-Benachrichtigungen sind zentrale Feedback-Mechanik.
+Dependencies: Aktuelle Toast-Hooks und Storybook-Beispiele.
+Verweise: CODX-FE-RADIX-302
+Subtasks:
+- Radix Toast-Provider integrieren und Styles übernehmen.
+- useToast Hook an das neue API anpassen.
+- UI-Tests und Doku aktualisieren (Verifikation der Varianten).

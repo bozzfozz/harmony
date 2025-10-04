@@ -139,14 +139,23 @@ export const SearchResultsOverlay = ({
                 </h3>
                 <ul className="mt-1 space-y-1 px-2" role="listbox">
                   {group.items.map((item) => {
-                    const selection = { type: group.key, item } as SearchResultSelection;
+                    let selection: SearchResultSelection;
+                    let subtitle: string | null = null;
                     const title = item.name;
-                    const subtitle =
-                      group.key === 'tracks'
-                        ? trackSubtitle(item as SpotifyTrackSearchResult)
-                        : group.key === 'artists'
-                          ? artistSubtitle(item as SpotifyArtistSearchResult)
-                          : albumSubtitle(item as SpotifyAlbumSearchResult);
+
+                    if (group.key === 'tracks') {
+                      const track = item as SpotifyTrackSearchResult;
+                      selection = { type: 'track', item: track };
+                      subtitle = trackSubtitle(track);
+                    } else if (group.key === 'artists') {
+                      const artist = item as SpotifyArtistSearchResult;
+                      selection = { type: 'artist', item: artist };
+                      subtitle = artistSubtitle(artist);
+                    } else {
+                      const album = item as SpotifyAlbumSearchResult;
+                      selection = { type: 'album', item: album };
+                      subtitle = albumSubtitle(album);
+                    }
                     return (
                       <li key={`${group.key}-${item.id ?? title}`} className="list-none">
                         <button

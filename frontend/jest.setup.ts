@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
+import * as React from 'react';
 
 jest.mock('@radix-ui/react-tooltip', () => {
-  const React = require('react');
   const renderChildren = (children?: React.ReactNode) =>
     React.createElement(React.Fragment, null, children);
   const MockProvider = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
@@ -18,6 +18,12 @@ jest.mock('@radix-ui/react-tooltip', () => {
     const { children, ...rest } = props;
     return React.createElement('div', { ref, ...rest }, children);
   });
+
+  MockProvider.displayName = 'MockTooltipProvider';
+  MockRoot.displayName = 'MockTooltipRoot';
+  MockPortal.displayName = 'MockTooltipPortal';
+  MockTrigger.displayName = 'MockTooltipTrigger';
+  MockContent.displayName = 'MockTooltipContent';
 
   return {
     __esModule: true,
