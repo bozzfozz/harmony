@@ -1,4 +1,4 @@
-import { ChangeEvent, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 import { Loader2, Upload } from 'lucide-react';
 
 import {
@@ -26,10 +26,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Textarea } from './ui/textarea';
 import { useToast } from '../hooks/useToast';
 
-interface SpotifyFreeImportProps {
-  proAvailable: boolean;
-}
-
 const normaliseQuery = (track: NormalizedTrack): string => {
   const segments = [track.title.trim(), track.artist.trim()];
   if (track.album) {
@@ -41,7 +37,7 @@ const normaliseQuery = (track: NormalizedTrack): string => {
   return segments.filter(Boolean).join(' ');
 };
 
-const SpotifyFreeImport = ({ proAvailable }: SpotifyFreeImportProps) => {
+const SpotifyFreeImport = () => {
   const { toast } = useToast();
   const [input, setInput] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -53,12 +49,8 @@ const SpotifyFreeImport = ({ proAvailable }: SpotifyFreeImportProps) => {
 
   const hasItems = items.length > 0;
 
-  const helperText = useMemo(() => {
-    if (!proAvailable) {
-      return 'Importiere Spotify-Listen ohne OAuth: Eine Referenz pro Zeile ("Artist - Title | Album | Year") oder Spotify-Track-Link.';
-    }
-    return 'Auch mit aktiven Spotify-Credentials kannst du Listen ohne API-Zugriff vorbereiten. Die Jobs nutzen Soulseek direkt.';
-  }, [proAvailable]);
+  const helperText =
+    'Importiere Spotify-Listen ohne OAuth: Eine Referenz pro Zeile ("Artist - Title | Album | Year") oder Spotify-Track-Link.';
 
   const handleUploadChange = async (event: ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {

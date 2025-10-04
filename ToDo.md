@@ -61,3 +61,25 @@ Subtasks:
 - API-Clients für Soulseek- und Matching-Status implementieren.
 - UI-Komponenten zur Visualisierung der Statusdaten ergänzen.
 - Monitoring- und Doku-Updates erstellen.
+
+ID: TD-20251012-003
+Titel: Spotify PRO Buttons triggern OAuth-Fluss direkt
+Status: todo
+Priorität: P2
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-12T16:30:00Z
+Updated_at: 2025-10-12T16:30:00Z
+Tags: spotify, ux, integrations
+Beschreibung: Die Spotify-Übersicht blendet jetzt PRO-spezifische Aktionen ein, doch die Buttons leiten lediglich auf allgemeine Seiten weiter. Für einen konsistenten Flow sollen Nutzer:innen den OAuth-Anmeldeprozess direkt aus der Oberfläche starten und den Status der Authentifizierung live sehen können. Zudem fehlt ein klarer Abschluss-Dialog nach erfolgreichem Login, der auf verfügbare PRO-Funktionen verweist. Ziel ist eine nahtlose UX ohne manuelle Kontextwechsel in Backend-Tools. Die Umsetzung sollte Telemetrie-Hooks berücksichtigen, um Fehlversuche zu analysieren und Retry-Hinweise zu geben.
+Akzeptanzkriterien:
+- PRO-Aktionsbuttons öffnen einen OAuth-Dialog inklusive Callback-Verarbeitung innerhalb des Frontends.
+- Nach erfolgreicher Authentifizierung aktualisiert sich der Status-Bereich automatisch ohne Reload.
+- Nutzer:innen erhalten einen Abschluss-Hinweis mit Links zu Watchlist, Künstlerbibliothek und Backfill-Aufträgen.
+Risiko/Impact: Mittel; Fehler im OAuth-Flow könnten den Zugriff auf PRO-Funktionen blockieren.
+Dependencies: Harmonys OAuth-Endpunkt und Redirect-Konfiguration.
+Verweise: TASK TBD
+Subtasks:
+- OAuth-Start-Endpoint aus dem Frontend ansteuern und Redirect-Handling implementieren.
+- Status-Polling nach Auth-Callback integrieren und UI-Feedback ergänzen.
+- Tracking für erfolgreiche und gescheiterte OAuth-Versuche hinzufügen.
