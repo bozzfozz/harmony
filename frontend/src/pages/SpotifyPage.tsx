@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 
 import SpotifyFreeImport from '../components/SpotifyFreeImport';
-import { getSpotifyMode, setSpotifyMode, type SpotifyMode } from '../api/services/spotify';
+import { getSpotifyStatus } from '../api/services/spotify';
+import type { SpotifyStatusResponse } from '../api/types';
 import { ApiError } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import {
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -16,95 +16,76 @@ import {
 
 const SpotifyPage = () => {
   const { toast } = useToast();
-  const [mode, setMode] = useState<SpotifyMode>('PRO');
+  const [status, setStatus] = useState<SpotifyStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    const fetchMode = async () => {
+    const fetchStatus = async () => {
       try {
-        const response = await getSpotifyMode();
-        setMode(response.mode);
+        const response = await getSpotifyStatus();
+        setStatus(response);
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : 'Modus konnte nicht geladen werden.';
-        toast({ title: 'Spotify-Modus', description: message, variant: 'destructive' });
+        const message = error instanceof ApiError ? error.message : 'Status konnte nicht geladen werden.';
+        toast({ title: 'Spotify-Status', description: message, variant: 'destructive' });
       } finally {
         setIsLoading(false);
       }
     };
-    fetchMode();
+    fetchStatus();
   }, [toast]);
-
-  const handleModeChange = async (targetMode: SpotifyMode) => {
-    if (targetMode === mode) {
-      return;
-    }
-    setIsUpdating(true);
-    try {
-      await setSpotifyMode(targetMode);
-      setMode(targetMode);
-      toast({
-        title: 'Modus aktualisiert',
-        description: targetMode === 'FREE' ? 'Spotify FREE aktiviert.' : 'Spotify PRO reaktiviert.'
-      });
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Moduswechsel fehlgeschlagen.';
-      toast({ title: 'Moduswechsel', description: message, variant: 'destructive' });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
       <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle>Spotify Modus</CardTitle>
+          <CardTitle>Spotify Status</CardTitle>
           <CardDescription>
-            Wähle zwischen voll integrierter PRO-Anbindung und dem schlanken FREE-Modus ohne OAuth.
+            Überblick über die verfügbaren Spotify-Funktionen und die OAuth-Anbindung.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Lade aktuellen Modus …
+              Lade Status …
             </div>
-          ) : (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          ) : status ? (
+            <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                <ShieldAlert className="h-5 w-5 text-indigo-600" />
                 <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Aktueller Modus: {mode}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    Verbindungsstatus: {status.status === 'connected' ? 'Verbunden' : status.status === 'unauthenticated' ? 'Nicht authentifiziert' : 'Nicht konfiguriert'}
+                  </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    PRO nutzt die Spotify-API inklusive OAuth. FREE arbeitet vollständig nutzereingabebasiert.
+                    FREE-Import ist immer verfügbar. PRO-Funktionen erfordern gültige Spotify-Credentials.
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={mode === 'FREE' ? 'default' : 'outline'}
-                  disabled={isUpdating}
-                  onClick={() => handleModeChange('FREE')}
-                >
-                  Spotify FREE
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === 'PRO' ? 'default' : 'outline'}
-                  disabled={isUpdating}
-                  onClick={() => handleModeChange('PRO')}
-                >
-                  Spotify PRO
-                </Button>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800">
+                  <p className="font-medium text-slate-900 dark:text-slate-100">PRO verfügbar</p>
+                  <p className="text-slate-600 dark:text-slate-400">{status.pro_available ? 'Ja – OAuth-Credentials gesetzt.' : 'Nein – Zugangsdaten fehlen.'}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800">
+                  <p className="font-medium text-slate-900 dark:text-slate-100">Authentifiziert</p>
+                  <p className="text-slate-600 dark:text-slate-400">{status.authenticated ? 'Aktive Session vorhanden.' : 'Noch kein Login durchgeführt.'}</p>
+                </div>
               </div>
+              {!status.pro_available && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Spotify-Credentials fehlen oder sind ungültig. Hinterlegen Sie Client-ID, Client-Secret und Redirect-URI in den Einstellungen,
+                  um PRO-Funktionen zu aktivieren.
+                </p>
+              )}
             </div>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-400">Statusinformationen sind derzeit nicht verfügbar.</p>
           )}
         </CardContent>
       </Card>
 
-      <SpotifyFreeImport mode={mode} />
+      <SpotifyFreeImport proAvailable={status?.pro_available ?? false} />
     </div>
   );
 };

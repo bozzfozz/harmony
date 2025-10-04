@@ -118,10 +118,13 @@ export interface ArtistReleasesResponse {
   releases: SpotifyArtistRelease[];
 }
 
-export type SpotifyMode = 'FREE' | 'PRO';
+export type SpotifyConnectionState = 'connected' | 'unauthenticated' | 'unconfigured';
 
-export interface SpotifyModeResponse {
-  mode: SpotifyMode;
+export interface SpotifyStatusResponse {
+  status: SpotifyConnectionState;
+  free_available: boolean;
+  pro_available: boolean;
+  authenticated: boolean;
 }
 
 export interface NormalizedTrack {

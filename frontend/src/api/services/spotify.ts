@@ -16,8 +16,7 @@ import type {
   SpotifyFreeUploadPayload,
   SpotifyFreeUploadResponse,
   SpotifyImage,
-  SpotifyMode,
-  SpotifyModeResponse,
+  SpotifyStatusResponse,
   SpotifyRawAlbum,
   SpotifyRawArtist,
   SpotifyRawTrack,
@@ -172,11 +171,8 @@ export const getArtistReleases = async (artistId: string): Promise<SpotifyArtist
     (response) => response.releases ?? []
   );
 
-export const getSpotifyMode = async (): Promise<SpotifyModeResponse> =>
-  request<SpotifyModeResponse>({ method: 'GET', url: apiUrl('/spotify/mode') });
-
-export const setSpotifyMode = async (mode: SpotifyMode): Promise<{ ok: boolean }> =>
-  request<{ ok: boolean }>({ method: 'POST', url: apiUrl('/spotify/mode'), data: { mode } });
+export const getSpotifyStatus = async (): Promise<SpotifyStatusResponse> =>
+  request<SpotifyStatusResponse>({ method: 'GET', url: apiUrl('/spotify/status') });
 
 export const getArtistPreferences = async (): Promise<ArtistPreferenceEntry[]> =>
   request<ArtistPreferencesResponse>({ method: 'GET', url: apiUrl('/settings/artist-preferences') }).then(
@@ -219,7 +215,6 @@ export type {
   SpotifyFreeUploadPayload,
   SpotifyFreeUploadResponse,
   SpotifySearchResults,
-  SpotifyMode,
-  SpotifyModeResponse,
+  SpotifyStatusResponse,
   SpotifyTrackSearchResult
 };

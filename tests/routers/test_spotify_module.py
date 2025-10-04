@@ -10,7 +10,7 @@ def _route_paths(target: APIRouter) -> set[str]:
 
 def test_spotify_router_includes_expected_paths() -> None:
     paths = _route_paths(spotify_module.router)
-    assert "/spotify/mode" in paths
+    assert "/spotify/status" in paths
     assert "/spotify/backfill/run" in paths
     assert "/spotify/import/free" in paths
     assert "/spotify/free/upload" in paths

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import {
   Button,
   Card,
@@ -20,9 +20,10 @@ import { useToast } from '../hooks/useToast';
 import AuthKeyPanel from './Settings/AuthKeyPanel';
 import SecretsPanel from './Settings/SecretsPanel';
 import { ApiError } from '../api/client';
-import { getSpotifyMode, setSpotifyMode, type SpotifyMode } from '../api/services/spotify';
+import { getSpotifyStatus } from '../api/services/spotify';
 import { testServiceConnection } from '../api/services/system';
 import type { ServiceIdentifier } from '../api/types';
+import type { SpotifyStatusResponse } from '../api/types';
 
 const spotifyFields = [
   { key: 'SPOTIFY_CLIENT_ID', label: 'Client ID', placeholder: 'Spotify client ID' },
@@ -51,9 +52,8 @@ const SERVICE_LABELS: Record<ServiceIdentifier, string> = {
 
 const SettingsPage = () => {
   const { toast } = useToast();
-  const [spotifyMode, setSpotifyModeState] = useState<SpotifyMode>('PRO');
-  const [isModeLoading, setIsModeLoading] = useState(true);
-  const [isModeUpdating, setIsModeUpdating] = useState(false);
+  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatusResponse | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(true);
   const spotify = useServiceSettingsForm({
     fields: spotifyFields,
     loadErrorDescription: 'Spotify settings could not be loaded.',
@@ -82,45 +82,25 @@ const SettingsPage = () => {
   });
 
   useEffect(() => {
-    const fetchMode = async () => {
+    const fetchStatus = async () => {
       try {
-        const response = await getSpotifyMode();
-        setSpotifyModeState(response.mode);
+        const response = await getSpotifyStatus();
+        setSpotifyStatus(response);
       } catch (error) {
         if (error instanceof ApiError && !error.handled) {
           toast({
-            title: 'Spotify-Modus',
+            title: 'Spotify-Status',
             description: error.message,
             variant: 'destructive'
           });
           error.markHandled();
         }
       } finally {
-        setIsModeLoading(false);
+        setIsStatusLoading(false);
       }
     };
-    fetchMode();
+    fetchStatus();
   }, [toast]);
-
-  const updateMode = async (mode: SpotifyMode) => {
-    if (mode === spotifyMode) {
-      return;
-    }
-    setIsModeUpdating(true);
-    try {
-      await setSpotifyMode(mode);
-      setSpotifyModeState(mode);
-      toast({
-        title: 'Spotify-Modus gespeichert',
-        description: mode === 'FREE' ? 'FREE-Modus ist aktiv.' : 'PRO-Modus ist aktiv.'
-      });
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Moduswechsel fehlgeschlagen.';
-      toast({ title: 'Spotify-Modus', description: message, variant: 'destructive' });
-    } finally {
-      setIsModeUpdating(false);
-    }
-  };
 
   const handleTestConnection = async (service: ServiceIdentifier) => {
     setIsTesting((previous) => ({ ...previous, [service]: true }));
@@ -189,35 +169,50 @@ const SettingsPage = () => {
       <TabsContent value="spotify">
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Moduswahl</CardTitle>
-            <CardDescription>Wechsle zwischen Spotify FREE und PRO direkt aus den Einstellungen.</CardDescription>
+            <CardTitle>Spotify Status</CardTitle>
+            <CardDescription>Überprüfe die Verfügbarkeit der PRO-Anbindung und vorhandene Sessions.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isModeLoading ? (
+            {isStatusLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Lade aktuellen Modus …
+                Lade Status …
+              </div>
+            ) : spotifyStatus ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <ShieldAlert className="h-5 w-5 text-indigo-600" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Verbindungsstatus: {spotifyStatus.status === 'connected' ? 'Verbunden' : spotifyStatus.status === 'unauthenticated' ? 'Nicht authentifiziert' : 'Nicht konfiguriert'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      FREE-Import ist immer verfügbar. PRO-Funktionen benötigen gültige Spotify-Credentials.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border border-border p-3 text-sm">
+                    <p className="font-medium text-foreground">PRO verfügbar</p>
+                    <p className="text-muted-foreground">
+                      {spotifyStatus.pro_available ? 'Ja – Credentials erkannt.' : 'Nein – Zugangsdaten fehlen.'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border p-3 text-sm">
+                    <p className="font-medium text-foreground">Authentifiziert</p>
+                    <p className="text-muted-foreground">
+                      {spotifyStatus.authenticated ? 'Aktive Session vorhanden.' : 'Noch kein OAuth-Login.'}
+                    </p>
+                  </div>
+                </div>
+                {!spotifyStatus.pro_available && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Hinterlege Client-ID, Client-Secret und Redirect-URI, um PRO-Funktionen freizuschalten.
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant={spotifyMode === 'FREE' ? 'default' : 'outline'}
-                  disabled={isModeUpdating}
-                  onClick={() => updateMode('FREE')}
-                >
-                  Spotify FREE
-                </Button>
-                <Button
-                  type="button"
-                  variant={spotifyMode === 'PRO' ? 'default' : 'outline'}
-                  disabled={isModeUpdating}
-                  onClick={() => updateMode('PRO')}
-                >
-                  Spotify PRO
-                </Button>
-                <span className="text-xs text-muted-foreground">Aktuell: {spotifyMode}</span>
-              </div>
+              <p className="text-sm text-muted-foreground">Statusinformationen sind derzeit nicht verfügbar.</p>
             )}
           </CardContent>
         </Card>

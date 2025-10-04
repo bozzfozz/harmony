@@ -1,3 +1,25 @@
+ID: TD-20251012-002
+Titel: SQLite-Queue erhält robuste Idempotenz-Garantie
+Status: todo
+Priorität: P1
+Scope: backend
+Owner: codex
+Created_at: 2025-10-12T15:00:00Z
+Updated_at: 2025-10-12T15:00:00Z
+Tags: queue, sqlite, reliability
+Beschreibung: Die aktuelle Fallback-Logik für SQLite-ON-CONFLICT führt zu zusätzlicher Komplexität und birgt das Risiko, dass Idempotenz über mehrere Prozesse hinweg nicht garantiert bleibt. Wir benötigen eine belastbare Lösung (Migration oder Schema-Anpassung), damit die Queue auch in Test- und Embedded-Umgebungen denselben Schutz wie in Postgres erhält.
+Akzeptanzkriterien:
+- QueueJob-Tabelle besitzt einen funktionierenden UNIQUE-Index für (type, idempotency_key) in SQLite-Umgebungen.
+- _upsert_queue_job() kann den Fallback entfernen und verlässt sich wieder auf einheitliche UPSERT-Semantik.
+- Tests decken konkurrierende Enqueue-Szenarien ohne Fallback-Pfade ab.
+Risiko/Impact: Mittel; Änderungen an Migrationslogik können bestehende Tests beeinflussen.
+Dependencies: Datenbank-Migrationspfad für SQLite.
+Verweise: TASK TBD
+Subtasks:
+- Analyse der bestehenden Alembic-Migrationen und SQLite-Einschränkungen.
+- Implementierung des neuen Index/Migrationspfads samt Tests.
+- Entfernen der temporären Fallback-Logik und Regressionstests.
+
 ID: TD-20251004-002
 Titel: Service Health akzeptiert gemischte Groß-/Kleinschreibung
 Status: done

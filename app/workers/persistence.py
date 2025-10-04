@@ -11,6 +11,7 @@ from sqlalchemy import Select, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.db import session_scope
@@ -201,14 +202,32 @@ def _upsert_queue_job(
                 index_elements=[QueueJob.type, QueueJob.idempotency_key]
             )
         )
-        result = session.execute(insert_stmt)
-        if result.rowcount:
-            stmt = select(QueueJob).where(
-                QueueJob.type == job_type,
-                QueueJob.idempotency_key == dedupe_key,
-            )
-            record = session.execute(stmt).scalars().one()
-            return record, False
+        try:
+            result = session.execute(insert_stmt)
+        except OperationalError as exc:
+            if dialect_name == "sqlite":
+                message = str(getattr(exc, "orig", exc))
+                if "ON CONFLICT" in message.upper():
+                    logger.debug(
+                        "Falling back to manual queue upsert due to sqlite ON CONFLICT error",
+                        extra={
+                            "event": "queue.sqlite_conflict_fallback",
+                            "job_type": job_type,
+                        },
+                    )
+                    session.rollback()
+                else:  # pragma: no cover - unexpected sqlite error
+                    raise
+            else:  # pragma: no cover - unexpected non-sqlite error
+                raise
+        else:
+            if result.rowcount:
+                stmt = select(QueueJob).where(
+                    QueueJob.type == job_type,
+                    QueueJob.idempotency_key == dedupe_key,
+                )
+                record = session.execute(stmt).scalars().one()
+                return record, False
 
     stmt: Select[QueueJob] = select(QueueJob).where(
         QueueJob.type == job_type,

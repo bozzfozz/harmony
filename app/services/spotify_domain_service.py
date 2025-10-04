@@ -10,7 +10,6 @@ from typing import (
     Awaitable,
     Callable,
     Iterable,
-    Literal,
     Mapping,
     Optional,
     Sequence,
@@ -22,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.config import AppConfig, SpotifyConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.errors import DependencyError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Playlist
@@ -34,8 +34,6 @@ from app.services.backfill_service import (
     BackfillService,
 )
 from app.services.free_ingest_service import FreeIngestService, IngestSubmission, JobStatus
-from app.utils.settings_store import write_setting
-from app.dependencies import get_app_config
 from app.workers.backfill_worker import BackfillWorker
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -53,6 +51,16 @@ class PlaylistItemsResult:
     total: int
 
 
+@dataclass(slots=True)
+class SpotifyServiceStatus:
+    """Connection and availability details for Spotify integrations."""
+
+    status: str
+    free_available: bool
+    pro_available: bool
+    authenticated: bool
+
+
 class SpotifyDomainService:
     """Aggregate Spotify use-cases across routers and workers."""
 
@@ -60,7 +68,7 @@ class SpotifyDomainService:
         self,
         *,
         config: AppConfig,
-        spotify_client: SpotifyClient,
+        spotify_client: SpotifyClient | None,
         soulseek_client: SoulseekClient,
         app_state: Any,
         free_ingest_factory: (
@@ -76,7 +84,7 @@ class SpotifyDomainService:
             | None
         ) = None,
         backfill_service_factory: (
-            Callable[[SpotifyConfig, SpotifyClient], BackfillService] | None
+            Callable[[SpotifyConfig, SpotifyClient | None], BackfillService] | None
         ) = None,
         backfill_worker_factory: Callable[[BackfillService], BackfillWorker] | None = None,
         session_runner: Callable[[SessionCallable[Any]], Awaitable[Any]] | None = None,
@@ -93,6 +101,7 @@ class SpotifyDomainService:
             backfill_worker_factory or self._default_backfill_worker_factory
         )
         self._session_runner = session_runner
+        self._pro_available = self._credentials_configured()
 
     # Factories ---------------------------------------------------------
 
@@ -112,7 +121,7 @@ class SpotifyDomainService:
 
     @staticmethod
     def _default_backfill_service_factory(
-        spotify_config: SpotifyConfig, spotify_client: SpotifyClient
+        spotify_config: SpotifyConfig, spotify_client: SpotifyClient | None
     ) -> BackfillService:
         return BackfillService(spotify_config, spotify_client)
 
@@ -122,28 +131,40 @@ class SpotifyDomainService:
 
     # Core Spotify operations ------------------------------------------
 
-    def get_mode(self) -> Literal["FREE", "PRO"]:
-        return self._config.spotify.mode
+    def get_status(self) -> SpotifyServiceStatus:
+        pro_usable = self._pro_available and self._spotify is not None
+        if not pro_usable:
+            return SpotifyServiceStatus(
+                status="unconfigured",
+                free_available=True,
+                pro_available=False,
+                authenticated=False,
+            )
 
-    def update_mode(self, mode: Literal["FREE", "PRO"]) -> None:
-        write_setting("SPOTIFY_MODE", mode)
-        get_app_config.cache_clear()
-
-    def get_status(self) -> str:
         try:
-            authenticated = self._spotify.is_authenticated()
+            authenticated = bool(self._spotify.is_authenticated())
         except Exception:  # pragma: no cover - defensive guard
             authenticated = False
-        return "connected" if authenticated else "unauthenticated"
+
+        status_value = "connected" if authenticated else "unauthenticated"
+        return SpotifyServiceStatus(
+            status=status_value,
+            free_available=True,
+            pro_available=True,
+            authenticated=authenticated,
+        )
 
     def is_authenticated(self) -> bool:
+        if not self._pro_available or self._spotify is None:
+            return False
         try:
             return bool(self._spotify.is_authenticated())
         except Exception:  # pragma: no cover - defensive guard
             return False
 
     def search_tracks(self, query: str) -> Sequence[ProviderTrack]:
-        response = self._spotify.search_tracks(query)
+        client = self._require_spotify()
+        response = client.search_tracks(query)
         tracks_section = response.get("tracks") if isinstance(response, Mapping) else None
         raw_items = tracks_section.get("items") if isinstance(tracks_section, Mapping) else None
         normalized: list[ProviderTrack] = []
@@ -154,15 +175,18 @@ class SpotifyDomainService:
         return tuple(normalized)
 
     def search_artists(self, query: str) -> Sequence[dict[str, Any]]:
-        response = self._spotify.search_artists(query)
+        client = self._require_spotify()
+        response = client.search_artists(query)
         return self._extract_items(response, "artists")
 
     def search_albums(self, query: str) -> Sequence[dict[str, Any]]:
-        response = self._spotify.search_albums(query)
+        client = self._require_spotify()
+        response = client.search_albums(query)
         return self._extract_items(response, "albums")
 
     def get_followed_artists(self) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_followed_artists()
+        client = self._require_spotify()
+        response = client.get_followed_artists()
         artists_section = response.get("artists") if isinstance(response, dict) else None
         items: Sequence[dict[str, Any]] = []
         if isinstance(artists_section, dict):
@@ -176,14 +200,16 @@ class SpotifyDomainService:
         return items
 
     def get_artist_releases(self, artist_id: str) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_artist_releases(artist_id)
+        client = self._require_spotify()
+        response = client.get_artist_releases(artist_id)
         raw_items = response.get("items") if isinstance(response, dict) else []
         if not isinstance(raw_items, Iterable):
             return []
         return [item for item in raw_items if isinstance(item, dict)]
 
     def get_artist_discography(self, artist_id: str) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_artist_discography(artist_id)
+        client = self._require_spotify()
+        response = client.get_artist_discography(artist_id)
         albums_payload = response.get("albums") if isinstance(response, dict) else []
         albums: list[dict[str, Any]] = []
         for entry in albums_payload or []:
@@ -207,7 +233,8 @@ class SpotifyDomainService:
         return session.query(Playlist).order_by(Playlist.updated_at.desc()).all()
 
     def get_playlist_items(self, playlist_id: str, *, limit: int) -> PlaylistItemsResult:
-        payload = self._spotify.get_playlist_items(playlist_id, limit=limit)
+        client = self._require_spotify()
+        payload = client.get_playlist_items(playlist_id, limit=limit)
         total = payload.get("total") if isinstance(payload, Mapping) else None
         if total is None and isinstance(payload, Mapping):
             tracks_payload = payload.get("tracks")
@@ -260,35 +287,42 @@ class SpotifyDomainService:
         return PlaylistItemsResult(items=tuple(normalized_tracks), total=int(fallback_total or 0))
 
     def add_tracks_to_playlist(self, playlist_id: str, uris: Sequence[str]) -> None:
-        self._spotify.add_tracks_to_playlist(playlist_id, list(uris))
+        client = self._require_spotify()
+        client.add_tracks_to_playlist(playlist_id, list(uris))
 
     def remove_tracks_from_playlist(self, playlist_id: str, uris: Sequence[str]) -> None:
-        self._spotify.remove_tracks_from_playlist(playlist_id, list(uris))
+        client = self._require_spotify()
+        client.remove_tracks_from_playlist(playlist_id, list(uris))
 
     def reorder_playlist(self, playlist_id: str, *, range_start: int, insert_before: int) -> None:
-        self._spotify.reorder_playlist_items(
+        client = self._require_spotify()
+        client.reorder_playlist_items(
             playlist_id,
             range_start=range_start,
             insert_before=insert_before,
         )
 
     def get_track_details(self, track_id: str) -> Optional[dict[str, Any]]:
-        details = self._spotify.get_track_details(track_id)
+        client = self._require_spotify()
+        details = client.get_track_details(track_id)
         return details if details else None
 
     def get_audio_features(self, track_id: str) -> Optional[dict[str, Any]]:
-        features = self._spotify.get_audio_features(track_id)
+        client = self._require_spotify()
+        features = client.get_audio_features(track_id)
         return features if features else None
 
     def get_multiple_audio_features(self, track_ids: Sequence[str]) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_multiple_audio_features(list(track_ids))
+        client = self._require_spotify()
+        response = client.get_multiple_audio_features(list(track_ids))
         audio_features = response.get("audio_features") if isinstance(response, dict) else []
         if not isinstance(audio_features, Iterable):
             return []
         return [item for item in audio_features if isinstance(item, dict)]
 
     def get_saved_tracks(self, *, limit: int) -> dict[str, Any]:
-        saved = self._spotify.get_saved_tracks(limit=limit)
+        client = self._require_spotify()
+        saved = client.get_saved_tracks(limit=limit)
         items = saved.get("items", []) if isinstance(saved, dict) else []
         total = saved.get("total") if isinstance(saved, dict) else None
         if total is None and isinstance(items, Iterable):
@@ -299,21 +333,26 @@ class SpotifyDomainService:
         }
 
     def save_tracks(self, track_ids: Sequence[str]) -> None:
-        self._spotify.save_tracks(list(track_ids))
+        client = self._require_spotify()
+        client.save_tracks(list(track_ids))
 
     def remove_saved_tracks(self, track_ids: Sequence[str]) -> None:
-        self._spotify.remove_saved_tracks(list(track_ids))
+        client = self._require_spotify()
+        client.remove_saved_tracks(list(track_ids))
 
     def get_current_user(self) -> Optional[dict[str, Any]]:
-        profile = self._spotify.get_current_user()
+        client = self._require_spotify()
+        profile = client.get_current_user()
         return profile if isinstance(profile, dict) else None
 
     def get_top_tracks(self, *, limit: int) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_top_tracks(limit=limit)
+        client = self._require_spotify()
+        response = client.get_top_tracks(limit=limit)
         return self._extract_items(response, "items")
 
     def get_top_artists(self, *, limit: int) -> Sequence[dict[str, Any]]:
-        response = self._spotify.get_top_artists(limit=limit)
+        client = self._require_spotify()
+        response = client.get_top_artists(limit=limit)
         return self._extract_items(response, "items")
 
     def get_recommendations(
@@ -324,7 +363,8 @@ class SpotifyDomainService:
         seed_genres: Optional[Sequence[str]] = None,
         limit: int,
     ) -> dict[str, Any]:
-        response = self._spotify.get_recommendations(
+        client = self._require_spotify()
+        response = client.get_recommendations(
             seed_tracks=list(seed_tracks) if seed_tracks else None,
             seed_artists=list(seed_artists) if seed_artists else None,
             seed_genres=list(seed_genres) if seed_genres else None,
@@ -412,10 +452,11 @@ class SpotifyDomainService:
     # Backfill ----------------------------------------------------------
 
     def ensure_backfill_service(self) -> BackfillService:
+        spotify_client = self._require_spotify()
         service = getattr(self._state, "backfill_service", None)
         if isinstance(service, BackfillService):
             return service
-        service = self._backfill_service_factory(self._config.spotify, self._spotify)
+        service = self._backfill_service_factory(self._config.spotify, spotify_client)
         setattr(self._state, "backfill_service", service)
         return service
 
@@ -460,6 +501,26 @@ class SpotifyDomainService:
             sync_worker,
             self._session_runner,
         )
+
+    def _credentials_configured(self) -> bool:
+        spotify_config = self._config.spotify
+        credentials = (
+            spotify_config.client_id,
+            spotify_config.client_secret,
+            spotify_config.redirect_uri,
+        )
+        for value in credentials:
+            if not isinstance(value, str) or not value.strip():
+                return False
+        return True
+
+    def _require_spotify(self) -> SpotifyClient:
+        if not self._pro_available or self._spotify is None:
+            raise DependencyError(
+                "Spotify credentials are not configured.",
+                meta={"component": "spotify", "pro_available": False},
+            )
+        return self._spotify
 
     @staticmethod
     def _extract_items(response: Any, key: str) -> Sequence[dict[str, Any]]:

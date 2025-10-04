@@ -392,7 +392,6 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `SPOTIFY_CLIENT_SECRET` | string | _(leer)_ | OAuth Client-Secret – niemals ins Repo. | 🔒 |
 | `SPOTIFY_REDIRECT_URI` | string | _(leer)_ | Registrierte Redirect-URI für den OAuth-Flow. | — |
 | `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
-| `SPOTIFY_MODE` | `FREE`\|`PRO` | `PRO` | Betriebsmodus – `FREE` benötigt keinen OAuth-Flow. | — |
 | `INTEGRATIONS_ENABLED` | csv | `spotify,slskd` | Aktivierte Provider (z. B. `spotify,slskd`). | — |
 | `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
@@ -408,8 +407,9 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 ##### Spotify OAuth (PRO-Modus)
 
-- `SPOTIFY_CLIENT_ID` und `SPOTIFY_CLIENT_SECRET` **müssen** gesetzt sein, sobald `SPOTIFY_MODE=PRO` aktiv ist. Die Werte stammen
-  aus der Spotify Developer Console (App → _Settings_). Sie dürfen nicht eingecheckt werden.
+- PRO-Funktionen werden automatisch aktiviert, sobald `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` und `SPOTIFY_REDIRECT_URI`
+  hinterlegt sind. Die Werte stammen aus der Spotify Developer Console (App → _Settings_) und dürfen nicht eingecheckt
+  werden. Der aktuelle Zustand lässt sich über `GET /spotify/status` prüfen.
 - `SPOTIFY_REDIRECT_URI` muss exakt mit der in Spotify registrierten Redirect-URI übereinstimmen (inkl. Protokoll/Port). Für
   lokale Tests bietet sich z. B. `http://localhost:3000/api/auth/spotify/callback` an.
 - Optional können die Secrets auch über `/settings` in die Datenbank geschrieben werden. ENV-Werte dienen als Fallback bzw.

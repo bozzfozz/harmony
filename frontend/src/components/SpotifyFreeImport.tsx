@@ -8,7 +8,6 @@ import {
   SpotifyFreeEnqueueResponse,
   SpotifyFreeParsePayload,
   SpotifyFreeUploadPayload,
-  SpotifyMode,
   uploadSpotifyFreeFile
 } from '../api/services/spotify';
 import { ApiError } from '../api/client';
@@ -28,7 +27,7 @@ import { Textarea } from './ui/textarea';
 import { useToast } from '../hooks/useToast';
 
 interface SpotifyFreeImportProps {
-  mode: SpotifyMode;
+  proAvailable: boolean;
 }
 
 const normaliseQuery = (track: NormalizedTrack): string => {
@@ -42,7 +41,7 @@ const normaliseQuery = (track: NormalizedTrack): string => {
   return segments.filter(Boolean).join(' ');
 };
 
-const SpotifyFreeImport = ({ mode }: SpotifyFreeImportProps) => {
+const SpotifyFreeImport = ({ proAvailable }: SpotifyFreeImportProps) => {
   const { toast } = useToast();
   const [input, setInput] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -55,11 +54,11 @@ const SpotifyFreeImport = ({ mode }: SpotifyFreeImportProps) => {
   const hasItems = items.length > 0;
 
   const helperText = useMemo(() => {
-    if (mode === 'FREE') {
+    if (!proAvailable) {
       return 'Importiere Spotify-Listen ohne OAuth: Eine Referenz pro Zeile ("Artist - Title | Album | Year") oder Spotify-Track-Link.';
     }
-    return 'Auch im PRO-Modus kannst du Listen ohne API-Zugriff vorbereiten. Die Jobs nutzen Soulseek direkt.';
-  }, [mode]);
+    return 'Auch mit aktiven Spotify-Credentials kannst du Listen ohne API-Zugriff vorbereiten. Die Jobs nutzen Soulseek direkt.';
+  }, [proAvailable]);
 
   const handleUploadChange = async (event: ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {

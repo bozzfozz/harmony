@@ -5,7 +5,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ## Quellen & Priorität
 
 1. **Code-Defaults** – sind in `app/config.py` hinterlegt (z. B. `DEFAULT_WATCHLIST_MAX_CONCURRENCY`).
-2. **Datenbank-Settings** – bestimmte Schlüssel (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_MODE`, `SLSKD_URL`, `SLSKD_API_KEY`, `ENABLE_ARTWORK`, `ENABLE_LYRICS`) werden beim Start aus der Tabelle `settings` geladen und haben Vorrang vor ENV-Werten.
+2. **Datenbank-Settings** – bestimmte Schlüssel (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SLSKD_URL`, `SLSKD_API_KEY`, `ENABLE_ARTWORK`, `ENABLE_LYRICS`) werden beim Start aus der Tabelle `settings` geladen und haben Vorrang vor ENV-Werten.
 3. **Umgebungsvariablen** – werden zuletzt ausgewertet und überschreiben Defaults, sofern kein Datenbankwert existiert. Während der Laufzeit cached `get_app_config()` die Werte; Änderungen an `.env` erfordern daher einen Neustart.
 4. **Runtime-Profile & Worker-Overrides** – `get_app_config().environment` bündelt `APP_ENV`, `HARMONY_DISABLE_WORKERS`, `WORKER_VISIBILITY_TIMEOUT_S`, `WATCHLIST_INTERVAL` sowie `WATCHLIST_TIMER_ENABLED`. Statt direkter `os.getenv()`-Zugriffe greifen Bootstrap, Queue-Persistence und Tests nun auf diese Single Source zurück.
 
