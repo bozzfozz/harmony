@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import {
   Button,
@@ -80,6 +80,19 @@ const SettingsPage = () => {
     plex: false,
     soulseek: false
   });
+
+  const credentialHint = useMemo(() => {
+    if (!spotifyStatus) {
+      return null;
+    }
+    if (!spotifyStatus.pro_available) {
+      return 'Spotify-Credentials fehlen oder sind unvollständig. Hinterlege Client-ID, Client-Secret und Redirect-URI, um die PRO-Anbindung freizuschalten.';
+    }
+    if (!spotifyStatus.authenticated) {
+      return 'Credentials erkannt – Authentifiziere dich im Backend, um PRO-Funktionen zu aktivieren.';
+    }
+    return 'Spotify PRO ist vollständig verbunden und einsatzbereit.';
+  }, [spotifyStatus]);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -187,11 +200,21 @@ const SettingsPage = () => {
                       Verbindungsstatus: {spotifyStatus.status === 'connected' ? 'Verbunden' : spotifyStatus.status === 'unauthenticated' ? 'Nicht authentifiziert' : 'Nicht konfiguriert'}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      FREE-Import ist immer verfügbar. PRO-Funktionen benötigen gültige Spotify-Credentials.
+                      {spotifyStatus.free_available
+                        ? 'FREE-Import steht bereit und nutzt Soulseek für Downloads.'
+                        : 'FREE-Import ist derzeit nicht verfügbar. Prüfe Worker-Status und Soulseek-Anbindung.'}
                     </p>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border border-border p-3 text-sm">
+                    <p className="font-medium text-foreground">FREE verfügbar</p>
+                    <p className="text-muted-foreground">
+                      {spotifyStatus.free_available
+                        ? 'Ja – Worker aktiv und Soulseek erreichbar.'
+                        : 'Nein – bitte Worker-Status und Soulseek prüfen.'}
+                    </p>
+                  </div>
                   <div className="rounded-md border border-border p-3 text-sm">
                     <p className="font-medium text-foreground">PRO verfügbar</p>
                     <p className="text-muted-foreground">
@@ -205,11 +228,16 @@ const SettingsPage = () => {
                     </p>
                   </div>
                 </div>
-                {!spotifyStatus.pro_available && (
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    Hinterlege Client-ID, Client-Secret und Redirect-URI, um PRO-Funktionen freizuschalten.
+                {credentialHint ? (
+                  <p className={`text-sm ${spotifyStatus.pro_available && spotifyStatus.authenticated ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {credentialHint}
                   </p>
-                )}
+                ) : null}
+                {!spotifyStatus.free_available ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Der FREE-Import ist deaktiviert. Prüfe die Soulseek-Konfiguration und die entsprechenden Worker.
+                  </p>
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Statusinformationen sind derzeit nicht verfügbar.</p>

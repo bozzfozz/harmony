@@ -3,10 +3,12 @@ import userEvent from '@testing-library/user-event';
 import SettingsPage from '../pages/SettingsPage';
 import { renderWithProviders } from '../test-utils';
 import { getSettings, updateSettings, testServiceConnection } from '../api/services/system';
+import { getSpotifyStatus } from '../api/services/spotify';
 
 type GetSettingsMock = jest.MockedFunction<typeof getSettings>;
 type UpdateSettingsMock = jest.MockedFunction<typeof updateSettings>;
 type TestServiceConnectionMock = jest.MockedFunction<typeof testServiceConnection>;
+type GetSpotifyStatusMock = jest.MockedFunction<typeof getSpotifyStatus>;
 
 jest.mock('../api/services/system', () => ({
   ...jest.requireActual('../api/services/system'),
@@ -15,9 +17,15 @@ jest.mock('../api/services/system', () => ({
   testServiceConnection: jest.fn()
 }));
 
+jest.mock('../api/services/spotify', () => ({
+  ...jest.requireActual('../api/services/spotify'),
+  getSpotifyStatus: jest.fn()
+}));
+
 const mockedGetSettings = getSettings as GetSettingsMock;
 const mockedUpdateSettings = updateSettings as UpdateSettingsMock;
 const mockedTestServiceConnection = testServiceConnection as TestServiceConnectionMock;
+const mockedGetSpotifyStatus = getSpotifyStatus as GetSpotifyStatusMock;
 
 const toastMock = jest.fn();
 
@@ -32,6 +40,12 @@ describe('SettingsPage', () => {
       }
     });
     mockedUpdateSettings.mockResolvedValue();
+    mockedGetSpotifyStatus.mockResolvedValue({
+      status: 'unconfigured',
+      free_available: true,
+      pro_available: false,
+      authenticated: false
+    });
   });
 
   it('lädt und speichert Einstellungen', async () => {
@@ -51,7 +65,7 @@ describe('SettingsPage', () => {
         { key: 'SPOTIFY_CLIENT_ID', value: 'updated-id' }
       ])
     );
-    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: '✅ Einstellungen gespeichert' }));
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Spotify settings saved' }));
   });
 
   it('prüft Dienst-Verbindung und zeigt Ergebnis an', async () => {
