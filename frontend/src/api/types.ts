@@ -241,8 +241,17 @@ export interface RetryAllFailedResponse {
   skipped: number;
 }
 
+export interface DownloadFilePayload {
+  filename?: string;
+  name?: string;
+  source?: string;
+  priority?: number;
+  [key: string]: unknown;
+}
+
 export interface StartDownloadPayload {
-  track_id: string;
+  username: string;
+  files: DownloadFilePayload[];
 }
 
 export interface DownloadExportFilters {

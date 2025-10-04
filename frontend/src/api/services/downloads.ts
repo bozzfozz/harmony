@@ -4,7 +4,8 @@ import type {
   DownloadEntry,
   DownloadExportFilters,
   FetchDownloadsOptions,
-  StartDownloadPayload
+  StartDownloadPayload,
+  DownloadFilePayload
 } from '../types';
 import { useMutation, useQuery } from '../../lib/query';
 import { ApiError } from '../client';
@@ -121,6 +122,60 @@ const withDefaultDownload = (entry: DownloadEntry | undefined, fallback: Partial
   username: fallback.username ?? entry?.username ?? null
 });
 
+const normalizeDownloadFilePayload = (file: DownloadFilePayload): DownloadFilePayload | null => {
+  const normalized: DownloadFilePayload = { ...file };
+
+  const rawFilename = typeof file.filename === 'string' ? file.filename.trim() : '';
+  const rawName = typeof file.name === 'string' ? file.name.trim() : '';
+  const rawSource = typeof file.source === 'string' ? file.source.trim() : '';
+
+  if (rawFilename) {
+    normalized.filename = rawFilename;
+  } else {
+    delete normalized.filename;
+  }
+
+  if (rawName) {
+    normalized.name = rawName;
+  } else if (rawFilename) {
+    normalized.name = rawFilename;
+  } else {
+    delete normalized.name;
+  }
+
+  if (rawSource) {
+    normalized.source = rawSource;
+  } else {
+    delete normalized.source;
+  }
+
+  if (typeof file.priority === 'number' && Number.isFinite(file.priority)) {
+    normalized.priority = Math.round(file.priority);
+  } else {
+    delete normalized.priority;
+  }
+
+  if (!normalized.filename && !normalized.name) {
+    return null;
+  }
+
+  return normalized;
+};
+
+const normalizeStartDownloadPayload = (payload: StartDownloadPayload): StartDownloadPayload => {
+  const username = typeof payload.username === 'string' ? payload.username.trim() : '';
+  const files = Array.isArray(payload.files) ? payload.files : [];
+
+  const normalizedFiles = files
+    .map((file) => normalizeDownloadFilePayload(file))
+    .filter((file): file is DownloadFilePayload => file !== null);
+
+  return {
+    username,
+    files: normalizedFiles
+  };
+};
+
 export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise<DownloadEntry[]> => {
   const params: Record<string, string> = {};
   if (options.includeAll) {
@@ -146,7 +201,8 @@ export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise
 };
 
 export const startDownload = async (payload: StartDownloadPayload): Promise<DownloadEntry> => {
-  const response = await request<unknown>({ method: 'POST', url: apiUrl('/download'), data: payload });
+  const requestPayload = normalizeStartDownloadPayload(payload);
+  const response = await request<unknown>({ method: 'POST', url: apiUrl('/download'), data: requestPayload });
   return withDefaultDownload(normalizeDownloadEntry(response) ?? undefined, {
     filename: '',
     status: 'queued',

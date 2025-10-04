@@ -37,13 +37,46 @@ const statusOptions = [
   { value: 'blocked', label: 'Blockiert' }
 ];
 
+const DOWNLOAD_SOURCE = 'library_manual';
+
+const extractDownloadDetails = (value: string): { username?: string; filename?: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const protocolMatch = /^soulseek:\/\/([^/]+)\/(.+)$/i.exec(trimmed);
+  if (protocolMatch) {
+    return {
+      username: protocolMatch[1].trim(),
+      filename: protocolMatch[2].trim()
+    };
+  }
+
+  const separator = '::';
+  const separatorIndex = trimmed.indexOf(separator);
+  if (separatorIndex > 0) {
+    const potentialUsername = trimmed.slice(0, separatorIndex).trim();
+    const potentialFilename = trimmed.slice(separatorIndex + separator.length).trim();
+    if (potentialUsername && potentialFilename) {
+      return {
+        username: potentialUsername,
+        filename: potentialFilename
+      };
+    }
+  }
+
+  return null;
+};
+
 interface LibraryDownloadsProps {
   isActive?: boolean;
 }
 
 const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
   const { toast } = useToast();
-  const [trackId, setTrackId] = useState('');
+  const [username, setUsername] = useState('');
+  const [downloadInput, setDownloadInput] = useState('');
   const [showAllDownloads, setShowAllDownloads] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,14 +145,17 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
 
   const startDownloadMutation = useMutation({
     mutationFn: startDownload,
-    onSuccess: (entry) => {
+    onSuccess: (entry, payload) => {
+      const submittedFile = payload?.files?.[0];
+      const displayName = entry?.filename || submittedFile?.filename || submittedFile?.name || '';
       toast({
         title: 'Download gestartet',
-        description: entry?.filename
-          ? `"${entry.filename}" wurde zur Warteschlange hinzugefügt.`
+        description: displayName
+          ? `"${displayName}" wurde zur Warteschlange hinzugefügt.`
           : 'Download wurde gestartet.'
       });
-      setTrackId('');
+      setDownloadInput('');
+      setUsername((current) => current || payload.username);
       void refetch();
     },
     onError: (error) => {
@@ -232,15 +268,45 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!trackId.trim()) {
+    const trimmedInput = downloadInput.trim();
+    if (!trimmedInput) {
       toast({
-        title: 'Track-ID erforderlich',
+        title: 'Track-Information erforderlich',
         description: 'Bitte Track oder Dateiname eingeben.',
         variant: 'destructive'
       });
       return;
     }
-    void startDownloadMutation.mutate({ track_id: trackId.trim() });
+
+    const derived = extractDownloadDetails(trimmedInput);
+    let normalizedUsername = username.trim();
+
+    if (!normalizedUsername && derived?.username) {
+      normalizedUsername = derived.username;
+      setUsername(derived.username);
+    }
+
+    if (!normalizedUsername) {
+      toast({
+        title: 'Benutzername erforderlich',
+        description: 'Bitte Soulseek-Benutzernamen angeben oder im Trackfeld hinterlegen.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const resolvedFilename = derived?.filename?.trim() || trimmedInput;
+
+    void startDownloadMutation.mutate({
+      username: normalizedUsername,
+      files: [
+        {
+          filename: resolvedFilename,
+          name: trimmedInput,
+          source: DOWNLOAD_SOURCE
+        }
+      ]
+    });
   };
 
   const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -341,23 +407,45 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSubmit}>
-            <Input
-              value={trackId}
-              onChange={(event) => setTrackId(event.target.value)}
-              placeholder="Track oder Dateiname eingeben"
-              aria-label="Track-ID"
-            />
-            <Button type="submit" disabled={startDownloadMutation.isPending}>
-              {startDownloadMutation.isPending ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Wird gestartet...
-                </span>
-              ) : (
-                'Download starten'
-              )}
-            </Button>
+          <form
+            className="grid gap-3 sm:grid-cols-[repeat(3,minmax(0,1fr))] sm:items-end"
+            onSubmit={handleSubmit}
+          >
+            <label className="flex flex-col gap-2 text-sm font-medium">
+              Soulseek-Benutzername
+              <Input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Soulseek-Benutzername"
+                aria-label="Soulseek-Benutzername"
+              />
+            </label>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                Datei oder Track
+                <Input
+                  value={downloadInput}
+                  onChange={(event) => setDownloadInput(event.target.value)}
+                  placeholder="Dateiname, Track oder soulseek://-Link"
+                  aria-label="Datei oder Track"
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Optional: Format „soulseek://nutzer/pfad“ oder „nutzer::datei“ zur automatischen Zuordnung.
+              </p>
+            </div>
+            <div className="sm:col-start-3 sm:self-end">
+              <Button type="submit" disabled={startDownloadMutation.isPending} className="w-full sm:w-auto">
+                {startDownloadMutation.isPending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Wird gestartet...
+                  </span>
+                ) : (
+                  'Download starten'
+                )}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
