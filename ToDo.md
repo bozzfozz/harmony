@@ -62,6 +62,28 @@ Subtasks:
 - Navigation erweitern und Badges gestalten.
 - Tests und Dokumentation aktualisieren.
 
+ID: TD-20251014-001
+Titel: Soulseek-Dashboard zeigt Download-Überwachung
+Status: done
+Priorität: P2
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-14T09:00:00Z
+Updated_at: 2025-10-14T09:00:00Z
+Tags: soulseek, operations, dashboard
+Beschreibung: Das Soulseek-Dashboard visualisierte bisher nur Uploads, wodurch Operator:innen den Zustand der Download-Warteschlange im Backend prüfen mussten. Die neue Ansicht integriert aktive und historische Downloads inklusive Priorität, Retry-Zähler und Fehlermeldungen direkt in der UI. Umschalter für aktive vs. alle Transfers sowie Live-Refresh erleichtern das Monitoring nach manuellen Eingriffen.
+Akzeptanzkriterien:
+- UI bindet `/soulseek/downloads` und `/soulseek/downloads/all` ein und zeigt relevante Felder (State, Fortschritt, Priorität, Retry-Zähler, Fehler) tabellarisch an.
+- Operator:innen können zwischen aktiven und sämtlichen Downloads umschalten und eine Aktualisierung anstoßen.
+- Tests decken Erfolgs-, Fehler-, Lade- und Leerszenarien der Download-Abfrage ab.
+Risiko/Impact: Niedrig; reine UI- und Service-Erweiterung ohne Änderungen an der Backend-Semantik.
+Dependencies: Soulseek-Router-Endpunkte für Downloads müssen erreichbar bleiben.
+Verweise: PR TBD
+Subtasks:
+- Downloads-Service im Frontend typisieren und normalisieren.
+- Komponenten & SoulseekPage um Download-Tabellen erweitern.
+- Tests und Dokumentation ergänzen.
+
 ID: TD-20251012-001
 Titel: Soulseek- und Matching-Ansichten mit Live-Daten versorgen
 Status: done
