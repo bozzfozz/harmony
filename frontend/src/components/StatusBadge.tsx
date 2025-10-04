@@ -59,7 +59,18 @@ const inferTone = (value: string): StatusTone => {
     return 'warning';
   }
   if (
-    ['disconnected', 'down', 'failed', 'error', 'offline', 'cancelled', 'blocked'].includes(normalized)
+    [
+      'disconnected',
+      'down',
+      'failed',
+      'error',
+      'offline',
+      'cancelled',
+      'blocked',
+      'dead_letter',
+      'dead-letter',
+      'deadletter'
+    ].includes(normalized)
   ) {
     return 'danger';
   }

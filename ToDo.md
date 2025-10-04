@@ -172,6 +172,28 @@ Subtasks:
 - Integrationstests für Matching-Flows ergänzen.
 - Monitoring-Hooks samt Dokumentation aktualisieren.
 
+ID: TD-20251004-004
+Titel: StatusBadge markiert Dead-Letter-Downloads als kritisch
+Status: done
+Priorität: P3
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-04T21:40:54Z
+Updated_at: 2025-10-04T21:40:54Z
+Tags: soulseek, status-badge, reliability
+Beschreibung: Die Soulseek-Ansicht nutzte bislang denselben neutralen Badge-Ton für Dead-Letter-Downloads wie für harmlose Stati, wodurch kritische Fälle im Monitoring untergingen. Die StatusBadge-Komponente erkennt Dead-Letter-Varianten jetzt als Gefahrenzustand und visualisiert sie auffällig. Begleitende Tests sichern das Mapping und verhindern Regressionen beim Umgang mit Dead-Letter-Zuständen.
+Akzeptanzkriterien:
+- Badge-Logik ordnet dead_letter und dead-letter der Danger-Farbpalette zu.
+- UI zeigt Dead-Letter-Downloads mit rotem Badge und Ausfall-Icon an.
+- Tests schlagen fehl, wenn Dead-Letter-Zustände nicht mehr als Gefahr markiert werden.
+Risiko/Impact: Niedrig; reine UI-Sichtbarkeit, keine Backend-Semantik.
+Dependencies: Keine
+Verweise: PR TBD (StatusBadge Dead-Letter Fix)
+Subtasks:
+- Danger-Mapping für Dead-Letter in StatusBadge ergänzen.
+- Soulseek-Downloadliste auf neues Mapping prüfen.
+- UI-Test für Dead-Letter-Badges erstellen.
+
 ID: TD-20251012-004
 Titel: Sidebar-Kollapszustand persistieren
 Status: done
