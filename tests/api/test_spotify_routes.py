@@ -26,7 +26,7 @@ def test_unified_router_includes_all_sections() -> None:
     paths = _collect_paths(app.router)
 
     expected = {
-        ("/spotify/mode", frozenset({"GET"})),
+        ("/spotify/status", frozenset({"GET"})),
         ("/spotify/import/free", frozenset({"POST"})),
         ("/spotify/backfill/run", frozenset({"POST"})),
         ("/spotify/free/upload", frozenset({"POST"})),
@@ -37,7 +37,7 @@ def test_unified_router_includes_all_sections() -> None:
 
 def test_section_routers_share_registration_contract() -> None:
     core_paths = _collect_paths(core_router)
-    assert ("/spotify/mode", frozenset({"GET"})) in core_paths
+    assert ("/spotify/status", frozenset({"GET"})) in core_paths
 
     backfill_paths = _collect_paths(backfill_router)
     assert ("/spotify/backfill/run", frozenset({"POST"})) in backfill_paths

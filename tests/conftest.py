@@ -1304,7 +1304,8 @@ def configure_environment(
     from app import dependencies as deps
 
     deps.get_app_config.cache_clear()
-    deps.get_spotify_client.cache_clear()
+    if hasattr(deps.get_spotify_client, "cache_clear"):
+        deps.get_spotify_client.cache_clear()
     deps.get_soulseek_client.cache_clear()
     deps.get_transfers_api.cache_clear()
     deps.get_matching_engine.cache_clear()

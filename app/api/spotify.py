@@ -79,18 +79,23 @@ class TrackIdsPayload(BaseModel):
     ids: List[str]
 
 
-class SpotifyModeResponse(BaseModel):
-    mode: Literal["FREE", "PRO"]
-
-
-class SpotifyModePayload(BaseModel):
-    mode: Literal["FREE", "PRO"]
+class SpotifyStatusResponse(BaseModel):
+    status: Literal["connected", "unauthenticated", "unconfigured"]
+    free_available: bool = Field(
+        ..., description="Whether FREE ingest features are available."
+    )
+    pro_available: bool = Field(
+        ..., description="Whether Spotify API integrations are configured."
+    )
+    authenticated: bool = Field(
+        ..., description="Indicates if the Spotify client currently holds a valid session."
+    )
 
 
 def _get_spotify_service(
     request: Request,
     config=Depends(get_app_config),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    spotify_client: SpotifyClient | None = Depends(get_spotify_client),
     soulseek_client: SoulseekClient = Depends(get_soulseek_client),
     session_runner: SessionRunner = Depends(get_session_runner),
 ) -> SpotifyDomainService:
@@ -103,27 +108,12 @@ def _get_spotify_service(
     )
 
 
-@core_router.get("/mode", response_model=SpotifyModeResponse)
-def get_spotify_mode(
-    service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> SpotifyModeResponse:
-    return SpotifyModeResponse(mode=service.get_mode())
-
-
-@core_router.post("/mode")
-def update_spotify_mode(
-    payload: SpotifyModePayload,
-    service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> dict[str, bool]:
-    service.update_mode(payload.mode)
-    return {"ok": True}
-
-
-@core_router.get("/status", response_model=StatusResponse)
+@core_router.get("/status", response_model=SpotifyStatusResponse)
 def spotify_status(
     service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> StatusResponse:
-    return StatusResponse(status=service.get_status())
+) -> SpotifyStatusResponse:
+    status_payload = service.get_status()
+    return SpotifyStatusResponse(**asdict(status_payload))
 
 
 @core_router.get("/search/tracks", response_model=SpotifySearchResponse)

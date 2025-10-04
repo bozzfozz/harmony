@@ -36,6 +36,10 @@ from app.workers.persistence import (
     release_active_leases_async,
 )
 
+# Backwards compatible alias used by existing tests and callers relying on the
+# original synchronous API facade.
+enqueue = enqueue_async
+
 AsyncEnqueue = Callable[[str, Mapping[str, Any]], Awaitable[QueueJobDTO]]
 AsyncFetchReady = Callable[[str], Awaitable[List[QueueJobDTO]]]
 AsyncLease = Callable[[int, str, Optional[int]], Awaitable[QueueJobDTO | None]]

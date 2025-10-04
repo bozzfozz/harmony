@@ -36,8 +36,28 @@ def get_app_config() -> AppConfig:
 
 
 @lru_cache()
-def get_spotify_client() -> SpotifyClient:
-    return SpotifyClient(get_app_config().spotify)
+def get_spotify_client() -> SpotifyClient | None:
+    config = get_app_config().spotify
+    credentials = (
+        config.client_id,
+        config.client_secret,
+        config.redirect_uri,
+    )
+    for value in credentials:
+        if not isinstance(value, str) or not value.strip():
+            logger.info(
+                "Spotify client is disabled due to missing credentials",
+                extra={"event": "spotify.client_disabled"},
+            )
+            return None
+    try:
+        return SpotifyClient(config)
+    except ValueError:
+        logger.warning(
+            "Spotify client initialisation failed due to incomplete credentials",
+            extra={"event": "spotify.client_invalid_config"},
+        )
+        return None
 
 
 @lru_cache()

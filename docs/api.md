@@ -26,8 +26,8 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `POST` | `/spotify/import/free` | Parserbasierte Ingest-API (Links/Tracklisten). |
 | `POST` | `/spotify/import/free/upload` | Datei-Upload (CSV/TXT/JSON) für Free-Ingest. |
 | `GET` | `/spotify/import/jobs/{id}` | Status eines Free-Ingest-Jobs. |
-| `POST` | `/spotify/mode` | Wechselt zwischen FREE und PRO. |
-| `GET` | `/spotify/mode` | Aktueller Modus. |
+
+> **Hinweis:** Alle PRO-Endpunkte (Spotify-API-Aufrufe) antworten mit `503` (`DependencyError`), solange keine gültigen OAuth-Credentials hinterlegt sind. Der aktuelle Status lässt sich über `GET /spotify/status` abfragen.
 
 ## Soulseek
 

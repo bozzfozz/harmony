@@ -15,6 +15,7 @@ from sqlalchemy import Select, func, select
 
 from app.config import SpotifyConfig
 from app.core.spotify_client import SpotifyClient
+from app.errors import DependencyError
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import BackfillJob, IngestItem, IngestItemState, SpotifyCache
@@ -72,7 +73,7 @@ class BackfillJobStatus:
 class BackfillService:
     """Orchestrate Spotify enrichment for FREE ingest items."""
 
-    def __init__(self, config: SpotifyConfig, spotify_client: SpotifyClient) -> None:
+    def __init__(self, config: SpotifyConfig, spotify_client: SpotifyClient | None) -> None:
         self._config = config
         self._spotify = spotify_client
         self._default_limit = max(1, getattr(config, "backfill_max_items", 2_000))
@@ -247,7 +248,8 @@ class BackfillService:
 
         if metadata is None:
             cache_hit = False if key else cache_hit
-            track = self._spotify.find_track_match(
+            client = self._require_spotify()
+            track = client.find_track_match(
                 artist=candidate.artist,
                 title=candidate.title,
                 album=candidate.album,
@@ -463,13 +465,14 @@ class BackfillService:
         return created
 
     def _fetch_playlist_tracks(self, playlist_id: str) -> List[Dict[str, Any]]:
+        client = self._require_spotify()
         tracks: List[Dict[str, Any]] = []
         offset = 0
         limit = 100
 
         while True:
             try:
-                response = self._spotify.get_playlist_items(playlist_id, limit=limit, offset=offset)
+                response = client.get_playlist_items(playlist_id, limit=limit, offset=offset)
             except Exception as exc:  # pragma: no cover - defensive guard
                 logger.warning(
                     "event=backfill playlist_fetch_failed playlist_id=%s error=%s",
@@ -625,8 +628,9 @@ class BackfillService:
         if track_id in cache:
             return cache[track_id]
 
+        client = self._require_spotify()
         try:
-            track = self._spotify.get_track_details(track_id)
+            track = client.get_track_details(track_id)
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.debug("Spotify track lookup failed for %s: %s", track_id, exc)
             track = {}
@@ -661,9 +665,18 @@ class BackfillService:
 
     # Utility helpers ----------------------------------------------------
 
+    def _require_spotify(self) -> SpotifyClient:
+        if self._spotify is None:
+            raise DependencyError(
+                "Spotify credentials are required for backfill operations.",
+                meta={"component": "spotify", "operation": "backfill"},
+            )
+        return self._spotify
+
     def _ensure_authenticated(self) -> None:
+        client = self._require_spotify()
         try:
-            authenticated = self._spotify.is_authenticated()
+            authenticated = client.is_authenticated()
         except Exception:  # pragma: no cover - defensive guard
             authenticated = False
         if not authenticated:
