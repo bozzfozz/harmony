@@ -191,6 +191,33 @@ export interface SpotifyStatusResponse {
   authenticated: boolean;
 }
 
+export interface SpotifyProOAuthStartResponse {
+  authorization_url: string;
+  state: string;
+  expires_at?: string | null;
+}
+
+export type SpotifyProOAuthStatus = 'pending' | 'authorized' | 'failed' | 'cancelled';
+
+export interface SpotifyProOAuthProfile {
+  id?: string;
+  display_name?: string;
+  email?: string;
+  country?: string;
+  product?: string;
+  uri?: string;
+  href?: string;
+}
+
+export interface SpotifyProOAuthStatusResponse {
+  status: SpotifyProOAuthStatus;
+  state: string;
+  authenticated: boolean;
+  error?: string;
+  completed_at?: string | null;
+  profile?: SpotifyProOAuthProfile | null;
+}
+
 export interface NormalizedTrack {
   source: 'user';
   kind: 'track';

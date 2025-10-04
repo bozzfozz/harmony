@@ -6,6 +6,7 @@ import MatchingPage from '../pages/MatchingPage';
 import SettingsPage from '../pages/SettingsPage';
 import SoulseekPage from '../pages/SoulseekPage';
 import SpotifyPage from '../pages/SpotifyPage';
+import SpotifyProOAuthCallbackPage from '../pages/SpotifyProOAuthCallback';
 
 const AppRoutes = () => (
   <Routes>
@@ -16,6 +17,7 @@ const AppRoutes = () => (
     <Route path="/artists" element={<Navigate to="/library?tab=artists" replace />} />
     <Route path="/watchlist" element={<Navigate to="/library?tab=watchlist" replace />} />
     <Route path="/spotify" element={<SpotifyPage />} />
+    <Route path="/spotify/oauth/callback" element={<SpotifyProOAuthCallbackPage />} />
     <Route path="/soulseek" element={<SoulseekPage />} />
     <Route path="/matching" element={<MatchingPage />} />
     <Route path="/settings" element={<SettingsPage />} />
