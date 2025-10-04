@@ -58,6 +58,46 @@ describe('downloads service normalization', () => {
     });
   });
 
+  it('merges download_id responses with nested download details', async () => {
+    mockedRequest.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        status: 'queued',
+        download_id: 'abc-123',
+        downloads: [
+          {
+            id: 777,
+            filename: 'nested.mp3',
+            status: 'running',
+            progress: 12,
+            priority: 4,
+            username: 'NestedUser'
+          }
+        ]
+      }
+    });
+
+    const payload: StartDownloadPayload = {
+      username: 'NestedUser',
+      files: [
+        {
+          filename: 'nested.mp3'
+        }
+      ]
+    };
+
+    const entry = await startDownload(payload);
+
+    expect(entry).toMatchObject({
+      id: 'abc-123',
+      filename: 'nested.mp3',
+      status: 'queued',
+      progress: 12,
+      priority: 4,
+      username: 'NestedUser'
+    });
+  });
+
   it('extracts entries from downloads arrays when retrying', async () => {
     mockedRequest.mockResolvedValueOnce({
       downloads: [
