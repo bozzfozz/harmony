@@ -32,7 +32,7 @@ from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrat
 from app.orchestrator.timer import WatchlistTimer
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
-from app.workers.metadata_worker import MetadataWorker
+from app.workers.metadata_worker import MetadataWorker, MetadataUpdateWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
@@ -231,6 +231,7 @@ async def _start_orchestrator_workers(
         "artwork": False,
         "lyrics": False,
         "metadata": False,
+        "metadata_update": False,
         "import": False,
         "orchestrator_scheduler": False,
         "orchestrator_dispatcher": False,
@@ -259,6 +260,12 @@ async def _start_orchestrator_workers(
     state.rich_metadata_worker = MetadataWorker(spotify_client=spotify_client)
     await state.rich_metadata_worker.start()
     worker_status["metadata"] = True
+
+    state.metadata_update_worker = MetadataUpdateWorker(
+        metadata_worker=state.rich_metadata_worker,
+        matching_worker=getattr(app.state, "matching_worker", None),
+    )
+    worker_status["metadata_update"] = True
 
     orchestrator = bootstrap_orchestrator(
         metadata_service=state.rich_metadata_worker,
@@ -364,7 +371,12 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     if hasattr(state, "import_worker"):
         delattr(state, "import_worker")
 
-    for attribute in ("artwork_worker", "lyrics_worker", "rich_metadata_worker"):
+    for attribute in (
+        "artwork_worker",
+        "lyrics_worker",
+        "rich_metadata_worker",
+        "metadata_update_worker",
+    ):
         await _stop_worker(getattr(state, attribute, None))
         if hasattr(state, attribute):
             delattr(state, attribute)
@@ -452,6 +464,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "artwork": False,
             "lyrics": False,
             "metadata": False,
+            "metadata_update": False,
             "import": False,
             "orchestrator_scheduler": False,
             "orchestrator_dispatcher": False,

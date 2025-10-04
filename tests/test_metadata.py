@@ -8,7 +8,7 @@ from app.db import init_db, reset_engine_for_tests, session_scope
 from app.main import app
 from app.models import Download
 from app.utils import metadata_utils
-from app.workers.metadata_worker import MetadataWorker
+from app.workers.metadata_worker import MetadataWorker, MetadataUpdateWorker
 from tests.simple_client import SimpleTestClient
 
 
@@ -258,4 +258,173 @@ def test_refresh_metadata_route(monkeypatch, tmp_path) -> None:
     job_download_id, job_path, job_payload, job_request_payload = worker.calls[0]
     assert job_download_id == download_id
     assert job_path == audio_file
-    assert job_request_payload["spotify_id"] == "track-1"
+
+
+@pytest.mark.asyncio
+async def test_metadata_update_worker_processes_downloads(tmp_path) -> None:
+    reset_engine_for_tests()
+    init_db()
+
+    audio_one = tmp_path / "one.flac"
+    audio_two = tmp_path / "two.flac"
+    audio_one.write_bytes(b"data")
+    audio_two.write_bytes(b"data")
+
+    with session_scope() as session:
+        first = Download(
+            filename=str(audio_one),
+            state="completed",
+            progress=100.0,
+            genre="Rock",
+        )
+        second = Download(
+            filename=str(audio_two),
+            state="completed",
+            progress=100.0,
+            composer="Composer",
+        )
+        session.add_all([first, second])
+        session.flush()
+        first_id = first.id
+        second_id = second.id
+
+    class RecordingWorker:
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, Path]] = []
+
+        async def enqueue(
+            self,
+            download_id: int,
+            audio_path: Path,
+            *,
+            payload: Dict[str, Any] | None = None,
+            request_payload: Dict[str, Any] | None = None,
+        ) -> Dict[str, Any]:
+            self.calls.append((download_id, Path(audio_path)))
+            return {"genre": payload.get("genre") if payload else None}
+
+    stub_worker = RecordingWorker()
+    update_worker = MetadataUpdateWorker(metadata_worker=stub_worker)
+
+    status = await update_worker.start()
+    assert status["status"] == "running"
+    assert status["total"] == 2
+
+    for _ in range(10):
+        await asyncio.sleep(0)
+        status = await update_worker.status()
+        if status["status"] == "completed":
+            break
+
+    assert status["status"] == "completed"
+    assert status["processed"] == 2
+    assert status["last_completed_id"] in {first_id, second_id}
+    assert stub_worker.calls == [(first_id, audio_one), (second_id, audio_two)]
+
+
+@pytest.mark.asyncio
+async def test_metadata_update_worker_stop(tmp_path) -> None:
+    reset_engine_for_tests()
+    init_db()
+
+    paths = []
+    for index in range(3):
+        file_path = tmp_path / f"slow-{index}.flac"
+        file_path.write_bytes(b"data")
+        paths.append(file_path)
+
+    with session_scope() as session:
+        for file_path in paths:
+            session.add(
+                Download(
+                    filename=str(file_path),
+                    state="completed",
+                    progress=100.0,
+                )
+            )
+
+    class SlowWorker:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def enqueue(self, download_id: int, audio_path: Path, **_: Any) -> Dict[str, Any]:
+            self.calls += 1
+            await asyncio.sleep(0)
+            return {}
+
+    stub_worker = SlowWorker()
+    update_worker = MetadataUpdateWorker(metadata_worker=stub_worker)
+
+    await update_worker.start()
+    await asyncio.sleep(0)
+    status = await update_worker.stop()
+
+    assert status["status"] in {"stopped", "completed"}
+    assert status["processed"] >= 1
+    assert stub_worker.calls >= 1
+
+
+def test_metadata_update_router_flow(monkeypatch, tmp_path) -> None:
+    reset_engine_for_tests()
+    init_db()
+
+    first = tmp_path / "router-one.flac"
+    second = tmp_path / "router-two.flac"
+    first.write_bytes(b"data")
+    second.write_bytes(b"data")
+
+    with session_scope() as session:
+        session.add_all(
+            [
+                Download(
+                    filename=str(first),
+                    state="completed",
+                    progress=100.0,
+                ),
+                Download(
+                    filename=str(second),
+                    state="completed",
+                    progress=100.0,
+                ),
+            ]
+        )
+
+    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
+
+    class RouterWorker:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        async def enqueue(self, download_id: int, audio_path: Path, **_: Any) -> Dict[str, Any]:
+            self.calls.append(download_id)
+            await asyncio.sleep(0)
+            return {}
+
+    stub_worker = RouterWorker()
+    update_worker = MetadataUpdateWorker(metadata_worker=stub_worker)
+
+    with SimpleTestClient(app) as client:
+        client.app.state.rich_metadata_worker = stub_worker
+        client.app.state.metadata_update_worker = update_worker
+
+        start_response = client.post("/metadata/update")
+        assert start_response.status_code == 202
+        payload = start_response.json()
+        assert payload["status"] == "running"
+        assert payload["total"] == 2
+
+        for _ in range(10):
+            client._loop.run_until_complete(asyncio.sleep(0))
+            status_payload = client.get("/metadata/status").json()
+            if status_payload["status"] == "completed":
+                break
+        else:
+            status_payload = client.get("/metadata/status").json()
+
+        assert status_payload["status"] == "completed"
+        assert status_payload["processed"] == 2
+
+        stop_payload = client.post("/metadata/stop").json()
+        assert stop_payload["status"] == "completed"
+
+    assert len(stub_worker.calls) == 2

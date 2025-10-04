@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Callable, ContextManager, Iterable
 
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
-from app.models import Download
+from app.models import Download, DownloadState
 from app.utils import metadata_utils
 
 logger = get_logger(__name__)
@@ -219,40 +219,246 @@ class MetadataWorker:
 
 
 class MetadataUpdateWorker:
-    """Placeholder worker while the legacy metadata refresh is archived."""
+    """Manage ad-hoc metadata refresh jobs across stored downloads."""
 
-    def __init__(self, matching_worker: Any | None = None) -> None:
+    def __init__(
+        self,
+        metadata_worker: MetadataWorker | None = None,
+        *,
+        session_factory: Callable[[], ContextManager[Any]] = session_scope,
+        matching_worker: Any | None = None,
+    ) -> None:
+        self._metadata_worker = metadata_worker
+        self._session_factory = session_factory
         self._matching_worker = matching_worker
+        self._status_lock = asyncio.Lock()
+        self._status: dict[str, Any] = self._initial_status()
+        self._job_task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
 
     async def start(self) -> Dict[str, Any]:
-        """Return the disabled status for compatibility with old callers."""
+        """Start (or return) the current metadata refresh job status."""
 
-        logger.info("Metadata update requested but legacy integration is disabled")
-        return self.status()
+        if self._metadata_worker is None:
+            raise RuntimeError("Metadata worker unavailable")
+
+        async with self._status_lock:
+            if self._job_task is not None and not self._job_task.done():
+                return self._snapshot_locked()
+
+        jobs = await asyncio.to_thread(self._collect_jobs)
+        now = datetime.now(timezone.utc)
+
+        if not jobs:
+            async with self._status_lock:
+                self._status.update(
+                    {
+                        "status": "completed",
+                        "phase": "No eligible downloads",
+                        "processed": 0,
+                        "total": 0,
+                        "started_at": None,
+                        "completed_at": now,
+                        "error": None,
+                        "current_download_id": None,
+                        "last_completed_id": None,
+                        "last_failed_id": None,
+                    }
+                )
+            return await self.status()
+
+        async with self._status_lock:
+            self._stop_event.clear()
+            self._status.update(
+                {
+                    "status": "running",
+                    "phase": "Refreshing metadata",
+                    "processed": 0,
+                    "total": len(jobs),
+                    "started_at": now,
+                    "completed_at": None,
+                    "error": None,
+                    "current_download_id": None,
+                    "last_completed_id": None,
+                    "last_failed_id": None,
+                }
+            )
+            loop = asyncio.get_running_loop()
+            self._job_task = loop.create_task(self._run_job(jobs))
+
+        return await self.status()
 
     async def stop(self) -> Dict[str, Any]:
-        """Return the disabled status for compatibility with old callers."""
+        """Request the active job to stop and return the latest status."""
 
-        logger.info("Metadata update stop requested but legacy integration is disabled")
-        return self.status()
+        task: asyncio.Task[None] | None
+        async with self._status_lock:
+            task = self._job_task
+            running = task is not None and not task.done()
 
-    def status(self) -> Dict[str, Any]:
-        """Expose a stable payload indicating that the worker is disabled."""
+        if not running:
+            return await self.status()
 
-        queue_size = 0
+        self._stop_event.set()
+        assert task is not None  # for type-checkers
+        await task
+        return await self.status()
+
+    async def status(self) -> Dict[str, Any]:
+        """Return a snapshot of the current worker state."""
+
+        async with self._status_lock:
+            snapshot = self._snapshot_locked()
+
+        snapshot["matching_queue"] = self._matching_queue_size()
+        return snapshot
+
+    def _matching_queue_size(self) -> int:
         queue = getattr(self._matching_worker, "queue", None)
-        if queue is not None and hasattr(queue, "qsize"):
-            try:
-                queue_size = int(queue.qsize())
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.debug("Unable to inspect matching queue while disabled: %s", exc)
+        if queue is None or not hasattr(queue, "qsize"):
+            return 0
+        try:
+            return max(int(queue.qsize()), 0)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.debug("Unable to inspect matching queue: %s", exc)
+            return 0
 
+    def _snapshot_locked(self) -> Dict[str, Any]:
+        data = dict(self._status)
+        data["started_at"] = self._format_dt(data.get("started_at"))
+        data["completed_at"] = self._format_dt(data.get("completed_at"))
+        return data
+
+    def _collect_jobs(self) -> list[dict[str, Any]]:
+        jobs: list[dict[str, Any]] = []
+        with self._session_factory() as session:
+            query = (
+                session.query(Download)
+                .filter(Download.state == DownloadState.COMPLETED.value)
+                .order_by(Download.id.asc())
+            )
+            for record in query:
+                file_path = self._resolve_file_path(record)
+                if file_path is None:
+                    continue
+                jobs.append(
+                    {
+                        "download_id": record.id,
+                        "file_path": file_path,
+                        "payload": self._build_payload(record),
+                        "request_payload": dict(record.request_payload or {}),
+                    }
+                )
+        return jobs
+
+    async def _run_job(self, jobs: Iterable[dict[str, Any]]) -> None:
+        processed = 0
+        try:
+            for job in jobs:
+                if self._stop_event.is_set():
+                    await self._update_status(
+                        status="stopped",
+                        phase="Stop requested",
+                        completed_at=datetime.now(timezone.utc),
+                        current_download_id=None,
+                    )
+                    return
+
+                download_id = job["download_id"]
+                await self._update_status(current_download_id=download_id)
+
+                try:
+                    await self._metadata_worker.enqueue(  # type: ignore[union-attr]
+                        download_id,
+                        job["file_path"],
+                        payload=job["payload"],
+                        request_payload=job["request_payload"],
+                    )
+                except Exception as exc:
+                    processed += 1
+                    logger.exception(
+                        "Metadata refresh failed for download %s: %s", download_id, exc
+                    )
+                    await self._update_status(
+                        processed=processed,
+                        error=str(exc),
+                        last_failed_id=download_id,
+                    )
+                    continue
+
+                processed += 1
+                await self._update_status(
+                    processed=processed,
+                    error=None,
+                    last_completed_id=download_id,
+                )
+
+            await self._update_status(
+                status="completed",
+                phase="Refresh complete",
+                completed_at=datetime.now(timezone.utc),
+                current_download_id=None,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.exception("Metadata update job crashed: %s", exc)
+            await self._update_status(
+                status="failed",
+                phase="Job failed",
+                error=str(exc),
+                completed_at=datetime.now(timezone.utc),
+                current_download_id=None,
+            )
+        finally:
+            async with self._status_lock:
+                self._job_task = None
+                self._stop_event.clear()
+
+    async def _update_status(self, **fields: Any) -> None:
+        async with self._status_lock:
+            self._status.update(fields)
+
+    @staticmethod
+    def _resolve_file_path(record: Download) -> Path | None:
+        candidate = record.organized_path or record.filename
+        if not candidate:
+            return None
+        return Path(candidate)
+
+    @staticmethod
+    def _build_payload(record: Download) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        for field_name in (
+            "genre",
+            "composer",
+            "producer",
+            "isrc",
+            "copyright",
+            "artwork_url",
+        ):
+            value = getattr(record, field_name, None)
+            if isinstance(value, str) and value:
+                payload[field_name] = value
+        return payload
+
+    @staticmethod
+    def _format_dt(value: Any) -> Optional[str]:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value.isoformat()
+        return None
+
+    @staticmethod
+    def _initial_status() -> dict[str, Any]:
         return {
-            "status": "disabled",
-            "phase": "Legacy integration archived",
+            "status": "idle",
+            "phase": "Idle",
             "processed": 0,
-            "matching_queue": max(queue_size, 0),
+            "total": 0,
             "started_at": None,
             "completed_at": None,
-            "error": "metadata update disabled",
+            "error": None,
+            "current_download_id": None,
+            "last_completed_id": None,
+            "last_failed_id": None,
         }
