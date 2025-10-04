@@ -211,6 +211,41 @@ describe('SoulseekPage', () => {
     expect(screen.getByText(/Aktuell sind keine Downloads aktiv/)).toBeInTheDocument();
   });
 
+  it('deaktiviert den Retry-Button für Dead-Letter-Downloads', () => {
+    const downloadData: NormalizedSoulseekDownload[] = [
+      {
+        id: '42',
+        filename: 'album-track.mp3',
+        username: 'alice',
+        state: 'dead_letter',
+        progress: 0,
+        priority: null,
+        retryCount: 0,
+        lastError: 'Permanent failure',
+        createdAt: null,
+        updatedAt: null,
+        queuedAt: null,
+        startedAt: null,
+        completedAt: null,
+        nextRetryAt: null,
+        raw: {} as any
+      }
+    ];
+
+    mockedUseQuery.mockImplementation(({ queryKey }) => {
+      const key = joinQueryKey(queryKey);
+      if (key === 'soulseek:downloads:active') {
+        return createQueryResult({ data: downloadData });
+      }
+      return createQueryResult();
+    });
+
+    renderWithProviders(<SoulseekPage />, { route: '/soulseek' });
+
+    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    expect(retryButton).toBeDisabled();
+  });
+
   it('plant fehlgeschlagene Downloads erneut ein und aktualisiert die Liste', async () => {
     const refetchMock = jest.fn().mockResolvedValue(undefined);
     const toastMock = jest.fn();

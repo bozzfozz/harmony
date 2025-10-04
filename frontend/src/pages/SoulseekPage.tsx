@@ -18,7 +18,7 @@ import {
   SoulseekRequeueError
 } from '../api/services/soulseek';
 import type { SoulseekConnectionStatus } from '../api/types';
-import { useQuery } from '../lib/query';
+import { useMutation, useQuery } from '../lib/query';
 import { useToast } from '../hooks/useToast';
 
 interface StatusLabelMapping {
@@ -103,8 +103,17 @@ const SoulseekPage = () => {
     queryFn: () => getSoulseekDownloads({ includeAll: showAllDownloads })
   });
 
+  const {
+    mutateAsync: requeueDownload,
+    isPending: isRequeuePending
+  } = useMutation<string, void>({ mutationFn: requeueSoulseekDownload });
+
   const handleRetryDownload = useCallback(
     async (download: NormalizedSoulseekDownload) => {
+      if (isRequeuePending) {
+        return;
+      }
+
       const downloadId = download.id?.trim();
       if (!downloadId) {
         toast({
@@ -117,7 +126,7 @@ const SoulseekPage = () => {
 
       setRetryingDownloadId(downloadId);
       try {
-        await requeueSoulseekDownload(downloadId);
+        await requeueDownload(downloadId);
         toast({
           title: 'Download erneut eingeplant',
           description: `${download.filename ?? downloadId} wird erneut heruntergeladen.`
@@ -137,7 +146,7 @@ const SoulseekPage = () => {
         setRetryingDownloadId(null);
       }
     },
-    [downloadsQuery, toast]
+    [downloadsQuery, isRequeuePending, requeueDownload, toast]
   );
 
   const connectionStatus = statusQuery.data?.status ?? 'unknown';
@@ -379,6 +388,7 @@ const SoulseekPage = () => {
             onRetryFetch={() => downloadsQuery.refetch()}
             onRetryDownload={handleRetryDownload}
             retryingDownloadId={retryingDownloadId}
+            isRetryPending={isRequeuePending}
           />
         </CardContent>
       </Card>
