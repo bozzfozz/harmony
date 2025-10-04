@@ -27,53 +27,60 @@ const titleCase = (value: string): string =>
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(' ');
 
+const POSITIVE_STATES = new Set([
+  'connected',
+  'ok',
+  'healthy',
+  'online',
+  'completed',
+  'active',
+  'running',
+  'up',
+  'available'
+]);
+
+const WARNING_STATES = new Set([
+  'degraded',
+  'warning',
+  'limited',
+  'uploading',
+  'pending',
+  'queued',
+  'starting',
+  'partial'
+]);
+
+const DANGER_STATES = new Set([
+  'disconnected',
+  'down',
+  'failed',
+  'failure',
+  'fail',
+  'error',
+  'offline',
+  'cancelled',
+  'blocked',
+  'dead_letter',
+  'dead-letter',
+  'deadletter'
+]);
+
 const inferTone = (value: string): StatusTone => {
-  const normalized = value.toLowerCase();
-  if (
-    [
-      'connected',
-      'ok',
-      'healthy',
-      'online',
-      'completed',
-      'active',
-      'running',
-      'up',
-      'available'
-    ].includes(normalized)
-  ) {
+  const normalized = value.trim().toLowerCase();
+  const compact = normalized.replace(/[\s_-]+/gu, '');
+
+  if (POSITIVE_STATES.has(normalized)) {
     return 'positive';
   }
-  if (
-    [
-      'degraded',
-      'warning',
-      'limited',
-      'uploading',
-      'pending',
-      'queued',
-      'starting',
-      'partial'
-    ].includes(normalized)
-  ) {
+
+  if (WARNING_STATES.has(normalized)) {
     return 'warning';
   }
-  if (
-    [
-      'disconnected',
-      'down',
-      'failed',
-      'error',
-      'offline',
-      'cancelled',
-      'blocked',
-      'dead_letter',
-      'dead-letter',
-      'deadletter'
-    ].includes(normalized)
-  ) {
+
+  if (DANGER_STATES.has(normalized) || compact.startsWith('deadletter')) {
     return 'danger';
   }
+
   return 'info';
 };
 
