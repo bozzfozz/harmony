@@ -8,6 +8,7 @@ import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
 import { navigationItems } from '../config/navigation';
 import { useIntegrationHealth, type ServiceHealthState } from '../hooks/useIntegrationHealth';
+import { usePersistentState } from '../hooks/usePersistentState';
 
 interface IndicatorMeta {
   variant: 'warning' | 'danger';
@@ -41,7 +42,7 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState<boolean>('layout:sidebarCollapsed', false);
   const location = useLocation();
   const { services } = useIntegrationHealth();
 

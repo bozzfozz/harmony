@@ -152,21 +152,21 @@ Subtasks:
 
 ID: TD-20251012-004
 Titel: Sidebar-Kollapszustand persistieren
-Status: todo
+Status: done
 Priorität: P3
 Scope: frontend
 Owner: codex
 Created_at: 2025-10-12T16:30:00Z
-Updated_at: 2025-10-12T16:30:00Z
+Updated_at: 2025-10-15T12:00:00Z
 Tags: ui, accessibility
-Beschreibung: Die neue Kollaps-Funktion der Sidebar merkt sich den Zustand derzeit nicht über Sitzungen hinweg. Nutzende müssen nach jedem Laden erneut einklappen. Eine Persistenz (z. B. LocalStorage) erhöht die Usability und stellt sicher, dass Tastatur- und Screenreader-Nutzende konsistent dieselbe Navigation vorfinden.
+Beschreibung: Die Sidebar nutzt nun einen Persistence-Hook mit LocalStorage-Fallback, sodass der Kollapszustand zwischen Sitzungen beibehalten wird. Der Hook kapselt SSR-Wachen sowie Fehler beim Storage-Zugriff und die Layout-Komponente liest gespeicherte Flags beim Initialrender. Zusätzliche Tests prüfen Persistenz, mobile Breakpoints und Fallback-Verhalten ohne verfügbaren Storage.
 Akzeptanzkriterien:
 - Sidebar merkt sich den letzten Kollapszustand über Reloads (z. B. mittels LocalStorage) und respektiert System- oder Nutzerpräferenzen.
 - Persistenter Zustand beeinträchtigt mobile Breakpoints nicht und wird bei deaktiviertem Storage sauber gehandhabt.
 - Tests decken Persistenz und Fallback auf Standardbreite ab.
 Risiko/Impact: Niedrig; betrifft ausschließlich Client-State und UI-Interaktion.
 Dependencies: Keine
-Verweise: PR TBD
+Verweise: PR TBD (Sidebar-Persistenz)
 Subtasks:
 - Persistenz-Hook oder Utility implementieren.
 - Layout-Komponente aktualisieren und auf Konsistenz testen.
