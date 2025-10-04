@@ -34,4 +34,5 @@ def test_status_connections_reports_health(client) -> None:
     assert "connections" in payload
     assert payload["connections"]["spotify"] == "fail"
     assert payload["connections"]["soulseek"] == "ok"
-    assert set(payload["connections"].keys()) == {"spotify", "soulseek"}
+    assert payload["connections"]["plex"] == "fail"
+    assert set(payload["connections"].keys()) == {"spotify", "plex", "soulseek"}
