@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import urlparse
@@ -66,6 +66,12 @@ class ArtworkFallbackConfig:
 
 
 @dataclass(slots=True)
+class ArtworkPostProcessingConfig:
+    enabled: bool = False
+    hooks: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
 class ArtworkConfig:
     directory: str
     timeout_seconds: float
@@ -74,6 +80,9 @@ class ArtworkConfig:
     min_edge: int
     min_bytes: int
     fallback: ArtworkFallbackConfig
+    post_processing: ArtworkPostProcessingConfig = field(
+        default_factory=ArtworkPostProcessingConfig
+    )
 
 
 @dataclass(slots=True)
@@ -1359,6 +1368,15 @@ def load_config() -> AppConfig:
     concurrency_value = os.getenv("ARTWORK_WORKER_CONCURRENCY") or os.getenv("ARTWORK_CONCURRENCY")
     min_edge_value = os.getenv("ARTWORK_MIN_EDGE")
     min_bytes_value = os.getenv("ARTWORK_MIN_BYTES")
+    post_processors_raw = os.getenv("ARTWORK_POST_PROCESSORS")
+    if post_processors_raw:
+        processor_entries = post_processors_raw.replace("\n", ",").split(",")
+        post_processors = tuple(
+            entry.strip() for entry in processor_entries if entry.strip()
+        )
+    else:
+        post_processors = ()
+
     artwork_config = ArtworkConfig(
         directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
         timeout_seconds=_as_float(timeout_value, default=DEFAULT_ARTWORK_TIMEOUT),
@@ -1383,6 +1401,13 @@ def load_config() -> AppConfig:
                 os.getenv("ARTWORK_FALLBACK_MAX_BYTES"),
                 default=DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
             ),
+        ),
+        post_processing=ArtworkPostProcessingConfig(
+            enabled=_as_bool(
+                os.getenv("ARTWORK_POST_PROCESSING_ENABLED"),
+                default=False,
+            ),
+            hooks=post_processors,
         ),
     )
 
