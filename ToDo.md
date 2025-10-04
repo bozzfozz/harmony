@@ -41,14 +41,14 @@ Subtasks:
 
 ID: TD-20251012-001
 Titel: Soulseek- und Matching-Ansichten mit Live-Daten versorgen
-Status: todo
+Status: in-progress
 Priorität: P2
 Scope: frontend
 Owner: codex
 Created_at: 2025-10-12T09:00:00Z
-Updated_at: 2025-10-12T09:00:00Z
+Updated_at: 2025-10-12T19:45:00Z
 Tags: navigation, integrations, soulseek, matching
-Beschreibung: Die neuen Navigationspunkte für Soulseek und Matching zeigen aktuell nur Platzhaltertexte. Für ein vollständiges Nutzererlebnis müssen die Komponenten API-Aufrufe der Downloader- und Matching-Services integrieren. Zusätzlich soll die Navigation den aktuellen Integrationsstatus widerspiegeln und Rückmeldungen bei Fehlern geben. Dokumentation und Monitoring-Hooks müssen mit den neuen Ansichten abgeglichen werden.
+Beschreibung: Die neuen Navigationspunkte für Soulseek und Matching zeigen aktuell nur Platzhaltertexte. Für ein vollständiges Nutzererlebnis müssen die Komponenten API-Aufrufe der Downloader- und Matching-Services integrieren. Zusätzlich soll die Navigation den aktuellen Integrationsstatus widerspiegeln und Rückmeldungen bei Fehlern geben. Dokumentation und Monitoring-Hooks müssen mit den neuen Ansichten abgeglichen werden. Die Soulseek-Ansicht ist inklusive Dashboard-Logik, Tests und Dokumentation umgesetzt; die Matching-Ansicht steht weiterhin aus.
 Akzeptanzkriterien:
 - SoulseekPage lädt Status- und Konfigurationsdaten aus dem Backend und visualisiert aktive Freigaben.
 - MatchingPage zeigt laufende und ausstehende Zuordnungen inklusive Fehlerzuständen an.

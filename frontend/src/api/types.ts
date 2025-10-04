@@ -77,6 +77,47 @@ export interface ServiceHealthResponse {
 
 export type ServiceIdentifier = 'spotify' | 'plex' | 'soulseek';
 
+export type SoulseekConnectionStatus = 'connected' | 'disconnected' | (string & {});
+
+export interface SoulseekStatusResponse {
+  status: SoulseekConnectionStatus;
+}
+
+export interface SoulseekUploadEntry {
+  id?: string;
+  filename?: string;
+  username?: string | null;
+  state?: string;
+  progress?: number | null;
+  size?: number | null;
+  speed?: number | null;
+  queued_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface SoulseekUploadsResponse {
+  uploads?: unknown;
+}
+
+export interface ProviderInfo {
+  name: string;
+  status: string;
+  details?: Record<string, unknown> | null;
+}
+
+export interface IntegrationsData {
+  overall: string;
+  providers: ProviderInfo[];
+}
+
+export interface IntegrationsResponse {
+  ok: boolean;
+  data?: IntegrationsData | null;
+  error?: Record<string, unknown> | null;
+}
+
 export interface ArtistPreferenceEntry {
   artist_id: string;
   release_id: string;

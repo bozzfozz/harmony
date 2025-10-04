@@ -58,6 +58,19 @@ FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registri
 
 Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompatibilitäts-Shims und re-exportieren die eigentlichen Router aus `app/api/…`.
 
+#### Soulseek UI Dashboard
+
+- Die Frontend-Ansicht **„Soulseek“** bündelt drei Kernbereiche für Operator:innen:
+  - **Verbindung & Integrationen:** nutzt `/soulseek/status` und `/integrations`, um den Connectivity-Status sowie Provider-Health inklusive Detailhinweisen (z. B. fehlende Credentials) anzuzeigen.
+  - **Konfigurationsübersicht:** lädt die relevanten `SLSKD_*`-Einstellungen über `/settings`, maskiert Secrets und markiert fehlende Pflichtwerte (Basis-URL/API-Key) deutlich.
+  - **Aktive Uploads:** ruft `/soulseek/uploads` bzw. `/soulseek/uploads/all` ab, stellt Fortschritt, Benutzer:innen, Größe und Durchsatz als Tabelle dar und signalisiert Fehlerzustände mit Retry-Möglichkeit.
+- **Interpretation der Hinweise:**
+  - Das Badge **„Verbunden“** bestätigt, dass der Backend-Proxy (`slskd`) erreichbar ist. **„Getrennt“** bedeutet, dass Downloads/Uploads blockiert sind und Worker in Folge mit Retries starten.
+  - Der Abschnitt **„Provider-Gesundheit“** spiegelt die `/integrations`-Bewertung wider. `degraded` deutet auf optionale, aber relevante Warnungen hin (z. B. fehlende Bandbreitenlimits), `down` auf harte Ausfälle oder fehlende Credentials. Detailfelder listen die Rohwerte aus dem Health-Endpunkt.
+  - In der Konfiguration kennzeichnet ein rotes Badge fehlende Pflichtwerte. Maskierte Secrets erscheinen als `••••••`; Operator:innen können so prüfen, ob Werte grundsätzlich gesetzt sind, ohne sie offenzulegen.
+  - Die Upload-Tabelle zeigt jeden aktiven Share mit Status, Fortschritt, Transfergröße und Geschwindigkeit. Bei leerem Ergebnis informiert der Hinweis „Aktuell sind keine Uploads aktiv“, Fehlerzustände liefern einen Retry-Button, der erneut `/soulseek/uploads` aufruft.
+- Die Seite dient als Operations-Dashboard für den Soulseek-Daemon: Warnhinweise bei Ausfällen oder fehlender Konfiguration helfen, bevor Sync-Worker oder Upload-Freigaben ins Stocken geraten.
+
 ### Hintergrund-Worker
 
 Der Lifespan startet zuerst den Orchestrator (Scheduler, Dispatcher, WatchlistTimer), der Queue-Jobs priorisiert, Heartbeats pflegt und Watchlist-Ticks kontrolliert. Anschließend werden – sofern `WORKERS_ENABLED` aktiv ist – die eigentlichen Worker registriert und vom Dispatcher anhand ihrer Job-Typen aufgerufen.
