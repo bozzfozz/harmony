@@ -12,6 +12,7 @@ const mockedUseIntegrationHealth = useIntegrationHealth as jest.MockedFunction<t
 
 describe('Layout sidebar interactions', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     mockedUseIntegrationHealth.mockReturnValue({
       services: {
         soulseek: {
@@ -175,5 +176,96 @@ describe('Layout sidebar interactions', () => {
 
     const soulseekLink = screen.getByRole('link', { name: 'Soulseek' });
     expect(within(soulseekLink).queryByText(/Offline|Fehler|Eingeschränkt/)).not.toBeInTheDocument();
+  });
+
+  it('restores the collapsed state from localStorage and persists user changes', async () => {
+    window.localStorage.setItem('layout:sidebarCollapsed', JSON.stringify(true));
+
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/dashboard' }
+    );
+
+    const collapseToggle = screen.getByRole('button', { name: /sidebar erweitern/i });
+    const aside = screen.getByRole('complementary');
+    const contentWrapper = screen.getByTestId('content-wrapper');
+
+    expect(aside).toHaveAttribute('data-collapsed', 'true');
+    expect(contentWrapper).toHaveClass('lg:ml-20');
+
+    await user.click(collapseToggle);
+
+    expect(aside).toHaveAttribute('data-collapsed', 'false');
+    expect(window.localStorage.getItem('layout:sidebarCollapsed')).toBe(JSON.stringify(false));
+  });
+
+  it('keeps mobile navigation toggling functional when collapsed state is persisted', async () => {
+    window.localStorage.setItem('layout:sidebarCollapsed', JSON.stringify(true));
+
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/dashboard' }
+    );
+
+    const aside = screen.getByRole('complementary');
+    const mobileToggle = screen.getByRole('button', { name: /navigation umschalten/i });
+
+    expect(aside).toHaveAttribute('data-collapsed', 'true');
+    expect(aside.className).toContain('-translate-x-full');
+
+    await user.click(mobileToggle);
+
+    expect(aside.className).toContain('translate-x-0');
+    expect(aside).toHaveAttribute('data-collapsed', 'true');
+  });
+
+  it('falls back gracefully when storage access fails', async () => {
+    const originalLocalStorage = window.localStorage;
+    const failingStorage = {
+      getItem: jest.fn(() => {
+        throw new Error('blocked');
+      }),
+      setItem: jest.fn(() => {
+        throw new Error('blocked');
+      }),
+      removeItem: jest.fn(() => {
+        throw new Error('blocked');
+      })
+    } as unknown as Storage;
+
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: failingStorage
+    });
+
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/dashboard' }
+    );
+
+    const collapseButton = screen.getByRole('button', { name: /sidebar einklappen/i });
+
+    await expect(user.click(collapseButton)).resolves.toBeUndefined();
+
+    const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
+    const dashboardLabel = within(dashboardLink).getByText('Dashboard');
+    expect(dashboardLabel).toHaveClass('sr-only');
+
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: originalLocalStorage
+    });
   });
 });
