@@ -2,7 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import DashboardPage from '../pages/DashboardPage';
 import LibraryPage from '../pages/Library';
+import MatchingPage from '../pages/MatchingPage';
 import SettingsPage from '../pages/SettingsPage';
+import SoulseekPage from '../pages/SoulseekPage';
 import SpotifyPage from '../pages/SpotifyPage';
 
 const AppRoutes = () => (
@@ -14,6 +16,8 @@ const AppRoutes = () => (
     <Route path="/artists" element={<Navigate to="/library?tab=artists" replace />} />
     <Route path="/watchlist" element={<Navigate to="/library?tab=watchlist" replace />} />
     <Route path="/spotify" element={<SpotifyPage />} />
+    <Route path="/soulseek" element={<SoulseekPage />} />
+    <Route path="/matching" element={<MatchingPage />} />
     <Route path="/settings" element={<SettingsPage />} />
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes>
