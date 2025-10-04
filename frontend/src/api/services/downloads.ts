@@ -124,7 +124,7 @@ const withDefaultDownload = (entry: DownloadEntry | undefined, fallback: Partial
 export const getDownloads = async (options: FetchDownloadsOptions = {}): Promise<DownloadEntry[]> => {
   const params: Record<string, string> = {};
   if (options.includeAll) {
-    params.scope = 'all';
+    params.all = 'true';
   }
   if (typeof options.status === 'string' && options.status.length > 0 && options.status !== 'all') {
     params.status = options.status;
