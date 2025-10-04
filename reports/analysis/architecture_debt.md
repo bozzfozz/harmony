@@ -1,7 +1,7 @@
 # Architektur-Schuldenanalyse – Harmony Backend & Schnittstellen
 
 ## Executive Summary
-- Die API-Schicht umfasst 17 Router, die in `app/main.py` direkt zusammengebaut werden und stellenweise Datenbank- und Worker-Instanzen selbst verwalten, was zu enger Kopplung und redundanten Initialisierungspfaden führt.【F:app/main.py†L178-L323】【F:app/routers/spotify_router.py†L160-L209】【F:app/routers/backfill_router.py†L24-L80】
+- Die API-Schicht umfasst 17 Router, die in `app/main.py` direkt zusammengebaut werden und stellenweise Datenbank- und Worker-Instanzen selbst verwalten, was zu enger Kopplung und redundanten Initialisierungspfaden führt.【F:app/main.py†L178-L323】【F:app/api/spotify.py†L181-L215】【F:app/api/spotify.py†L1024-L1050】
 - Hintergrundprozesse werden im FastAPI-Lebenszyklus aufgebaut; die Geschäftslogik für Watchlist-, Backfill- und Sync-Worker hängt an `app.state` und erschwert Testbarkeit, Idempotenz und das Abschalten einzelner Worker.【F:app/main.py†L239-L352】【F:app/workers/persistence.py†L50-L191】【F:app/workers/watchlist_worker.py†L61-L118】
 - Die Such- und Matching-Pipeline verzahnt Router, Integrations-Service, Matching-Engine und Library-Service eng miteinander; Konfigurationsgrenzen (Timeouts, Kandidatenlimits) sind mehrfach verteilt.【F:app/routers/search_router.py†L76-L176】【F:app/services/integration_service.py†L31-L86】【F:app/core/matching_engine.py†L74-L209】【F:app/services/library_service.py†L45-L126】
 - Logging- und Observability-Pattern divergieren: Einige Komponenten liefern strukturierte `extra`-Felder, andere formatieren Schlüssel/Werte im Nachrichtentext, wodurch Korrelation und Metrik-Auswertung erschwert wird.【F:app/services/cache.py†L70-L135】【F:app/workers/watchlist_worker.py†L93-L103】【F:app/routers/search_router.py†L127-L154】
@@ -13,8 +13,8 @@
 
 **Evidenz.**
 - Router-Registrierung & Tagging: `app/main.py` Zeilen 178–200.【F:app/main.py†L178-L201】
-- Direktzugriff auf SQLAlchemy-Session im Router: `app/routers/spotify_router.py` Zeilen 160–162.【F:app/routers/spotify_router.py†L160-L162】
-- Worker-Erzeugung im Request: `app/routers/backfill_router.py` Zeilen 24–80.【F:app/routers/backfill_router.py†L24-L80】
+- Direktzugriff auf SQLAlchemy-Session im Router: `app/api/spotify.py` Zeilen 181–187.【F:app/api/spotify.py†L181-L187】
+- Zugriff auf Worker-Instanz über `app.state`: `app/api/spotify.py` Zeilen 1024–1044.【F:app/api/spotify.py†L1024-L1044】
 
 **Auswirkungen.**
 - Harte Kopplung zwischen API und Infrastruktur (DB/Worker) erschwert das Stubben in Tests und die spätere Extraktion in Microservices.

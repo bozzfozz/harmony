@@ -50,7 +50,8 @@ Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Plex-
 
 FastAPI-Router kapseln die öffentliche API und werden in `app/main.py` registriert. Aktiv sind u. a.:
 
-- `app/routers/spotify_router.py` & `app/routers/spotify_free_router.py`: Suche, Backfill, Free-Ingest, Playlist-APIs.
+- [`app/api/spotify.py`](../app/api/spotify.py#L60-L1233): bündelt die Spotify-Domain und stellt `core_router`, `backfill_router`, `free_router` und `free_ingest_router` für Suche, Moduswechsel, Backfill sowie FREE-Import-Flows bereit.
+- [`app/api/routers/spotify.py`](../app/api/routers/spotify.py): dient als Kompatibilitäts-Layer und exportiert die konsolidierten Router unter dem bisherigen Modul-Namespace.
 - `app/routers/soulseek_router.py`: Download- und Upload-Management, Warteschlangen, Status und Artefakt-Endpunkte.
 - `app/routers/search_router.py`: Aggregierte Suche über Spotify und Soulseek.
 - `app/routers/matching_router.py`: Persistiertes Matching (`/matching/spotify-to-soulseek`) inkl. Legacy-404-Checks für Plex.

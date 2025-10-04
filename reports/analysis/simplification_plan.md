@@ -64,16 +64,16 @@
    - **Risiko:** Mittel (Async, Error-Mapping).  
    - **Rollback:** Gateway deaktivieren, alte Methode reaktivieren.
 
-3. **Spotify-Domäne konsolidieren (Router & Services)**  
-   - **Beobachtung:** `spotify_router`, `spotify_free_router`, `backfill_router`, `free_ingest_router` teilen sich Clients/Modelle, initialisieren aber eigene Services/Worker.【F:app/routers/spotify_router.py†L16-L233】【F:app/routers/spotify_free_router.py†L1-L120】【F:app/routers/backfill_router.py†L24-L80】  
-   - **Schritte:**  
-     1. Domänen-Service `SpotifyDomainService` einführen (auth-Status, Playlist-IO, Free-Import).  
-     2. Router auf Handler-Funktionen aus dem Service umstellen; Worker-Setup (`BackfillWorker`, `SyncWorker`) via Orchestrator steuern.  
-     3. Überflüssige Duplicate-Validierungen entfernen, Response-Models teilen.  
-   - **Impact:** Geringere Duplikate, klarer Verantwortungsbereich Spotify.  
-   - **Aufwand:** 1–2 Sprints.  
-   - **Risiko:** Mittel (viele Endpoints).  
-   - **Rollback:** Service wieder entfernen, Router revertieren.
+3. **Spotify-Domäne konsolidieren (Router & Services)**
+   - **Beobachtung:** `app/api/spotify.py` bündelt `core_router`, `backfill_router`, `free_router` und `free_ingest_router`; Legacy-Wrapper unter `app/routers/*.py` warnen nur noch vor der Alt-Nutzung.【F:app/api/spotify.py†L60-L1233】【F:app/api/routers/spotify.py†L1-L13】
+   - **Schritte:**
+     1. Domänen-Service `SpotifyDomainService` etabliert halten (auth-Status, Playlist-IO, Free-Import).
+     2. Aufrufer konsequent auf das neue Modul umstellen und verbleibende Legacy-Wrapper abbauen.
+     3. Überflüssige Duplicate-Validierungen entfernen, Response-Models teilen.
+   - **Impact:** Geringere Duplikate, klarer Verantwortungsbereich Spotify.
+   - **Aufwand:** 1–2 Sprints.
+   - **Risiko:** Mittel (viele Endpoints).
+   - **Rollback:** Legacy-Wrapper beibehalten und alten Stand wiederverwenden.
 
 ### P2 – Nice-to-have
 1. **Generierter API-Client für das Frontend**
