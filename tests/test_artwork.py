@@ -7,11 +7,20 @@ from typing import Any, Dict, List
 
 import pytest
 
-from app.config import ArtworkConfig, ArtworkFallbackConfig
+import app.workers.artwork_worker as artwork_worker
+from app.config import (
+    ArtworkConfig,
+    ArtworkFallbackConfig,
+    ArtworkPostProcessingConfig,
+)
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
-from app.workers.artwork_worker import ArtworkWorker
+from app.workers.artwork_worker import (
+    ArtworkJob,
+    ArtworkProcessingResult,
+    ArtworkWorker,
+)
 from app.workers.sync_worker import SyncWorker
 from tests.conftest import StubSoulseekClient
 
@@ -23,6 +32,8 @@ def _make_artwork_config(
     fallback_timeout: float = 5.0,
     min_edge: int = 600,
     min_bytes: int = 120_000,
+    post_processing_enabled: bool = False,
+    post_processing_hooks: tuple[str, ...] = (),
 ) -> ArtworkConfig:
     provider = "musicbrainz" if fallback_enabled else "none"
     return ArtworkConfig(
@@ -37,6 +48,10 @@ def _make_artwork_config(
             provider=provider,
             timeout_seconds=fallback_timeout,
             max_bytes=5 * 1024 * 1024,
+        ),
+        post_processing=ArtworkPostProcessingConfig(
+            enabled=post_processing_enabled,
+            hooks=post_processing_hooks,
         ),
     )
 
@@ -132,6 +147,165 @@ async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path
         assert refreshed.artwork_status == "done"
         assert refreshed.spotify_album_id == "album-123"
         assert Path(refreshed.artwork_path or "") == stored_path
+
+
+@pytest.mark.asyncio
+async def test_post_processing_hook_invoked_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    audio_path = tmp_path / "hook.mp3"
+    audio_path.write_bytes(b"audio")
+
+    async def fake_collect(self: ArtworkWorker, *_: Any, **__: Any) -> list[str]:
+        return ["http://example.com/post.jpg"]
+
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
+        destination = target.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"img")
+        return destination
+
+    def fake_embed(audio_file: Path, artwork_file: Path) -> None:
+        assert audio_file == audio_path
+        assert artwork_file.exists()
+
+    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
+
+    calls: list[tuple[str, Path | None]] = []
+
+    async def hook(job: "ArtworkJob", result: "ArtworkProcessingResult") -> None:
+        calls.append((job.file_path, result.artwork_path))
+
+    config = _make_artwork_config(
+        tmp_path / "artwork",
+        post_processing_enabled=True,
+    )
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=config,
+        post_processing_hooks=[hook],
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(None, str(audio_path), metadata={})
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert len(calls) == 1
+    call_job_path, call_result_path = calls[0]
+    assert call_job_path == str(audio_path)
+    assert call_result_path is not None and call_result_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_post_processing_hook_failure_logs_and_continues(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    audio_path = tmp_path / "hook-fail.mp3"
+    audio_path.write_bytes(b"audio")
+
+    async def fake_collect(self: ArtworkWorker, *_: Any, **__: Any) -> list[str]:
+        return ["http://example.com/post.jpg"]
+
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
+        destination = target.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"img")
+        return destination
+
+    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
+
+    calls: list[str] = []
+    logged: list[dict[str, Any]] = []
+
+    def fake_exception(self: Any, message: str, *args: Any, **kwargs: Any) -> None:
+        logged.append({"message": message, "extra": kwargs.get("extra")})
+
+    monkeypatch.setattr(
+        artwork_worker.logger,
+        "exception",
+        types.MethodType(fake_exception, artwork_worker.logger),
+    )
+
+    def failing_hook(job: "ArtworkJob", _: "ArtworkProcessingResult") -> None:
+        calls.append("first")
+        raise RuntimeError("boom")
+
+    async def succeeding_hook(job: "ArtworkJob", result: "ArtworkProcessingResult") -> None:
+        calls.append("second")
+        assert result.artwork_path is not None
+
+    config = _make_artwork_config(
+        tmp_path / "artwork",
+        post_processing_enabled=True,
+    )
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=config,
+        post_processing_hooks=[failing_hook, succeeding_hook],
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(None, str(audio_path), metadata={})
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert calls == ["first", "second"]
+    assert len(logged) == 1
+    assert "post-processing hook failed" in logged[0]["message"]
+
+
+@pytest.mark.asyncio
+async def test_post_processing_hooks_respect_disable_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    audio_path = tmp_path / "hook-disabled.mp3"
+    audio_path.write_bytes(b"audio")
+
+    async def fake_collect(self: ArtworkWorker, *_: Any, **__: Any) -> list[str]:
+        return ["http://example.com/post.jpg"]
+
+    def fake_download(url: str, target: Path, **_: Any) -> Path:
+        destination = target.with_suffix(".jpg")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"img")
+        return destination
+
+    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
+    monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
+    monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
+
+    calls: list[str] = []
+
+    def hook(job: "ArtworkJob", result: "ArtworkProcessingResult") -> None:
+        calls.append(job.file_path)
+
+    config = _make_artwork_config(
+        tmp_path / "artwork",
+        post_processing_enabled=False,
+    )
+    worker = ArtworkWorker(
+        storage_directory=tmp_path / "artwork",
+        config=config,
+        post_processing_hooks=[hook],
+    )
+    await worker.start()
+    try:
+        await worker.enqueue(None, str(audio_path), metadata={})
+        await worker.wait_for_pending()
+    finally:
+        await worker.stop()
+
+    assert calls == []
 
 
 def _install_mutagen_stubs(monkeypatch: pytest.MonkeyPatch, tracker: Dict[str, Any]) -> None:

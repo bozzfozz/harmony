@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import inspect
 import os
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, Iterable, Mapping, Optional, Sequence, cast
 from urllib.parse import urlparse
 
-from app.config import ArtworkConfig, load_config
+from app.config import ArtworkConfig, ArtworkPostProcessingConfig, load_config
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -55,6 +57,9 @@ class ArtworkProcessingResult:
     has_artwork: bool
 
 
+PostProcessingHook = Callable[[ArtworkJob, ArtworkProcessingResult], Awaitable[None] | None]
+
+
 class ArtworkWorker:
     """Download high-resolution artwork and embed it into media files."""
 
@@ -65,6 +70,8 @@ class ArtworkWorker:
         *,
         storage_directory: Path | None = None,
         config: ArtworkConfig | None = None,
+        post_processing_hooks: Sequence[PostProcessingHook] | None = None,
+        post_processing_enabled: bool | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
@@ -89,6 +96,22 @@ class ArtworkWorker:
         self._fallback_provider = fallback_provider or "musicbrainz"
         self._fallback_timeout = float(config.fallback.timeout_seconds)
         self._fallback_max_bytes = int(config.fallback.max_bytes)
+
+        post_processing_config: ArtworkPostProcessingConfig = getattr(
+            config, "post_processing", ArtworkPostProcessingConfig()
+        )
+        if post_processing_enabled is None:
+            self._post_processing_enabled = bool(post_processing_config.enabled)
+        else:
+            self._post_processing_enabled = bool(post_processing_enabled)
+
+        self._post_processing_hooks: list[PostProcessingHook] = []
+        if self._post_processing_enabled and post_processing_config.hooks:
+            self._post_processing_hooks.extend(
+                self._import_post_processors(post_processing_config.hooks)
+            )
+        if post_processing_hooks:
+            self._post_processing_hooks.extend(post_processing_hooks)
 
         self._queue: asyncio.Queue[Optional[ArtworkJob]] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
@@ -353,15 +376,18 @@ class ArtworkWorker:
             },
         )
 
-        # Post-processing hooks are disabled in the slim MVP build.
-
-        return ArtworkProcessingResult(
+        result = ArtworkProcessingResult(
             status="done",
             artwork_path=artwork_file,
             replaced=has_existing,
             was_low_res=was_low_res,
             has_artwork=True,
         )
+        await self._run_post_processing_hooks(job, result)
+        return result
+
+    def register_post_processor(self, hook: PostProcessingHook) -> None:
+        self._post_processing_hooks.append(hook)
 
     async def _collect_candidate_urls(
         self,
@@ -731,3 +757,68 @@ class ArtworkWorker:
             if segment == "release-group" and index + 1 < len(segments):
                 return segments[index + 1]
         return None
+
+    async def _run_post_processing_hooks(
+        self, job: ArtworkJob, result: ArtworkProcessingResult
+    ) -> None:
+        if (
+            not self._post_processing_enabled
+            or not self._post_processing_hooks
+            or result.artwork_path is None
+        ):
+            return
+
+        for hook in list(self._post_processing_hooks):
+            try:
+                outcome = hook(job, result)
+                if inspect.isawaitable(outcome):
+                    await cast(Awaitable[None], outcome)
+            except Exception:
+                logger.exception(
+                    "Artwork post-processing hook failed",
+                    extra={
+                        "event": "artwork_post_process",
+                        "download_id": job.download_id,
+                        "hook": getattr(
+                            hook,
+                            "__qualname__",
+                            getattr(hook, "__name__", repr(hook)),
+                        ),
+                    },
+                )
+
+    def _import_post_processors(
+        self, dotted_paths: Sequence[str]
+    ) -> list[PostProcessingHook]:
+        hooks: list[PostProcessingHook] = []
+        for path in dotted_paths:
+            if not path:
+                continue
+            try:
+                hooks.append(self._import_hook(path))
+            except Exception:
+                logger.exception(
+                    "Failed to import artwork post-processing hook",
+                    extra={"event": "artwork_post_process", "hook": path},
+                )
+        return hooks
+
+    @staticmethod
+    def _import_hook(path: str) -> PostProcessingHook:
+        if not path:
+            raise ValueError("Hook path must be non-empty")
+
+        module_path: str
+        attribute: str
+        if ":" in path:
+            module_path, attribute = path.split(":", 1)
+        else:
+            module_path, _, attribute = path.rpartition(".")
+        if not module_path or not attribute:
+            raise ValueError(f"Invalid hook path '{path}'")
+
+        module = importlib.import_module(module_path)
+        hook = getattr(module, attribute)
+        if not callable(hook):
+            raise TypeError(f"Hook '{path}' is not callable")
+        return cast(PostProcessingHook, hook)

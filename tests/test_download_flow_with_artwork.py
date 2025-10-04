@@ -5,7 +5,11 @@ from typing import Any, Dict
 
 import pytest
 
-from app.config import ArtworkConfig, ArtworkFallbackConfig
+from app.config import (
+    ArtworkConfig,
+    ArtworkFallbackConfig,
+    ArtworkPostProcessingConfig,
+)
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
@@ -64,6 +68,7 @@ def test_download_flow_with_artwork(
                 timeout_seconds=5.0,
                 max_bytes=5 * 1024 * 1024,
             ),
+            post_processing=ArtworkPostProcessingConfig(enabled=False, hooks=()),
         )
         worker = ArtworkWorker(storage_directory=tmp_path / "artwork", config=config)
         await worker.start()
