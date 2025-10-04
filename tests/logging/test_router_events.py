@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -75,16 +76,33 @@ def test_download_router_list_emits_structured_event(caplog, monkeypatch) -> Non
     assert record.offset == 2
 
 
+class _StubMetadataUpdateWorker:
+    def __init__(self) -> None:
+        self.started = False
+
+    async def start(self) -> dict[str, str]:
+        self.started = True
+        return {"status": "running"}
+
+
 @pytest.mark.asyncio
-async def test_metadata_router_logs_blocked_event(caplog, monkeypatch) -> None:
+async def test_metadata_router_logs_start_event(caplog, monkeypatch) -> None:
     monkeypatch.setattr(metadata_router_module.logger, "disabled", False)
+
+    worker = _StubMetadataUpdateWorker()
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(metadata_update_worker=worker))
+    )
+
     with caplog.at_level("INFO", logger="app.routers.metadata_router"):
-        with pytest.raises(HTTPException):
-            await metadata_router_module.start_metadata_update(cast(Any, object()))
+        payload = await metadata_router_module.start_metadata_update(request)
+
+    assert worker.started is True
+    assert payload["status"] == "running"
 
     record = _first_record(caplog, "api.metadata.request")
     assert record.component == "router.metadata"
-    assert record.status == "blocked"
+    assert record.status == "accepted"
     assert record.action == "update"
 
 
