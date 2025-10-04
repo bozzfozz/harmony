@@ -290,7 +290,7 @@ class MatchResult:
 
     def __post_init__(self) -> None:
         confidence = (self.confidence or "").strip().lower()
-        if confidence not in {"complete", "nearly", "partial", "miss"}:
+        if confidence not in {"complete", "nearly", "incomplete"}:
             raise InvalidInputError("Unsupported confidence label")
         object.__setattr__(self, "confidence", confidence)
 
