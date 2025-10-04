@@ -2,8 +2,37 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Layout from '../components/Layout';
 import { renderWithProviders } from '../test-utils';
+import { useIntegrationHealth } from '../hooks/useIntegrationHealth';
+
+jest.mock('../hooks/useIntegrationHealth', () => ({
+  useIntegrationHealth: jest.fn()
+}));
+
+const mockedUseIntegrationHealth = useIntegrationHealth as jest.MockedFunction<typeof useIntegrationHealth>;
 
 describe('Layout sidebar interactions', () => {
+  beforeEach(() => {
+    mockedUseIntegrationHealth.mockReturnValue({
+      services: {
+        soulseek: {
+          online: true,
+          degraded: false,
+          misconfigured: false,
+          status: 'ok'
+        },
+        matching: {
+          online: true,
+          degraded: false,
+          misconfigured: false,
+          status: 'ok'
+        }
+      },
+      isLoading: false,
+      errors: {},
+      refresh: jest.fn()
+    });
+  });
+
   it('collapses navigation labels but keeps icons and tooltips accessible', async () => {
     const user = userEvent.setup();
 
@@ -30,10 +59,121 @@ describe('Layout sidebar interactions', () => {
     expect(dashboardIcon).toBeVisible();
     expect(dashboardLink).toHaveAttribute('aria-label', 'Dashboard');
 
-    await user.hover(dashboardLink);
-    const tooltip = await screen.findByRole('tooltip');
+    const tooltip = screen.getByTestId('nav-tooltip-dashboard');
     expect(tooltip).toHaveTextContent('Dashboard');
 
     expect(contentWrapper).toHaveClass('lg:ml-20');
+  });
+
+  it('renders warning badges for degraded services', async () => {
+    mockedUseIntegrationHealth.mockReturnValue({
+      services: {
+        soulseek: {
+          online: false,
+          degraded: true,
+          misconfigured: false,
+          status: 'down'
+        },
+        matching: {
+          online: true,
+          degraded: true,
+          misconfigured: false,
+          status: 'degraded'
+        }
+      },
+      isLoading: false,
+      errors: {},
+      refresh: jest.fn()
+    });
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/matching' }
+    );
+
+    const matchingLink = screen.getByRole('link', { name: /Matching – Warnung/i });
+    expect(matchingLink).toBeInTheDocument();
+    expect(within(matchingLink).getByText('Eingeschränkt')).toBeInTheDocument();
+
+    const soulseekLink = screen.getByRole('link', { name: /Soulseek – Warnung/i });
+    expect(soulseekLink).toBeInTheDocument();
+    expect(within(soulseekLink).getByText('Offline')).toBeInTheDocument();
+
+    const matchingTooltip = screen.getByTestId('nav-tooltip-matching');
+    expect(within(matchingTooltip).getByText(/Warnung: Dienst eingeschränkt/)).toBeInTheDocument();
+  });
+
+  it('keeps warning indicators accessible when the sidebar is collapsed', async () => {
+    mockedUseIntegrationHealth.mockReturnValue({
+      services: {
+        soulseek: {
+          online: true,
+          degraded: true,
+          misconfigured: true,
+          status: 'error'
+        },
+        matching: {
+          online: true,
+          degraded: false,
+          misconfigured: false,
+          status: 'ok'
+        }
+      },
+      isLoading: false,
+      errors: {},
+      refresh: jest.fn()
+    });
+
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/soulseek' }
+    );
+
+    const collapseButton = screen.getByRole('button', { name: /sidebar einklappen/i });
+    await user.click(collapseButton);
+
+    const soulseekLink = screen.getByRole('link', { name: /Soulseek – Warnung/i });
+    const tooltip = screen.getByTestId('nav-tooltip-soulseek');
+    expect(within(tooltip).getByText(/Warnung: Konfiguration prüfen/)).toBeInTheDocument();
+    const indicator = within(soulseekLink).getByText('Fehler');
+    expect(indicator).toHaveClass('sr-only');
+  });
+
+  it('falls back to plain labels when integration health cannot be loaded', () => {
+    mockedUseIntegrationHealth.mockReturnValue({
+      services: {
+        soulseek: {
+          online: false,
+          degraded: false,
+          misconfigured: false,
+          status: 'unknown'
+        },
+        matching: {
+          online: false,
+          degraded: false,
+          misconfigured: false,
+          status: 'unknown'
+        }
+      },
+      isLoading: false,
+      errors: { system: new Error('unreachable') },
+      refresh: jest.fn()
+    });
+
+    renderWithProviders(
+      <Layout>
+        <div>Test content</div>
+      </Layout>,
+      { route: '/dashboard' }
+    );
+
+    const soulseekLink = screen.getByRole('link', { name: 'Soulseek' });
+    expect(within(soulseekLink).queryByText(/Offline|Fehler|Eingeschränkt/)).not.toBeInTheDocument();
   });
 });

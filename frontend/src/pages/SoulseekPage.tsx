@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge';
 import SoulseekUploadList from '../components/SoulseekUploadList';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/shadcn';
 import {
-  getIntegrationsReport,
+  getIntegrations,
   getSoulseekConfiguration,
   getSoulseekStatus,
   getSoulseekUploads,
@@ -75,7 +75,7 @@ const SoulseekPage = () => {
 
   const integrationsQuery = useQuery<IntegrationsData>({
     queryKey: ['integrations', 'providers'],
-    queryFn: getIntegrationsReport
+    queryFn: getIntegrations
   });
 
   const configurationQuery = useQuery<SoulseekConfigurationEntry[]>({

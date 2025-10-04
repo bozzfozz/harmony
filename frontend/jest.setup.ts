@@ -6,16 +6,19 @@ jest.mock('@radix-ui/react-tooltip', () => {
   const MockProvider = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
   const MockRoot = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
   const MockPortal = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
-  const MockTrigger = React.forwardRef<HTMLElement, { children?: React.ReactNode }>((props, ref) => {
-    const { children, ...rest } = props;
+  const MockTrigger = React.forwardRef<HTMLElement, { children?: React.ReactNode; asChild?: boolean }>((props, ref) => {
+    const { children, asChild: _asChild, ...rest } = props;
     if (React.isValidElement(children)) {
       return React.cloneElement(children, { ref, ...rest });
     }
     return React.createElement('span', { ref, ...rest }, children);
   });
-  const MockContent = React.forwardRef<HTMLDivElement, { children?: React.ReactNode }>((props, ref) => {
-    const { children, ...rest } = props;
-    return React.createElement('div', { ref, ...rest }, children);
+  const MockContent = React.forwardRef<
+    HTMLDivElement,
+    { children?: React.ReactNode; sideOffset?: number; role?: string }
+  >((props, ref) => {
+    const { children, sideOffset: _sideOffset, role, ...rest } = props;
+    return React.createElement('div', { ref, role: role ?? 'tooltip', ...rest }, children);
   });
 
   MockProvider.displayName = 'MockTooltipProvider';

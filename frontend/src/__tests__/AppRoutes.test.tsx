@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react';
 import AppRoutes from '../routes';
 import { renderWithProviders } from '../test-utils';
 import {
-  getIntegrationsReport,
+  getIntegrations,
   getSoulseekConfiguration,
   getSoulseekStatus,
   getSoulseekUploads
@@ -13,7 +13,7 @@ import { getMatchingOverview } from '../api/services/matching';
 jest.mock('../api/services/soulseek', () => ({
   getSoulseekStatus: jest.fn(),
   getSoulseekUploads: jest.fn(),
-  getIntegrationsReport: jest.fn(),
+  getIntegrations: jest.fn(),
   getSoulseekConfiguration: jest.fn()
 }));
 
@@ -23,7 +23,7 @@ jest.mock('../api/services/matching', () => ({
 
 const mockedGetSoulseekStatus = getSoulseekStatus as jest.MockedFunction<typeof getSoulseekStatus>;
 const mockedGetSoulseekUploads = getSoulseekUploads as jest.MockedFunction<typeof getSoulseekUploads>;
-const mockedGetIntegrationsReport = getIntegrationsReport as jest.MockedFunction<typeof getIntegrationsReport>;
+const mockedGetIntegrations = getIntegrations as jest.MockedFunction<typeof getIntegrations>;
 const mockedGetSoulseekConfiguration = getSoulseekConfiguration as jest.MockedFunction<
   typeof getSoulseekConfiguration
 >;
@@ -35,7 +35,7 @@ describe('AppRoutes', () => {
   beforeEach(() => {
     mockedGetSoulseekStatus.mockResolvedValue({ status: 'connected' });
     mockedGetSoulseekUploads.mockResolvedValue([]);
-    mockedGetIntegrationsReport.mockResolvedValue({ overall: 'ok', providers: [] });
+    mockedGetIntegrations.mockResolvedValue({ overall: 'ok', providers: [] });
     mockedGetSoulseekConfiguration.mockResolvedValue([]);
     mockedGetMatchingOverview.mockResolvedValue({
       worker: { status: 'running', lastSeen: '2024-05-05T10:00:00Z', queueSize: 0, rawQueueSize: 0 },
