@@ -28,6 +28,17 @@ _EDITION_KEYWORDS = {
 _EDITION_REGEX = re.compile(r"\b(" + "|".join(sorted(_EDITION_KEYWORDS)) + r")\b", re.IGNORECASE)
 
 
+_TRACK_COUNT_META_KEYS = (
+    "total_tracks",
+    "track_count",
+    "tracks_count",
+    "total_track_count",
+    "num_tracks",
+    "number_of_tracks",
+    "album_total_tracks",
+)
+
+
 def extract_edition_tags(text: str) -> tuple[str, ...]:
     """Return edition markers contained in ``text``."""
 
@@ -322,6 +333,17 @@ def ensure_artist_dto(payload: Any, *, default_source: str | None = None) -> Pro
     )
 
 
+def _extract_total_tracks_from_metadata(metadata: Mapping[str, Any] | None) -> int | None:
+    if not metadata:
+        return None
+    for key in _TRACK_COUNT_META_KEYS:
+        value = metadata.get(key)
+        total = _coerce_int(value)
+        if total is not None:
+            return total
+    return None
+
+
 def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> ProviderAlbumDTO:
     if isinstance(payload, ProviderAlbumDTO):
         return payload
@@ -350,6 +372,8 @@ def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> Prov
             if isinstance(getattr(payload, "metadata", None), Mapping)
             else None
         )
+    if total_tracks is None:
+        total_tracks = _extract_total_tracks_from_metadata(metadata)
     artist_entries = tuple(
         ensure_artist_dto(entry, default_source=_coerce_str(source) or default_source or "unknown")
         for entry in _iter_sequence(artists)
