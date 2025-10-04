@@ -327,37 +327,45 @@ export function SecondaryButton({ className, ...props }: ButtonHTMLAttributes<HT
 - Farbgebung je Status.
 
 ```tsx
-import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
+import {
+  Toast,
+  ToastClose,
+  ToastDescription,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+} from "@/components/ui/toast";
 import { useToast } from "@/components/ui/use-toast";
-
-export function HarmonyToastViewport() {
-  return <ToastViewport className="fixed top-16 right-4 flex max-w-sm flex-col gap-2" />;
-}
 
 export function ExampleToasts() {
   const { toasts } = useToast();
 
   return (
-    <ToastProvider swipeDirection="right">
-      {toasts.slice(0, 3).map(function ({ id, title, description, action, variant, ...props }) {
-        return (
-          <Toast key={id} variant={variant} {...props}>
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && <ToastDescription>{description}</ToastDescription>}
-            </div>
-            {action}
-          </Toast>
-        );
-      })}
-      <HarmonyToastViewport />
+    <ToastProvider duration={6000} swipeDirection="right">
+      {toasts.map(({ id, title, description, action, variant, open, duration, onOpenChange }) => (
+        <Toast
+          key={id}
+          variant={variant}
+          open={open}
+          duration={duration}
+          onOpenChange={onOpenChange}
+        >
+          <div className="grid gap-1">
+            {title && <ToastTitle>{title}</ToastTitle>}
+            {description && <ToastDescription>{description}</ToastDescription>}
+          </div>
+          {action}
+          <ToastClose />
+        </Toast>
+      ))}
+      <ToastViewport />
     </ToastProvider>
   );
 }
 ```
 
 Verwende Varianten:
-- Erfolg: `variant="success"`, Hintergrund grün (`bg-green-500/10 text-green-700 dark:text-green-400`).
+- Erfolg: `variant="success"`, Hintergrund grün (`bg-emerald-500/10 text-emerald-700 dark:text-emerald-200`).
 - Fehler: `variant="destructive"`, Hintergrund rot.
 - Info: Custom-Variante mit blauem Schema.
 

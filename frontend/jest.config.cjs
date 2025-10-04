@@ -14,7 +14,8 @@ const config = {
     }
   },
   moduleNameMapper: {
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^@radix-ui/react-toast$': '<rootDir>/src/test/mocks/radix-react-toast.tsx'
   },
   testMatch: ['**/__tests__/**/*.test.ts?(x)'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

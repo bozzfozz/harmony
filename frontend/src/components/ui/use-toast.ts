@@ -1,9 +1,9 @@
 import * as React from 'react';
 
+import type { ToastVariant } from './toast';
+
 const TOAST_LIMIT = 3;
 const TOAST_REMOVE_DELAY = 6000;
-
-type ToastVariant = 'default' | 'destructive' | 'success' | 'info';
 
 type ToastRecord = {
   id: string;
@@ -13,6 +13,7 @@ type ToastRecord = {
   open?: boolean;
   duration?: number;
   variant?: ToastVariant;
+  onOpenChange?: (open: boolean) => void;
 };
 
 type ToastState = {
@@ -58,7 +59,9 @@ const toastReducer = (state: ToastState, action: ToastAction): ToastState => {
       return {
         ...state,
         toasts: state.toasts.map((toast) =>
-          toast.id === action.toastId || action.toastId === undefined ? { ...toast, open: false } : toast
+          toast.id === action.toastId || action.toastId === undefined
+            ? { ...toast, open: false }
+            : toast
         )
       };
     case 'REMOVE_TOAST':
@@ -90,8 +93,18 @@ const createToastId = () => {
   return Math.random().toString(36).slice(2);
 };
 
-export const toast = ({ id, ...props }: Omit<ToastRecord, 'id'> & { id?: string }) => {
+export const toast = ({ id, ...props }: Omit<ToastRecord, 'id' | 'onOpenChange'> & { id?: string }) => {
   const toastId = id ?? createToastId();
+
+  const onOpenChange = (open: boolean) => {
+    dispatch({
+      type: 'UPDATE_TOAST',
+      toast: { id: toastId, open }
+    });
+    if (!open) {
+      addToRemoveQueue(toastId);
+    }
+  };
 
   dispatch({
     type: 'ADD_TOAST',
@@ -99,7 +112,8 @@ export const toast = ({ id, ...props }: Omit<ToastRecord, 'id'> & { id?: string 
       ...props,
       id: toastId,
       open: true,
-      variant: props.variant ?? 'default'
+      variant: props.variant ?? 'default',
+      onOpenChange
     }
   });
 
