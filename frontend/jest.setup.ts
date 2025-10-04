@@ -1,5 +1,34 @@
 import '@testing-library/jest-dom';
 
+jest.mock('@radix-ui/react-tooltip', () => {
+  const React = require('react');
+  const renderChildren = (children?: React.ReactNode) =>
+    React.createElement(React.Fragment, null, children);
+  const MockProvider = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
+  const MockRoot = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
+  const MockPortal = ({ children }: { children?: React.ReactNode }) => renderChildren(children);
+  const MockTrigger = React.forwardRef<HTMLElement, { children?: React.ReactNode }>((props, ref) => {
+    const { children, ...rest } = props;
+    if (React.isValidElement(children)) {
+      return React.cloneElement(children, { ref, ...rest });
+    }
+    return React.createElement('span', { ref, ...rest }, children);
+  });
+  const MockContent = React.forwardRef<HTMLDivElement, { children?: React.ReactNode }>((props, ref) => {
+    const { children, ...rest } = props;
+    return React.createElement('div', { ref, ...rest }, children);
+  });
+
+  return {
+    __esModule: true,
+    Provider: MockProvider,
+    Root: MockRoot,
+    Trigger: MockTrigger,
+    Portal: MockPortal,
+    Content: MockContent
+  };
+});
+
 const globalProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 if (globalProcess) {
   globalProcess.env = {
