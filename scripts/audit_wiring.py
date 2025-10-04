@@ -33,7 +33,6 @@ class Allowance:
 ALLOWANCES: tuple[Allowance, ...] = (
     Allowance(Path("app/main.py"), re.compile(r"wiring_summary .*plex=false")),
     Allowance(Path("app/main.py"), re.compile(r'"plex"\s*:\s*False')),
-    Allowance(Path("app/main.py"), re.compile(r'"beets"\s*:\s*False')),
     Allowance(Path("tests/test_matching.py"), re.compile(r"spotify-to-plex")),
     Allowance(Path("tests/test_matching.py"), re.compile(r"discography/plex")),
 )

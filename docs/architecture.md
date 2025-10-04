@@ -1,6 +1,6 @@
 # Architekturübersicht
 
-Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Plex- und Beets-spezifische Module liegen im Verzeichnis [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/) und werden zur Laufzeit nicht geladen. Der aktive Codepfad besteht aus folgenden Bausteinen:
+Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Ehemalige Plex-Module wurden entfernt und werden zur Laufzeit nicht geladen. Der aktive Codepfad besteht aus folgenden Bausteinen:
 
 ```text
 +----------------------------+
@@ -92,9 +92,9 @@ Der frühere Scan-/AutoSync-Stack liegt vollständig im Archiv und wird im Syste
 
 ### Observability & Wiring Guard
 
-- Beim Start protokolliert `app/main.py` ein `wiring_summary` mit aktiven Routern, Workern und Integrationen (`plex=false`, `beets=false`).
-- `scripts/audit_wiring.py` stellt sicher, dass keine Plex-/Beets-Referenzen außerhalb des Archivs in `app/` oder `tests/` landen und ist in der CI eingebunden.
+- Beim Start protokolliert `app/main.py` ein `wiring_summary` mit aktiven Routern, Workern und Integrationen (deaktivierte Provider erscheinen mit `False`).
+- `scripts/audit_wiring.py` stellt sicher, dass keine Legacy-Integrations-Referenzen (z. B. Plex) außerhalb des Archivs in `app/` oder `tests/` landen und ist in der CI eingebunden.
 
 ### Archivierte Module
 
-Legacy-Code (Plex-Router, Scan-Worker, AutoSync, Beets-CLI) befindet sich unter [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/) und kann separat wiederbelebt werden. Die aktiven Tests (`tests/test_matching.py`) verifizieren, dass entsprechende Endpunkte `404` liefern.
+Legacy-Code (Plex-Router, Scan-Worker, AutoSync) wurde entfernt. Die aktiven Tests (`tests/test_matching.py`) verifizieren, dass entsprechende Endpunkte `404` liefern.

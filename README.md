@@ -2,7 +2,7 @@
 
 Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene Matching-Engine und Hintergrund-Worker zu einem gemeinsamen Musik-Hub kombiniert. Die Anwendung bündelt Bibliotheken, Downloads und Metadaten, synchronisiert sie zyklisch und stellt einheitliche JSON-APIs für Automatisierungen und Frontend-Clients bereit.
 
-> **MVP-Hinweis:** Die früheren Plex- und Beets-Integrationen sind vorübergehend deaktiviert und der Quellcode wurde unter `archive/integrations/plex_beets/` abgelegt. Markierte Abschnitte in diesem Dokument beschreiben archivierte Funktionen.
+> **MVP-Hinweis:** Die frühere Plex-Integration ist vorübergehend deaktiviert und der Legacy-Code wurde aus dem Repository entfernt. Markierte Abschnitte in diesem Dokument beschreiben archivierte Funktionen.
 
 ## Architecture
 
@@ -87,7 +87,7 @@ Die Ergebnisse lassen sich über `sort` nach `relevance`, `bitrate`, `year` oder
 
 ## Complete Discographies _(archiviert)_
 
-Die Discography-Funktion benötigte Plex- und Beets-Integrationen und ist im MVP deaktiviert. Der historische Code liegt im Archiv (`archive/integrations/plex_beets/`).
+Die Discography-Funktion benötigte zusätzliche Bibliotheksintegrationen (u. a. Plex) und ist im MVP deaktiviert. Der zugehörige Legacy-Code wurde aus dem Repository entfernt.
 
 ## Artist Watchlist
 
@@ -151,7 +151,7 @@ Beispielantwort:
 
 ## High-Quality Artwork
 
-Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in Originalauflösung. Primärquelle ist die Spotify-API; das größte verfügbare Bild landet im lokalen Cache-Verzeichnis (`ARTWORK_DIR`, Default `./artwork`). Für jede Spotify-Album-ID bzw. Fallback-MBID wird exakt eine Datei (`<id>_original.<ext>`) vorgehalten und für nachfolgende Titel wiederverwendet. Vor dem Einbetten prüft der Worker vorhandene Cover: nur fehlende oder als „low-res“ eingestufte Embeds werden ersetzt (`ARTWORK_MIN_EDGE`, `ARTWORK_MIN_BYTES`). Optional lässt sich ein Fallback auf MusicBrainz + Cover Art Archive aktivieren (`ARTWORK_FALLBACK_ENABLED=true`, `ARTWORK_FALLBACK_PROVIDER=musicbrainz`). Dabei sind nur die Hosts `musicbrainz.org` und `coverartarchive.org` erlaubt; Timeouts und Download-Größen lassen sich getrennt konfigurieren (`ARTWORK_HTTP_TIMEOUT`, `ARTWORK_MAX_BYTES`, `ARTWORK_FALLBACK_TIMEOUT_SEC`, `ARTWORK_FALLBACK_MAX_BYTES`, `ARTWORK_WORKER_CONCURRENCY`). Nach erfolgreichem Einbetten aktualisiert Harmony den Download-Datensatz (Pfad `artwork_path`, Status `has_artwork`, Cache-Hits `artwork_status`) und speichert die zugehörigen Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Der frühere Beets-Poststep ist archiviert und im MVP deaktiviert.
+Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörige Albumcover in Originalauflösung. Primärquelle ist die Spotify-API; das größte verfügbare Bild landet im lokalen Cache-Verzeichnis (`ARTWORK_DIR`, Default `./artwork`). Für jede Spotify-Album-ID bzw. Fallback-MBID wird exakt eine Datei (`<id>_original.<ext>`) vorgehalten und für nachfolgende Titel wiederverwendet. Vor dem Einbetten prüft der Worker vorhandene Cover: nur fehlende oder als „low-res“ eingestufte Embeds werden ersetzt (`ARTWORK_MIN_EDGE`, `ARTWORK_MIN_BYTES`). Optional lässt sich ein Fallback auf MusicBrainz + Cover Art Archive aktivieren (`ARTWORK_FALLBACK_ENABLED=true`, `ARTWORK_FALLBACK_PROVIDER=musicbrainz`). Dabei sind nur die Hosts `musicbrainz.org` und `coverartarchive.org` erlaubt; Timeouts und Download-Größen lassen sich getrennt konfigurieren (`ARTWORK_HTTP_TIMEOUT`, `ARTWORK_MAX_BYTES`, `ARTWORK_FALLBACK_TIMEOUT_SEC`, `ARTWORK_FALLBACK_MAX_BYTES`, `ARTWORK_WORKER_CONCURRENCY`). Nach erfolgreichem Einbetten aktualisiert Harmony den Download-Datensatz (Pfad `artwork_path`, Status `has_artwork`, Cache-Hits `artwork_status`) und speichert die zugehörigen Spotify-IDs (`spotify_track_id`, `spotify_album_id`). Der frühere nachgelagerte Tagging-Poststep ist archiviert und im MVP deaktiviert.
 
 > **Feature-Flag:** Artwork ist standardmäßig deaktiviert. Setze `ENABLE_ARTWORK=true` (oder aktiviere das Setting in der Datenbank), damit Worker und Endpunkte laufen; solange der Flag `false` ist, liefern `/soulseek/download/{id}/artwork*` eine `503 FEATURE_DISABLED`-Antwort.
 
@@ -253,12 +253,12 @@ CI_OFFLINE=true make all
 
 - Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
 - Library-Seite bündelt Artists, Downloads und Watchlist mit konsistenter Tab-Navigation; nur der aktive Tab wird lazy geladen und führt Polling aus.
-- Detailseiten für Spotify und Soulseek inkl. Tabs für Übersicht und Einstellungen (Plex/Beets-Ansichten archiviert).
+- Detailseiten für Spotify und Soulseek inkl. Tabs für Übersicht und Einstellungen (Legacy-Plex-Ansichten archiviert).
 - Matching-Ansicht mit Fortschrittsanzeigen.
 - Settings-Bereich mit Formularen für sämtliche Integrationen.
 - Dark-/Light-Mode Switch (Radix Switch) und globale Toast-Benachrichtigungen.
 
-Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/matching`, `/settings`). Archivierte Routen (`/plex`, `/beets`) werden nicht mehr ausgeliefert.
+Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/matching`, `/settings`). Archivierte Routen (`/plex`) werden nicht mehr ausgeliefert.
 
 ### Fehlgeschlagene Downloads verwalten
 
@@ -271,8 +271,8 @@ Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/match
 
 Harmony folgt einer klar getrennten Schichten-Architektur:
 
-- **Core**: Enthält API-Clients (`spotify_client.py`, `soulseek_client.py`) und die Matching-Engine. Die früheren Plex-/Beets-Clients liegen im Archiv.
-- **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Soulseek, Matching, Settings). Archivierte Router (`/plex`, `/beets`) bleiben im Repository erhalten, sind aber nicht eingebunden.
+- **Core**: Enthält API-Clients (`spotify_client.py`, `soulseek_client.py`) und die Matching-Engine. Die frühere Plex-Client-Implementierung wurde entfernt.
+- **Routers**: FastAPI-Router kapseln die öffentlich erreichbaren Endpunkte (Spotify, Soulseek, Matching, Settings). Archivierte Router (`/plex`) sind nicht eingebunden.
 - **Workers**: Asynchrone Tasks synchronisieren Playlists, Soulseek-Downloads und Matching-Jobs. Ein zusätzlicher Retry-Scheduler prüft fällige Downloads und sorgt für persistente Neuversuche mit exponentiellem Backoff.
 - **Datenbank-Layer**: `app/db.py`, SQLAlchemy-Modelle und -Schemas verwalten persistente Zustände.
 
@@ -706,7 +706,7 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 - `LibraryService` verwaltet Bibliotheksdaten auf Basis der Pydantic-Provider-DTOs und liefert weiterhin Fuzzy-/LIKE-Suchen.
 - Logging erfolgt über `log_event(..., event="service.call")` bzw. `event="service.cache"` mit `component=service.<name>` und strukturierten Feldern für Status, Dauer, Provider und Trefferanzahl.
 
-Archivierte Integrationen (Plex, Beets) befinden sich im Verzeichnis [`archive/integrations/plex_beets/`](archive/integrations/plex_beets/) und werden im aktiven Build nicht geladen.
+Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht geladen.
 
 ## Contributing
 
