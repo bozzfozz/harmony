@@ -15,7 +15,8 @@ const config = {
   testMatch: [
     '**/__tests__/**/*.smoke.test.tsx',
     '**/__tests__/auth-header.test.ts',
-    '**/__tests__/downloads-failed-inline.test.tsx'
+    '**/__tests__/downloads-failed-inline.test.tsx',
+    '**/__tests__/downloads.service.test.ts'
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/']
