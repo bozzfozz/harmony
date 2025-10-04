@@ -21,6 +21,17 @@ from .types import (
 _DEFAULT_MATCHING_CONFIG = load_matching_config()
 
 
+_TRACK_COUNT_META_KEYS = (
+    "total_tracks",
+    "track_count",
+    "tracks_count",
+    "total_track_count",
+    "num_tracks",
+    "number_of_tracks",
+    "album_total_tracks",
+)
+
+
 @dataclass(slots=True, frozen=True)
 class _QueryParts:
     raw: str
@@ -240,6 +251,21 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+def _album_total_tracks_from_dto(track: ProviderTrackDTO) -> int | None:
+    album = track.album
+    if not album:
+        return None
+    primary = _as_int(album.total_tracks)
+    if primary is not None:
+        return primary
+    for key in _TRACK_COUNT_META_KEYS:
+        if key in album.metadata:
+            total = _as_int(album.metadata.get(key))
+            if total is not None:
+                return total
+    return None
+
+
 def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) -> float:
     """Return a confidence score between a Spotify track and a Soulseek candidate."""
 
@@ -264,8 +290,18 @@ def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) ->
         bitrate_score = 0.7
     else:
         bitrate_score = 0.4
+    album_bonus = 0.0
+    spotify_total = _album_total_tracks_from_dto(track)
+    soulseek_total = _album_total_tracks_from_dto(candidate)
+    if spotify_total is not None and soulseek_total is not None:
+        diff = abs(spotify_total - soulseek_total)
+        if diff <= 1:
+            album_bonus = 0.05
+        else:
+            album_bonus = -0.02 * min(diff, 10)
     result = (title_score * 0.6) + (artist_score * 0.25) + (bitrate_score * 0.15)
-    return max(0.0, min(1.0, round(result, 4)))
+    adjusted = result + album_bonus
+    return max(0.0, min(1.0, round(adjusted, 4)))
 
 
 def _ensure_iterable(obj: Any) -> Iterable[Any]:

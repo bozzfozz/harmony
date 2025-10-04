@@ -83,6 +83,28 @@ Subtasks:
 - Status-Polling nach Auth-Callback integrieren und UI-Feedback ergänzen.
 - Tracking für erfolgreiche und gescheiterte OAuth-Versuche hinzufügen.
 
+ID: TD-20251012-005
+Titel: Matching-Scoring mit Album-Trackzahlen validieren
+Status: todo
+Priorität: P2
+Scope: backend
+Owner: codex
+Created_at: 2025-10-12T17:00:00Z
+Updated_at: 2025-10-12T17:00:00Z
+Tags: matching, scoring, integrations
+Beschreibung: Die neuen Bonusroutinen für Album-Trackzahlen sind bislang nur durch Unit-Tests abgesichert. Um Regressionen zu vermeiden, sollen repräsentative Provider-Datensätze gesammelt und End-to-End-Matchingläufe mit unterschiedlichen Albumgrößen dokumentiert werden. Zusätzlich braucht es Monitoring-Kennzahlen, die Trackcount-Abweichungen und deren Einfluss auf Scores sichtbar machen. Erkenntnisse aus den Tests sollen in die Matching-Konfiguration einfließen und dokumentiert werden.
+Akzeptanzkriterien:
+- Beispielhafte Spotify- und Soulseek-Datensätze werden mit realistischen Trackcount-Verteilungen gepflegt und versioniert.
+- Automatisierte Integrationstests prüfen Bonus und Penalty bei Trackcount-Abgleich in der Matching-Pipeline.
+- Dashboards oder Logs erfassen Trackcount-Deltas inklusive Score-Verlauf zur Laufzeit.
+Risiko/Impact: Mittel; falsche Kalibrierung kann Score-Vertrauen mindern oder Downloads blockieren.
+Dependencies: Matching-Konfigurations- und Telemetrie-Pipeline.
+Verweise: TASK TBD
+Subtasks:
+- Datensätze recherchieren und als Fixtures aufbereiten.
+- Integrationstests für Matching-Flows ergänzen.
+- Monitoring-Hooks samt Dokumentation aktualisieren.
+
 ID: TD-20251012-004
 Titel: Sidebar-Kollapszustand persistieren
 Status: todo

@@ -4,9 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from typing import Any
-
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
+
+
+_TRACK_COUNT_KEYS = (
+    "total_tracks",
+    "track_count",
+    "tracks_count",
+    "total_track_count",
+    "num_tracks",
+    "number_of_tracks",
+    "album_total_tracks",
+)
 
 
 def _coerce_str(value: Any) -> str | None:
@@ -58,6 +68,37 @@ def _iter_sequence(obj: Any) -> Iterable[Any]:
     if obj is None:
         return ()
     return (obj,)
+
+
+def _collect_track_count_metadata(source: Any) -> dict[str, int]:
+    mapping = _extract_mapping(source)
+    metadata_mapping = None
+    if mapping is not None:
+        metadata_mapping = _extract_mapping(mapping.get("metadata"))
+    counts: dict[str, int] = {}
+    for key in _TRACK_COUNT_KEYS:
+        raw = None
+        if mapping is not None and key in mapping:
+            raw = mapping.get(key)
+        elif metadata_mapping is not None and key in metadata_mapping:
+            raw = metadata_mapping.get(key)
+        elif mapping is None:
+            raw = getattr(source, key, None)
+            if raw is None:
+                metadata_attr = getattr(source, "metadata", None)
+                if isinstance(metadata_attr, Mapping):
+                    raw = metadata_attr.get(key)
+                elif metadata_attr is not None:
+                    raw = getattr(metadata_attr, key, None)
+        value = _coerce_int(raw)
+        if value is not None:
+            counts[key] = value
+    if "total_tracks" not in counts:
+        for key in _TRACK_COUNT_KEYS:
+            if key in counts:
+                counts["total_tracks"] = counts[key]
+                break
+    return counts
 
 
 def normalize_spotify_track(
@@ -118,12 +159,12 @@ def normalize_spotify_track(
         album_name = _coerce_str(_get(album_payload, "name")) or ""
         album_id = _coerce_str(_get(album_payload, "id"))
         album_metadata: dict[str, Any] = {}
+        track_counts = _collect_track_count_metadata(album_payload)
+        if track_counts:
+            album_metadata.update(track_counts)
         release_year = _coerce_int(_get(album_payload, "release_year"))
         if release_year is not None:
             album_metadata["release_year"] = release_year
-        total_tracks = _coerce_int(_get(album_payload, "total_tracks"))
-        if total_tracks is not None:
-            album_metadata["total_tracks"] = total_tracks
         release_date = _coerce_str(_get(album_payload, "release_date"))
         if release_date:
             album_metadata["release_date"] = release_date
@@ -261,6 +302,19 @@ def normalize_slskd_candidate(
     album = _coerce_str(payload.get("album"))
     if album:
         metadata["album"] = album
+    for key in _TRACK_COUNT_KEYS:
+        value = payload.get(key)
+        count = _coerce_int(value)
+        if count is not None:
+            metadata[key] = count
+    payload_metadata = payload.get("metadata")
+    if isinstance(payload_metadata, Mapping):
+        for key in _TRACK_COUNT_KEYS:
+            if key in metadata:
+                continue
+            count = _coerce_int(payload_metadata.get(key))
+            if count is not None:
+                metadata[key] = count
     filename = _coerce_str(payload.get("filename"))
     if filename:
         metadata["filename"] = filename
@@ -316,10 +370,20 @@ def normalize_slskd_track(
     album_name = _coerce_str(metadata.get("album"))
     album = None
     if album_name:
-        album = ProviderAlbum(name=album_name, id=None, artists=tuple())
+        album_metadata = {
+            key: metadata[key]
+            for key in _TRACK_COUNT_KEYS
+            if metadata.get(key) is not None
+        }
+        album = ProviderAlbum(
+            name=album_name,
+            id=None,
+            artists=tuple(),
+            metadata=album_metadata,
+        )
 
     track_metadata: dict[str, Any] = {}
-    for key in ("genre", "genres", "year", "id", "score", "bitrate_mode"):
+    for key in ("genre", "genres", "year", "id", "score", "bitrate_mode") + _TRACK_COUNT_KEYS:
         if key in metadata and metadata[key] is not None:
             track_metadata[key] = metadata[key]
 
