@@ -163,6 +163,83 @@ export interface SpotifyFreeEnqueueResponse {
   skipped: number;
 }
 
+export interface SpotifySearchResponse<T = Record<string, unknown>> {
+  items: T[];
+}
+
+export interface SpotifyRawArtist {
+  id?: string | null;
+  name?: string | null;
+  images?: SpotifyImage[] | null;
+  genres?: string[] | null;
+  followers?: { total?: number | null } | null;
+  popularity?: number | null;
+  uri?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SpotifyRawAlbum {
+  id?: string | null;
+  name?: string | null;
+  release_date?: string | null;
+  images?: SpotifyImage[] | null;
+  artists?: SpotifyRawArtist[] | null;
+  total_tracks?: number | null;
+  uri?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SpotifyRawTrackArtist {
+  id?: string | null;
+  name?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SpotifyRawTrack {
+  id?: string | null;
+  name?: string | null;
+  provider?: string | null;
+  artists?: SpotifyRawTrackArtist[] | null;
+  album?: SpotifyRawAlbum | null;
+  duration_ms?: number | null;
+  isrc?: string | null;
+  score?: number | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface SpotifyTrackSearchResult {
+  type: 'track';
+  id: string | null;
+  name: string;
+  artists: string[];
+  album: string | null;
+  durationMs: number | null;
+}
+
+export interface SpotifyArtistSearchResult {
+  type: 'artist';
+  id: string | null;
+  name: string;
+  imageUrl: string | null;
+  followers: number | null;
+  genres: string[];
+}
+
+export interface SpotifyAlbumSearchResult {
+  type: 'album';
+  id: string | null;
+  name: string;
+  imageUrl: string | null;
+  releaseDate: string | null;
+  artists: string[];
+}
+
+export interface SpotifySearchResults {
+  tracks: SpotifyTrackSearchResult[];
+  artists: SpotifyArtistSearchResult[];
+  albums: SpotifyAlbumSearchResult[];
+}
+
 export interface WatchlistArtistEntry {
   id: number | string;
   spotify_artist_id: string;
