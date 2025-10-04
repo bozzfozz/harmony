@@ -1,6 +1,6 @@
 # API-Referenz (MVP-Slim)
 
-Diese Datei beschreibt die aktiven REST-Endpunkte des Harmony-Backends im Spotify/Soulseek-MVP. Legacy-Routen für Plex/Beets sind deaktiviert und werden in der OpenAPI-Spezifikation nicht mehr generiert. Der entsprechende Code liegt unter [`archive/integrations/plex_beets/`](../archive/integrations/plex_beets/).
+Diese Datei beschreibt die aktiven REST-Endpunkte des Harmony-Backends im Spotify/Soulseek-MVP. Legacy-Routen für Plex sind deaktiviert und werden in der OpenAPI-Spezifikation nicht mehr generiert. Der entsprechende Code wurde entfernt.
 
 Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSON, sofern nicht anders angegeben. Der Basispräfix kann über die Umgebungsvariable `API_BASE_PATH` angepasst werden.
 
@@ -63,7 +63,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | ------- | ----- | ------------ |
 | `GET` | `/soulseek/download/{id}/metadata` | Liefert angereicherte Metadaten. |
 | `POST` | `/soulseek/download/{id}/metadata/refresh` | Erstellt einen neuen Metadaten-Job (Spotify-Quelle). |
-| `POST` | `/metadata/update` | Antwortet mit `503`, solange Plex/Beets archiviert bleiben. |
+| `POST` | `/metadata/update` | Antwortet mit `503`, solange die frühere Plex-Integration deaktiviert bleibt. |
 | `POST` | `/metadata/stop` | Ebenfalls `503` – nur als Legacy-Platzhalter. |
 | `GET` | `/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
 | `POST` | `/watchlist` | Fügt Artist zur Watchlist hinzu. |
@@ -116,4 +116,4 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 
 ## Archivierte Routen
 
-Alle `/plex/*` und `/beets/*`-Routen sind aus der App entfernt und liefern `404` bzw. sind vollständig deaktiviert. Das Audit-Skript verhindert, dass neue Referenzen im aktiven Code auftauchen.
+Alle `/plex/*`-Routen sind aus der App entfernt und liefern `404` bzw. sind vollständig deaktiviert. Das Audit-Skript verhindert, dass neue Referenzen im aktiven Code auftauchen.
