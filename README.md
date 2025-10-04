@@ -264,8 +264,7 @@ Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/match
 
 - Im Downloads-Tab zeigt eine Badge "Fehlgeschlagen: N" den aktuellen Bestand. Die Zahl wird nur für den aktiven Tab geladen; Invalidation erfolgt nach Aktionen oder beim erneuten Aktivieren.
 - Ein Klick auf die Badge aktiviert automatisch den Statusfilter „failed“ und blendet fehlgeschlagene Einträge in der Liste ein.
-- Zeilen mit Status `failed` bieten nun direkte Aktionen: **Neu starten** (POST `/downloads/{id}/retry`) und **Entfernen** (DELETE `/downloads/{id}`) aktualisieren Tabelle und Badge unmittelbar.
-- Ein globaler Button **Alle fehlgeschlagenen erneut versuchen** triggert optional `/downloads/retry-failed`. Die Aktion wird nur angeboten, wenn der Endpoint erreichbar ist und fordert vor dem Start eine Bestätigung an.
+- Zeilen mit Status `failed` bieten nun direkte Aktionen: **Neu starten** (POST `/download/{id}/retry`) und **Entfernen** (DELETE `/download/{id}`) aktualisieren Tabelle und Badge unmittelbar.
 - Während Requests sind Buttons deaktiviert; inaktive Tabs poll nicht im Hintergrund.
 
 ## Architekturüberblick
