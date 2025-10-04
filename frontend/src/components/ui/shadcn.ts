@@ -9,3 +9,4 @@ export {
 } from './card';
 export { Input, type InputProps } from './input';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
+export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';

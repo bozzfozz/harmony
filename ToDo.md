@@ -38,7 +38,6 @@ Dependencies: Keine
 Verweise: PR TBD
 Subtasks:
 - Normalisierung der Service-Namen implementieren.
-- Regressionstests für gemischt geschriebene Service-Namen ergänzen.
 
 ID: TD-20251012-001
 Titel: Soulseek- und Matching-Ansichten mit Live-Daten versorgen
@@ -83,3 +82,25 @@ Subtasks:
 - OAuth-Start-Endpoint aus dem Frontend ansteuern und Redirect-Handling implementieren.
 - Status-Polling nach Auth-Callback integrieren und UI-Feedback ergänzen.
 - Tracking für erfolgreiche und gescheiterte OAuth-Versuche hinzufügen.
+
+ID: TD-20251012-004
+Titel: Sidebar-Kollapszustand persistieren
+Status: todo
+Priorität: P3
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-12T16:30:00Z
+Updated_at: 2025-10-12T16:30:00Z
+Tags: ui, accessibility
+Beschreibung: Die neue Kollaps-Funktion der Sidebar merkt sich den Zustand derzeit nicht über Sitzungen hinweg. Nutzende müssen nach jedem Laden erneut einklappen. Eine Persistenz (z. B. LocalStorage) erhöht die Usability und stellt sicher, dass Tastatur- und Screenreader-Nutzende konsistent dieselbe Navigation vorfinden.
+Akzeptanzkriterien:
+- Sidebar merkt sich den letzten Kollapszustand über Reloads (z. B. mittels LocalStorage) und respektiert System- oder Nutzerpräferenzen.
+- Persistenter Zustand beeinträchtigt mobile Breakpoints nicht und wird bei deaktiviertem Storage sauber gehandhabt.
+- Tests decken Persistenz und Fallback auf Standardbreite ab.
+Risiko/Impact: Niedrig; betrifft ausschließlich Client-State und UI-Interaktion.
+Dependencies: Keine
+Verweise: PR TBD
+Subtasks:
+- Persistenz-Hook oder Utility implementieren.
+- Layout-Komponente aktualisieren und auf Konsistenz testen.
+- Jest-Tests für gespeicherten Zustand ergänzen.
