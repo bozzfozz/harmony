@@ -1,10 +1,13 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import SoulseekPage from '../pages/SoulseekPage';
 import { renderWithProviders } from '../test-utils';
 import { useQuery } from '../lib/query';
-import type { IntegrationsData } from '../api/services/soulseek';
-import type {
+import {
+  requeueSoulseekDownload,
+  SoulseekRequeueError,
+  type IntegrationsData,
   SoulseekConfigurationEntry,
   NormalizedSoulseekDownload
 } from '../api/services/soulseek';
@@ -18,7 +21,17 @@ jest.mock('../lib/query', () => {
   };
 });
 
+jest.mock('../api/services/soulseek', () => {
+  const actual = jest.requireActual('../api/services/soulseek');
+  return {
+    ...actual,
+    requeueSoulseekDownload: jest.fn()
+  };
+});
+
 const mockedUseQuery = useQuery as jest.MockedFunction<typeof useQuery>;
+const mockedRequeueSoulseekDownload =
+  requeueSoulseekDownload as jest.MockedFunction<typeof requeueSoulseekDownload>;
 
 type QueryResult<T> = {
   data: T | undefined;
@@ -47,6 +60,7 @@ const joinQueryKey = (queryKey: unknown): string => {
 describe('SoulseekPage', () => {
   beforeEach(() => {
     mockedUseQuery.mockReset();
+    mockedRequeueSoulseekDownload.mockReset();
   });
 
   it('zeigt Status, Konfiguration und Uploads an', () => {
@@ -195,5 +209,175 @@ describe('SoulseekPage', () => {
     renderWithProviders(<SoulseekPage />, { route: '/soulseek' });
 
     expect(screen.getByText(/Aktuell sind keine Downloads aktiv/)).toBeInTheDocument();
+  });
+
+  it('plant fehlgeschlagene Downloads erneut ein und aktualisiert die Liste', async () => {
+    const refetchMock = jest.fn().mockResolvedValue(undefined);
+    const toastMock = jest.fn();
+    const statusData: SoulseekStatusResponse = { status: 'connected' };
+    const downloadData: NormalizedSoulseekDownload[] = [
+      {
+        id: '42',
+        filename: 'album-track.mp3',
+        username: 'alice',
+        state: 'failed',
+        progress: 0.42,
+        priority: 5,
+        retryCount: 2,
+        lastError: 'Timeout',
+        createdAt: '2024-01-01T10:00:00Z',
+        updatedAt: '2024-01-01T10:05:00Z',
+        queuedAt: '2024-01-01T09:55:00Z',
+        startedAt: null,
+        completedAt: null,
+        nextRetryAt: null,
+        raw: {} as any
+      }
+    ];
+
+    let resolveRequeue: (() => void) | undefined;
+    mockedRequeueSoulseekDownload.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRequeue = resolve;
+        })
+    );
+
+    mockedUseQuery.mockImplementation(({ queryKey }) => {
+      const key = joinQueryKey(queryKey);
+      switch (key) {
+        case 'soulseek:status':
+          return createQueryResult({ data: statusData });
+        case 'soulseek:downloads:active':
+          return createQueryResult({ data: downloadData, refetch: refetchMock });
+        default:
+          return createQueryResult();
+      }
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<SoulseekPage />, { route: '/soulseek', toastFn: toastMock });
+
+    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    await user.click(retryButton);
+
+    expect(mockedRequeueSoulseekDownload).toHaveBeenCalledWith('42');
+    expect(await screen.findByRole('button', { name: /Wird erneut gestartet/i })).toBeDisabled();
+
+    resolveRequeue?.();
+
+    await waitFor(() => {
+      expect(refetchMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    });
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Download erneut eingeplant',
+        description: 'album-track.mp3 wird erneut heruntergeladen.'
+      })
+    );
+  });
+
+  it('zeigt einen Konflikt-Hinweis, wenn der Download in der Dead-Letter-Queue liegt', async () => {
+    const toastMock = jest.fn();
+    mockedRequeueSoulseekDownload.mockRejectedValue(
+      new SoulseekRequeueError(
+        'Der Download befindet sich in der Dead-Letter-Queue und muss manuell geprüft werden.',
+        { code: 'CONFLICT', status: 409 }
+      )
+    );
+
+    const downloadData: NormalizedSoulseekDownload[] = [
+      {
+        id: '42',
+        filename: 'album-track.mp3',
+        username: 'alice',
+        state: 'failed',
+        progress: 0,
+        priority: null,
+        retryCount: 0,
+        lastError: null,
+        createdAt: null,
+        updatedAt: null,
+        queuedAt: null,
+        startedAt: null,
+        completedAt: null,
+        nextRetryAt: null,
+        raw: {} as any
+      }
+    ];
+
+    mockedUseQuery.mockImplementation(({ queryKey }) => {
+      const key = joinQueryKey(queryKey);
+      if (key === 'soulseek:downloads:active') {
+        return createQueryResult({ data: downloadData });
+      }
+      return createQueryResult();
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<SoulseekPage />, { route: '/soulseek', toastFn: toastMock });
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Retry fehlgeschlagen',
+          description: 'Der Download befindet sich in der Dead-Letter-Queue und muss manuell geprüft werden.',
+          variant: 'destructive'
+        })
+      );
+    });
+  });
+
+  it('meldet allgemeine Fehler beim Requeue-Versuch', async () => {
+    const toastMock = jest.fn();
+    mockedRequeueSoulseekDownload.mockRejectedValue(new Error('kaputt'));
+
+    const downloadData: NormalizedSoulseekDownload[] = [
+      {
+        id: '42',
+        filename: 'album-track.mp3',
+        username: 'alice',
+        state: 'failed',
+        progress: 0,
+        priority: null,
+        retryCount: 0,
+        lastError: null,
+        createdAt: null,
+        updatedAt: null,
+        queuedAt: null,
+        startedAt: null,
+        completedAt: null,
+        nextRetryAt: null,
+        raw: {} as any
+      }
+    ];
+
+    mockedUseQuery.mockImplementation(({ queryKey }) => {
+      const key = joinQueryKey(queryKey);
+      if (key === 'soulseek:downloads:active') {
+        return createQueryResult({ data: downloadData });
+      }
+      return createQueryResult();
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<SoulseekPage />, { route: '/soulseek', toastFn: toastMock });
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Retry fehlgeschlagen',
+          description: 'Der Download konnte nicht erneut eingeplant werden.',
+          variant: 'destructive'
+        })
+      );
+    });
   });
 });

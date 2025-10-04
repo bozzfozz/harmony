@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import StatusBadge from '../components/StatusBadge';
 import SoulseekDownloadList from '../components/SoulseekDownloadList';
@@ -8,15 +8,18 @@ import {
   getIntegrations,
   getSoulseekConfiguration,
   getSoulseekDownloads,
+  requeueSoulseekDownload,
   getSoulseekStatus,
   getSoulseekUploads,
   type IntegrationsData,
   type NormalizedSoulseekDownload,
   type NormalizedSoulseekUpload,
-  type SoulseekConfigurationEntry
+  type SoulseekConfigurationEntry,
+  SoulseekRequeueError
 } from '../api/services/soulseek';
 import type { SoulseekConnectionStatus } from '../api/types';
 import { useQuery } from '../lib/query';
+import { useToast } from '../hooks/useToast';
 
 interface StatusLabelMapping {
   ok?: Record<string, string>;
@@ -71,6 +74,9 @@ const formatDetailValue = (value: unknown): string => {
 const SoulseekPage = () => {
   const [showAllUploads, setShowAllUploads] = useState(false);
   const [showAllDownloads, setShowAllDownloads] = useState(false);
+  const [retryingDownloadId, setRetryingDownloadId] = useState<string | null>(null);
+
+  const { toast } = useToast();
 
   const statusQuery = useQuery<{ status: SoulseekConnectionStatus }>({
     queryKey: ['soulseek', 'status'],
@@ -96,6 +102,43 @@ const SoulseekPage = () => {
     queryKey: ['soulseek', 'downloads', showAllDownloads ? 'all' : 'active'],
     queryFn: () => getSoulseekDownloads({ includeAll: showAllDownloads })
   });
+
+  const handleRetryDownload = useCallback(
+    async (download: NormalizedSoulseekDownload) => {
+      const downloadId = download.id?.trim();
+      if (!downloadId) {
+        toast({
+          title: 'Retry nicht möglich',
+          description: 'Für diesen Download liegt keine eindeutige Kennung vor.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setRetryingDownloadId(downloadId);
+      try {
+        await requeueSoulseekDownload(downloadId);
+        toast({
+          title: 'Download erneut eingeplant',
+          description: `${download.filename ?? downloadId} wird erneut heruntergeladen.`
+        });
+        await downloadsQuery.refetch();
+      } catch (error) {
+        let description = 'Der Download konnte nicht erneut eingeplant werden.';
+        if (error instanceof SoulseekRequeueError) {
+          description = error.message;
+        }
+        toast({
+          title: 'Retry fehlgeschlagen',
+          description,
+          variant: 'destructive'
+        });
+      } finally {
+        setRetryingDownloadId(null);
+      }
+    },
+    [downloadsQuery, toast]
+  );
 
   const connectionStatus = statusQuery.data?.status ?? 'unknown';
   const connectionLabelMap = {
@@ -334,7 +377,8 @@ const SoulseekPage = () => {
             isLoading={downloadsQuery.isLoading}
             isError={downloadsQuery.isError}
             onRetryFetch={() => downloadsQuery.refetch()}
-            onRetryDownload={() => downloadsQuery.refetch()}
+            onRetryDownload={handleRetryDownload}
+            retryingDownloadId={retryingDownloadId}
           />
         </CardContent>
       </Card>
