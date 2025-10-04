@@ -1,4 +1,4 @@
-import { apiUrl, request } from '../client';
+import { ApiError, apiUrl, request } from '../client';
 import { getSettings } from './system';
 import type {
   IntegrationsData,
@@ -234,6 +234,29 @@ export interface SoulseekConfigurationEntry {
   masked: boolean;
 }
 
+export type SoulseekRequeueErrorCode = 'NOT_FOUND' | 'CONFLICT' | 'UNAVAILABLE' | 'UNKNOWN';
+
+export class SoulseekRequeueError extends Error {
+  readonly code: SoulseekRequeueErrorCode;
+  readonly status?: number;
+  readonly details?: unknown;
+  declare cause?: unknown;
+
+  constructor(
+    message: string,
+    { code, status, details, cause }: { code: SoulseekRequeueErrorCode; status?: number; details?: unknown; cause?: unknown }
+  ) {
+    super(message);
+    this.name = 'SoulseekRequeueError';
+    this.code = code;
+    this.status = status;
+    this.details = details;
+    if (cause !== undefined) {
+      this.cause = cause;
+    }
+  }
+}
+
 export const getSoulseekStatus = async (): Promise<SoulseekStatusResponse> =>
   request<SoulseekStatusResponse>({ method: 'GET', url: apiUrl('/soulseek/status') });
 
@@ -255,6 +278,56 @@ export const getSoulseekDownloads = async ({
   return downloads
     .map(normalizeDownload)
     .filter((entry): entry is NormalizedSoulseekDownload => entry !== null);
+};
+
+export const requeueSoulseekDownload = async (downloadId: string): Promise<void> => {
+  const trimmedId = downloadId.trim();
+  if (!trimmedId) {
+    throw new SoulseekRequeueError('Download-ID fehlt', { code: 'UNKNOWN' });
+  }
+
+  try {
+    await request<{ status: string }>({
+      method: 'POST',
+      url: apiUrl(`/soulseek/downloads/${encodeURIComponent(trimmedId)}/requeue`)
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      const normalizedMessage = error.message?.toLowerCase?.() ?? '';
+      if (error.status === 404) {
+        throw new SoulseekRequeueError('Der Download wurde nicht gefunden.', {
+          code: 'NOT_FOUND',
+          status: error.status,
+          details: error.details,
+          cause: error
+        });
+      }
+      if (error.status === 409) {
+        let message = 'Der Download kann nicht erneut eingeplant werden.';
+        if (normalizedMessage.includes('dead-letter')) {
+          message =
+            'Der Download befindet sich in der Dead-Letter-Queue und muss manuell geprüft werden.';
+        } else if (normalizedMessage.includes('already active')) {
+          message = 'Der Download ist bereits aktiv und benötigt keinen erneuten Retry.';
+        }
+        throw new SoulseekRequeueError(message, {
+          code: 'CONFLICT',
+          status: error.status,
+          details: error.details,
+          cause: error
+        });
+      }
+      if (error.status === 503) {
+        throw new SoulseekRequeueError('Der Sync-Worker ist derzeit nicht verfügbar.', {
+          code: 'UNAVAILABLE',
+          status: error.status,
+          details: error.details,
+          cause: error
+        });
+      }
+    }
+    throw error;
+  }
 };
 
 export const getIntegrations = async (): Promise<IntegrationsData> => {

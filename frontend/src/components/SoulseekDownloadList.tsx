@@ -19,6 +19,8 @@ const formatStateLabel = (state: string): string => {
   return labels[normalized] ?? state.charAt(0).toUpperCase() + state.slice(1);
 };
 
+const RETRYABLE_STATES = new Set(['failed']);
+
 const formatTimestamp = (value: string | null): string | null => {
   if (!value) {
     return null;
@@ -53,6 +55,7 @@ export interface SoulseekDownloadListProps {
   isError: boolean;
   onRetryFetch?: () => void;
   onRetryDownload?: (download: NormalizedSoulseekDownload) => void;
+  retryingDownloadId?: string | null;
 }
 
 const SoulseekDownloadList = ({
@@ -60,7 +63,8 @@ const SoulseekDownloadList = ({
   isLoading,
   isError,
   onRetryFetch,
-  onRetryDownload
+  onRetryDownload,
+  retryingDownloadId
 }: SoulseekDownloadListProps) => {
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Downloads werden geladen …</p>;
@@ -103,10 +107,12 @@ const SoulseekDownloadList = ({
               ? null
               : mapProgressToPercent(download.progress);
           const rowKey = download.id ?? `${download.filename ?? 'download'}-${index}`;
-          const canRetry = (() => {
-            const normalized = download.state.toLowerCase();
-            return normalized === 'failed' || normalized === 'dead_letter';
-          })();
+          const normalizedState = download.state.toLowerCase();
+          const normalizedId = typeof download.id === 'string' ? download.id.trim() : null;
+          const hasIdentifier = Boolean(normalizedId);
+          const canRetry = hasIdentifier && RETRYABLE_STATES.has(normalizedState);
+          const isRetrying =
+            hasIdentifier && retryingDownloadId != null && normalizedId === retryingDownloadId;
           const queuedLabel = formatTimestamp(download.queuedAt);
           const startedLabel = formatTimestamp(download.startedAt);
           const completedLabel = formatTimestamp(download.completedAt);
@@ -180,10 +186,10 @@ const SoulseekDownloadList = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!onRetryDownload || !canRetry}
+                  disabled={!onRetryDownload || !canRetry || isRetrying}
                   onClick={() => onRetryDownload?.(download)}
                 >
-                  Retry
+                  {isRetrying ? 'Wird erneut gestartet …' : 'Retry'}
                 </Button>
               </TableCell>
             </TableRow>

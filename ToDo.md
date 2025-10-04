@@ -40,6 +40,28 @@ Subtasks:
 - Normalisierung der Service-Namen implementieren.
 - Tests für gemischte Service-Namen ergänzen.
 
+ID: TD-20251004-003
+Titel: Soulseek-Retry-Zustände mit Backend synchronisieren
+Status: todo
+Priorität: P2
+Scope: frontend
+Owner: codex
+Created_at: 2025-10-04T21:27:00Z
+Updated_at: 2025-10-04T21:27:00Z
+Tags: soulseek, reliability, ux
+Beschreibung: Die neue Retry-UI beschränkt sich aktuell auf den Zustand `failed`, weil die Liste erlaubter Zustände im Backend nicht explizit bereitgestellt wird. Wenn slskd weitere Zustandsübergänge zulässt (z. B. nach Abbruch oder Abschluss), erscheinen Buttons fälschlicherweise deaktiviert. Eine zentrale Quelle für zulässige Requeue-Zustände würde Frontend, Tests und Dokumentation synchron halten. Die Aufgabe soll die erlaubten Zustände ermitteln, publizieren und sicherstellen, dass UI und Tests automatisch darauf reagieren.
+Akzeptanzkriterien:
+- Backend stellt die zulässigen Requeue-Zustände über einen API-Contract oder ein Metadatenfeld bereit.
+- Frontend nutzt die gemeldete Liste dynamisch zur Steuerung der Retry-Buttons.
+- Tests decken mindestens einen zusätzlichen erlaubten Zustand ab und schlagen fehl, wenn die Liste fehlt.
+Risiko/Impact: Mittel; ohne Anpassung könnten zulässige Retries blockiert werden und Betriebs-Workflows ins Stocken geraten.
+Dependencies: Abstimmung mit Soulseek-Router und slskd-Schema.
+Verweise: PR TBD (Soulseek Retry UI)
+Subtasks:
+- Zulässige Zustände im Backend identifizieren oder neues Feld bereitstellen.
+- Frontend-Service und Komponenten auf die dynamische Liste umstellen.
+- Tests und Dokumentation entsprechend aktualisieren.
+
 ID: TD-20251013-001
 Titel: UI Navigation signalisiert Integrationswarnungen
 Status: done
