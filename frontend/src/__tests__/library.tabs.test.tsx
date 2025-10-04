@@ -48,17 +48,9 @@ describe('Library tab gating', () => {
       const queryKey = option.queryKey as unknown[] | undefined;
       return Array.isArray(queryKey) && queryKey.length === 3;
     });
-    const statsOptions = capturedOptions.find((option) => {
-      const queryKey = option.queryKey as unknown[] | undefined;
-      return Array.isArray(queryKey) && queryKey.length === 2 && queryKey[1] === 'stats';
-    });
-
     expect(listOptions).toBeDefined();
     expect(listOptions?.enabled).toBe(false);
     expect(listOptions?.refetchInterval).toBe(false);
-
-    expect(statsOptions).toBeDefined();
-    expect(statsOptions?.enabled).toBe(false);
   });
 
   it('aktiviert Polling nur im aktiven Tab', () => {
@@ -74,17 +66,9 @@ describe('Library tab gating', () => {
       const queryKey = option.queryKey as unknown[] | undefined;
       return Array.isArray(queryKey) && queryKey.length === 3;
     });
-    const statsOptions = capturedOptions.find((option) => {
-      const queryKey = option.queryKey as unknown[] | undefined;
-      return Array.isArray(queryKey) && queryKey.length === 2 && queryKey[1] === 'stats';
-    });
-
     expect(listOptions).toBeDefined();
     expect(listOptions?.enabled).toBe(true);
     expect(listOptions?.refetchInterval).toBe(LIBRARY_POLL_INTERVAL_MS);
-
-    expect(statsOptions).toBeDefined();
-    expect(statsOptions?.enabled).toBe(true);
   });
 
   it('unterdrückt Fehler-Toasts wenn der Tab inaktiv ist', () => {
