@@ -242,6 +242,9 @@ describe('SoulseekPage', () => {
 
     renderWithProviders(<SoulseekPage />, { route: '/soulseek' });
 
+    const badge = screen.getByRole('status', { name: /wartet auf eingriff/i });
+    expect(badge).toHaveClass('bg-rose-100');
+
     const retryButton = screen.getByRole('button', { name: 'Retry' });
     expect(retryButton).toBeDisabled();
   });
