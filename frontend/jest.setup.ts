@@ -25,3 +25,13 @@ const importMetaEnv = {
   ...(globalThis as typeof globalThis & { __HARMONY_IMPORT_META_ENV__?: Record<string, unknown> }).__HARMONY_IMPORT_META_ENV__,
   ...importMetaEnv
 };
+
+if (typeof (globalThis as typeof globalThis & { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  (globalThis as typeof globalThis & { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
+}

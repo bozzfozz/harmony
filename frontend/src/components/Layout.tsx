@@ -1,8 +1,8 @@
 import { ReactNode, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { CircleDot, Menu, Moon, Sun } from 'lucide-react';
+import { CircleDot, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/shadcn';
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/shadcn';
 import { ScrollArea } from './ui/scroll-area';
 import { Switch } from './ui/switch';
 import { useTheme } from '../hooks/useTheme';
@@ -15,6 +15,7 @@ interface LayoutProps {
 const Layout = ({ children }: LayoutProps) => {
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
 
   const activeTitle = useMemo(() => {
@@ -25,43 +26,76 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside
+        data-collapsed={sidebarCollapsed}
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white/90 shadow-lg backdrop-blur transition-transform dark:border-slate-800 dark:bg-slate-900/90 lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white/90 shadow-lg backdrop-blur transition-transform transition-all dark:border-slate-800 dark:bg-slate-900/90 lg:static lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          sidebarCollapsed ? 'lg:w-20' : 'lg:w-64',
           'lg:block'
         )}
       >
-        <div className="flex h-16 items-center px-6">
+        <div className="flex h-16 items-center justify-between px-6">
           <Link to="/dashboard" className="flex items-center gap-2 text-lg font-semibold">
             <CircleDot className="h-5 w-5 text-indigo-600" />
-            Harmony
+            <span className={cn('transition-opacity', sidebarCollapsed && 'sr-only')}>Harmony</span>
           </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="hidden lg:inline-flex"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? 'Sidebar erweitern' : 'Sidebar einklappen'}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          </Button>
         </div>
         <ScrollArea className="h-[calc(100vh-4rem)]">
-          <nav className="flex flex-col gap-1 p-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50',
-                      isActive && 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50'
-                    )
-                  }
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </nav>
+          <TooltipProvider delayDuration={0}>
+            <nav className={cn('flex flex-col gap-1 p-4', sidebarCollapsed && 'px-2')}>
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                const iconTestId = `nav-icon-${item.label.toLowerCase().replace(/\s+/g, '-')}`;
+                return (
+                  <Tooltip key={item.to}>
+                    <TooltipTrigger asChild>
+                      <NavLink
+                        aria-label={item.label}
+                        to={item.to}
+                        className={({ isActive }) =>
+                          cn(
+                            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50',
+                            sidebarCollapsed && 'justify-center gap-2 px-2',
+                            isActive && 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50'
+                          )
+                        }
+                        onClick={() => setSidebarOpen(false)}
+                      >
+                        <span className="flex items-center justify-center">
+                          <Icon className="h-5 w-5" data-testid={iconTestId} aria-hidden="true" />
+                        </span>
+                        <span
+                          className={cn(
+                            'whitespace-nowrap transition-opacity',
+                            sidebarCollapsed && 'sr-only'
+                          )}
+                        >
+                          {item.label}
+                        </span>
+                      </NavLink>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </nav>
+          </TooltipProvider>
         </ScrollArea>
       </aside>
-      <div className="flex flex-1 flex-col lg:ml-64">
+      <div
+        data-testid="content-wrapper"
+        className={cn('flex flex-1 flex-col transition-all', sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64')}
+      >
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur transition-colors dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4">
             <Button
