@@ -33,8 +33,7 @@ const statusOptions = [
   { value: 'queued', label: 'Warteschlange' },
   { value: 'completed', label: 'Abgeschlossen' },
   { value: 'failed', label: 'Fehlgeschlagen' },
-  { value: 'cancelled', label: 'Abgebrochen' },
-  { value: 'blocked', label: 'Blockiert' }
+  { value: 'cancelled', label: 'Abgebrochen' }
 ];
 
 const DOWNLOAD_SOURCE = 'library_manual';
