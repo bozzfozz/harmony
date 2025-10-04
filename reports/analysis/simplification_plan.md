@@ -19,15 +19,16 @@
    - **Risiko:** Niedrig (nur Verkabelung).  
    - **Rollback:** Revert der neuen Registry und Wiederherstellung der bisherigen `include_router`-Aufrufe.
 
-2. **Logging-Hilfsfunktion einführen (`log_event`)**  
-   - **Beobachtung:** Cache nutzt `extra={"event": …}`, Watchlist-Worker und Search-Router codieren Schlüssel im Nachrichtentext.【F:app/services/cache.py†L70-L135】【F:app/workers/watchlist_worker.py†L93-L103】【F:app/routers/search_router.py†L127-L154】  
+2. **Logging-Hilfsfunktion vereinheitlichen (`log_event`)**
+   - **Beobachtung:** `app/logging_events.log_event` dient bereits als zentraler Helper; der Search-Endpunkt nutzt ihn über `_emit_api_event`, hält aber noch einen Kompatibilitätspfad zu `app.routers.search_router.log_event` offen, während der `IntegrationService` seine Provider-Gateway-Aufrufe direkt mit `log_event` instrumentiert.【F:app/api/search.py†L103-L180】【F:app/services/integration_service.py†L109-L195】
+
    - **Schritte:**
-     1. Utility `app.logging_events.log_event(logger, event, **fields)` bereitstellen.
-     2. In kritischen Komponenten (Search, Watchlist, Orchestrator) auf das neue Helper wechseln.
-     3. Monitoring-Doku ergänzen (Event- und Pflichtfelder siehe Logging-Contract).  
-   - **Impact:** Vereinheitlichte Logs → schnellere Observability-Gewinne.  
-   - **Aufwand:** 1 PT.  
-   - **Risiko:** Niedrig (Log-Only).  
+     1. Kompatibilitäts-Shim `_emit_api_event` in `app/api/search.py` abbauen und Tests/Caller direkt auf `app.logging_events.log_event` ausrichten.
+     2. Komponenten (Search, Worker, Services) auf konsistente Event-Felder prüfen und fehlende Helper-Nutzung nachziehen.
+     3. Monitoring-Dokumentation mit vereinheitlichten Beispielen und Pflichtfeldern zur Structured-Logging-Konvention aktualisieren.
+   - **Impact:** Vereinheitlichte Logs → schnellere Observability-Gewinne.
+   - **Aufwand:** 1 PT.
+   - **Risiko:** Niedrig (Log-Only).
    - **Rollback:** Helper entfernen; alte Logzeilen wiederherstellen.
 
 3. **Worker-Konfigurations-Defaults im Code dokumentieren & konsolidieren**  
@@ -53,15 +54,15 @@
    - **Risiko:** Mittel (Lifecycle/Async).  
    - **Rollback:** Orchestrator entfernen und alten Lifecycle wiederherstellen.
 
-2. **ProviderGateway + Adapter-Contracts vereinheitlichen**  
-   - **Beobachtung:** `IntegrationService` behandelt nur `SlskdAdapter`; Spotify/Plex-Adapter werden zwar erstellt, aber nicht genutzt.【F:app/services/integration_service.py†L31-L86】【F:app/integrations/registry.py†L16-L58】  
-   - **Schritte:**  
-     1. `IntegrationService.search_tracks` auf generische `MusicProviderAdapter` umstellen.  
-     2. Timeout/Retry-Policy zentralisieren (ein Decorator oder Wrapper im Gateway).  
-     3. Router (`search`, `integrations`) auf den Gateway refaktorisieren; Response-Modelle angleichen.  
-   - **Impact:** Mehr Provider in Zukunft möglich, weniger Sonderfälle, klare Fehlercodes.  
-   - **Aufwand:** 1 Sprint.  
-   - **Risiko:** Mittel (Async, Error-Mapping).  
+2. **ProviderGateway + Adapter-Contracts vereinheitlichen**
+   - **Beobachtung:** `IntegrationService` initialisiert den `ProviderGateway` mit allen aktivierten Track-Providern und protokolliert Mehrquellen-Suchen via `log_event`, dennoch mappt `app/api/search.py` die API-Sources weiterhin manuell zu Providern und aggregiert Fehlerzustände selbst.【F:app/services/integration_service.py†L33-L195】【F:app/api/search.py†L125-L188】
+   - **Schritte:**
+     1. Source/Provider-Mapping sowie Statusaggregation aus `app/api/search.py` in Gateway bzw. `IntegrationService` überführen und als wiederverwendbare Antwortstruktur bereitstellen.
+     2. Fehler- und Timeout-Kontrakte im Gateway harmonisieren, sodass Router und Services die gleichen Result-/Statusfelder konsumieren.
+     3. Search- und Integrations-Router auf das neue Mehrquellen-Response-Modell umstellen und Tests/Schema-Dokumentation entsprechend aktualisieren.
+   - **Impact:** Mehr Provider in Zukunft möglich, weniger Sonderfälle, klare Fehlercodes.
+   - **Aufwand:** 1 Sprint.
+   - **Risiko:** Mittel (Async, Error-Mapping).
    - **Rollback:** Gateway deaktivieren, alte Methode reaktivieren.
 
 3. **Spotify-Domäne konsolidieren (Router & Services)**
