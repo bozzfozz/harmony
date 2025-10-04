@@ -101,6 +101,29 @@ export interface SoulseekUploadsResponse {
   uploads?: unknown;
 }
 
+export interface SoulseekDownloadEntry {
+  id?: number | string | null;
+  filename?: string | null;
+  username?: string | null;
+  state?: string | null;
+  progress?: number | null;
+  priority?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  queued_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  finished_at?: string | null;
+  retry_count?: number | null;
+  next_retry_at?: string | null;
+  last_error?: string | null;
+  [key: string]: unknown;
+}
+
+export interface SoulseekDownloadsResponse {
+  downloads?: unknown;
+}
+
 export interface ProviderInfo {
   name: string;
   status: string;

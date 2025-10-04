@@ -5,6 +5,8 @@ import type {
   IntegrationsResponse,
   ProviderInfo,
   SettingsResponse,
+  SoulseekDownloadEntry,
+  SoulseekDownloadsResponse,
   SoulseekStatusResponse,
   SoulseekUploadEntry,
   SoulseekUploadsResponse
@@ -79,6 +81,85 @@ const normalizeUpload = (entry: unknown): NormalizedSoulseekUpload | null => {
   };
 };
 
+const normalizeDownload = (entry: unknown): NormalizedSoulseekDownload | null => {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+
+  const record = entry as SoulseekDownloadEntry;
+  const id = toStringOrNull(
+    (record.id ?? (record as { download_id?: unknown }).download_id ?? (record as { transfer_id?: unknown }).transfer_id) ??
+      null
+  );
+  const filename = toStringOrNull(
+    record.filename ??
+      (record as { file?: unknown }).file ??
+      (record as { name?: unknown }).name ??
+      (record as { filepath?: unknown }).filepath
+  );
+  const username = toStringOrNull(
+    record.username ?? (record as { user?: unknown }).user ?? (record as { peer?: unknown }).peer
+  );
+  const state =
+    toStringOrNull(record.state ?? (record as { status?: unknown }).status) ?? 'unknown';
+  const progress = toNumberOrNull(
+    record.progress ??
+      (record as { progress_percent?: unknown }).progress_percent ??
+      (record as { progress_pct?: unknown }).progress_pct
+  );
+  const priority = toNumberOrNull(
+    record.priority ?? (record as { priority_level?: unknown }).priority_level
+  );
+  const retryCount =
+    toNumberOrNull(record.retry_count ?? (record as { retryCount?: unknown }).retryCount) ?? 0;
+  const lastError = toStringOrNull(
+    record.last_error ?? (record as { lastError?: unknown }).lastError
+  );
+  const createdAt =
+    toStringOrNull(
+      record.created_at ??
+        (record as { createdAt?: unknown }).createdAt ??
+        (record as { added_at?: unknown }).added_at
+    ) ?? null;
+  const updatedAt = toStringOrNull(
+    record.updated_at ?? (record as { updatedAt?: unknown }).updatedAt
+  );
+  const queuedAt =
+    toStringOrNull(
+      record.queued_at ?? (record as { queuedAt?: unknown }).queuedAt ?? createdAt
+    ) ?? createdAt;
+  const startedAt = toStringOrNull(
+    record.started_at ?? (record as { startedAt?: unknown }).startedAt
+  );
+  const completedAt = toStringOrNull(
+    record.completed_at ??
+      (record as { completedAt?: unknown }).completedAt ??
+      record.finished_at ??
+      (record as { finishedAt?: unknown }).finishedAt
+  );
+  const nextRetryAt = toStringOrNull(
+    record.next_retry_at ?? (record as { nextRetryAt?: unknown }).nextRetryAt
+  );
+
+  return {
+    id,
+    filename,
+    username,
+    state,
+    progress,
+    priority,
+    retryCount,
+    lastError,
+    createdAt,
+    updatedAt,
+    queuedAt,
+    startedAt,
+    completedAt,
+    nextRetryAt,
+    raw: record
+  };
+};
+
 const normalizeProvider = (entry: unknown): ProviderInfo | null => {
   if (!entry || typeof entry !== 'object') {
     return null;
@@ -126,6 +207,24 @@ export interface NormalizedSoulseekUpload {
   raw: SoulseekUploadEntry;
 }
 
+export interface NormalizedSoulseekDownload {
+  id: string | null;
+  filename: string | null;
+  username: string | null;
+  state: string;
+  progress: number | null;
+  priority: number | null;
+  retryCount: number;
+  lastError: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  queuedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  nextRetryAt: string | null;
+  raw: SoulseekDownloadEntry;
+}
+
 export interface SoulseekConfigurationEntry {
   key: string;
   label: string;
@@ -145,6 +244,17 @@ export const getSoulseekUploads = async ({
   const payload = await request<SoulseekUploadsResponse>({ method: 'GET', url: apiUrl(endpoint) });
   const uploads = ensureArray(payload.uploads);
   return uploads.map(normalizeUpload).filter((entry): entry is NormalizedSoulseekUpload => entry !== null);
+};
+
+export const getSoulseekDownloads = async ({
+  includeAll = false
+}: { includeAll?: boolean } = {}): Promise<NormalizedSoulseekDownload[]> => {
+  const endpoint = includeAll ? '/soulseek/downloads/all' : '/soulseek/downloads';
+  const payload = await request<SoulseekDownloadsResponse>({ method: 'GET', url: apiUrl(endpoint) });
+  const downloads = ensureArray(payload.downloads);
+  return downloads
+    .map(normalizeDownload)
+    .filter((entry): entry is NormalizedSoulseekDownload => entry !== null);
 };
 
 export const getIntegrations = async (): Promise<IntegrationsData> => {

@@ -60,15 +60,17 @@ Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompa
 
 #### Soulseek UI Dashboard
 
-- Die Frontend-Ansicht **„Soulseek“** bündelt drei Kernbereiche für Operator:innen:
+- Die Frontend-Ansicht **„Soulseek“** bündelt vier Kernbereiche für Operator:innen:
   - **Verbindung & Integrationen:** nutzt `/soulseek/status` und `/integrations`, um den Connectivity-Status sowie Provider-Health inklusive Detailhinweisen (z. B. fehlende Credentials) anzuzeigen.
   - **Konfigurationsübersicht:** lädt die relevanten `SLSKD_*`-Einstellungen über `/settings`, maskiert Secrets und markiert fehlende Pflichtwerte (Basis-URL/API-Key) deutlich.
   - **Aktive Uploads:** ruft `/soulseek/uploads` bzw. `/soulseek/uploads/all` ab, stellt Fortschritt, Benutzer:innen, Größe und Durchsatz als Tabelle dar und signalisiert Fehlerzustände mit Retry-Möglichkeit.
+  - **Download-Überwachung:** bindet `/soulseek/downloads` und `/soulseek/downloads/all` ein, zeigt Priorität, Retry-Zähler und letzte Fehler pro Transfer und erlaubt den Wechsel zwischen aktiven und historischen Downloads.
 - **Interpretation der Hinweise:**
   - Das Badge **„Verbunden“** bestätigt, dass der Backend-Proxy (`slskd`) erreichbar ist. **„Getrennt“** bedeutet, dass Downloads/Uploads blockiert sind und Worker in Folge mit Retries starten.
   - Der Abschnitt **„Provider-Gesundheit“** spiegelt die `/integrations`-Bewertung wider. `degraded` deutet auf optionale, aber relevante Warnungen hin (z. B. fehlende Bandbreitenlimits), `down` auf harte Ausfälle oder fehlende Credentials. Detailfelder listen die Rohwerte aus dem Health-Endpunkt.
   - In der Konfiguration kennzeichnet ein rotes Badge fehlende Pflichtwerte. Maskierte Secrets erscheinen als `••••••`; Operator:innen können so prüfen, ob Werte grundsätzlich gesetzt sind, ohne sie offenzulegen.
   - Die Upload-Tabelle zeigt jeden aktiven Share mit Status, Fortschritt, Transfergröße und Geschwindigkeit. Bei leerem Ergebnis informiert der Hinweis „Aktuell sind keine Uploads aktiv“, Fehlerzustände liefern einen Retry-Button, der erneut `/soulseek/uploads` aufruft.
+  - Die Download-Tabelle aggregiert Daten aus persistenter Datenbank und Live-Queue, inklusive Priorität, Retry-Historie und Zeitstempeln. Über die Umschalter „Alle Downloads anzeigen“/„Nur aktive Downloads“ lassen sich Altlasten prüfen; der Retry-Button stößt eine erneute Synchronisation der Liste an, sodass Operator:innen nach manuellen Requeues den Zustand kontrollieren können.
 - Die Seite dient als Operations-Dashboard für den Soulseek-Daemon: Warnhinweise bei Ausfällen oder fehlender Konfiguration helfen, bevor Sync-Worker oder Upload-Freigaben ins Stocken geraten.
 - **Navigation-Warnhinweise:** Die linke Seitenleiste übernimmt die gleichen Integrationssignale. Ein gelbes Badge „Eingeschränkt“ weist auf degradierte Dienste hin (z. B. wenn `/integrations` `degraded` meldet), rote Badges „Offline“ bzw. „Fehler“ kennzeichnen fehlende Konfiguration oder nicht erreichbare Services. Tooltips und Screenreader-Texte wiederholen die Warnung – auch im eingeklappten Zustand der Navigation – damit Operator:innen die Soulseek- und Matching-Dashboards gezielt aufrufen können.
 

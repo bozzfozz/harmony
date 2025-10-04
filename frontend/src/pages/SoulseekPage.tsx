@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 
 import StatusBadge from '../components/StatusBadge';
+import SoulseekDownloadList from '../components/SoulseekDownloadList';
 import SoulseekUploadList from '../components/SoulseekUploadList';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/shadcn';
 import {
   getIntegrations,
   getSoulseekConfiguration,
+  getSoulseekDownloads,
   getSoulseekStatus,
   getSoulseekUploads,
   type IntegrationsData,
+  type NormalizedSoulseekDownload,
   type NormalizedSoulseekUpload,
   type SoulseekConfigurationEntry
 } from '../api/services/soulseek';
@@ -67,6 +70,7 @@ const formatDetailValue = (value: unknown): string => {
 
 const SoulseekPage = () => {
   const [showAllUploads, setShowAllUploads] = useState(false);
+  const [showAllDownloads, setShowAllDownloads] = useState(false);
 
   const statusQuery = useQuery<{ status: SoulseekConnectionStatus }>({
     queryKey: ['soulseek', 'status'],
@@ -86,6 +90,11 @@ const SoulseekPage = () => {
   const uploadsQuery = useQuery<NormalizedSoulseekUpload[]>({
     queryKey: ['soulseek', 'uploads', showAllUploads ? 'all' : 'active'],
     queryFn: () => getSoulseekUploads({ includeAll: showAllUploads })
+  });
+
+  const downloadsQuery = useQuery<NormalizedSoulseekDownload[]>({
+    queryKey: ['soulseek', 'downloads', showAllDownloads ? 'all' : 'active'],
+    queryFn: () => getSoulseekDownloads({ includeAll: showAllDownloads })
   });
 
   const connectionStatus = statusQuery.data?.status ?? 'unknown';
@@ -126,7 +135,7 @@ const SoulseekPage = () => {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Soulseek</h1>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Überblick über den slskd-Status, Konfiguration und aktive Upload-Freigaben.
+          Überblick über den slskd-Status, Konfiguration sowie aktive Upload- und Download-Transfers.
         </p>
       </header>
 
@@ -295,6 +304,37 @@ const SoulseekPage = () => {
             isLoading={uploadsQuery.isLoading}
             isError={uploadsQuery.isError}
             onRetry={() => uploadsQuery.refetch()}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Downloads</CardTitle>
+            <CardDescription>Aktive und vergangene Downloads aus der slskd-Warteschlange.</CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-pressed={showAllDownloads}
+              onClick={() => setShowAllDownloads((value) => !value)}
+            >
+              {showAllDownloads ? 'Nur aktive Downloads anzeigen' : 'Alle Downloads anzeigen'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => downloadsQuery.refetch()}>
+              Aktualisieren
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <SoulseekDownloadList
+            downloads={downloadsQuery.data}
+            isLoading={downloadsQuery.isLoading}
+            isError={downloadsQuery.isError}
+            onRetryFetch={() => downloadsQuery.refetch()}
+            onRetryDownload={() => downloadsQuery.refetch()}
           />
         </CardContent>
       </Card>
