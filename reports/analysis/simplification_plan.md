@@ -76,8 +76,8 @@
    - **Rollback:** Service wieder entfernen, Router revertieren.
 
 ### P2 – Nice-to-have
-1. **Generierter API-Client für das Frontend**  
-   - **Beobachtung:** `frontend/src/lib/api.ts` enthält ~600 Zeilen manuell gepflegter Fetch-Wrapper mit duplicierten Pfaden.【F:frontend/src/lib/api.ts†L1-L610】  
+1. **Generierter API-Client für das Frontend**
+   - **Beobachtung:** `frontend/src/api/client.ts` und die Service-Module (`frontend/src/api/services/*.ts`) enthalten ~470 Zeilen manuell gepflegter Fetch-Logik inklusive wiederholter Routenstrings.【F:frontend/src/api/client.ts†L18-L409】【F:frontend/src/api/services/downloads.ts†L180-L241】
    - **Schritte:** OpenAPI-Schema exportieren (`app.main` → `get_openapi`), Client via `openapi-typescript-codegen` generieren, lokale Hooks migrieren.  
    - **Impact:** Weniger Drift, Typsicherheit.  
    - **Aufwand:** 2+ Sprints (inkl. Anpassung der Tests).  
