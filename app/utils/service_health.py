@@ -12,6 +12,15 @@ from sqlalchemy.orm import Session
 from app.models import Setting
 
 
+def _normalize_service_name(service: str) -> str:
+    """Return the canonical representation for a service name."""
+
+    normalized = service.strip().lower()
+    if not normalized:
+        raise KeyError("Unknown service ''")
+    return normalized
+
+
 @dataclass(frozen=True)
 class ServiceDefinition:
     """Describe the required configuration for a service."""
@@ -49,8 +58,9 @@ _SERVICE_DEFINITIONS: tuple[ServiceDefinition, ...] = (
 
 
 def _definition_for(service: str) -> ServiceDefinition:
+    normalized = _normalize_service_name(service)
     for definition in _SERVICE_DEFINITIONS:
-        if definition.name == service:
+        if definition.name == normalized:
             return definition
     raise KeyError(f"Unknown service '{service}'")
 
@@ -108,7 +118,7 @@ def collect_missing_credentials(
     for service in services:
         health = evaluate_service_health(session, service)
         if health.missing:
-            missing[service] = tuple(health.missing)
+            missing[health.service] = tuple(health.missing)
     return missing
 
 
