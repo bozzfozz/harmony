@@ -1,6 +1,6 @@
 ID: TD-20251012-002
 Titel: SQLite-Queue erhält robuste Idempotenz-Garantie
-Status: todo
+Status: done
 Priorität: P1
 Scope: backend
 Owner: codex
@@ -174,12 +174,12 @@ Subtasks:
 
 ID: TD-20251012-006
 Titel: Toaster auf Radix UI migrieren
-Status: todo
+Status: done
 Priorität: P3
 Scope: frontend
 Owner: codex
 Created_at: 2025-10-12T20:00:00Z
-Updated_at: 2025-10-12T20:00:00Z
+Updated_at: 2025-10-14T21:05:00Z
 Tags: ui, feedback, toast
 Beschreibung: Der aktuelle Toast-Stack nutzt eine Eigenimplementierung mit DOM-Knoten. Für einheitliche Accessibility und Fokus-Management sollte der Toaster auf `@radix-ui/react-toast` umgestellt werden. Die Migration reduziert Wartungsaufwand und sorgt für konsistente Animationen.
 Akzeptanzkriterien:
@@ -188,7 +188,7 @@ Akzeptanzkriterien:
 - Tests prüfen Rendering, Autoclose und Dismiss-Verhalten mit Radix.
 Risiko/Impact: Niedrig; UI-only, aber Toast-Benachrichtigungen sind zentrale Feedback-Mechanik.
 Dependencies: Aktuelle Toast-Hooks und Storybook-Beispiele.
-Verweise: CODX-FE-RADIX-302
+Verweise: CODX-FE-RADIX-302, PR TBD (Radix Toast Migration)
 Subtasks:
 - Radix Toast-Provider integrieren und Styles übernehmen.
 - useToast Hook an das neue API anpassen.

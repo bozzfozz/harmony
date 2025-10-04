@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from './lib/query';
 import { ThemeProvider } from './components/theme-provider';
 import { ToastMessage, useToast } from './hooks/useToast';
 import Toaster from './components/ui/toaster';
+import { ToastProvider } from './components/ui/toast';
 import ApiErrorListener from './components/ApiErrorListener';
 
 export interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
@@ -54,10 +55,12 @@ export const renderWithProviders = (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <BrowserRouter>
-          <ApiErrorListener />
-          <Toaster />
-          <TestToastRecorder onToast={toastFn} />
-          {children}
+          <ToastProvider duration={6000} swipeDirection="right">
+            <ApiErrorListener />
+            <Toaster />
+            <TestToastRecorder onToast={toastFn} />
+            {children}
+          </ToastProvider>
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>

@@ -1,9 +1,10 @@
 import { dismiss, toast as showToast, useToast as useUiToast } from '../components/ui/use-toast';
+import type { ToastVariant } from '../components/ui/use-toast';
 
 export interface ToastMessage {
   title: string;
   description?: string;
-  variant?: 'default' | 'destructive' | 'success' | 'info';
+  variant?: ToastVariant;
 }
 
 export const useToast = () => {
