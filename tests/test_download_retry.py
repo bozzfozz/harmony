@@ -13,6 +13,7 @@ from app.orchestrator.handlers import (
     SyncRetryPolicy,
     calculate_retry_backoff_seconds,
     handle_retry,
+    load_sync_retry_policy,
 )
 from app.utils.activity import activity_manager
 from app.utils.events import (
@@ -208,6 +209,28 @@ async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyP
     assert worker.retry_policy.max_attempts == 5
     assert worker.retry_policy.base_seconds == 3.0
     assert worker.retry_policy.jitter_pct == 0.1
+
+
+def test_load_sync_retry_policy_uses_live_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "4")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "2")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "5")
+
+    initial = load_sync_retry_policy()
+    assert initial.max_attempts == 4
+    assert initial.base_seconds == 2.0
+    assert initial.jitter_pct == pytest.approx(0.05)
+
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "9")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "12")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "15")
+
+    updated = load_sync_retry_policy()
+
+    assert updated.max_attempts == 9
+    assert updated.base_seconds == 12.0
+    assert updated.jitter_pct == pytest.approx(0.15)
+    assert updated != initial
 
 
 @pytest.mark.asyncio

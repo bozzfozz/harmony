@@ -69,7 +69,7 @@ _WATCHLIST_MAX_BACKOFF_MS = 5_000
 _WATCHLIST_LOG_COMPONENT = "orchestrator.watchlist"
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class SyncRetryPolicy:
     """Configuration options for persistent download retries."""
 
@@ -136,7 +136,6 @@ def _coerce_bool(value: Any, default: bool) -> bool:
 
 
 _retry_policy_lock = threading.RLock()
-_cached_retry_defaults: RetryPolicyConfig | None = None
 
 
 def _load_retry_defaults(
@@ -144,23 +143,18 @@ def _load_retry_defaults(
     *,
     force_reload: bool = False,
 ) -> RetryPolicyConfig:
-    """Return the latest retry defaults, refreshing from the environment when needed."""
-
-    global _cached_retry_defaults
+    """Return a fresh snapshot of the retry defaults."""
 
     # When an explicit environment mapping is provided we do not cache the
     # result – callers are likely performing targeted lookups (e.g. tests).
     if env is not None:
         return resolve_retry_policy(env)
 
+    # ``force_reload`` is retained for backwards compatibility even though the
+    # loader now always returns a fresh snapshot. Guard the load with a lock so
+    # concurrent callers never observe partially constructed Settings objects.
     with _retry_policy_lock:
-        if force_reload or _cached_retry_defaults is None:
-            _cached_retry_defaults = Settings.load().retry_policy
-        else:
-            latest = Settings.load().retry_policy
-            if latest != _cached_retry_defaults:
-                _cached_retry_defaults = latest
-        return _cached_retry_defaults
+        return Settings.load().retry_policy
 
 
 def load_sync_retry_policy(
@@ -172,7 +166,12 @@ def load_sync_retry_policy(
     defaults: RetryPolicyConfig | None = None,
     force_reload: bool = False,
 ) -> SyncRetryPolicy:
-    """Resolve the retry policy from parameters or environment defaults."""
+    """Resolve the retry policy honouring runtime overrides.
+
+    Precedence: explicit keyword arguments → provided ``defaults``
+    → live ``Settings.load()``/ENV values → code defaults from
+    :mod:`app.config`.
+    """
 
     resolved_defaults = defaults or _load_retry_defaults(env, force_reload=force_reload)
     resolved_max = _coerce_positive_int(
