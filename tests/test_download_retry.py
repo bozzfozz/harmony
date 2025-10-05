@@ -189,6 +189,28 @@ async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "0")
+
+    worker = SyncWorker(FlakySoulseekClient(failures=0), concurrency=1)
+
+    assert worker.retry_policy.max_attempts == 2
+    assert worker.retry_policy.base_seconds == 1.0
+
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "5")
+    monkeypatch.setenv("RETRY_BASE_SECONDS", "3")
+    monkeypatch.setenv("RETRY_JITTER_PCT", "10")
+
+    worker.refresh_retry_policy()
+
+    assert worker.retry_policy.max_attempts == 5
+    assert worker.retry_policy.base_seconds == 3.0
+    assert worker.retry_policy.jitter_pct == 0.1
+
+
+@pytest.mark.asyncio
 async def test_handle_retry_failure_sets_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_engine_for_tests()
     init_db()

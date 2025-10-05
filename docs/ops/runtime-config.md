@@ -39,7 +39,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 - Spotify/slskd-Zeitlimits (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`) greifen sowohl in REST-Endpunkten als auch in Workern (z. B. Watchlist).
 - `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn SQLite-Locks auftreten, oder schalte auf `WATCHLIST_DB_IO_MODE=async`, sobald eine asynchrone Datenbank verwendet wird.
 - Download-Retries (`RETRY_*`) konfigurieren die Sync-/Retry-Handler des Orchestrators; die historischen `RETRY_SCAN_*`-Werte werden nur noch für Legacy-Fallbacks gelesen.
-- Die Retry-Defaults (`RETRY_MAX_ATTEMPTS`, `RETRY_BASE_SECONDS`, `RETRY_JITTER_PCT`) liegen gesammelt in `settings.retry_policy` und speisen sowohl den Orchestrator als auch Worker.
+- Die Download-Retry-Defaults (`RETRY_MAX_ATTEMPTS`, `RETRY_BASE_SECONDS`, `RETRY_JITTER_PCT`) werden bei jedem Aufruf von `load_sync_retry_policy()` frisch aus den Runtime-Quellen geladen. Die Auflösung folgt der Reihenfolge: explizite Funktionsargumente → bereitgestellte Default-Configs → aktuelle ENV-/Settings-Werte → Code-Defaults aus `app/config.py`. Über `refresh_sync_retry_policy()` bzw. `SyncWorker.refresh_retry_policy()` lassen sich ENV-Anpassungen ohne Prozessneustart übernehmen.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
 
 ## Frontend & Runtime Injection
