@@ -22,10 +22,10 @@ quality:
 
 security:
 ifeq ($(OFF),true)
-	@echo "⚠️ CI_OFFLINE=true → skipping security tools (bandit, pip-audit)."
+\t@echo "⚠️ CI_OFFLINE=true → skipping security tools (bandit, pip-audit)."
 else
-	bandit -q -r app
-	pip-audit -r requirements.txt || true
+\tbandit -r app
+\tpip-audit -r requirements.txt || true
 endif
 
 analyze:
