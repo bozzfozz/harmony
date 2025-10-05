@@ -212,35 +212,39 @@ class PlaylistSyncWorker:
     ) -> int:
         processed = 0
         updated_ids: set[str] = set()
+        commit_successful = False
 
-        with session_scope() as session:
-            for payload in items:
-                playlist_id = payload.get("id")
-                name = payload.get("name")
-                if not playlist_id or not name:
-                    continue
+        try:
+            with session_scope() as session:
+                for payload in items:
+                    playlist_id = payload.get("id")
+                    name = payload.get("name")
+                    if not playlist_id or not name:
+                        continue
 
-                track_count = self._extract_track_count(payload)
-                playlist = session.get(Playlist, str(playlist_id))
+                    track_count = self._extract_track_count(payload)
+                    playlist = session.get(Playlist, str(playlist_id))
 
-                if playlist is None:
-                    playlist = Playlist(
-                        id=str(playlist_id),
-                        name=str(name),
-                        track_count=track_count,
-                    )
-                    playlist.updated_at = timestamp
-                    session.add(playlist)
-                else:
-                    playlist.name = str(name)
-                    playlist.track_count = track_count
-                    playlist.updated_at = timestamp
+                    if playlist is None:
+                        playlist = Playlist(
+                            id=str(playlist_id),
+                            name=str(name),
+                            track_count=track_count,
+                        )
+                        playlist.updated_at = timestamp
+                        session.add(playlist)
+                    else:
+                        playlist.name = str(name)
+                        playlist.track_count = track_count
+                        playlist.updated_at = timestamp
 
-                processed += 1
-                updated_ids.add(str(playlist_id))
+                    processed += 1
+                    updated_ids.add(str(playlist_id))
 
-        if cache_invalidator is not None and updated_ids:
-            cache_invalidator.invalidate(tuple(updated_ids))
+            commit_successful = True
+        finally:
+            if commit_successful and cache_invalidator is not None and updated_ids:
+                cache_invalidator.invalidate(tuple(updated_ids))
 
         return processed
 
