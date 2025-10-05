@@ -6,6 +6,7 @@ import asyncio
 import os
 import random
 from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -67,6 +68,21 @@ AsyncFail = Callable[
     Awaitable[bool],
 ]
 AsyncRelease = Callable[[str], Awaitable[None]]
+
+
+@dataclass(slots=True)
+class _PriorityQueueEntry:
+    """Internal representation of a queued job with its priority metadata."""
+
+    queue_priority: int
+    sequence: int
+    job: QueueJobDTO
+
+    @property
+    def effective_priority(self) -> int:
+        """Return the original (non-negated) priority value."""
+
+        return -self.queue_priority
 
 
 async def _default_lease_job(
@@ -392,30 +408,26 @@ class SyncWorker:
             candidate = await self._maybe_take_preempting_job(current_priority)
             if candidate is None:
                 return
-            cand_priority, cand_sequence, cand_job = candidate
             try:
-                await self._process_job_with_priority(cand_priority, cand_sequence, cand_job)
+                await self._process_job_with_priority(
+                    candidate.queue_priority, candidate.sequence, candidate.job
+                )
             finally:
                 self._queue.task_done()
 
     async def _maybe_take_preempting_job(
         self, current_priority: int
-    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
+    ) -> Optional[_PriorityQueueEntry]:
         await asyncio.sleep(0)
-        if self._queue.empty():
-            return None
-        try:
-            peek_priority, _, peek_job = self._queue._queue[0]
-        except IndexError:  # pragma: no cover - defensive
-            return None
-        if peek_job is None or peek_priority >= current_priority:
+        candidate = self._peek_higher_priority_entry(current_priority)
+        if candidate is None:
             return None
         priority, sequence, job = await self._queue.get()
         if job is None:
             self._queue.task_done()
             await self._queue.put((priority, sequence, job))
             return None
-        return priority, sequence, job
+        return _PriorityQueueEntry(priority, sequence, job)
 
     async def _handle_queue_job(self, priority: int, job: QueueJobDTO) -> None:
         try:
@@ -469,6 +481,9 @@ class SyncWorker:
 
         if await self._maybe_preempt_after_lease(priority, leased):
             return False
+
+        if await self._maybe_preempt_before_execution(priority, leased):
+            return False
         try:
             await self._process_job(leased.payload)
         except DownloadJobError as exc:
@@ -507,15 +522,13 @@ class SyncWorker:
         if candidate is None:
             return False
 
-        peek_priority, _, peek_job = candidate
-
         await self._put_job(job)
         self._record_priority_reorder(
-            reason="before_lease",
+            stage="before_lease",
             preempted_job=job,
             preempted_priority=-current_priority,
-            next_job=peek_job,
-            next_priority=-peek_priority,
+            next_job=candidate.job,
+            next_priority=candidate.effective_priority,
         )
         return True
 
@@ -526,12 +539,37 @@ class SyncWorker:
         if candidate is None:
             return False
 
-        peek_priority, _, peek_job = candidate
-        higher_priority = -peek_priority
-        current_priority_value = -current_priority
+        return await self._preempt_leased_job(
+            stage="after_lease",
+            current_priority=current_priority,
+            preempted=leased,
+            candidate=candidate,
+        )
 
+    async def _maybe_preempt_before_execution(
+        self, current_priority: int, leased: QueueJobDTO
+    ) -> bool:
+        candidate = await self._wait_for_higher_priority(current_priority)
+        if candidate is None:
+            return False
+
+        return await self._preempt_leased_job(
+            stage="before_execute",
+            current_priority=current_priority,
+            preempted=leased,
+            candidate=candidate,
+        )
+
+    async def _preempt_leased_job(
+        self,
+        *,
+        stage: str,
+        current_priority: int,
+        preempted: QueueJobDTO,
+        candidate: _PriorityQueueEntry,
+    ) -> bool:
         rescheduled = await self._fail_job(
-            leased.id,
+            preempted.id,
             self._job_type,
             error=None,
             retry_in=0,
@@ -540,29 +578,32 @@ class SyncWorker:
         )
         if not rescheduled:
             logger.warning(
-                "Failed to reschedule sync job %s for higher priority job %s", leased.id, peek_job.id
+                "Failed to reschedule sync job %s for higher priority job %s during %s",
+                preempted.id,
+                candidate.job.id,
+                stage,
             )
             return False
 
-        await self._put_job(leased)
+        await self._put_job(preempted)
         self._record_priority_reorder(
-            reason="after_lease",
-            preempted_job=leased,
-            preempted_priority=current_priority_value,
-            next_job=peek_job,
-            next_priority=higher_priority,
+            stage=stage,
+            preempted_job=preempted,
+            preempted_priority=-current_priority,
+            next_job=candidate.job,
+            next_priority=candidate.effective_priority,
         )
         return True
 
     async def _wait_for_higher_priority(
         self, current_priority: int
-    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
-        candidate = self._peek_higher_priority(current_priority)
+    ) -> Optional[_PriorityQueueEntry]:
+        candidate = self._peek_higher_priority_entry(current_priority)
         if candidate is not None:
             return candidate
 
         self._priority_event.clear()
-        candidate = self._peek_higher_priority(current_priority)
+        candidate = self._peek_higher_priority_entry(current_priority)
         if candidate is not None:
             return candidate
 
@@ -571,33 +612,42 @@ class SyncWorker:
                 self._priority_event.wait(), timeout=self._priority_reorder_window
             )
         except asyncio.TimeoutError:
-            return self._peek_higher_priority(current_priority)
+            return self._peek_higher_priority_entry(current_priority)
 
-        return self._peek_higher_priority(current_priority)
+        return self._peek_higher_priority_entry(current_priority)
 
-    def _peek_higher_priority(
-        self, current_priority: int
-    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
+    def _peek_queue_entry(self) -> Optional[_PriorityQueueEntry]:
         if self._queue.empty():
             return None
         try:
-            peek_priority, peek_sequence, peek_job = self._queue._queue[0]
+            queue_priority, sequence, job = self._queue._queue[0]
         except IndexError:  # pragma: no cover - defensive
             return None
-        if peek_job is None or peek_priority >= current_priority:
+        if job is None:
             return None
-        return peek_priority, peek_sequence, peek_job
+        return _PriorityQueueEntry(queue_priority, sequence, job)
+
+    def _peek_higher_priority_entry(
+        self, current_priority: int
+    ) -> Optional[_PriorityQueueEntry]:
+        candidate = self._peek_queue_entry()
+        if candidate is None:
+            return None
+        if candidate.queue_priority >= current_priority:
+            return None
+        return candidate
 
     def _record_priority_reorder(
         self,
         *,
-        reason: str,
+        stage: str,
         preempted_job: QueueJobDTO,
         preempted_priority: int,
         next_job: QueueJobDTO,
         next_priority: int,
     ) -> None:
         increment_counter("metrics.sync.jobs_preempted")
+        increment_counter(f"metrics.sync.jobs_preempted.{stage}")
         record_activity(
             "download",
             "sync_job_preempted",
@@ -606,12 +656,12 @@ class SyncWorker:
                 "preempted_priority": preempted_priority,
                 "next_job_id": next_job.id,
                 "next_job_priority": next_priority,
-                "reason": reason,
+                "stage": stage,
             },
         )
         logger.info(
             "Priority reorder (%s): defer job %s (priority=%d) for job %s (priority=%d)",
-            reason,
+            stage,
             preempted_job.id,
             preempted_priority,
             next_job.id,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 
@@ -25,6 +25,29 @@ class RecordingSoulseekClient:
     async def cancel_download(self, identifier: str) -> None:  # pragma: no cover - unused
         return None
 
+
+class BlockingRecordingSoulseekClient(RecordingSoulseekClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.block_on_id: Optional[int] = None
+        self.high_priority_id: Optional[int] = None
+        self.low_started = asyncio.Event()
+        self.high_started = asyncio.Event()
+        self._release = asyncio.Event()
+
+    async def download(self, payload: Dict[str, Any]) -> None:
+        await super().download(payload)
+        files = payload.get("files", [])
+        for file_info in files:
+            identifier = int(file_info.get("download_id", 0))
+            if self.high_priority_id is not None and identifier == self.high_priority_id:
+                self.high_started.set()
+            if self.block_on_id is not None and identifier == self.block_on_id:
+                self.low_started.set()
+                await self._release.wait()
+
+    def release(self) -> None:
+        self._release.set()
 
 @pytest.mark.asyncio
 async def test_high_priority_jobs_are_processed_first() -> None:
@@ -156,6 +179,73 @@ async def test_high_priority_job_preempts_recent_low_priority_lease() -> None:
     second = client.download_calls[1]
     assert first["files"][0]["download_id"] == high_id
     assert second["files"][0]["download_id"] == low_id
+
+
+@pytest.mark.asyncio
+async def test_high_priority_arrival_during_processing_runs_next() -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    client = BlockingRecordingSoulseekClient()
+
+    with session_scope() as session:
+        low = Download(
+            filename="low.mp3",
+            state="queued",
+            progress=0.0,
+            username="tester",
+            priority=1,
+        )
+        high = Download(
+            filename="high.mp3",
+            state="queued",
+            progress=0.0,
+            username="tester",
+            priority=10,
+        )
+        session.add_all([low, high])
+        session.flush()
+        low_id = low.id
+        high_id = high.id
+
+    client.block_on_id = low_id
+    client.high_priority_id = high_id
+    worker = SyncWorker(client, concurrency=1)
+
+    await worker.start()
+
+    try:
+        await worker.enqueue(
+            {
+                "username": "tester",
+                "files": [{"download_id": low_id, "priority": 1}],
+                "priority": 1,
+            }
+        )
+
+        await asyncio.wait_for(client.low_started.wait(), timeout=1)
+
+        await worker.enqueue(
+            {
+                "username": "tester",
+                "files": [{"download_id": high_id, "priority": 10}],
+                "priority": 10,
+            }
+        )
+
+        client.release()
+        await asyncio.wait_for(client.high_started.wait(), timeout=1)
+        await asyncio.sleep(0.05)
+    finally:
+        client.release()
+        await worker.stop()
+
+    assert len(client.download_calls) >= 2
+    first = client.download_calls[0]
+    second = client.download_calls[1]
+    assert first["files"][0]["download_id"] == low_id
+    assert second["files"][0]["download_id"] == high_id
 
 
 def test_priority_can_be_updated_via_api(client) -> None:
