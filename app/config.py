@@ -950,6 +950,17 @@ def _load_retry_policy(env: Mapping[str, Any]) -> RetryPolicyConfig:
     )
 
 
+def resolve_retry_policy(env: Mapping[str, Any] | None = None) -> RetryPolicyConfig:
+    """Load the retry policy configuration from the provided environment."""
+
+    env_map: Mapping[str, Any]
+    if env is None:
+        env_map = os.environ
+    else:
+        env_map = env
+    return _load_retry_policy(env_map)
+
+
 settings = Settings.load()
 
 log_event(
