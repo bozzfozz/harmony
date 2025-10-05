@@ -40,7 +40,7 @@ jobs:
       - name: Pytest
         run: pytest -q
       - name: Bandit
-        run: bandit -q -r app
+        run: bandit -r app
       - name: pip-audit (advisories only)
         run: pip-audit -r requirements.txt || true
       - name: Radon
