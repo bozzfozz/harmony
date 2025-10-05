@@ -206,17 +206,38 @@ class SoulseekDownloadResponse(BaseModel):
     detail: Optional[Dict[str, Any]] = None
 
 
+_CANONICAL_DOWNLOAD_STATE_MAP = {
+    "queued": "pending",
+    "downloading": "in_progress",
+    "completed": "completed",
+    "failed": "failed",
+    "dead_letter": "dead_letter",
+    "cancelled": "failed",
+}
+
+_REQUEUE_PROHIBITED_DB_STATES = frozenset({"dead_letter", "queued", "downloading"})
+
+
 def _canonical_download_state(value: str | None) -> str:
-    mapping = {
-        "queued": "pending",
-        "downloading": "in_progress",
-        "completed": "completed",
-        "failed": "failed",
-        "dead_letter": "dead_letter",
-        "cancelled": "failed",
-    }
     normalized = (value or "").strip().lower()
-    return mapping.get(normalized, normalized or "pending")
+    return _CANONICAL_DOWNLOAD_STATE_MAP.get(normalized, normalized or "pending")
+
+
+def _default_retryable_states() -> List[str]:
+    allowed_db_states = set(_CANONICAL_DOWNLOAD_STATE_MAP.keys()) - set(
+        _REQUEUE_PROHIBITED_DB_STATES
+    )
+    canonical_states = {
+        _canonical_download_state(state) for state in allowed_db_states
+    }
+    return sorted(canonical_states)
+
+
+SOULSEEK_RETRYABLE_STATES: tuple[str, ...] = tuple(_default_retryable_states())
+
+
+def _retryable_states_default() -> List[str]:
+    return list(SOULSEEK_RETRYABLE_STATES)
 
 
 class SoulseekDownloadEntry(BaseModel):
@@ -255,6 +276,7 @@ class SoulseekDownloadEntry(BaseModel):
 
 class SoulseekDownloadStatus(BaseModel):
     downloads: List[SoulseekDownloadEntry]
+    retryable_states: List[str] = Field(default_factory=_retryable_states_default)
 
 
 class DownloadEntryResponse(BaseModel):

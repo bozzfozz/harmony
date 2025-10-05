@@ -21,8 +21,6 @@ const formatStateLabel = (state: string): string => {
   return labels[normalized] ?? state.charAt(0).toUpperCase() + state.slice(1);
 };
 
-const RETRYABLE_STATES = new Set(['failed']);
-
 const formatTimestamp = (value: string | null): string | null => {
   if (!value) {
     return null;
@@ -59,6 +57,7 @@ export interface SoulseekDownloadListProps {
   onRetryDownload?: (download: NormalizedSoulseekDownload) => void;
   retryingDownloadId?: string | null;
   isRetryPending?: boolean;
+  retryableStates?: readonly string[];
 }
 
 const SoulseekDownloadList = ({
@@ -68,8 +67,15 @@ const SoulseekDownloadList = ({
   onRetryFetch,
   onRetryDownload,
   retryingDownloadId,
-  isRetryPending = false
+  isRetryPending = false,
+  retryableStates
 }: SoulseekDownloadListProps) => {
+  const normalizedRetryableStates = new Set(
+    (retryableStates && retryableStates.length > 0 ? retryableStates : ['failed']).map((state) =>
+      state.toLowerCase()
+    )
+  );
+
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Downloads werden geladen …</p>;
   }
@@ -116,7 +122,10 @@ const SoulseekDownloadList = ({
           const hasIdentifier = Boolean(normalizedId);
           const isDeadLetter = normalizedState === 'dead_letter';
           const canRetry =
-            Boolean(onRetryDownload) && hasIdentifier && !isDeadLetter && RETRYABLE_STATES.has(normalizedState);
+            Boolean(onRetryDownload) &&
+            hasIdentifier &&
+            !isDeadLetter &&
+            normalizedRetryableStates.has(normalizedState);
           const isQueuedForRetry = Boolean(
             hasIdentifier && retryingDownloadId != null && normalizedId === retryingDownloadId
           );
