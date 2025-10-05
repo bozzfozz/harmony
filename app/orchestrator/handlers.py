@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import os
 import random
+import threading
 import statistics
 import time
 from contextlib import AbstractContextManager
@@ -30,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.config import (
     RetryPolicyConfig,
+    Settings,
     WatchlistWorkerConfig,
     resolve_retry_policy,
 )
@@ -133,6 +135,34 @@ def _coerce_bool(value: Any, default: bool) -> bool:
     return bool(value)
 
 
+_retry_policy_lock = threading.RLock()
+_cached_retry_defaults: RetryPolicyConfig | None = None
+
+
+def _load_retry_defaults(
+    env: Mapping[str, Any] | None = None,
+    *,
+    force_reload: bool = False,
+) -> RetryPolicyConfig:
+    """Return the latest retry defaults, refreshing from the environment when needed."""
+
+    global _cached_retry_defaults
+
+    # When an explicit environment mapping is provided we do not cache the
+    # result – callers are likely performing targeted lookups (e.g. tests).
+    if env is not None:
+        return resolve_retry_policy(env)
+
+    with _retry_policy_lock:
+        if force_reload or _cached_retry_defaults is None:
+            _cached_retry_defaults = Settings.load().retry_policy
+        else:
+            latest = Settings.load().retry_policy
+            if latest != _cached_retry_defaults:
+                _cached_retry_defaults = latest
+        return _cached_retry_defaults
+
+
 def load_sync_retry_policy(
     *,
     max_attempts: int | None = None,
@@ -140,10 +170,11 @@ def load_sync_retry_policy(
     jitter_pct: float | None = None,
     env: Mapping[str, Any] | None = None,
     defaults: RetryPolicyConfig | None = None,
+    force_reload: bool = False,
 ) -> SyncRetryPolicy:
     """Resolve the retry policy from parameters or environment defaults."""
 
-    resolved_defaults = defaults or resolve_retry_policy(env)
+    resolved_defaults = defaults or _load_retry_defaults(env, force_reload=force_reload)
     resolved_max = _coerce_positive_int(
         resolved_defaults.max_attempts if max_attempts is None else max_attempts,
         resolved_defaults.max_attempts,
@@ -166,6 +197,13 @@ def load_sync_retry_policy(
         base_seconds=float(resolved_base),
         jitter_pct=float(resolved_jitter),
     )
+
+
+def refresh_sync_retry_policy(env: Mapping[str, Any] | None = None) -> SyncRetryPolicy:
+    """Force a refresh of the cached retry policy defaults and return the snapshot."""
+
+    defaults = _load_retry_defaults(env, force_reload=True)
+    return load_sync_retry_policy(defaults=defaults)
 
 
 def calculate_retry_backoff_seconds(

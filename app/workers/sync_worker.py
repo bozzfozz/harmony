@@ -220,6 +220,15 @@ class SyncWorker:
         except (TypeError, ValueError):
             return 0
 
+    @property
+    def retry_policy(self) -> RetryConfig:
+        return self._retry_config
+
+    def refresh_retry_policy(self) -> None:
+        """Reload the retry policy from the latest runtime configuration."""
+
+        self._retry_config = load_sync_retry_policy(force_reload=True)
+
     @staticmethod
     def _extract_file_priority(file_info: Dict[str, Any]) -> int:
         return SyncWorker._coerce_priority(file_info.get("priority"))
