@@ -10,7 +10,7 @@ from typing import Any, Iterable, List, Mapping, Sequence
 
 from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import settings
 from app.db import session_scope
@@ -233,6 +233,16 @@ def _upsert_queue_job(
                 now=now,
             )
             session.add(existing)
+            if deduped:
+                logger.debug(
+                    "Queue job dedupe hit",
+                    extra={
+                        "event": "queue.job.dedupe",
+                        "job_type": job_type,
+                        "idempotency_key": dedupe_key,
+                        "dialect": dialect_name or "unknown",
+                    },
+                )
             return existing, deduped
 
         record = QueueJob(
@@ -253,9 +263,39 @@ def _upsert_queue_job(
         session.add(record)
         try:
             session.flush()
-        except IntegrityError as exc:
+        except (IntegrityError, OperationalError) as exc:
             session.rollback()
-            if _is_duplicate_integrity_error(exc):
+
+            stmt = stmt_base
+            if dialect_name not in {"", "sqlite"}:
+                stmt = stmt.with_for_update()
+            existing = session.execute(stmt).scalars().first()
+            if existing is not None:
+                deduped = _apply_existing_job_updates(
+                    existing,
+                    payload=payload,
+                    priority=priority,
+                    scheduled_for=scheduled_for,
+                    now=now,
+                )
+                session.add(existing)
+                if deduped:
+                    logger.debug(
+                        "Queue job dedupe hit",
+                        extra={
+                            "event": "queue.job.dedupe",
+                            "job_type": job_type,
+                            "idempotency_key": dedupe_key,
+                            "dialect": dialect_name or "unknown",
+                        },
+                    )
+                return existing, deduped
+
+            if isinstance(exc, IntegrityError) and _is_duplicate_integrity_error(exc):
+                attempts += 1
+                time.sleep(min(0.01, 0.001 * attempts))
+                continue
+            if isinstance(exc, OperationalError):
                 attempts += 1
                 time.sleep(min(0.01, 0.001 * attempts))
                 continue
