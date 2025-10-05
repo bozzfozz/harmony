@@ -20,7 +20,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import QueueJob
 from app.workers import persistence
-from app.workers.persistence import enqueue
+from app.workers.persistence import QueueJobDTO, enqueue
 
 
 @pytest.mark.anyio
@@ -199,8 +199,10 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
     barrier = threading.Barrier(concurrency)
 
     dedupe_events: list[dict[str, Any]] = []
+    emitted_events: list[dict[str, Any]] = []
     lock = threading.Lock()
     original_debug = persistence.logger.debug
+    original_emit = persistence._emit_worker_job_event
 
     def capture_debug(message: str, *args: Any, **kwargs: Any) -> None:
         extra = kwargs.get("extra")
@@ -209,7 +211,20 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
                 dedupe_events.append({"message": message, "extra": extra})
         original_debug(message, *args, **kwargs)
 
+    def capture_emit(job: QueueJobDTO, status: str, *, deduped=None, **kwargs: Any) -> None:
+        with lock:
+            emitted_events.append(
+                {
+                    "job_id": int(job.id),
+                    "status": status,
+                    "deduped": bool(deduped),
+                    "extra": dict(kwargs),
+                }
+            )
+        original_emit(job, status, deduped=deduped, **kwargs)
+
     monkeypatch.setattr(persistence.logger, "debug", capture_debug)
+    monkeypatch.setattr(persistence, "_emit_worker_job_event", capture_emit)
 
     def run_parallel() -> list[int]:
         results: list[int] = []
@@ -241,6 +256,9 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
     assert dedupe_events, "Expected a dedupe log entry for concurrent enqueue conflict"
     assert any(event["extra"].get("job_type") == job_type for event in dedupe_events)
     assert any(event["extra"].get("dialect") == queue_database_backend for event in dedupe_events)
+
+    deduped_event_job_ids = {event["job_id"] for event in emitted_events if event["deduped"]}
+    assert deduped_event_job_ids == {existing_id}
 
     with session_scope() as session:
         stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)

@@ -218,12 +218,25 @@ def _upsert_queue_job(
     )
     attempts = 0
 
-    while True:
-        stmt = stmt_base
-        if dialect_name not in {"", "sqlite"}:
-            stmt = stmt.with_for_update()
+    def _log_dedupe() -> None:
+        logger.debug(
+            "Queue job dedupe hit",
+            extra={
+                "event": "queue.job.dedupe",
+                "job_type": job_type,
+                "idempotency_key": dedupe_key,
+                "dialect": dialect_name or "unknown",
+            },
+        )
 
-        existing = session.execute(stmt).scalars().first()
+    def _select_existing(with_lock: bool = True) -> QueueJob | None:
+        stmt = stmt_base
+        if with_lock and dialect_name not in {"", "sqlite"}:
+            stmt = stmt.with_for_update()
+        return session.execute(stmt).scalars().first()
+
+    while True:
+        existing = _select_existing()
         if existing is not None:
             deduped = _apply_existing_job_updates(
                 existing,
@@ -234,15 +247,7 @@ def _upsert_queue_job(
             )
             session.add(existing)
             if deduped:
-                logger.debug(
-                    "Queue job dedupe hit",
-                    extra={
-                        "event": "queue.job.dedupe",
-                        "job_type": job_type,
-                        "idempotency_key": dedupe_key,
-                        "dialect": dialect_name or "unknown",
-                    },
-                )
+                _log_dedupe()
             return existing, deduped
 
         record = QueueJob(
@@ -263,13 +268,25 @@ def _upsert_queue_job(
         session.add(record)
         try:
             session.flush()
-        except (IntegrityError, OperationalError) as exc:
+        except IntegrityError as exc:
             session.rollback()
 
-            stmt = stmt_base
-            if dialect_name not in {"", "sqlite"}:
-                stmt = stmt.with_for_update()
-            existing = session.execute(stmt).scalars().first()
+            if _is_duplicate_integrity_error(exc):
+                existing = _select_existing(with_lock=False)
+                if existing is not None:
+                    session.add(existing)
+                    _log_dedupe()
+                    return existing, True
+
+                attempts += 1
+                time.sleep(min(0.01, 0.001 * attempts))
+                continue
+
+            raise
+        except OperationalError:
+            session.rollback()
+
+            existing = _select_existing()
             if existing is not None:
                 deduped = _apply_existing_job_updates(
                     existing,
@@ -280,26 +297,12 @@ def _upsert_queue_job(
                 )
                 session.add(existing)
                 if deduped:
-                    logger.debug(
-                        "Queue job dedupe hit",
-                        extra={
-                            "event": "queue.job.dedupe",
-                            "job_type": job_type,
-                            "idempotency_key": dedupe_key,
-                            "dialect": dialect_name or "unknown",
-                        },
-                    )
+                    _log_dedupe()
                 return existing, deduped
 
-            if isinstance(exc, IntegrityError) and _is_duplicate_integrity_error(exc):
-                attempts += 1
-                time.sleep(min(0.01, 0.001 * attempts))
-                continue
-            if isinstance(exc, OperationalError):
-                attempts += 1
-                time.sleep(min(0.01, 0.001 * attempts))
-                continue
-            raise
+            attempts += 1
+            time.sleep(min(0.01, 0.001 * attempts))
+            continue
         else:
             return record, False
 
