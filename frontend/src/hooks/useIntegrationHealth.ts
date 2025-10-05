@@ -182,11 +182,44 @@ const useIntegrationHealth = (): UseIntegrationHealthResult => {
     const systemStatus = systemStatusQuery.data;
     const integrations = integrationsQuery.data;
 
-    return {
+    const baseState: ServiceHealthMap = {
       soulseek: deriveServiceState('soulseek', systemStatus, integrations),
       matching: deriveServiceState('matching', systemStatus, integrations)
     };
-  }, [integrationsQuery.data, systemStatusQuery.data]);
+
+    const hasSystemPayload = Boolean(systemStatus);
+    const hasIntegrationsPayload = Boolean(integrations);
+    const hasSystemError = systemStatusQuery.isError;
+    const hasIntegrationsError = integrationsQuery.isError;
+    const missingSystemPayload = !hasSystemPayload && !systemStatusQuery.isLoading;
+    const missingIntegrationsPayload = !hasIntegrationsPayload && !integrationsQuery.isLoading;
+
+    if (hasSystemError || hasIntegrationsError || missingSystemPayload || missingIntegrationsPayload) {
+      return {
+        soulseek: {
+          ...baseState.soulseek,
+          online: false,
+          degraded: true,
+          status: baseState.soulseek.status ?? 'unknown'
+        },
+        matching: {
+          ...baseState.matching,
+          online: false,
+          degraded: true,
+          status: baseState.matching.status ?? 'unknown'
+        }
+      };
+    }
+
+    return baseState;
+  }, [
+    integrationsQuery.data,
+    integrationsQuery.isError,
+    integrationsQuery.isLoading,
+    systemStatusQuery.data,
+    systemStatusQuery.isError,
+    systemStatusQuery.isLoading
+  ]);
 
   const refresh = useCallback(async () => {
     await Promise.all([systemStatusQuery.refetch(), integrationsQuery.refetch()]);

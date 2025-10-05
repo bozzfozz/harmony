@@ -146,18 +146,20 @@ describe('Layout sidebar interactions', () => {
     expect(indicator).toHaveClass('sr-only');
   });
 
-  it('falls back to plain labels when integration health cannot be loaded', () => {
+  it('shows offline indicators when integration health queries fail', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
     mockedUseIntegrationHealth.mockReturnValue({
       services: {
         soulseek: {
           online: false,
-          degraded: false,
+          degraded: true,
           misconfigured: false,
           status: 'unknown'
         },
         matching: {
           online: false,
-          degraded: false,
+          degraded: true,
           misconfigured: false,
           status: 'unknown'
         }
@@ -174,8 +176,14 @@ describe('Layout sidebar interactions', () => {
       { route: '/dashboard' }
     );
 
-    const soulseekLink = screen.getByRole('link', { name: 'Soulseek' });
-    expect(within(soulseekLink).queryByText(/Offline|Fehler|Eingeschränkt/)).not.toBeInTheDocument();
+    const soulseekLink = screen.getByRole('link', { name: /Soulseek – Warnung: Dienst offline/i });
+    expect(within(soulseekLink).getByText('Offline')).toBeInTheDocument();
+
+    const matchingLink = screen.getByRole('link', { name: /Matching – Warnung: Dienst offline/i });
+    expect(within(matchingLink).getByText('Offline')).toBeInTheDocument();
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('restores the collapsed state from localStorage and persists user changes', async () => {
