@@ -105,7 +105,7 @@ Ohne explizites Flag gilt **Write Mode**.
 - [ ] Rollback-Plan vorhanden.
 - [ ] Testnachweise dokumentiert (Logs, Screens, Coverage).
 - [ ] **Change-Impact-Scan** (§20) ausgeführt.
-- [ ] **ToDo gepflegt** gemäß **§25** (Zeitstempel, Priorität, Sortierung, Verweise).
+- [ ] **ToDo gepflegt – nur falls §25.0 „Erforderlichkeit“ ausgelöst** (Zeitstempel, Priorität, Sortierung, Verweise) **ODER** „No ToDo changes required“ im PR bestätigt.
 
 ### Agent-Ausführung
 - [ ] Eingaben validiert, Schema geprüft.
@@ -116,7 +116,7 @@ Ohne explizites Flag gilt **Write Mode**.
 
 ## 10. Vorlagen
 - **Issue**: Titel; Beschreibung (Problem/Nutzen); Akzeptanzkriterien; Risiken/Annahmen; DoD.
-- **PR**: Was/Warum; Dateiänderungen (Neu/Geändert/Gelöscht); Migrationshinweise; Tests; Risiken/Limitierungen; Verweis auf AGENTS.md/Template; **ToDo-Nachweis**.
+- **PR**: Was/Warum; Dateiänderungen (Neu/Geändert/Gelöscht); Migrationshinweise; Tests; Risiken/Limitierungen; Verweis auf AGENTS.md/Template; **ToDo-Nachweis (falls erforderlich)**.
 - **ADR (Kurz)**: Titel, Datum, Kontext, Entscheidung, Alternativen, Folgen.
 
 ## 11. Durchsetzung
@@ -131,10 +131,10 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) aus.
 - **TASK_ID** bleibt im Titel/Body und verweist auf Template.
 
-## 13. ToDo-Pflege (verbindlich)
+## 13. ToDo-Pflege (verbindlich, **nicht** als Changelog)
 - **Ort:** `ToDo.md` (Repo-Root).  
-- Nach Abschluss **jedes Tasks** muss **ToDo** gemäß **§25** aktualisiert werden (Zeitstempel, Status, Verweise).  
-- Ohne ToDo-Nachweis erfolgt kein Merge.
+- **Kein Changelog-Ersatz.** ToDo ist **kein** Commit-/PR-Protokoll.  
+- **Pflicht nur, wenn §25.0 „Erforderlichkeit“** erfüllt ist. Andernfalls im PR-Body „No ToDo changes required“ bestätigen.
 
 ## 14. Completion Gates (Pflicht, Merge-Gate)
 - **Backend**: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
@@ -160,7 +160,7 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 
 ## 18. Review & PR
 - Commits nach Conventional-Commit (optional Scope).
-- PR MUSS enthalten: Was/Warum, geänderte Dateien (Neu/Geändert/Gelöscht), Migration, Tests/Abdeckung, Risiken/Limitierungen, Verweis auf AGENTS.md/Template, **ToDo-Nachweis**.
+- PR MUSS enthalten: Was/Warum, geänderte Dateien (Neu/Geändert/Gelöscht), Migration, Tests/Abdeckung, Risiken/Limitierungen, Verweis auf AGENTS.md/Template, **ToDo-Nachweis (falls erforderlich)**.
 
 ## 19. Initiative-, Scope- & Clarification-Regeln
 
@@ -230,6 +230,7 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 - Manuelles Override im Task erlaubt: `FAST-TRACK: false`.
 
 ## 23. Beispiele (Do/Don't)
+
 | Do | Don't |
 | --- | --- |
 | ENV-Variable in README ergänzen, wenn `app/config.py` Quelle klar vorgibt. | Schema-Feld „klein“ erweitern ohne Migration/Task-Freigabe. |
@@ -243,79 +244,69 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 
 ---
 
-## 25. **ToDo — Regeln (verbindlich)**
+## 25. **ToDo — Regeln (verbindlich, nicht als Changelog)**
 
-**Zweck:** Zentraler, versionierter Backlog für technische Schulden, Refactors, Qualitäts-Follow-ups, Ideen.  
+**Zweck:** Zentraler, versionierter Backlog für **fehlende** oder **defizitäre** Funktionen, **technische Schulden**, **Risiken** und **gezielte Verbesserungen**.  
 **Ort:** `ToDo.md` (Repo-Root, Markdown).  
-**Pflicht:** Jeder PR, der Code/Doku/CI ändert, **muss** ToDo pflegen (Einträge ergänzen/aktualisieren/abschließen) und dies in der PR-Checkliste abhaken.
+**Abgrenzung:** ToDo ist **kein** CHANGELOG, kein Commit-Protokoll und keine allgemeine Tätigkeitsliste.
+
+### 25.0 Erforderlichkeit (Wann ToDo-Eintrag anlegen?)
+**Ein ToDo-Item wird nur erstellt, wenn mindestens eine der Bedingungen erfüllt ist:**
+1. **Fehlende/platzhalterhafte Implementierung** entdeckt (`TODO|FIXME|pass|raise NotImplementedError`, leere Handler/Tests, Mock-Stubs in Produktion).
+2. **Funktionale Lücke**: Feature/Flow faktisch unvollständig (Kontrakt nicht erfüllt, UI/API/Worker ohne Wirkung).
+3. **Defekt oder instabile Robustheit**: Reproduzierbarer Bug, Race Condition, fehlende Idempotenz/Lease/Retry/Timeout.
+4. **Kontrakt-/Konfig-Drift**: Code ≠ Dokumentation/OpenAPI/ENV; Breaking ohne Migration.
+5. **Sicherheits-/Compliance-Lücke**: Sensitive Daten im Log, Secrets im Code, fehlende Validierung.
+6. **Observability-Lücke**: Fehlende Pflichtfelder im Logging-Contract; fehlende Metriken für kritische Pfade.
+7. **Architektur-/Code-Smell** mit Folgekosten: Duplikate, Dead Code/Orphans, zyklische Abhängigkeiten, übermäßige Kopplung.
+8. **Externe Abhängigkeit** erfordert Aktion: API-Deprecation, Paket-Sicherheitslücke, Rate-Limit-Änderung.
+
+**Nicht erzeugen** für:
+- Rein kosmetische Änderungen (Formatierung, Kommentare).
+- Reine Umbenennungen ohne Verhaltensänderung.
+- Routine-Doku-Updates ohne inhaltliche Drift.
+- Dependency-Bumps ohne Code-Follow-ups.
+- „Arbeitstagebuch“ (bitte ins PR/CHANGELOG).
 
 ### 25.1 Eintrags-Format (pro Item)
 - **ID**: `TD-YYYYMMDD-XXX` (laufende Nummer pro Tag).
 - **Titel**: Kurz & prägnant.
 - **Status**: `todo` | `in-progress` | `blocked` | `done` | `wontdo`.
-- **Priorität**: `P0` (kritisch) / `P1` (hoch) / `P2` (mittel) / `P3` (niedrig).
+- **Priorität**: `P0` (kritisch, Ausfall/Sicherheit) / `P1` (hoch, starke Beeinträchtigung) / `P2` (mittel) / `P3` (niedrig).
 - **Scope**: `backend` | `frontend` | `all`.
 - **Owner**: `codex` | `<Name>`.
 - **Created_at (UTC)**: ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`).
-- **Updated_at (UTC)**: ISO-8601; bei jeder Änderung aktualisieren.
-- **Due_at (UTC, optional)**: Zieltermin.
+- **Updated_at (UTC)**: Bei jeder Änderung aktualisieren.
+- **Due_at (UTC, optional)**.
 - **Tags**: z. B. `orchestrator`, `router`, `matching`, `observability`.
-- **Beschreibung**: 3–7 Sätze: Problem, Kontext, gewünschter Zielzustand.
-- **Akzeptanzkriterien**: Liste messbarer Kriterien (DoD).
-- **Risiko/Impact**: kurz; Migration/Backcompat, Performance, Sicherheit.
+- **Beschreibung**: Problem, Kontext, gewünschter Zielzustand (3–7 Sätze).
+- **Akzeptanzkriterien** (DoD): Messbare Kriterien.
+- **Risiko/Impact**: kurz; Backcompat/Performance/Sicherheit.
 - **Dependencies**: Blocker/abhängige Issues/Tasks.
 - **Verweise**: `TASK_ID`, PR-Links, Commit-Hashes.
-- **Subtasks**: Aufzählung konkreter Schritte (Codex darf automatisch erzeugen/splitten).
-
-**Beispiel (ohne Code-Fence):**  
-ID: TD-2025-10-04-001  
-Titel: Orchestrator – Lease erneuern bei Long-IO  
-Status: todo  
-Priorität: P1  
-Scope: backend  
-Owner: codex  
-Created_at: 2025-10-04T10:15:00Z  
-Updated_at: 2025-10-04T10:15:00Z  
-Tags: orchestrator, reliability  
-Beschreibung: Der Dispatcher verliert Leases bei langen externen Aufrufen. Wir benötigen Heartbeat-Verlängerungen und Redelivery-Schutz…  
-Akzeptanzkriterien:
-- Heartbeat verlängert Lease zyklisch (≤ ORCH_HEARTBEAT_S).
-- Redelivery innerhalb `ORCH_VISIBILITY_TIMEOUT_S + 5s` bei Absturz.
-- Tests: `test_heartbeat_extends_lease`, `test_visibility_timeout_triggers_redelivery`.  
-Risiko/Impact: Mittel; erfordert sorgfältige Tests.  
-Dependencies: CODX-ORCH-084 (Basis).  
-Verweise: PR #123, commit abcdef1.  
-Subtasks:
-- Lease-API in persistence erweitern.
-- Heartbeat-Task implementieren.
-- Tests schreiben.
+- **Subtasks**: Konkrete Schritte (Codex darf automatisch erzeugen/splitten).
 
 ### 25.2 Sortierung & Pflege
-- **Sortierung**: Nach **Priorität** (P0 → P3), innerhalb derselben Priorität aufsteigend nach **Created_at**.  
-- **Gruppierung** (optional): Nach **Status** (todo/in-progress/blocked/done/wontdo).  
-- **Zeitstempel**: `Created_at` beim Erstellen; `Updated_at` bei **jeder** Änderung.  
-- **Automatische Pflege durch Codex**:
-  - Neue Funde aus Change-Impact-Scan (§20) **automatisch** als Items hinzufügen (Dedup via Titel+Tags+Scope).
-  - Beim Merge: relevante Items auf `done` setzen und **Commit-Hash/PR** in Verweise eintragen.
-  - Veraltete/wontdo-Items kennzeichnen statt löschen (Historie bewahren).
+- **Sortierung**: Nach **Priorität** (P0 → P3), innerhalb Priorität nach **Created_at** aufsteigend.
+- **Gruppierung** (optional): Nach **Status** (todo/in-progress/blocked/done/wontdo).
+- **Lebenszyklus**: Items ohne Update > 60 Tage → Review; ggf. `wontdo` mit Begründung statt löschen (Historie bewahren).
 
-### 25.3 Heuristiken & Mustererkennung (für neue Einträge)
-- **Platzhalter/Unvollständig**: `TODO|FIXME|pass|raise NotImplementedError|# noqa: E501` erkennen.
-- **Fehlende Tests/Pfade**: Unabgedeckte Branches (< 85 %), `pragma: no cover` missbraucht.
-- **Duplikate**: Gleiche Funktionssignaturen/Utility-Blöcke in verschiedenen Modulen.
-- **Dead Code/Orphans**: Unreferenzierte Router/Handlers, nicht exportierte Funktionen, ungenutzte ENV-Variablen.
-- **Async/Thread-Mischung**: Blockierende I/O in async-Routen, fehlende `await`, unbeaufsichtigte `create_task`.
-- **Config-Drift**: Werte in Code ≠ README/ENV-Doku.
-- **Error-Mapping**: Uneinheitliche Exceptions → Fehlercodes (`DEPENDENCY_ERROR`, …).
-- **Observability**: Logs ohne `event/component/status/duration_ms/entity_id`; fehlende Korrelation (`request_id/job_id`).
-- **DB/Queue-Robustheit**: Fehlende Idempotenz-Keys, fehlende Leases/Heartbeats/Backoff+Jitter.
-- **Security**: Potentielle Secrets in Code/Tests; unmaskierte Fehlerdetails.
-- **API-Kontrakte**: Router spricht direkt DB/Integrationen an statt Service; fehlende DTOs.
+### 25.3 Automatische Pflege (durch Codex)
+- **Erzeugen**: Bei Change-Impact-Scan (§20) ToDo nur anlegen, wenn §25.0 erfüllt; Dedup über (Titel+Tags+Scope).
+- **Aktualisieren**: Beim Merge relevante Items auf `done` setzen; **Commit-Hash/PR** in „Verweise“ eintragen.
+- **Kein Bedarf**: Wenn §25.0 **nicht** erfüllt, PR-Body mit „No ToDo changes required“ versehen (siehe PR-Checkliste).
 
-### 25.4 Verbindlichkeit in PRs
-- PR-Body enthält Abschnitt **„ToDo-Update“**:
-  - Auflistung **neu**/**aktualisiert**/**done** Items (IDs).
-  - Begründung bei `wontdo`.
-  - Bestätigung der **Sortierung nach §25.2**.
-- PR wird geblockt, wenn **ToDo** nicht gemäß §25 gepflegt ist.
+### 25.4 Beispiele
+
+**Erzeugen (OK):**
+- „Watchlist-Timer verliert Leases bei Langläufern“ (kritische Robustheit).
+- „ProviderGateway: fehlender Retry-Jitter“ (Defizit gem. Policy).
+- „OpenAPI sagt `200`, Code liefert `202`“ (Kontrakt-Drift).
+
+**Nicht erzeugen (NICHT OK):**
+- „eslint --fix hat 120 Dateien formatiert“ (kosmetisch).
+- „Kommentarstil vereinheitlicht“ (kosmetisch).
+- „Paket minor-Bump ohne Code-Follow-ups“ (kein Handlungsbedarf).
+
+---
 ```0
