@@ -358,23 +358,63 @@ class SyncWorker:
     async def _worker_loop(self, index: int) -> None:
         logger.debug("SyncWorker task %d started", index)
         while self._running.is_set():
-            _, _, job = await self._queue.get()
+            priority, sequence, job = await self._queue.get()
             if job is None:
                 self._queue.task_done()
                 break
             try:
-                await self._execute_job(job)
-                await self.refresh_downloads()
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to process sync job %s: %s", job.id, exc)
-                record_activity(
-                    "download",
-                    "sync_job_failed",
-                    details={"job_id": job.id, "error": str(exc)},
-                )
+                await self._process_job_with_priority(priority, sequence, job)
             finally:
                 self._queue.task_done()
         logger.debug("SyncWorker task %d stopped", index)
+
+    async def _process_job_with_priority(
+        self, priority: int, sequence: int, job: QueueJobDTO
+    ) -> None:
+        await self._drain_higher_priority_jobs(priority)
+        await self._handle_queue_job(job)
+
+    async def _drain_higher_priority_jobs(self, current_priority: int) -> None:
+        while True:
+            candidate = await self._maybe_take_preempting_job(current_priority)
+            if candidate is None:
+                return
+            cand_priority, cand_sequence, cand_job = candidate
+            try:
+                await self._process_job_with_priority(cand_priority, cand_sequence, cand_job)
+            finally:
+                self._queue.task_done()
+
+    async def _maybe_take_preempting_job(
+        self, current_priority: int
+    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
+        await asyncio.sleep(0)
+        if self._queue.empty():
+            return None
+        try:
+            peek_priority, _, peek_job = self._queue._queue[0]
+        except IndexError:  # pragma: no cover - defensive
+            return None
+        if peek_job is None or peek_priority >= current_priority:
+            return None
+        priority, sequence, job = await self._queue.get()
+        if job is None:
+            self._queue.task_done()
+            await self._queue.put((priority, sequence, job))
+            return None
+        return priority, sequence, job
+
+    async def _handle_queue_job(self, job: QueueJobDTO) -> None:
+        try:
+            await self._execute_job(job)
+            await self.refresh_downloads()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to process sync job %s: %s", job.id, exc)
+            record_activity(
+                "download",
+                "sync_job_failed",
+                details={"job_id": job.id, "error": str(exc)},
+            )
 
     async def _poll_loop(self) -> None:
         while self._running.is_set():
