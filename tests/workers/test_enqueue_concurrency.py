@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import anyio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import pytest
 from sqlalchemy import func, select
 
@@ -67,3 +69,43 @@ async def test_enqueue_returns_single_job_for_conflicting_requests() -> None:
         job_stmt = select(QueueJob.id).where(QueueJob.type == "metadata")
         job_id = session.execute(job_stmt).scalar_one()
         assert job_id is not None
+
+
+@pytest.mark.anyio
+async def test_enqueue_parallel_requests_return_existing_job() -> None:
+    """Parallel enqueue calls should return the existing job without raising errors."""
+
+    job_type = "parallel"
+    template = {"idempotency_key": "parallel-job"}
+    concurrency = 6
+    barrier = threading.Barrier(concurrency)
+
+    def run_parallel() -> list[int]:
+        results: list[int] = []
+
+        def worker(idx: int) -> int:
+            payload = dict(template)
+            payload["payload"] = {"attempt": idx}
+            barrier.wait()
+            job = enqueue(job_type, payload)
+            return job.id
+
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            for job_id in executor.map(worker, range(concurrency)):
+                results.append(job_id)
+
+        return results
+
+    results = await anyio.to_thread.run_sync(run_parallel)
+
+    assert len(results) == concurrency
+    assert len(set(results)) == 1
+
+    with session_scope() as session:
+        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        count = session.execute(stmt).scalar_one()
+        assert count == 1
+
+        record_stmt = select(QueueJob).where(QueueJob.type == job_type)
+        record = session.execute(record_stmt).scalars().one()
+        assert record.payload["payload"]["attempt"] in range(concurrency)

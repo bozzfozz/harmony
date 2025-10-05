@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
 
 from sqlalchemy import Select, func, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.db import session_scope
@@ -162,6 +161,45 @@ def _refresh_instance(session: Session, record: QueueJob) -> QueueJobDTO:
     return _to_dto(record)
 
 
+def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
+    """Return ``True`` when an integrity error represents a duplicate insert."""
+
+    original = getattr(exc, "orig", exc)
+    pgcode = getattr(original, "pgcode", None)
+    if pgcode == "23505":  # unique_violation
+        return True
+
+    message = str(original).upper()
+    return "UNIQUE" in message or "DUPLICATE" in message
+
+
+def _apply_existing_job_updates(
+    existing: QueueJob,
+    *,
+    payload: Mapping[str, Any],
+    priority: int,
+    scheduled_for: datetime,
+    now: datetime,
+) -> bool:
+    previous_status = existing.status
+    existing.payload = dict(payload)
+    existing.priority = priority
+    existing.available_at = scheduled_for
+    existing.status = QueueJobStatus.PENDING.value
+    existing.lease_expires_at = None
+    existing.last_error = None
+    existing.result_payload = None
+    existing.stop_reason = None
+    existing.updated_at = now
+    if previous_status in {
+        QueueJobStatus.COMPLETED.value,
+        QueueJobStatus.CANCELLED.value,
+    }:
+        existing.attempts = 0
+        return False
+    return True
+
+
 def _upsert_queue_job(
     session: Session,
     *,
@@ -177,91 +215,56 @@ def _upsert_queue_job(
     bind = session.get_bind()
     dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
 
-    insert_values = {
-        "type": job_type,
-        "payload": dict(payload),
-        "priority": priority,
-        "available_at": scheduled_for,
-        "idempotency_key": dedupe_key,
-        "status": QueueJobStatus.PENDING.value,
-        "stop_reason": None,
-        "lease_expires_at": None,
-        "last_error": None,
-        "result_payload": None,
-        "attempts": 0,
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    if dialect_name in {"postgresql", "sqlite"}:
-        insert_fn = pg_insert if dialect_name == "postgresql" else sqlite_insert
-        insert_stmt = (
-            insert_fn(QueueJob)
-            .values(**insert_values)
-            .on_conflict_do_nothing(
-                index_elements=[QueueJob.type, QueueJob.idempotency_key]
-            )
-        )
-        try:
-            result = session.execute(insert_stmt)
-        except OperationalError as exc:
-            if dialect_name == "sqlite":
-                message = str(getattr(exc, "orig", exc))
-                if "ON CONFLICT" in message.upper():
-                    logger.debug(
-                        "Falling back to manual queue upsert due to sqlite ON CONFLICT error",
-                        extra={
-                            "event": "queue.sqlite_conflict_fallback",
-                            "job_type": job_type,
-                        },
-                    )
-                    session.rollback()
-                else:  # pragma: no cover - unexpected sqlite error
-                    raise
-            else:  # pragma: no cover - unexpected non-sqlite error
-                raise
-        else:
-            if result.rowcount:
-                stmt = select(QueueJob).where(
-                    QueueJob.type == job_type,
-                    QueueJob.idempotency_key == dedupe_key,
-                )
-                record = session.execute(stmt).scalars().one()
-                return record, False
-
-    stmt: Select[QueueJob] = select(QueueJob).where(
+    stmt_base: Select[QueueJob] = select(QueueJob).where(
         QueueJob.type == job_type,
         QueueJob.idempotency_key == dedupe_key,
     )
-    if dialect_name not in {"", "sqlite"}:
-        stmt = stmt.with_for_update()
+    attempts = 0
 
-    existing = session.execute(stmt).scalars().first()
-    if existing is not None:
-        previous_status = existing.status
-        existing.payload = dict(payload)
-        existing.priority = priority
-        existing.available_at = scheduled_for
-        existing.status = QueueJobStatus.PENDING.value
-        existing.lease_expires_at = None
-        existing.last_error = None
-        existing.result_payload = None
-        existing.stop_reason = None
-        existing.updated_at = now
-        if previous_status in {
-            QueueJobStatus.COMPLETED.value,
-            QueueJobStatus.CANCELLED.value,
-        }:
-            existing.attempts = 0
-            deduped = False
+    while True:
+        stmt = stmt_base
+        if dialect_name not in {"", "sqlite"}:
+            stmt = stmt.with_for_update()
+
+        existing = session.execute(stmt).scalars().first()
+        if existing is not None:
+            deduped = _apply_existing_job_updates(
+                existing,
+                payload=payload,
+                priority=priority,
+                scheduled_for=scheduled_for,
+                now=now,
+            )
+            session.add(existing)
+            return existing, deduped
+
+        record = QueueJob(
+            type=job_type,
+            payload=dict(payload),
+            priority=priority,
+            available_at=scheduled_for,
+            idempotency_key=dedupe_key,
+            status=QueueJobStatus.PENDING.value,
+            stop_reason=None,
+            lease_expires_at=None,
+            last_error=None,
+            result_payload=None,
+            attempts=0,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(record)
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            if _is_duplicate_integrity_error(exc):
+                attempts += 1
+                time.sleep(min(0.01, 0.001 * attempts))
+                continue
+            raise
         else:
-            deduped = True
-        session.add(existing)
-        return existing, deduped
-
-    record = QueueJob(**insert_values)
-    session.add(record)
-    return record, False
+            return record, False
 
 
 def enqueue(
