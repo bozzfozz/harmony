@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { CircleDot, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -44,7 +44,16 @@ const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState<boolean>('layout:sidebarCollapsed', false);
   const location = useLocation();
-  const { services } = useIntegrationHealth();
+  const { services, errors } = useIntegrationHealth();
+
+  useEffect(() => {
+    if (errors.system) {
+      console.warn('System health query failed', errors.system);
+    }
+    if (errors.integrations) {
+      console.warn('Integration health query failed', errors.integrations);
+    }
+  }, [errors.integrations, errors.system]);
 
   const activeTitle = useMemo(() => {
     const match = navigationItems.find((item) => location.pathname.startsWith(item.to));
