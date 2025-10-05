@@ -196,6 +196,8 @@ class SyncWorker:
         self._complete_job = complete_fn or _default_complete_job
         self._fail_job = fail_fn or _default_fail_job
         self._release_active_leases = release_active_leases_fn or _default_release_active_leases
+        self._priority_event = asyncio.Event()
+        self._priority_reorder_window = 0.02
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -244,6 +246,7 @@ class SyncWorker:
         self._enqueue_sequence += 1
         priority = 0 if job is None else max(self._coerce_priority(job.priority), 0)
         await self._queue.put((-priority, self._enqueue_sequence, job))
+        self._priority_event.set()
 
     async def start(self) -> None:
         if self._manager_task is not None and not self._manager_task.done():
@@ -305,8 +308,10 @@ class SyncWorker:
             await self._put_job(record)
             return
 
-        await self._execute_job(record)
-        await self.refresh_downloads()
+        priority_value = -max(self._coerce_priority(record.priority), 0)
+        processed = await self._execute_job(record, priority_value)
+        if processed:
+            await self.refresh_downloads()
 
     async def request_cancel(self, download_id: int) -> None:
         """Flag a download for cancellation."""
@@ -371,7 +376,7 @@ class SyncWorker:
         self, priority: int, sequence: int, job: QueueJobDTO
     ) -> None:
         await self._drain_higher_priority_jobs(priority)
-        await self._handle_queue_job(job)
+        await self._handle_queue_job(priority, job)
 
     async def _drain_higher_priority_jobs(self, current_priority: int) -> None:
         while True:
@@ -403,10 +408,11 @@ class SyncWorker:
             return None
         return priority, sequence, job
 
-    async def _handle_queue_job(self, job: QueueJobDTO) -> None:
+    async def _handle_queue_job(self, priority: int, job: QueueJobDTO) -> None:
         try:
-            await self._execute_job(job)
-            await self.refresh_downloads()
+            processed = await self._execute_job(job, priority)
+            if processed:
+                await self.refresh_downloads()
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to process sync job %s: %s", job.id, exc)
             record_activity(
@@ -439,7 +445,10 @@ class SyncWorker:
             except asyncio.TimeoutError:
                 continue
 
-    async def _execute_job(self, job: QueueJobDTO) -> None:
+    async def _execute_job(self, job: QueueJobDTO, priority: int) -> bool:
+        if await self._maybe_defer_before_lease(priority, job):
+            return False
+
         leased = await self._lease_job(
             job.id,
             self._job_type,
@@ -447,7 +456,10 @@ class SyncWorker:
         )
         if leased is None:
             logger.debug("Sync job %s skipped because it could not be leased", job.id)
-            return
+            return False
+
+        if await self._maybe_preempt_after_lease(priority, leased):
+            return False
         try:
             await self._process_job(leased.payload)
         except DownloadJobError as exc:
@@ -460,7 +472,7 @@ class SyncWorker:
                 stop_reason=None,
             )
             logger.debug("Download job %s marked as failed after scheduling retry", job.id)
-            return
+            return True
         except Exception as exc:
             await self._fail_job(
                 job.id,
@@ -479,6 +491,123 @@ class SyncWorker:
             )
             increment_counter("metrics.sync.jobs_completed")
             self._record_heartbeat()
+            return True
+
+    async def _maybe_defer_before_lease(self, current_priority: int, job: QueueJobDTO) -> bool:
+        candidate = await self._wait_for_higher_priority(current_priority)
+        if candidate is None:
+            return False
+
+        peek_priority, _, peek_job = candidate
+
+        await self._put_job(job)
+        self._record_priority_reorder(
+            reason="before_lease",
+            preempted_job=job,
+            preempted_priority=-current_priority,
+            next_job=peek_job,
+            next_priority=-peek_priority,
+        )
+        return True
+
+    async def _maybe_preempt_after_lease(
+        self, current_priority: int, leased: QueueJobDTO
+    ) -> bool:
+        candidate = await self._wait_for_higher_priority(current_priority)
+        if candidate is None:
+            return False
+
+        peek_priority, _, peek_job = candidate
+        higher_priority = -peek_priority
+        current_priority_value = -current_priority
+
+        rescheduled = await self._fail_job(
+            leased.id,
+            self._job_type,
+            error=None,
+            retry_in=0,
+            available_at=None,
+            stop_reason=None,
+        )
+        if not rescheduled:
+            logger.warning(
+                "Failed to reschedule sync job %s for higher priority job %s", leased.id, peek_job.id
+            )
+            return False
+
+        await self._put_job(leased)
+        self._record_priority_reorder(
+            reason="after_lease",
+            preempted_job=leased,
+            preempted_priority=current_priority_value,
+            next_job=peek_job,
+            next_priority=higher_priority,
+        )
+        return True
+
+    async def _wait_for_higher_priority(
+        self, current_priority: int
+    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
+        candidate = self._peek_higher_priority(current_priority)
+        if candidate is not None:
+            return candidate
+
+        self._priority_event.clear()
+        candidate = self._peek_higher_priority(current_priority)
+        if candidate is not None:
+            return candidate
+
+        try:
+            await asyncio.wait_for(
+                self._priority_event.wait(), timeout=self._priority_reorder_window
+            )
+        except asyncio.TimeoutError:
+            return self._peek_higher_priority(current_priority)
+
+        return self._peek_higher_priority(current_priority)
+
+    def _peek_higher_priority(
+        self, current_priority: int
+    ) -> Optional[Tuple[int, int, QueueJobDTO]]:
+        if self._queue.empty():
+            return None
+        try:
+            peek_priority, peek_sequence, peek_job = self._queue._queue[0]
+        except IndexError:  # pragma: no cover - defensive
+            return None
+        if peek_job is None or peek_priority >= current_priority:
+            return None
+        return peek_priority, peek_sequence, peek_job
+
+    def _record_priority_reorder(
+        self,
+        *,
+        reason: str,
+        preempted_job: QueueJobDTO,
+        preempted_priority: int,
+        next_job: QueueJobDTO,
+        next_priority: int,
+    ) -> None:
+        increment_counter("metrics.sync.jobs_preempted")
+        record_activity(
+            "download",
+            "sync_job_preempted",
+            details={
+                "preempted_job_id": preempted_job.id,
+                "preempted_priority": preempted_priority,
+                "next_job_id": next_job.id,
+                "next_job_priority": next_priority,
+                "reason": reason,
+            },
+        )
+        logger.info(
+            "Priority reorder (%s): defer job %s (priority=%d) for job %s (priority=%d)",
+            reason,
+            preempted_job.id,
+            preempted_priority,
+            next_job.id,
+            next_priority,
+        )
 
     async def _process_job(self, job: Dict[str, Any]) -> None:
         username = job.get("username")
