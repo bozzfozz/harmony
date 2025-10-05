@@ -13,9 +13,106 @@ from app.models import Playlist
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.services.cache import ResponseCache
+from app.logging_events import log_event
+from app.services.cache import ResponseCache, build_path_param_hash
 
 logger = get_logger(__name__)
+
+
+class PlaylistCacheInvalidator:
+    """Synchronous wrapper that invalidates cached playlist responses."""
+
+    def __init__(
+        self,
+        cache: ResponseCache,
+        *,
+        loop: asyncio.AbstractEventLoop,
+        list_prefixes: tuple[str, ...],
+        detail_templates: tuple[str, ...],
+    ) -> None:
+        self._cache = cache
+        self._loop = loop
+        self._list_prefixes = list_prefixes
+        self._detail_templates = detail_templates
+
+    def invalidate(self, playlist_ids: Iterable[str]) -> None:
+        ordered_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for playlist_id in playlist_ids:
+            if not isinstance(playlist_id, str):
+                continue
+            trimmed = playlist_id.strip()
+            if not trimmed or trimmed in seen_ids:
+                continue
+            ordered_ids.append(trimmed)
+            seen_ids.add(trimmed)
+
+        prefixes = list(self._list_prefixes)
+        prefixes.extend(self._build_detail_prefixes(tuple(ordered_ids)))
+
+        if not prefixes:
+            return
+
+        deduped: list[str] = []
+        seen_prefixes: set[str] = set()
+        for prefix in prefixes:
+            if not prefix or prefix in seen_prefixes:
+                continue
+            deduped.append(prefix)
+            seen_prefixes.add(prefix)
+
+        future = asyncio.run_coroutine_threadsafe(
+            self._invalidate_prefixes(tuple(deduped)), self._loop
+        )
+
+        try:
+            invalidated = future.result()
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning("Failed to invalidate playlist cache entries: %s", exc)
+            log_event(
+                logger,
+                "worker.playlists.cache.invalidate",
+                component="worker.playlist_sync",
+                status="error",
+                error=str(exc),
+            )
+            return
+
+        status = "ok" if invalidated else "noop"
+        log_event(
+            logger,
+            "worker.playlists.cache.invalidate",
+            component="worker.playlist_sync",
+            status=status,
+            invalidated_entries=int(invalidated),
+            playlist_count=len(ordered_ids),
+            prefixes=tuple(deduped),
+        )
+        if invalidated:
+            logger.info(
+                "Invalidated %s cached Spotify playlist responses",
+                invalidated,
+                extra={"playlist_ids": tuple(ordered_ids)},
+            )
+
+    async def _invalidate_prefixes(self, prefixes: tuple[str, ...]) -> int:
+        total = 0
+        for prefix in prefixes:
+            total += await self._cache.invalidate_prefix(prefix)
+        return total
+
+    def _build_detail_prefixes(self, playlist_ids: tuple[str, ...]) -> list[str]:
+        if not playlist_ids:
+            return []
+        prefixes: list[str] = []
+        for template in self._detail_templates:
+            if "{playlist_id}" not in template:
+                prefixes.append(f"GET:{template}")
+                continue
+            for playlist_id in playlist_ids:
+                path_hash = build_path_param_hash({"playlist_id": playlist_id})
+                prefixes.append(f"GET:{template}:{path_hash}:")
+        return prefixes
 
 
 class PlaylistSyncWorker:
@@ -94,20 +191,27 @@ class PlaylistSyncWorker:
 
         now = datetime.utcnow()
 
+        cache_invalidator = self._build_cache_invalidator()
+
         try:
-            processed = await asyncio.to_thread(self._persist_playlists, items, now)
+            processed = await asyncio.to_thread(
+                self._persist_playlists, items, now, cache_invalidator
+            )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error("Failed to persist playlists: %s", exc)
             return
 
-        if processed > 0:
-            await self._invalidate_playlist_cache()
-
         logger.info("Synced %s playlists from Spotify", processed)
         record_worker_heartbeat("playlist")
 
-    def _persist_playlists(self, items: list[dict[str, Any]], timestamp: datetime) -> int:
+    def _persist_playlists(
+        self,
+        items: list[dict[str, Any]],
+        timestamp: datetime,
+        cache_invalidator: "PlaylistCacheInvalidator | None",
+    ) -> int:
         processed = 0
+        updated_ids: set[str] = set()
 
         with session_scope() as session:
             for payload in items:
@@ -133,22 +237,12 @@ class PlaylistSyncWorker:
                     playlist.updated_at = timestamp
 
                 processed += 1
+                updated_ids.add(str(playlist_id))
+
+        if cache_invalidator is not None and updated_ids:
+            cache_invalidator.invalidate(tuple(updated_ids))
 
         return processed
-
-    async def _invalidate_playlist_cache(self) -> None:
-        if self._response_cache is None:
-            return
-
-        prefixes = self._resolve_cache_prefixes()
-        if not prefixes:
-            return
-
-        for prefix in prefixes:
-            try:
-                await self._response_cache.invalidate_prefix(prefix)
-            except Exception as exc:  # pragma: no cover - defensive guard
-                logger.warning("Failed to invalidate playlist cache prefix %s: %s", prefix, exc)
 
     def _resolve_cache_prefixes(self) -> tuple[str, ...]:
         if self._cache_prefixes is not None:
@@ -173,6 +267,43 @@ class PlaylistSyncWorker:
 
         self._cache_prefixes = tuple(ordered)
         return self._cache_prefixes
+
+    def _resolve_detail_templates(self) -> tuple[str, ...]:
+        detail_path = "/spotify/playlists/{playlist_id}/tracks"
+        templates: list[str] = []
+
+        base_template = self._compose_path(detail_path)
+        if base_template:
+            templates.append(base_template)
+
+        templates.append(detail_path)
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for template in templates:
+            if template not in seen:
+                ordered.append(template)
+                seen.add(template)
+
+        return tuple(ordered)
+
+    def _build_cache_invalidator(self) -> "PlaylistCacheInvalidator | None":
+        if self._response_cache is None:
+            return None
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive guard
+            logger.debug("No running event loop available for cache invalidation")
+            return None
+
+        return PlaylistCacheInvalidator(
+            self._response_cache,
+            loop=loop,
+            list_prefixes=self._resolve_cache_prefixes(),
+            detail_templates=self._resolve_detail_templates(),
+        )
 
     def _compose_path(self, path: str) -> str:
         normalized_path = path if path.startswith("/") else f"/{path}"
