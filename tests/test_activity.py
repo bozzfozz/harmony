@@ -46,3 +46,15 @@ def test_record_activity_serialises_timezone_aware_timestamp() -> None:
     assert timestamp == "2024-05-04T10:30:45Z"
     assert timestamp.endswith("Z")
     assert timestamp.count("Z") == 1
+
+
+def test_record_activity_details_datetime_serialises_to_utc() -> None:
+    aware_detail = datetime(2024, 1, 15, 9, 45, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    payload = record_activity("sync", "completed", details={"finished_at": aware_detail})
+
+    finished_at = payload["details"]["finished_at"]
+    expected = aware_detail.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    assert finished_at == expected
+    assert finished_at.endswith("Z")
+    assert finished_at.count("Z") == 1

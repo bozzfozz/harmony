@@ -28,7 +28,10 @@ def _timestamp_to_utc_isoformat(value: datetime) -> str:
         normalised = value.replace(tzinfo=timezone.utc)
     else:
         normalised = value.astimezone(timezone.utc)
-    return normalised.isoformat().replace("+00:00", "Z")
+    iso_value = normalised.isoformat()
+    if iso_value.endswith("+00:00"):
+        return f"{iso_value[:-6]}Z"
+    return iso_value
 
 
 @dataclass(frozen=True)
