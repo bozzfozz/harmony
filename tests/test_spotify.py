@@ -57,6 +57,21 @@ def test_playlist_cache_invalidation(client: SimpleTestClient) -> None:
         {"id": "playlist-1", "name": "Morning", "tracks": {"total": 10}},
         {"id": "playlist-2", "name": "Chill", "track_count": 4},
     ]
+    stub.tracks["track-2"] = {
+        "id": "track-2",
+        "name": "Morning Anthem",
+        "artists": [{"name": "Dawn Ensemble"}],
+        "album": {
+            "id": "album-2",
+            "name": "Sunrise",
+            "artists": [{"name": "Dawn Ensemble"}],
+        },
+        "duration_ms": 210_000,
+    }
+    stub.playlist_items["playlist-1"] = {
+        "items": [{"track": dict(stub.tracks["track-1"])}],
+        "total": 1,
+    }
 
     worker = client.app.state.playlist_worker
     client._loop.run_until_complete(worker.sync_once())
@@ -73,10 +88,28 @@ def test_playlist_cache_invalidation(client: SimpleTestClient) -> None:
     assert cached.headers.get("etag") == initial_etag
     assert "age" in {key.lower() for key in cached.headers}
 
+    detail_initial = client.get("/spotify/playlists/playlist-1/tracks")
+    assert detail_initial.status_code == 200
+    detail_payload = detail_initial.json()
+    assert detail_payload["total"] == 1
+    first_track = detail_payload["items"][0]
+    assert first_track["id"] == "track-1"
+    detail_initial_etag = detail_initial.headers.get("etag")
+    assert detail_initial_etag is not None
+
+    detail_cached = client.get("/spotify/playlists/playlist-1/tracks")
+    assert detail_cached.status_code == 200
+    assert detail_cached.headers.get("etag") == detail_initial_etag
+    assert "age" in {key.lower() for key in detail_cached.headers}
+
     stub.playlists = [
         {"id": "playlist-1", "name": "Morning Updated", "tracks": {"total": 25}},
         {"id": "playlist-2", "name": "Chill", "track_count": 4},
     ]
+    stub.playlist_items["playlist-1"] = {
+        "items": [{"track": dict(stub.tracks["track-2"])}],
+        "total": 1,
+    }
     client._loop.run_until_complete(worker.sync_once())
 
     refreshed = client.get("/spotify/playlists")
@@ -96,6 +129,24 @@ def test_playlist_cache_invalidation(client: SimpleTestClient) -> None:
     assert cached_after.status_code == 200
     assert cached_after.headers.get("etag") == refreshed_etag
     assert "age" in {key.lower() for key in cached_after.headers}
+
+    detail_refreshed = client.get("/spotify/playlists/playlist-1/tracks")
+    assert detail_refreshed.status_code == 200
+    detail_refreshed_payload = detail_refreshed.json()
+    assert detail_refreshed_payload["total"] == 1
+    updated_track = detail_refreshed_payload["items"][0]
+    assert updated_track["id"] == "track-2"
+    detail_refreshed_etag = detail_refreshed.headers.get("etag")
+    assert detail_refreshed_etag is not None
+    assert detail_refreshed_etag != detail_initial_etag
+    detail_age_header = detail_refreshed.headers.get("Age")
+    if detail_age_header is not None:
+        assert int(detail_age_header) <= 1
+
+    detail_cached_after = client.get("/spotify/playlists/playlist-1/tracks")
+    assert detail_cached_after.status_code == 200
+    assert detail_cached_after.headers.get("etag") == detail_refreshed_etag
+    assert "age" in {key.lower() for key in detail_cached_after.headers}
 
 
 def test_audio_features_endpoints(client: SimpleTestClient) -> None:
