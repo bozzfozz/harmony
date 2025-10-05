@@ -8,7 +8,7 @@ import pytest
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, QueueJob, QueueJobStatus
 from app.utils.activity import activity_manager
-from app.workers.persistence import enqueue, update_priority
+from app.workers.persistence import QueueJobDTO, enqueue, lease_async, update_priority
 from app.workers.sync_worker import SyncWorker
 
 
@@ -79,6 +79,83 @@ async def test_high_priority_jobs_are_processed_first() -> None:
     first_call = client.download_calls[0]
     first_download_id = first_call["files"][0]["download_id"]
     assert first_download_id == high_id
+
+
+@pytest.mark.asyncio
+async def test_high_priority_job_preempts_recent_low_priority_lease() -> None:
+    reset_engine_for_tests()
+    init_db()
+    activity_manager.clear()
+
+    client = RecordingSoulseekClient()
+
+    with session_scope() as session:
+        low = Download(
+            filename="low.mp3",
+            state="queued",
+            progress=0.0,
+            username="tester",
+            priority=1,
+        )
+        high = Download(
+            filename="high.mp3",
+            state="queued",
+            progress=0.0,
+            username="tester",
+            priority=10,
+        )
+        session.add_all([low, high])
+        session.flush()
+        low_id = low.id
+        high_id = high.id
+
+    low_leased = asyncio.Event()
+    allow_processing = asyncio.Event()
+
+    async def tracking_lease(job_id: int, job_type: str, lease_seconds: int | None) -> QueueJobDTO | None:
+        leased_job = await lease_async(job_id, job_type=job_type, lease_seconds=lease_seconds)
+        if leased_job and any(
+            isinstance(item, dict) and int(item.get("download_id", 0)) == low_id
+            for item in leased_job.payload.get("files", [])
+        ):
+            low_leased.set()
+            await allow_processing.wait()
+        return leased_job
+
+    worker = SyncWorker(client, concurrency=1, lease_fn=tracking_lease)
+
+    await worker.start()
+
+    try:
+        await worker.enqueue(
+            {
+                "username": "tester",
+                "files": [{"download_id": low_id, "priority": 1}],
+                "priority": 1,
+            }
+        )
+
+        await asyncio.wait_for(low_leased.wait(), timeout=1)
+
+        await worker.enqueue(
+            {
+                "username": "tester",
+                "files": [{"download_id": high_id, "priority": 10}],
+                "priority": 10,
+            }
+        )
+
+        allow_processing.set()
+        await asyncio.sleep(0.1)
+    finally:
+        allow_processing.set()
+        await worker.stop()
+
+    assert len(client.download_calls) >= 2
+    first = client.download_calls[0]
+    second = client.download_calls[1]
+    assert first["files"][0]["download_id"] == high_id
+    assert second["files"][0]["download_id"] == low_id
 
 
 def test_priority_can_be_updated_via_api(client) -> None:
