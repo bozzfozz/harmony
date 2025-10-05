@@ -13,6 +13,7 @@ from app.models import Playlist
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
+from app.services.cache import ResponseCache
 
 logger = get_logger(__name__)
 
@@ -20,11 +21,21 @@ logger = get_logger(__name__)
 class PlaylistSyncWorker:
     """Periodically fetches playlists for the authenticated user."""
 
-    def __init__(self, spotify_client: SpotifyClient, interval_seconds: float = 900.0) -> None:
+    def __init__(
+        self,
+        spotify_client: SpotifyClient,
+        interval_seconds: float = 900.0,
+        *,
+        response_cache: ResponseCache | None = None,
+        api_base_path: str = "",
+    ) -> None:
         self._client = spotify_client
         self._interval = interval_seconds
         self._task: asyncio.Task[None] | None = None
         self._running = False
+        self._response_cache = response_cache
+        self._api_base_path = (api_base_path or "").strip()
+        self._cache_prefixes: tuple[str, ...] | None = None
 
     async def start(self) -> None:
         if self._task is None or self._task.done():
@@ -89,6 +100,9 @@ class PlaylistSyncWorker:
             logger.error("Failed to persist playlists: %s", exc)
             return
 
+        if processed > 0:
+            await self._invalidate_playlist_cache()
+
         logger.info("Synced %s playlists from Spotify", processed)
         record_worker_heartbeat("playlist")
 
@@ -121,6 +135,54 @@ class PlaylistSyncWorker:
                 processed += 1
 
         return processed
+
+    async def _invalidate_playlist_cache(self) -> None:
+        if self._response_cache is None:
+            return
+
+        prefixes = self._resolve_cache_prefixes()
+        if not prefixes:
+            return
+
+        for prefix in prefixes:
+            try:
+                await self._response_cache.invalidate_prefix(prefix)
+            except Exception as exc:  # pragma: no cover - defensive guard
+                logger.warning(
+                    "Failed to invalidate playlist cache prefix %s: %s", prefix, exc
+                )
+
+    def _resolve_cache_prefixes(self) -> tuple[str, ...]:
+        if self._cache_prefixes is not None:
+            return self._cache_prefixes
+
+        playlist_path = "/spotify/playlists"
+        prefixes: list[str] = []
+
+        base_prefix = self._compose_path(playlist_path)
+        if base_prefix:
+            prefixes.append(f"GET:{base_prefix}")
+
+        prefixes.append(f"GET:{playlist_path}")
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for prefix in prefixes:
+            if prefix not in seen:
+                ordered.append(prefix)
+                seen.add(prefix)
+
+        self._cache_prefixes = tuple(ordered)
+        return self._cache_prefixes
+
+    def _compose_path(self, path: str) -> str:
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        base = self._api_base_path
+        if not base or base == "/":
+            return normalized_path
+        base_prefix = base.rstrip("/")
+        return f"{base_prefix}{normalized_path}"
 
     @staticmethod
     def _extract_track_count(payload: dict[str, Any]) -> int:

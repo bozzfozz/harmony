@@ -4,8 +4,6 @@ from tests.simple_client import SimpleTestClient
 
 from app.db import session_scope
 from app.models import Playlist
-from app.workers.playlist_sync_worker import PlaylistSyncWorker
-
 
 def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> None:
     stub = client.app.state.spotify_stub
@@ -14,7 +12,7 @@ def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> No
         {"id": "playlist-2", "name": "Relax", "track_count": 8},
     ]
 
-    worker = PlaylistSyncWorker(stub, interval_seconds=0.1)
+    worker = client.app.state.playlist_worker
     client._loop.run_until_complete(worker.sync_once())
 
     with session_scope() as session:
@@ -27,6 +25,12 @@ def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> No
     assert {entry["id"] for entry in playlists} == {"playlist-1", "playlist-2"}
     first = next(item for item in playlists if item["id"] == "playlist-1")
     assert first["track_count"] == 12
+    etag_initial = response.headers.get("etag")
+
+    cached_response = client.get("/spotify/playlists")
+    assert cached_response.status_code == 200
+    cached_header_names = {key.lower() for key in cached_response.headers}
+    assert "age" in cached_header_names
 
     stub.playlists = [
         {"id": "playlist-1", "name": "Focus Updated", "tracks": {"total": 15}},
@@ -41,6 +45,9 @@ def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> No
     assert updated["name"] == "Focus Updated"
     assert updated["track_count"] == 15
     assert playlists[0]["id"] == "playlist-1"
+    etag_updated = response.headers.get("etag")
+    assert etag_updated is not None and etag_initial is not None
+    assert etag_updated != etag_initial
 
 
 def test_audio_features_endpoints(client: SimpleTestClient) -> None:
