@@ -116,7 +116,14 @@ def _get_playlist_worker(request: Request) -> PlaylistSyncWorker | None:
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Unable to initialise Spotify client for playlist sync: %s", exc)
         return None
-    worker = PlaylistSyncWorker(spotify_client, interval_seconds=900.0)
+    response_cache = getattr(request.app.state, "response_cache", None)
+    api_base_path = getattr(request.app.state, "api_base_path", "") or ""
+    worker = PlaylistSyncWorker(
+        spotify_client,
+        interval_seconds=900.0,
+        response_cache=response_cache,
+        api_base_path=api_base_path,
+    )
     request.app.state.playlist_worker = worker
     return worker
 
