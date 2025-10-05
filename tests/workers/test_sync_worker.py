@@ -38,7 +38,9 @@ class RecordingSoulseekClient:
 
 
 @pytest.mark.asyncio
-async def test_sync_worker_processes_jobs_with_async_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sync_worker_processes_jobs_with_async_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Jobs are executed using the async persistence wrappers."""
 
     reset_engine_for_tests()

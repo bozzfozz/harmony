@@ -81,12 +81,8 @@ class TrackIdsPayload(BaseModel):
 
 class SpotifyStatusResponse(BaseModel):
     status: Literal["connected", "unauthenticated", "unconfigured"]
-    free_available: bool = Field(
-        ..., description="Whether FREE ingest features are available."
-    )
-    pro_available: bool = Field(
-        ..., description="Whether Spotify API integrations are configured."
-    )
+    free_available: bool = Field(..., description="Whether FREE ingest features are available.")
+    pro_available: bool = Field(..., description="Whether Spotify API integrations are configured.")
     authenticated: bool = Field(
         ..., description="Indicates if the Spotify client currently holds a valid session."
     )

@@ -227,7 +227,9 @@ async def test_handle_matching_yields_with_slow_db(monkeypatch: pytest.MonkeyPat
             return 0.9
 
     session = _FakeSession()
-    session_factory = lambda: _FakeSessionContext(session)
+
+    def session_factory() -> _FakeSessionContext:
+        return _FakeSessionContext(session)
 
     started, _ = _install_slow_run_session(
         monkeypatch,

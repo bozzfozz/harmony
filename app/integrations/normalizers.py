@@ -371,9 +371,7 @@ def normalize_slskd_track(
     album = None
     if album_name:
         album_metadata = {
-            key: metadata[key]
-            for key in _TRACK_COUNT_KEYS
-            if metadata.get(key) is not None
+            key: metadata[key] for key in _TRACK_COUNT_KEYS if metadata.get(key) is not None
         }
         album = ProviderAlbum(
             name=album_name,

@@ -174,17 +174,13 @@ __all__ = [
 ]
 
 
-def _call_with_session(
-    func: SessionCallable[T], *, factory: SessionFactory | None = None
-) -> T:
+def _call_with_session(func: SessionCallable[T], *, factory: SessionFactory | None = None) -> T:
     context = factory() if factory is not None else session_scope()
     with context as session:
         return func(session)
 
 
-async def run_session(
-    func: SessionCallable[T], *, factory: SessionFactory | None = None
-) -> T:
+async def run_session(func: SessionCallable[T], *, factory: SessionFactory | None = None) -> T:
     """Execute ``func`` with a database session in a worker thread."""
 
     return await asyncio.to_thread(_call_with_session, func, factory=factory)

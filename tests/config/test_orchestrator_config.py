@@ -67,9 +67,7 @@ def test_load_sync_retry_policy_uses_settings(monkeypatch) -> None:
     }
     config = Settings.load(env)
 
-    policy = orchestrator_handlers.load_sync_retry_policy(
-        defaults=config.retry_policy
-    )
+    policy = orchestrator_handlers.load_sync_retry_policy(defaults=config.retry_policy)
 
     assert policy.max_attempts == 4
     assert policy.base_seconds == 45.0

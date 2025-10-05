@@ -88,18 +88,15 @@ def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None
 
     payload_value = payload.get("visibility_timeout")
     from app.dependencies import get_app_config  # lazy import to avoid circular dependency
+
     config = get_app_config()
     worker_env = config.environment.workers
     env_override = worker_env.visibility_timeout_s
     resolved_default = (
-        env_override
-        if env_override is not None
-        else settings.orchestrator.visibility_timeout_s
+        env_override if env_override is not None else settings.orchestrator.visibility_timeout_s
     )
     try:
-        payload_resolved = (
-            int(payload_value) if payload_value is not None else resolved_default
-        )
+        payload_resolved = int(payload_value) if payload_value is not None else resolved_default
     except (TypeError, ValueError):
         payload_resolved = resolved_default
     return max(5, payload_resolved)
@@ -725,9 +722,7 @@ async def lease_async(
 ) -> QueueJobDTO | None:
     """Async wrapper around :func:`lease`."""
 
-    return await asyncio.to_thread(
-        lease, job_id, job_type=job_type, lease_seconds=lease_seconds
-    )
+    return await asyncio.to_thread(lease, job_id, job_type=job_type, lease_seconds=lease_seconds)
 
 
 async def complete_async(

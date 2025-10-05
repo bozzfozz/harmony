@@ -153,9 +153,7 @@ def load_sync_retry_policy(
         resolved_defaults.base_seconds,
     )
 
-    resolved_jitter = (
-        jitter_pct if jitter_pct is not None else resolved_defaults.jitter_pct
-    )
+    resolved_jitter = jitter_pct if jitter_pct is not None else resolved_defaults.jitter_pct
     try:
         resolved_jitter = float(resolved_jitter)
     except (TypeError, ValueError):

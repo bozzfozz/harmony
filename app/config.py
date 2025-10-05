@@ -712,9 +712,7 @@ def _parse_optional_int(
         logger.warning("Ignoring invalid integer override value: %s", value)
         return None
     if minimum is not None and resolved < minimum:
-        logger.warning(
-            "Integer override %s below minimum %s; clamping", value, minimum
-        )
+        logger.warning("Integer override %s below minimum %s; clamping", value, minimum)
         resolved = minimum
     if maximum is not None and resolved > maximum:
         resolved = maximum
@@ -735,9 +733,7 @@ def _parse_optional_float(
         logger.warning("Ignoring invalid float override value: %s", value)
         return None
     if minimum is not None and resolved < minimum:
-        logger.warning(
-            "Float override %s below minimum %s; clamping", value, minimum
-        )
+        logger.warning("Float override %s below minimum %s; clamping", value, minimum)
         resolved = minimum
     if maximum is not None and resolved > maximum:
         resolved = maximum
@@ -898,14 +894,10 @@ def _load_environment_config(env: Mapping[str, Any]) -> EnvironmentConfig:
     workers_enabled_raw = env.get("WORKERS_ENABLED")
     workers_enabled_override = _parse_bool_override(workers_enabled_raw)
     disable_workers = _as_bool(
-        str(env.get("HARMONY_DISABLE_WORKERS"))
-        if "HARMONY_DISABLE_WORKERS" in env
-        else None,
+        str(env.get("HARMONY_DISABLE_WORKERS")) if "HARMONY_DISABLE_WORKERS" in env else None,
         default=False,
     )
-    visibility_override = _parse_optional_int(
-        env.get("WORKER_VISIBILITY_TIMEOUT_S"), minimum=5
-    )
+    visibility_override = _parse_optional_int(env.get("WORKER_VISIBILITY_TIMEOUT_S"), minimum=5)
     watchlist_interval = _parse_optional_float(env.get("WATCHLIST_INTERVAL"))
     watchlist_timer_enabled = _parse_bool_override(env.get("WATCHLIST_TIMER_ENABLED"))
 
@@ -1365,9 +1357,7 @@ def load_config() -> AppConfig:
     post_processors_raw = os.getenv("ARTWORK_POST_PROCESSORS")
     if post_processors_raw:
         processor_entries = post_processors_raw.replace("\n", ",").split(",")
-        post_processors = tuple(
-            entry.strip() for entry in processor_entries if entry.strip()
-        )
+        post_processors = tuple(entry.strip() for entry in processor_entries if entry.strip())
     else:
         post_processors = ()
 
@@ -1660,9 +1650,7 @@ def load_config() -> AppConfig:
     require_auth_override = _parse_bool_override(os.getenv("FEATURE_REQUIRE_AUTH"))
     rate_limit_override = _parse_bool_override(os.getenv("FEATURE_RATE_LIMITING"))
     rate_limit_enabled = (
-        security_defaults.rate_limiting
-        if rate_limit_override is None
-        else rate_limit_override
+        security_defaults.rate_limiting if rate_limit_override is None else rate_limit_override
     )
 
     rate_limit_config = RateLimitMiddlewareConfig(

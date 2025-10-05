@@ -77,7 +77,9 @@ def test_update_priority_persists_and_notifies_worker(monkeypatch, db_session) -
         notified.update({"job_id": job_id, "priority": priority, "job_type": job_type})
         return True
 
-    monkeypatch.setattr("app.services.download_service.update_worker_priority", fake_update_priority)
+    monkeypatch.setattr(
+        "app.services.download_service.update_worker_priority", fake_update_priority
+    )
 
     download.job_id = 42
     db_session.commit()

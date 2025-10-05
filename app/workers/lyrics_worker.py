@@ -190,9 +190,7 @@ class LyricsWorker:
             return {"lyrics": result}
         return None
 
-    async def _update_download(
-        self, download_id: int, *, status: str, path: str | None
-    ) -> None:
+    async def _update_download(self, download_id: int, *, status: str, path: str | None) -> None:
 
         def _apply(session: Session) -> None:
             download = session.get(Download, int(download_id))

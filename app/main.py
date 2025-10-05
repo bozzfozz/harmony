@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.api import router_registry
@@ -142,11 +142,7 @@ def _resolve_watchlist_interval(override: float | None) -> float:
 
 
 def _resolve_visibility_timeout(override: int | None) -> int:
-    resolved = (
-        override
-        if override is not None
-        else settings.orchestrator.visibility_timeout_s
-    )
+    resolved = override if override is not None else settings.orchestrator.visibility_timeout_s
     return max(5, resolved)
 
 

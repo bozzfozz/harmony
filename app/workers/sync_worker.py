@@ -15,6 +15,24 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
+from app.orchestrator.handlers import (
+    SyncHandlerDeps,
+    SyncRetryPolicy,
+    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
+    extract_basic_metadata,
+    extract_ingest_item_id,
+    extract_spotify_album_id,
+    extract_spotify_id,
+    fanout_download_completion,
+    handle_sync_download_failure,
+    handle_sync_retry_success,
+    load_sync_retry_policy,
+    process_sync_payload,
+    resolve_download_path,
+    resolve_text,
+    truncate_error,
+    update_ingest_item_state,
+)
 from app.utils.activity import (
     record_activity,
     record_worker_started,
@@ -83,24 +101,7 @@ async def _default_fail_job(
 
 async def _default_release_active_leases(job_type: str) -> None:
     await release_active_leases_async(job_type)
-from app.orchestrator.handlers import (
-    SyncHandlerDeps,
-    SyncRetryPolicy,
-    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
-    extract_basic_metadata,
-    extract_ingest_item_id,
-    extract_spotify_album_id,
-    extract_spotify_id,
-    fanout_download_completion,
-    handle_sync_download_failure,
-    handle_sync_retry_success,
-    load_sync_retry_policy,
-    process_sync_payload,
-    resolve_download_path,
-    resolve_text,
-    truncate_error,
-    update_ingest_item_state,
-)
+
 
 logger = get_logger(__name__)
 
@@ -194,9 +195,7 @@ class SyncWorker:
         self._lease_job = lease_fn or _default_lease_job
         self._complete_job = complete_fn or _default_complete_job
         self._fail_job = fail_fn or _default_fail_job
-        self._release_active_leases = (
-            release_active_leases_fn or _default_release_active_leases
-        )
+        self._release_active_leases = release_active_leases_fn or _default_release_active_leases
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
@@ -552,6 +551,7 @@ class SyncWorker:
 
         to_cancel: List[int] = []
         completed_downloads: List[Tuple[int, Dict[str, Any]]] = []
+
         def _update_progress(
             session: Session,
         ) -> tuple[bool, List[int], List[Tuple[int, Dict[str, Any]]]]:

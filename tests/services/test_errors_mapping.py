@@ -63,9 +63,7 @@ def test_to_api_error_from_value_error() -> None:
 
 
 def test_to_api_error_from_transfers_error() -> None:
-    exc = TransfersDependencyError(
-        "slskd unavailable", status_code=502, details={"hint": "retry"}
-    )
+    exc = TransfersDependencyError("slskd unavailable", status_code=502, details={"hint": "retry"})
     mapped = to_api_error(exc, provider="slskd")
     assert mapped.error.code == "DEPENDENCY_ERROR"
     assert mapped.error.details == {

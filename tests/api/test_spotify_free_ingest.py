@@ -46,7 +46,9 @@ async def test_free_ingest_pipeline_uses_async_db_executor(
 ) -> None:
     delay = 0.25
     original_runner = get_session_runner()
-    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(delay, original_runner)
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
 
     ticker_count = 0
 

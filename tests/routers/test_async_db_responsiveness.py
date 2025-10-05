@@ -66,7 +66,9 @@ async def test_free_import_uses_async_session(
 ) -> None:
     delay = 0.2
     original_runner = get_session_runner()
-    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(delay, original_runner)
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
 
     try:
         async with time_budget.limit(0.75) as elapsed:
@@ -95,7 +97,9 @@ async def test_manual_sync_checks_credentials_off_thread(
 ) -> None:
     delay = 0.2
     original_runner = get_session_runner()
-    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(delay, original_runner)
+    client.app.dependency_overrides[get_session_runner] = lambda: _slow_runner(
+        delay, original_runner
+    )
 
     playlist_calls = {"count": 0}
 
@@ -195,9 +199,7 @@ async def test_download_retry_uses_async_session(
 
     try:
         async with time_budget.limit(0.75) as elapsed:
-            response = await async_client.post(
-                api_path(f"/download/{download_id}/retry")
-            )
+            response = await async_client.post(api_path(f"/download/{download_id}/retry"))
         assert response.status_code == 202
         assert elapsed() >= delay
     finally:
