@@ -33,8 +33,17 @@ class ActivityEntry:
     def as_dict(self) -> Dict[str, object]:
         """Return a serialisable representation of the entry."""
 
+        def _serialise_timestamp(dt: datetime) -> str:
+            """Normalise datetimes to UTC and serialise with a trailing Z."""
+
+            if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+                normalised = dt.replace(tzinfo=timezone.utc)
+            else:
+                normalised = dt.astimezone(timezone.utc)
+            return normalised.isoformat().replace("+00:00", "Z")
+
         payload: Dict[str, object] = {
-            "timestamp": self.timestamp.isoformat() + "Z",
+            "timestamp": _serialise_timestamp(self.timestamp),
             "type": self.type,
             "status": self.status,
         }

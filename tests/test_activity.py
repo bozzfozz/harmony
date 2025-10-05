@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from app.utils.activity import record_activity
 
 
@@ -33,3 +35,13 @@ def test_activity_endpoint_limits_to_fifty_entries(client) -> None:
     assert len(entries) == 50
     assert entries[0]["details"]["index"] == 59
     assert entries[-1]["details"]["index"] == 10
+
+
+def test_record_activity_serialises_timezone_aware_timestamp() -> None:
+    aware_timestamp = datetime(2024, 5, 4, 12, 30, 45, tzinfo=timezone(timedelta(hours=2)))
+
+    payload = record_activity("test", "completed", timestamp=aware_timestamp)
+
+    timestamp = payload["timestamp"]
+    assert timestamp.endswith("Z")
+    assert timestamp.count("Z") == 1
