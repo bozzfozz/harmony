@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field, is_dataclass, asdict
+from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Deque, Dict, Iterable, List, MutableMapping, Optional, Literal
+from typing import Any, Deque, Dict, Iterable, List, Literal, MutableMapping, Optional
 
 from sqlalchemy import func
 
@@ -21,6 +21,16 @@ from app.utils.events import (
 from app.utils.worker_health import read_worker_status
 
 
+def _timestamp_to_utc_isoformat(value: datetime) -> str:
+    """Return a UTC-normalised ISO 8601 representation ending with Z."""
+
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        normalised = value.replace(tzinfo=timezone.utc)
+    else:
+        normalised = value.astimezone(timezone.utc)
+    return normalised.isoformat().replace("+00:00", "Z")
+
+
 @dataclass(frozen=True)
 class ActivityEntry:
     """Immutable record representing a single activity entry."""
@@ -33,17 +43,8 @@ class ActivityEntry:
     def as_dict(self) -> Dict[str, object]:
         """Return a serialisable representation of the entry."""
 
-        def _serialise_timestamp(dt: datetime) -> str:
-            """Normalise datetimes to UTC and serialise with a trailing Z."""
-
-            if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
-                normalised = dt.replace(tzinfo=timezone.utc)
-            else:
-                normalised = dt.astimezone(timezone.utc)
-            return normalised.isoformat().replace("+00:00", "Z")
-
         payload: Dict[str, object] = {
-            "timestamp": _serialise_timestamp(self.timestamp),
+            "timestamp": _timestamp_to_utc_isoformat(self.timestamp),
             "type": self.type,
             "status": self.status,
         }
@@ -201,7 +202,7 @@ def _serialise_details(
         if isinstance(value, set):
             return sorted(_convert(item) for item in value)
         if isinstance(value, datetime):
-            return value.isoformat() + "Z"
+            return _timestamp_to_utc_isoformat(value)
         if is_dataclass(value):
             return _convert(asdict(value))
         converter = getattr(value, "as_dict", None)

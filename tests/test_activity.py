@@ -43,5 +43,6 @@ def test_record_activity_serialises_timezone_aware_timestamp() -> None:
     payload = record_activity("test", "completed", timestamp=aware_timestamp)
 
     timestamp = payload["timestamp"]
+    assert timestamp == "2024-05-04T10:30:45Z"
     assert timestamp.endswith("Z")
     assert timestamp.count("Z") == 1
