@@ -122,6 +122,7 @@ export interface SoulseekDownloadEntry {
 
 export interface SoulseekDownloadsResponse {
   downloads?: unknown;
+  retryable_states?: unknown;
 }
 
 export interface ProviderInfo {

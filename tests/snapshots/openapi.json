@@ -2558,6 +2558,13 @@
             },
             "title": "Downloads",
             "type": "array"
+          },
+          "retryable_states": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Retryable States",
+            "type": "array"
           }
         },
         "required": [

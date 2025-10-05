@@ -15,6 +15,7 @@ import {
   type NormalizedSoulseekDownload,
   type NormalizedSoulseekUpload,
   type SoulseekConfigurationEntry,
+  type SoulseekDownloadsResult,
   SoulseekRequeueError
 } from '../api/services/soulseek';
 import type { SoulseekConnectionStatus } from '../api/types';
@@ -98,7 +99,7 @@ const SoulseekPage = () => {
     queryFn: () => getSoulseekUploads({ includeAll: showAllUploads })
   });
 
-  const downloadsQuery = useQuery<NormalizedSoulseekDownload[]>({
+  const downloadsQuery = useQuery<SoulseekDownloadsResult>({
     queryKey: ['soulseek', 'downloads', showAllDownloads ? 'all' : 'active'],
     queryFn: () => getSoulseekDownloads({ includeAll: showAllDownloads })
   });
@@ -382,13 +383,14 @@ const SoulseekPage = () => {
         </CardHeader>
         <CardContent>
           <SoulseekDownloadList
-            downloads={downloadsQuery.data}
+            downloads={downloadsQuery.data?.downloads}
             isLoading={downloadsQuery.isLoading}
             isError={downloadsQuery.isError}
             onRetryFetch={() => downloadsQuery.refetch()}
             onRetryDownload={handleRetryDownload}
             retryingDownloadId={retryingDownloadId}
             isRetryPending={isRequeuePending}
+            retryableStates={downloadsQuery.data?.retryableStates}
           />
         </CardContent>
       </Card>

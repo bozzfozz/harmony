@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import SoulseekPage from '../pages/SoulseekPage';
@@ -9,7 +9,8 @@ import {
   SoulseekRequeueError,
   type IntegrationsData,
   SoulseekConfigurationEntry,
-  NormalizedSoulseekDownload
+  NormalizedSoulseekDownload,
+  type SoulseekDownloadsResult
 } from '../api/services/soulseek';
 import type { SoulseekStatusResponse } from '../api/types';
 
@@ -50,6 +51,14 @@ const createQueryResult = <T,>(overrides: Partial<QueryResult<T>> = {}): QueryRe
   ...overrides
 });
 
+const createDownloadsResult = (
+  downloads: NormalizedSoulseekDownload[],
+  retryableStates: string[] = ['failed']
+): SoulseekDownloadsResult => ({
+  downloads,
+  retryableStates
+});
+
 const joinQueryKey = (queryKey: unknown): string => {
   if (Array.isArray(queryKey)) {
     return queryKey.join(':');
@@ -86,25 +95,28 @@ describe('SoulseekPage', () => {
       }
     ];
 
-    const downloadData: NormalizedSoulseekDownload[] = [
-      {
-        id: '42',
-        filename: 'album-track.mp3',
-        username: 'alice',
-        state: 'failed',
-        progress: 0.42,
-        priority: 5,
-        retryCount: 2,
-        lastError: 'Timeout',
-        createdAt: '2024-01-01T10:00:00Z',
-        updatedAt: '2024-01-01T10:05:00Z',
-        queuedAt: '2024-01-01T09:55:00Z',
-        startedAt: null,
-        completedAt: null,
-        nextRetryAt: null,
-        raw: {} as any
-      }
-    ];
+    const downloadsResult = createDownloadsResult(
+      [
+        {
+          id: '42',
+          filename: 'album-track.mp3',
+          username: 'alice',
+          state: 'failed',
+          progress: 0.42,
+          priority: 5,
+          retryCount: 2,
+          lastError: 'Timeout',
+          createdAt: '2024-01-01T10:00:00Z',
+          updatedAt: '2024-01-01T10:05:00Z',
+          queuedAt: '2024-01-01T09:55:00Z',
+          startedAt: null,
+          completedAt: null,
+          nextRetryAt: null,
+          raw: {} as any
+        }
+      ],
+      ['failed', 'completed']
+    );
 
     mockedUseQuery.mockImplementation(({ queryKey }) => {
       const key = joinQueryKey(queryKey);
@@ -118,7 +130,7 @@ describe('SoulseekPage', () => {
         case 'soulseek:uploads:active':
           return createQueryResult({ data: [] });
         case 'soulseek:downloads:active':
-          return createQueryResult({ data: downloadData });
+          return createQueryResult({ data: downloadsResult });
         default:
           return createQueryResult();
       }
@@ -201,7 +213,7 @@ describe('SoulseekPage', () => {
     mockedUseQuery.mockImplementation(({ queryKey }) => {
       const key = joinQueryKey(queryKey);
       if (key === 'soulseek:downloads:active') {
-        return createQueryResult({ data: [] });
+        return createQueryResult({ data: createDownloadsResult([]) });
       }
       return createQueryResult();
     });
@@ -212,7 +224,7 @@ describe('SoulseekPage', () => {
   });
 
   it('deaktiviert den Retry-Button für Dead-Letter-Downloads', () => {
-    const downloadData: NormalizedSoulseekDownload[] = [
+    const downloadsResult = createDownloadsResult([
       {
         id: '42',
         filename: 'album-track.mp3',
@@ -230,12 +242,12 @@ describe('SoulseekPage', () => {
         nextRetryAt: null,
         raw: {} as any
       }
-    ];
+    ]);
 
     mockedUseQuery.mockImplementation(({ queryKey }) => {
       const key = joinQueryKey(queryKey);
       if (key === 'soulseek:downloads:active') {
-        return createQueryResult({ data: downloadData });
+        return createQueryResult({ data: downloadsResult });
       }
       return createQueryResult();
     });
@@ -249,11 +261,71 @@ describe('SoulseekPage', () => {
     expect(retryButton).toBeDisabled();
   });
 
+  it('aktiviert Retries für vom Backend freigegebene Zustände', () => {
+    const downloadsResult = createDownloadsResult(
+      [
+        {
+          id: '42',
+          filename: 'album-track.mp3',
+          username: 'alice',
+          state: 'failed',
+          progress: 0,
+          priority: null,
+          retryCount: 0,
+          lastError: null,
+          createdAt: null,
+          updatedAt: null,
+          queuedAt: null,
+          startedAt: null,
+          completedAt: null,
+          nextRetryAt: null,
+          raw: {} as any
+        },
+        {
+          id: '84',
+          filename: 'completed-track.mp3',
+          username: 'bob',
+          state: 'completed',
+          progress: 1,
+          priority: 1,
+          retryCount: 0,
+          lastError: null,
+          createdAt: null,
+          updatedAt: null,
+          queuedAt: null,
+          startedAt: null,
+          completedAt: '2024-01-02T12:00:00Z',
+          nextRetryAt: null,
+          raw: {} as any
+        }
+      ],
+      ['failed', 'completed']
+    );
+
+    mockedUseQuery.mockImplementation(({ queryKey }) => {
+      const key = joinQueryKey(queryKey);
+      if (key === 'soulseek:downloads:active') {
+        return createQueryResult({ data: downloadsResult });
+      }
+      return createQueryResult();
+    });
+
+    renderWithProviders(<SoulseekPage />, { route: '/soulseek' });
+
+    const completedRow = screen.getByText('completed-track.mp3').closest('tr');
+    expect(completedRow).not.toBeNull();
+    if (!completedRow) {
+      throw new Error('completed row missing');
+    }
+
+    expect(within(completedRow).getByRole('button', { name: 'Retry' })).toBeEnabled();
+  });
+
   it('plant fehlgeschlagene Downloads erneut ein und aktualisiert die Liste', async () => {
     const refetchMock = jest.fn().mockResolvedValue(undefined);
     const toastMock = jest.fn();
     const statusData: SoulseekStatusResponse = { status: 'connected' };
-    const downloadData: NormalizedSoulseekDownload[] = [
+    const downloadsResult = createDownloadsResult([
       {
         id: '42',
         filename: 'album-track.mp3',
@@ -271,7 +343,7 @@ describe('SoulseekPage', () => {
         nextRetryAt: null,
         raw: {} as any
       }
-    ];
+    ]);
 
     let resolveRequeue: (() => void) | undefined;
     mockedRequeueSoulseekDownload.mockImplementation(
@@ -287,7 +359,7 @@ describe('SoulseekPage', () => {
         case 'soulseek:status':
           return createQueryResult({ data: statusData });
         case 'soulseek:downloads:active':
-          return createQueryResult({ data: downloadData, refetch: refetchMock });
+          return createQueryResult({ data: downloadsResult, refetch: refetchMock });
         default:
           return createQueryResult();
       }
@@ -327,7 +399,7 @@ describe('SoulseekPage', () => {
       )
     );
 
-    const downloadData: NormalizedSoulseekDownload[] = [
+    const downloadsResult = createDownloadsResult([
       {
         id: '42',
         filename: 'album-track.mp3',
@@ -345,12 +417,12 @@ describe('SoulseekPage', () => {
         nextRetryAt: null,
         raw: {} as any
       }
-    ];
+    ]);
 
     mockedUseQuery.mockImplementation(({ queryKey }) => {
       const key = joinQueryKey(queryKey);
       if (key === 'soulseek:downloads:active') {
-        return createQueryResult({ data: downloadData });
+        return createQueryResult({ data: downloadsResult });
       }
       return createQueryResult();
     });
@@ -375,7 +447,7 @@ describe('SoulseekPage', () => {
     const toastMock = jest.fn();
     mockedRequeueSoulseekDownload.mockRejectedValue(new Error('kaputt'));
 
-    const downloadData: NormalizedSoulseekDownload[] = [
+    const downloadsResult = createDownloadsResult([
       {
         id: '42',
         filename: 'album-track.mp3',
@@ -393,12 +465,12 @@ describe('SoulseekPage', () => {
         nextRetryAt: null,
         raw: {} as any
       }
-    ];
+    ]);
 
     mockedUseQuery.mockImplementation(({ queryKey }) => {
       const key = joinQueryKey(queryKey);
       if (key === 'soulseek:downloads:active') {
-        return createQueryResult({ data: downloadData });
+        return createQueryResult({ data: downloadsResult });
       }
       return createQueryResult();
     });

@@ -32,7 +32,9 @@ def test_soulseek_download_flow(client: SimpleTestClient) -> None:
 
     response = client.get("/soulseek/downloads")
     assert response.status_code == 200
-    downloads = response.json()["downloads"]
+    payload = response.json()
+    assert "retryable_states" in payload
+    downloads = payload["downloads"]
     download = next(item for item in downloads if item["id"] == download_id)
     assert download["state"] == "pending"
     assert download["progress"] == 0.0
@@ -42,7 +44,8 @@ def test_soulseek_download_flow(client: SimpleTestClient) -> None:
     client._loop.run_until_complete(client.app.state.sync_worker.refresh_downloads())
 
     response = client.get("/soulseek/downloads")
-    downloads = response.json()["downloads"]
+    payload = response.json()
+    downloads = payload["downloads"]
     download = next(item for item in downloads if item["id"] == download_id)
     assert download["state"] == "in_progress"
     assert download["progress"] > 0
@@ -55,6 +58,21 @@ def test_soulseek_download_flow(client: SimpleTestClient) -> None:
     download = next(item for item in downloads if item["id"] == download_id)
     assert download["state"] == "completed"
     assert download["progress"] == 100.0
+
+
+def test_soulseek_downloads_include_retryable_states(
+    client: SimpleTestClient,
+) -> None:
+    response = client.get("/soulseek/downloads")
+    assert response.status_code == 200
+
+    payload = response.json()
+    states = payload.get("retryable_states")
+
+    assert isinstance(states, list)
+    assert "failed" in states
+    assert "completed" in states
+    assert "dead_letter" not in states
 
 
 def test_soulseek_download_cancellation(client: SimpleTestClient) -> None:

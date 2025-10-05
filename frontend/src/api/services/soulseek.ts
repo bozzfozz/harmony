@@ -47,6 +47,24 @@ const ensureArray = (value: unknown): unknown[] => {
   return [value];
 };
 
+const normalizeRetryableStates = (value: unknown): string[] => {
+  const seen = new Set<string>();
+  for (const entry of ensureArray(value)) {
+    const text = toStringOrNull(entry);
+    if (!text) {
+      continue;
+    }
+    const normalized = text.toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+    }
+  }
+  if (seen.size === 0) {
+    return ['failed'];
+  }
+  return Array.from(seen);
+};
+
 const normalizeUpload = (entry: unknown): NormalizedSoulseekUpload | null => {
   if (!entry || typeof entry !== 'object') {
     return null;
@@ -225,6 +243,11 @@ export interface NormalizedSoulseekDownload {
   raw: SoulseekDownloadEntry;
 }
 
+export interface SoulseekDownloadsResult {
+  downloads: NormalizedSoulseekDownload[];
+  retryableStates: string[];
+}
+
 export interface SoulseekConfigurationEntry {
   key: string;
   label: string;
@@ -271,13 +294,16 @@ export const getSoulseekUploads = async ({
 
 export const getSoulseekDownloads = async ({
   includeAll = false
-}: { includeAll?: boolean } = {}): Promise<NormalizedSoulseekDownload[]> => {
+}: { includeAll?: boolean } = {}): Promise<SoulseekDownloadsResult> => {
   const endpoint = includeAll ? '/soulseek/downloads/all' : '/soulseek/downloads';
   const payload = await request<SoulseekDownloadsResponse>({ method: 'GET', url: apiUrl(endpoint) });
   const downloads = ensureArray(payload.downloads);
-  return downloads
-    .map(normalizeDownload)
-    .filter((entry): entry is NormalizedSoulseekDownload => entry !== null);
+  return {
+    downloads: downloads
+      .map(normalizeDownload)
+      .filter((entry): entry is NormalizedSoulseekDownload => entry !== null),
+    retryableStates: normalizeRetryableStates((payload as { retryable_states?: unknown }).retryable_states)
+  };
 };
 
 export const requeueSoulseekDownload = async (downloadId: string): Promise<void> => {

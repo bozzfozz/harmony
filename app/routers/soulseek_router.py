@@ -27,6 +27,7 @@ from app.schemas import (
     SoulseekDownloadRequest,
     SoulseekDownloadResponse,
     SoulseekDownloadStatus,
+    SOULSEEK_RETRYABLE_STATES,
     SoulseekSearchRequest,
     SoulseekSearchResponse,
     StatusResponse,
@@ -574,7 +575,10 @@ def soulseek_downloads(session: Session = Depends(get_db)) -> SoulseekDownloadSt
 
     stmt = select(Download).order_by(Download.created_at.desc())
     downloads = session.execute(stmt).scalars().all()
-    return SoulseekDownloadStatus(downloads=downloads)
+    return SoulseekDownloadStatus(
+        downloads=downloads,
+        retryable_states=list(SOULSEEK_RETRYABLE_STATES),
+    )
 
 
 @router.post("/downloads/{download_id}/requeue", status_code=202)
