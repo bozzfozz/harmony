@@ -512,7 +512,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `DLQ_PURGE_LIMIT` | int | `1000` | Limit für Bulk-Purge. | — |
 | `MUSIC_DIR` | path | `./music` | Zielpfad für organisierte Downloads. | — |
 
-> **Retry-Präzedenz:** `load_sync_retry_policy()` wertet zunächst explizite Funktionsargumente aus, danach übergebene Defaults (z. B. Tests oder Provider), anschließend die aktuellen ENV-/Settings-Werte und zuletzt die Code-Defaults aus `app/config.py`. Nutze `refresh_sync_retry_policy()` oder `SyncWorker.refresh_retry_policy()`, um geänderte ENV-Werte ohne Neustart zu übernehmen.
+> **Retry-Präzedenz:** `load_sync_retry_policy()` liest bei jedem Aufruf eine frische Snapshot-Konfiguration. Die Auflösung folgt der Reihenfolge: explizite Funktionsargumente → übergebene Defaults (z. B. Tests oder Provider) → aktuelle ENV-/Settings-Werte → Code-Defaults aus `app/config.py`. Nutze `refresh_sync_retry_policy()` oder `SyncWorker.refresh_retry_policy()`, um geänderte ENV-Werte ohne Neustart zu übernehmen.
 
 > **Hinweis:** Spotify- und slskd-Zugangsdaten können über `/settings` in der Datenbank persistiert werden. Beim Laden der Anwendung haben Datenbankwerte Vorrang vor Umgebungsvariablen; ENV-Variablen dienen als Fallback und Basis für neue Deployments. Eine ausführliche Laufzeitreferenz inkl. Überschneidungen mit Datenbank-Settings befindet sich in [`docs/ops/runtime-config.md`](docs/ops/runtime-config.md).
 
