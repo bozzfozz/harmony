@@ -51,6 +51,53 @@ def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> No
     assert etag_updated != etag_initial
 
 
+def test_playlist_cache_invalidation(client: SimpleTestClient) -> None:
+    stub = client.app.state.spotify_stub
+    stub.playlists = [
+        {"id": "playlist-1", "name": "Morning", "tracks": {"total": 10}},
+        {"id": "playlist-2", "name": "Chill", "track_count": 4},
+    ]
+
+    worker = client.app.state.playlist_worker
+    client._loop.run_until_complete(worker.sync_once())
+
+    initial = client.get("/spotify/playlists")
+    assert initial.status_code == 200
+    initial_payload = initial.json()["playlists"]
+    assert {item["id"] for item in initial_payload} == {"playlist-1", "playlist-2"}
+    initial_etag = initial.headers.get("etag")
+    assert initial_etag is not None
+
+    cached = client.get("/spotify/playlists")
+    assert cached.status_code == 200
+    assert cached.headers.get("etag") == initial_etag
+    assert "age" in {key.lower() for key in cached.headers}
+
+    stub.playlists = [
+        {"id": "playlist-1", "name": "Morning Updated", "tracks": {"total": 25}},
+        {"id": "playlist-2", "name": "Chill", "track_count": 4},
+    ]
+    client._loop.run_until_complete(worker.sync_once())
+
+    refreshed = client.get("/spotify/playlists")
+    assert refreshed.status_code == 200
+    refreshed_data = refreshed.json()["playlists"]
+    updated = next(item for item in refreshed_data if item["id"] == "playlist-1")
+    assert updated["name"] == "Morning Updated"
+    assert updated["track_count"] == 25
+    refreshed_etag = refreshed.headers.get("etag")
+    assert refreshed_etag is not None
+    assert refreshed_etag != initial_etag
+    age_header = refreshed.headers.get("Age")
+    if age_header is not None:
+        assert int(age_header) <= 1
+
+    cached_after = client.get("/spotify/playlists")
+    assert cached_after.status_code == 200
+    assert cached_after.headers.get("etag") == refreshed_etag
+    assert "age" in {key.lower() for key in cached_after.headers}
+
+
 def test_audio_features_endpoints(client: SimpleTestClient) -> None:
     stub = client.app.state.spotify_stub
     stub.audio_features["track-2"] = {"id": "track-2", "danceability": 0.7}
