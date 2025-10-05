@@ -108,7 +108,4 @@ def test_retry_download_invalid_state_returns_validation_error(
     body = response.json()
     assert body["ok"] is False
     assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert (
-        body["error"]["message"]
-        == "Download cannot be retried in its current state"
-    )
+    assert body["error"]["message"] == "Download cannot be retried in its current state"

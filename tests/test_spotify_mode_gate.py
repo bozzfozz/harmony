@@ -14,9 +14,7 @@ def test_spotify_status_reports_capabilities(client: SimpleTestClient) -> None:
     assert payload["status"] in {"connected", "unauthenticated"}
 
 
-def test_spotify_pro_features_require_credentials(
-    client: SimpleTestClient, monkeypatch
-) -> None:
+def test_spotify_pro_features_require_credentials(client: SimpleTestClient, monkeypatch) -> None:
     from app.dependencies import get_spotify_client as dependency_spotify_client
 
     for key in ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"):

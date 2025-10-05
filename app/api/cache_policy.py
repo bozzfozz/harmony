@@ -40,9 +40,7 @@ CACHEABLE_RESPONSES: Final[Mapping[int, Mapping[str, object]]] = {
             "Successful response with cache metadata. Subsequent cache hits may "
             "include an Age header."
         ),
-        "headers": {
-            key: value for key, value in _CACHE_POLICY_HEADERS.items() if key != "Age"
-        },
+        "headers": {key: value for key, value in _CACHE_POLICY_HEADERS.items() if key != "Age"},
     },
     304: {
         "description": _CACHE_HEADERS_DESCRIPTION,

@@ -13,9 +13,7 @@ from tests.fixtures.async_client import AsyncDeadlineClient
 from tests.helpers import api_path
 
 
-def _install_slow_session_runner(
-    monkeypatch: pytest.MonkeyPatch, delay: float
-) -> None:
+def _install_slow_session_runner(monkeypatch: pytest.MonkeyPatch, delay: float) -> None:
     original_db_run_session = db.run_session
 
     async def slow_run_session(func, *, factory=None):

@@ -53,8 +53,14 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - CI führt Tests und Linter standardmäßig aus.  
 
 ## 8. Dokumentation
-- API-Endpunkte mit Beispielen dokumentieren (Markdown, OpenAPI).  
-- Architekturübersicht (Schichten, Hauptmodule).  
-- Worker-Dokumentation (Aufgabe, Intervalle, Fehlerbehandlung).  
-- Changelog nach [Keep a Changelog](https://keepachangelog.com/).  
+- API-Endpunkte mit Beispielen dokumentieren (Markdown, OpenAPI).
+- Architekturübersicht (Schichten, Hauptmodule).
+- Worker-Dokumentation (Aufgabe, Intervalle, Fehlerbehandlung).
+- Changelog nach [Keep a Changelog](https://keepachangelog.com/).
+
+## 9. Linting & Formatting
+- Vor jedem Commit sind die Python-Linting- und Format-Gates lokal auszuführen.
+- Verwende `ruff check --fix app tests`, um alle automatisierbaren Verstöße direkt zu beheben.
+- Ergänzend stellt `black app tests` sicher, dass der Code konsistent formatiert ist; `black --check app tests` verifiziert den Status für die CI.
+- Läuft `ruff check app tests` ohne Findings, müssen verbliebene Hinweise (z. B. ungenutzte Importe) manuell adressiert werden.
 

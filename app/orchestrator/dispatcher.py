@@ -249,7 +249,9 @@ class Dispatcher:
             except Exception as exc:
                 stop_heartbeat.set()
                 lease_lost_event = lease_lost_signal
-                lease_lost = bool(lease_lost_event.is_set()) if lease_lost_event is not None else False
+                lease_lost = (
+                    bool(lease_lost_event.is_set()) if lease_lost_event is not None else False
+                )
                 await self._handle_failure(job, exc, start, lease_lost=lease_lost)
             else:
                 if lease_lost_triggered:

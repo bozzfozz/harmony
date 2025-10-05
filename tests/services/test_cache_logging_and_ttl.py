@@ -89,6 +89,7 @@ async def test_zero_ttl_entry_expires_immediately(monkeypatch) -> None:
 
     assert await cache.get("key") is None
 
+
 def _last_service_event(events: list[tuple[str, dict[str, object]]]) -> dict[str, object]:
     for name, payload in reversed(events):
         if name == "service.cache":

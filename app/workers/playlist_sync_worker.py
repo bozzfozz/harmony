@@ -148,9 +148,7 @@ class PlaylistSyncWorker:
             try:
                 await self._response_cache.invalidate_prefix(prefix)
             except Exception as exc:  # pragma: no cover - defensive guard
-                logger.warning(
-                    "Failed to invalidate playlist cache prefix %s: %s", prefix, exc
-                )
+                logger.warning("Failed to invalidate playlist cache prefix %s: %s", prefix, exc)
 
     def _resolve_cache_prefixes(self) -> tuple[str, ...]:
         if self._cache_prefixes is not None:

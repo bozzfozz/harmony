@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import sys
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -126,25 +126,18 @@ async def test_soulseek_status_failure_logs_error_event(caplog, monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_sync_router_missing_credentials_logs_blocked_event(
-    caplog, monkeypatch
-) -> None:
+async def test_sync_router_missing_credentials_logs_blocked_event(caplog, monkeypatch) -> None:
     monkeypatch.setattr(sync_router_module.logger, "disabled", False)
+
     async def fake_missing_credentials(session_runner):  # pragma: no cover - simple stub
         return {"spotify": ("token",)}
 
-    monkeypatch.setattr(
-        sync_router_module, "_missing_credentials", fake_missing_credentials
-    )
-    monkeypatch.setattr(
-        sync_router_module, "record_activity", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(sync_router_module, "_missing_credentials", fake_missing_credentials)
+    monkeypatch.setattr(sync_router_module, "record_activity", lambda *args, **kwargs: None)
 
     with caplog.at_level("INFO", logger="app.routers.sync_router"):
         with pytest.raises(HTTPException):
-            await sync_router_module.trigger_manual_sync(
-                request=object(), session_runner=None
-            )
+            await sync_router_module.trigger_manual_sync(request=object(), session_runner=None)
 
     record = _first_record(caplog, "api.sync.trigger")
     assert record.component == "router.sync"

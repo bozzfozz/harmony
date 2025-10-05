@@ -159,7 +159,7 @@ class DownloadFileRequest(BaseModel):
 
     @property
     def resolved_filename(self) -> str:
-        return (self.filename or self.name or "unknown")
+        return self.filename or self.name or "unknown"
 
     def to_payload(self) -> Dict[str, Any]:
         payload = self.model_dump(by_alias=True, exclude_none=True)
@@ -169,9 +169,7 @@ class DownloadFileRequest(BaseModel):
 
 class SoulseekDownloadRequest(BaseModel):
     username: str = Field(..., description="Soulseek username hosting the files")
-    files: List[DownloadFileRequest] = Field(
-        ..., description="List of files to download"
-    )
+    files: List[DownloadFileRequest] = Field(..., description="List of files to download")
 
     @field_validator("username")
     @classmethod
@@ -227,9 +225,7 @@ def _default_retryable_states() -> List[str]:
     allowed_db_states = set(_CANONICAL_DOWNLOAD_STATE_MAP.keys()) - set(
         _REQUEUE_PROHIBITED_DB_STATES
     )
-    canonical_states = {
-        _canonical_download_state(state) for state in allowed_db_states
-    }
+    canonical_states = {_canonical_download_state(state) for state in allowed_db_states}
     return sorted(canonical_states)
 
 

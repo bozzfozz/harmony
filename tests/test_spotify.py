@@ -5,6 +5,7 @@ from tests.simple_client import SimpleTestClient
 from app.db import session_scope
 from app.models import Playlist
 
+
 def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> None:
     stub = client.app.state.spotify_stub
     stub.playlists = [

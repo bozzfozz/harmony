@@ -180,9 +180,7 @@ async def test_dispatcher_executes_job_and_marks_complete(
     assert storage.dlq_calls == []
 
     commit_events = [
-        payload
-        for event_name, payload in captured_events
-        if event_name == "orchestrator.commit"
+        payload for event_name, payload in captured_events if event_name == "orchestrator.commit"
     ]
     assert commit_events
     payload = commit_events[-1]
@@ -192,9 +190,7 @@ async def test_dispatcher_executes_job_and_marks_complete(
     assert payload["attempts"] == 1
 
     heartbeat_events = [
-        payload
-        for event_name, payload in captured_events
-        if event_name == "orchestrator.heartbeat"
+        payload for event_name, payload in captured_events if event_name == "orchestrator.heartbeat"
     ]
     assert heartbeat_events
     assert heartbeat_events[-1]["status"] == "stopped"
@@ -238,9 +234,7 @@ async def test_dispatcher_retries_with_backoff(
     assert storage.complete_calls == []
 
     commit_events = [
-        payload
-        for event_name, payload in captured_events
-        if event_name == "orchestrator.commit"
+        payload for event_name, payload in captured_events if event_name == "orchestrator.commit"
     ]
     assert commit_events
     payload = commit_events[-1]
@@ -300,9 +294,7 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     assert storage.complete_calls == []
 
     dlq_events = [
-        payload
-        for event_name, payload in captured_events
-        if event_name == "orchestrator.dlq"
+        payload for event_name, payload in captured_events if event_name == "orchestrator.dlq"
     ]
     assert dlq_events
     payload = dlq_events[-1]
@@ -361,14 +353,12 @@ async def test_dispatcher_stops_job_when_lease_lost(
     assert "lost" in heartbeat_statuses
     assert heartbeat_records[-1].job_type == "sync"
 
-    assert not any(
-        record.getMessage() == "orchestrator.commit" for record in caplog.records
-    )
+    assert not any(record.getMessage() == "orchestrator.commit" for record in caplog.records)
 
 
 @pytest.mark.asyncio
 async def test_handle_failure_skips_when_lease_lost(
-    captured_events: list[tuple[str, Mapping[str, Any]]]
+    captured_events: list[tuple[str, Mapping[str, Any]]],
 ) -> None:
     scheduler = StubScheduler([[]])
     storage = StubPersistence()
@@ -393,9 +383,7 @@ async def test_handle_failure_skips_when_lease_lost(
     assert storage.dlq_calls == []
 
     heartbeat_events = [
-        payload
-        for event_name, payload in captured_events
-        if event_name == "orchestrator.heartbeat"
+        payload for event_name, payload in captured_events if event_name == "orchestrator.heartbeat"
     ]
     assert heartbeat_events
     assert heartbeat_events[-1]["status"] == "skip_failure"

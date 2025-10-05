@@ -146,9 +146,7 @@ class DownloadService:
         offset: int,
     ) -> List[Download]:
         try:
-            query = self._build_download_query(
-                include_all=include_all, status_filter=status_filter
-            )
+            query = self._build_download_query(include_all=include_all, status_filter=status_filter)
             return query.offset(offset).limit(limit).all()
         except AppError:
             raise
@@ -347,9 +345,7 @@ class DownloadService:
         }
 
     async def retry_download(self, download_id: int) -> Dict[str, Any]:
-        original = await self._run_session(
-            lambda session: _prepare_retry(session, download_id)
-        )
+        original = await self._run_session(lambda session: _prepare_retry(session, download_id))
 
         try:
             await self._transfers.cancel_download(download_id)
@@ -472,9 +468,7 @@ def _mark_downloads_failed(session: Session, download_ids: Sequence[int]) -> Non
         return
 
     try:
-        downloads = (
-            session.query(Download).filter(Download.id.in_(tuple(download_ids))).all()
-        )
+        downloads = session.query(Download).filter(Download.id.in_(tuple(download_ids))).all()
         now = datetime.utcnow()
         for download in downloads:
             download.state = "failed"
@@ -543,14 +537,10 @@ def _prepare_retry(session: Session, download_id: int) -> RetryPreparation:
     filename = payload_copy.get("filename") or download.filename
     if not filename:
         logger.error("Retry rejected for download %s due to missing filename", download_id)
-        raise ValidationAppError(
-            "Download cannot be retried because filename is unknown"
-        )
+        raise ValidationAppError("Download cannot be retried because filename is unknown")
 
     filesize = (
-        payload_copy.get("filesize")
-        or payload_copy.get("size")
-        or payload_copy.get("file_size")
+        payload_copy.get("filesize") or payload_copy.get("size") or payload_copy.get("file_size")
     )
     if filesize is not None:
         payload_copy.setdefault("filesize", filesize)

@@ -787,9 +787,7 @@ class ArtworkWorker:
                     },
                 )
 
-    def _import_post_processors(
-        self, dotted_paths: Sequence[str]
-    ) -> list[PostProcessingHook]:
+    def _import_post_processors(self, dotted_paths: Sequence[str]) -> list[PostProcessingHook]:
         hooks: list[PostProcessingHook] = []
         for path in dotted_paths:
             if not path:
