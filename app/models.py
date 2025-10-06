@@ -292,10 +292,8 @@ class QueueJob(Base):
             "available_at",
         ),
         Index("ix_queue_jobs_lease_expires_at", "lease_expires_at"),
-        Index("ix_queue_jobs_idempotency_key", "idempotency_key"),
         Index(
-            "ix_queue_jobs_type_idempotency_key_not_null",
-            "type",
+            "ix_queue_jobs_idempotency_key_not_null",
             "idempotency_key",
             unique=True,
             postgresql_where=text("idempotency_key IS NOT NULL"),

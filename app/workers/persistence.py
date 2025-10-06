@@ -39,10 +39,12 @@ def _emit_worker_job_event(
         "status": status,
         "attempts": int(job.attempts),
     }
+    meta: dict[str, Any] | None = None
     if deduped is not None:
         payload["deduped"] = deduped
+        meta = {"dedup": bool(deduped)}
     payload.update({key: value for key, value in extra.items() if value is not None})
-    log_event(logger, "worker.job", **payload)
+    log_event(logger, "worker.job", meta=meta, **payload)
 
 
 def _emit_worker_tick(job_type: str, *, status: str, count: int | None = None) -> None:
@@ -212,10 +214,7 @@ def _upsert_queue_job(
     bind = session.get_bind()
     dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
 
-    stmt_base: Select[QueueJob] = select(QueueJob).where(
-        QueueJob.type == job_type,
-        QueueJob.idempotency_key == dedupe_key,
-    )
+    stmt_base: Select[QueueJob] = select(QueueJob).where(QueueJob.idempotency_key == dedupe_key)
     attempts = 0
 
     def _log_dedupe() -> None:
@@ -235,9 +234,103 @@ def _upsert_queue_job(
             stmt = stmt.with_for_update()
         return session.execute(stmt).scalars().first()
 
+    insert_values: dict[str, Any] = {
+        "type": job_type,
+        "payload": dict(payload),
+        "priority": priority,
+        "available_at": scheduled_for,
+        "idempotency_key": dedupe_key,
+        "status": QueueJobStatus.PENDING.value,
+        "stop_reason": None,
+        "lease_expires_at": None,
+        "last_error": None,
+        "result_payload": None,
+        "attempts": 0,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    insert_stmt: Any | None = None
+    returning_supported = False
+
+    if dialect_name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        insert_stmt = (
+            pg_insert(QueueJob)
+            .values(**insert_values)
+            .on_conflict_do_nothing(index_elements=["idempotency_key"])
+            .returning(QueueJob.id)
+        )
+        returning_supported = True
+    elif dialect_name == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        stmt = sqlite_insert(QueueJob).values(**insert_values)
+        try:
+            stmt = stmt.on_conflict_do_nothing(index_elements=["idempotency_key"])
+        except AttributeError:
+            stmt = stmt.prefix_with("OR IGNORE")
+        try:
+            stmt = stmt.returning(QueueJob.id)
+            returning_supported = True
+        except AttributeError:
+            returning_supported = False
+        insert_stmt = stmt
+
     while True:
+        inserted_record: QueueJob | None = None
+        if insert_stmt is None:
+            record = QueueJob(**insert_values)
+            session.add(record)
+            try:
+                session.flush()
+            except IntegrityError as exc:
+                session.rollback()
+                if not _is_duplicate_integrity_error(exc):
+                    raise
+            except OperationalError:
+                session.rollback()
+            else:
+                return record, False
+        else:
+            try:
+                result = session.execute(insert_stmt)
+            except IntegrityError as exc:
+                session.rollback()
+                if not _is_duplicate_integrity_error(exc):
+                    raise
+            except OperationalError:
+                session.rollback()
+            else:
+                if returning_supported:
+                    inserted_id = result.scalars().first()
+                    if inserted_id is not None:
+                        inserted_record = session.get(QueueJob, inserted_id)
+                        if inserted_record is None:
+                            inserted_record = _select_existing(with_lock=False)
+                elif result.rowcount and result.rowcount > 0:
+                    inserted_record = _select_existing(with_lock=False)
+
+        if inserted_record is not None:
+            return inserted_record, False
+
         existing = _select_existing()
         if existing is not None:
+            if existing.type != job_type:
+                logger.warning(
+                    "Queue job idempotency key reused by different job type",
+                    extra={
+                        "event": "queue.job.dedupe_conflict",
+                        "requested_type": job_type,
+                        "existing_type": existing.type,
+                        "idempotency_key": dedupe_key,
+                        "dialect": dialect_name or "unknown",
+                    },
+                )
+                _log_dedupe()
+                return existing, True
+
             deduped = _apply_existing_job_updates(
                 existing,
                 payload=payload,
@@ -250,69 +343,8 @@ def _upsert_queue_job(
                 _log_dedupe()
             return existing, deduped
 
-        record = QueueJob(
-            type=job_type,
-            payload=dict(payload),
-            priority=priority,
-            available_at=scheduled_for,
-            idempotency_key=dedupe_key,
-            status=QueueJobStatus.PENDING.value,
-            stop_reason=None,
-            lease_expires_at=None,
-            last_error=None,
-            result_payload=None,
-            attempts=0,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(record)
-        try:
-            session.flush()
-        except IntegrityError as exc:
-            session.rollback()
-
-            if _is_duplicate_integrity_error(exc):
-                existing = _select_existing(with_lock=False)
-                if existing is not None:
-                    deduped = _apply_existing_job_updates(
-                        existing,
-                        payload=payload,
-                        priority=priority,
-                        scheduled_for=scheduled_for,
-                        now=now,
-                    )
-                    session.add(existing)
-                    if deduped:
-                        _log_dedupe()
-                    return existing, deduped
-
-                attempts += 1
-                time.sleep(min(0.01, 0.001 * attempts))
-                continue
-
-            raise
-        except OperationalError:
-            session.rollback()
-
-            existing = _select_existing()
-            if existing is not None:
-                deduped = _apply_existing_job_updates(
-                    existing,
-                    payload=payload,
-                    priority=priority,
-                    scheduled_for=scheduled_for,
-                    now=now,
-                )
-                session.add(existing)
-                if deduped:
-                    _log_dedupe()
-                return existing, deduped
-
-            attempts += 1
-            time.sleep(min(0.01, 0.001 * attempts))
-            continue
-        else:
-            return record, False
+        attempts += 1
+        time.sleep(min(0.01, 0.001 * attempts))
 
 
 def enqueue(

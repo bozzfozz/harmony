@@ -24,9 +24,10 @@ from app.workers.persistence import QueueJobDTO, enqueue
 
 
 @pytest.mark.anyio
-async def test_enqueue_is_atomic_under_concurrency() -> None:
+async def test_enqueue_idempotent_concurrency_creates_single_row() -> None:
     payload_template = {"idempotency_key": "concurrent-job"}
     results: list[int] = []
+    concurrency = 50
 
     async def call(index: int) -> None:
         payload = dict(payload_template)
@@ -35,10 +36,10 @@ async def test_enqueue_is_atomic_under_concurrency() -> None:
         results.append(job.id)
 
     async with anyio.create_task_group() as tg:
-        for idx in range(8):
+        for idx in range(concurrency):
             tg.start_soon(call, idx)
 
-    assert len(results) == 8
+    assert len(results) == concurrency
     assert len(set(results)) == 1
 
     with session_scope() as session:
@@ -54,11 +55,22 @@ async def test_enqueue_is_atomic_under_concurrency() -> None:
 
 
 @pytest.mark.anyio
-async def test_enqueue_returns_single_job_for_conflicting_requests() -> None:
+async def test_enqueue_duplicate_returns_existing_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Ensure the DTO returned from concurrent enqueues references the same record."""
 
     payload = {"idempotency_key": "conflict", "payload": {"value": 1}}
     ids: list[int] = []
+    events: list[dict[str, Any]] = []
+
+    original_log_event = persistence.log_event
+
+    def capture_event(logger: Any, event: str, /, **fields: Any) -> None:
+        events.append({"event": event, **fields})
+        original_log_event(logger, event, **fields)
+
+    monkeypatch.setattr(persistence, "log_event", capture_event)
 
     async def run() -> None:
         job = await anyio.to_thread.run_sync(enqueue, "metadata", payload)
@@ -70,6 +82,16 @@ async def test_enqueue_returns_single_job_for_conflicting_requests() -> None:
 
     assert len(ids) == 2
     assert len(set(ids)) == 1
+
+    enqueued_events = [
+        event
+        for event in events
+        if event.get("event") == "worker.job" and event.get("status") == "enqueued"
+    ]
+    assert enqueued_events, "expected worker.job events to be emitted"
+    dedup_flags = [event.get("meta", {}).get("dedup") for event in enqueued_events]
+    assert True in dedup_flags
+    assert False in dedup_flags
 
     with session_scope() as session:
         stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == "metadata")
@@ -121,6 +143,36 @@ async def test_enqueue_parallel_requests_return_existing_job() -> None:
         payload_data = record.payload.get("payload") if isinstance(record.payload, dict) else None
         assert isinstance(payload_data, dict)
         assert payload_data.get("attempt") in range(concurrency)
+
+
+def test_enqueue_redelivery_does_not_duplicate_on_retry() -> None:
+    job_type = "retryable"
+    dedupe_key = "retryable-job"
+
+    original = enqueue(job_type, {"idempotency_key": dedupe_key, "payload": {"stage": "initial"}})
+    assert original.idempotency_key == dedupe_key
+
+    leased = persistence.lease(original.id, job_type=job_type)
+    assert leased is not None
+    assert leased.id == original.id
+
+    assert persistence.fail(original.id, job_type=job_type, retry_in=0)
+
+    updated = enqueue(
+        job_type,
+        {"idempotency_key": dedupe_key, "payload": {"stage": "retry"}},
+    )
+
+    assert updated.id == original.id
+    assert updated.payload["payload"]["stage"] == "retry"
+
+    with session_scope() as session:
+        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        count = session.execute(stmt).scalar_one()
+        assert count == 1
+
+        record = session.execute(select(QueueJob).where(QueueJob.id == original.id)).scalars().one()
+        assert record.payload["payload"]["stage"] == "retry"
 
 
 @pytest.fixture(params=["sqlite", "postgresql"], ids=["sqlite", "postgresql"])
