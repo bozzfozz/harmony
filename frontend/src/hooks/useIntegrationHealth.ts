@@ -111,19 +111,11 @@ const deriveOnlineFlag = (
   const provider = normalizeStatus(providerStatus);
   const workerStatus = normalizeStatus(worker?.status);
 
-  if (connection === 'ok' || connection === 'connected') {
-    return true;
-  }
-  if (provider === 'ok' || provider === 'ready') {
-    return true;
-  }
-  if (workerStatus === 'running') {
-    return true;
-  }
-  if (!connectionStatus && !providerStatus && !worker?.status) {
-    return false;
-  }
-  return false;
+  const connectionHealthy = connection === 'ok' || connection === 'connected';
+  const providerHealthy = provider === 'ok' || provider === 'ready';
+  const workerHealthy = worker?.status ? workerStatus === 'running' : true;
+
+  return connectionHealthy && providerHealthy && workerHealthy;
 };
 
 const deriveServiceState = (
