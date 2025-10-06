@@ -15,6 +15,7 @@ from app.orchestrator.handlers import (
     handle_retry,
     load_sync_retry_policy,
 )
+from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.activity import activity_manager
 from app.utils.events import (
     DOWNLOAD_RETRY_FAILED,
@@ -191,6 +192,9 @@ async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = get_retry_policy_provider()
+    provider.invalidate()
+    monkeypatch.setenv("RETRY_POLICY_RELOAD_S", "0")
     monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "2")
     monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
     monkeypatch.setenv("RETRY_JITTER_PCT", "0")
@@ -212,6 +216,9 @@ async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyP
 
 
 def test_load_sync_retry_policy_uses_live_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = get_retry_policy_provider()
+    provider.invalidate()
+    monkeypatch.setenv("RETRY_POLICY_RELOAD_S", "0")
     monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "4")
     monkeypatch.setenv("RETRY_BASE_SECONDS", "2")
     monkeypatch.setenv("RETRY_JITTER_PCT", "5")
@@ -224,6 +231,7 @@ def test_load_sync_retry_policy_uses_live_values(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "9")
     monkeypatch.setenv("RETRY_BASE_SECONDS", "12")
     monkeypatch.setenv("RETRY_JITTER_PCT", "15")
+    provider.invalidate()
 
     updated = load_sync_retry_policy()
 
@@ -325,6 +333,9 @@ async def test_dlq_after_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
     init_db()
     activity_manager.clear()
 
+    provider = get_retry_policy_provider()
+    provider.invalidate()
+    monkeypatch.setenv("RETRY_POLICY_RELOAD_S", "0")
     monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "1")
     monkeypatch.setenv("RETRY_BASE_SECONDS", "1")
     monkeypatch.setenv("RETRY_JITTER_PCT", "0")

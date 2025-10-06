@@ -6,7 +6,6 @@ import asyncio
 import inspect
 import os
 import random
-import threading
 import statistics
 import time
 from contextlib import AbstractContextManager
@@ -29,12 +28,7 @@ from typing import (
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from app.config import (
-    RetryPolicyConfig,
-    Settings,
-    WatchlistWorkerConfig,
-    resolve_retry_policy,
-)
+from app.config import WatchlistWorkerConfig
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -44,6 +38,11 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Download, IngestItem, IngestItemState, Match
 from app.services.backfill_service import BackfillJobStatus
+from app.services.retry_policy_provider import (
+    RetryPolicy,
+    RetryPolicyProvider,
+    get_retry_policy_provider,
+)
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
@@ -69,13 +68,7 @@ _WATCHLIST_MAX_BACKOFF_MS = 5_000
 _WATCHLIST_LOG_COMPONENT = "orchestrator.watchlist"
 
 
-@dataclass(slots=True, frozen=True)
-class SyncRetryPolicy:
-    """Configuration options for persistent download retries."""
-
-    max_attempts: int
-    base_seconds: float
-    jitter_pct: float
+SyncRetryPolicy = RetryPolicy
 
 
 def _safe_int(value: str | None, default: int) -> int:
@@ -135,74 +128,79 @@ def _coerce_bool(value: Any, default: bool) -> bool:
     return bool(value)
 
 
-_retry_policy_lock = threading.RLock()
-
-
-def _load_retry_defaults(
-    env: Mapping[str, Any] | None = None,
-    *,
-    force_reload: bool = False,
-) -> RetryPolicyConfig:
-    """Return a fresh snapshot of the retry defaults."""
-
-    # When an explicit environment mapping is provided we do not cache the
-    # result – callers are likely performing targeted lookups (e.g. tests).
-    if env is not None:
-        return resolve_retry_policy(env)
-
-    # ``force_reload`` is retained for backwards compatibility even though the
-    # loader now always returns a fresh snapshot. Guard the load with a lock so
-    # concurrent callers never observe partially constructed Settings objects.
-    with _retry_policy_lock:
-        return Settings.load().retry_policy
-
-
 def load_sync_retry_policy(
     *,
     max_attempts: int | None = None,
     base_seconds: float | None = None,
     jitter_pct: float | None = None,
     env: Mapping[str, Any] | None = None,
-    defaults: RetryPolicyConfig | None = None,
+    defaults: Any | None = None,
     force_reload: bool = False,
+    job_type: str = "sync",
 ) -> SyncRetryPolicy:
     """Resolve the retry policy honouring runtime overrides.
 
     Precedence: explicit keyword arguments → provided ``defaults``
-    → live ``Settings.load()``/ENV values → code defaults from
-    :mod:`app.config`.
+    → live environment overrides → code defaults from :mod:`app.config`.
     """
 
-    resolved_defaults = defaults or _load_retry_defaults(env, force_reload=force_reload)
+    base_policy: RetryPolicy
+    if env is not None:
+        provider = RetryPolicyProvider(env_source=lambda env_map=env: env_map, reload_interval=0)
+        base_policy = provider.get_retry_policy(job_type)
+    else:
+        provider = get_retry_policy_provider()
+        if force_reload:
+            provider.invalidate(job_type)
+        base_policy = provider.get_retry_policy(job_type)
+
+    if defaults is not None:
+        base_policy = RetryPolicy(
+            max_attempts=_coerce_positive_int(
+                getattr(defaults, "max_attempts", base_policy.max_attempts),
+                base_policy.max_attempts,
+            ),
+            base_seconds=_coerce_positive_float(
+                getattr(defaults, "base_seconds", base_policy.base_seconds),
+                base_policy.base_seconds,
+            ),
+            jitter_pct=float(getattr(defaults, "jitter_pct", base_policy.jitter_pct)),
+            timeout_seconds=getattr(defaults, "timeout_seconds", base_policy.timeout_seconds),
+        )
+
     resolved_max = _coerce_positive_int(
-        resolved_defaults.max_attempts if max_attempts is None else max_attempts,
-        resolved_defaults.max_attempts,
+        base_policy.max_attempts if max_attempts is None else max_attempts,
+        base_policy.max_attempts,
     )
     resolved_base = _coerce_positive_float(
-        resolved_defaults.base_seconds if base_seconds is None else base_seconds,
-        resolved_defaults.base_seconds,
+        base_policy.base_seconds if base_seconds is None else base_seconds,
+        base_policy.base_seconds,
     )
 
-    resolved_jitter = jitter_pct if jitter_pct is not None else resolved_defaults.jitter_pct
-    try:
-        resolved_jitter = float(resolved_jitter)
-    except (TypeError, ValueError):
-        resolved_jitter = resolved_defaults.jitter_pct
+    resolved_jitter = base_policy.jitter_pct if jitter_pct is None else float(jitter_pct)
     if resolved_jitter < 0:
         resolved_jitter = 0.0
 
-    return SyncRetryPolicy(
+    return RetryPolicy(
         max_attempts=int(resolved_max),
         base_seconds=float(resolved_base),
         jitter_pct=float(resolved_jitter),
+        timeout_seconds=base_policy.timeout_seconds,
     )
 
 
-def refresh_sync_retry_policy(env: Mapping[str, Any] | None = None) -> SyncRetryPolicy:
+def refresh_sync_retry_policy(
+    env: Mapping[str, Any] | None = None, *, job_type: str = "sync"
+) -> SyncRetryPolicy:
     """Force a refresh of the cached retry policy defaults and return the snapshot."""
 
-    defaults = _load_retry_defaults(env, force_reload=True)
-    return load_sync_retry_policy(defaults=defaults)
+    if env is not None:
+        provider = RetryPolicyProvider(env_source=lambda env_map=env: env_map, reload_interval=0)
+        return provider.get_retry_policy(job_type)
+
+    provider = get_retry_policy_provider()
+    provider.invalidate(job_type)
+    return provider.get_retry_policy(job_type)
 
 
 def calculate_retry_backoff_seconds(
@@ -520,7 +518,9 @@ class RetryHandlerDeps:
 
     session_factory: Callable[[], AbstractContextManager[Session]] = session_scope
     submit_sync_job: SyncJobSubmitter = enqueue_sync_job
-    retry_policy: SyncRetryPolicy = field(default_factory=load_sync_retry_policy)
+    retry_policy: SyncRetryPolicy = field(
+        default_factory=lambda: load_sync_retry_policy(job_type="retry")
+    )
     rng: random.Random = field(default_factory=random.Random)
     batch_limit: int = field(
         default_factory=lambda: _safe_int(
@@ -1496,6 +1496,8 @@ async def handle_sync_download_failure(
     username = job.get("username")
     error_message = truncate_error(str(error))
     now = datetime.utcnow()
+    provider = get_retry_policy_provider()
+    policy_ttl = provider.reload_interval
 
     with deps.session_factory() as session:
         for file_info in file_list:
@@ -1537,6 +1539,27 @@ async def handle_sync_download_failure(
                 )
                 download.state = "failed"
                 download.next_retry_at = now + timedelta(seconds=delay_seconds)
+                meta = {
+                    "policy_ttl_s": policy_ttl,
+                    "attempt": int(download.retry_count),
+                    "max_attempts": int(deps.retry_policy.max_attempts),
+                    "backoff_ms": int(delay_seconds * 1000),
+                    "jitter_pct": float(deps.retry_policy.jitter_pct),
+                }
+                if deps.retry_policy.timeout_seconds is not None:
+                    meta["timeout_s"] = float(deps.retry_policy.timeout_seconds)
+                log_event(
+                    logger,
+                    "worker.retry",
+                    component="orchestrator.sync",
+                    entity_id=str(download_id),
+                    job_type="sync",
+                    status="scheduled",
+                    attempts=int(download.retry_count),
+                    retry_in=int(delay_seconds),
+                    error=error_message or None,
+                    meta=meta,
+                )
                 scheduled.append(
                     {
                         "download_id": download_id,
@@ -1996,6 +2019,7 @@ __all__ = [
     "build_retry_handler",
     "handle_retry",
     "build_sync_handler",
+    "SyncRetryPolicy",
     "calculate_retry_backoff_seconds",
     "enqueue_sync_job",
     "enqueue_retry_scan_job",

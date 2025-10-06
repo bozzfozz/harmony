@@ -15,6 +15,7 @@ from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.orchestrator.handlers import MatchingJobError
 from app.orchestrator.scheduler import Scheduler
+from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.concurrency import BoundedPools
 from app.utils.retry import exp_backoff_delays
 from app.workers import persistence
@@ -89,6 +90,7 @@ class Dispatcher:
         self._persistence = persistence_module
         self._logger = get_logger(__name__)
         self._rng = rng or random.Random()
+        self._retry_provider = get_retry_policy_provider()
         self._config = orchestrator_config or settings.orchestrator
         self._base_pool_limits = self._config.pool_limits()
         limits = self._resolve_limits(global_concurrency, pool_concurrency)
@@ -206,12 +208,14 @@ class Dispatcher:
     ) -> None:
         async with self._acquire_slots(job.type):
             start = time.perf_counter()
+            attempts = int(job.attempts)
             orchestrator_events.emit_dispatch_event(
                 self._logger,
                 job_id=job.id,
                 job_type=job.type,
                 status="started",
-                attempts=int(job.attempts),
+                attempts=attempts,
+                meta=self._retry_policy_meta(job.type, attempts),
             )
             stop_heartbeat = asyncio.Event()
             lease_lost_signal = asyncio.Event()
@@ -475,6 +479,28 @@ class Dispatcher:
             for job_type, limit in pool_concurrency.items():
                 pool[job_type] = max(1, int(limit))
         return _PoolLimits(global_limit=resolved_global, pool=pool)
+
+    def _retry_policy_meta(self, job_type: str, attempts: int) -> dict[str, Any] | None:
+        try:
+            policy = self._retry_provider.get_retry_policy(job_type)
+        except Exception:  # pragma: no cover - defensive logging
+            self._logger.exception(
+                "failed to resolve retry policy for dispatch log", extra={"job_type": job_type}
+            )
+            return None
+
+        bounded_attempt = max(0, min(int(attempts), 6))
+        base_delay_seconds = policy.base_seconds * (2**bounded_attempt)
+        meta: dict[str, Any] = {
+            "policy_ttl_s": self._retry_provider.reload_interval,
+            "attempt": int(attempts),
+            "max_attempts": int(policy.max_attempts),
+            "backoff_ms": int(base_delay_seconds * 1000),
+            "jitter_pct": float(policy.jitter_pct),
+        }
+        if policy.timeout_seconds is not None:
+            meta["timeout_s"] = float(policy.timeout_seconds)
+        return meta
 
     def _calculate_backoff_seconds(self, attempts: int) -> float:
         schedule = exp_backoff_delays(self._backoff_base_ms, max(1, attempts), 0)

@@ -18,7 +18,6 @@ from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
-    SyncRetryPolicy,
     calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
     extract_basic_metadata,
     extract_ingest_item_id,
@@ -27,7 +26,6 @@ from app.orchestrator.handlers import (
     fanout_download_completion,
     handle_sync_download_failure,
     handle_sync_retry_success,
-    load_sync_retry_policy,
     process_sync_payload,
     resolve_download_path,
     resolve_text,
@@ -42,6 +40,10 @@ from app.utils.activity import (
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
+from app.services.retry_policy_provider import (
+    RetryPolicy,
+    get_retry_policy_provider,
+)
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
@@ -126,11 +128,7 @@ ALLOWED_STATES = {"queued", "downloading", "completed", "failed", "cancelled", "
 DEFAULT_CONCURRENCY = 2
 DEFAULT_IDLE_POLL = 15.0
 
-RetryConfig = SyncRetryPolicy
-
-
-def _load_retry_config() -> RetryConfig:
-    return load_sync_retry_policy()
+RetryConfig = RetryPolicy
 
 
 def _safe_int(value: str | None, default: int) -> int:
@@ -204,7 +202,8 @@ class SyncWorker:
         self._cancelled_downloads: Set[int] = set()
         self._cancel_lock = asyncio.Lock()
         self._music_dir = Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
-        self._retry_config = _load_retry_config()
+        self._retry_provider = get_retry_policy_provider()
+        self._retry_config = self._retry_provider.get_retry_policy("sync")
         self._retry_rng = random.Random()
         self._enqueue_job = enqueue_fn or enqueue_async
         self._fetch_ready_jobs = fetch_ready_fn or fetch_ready_async
@@ -243,7 +242,8 @@ class SyncWorker:
     def refresh_retry_policy(self) -> None:
         """Reload the retry policy from the latest runtime configuration."""
 
-        self._retry_config = load_sync_retry_policy(force_reload=True)
+        self._retry_provider.invalidate("sync")
+        self._retry_config = self._retry_provider.get_retry_policy("sync")
 
     @staticmethod
     def _extract_file_priority(file_info: Dict[str, Any]) -> int:
