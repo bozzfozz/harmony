@@ -3,6 +3,7 @@ const config = {
   testEnvironment: 'jsdom',
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   setupFilesAfterEnv: [
+    '<rootDir>/src/tests/setup/polyfills.pointerCapture.ts',
     '<rootDir>/src/test/setup-dom-polyfills.ts',
     '<rootDir>/src/test/setup-testing-library.ts',
     '<rootDir>/jest.setup.ts'

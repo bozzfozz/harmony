@@ -110,6 +110,11 @@
 - **ProviderGateway** kann parallel zu Logging-Standardisierung erfolgen, benötigt aber Tests für Timeout- und Fehlerkodes.
 
 ## Risiken & Rollback-Strategie
-- Für jede Maßnahme existiert eine natürliche Revert-Strategie (klassischer Git-Revert).  
+- Für jede Maßnahme existiert eine natürliche Revert-Strategie (klassischer Git-Revert).
 - Kritische Umbauten (Orchestrator, ProviderGateway) sollten hinter Feature-Flags (`FEATURE_WORKER_ORCHESTRATOR`, `FEATURE_PROVIDER_GATEWAY`) ausgerollt werden, um gezielt umzuschalten.【F:app.config.py†L200-L299】
+
+## 2025-10-06 – Radix UI bump & Test-Polyfills
+- Frontend-Abhängigkeiten (`@radix-ui/react-*`, Testing-Library, Tailwind/Vite Toolchain) auf aktuelle Minor-/Patch-Stände gebracht, damit der Dev-Server wieder ohne Peer-Warnungen startet.
+- Jest-Setup ergänzt einen dedizierten Pointer-Capture-Polyfill für `hasPointerCapture`/`releasePointerCapture`, damit jsdom ≥20 keine Laufzeitfehler wirft.
+- Neue Radix-Smoke-Tests (Select, Tabs, Switch, Toast) sichern die Basisinteraktionen für Keyboard- und Pointer-Nutzung ab und verhindern Regressionen nach weiteren Bumps.【F:frontend/src/__tests__/radix.smoke.test.tsx†L1-L129】【F:frontend/jest.config.cjs†L6-L14】【F:frontend/src/tests/setup/polyfills.pointerCapture.ts†L1-L10】
 
