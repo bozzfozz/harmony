@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
 
-from app.routers import spotify as spotify_module
+from app.api import spotify as spotify_module
 
 
 def _route_paths(target: APIRouter) -> set[str]:

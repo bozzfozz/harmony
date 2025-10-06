@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from warnings import warn
-
 from app.api.routers.system import psutil, router
+from app.routers._deprecation import emit_router_deprecation
 
-warn(
-    "app.routers.system_router is deprecated; use app.api.routers.system.router instead.",
-    DeprecationWarning,
-    stacklevel=2,
+emit_router_deprecation(
+    "app.routers.system_router",
+    "app.api.routers.system.router",
 )
 
 __all__ = ["router", "psutil"]

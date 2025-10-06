@@ -9,4 +9,5 @@ pytest
 pytest-asyncio
 httpx
 psutil
+psycopg[binary]
 mutagen

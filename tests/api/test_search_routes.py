@@ -44,7 +44,6 @@ def test_search_endpoint_emits_logging(monkeypatch) -> None:
         captured.append((event_name, payload))
 
     monkeypatch.setattr(search_module, "_log_event", _capture)
-    monkeypatch.setattr("app.routers.search_router.log_event", _capture, raising=False)
     monkeypatch.setattr("app.logging_events.log_event", _capture)
 
     def _record_event(*args: Any, **kwargs: Any) -> None:

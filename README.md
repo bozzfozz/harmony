@@ -714,6 +714,13 @@ Eine vollständige Referenz der FastAPI-Routen befindet sich in [`docs/api.md`](
 
 Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht geladen.
 
+## Deprecations
+
+- Die Legacy-Router unter `app.routers.*` sind lediglich Kompatibilitäts-Shims und werden zum
+  **30.06.2025** entfernt. Verwendet stattdessen die neuen Module unter `app.api` (z. B.
+  `app.api.search`, `app.api.spotify`, `app.api.routers.watchlist`). Beim Import warnen die Shims
+  bereits heute über `DeprecationWarning`.
+
 ## Contributing
 
 Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
@@ -726,6 +733,24 @@ pytest
 
 Die Tests mocken externe Dienste und können lokal wie auch via GitHub Actions ausgeführt werden. Für deterministische
 Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
+
+### PostgreSQL smoke suite
+
+- GitHub Actions führt zusätzlich zum regulären Backend-Lauf einen `backend-postgres`-Job aus. Der Job startet einen
+  PostgreSQL-16-Service, führt `alembic upgrade/downgrade` als Roundtrip aus und testet die wichtigsten Datenbankpfade
+  (`tests/migrations/test_upgrade_downgrade_postgres.py`, `tests/test_artists.py`,
+  `tests/workers/test_watchlist_worker.py::test_watchlist_handler_success_enqueues_sync_job`).
+- Lokal lässt sich der Lauf mit einer bereitstehenden Datenbank reproduzieren:
+
+  ```bash
+  export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
+  alembic upgrade head
+  pytest tests/migrations/test_upgrade_downgrade_postgres.py -q
+  pytest tests/test_artists.py -q
+  pytest tests/workers/test_watchlist_worker.py::test_watchlist_handler_success_enqueues_sync_job -q
+  ```
+
+  Die Tests erzeugen bei PostgreSQL automatisch ein isoliertes Schema pro Testlauf und entfernen es im Anschluss.
 
 ## Lizenz
 

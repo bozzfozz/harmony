@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
 
 import os
+import uuid
 
 import sys
 
@@ -24,6 +25,10 @@ os.environ.setdefault("CACHE_DEFAULT_TTL_S", "30")
 os.environ.setdefault("CACHE_MAX_ITEMS", "256")
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.schema import CreateSchema, DropSchema
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.dependencies import (
@@ -1317,6 +1322,56 @@ def configure_environment(
     monkeypatch.setenv("ENABLE_ARTWORK", "1")
     monkeypatch.setenv("ENABLE_LYRICS", "1")
     _install_recording_orchestrator(monkeypatch)
+    configured_url = os.getenv("DATABASE_URL")
+
+    def _seed_settings() -> None:
+        write_setting("SPOTIFY_CLIENT_ID", "stub-client")
+        write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
+        write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
+        write_setting("SLSKD_URL", "http://localhost:5030")
+
+    if configured_url:
+        try:
+            resolved_url = make_url(configured_url)
+        except Exception:  # pragma: no cover - defensive parsing
+            resolved_url = None
+
+        if resolved_url is not None and resolved_url.get_backend_name() == "postgresql":
+            schema_name = f"test_suite_{uuid.uuid4().hex}"
+            base_engine = sa.create_engine(resolved_url)
+            with base_engine.connect() as connection:
+                connection.execute(CreateSchema(schema_name))
+                connection.commit()
+            scoped_url = resolved_url.set(
+                query={**resolved_url.query, "options": f"-csearch_path={schema_name}"}
+            )
+            monkeypatch.setenv("DATABASE_URL", str(scoped_url))
+            reset_engine_for_tests()
+            init_db()
+            _seed_settings()
+            try:
+                yield
+            finally:
+                reset_engine_for_tests()
+                with base_engine.connect() as connection:
+                    try:
+                        connection.execute(DropSchema(schema_name, cascade=True))
+                        connection.commit()
+                    except ProgrammingError:
+                        connection.rollback()
+                base_engine.dispose()
+            return
+
+        monkeypatch.setenv("DATABASE_URL", configured_url)
+        reset_engine_for_tests()
+        init_db()
+        _seed_settings()
+        try:
+            yield
+        finally:
+            reset_engine_for_tests()
+        return
+
     db_dir = tmp_path_factory.mktemp("db")
     db_path = db_dir / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
@@ -1326,16 +1381,15 @@ def configure_environment(
         if candidate.exists():
             candidate.unlink()
     init_db()
-    write_setting("SPOTIFY_CLIENT_ID", "stub-client")
-    write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
-    write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
-    write_setting("SLSKD_URL", "http://localhost:5030")
-    yield
-    reset_engine_for_tests()
-    for suffix in ("", "-journal", "-wal", "-shm"):
-        candidate = db_path.with_name(f"{db_path.name}{suffix}")
-        if candidate.exists():
-            candidate.unlink()
+    _seed_settings()
+    try:
+        yield
+    finally:
+        reset_engine_for_tests()
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            candidate = db_path.with_name(f"{db_path.name}{suffix}")
+            if candidate.exists():
+                candidate.unlink()
 
 
 @pytest.fixture(autouse=True)
