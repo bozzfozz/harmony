@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime
 from typing import Any, Iterable
 
@@ -27,13 +28,14 @@ class PlaylistCacheInvalidator:
         cache: ResponseCache,
         *,
         loop: asyncio.AbstractEventLoop,
-        list_prefixes: tuple[str, ...],
+        list_paths: tuple[str, ...],
         detail_templates: tuple[str, ...],
     ) -> None:
         self._cache = cache
         self._loop = loop
-        self._list_prefixes = list_prefixes
+        self._list_paths = list_paths
         self._detail_templates = detail_templates
+        self._reason = "playlist_updated"
 
     def invalidate(self, playlist_ids: Iterable[str]) -> None:
         ordered_ids: list[str] = []
@@ -47,22 +49,11 @@ class PlaylistCacheInvalidator:
             ordered_ids.append(trimmed)
             seen_ids.add(trimmed)
 
-        prefixes = list(self._list_prefixes)
-        prefixes.extend(self._build_detail_prefixes(tuple(ordered_ids)))
-
-        if not prefixes:
+        if not self._list_paths and not self._detail_templates:
             return
 
-        deduped: list[str] = []
-        seen_prefixes: set[str] = set()
-        for prefix in prefixes:
-            if not prefix or prefix in seen_prefixes:
-                continue
-            deduped.append(prefix)
-            seen_prefixes.add(prefix)
-
         future = asyncio.run_coroutine_threadsafe(
-            self._invalidate_prefixes(tuple(deduped)), self._loop
+            self._invalidate_targets(tuple(ordered_ids)), self._loop
         )
 
         try:
@@ -86,7 +77,7 @@ class PlaylistCacheInvalidator:
             status=status,
             invalidated_entries=int(invalidated),
             playlist_count=len(ordered_ids),
-            prefixes=tuple(deduped),
+            reason=self._reason,
         )
         if invalidated:
             logger.info(
@@ -95,24 +86,33 @@ class PlaylistCacheInvalidator:
                 extra={"playlist_ids": tuple(ordered_ids)},
             )
 
-    async def _invalidate_prefixes(self, prefixes: tuple[str, ...]) -> int:
+    async def _invalidate_targets(self, playlist_ids: tuple[str, ...]) -> int:
         total = 0
-        for prefix in prefixes:
-            total += await self._cache.invalidate_prefix(prefix)
-        return total
+        for path in self._list_paths:
+            total += await self._cache.invalidate_path(
+                path,
+                reason=self._reason,
+            )
 
-    def _build_detail_prefixes(self, playlist_ids: tuple[str, ...]) -> list[str]:
-        if not playlist_ids:
-            return []
-        prefixes: list[str] = []
         for template in self._detail_templates:
             if "{playlist_id}" not in template:
-                prefixes.append(f"GET:{template}")
+                total += await self._cache.invalidate_path(
+                    template,
+                    reason=self._reason,
+                )
                 continue
+
+            escaped_template = re.escape(template)
             for playlist_id in playlist_ids:
                 path_hash = build_path_param_hash({"playlist_id": playlist_id})
-                prefixes.append(f"GET:{template}:{path_hash}:")
-        return prefixes
+                pattern = rf"^GET:{escaped_template}:{path_hash}:"
+                total += await self._cache.invalidate_pattern(
+                    pattern,
+                    reason=self._reason,
+                    entity_id=playlist_id,
+                )
+
+        return total
 
 
 class PlaylistSyncWorker:
@@ -132,7 +132,7 @@ class PlaylistSyncWorker:
         self._running = False
         self._response_cache = response_cache
         self._api_base_path = (api_base_path or "").strip()
-        self._cache_prefixes: tuple[str, ...] | None = None
+        self._list_paths: tuple[str, ...] | None = None
 
     async def start(self) -> None:
         if self._task is None or self._task.done():
@@ -248,29 +248,28 @@ class PlaylistSyncWorker:
 
         return processed
 
-    def _resolve_cache_prefixes(self) -> tuple[str, ...]:
-        if self._cache_prefixes is not None:
-            return self._cache_prefixes
+    def _resolve_list_paths(self) -> tuple[str, ...]:
+        if self._list_paths is not None:
+            return self._list_paths
 
         playlist_path = "/spotify/playlists"
-        prefixes: list[str] = []
+        paths: list[str] = []
 
-        base_prefix = self._compose_path(playlist_path)
-        if base_prefix:
-            prefixes.append(f"GET:{base_prefix}")
+        base_path = self._compose_path(playlist_path)
+        if base_path:
+            paths.append(base_path)
 
-        prefixes.append(f"GET:{playlist_path}")
+        paths.append(playlist_path)
 
-        # Deduplicate while preserving order
         seen: set[str] = set()
         ordered: list[str] = []
-        for prefix in prefixes:
-            if prefix not in seen:
-                ordered.append(prefix)
-                seen.add(prefix)
+        for path in paths:
+            if path not in seen:
+                ordered.append(path)
+                seen.add(path)
 
-        self._cache_prefixes = tuple(ordered)
-        return self._cache_prefixes
+        self._list_paths = tuple(ordered)
+        return self._list_paths
 
     def _resolve_detail_templates(self) -> tuple[str, ...]:
         detail_path = "/spotify/playlists/{playlist_id}/tracks"
@@ -296,6 +295,9 @@ class PlaylistSyncWorker:
         if self._response_cache is None:
             return None
 
+        if not getattr(self._response_cache, "write_through", True):
+            return None
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive guard
@@ -305,7 +307,7 @@ class PlaylistSyncWorker:
         return PlaylistCacheInvalidator(
             self._response_cache,
             loop=loop,
-            list_prefixes=self._resolve_cache_prefixes(),
+            list_paths=self._resolve_list_paths(),
             detail_templates=self._resolve_detail_templates(),
         )
 

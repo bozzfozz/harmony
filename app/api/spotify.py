@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
@@ -53,6 +53,10 @@ from app.services.backfill_service import BackfillJobStatus
 from app.services.spotify_domain_service import (
     PlaylistItemsResult,
     SpotifyDomainService,
+)
+from app.utils.http_cache import (
+    compute_playlist_collection_metadata,
+    is_request_not_modified,
 )
 from app.utils.settings_store import write_setting
 from app.workers.sync_worker import SyncWorker
@@ -166,11 +170,27 @@ def get_artist_discography(
 
 @core_router.get("/playlists", response_model=PlaylistResponse)
 def list_playlists(
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     service: SpotifyDomainService = Depends(_get_spotify_service),
-) -> PlaylistResponse:
-    playlists = service.list_playlists(db)
-    return PlaylistResponse(playlists=list(playlists))
+) -> PlaylistResponse | Response:
+    playlists = list(service.list_playlists(db))
+    metadata = compute_playlist_collection_metadata(playlists)
+
+    if is_request_not_modified(
+        request,
+        etag=metadata.etag,
+        last_modified=metadata.last_modified,
+    ):
+        headers = metadata.as_headers()
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
+    headers = metadata.as_headers()
+    for header_name, header_value in headers.items():
+        response.headers[header_name] = header_value
+
+    return PlaylistResponse(playlists=playlists)
 
 
 @core_router.get(

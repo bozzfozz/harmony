@@ -249,7 +249,12 @@ class CacheMiddleware(BaseHTTPMiddleware):
                     parsed = parsed.replace(tzinfo=timezone.utc)
                 now = parsed.astimezone(timezone.utc).replace(microsecond=0)
 
-        etag = self._generate_etag(body)
+        existing_etag = response.headers.get("ETag")
+        if existing_etag:
+            candidates = [value.strip() for value in existing_etag.split(",") if value.strip()]
+            etag = candidates[0] if candidates else self._generate_etag(body)
+        else:
+            etag = self._generate_etag(body)
         headers = dict(response.headers)
         headers["ETag"] = etag
         headers["Last-Modified"] = format_datetime(now, usegmt=True)

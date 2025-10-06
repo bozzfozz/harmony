@@ -27,8 +27,12 @@ def install_middleware(app: FastAPI, config: AppConfig) -> None:
         max_items=middleware_cfg.cache.max_items,
         default_ttl=float(middleware_cfg.cache.default_ttl),
         fail_open=middleware_cfg.cache.fail_open,
+        write_through=middleware_cfg.cache.write_through,
+        log_evictions=middleware_cfg.cache.log_evictions,
     )
     app.state.response_cache = response_cache
+    app.state.cache_write_through = middleware_cfg.cache.write_through
+    app.state.cache_log_evictions = middleware_cfg.cache.log_evictions
 
     app.add_middleware(
         CacheMiddleware,

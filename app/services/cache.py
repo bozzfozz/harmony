@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -58,6 +59,8 @@ class ResponseCache:
         default_ttl: float,
         fail_open: bool = True,
         time_func: TimeProvider | None = None,
+        write_through: bool = True,
+        log_evictions: bool = True,
     ) -> None:
         if max_items <= 0:
             raise ValueError("max_items must be positive")
@@ -69,6 +72,8 @@ class ResponseCache:
         self._cache: "OrderedDict[str, CacheEntry]" = OrderedDict()
         self._lock = asyncio.Lock()
         self._now: TimeProvider = time_func or time.time
+        self._write_through = write_through
+        self._log_evictions = log_evictions
 
     @property
     def default_ttl(self) -> float:
@@ -79,12 +84,12 @@ class ResponseCache:
             async with self._lock:
                 entry = self._cache.get(key)
                 if entry is None:
-                    _log_cache_event("miss", "miss", key_hash=key)
+                    self._log_operation("miss", "miss", key_hash=key)
                     return None
                 now = self._now()
                 if entry.is_expired(now):
                     self._cache.pop(key, None)
-                    _log_cache_event(
+                    self._log_operation(
                         "expired",
                         "expired",
                         key_hash=key,
@@ -93,7 +98,7 @@ class ResponseCache:
                     )
                     return None
                 self._cache.move_to_end(key)
-                _log_cache_event(
+                self._log_operation(
                     "hit",
                     "hit",
                     key_hash=key,
@@ -102,7 +107,7 @@ class ResponseCache:
                 return entry
         except Exception:
             if self._fail_open:
-                _log_cache_event("error", "error", key_hash=key)
+                self._log_operation("error", "error", key_hash=key)
                 return None
             raise
 
@@ -125,7 +130,7 @@ class ResponseCache:
                     self._cache.pop(key)
                 self._cache[key] = entry
                 self._enforce_limit()
-            _log_cache_event(
+            self._log_operation(
                 "store",
                 "stored",
                 key_hash=key,
@@ -134,7 +139,7 @@ class ResponseCache:
             )
         except Exception:
             if self._fail_open:
-                _log_cache_event("error", "error", key_hash=key)
+                self._log_operation("error", "error", key_hash=key)
                 return
             raise
 
@@ -143,30 +148,114 @@ class ResponseCache:
             async with self._lock:
                 if key in self._cache:
                     self._cache.pop(key, None)
-                    _log_cache_event("invalidate", "invalidated", key_hash=key)
+                    self._log_operation("invalidate", "invalidated", key_hash=key)
         except Exception:
             if self._fail_open:
-                _log_cache_event("error", "error", key_hash=key)
+                self._log_operation("error", "error", key_hash=key)
                 return
             raise
 
-    async def invalidate_prefix(self, prefix: str) -> int:
+    async def invalidate_prefix(
+        self,
+        prefix: str,
+        *,
+        reason: str | None = None,
+        entity_id: str | None = None,
+        path: str | None = None,
+        pattern: str | None = None,
+    ) -> int:
         try:
             async with self._lock:
                 keys = [key for key in self._cache if key.startswith(prefix)]
-                for key in keys:
-                    self._cache.pop(key, None)
-                if keys:
-                    _log_cache_event(
-                        "invalidate",
-                        "invalidated",
-                        key_hash=prefix,
-                        count=len(keys),
-                    )
-                return len(keys)
+                removed = [self._cache.pop(key, None) for key in keys]
+                removed = [entry for entry in removed if entry is not None]
+                count = len(removed)
+            operation = "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
+            status = "evicted" if count else "noop"
+            fields: dict[str, object] = {
+                "key_hash": prefix,
+                "count": count,
+            }
+            if path:
+                fields["path"] = path
+            if pattern:
+                fields["pattern"] = pattern
+            if reason:
+                fields["reason"] = reason
+            if entity_id:
+                fields["entity_id"] = entity_id
+            if removed:
+                template = removed[0].path_template
+                if template:
+                    fields.setdefault("path_template", template)
+            self._log_operation(operation, status, **fields)
+            return count
         except Exception:
             if self._fail_open:
-                _log_cache_event("error", "error", key_hash=prefix)
+                self._log_operation("error", "error", key_hash=prefix)
+                return 0
+            raise
+
+    async def invalidate_path(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        reason: str | None = None,
+        entity_id: str | None = None,
+    ) -> int:
+        normalized = self._normalize_path(path)
+        prefix = f"{method.upper()}:{normalized}"
+        return await self.invalidate_prefix(
+            prefix,
+            reason=reason,
+            entity_id=entity_id,
+            path=normalized,
+        )
+
+    async def invalidate_pattern(
+        self,
+        pattern: str,
+        *,
+        reason: str | None = None,
+        entity_id: str | None = None,
+    ) -> int:
+        try:
+            compiled = re.compile(pattern)
+        except re.error:
+            return await self.invalidate_prefix(
+                pattern,
+                reason=reason,
+                entity_id=entity_id,
+                pattern=pattern,
+            )
+
+        try:
+            async with self._lock:
+                matching_keys = [key for key in self._cache if compiled.search(key)]
+                removed_entries = [self._cache.pop(key, None) for key in matching_keys]
+                removed_entries = [entry for entry in removed_entries if entry is not None]
+                count = len(removed_entries)
+            operation = "evict" if reason or entity_id else "invalidate"
+            status = "evicted" if count else "noop"
+            fields: dict[str, object] = {
+                "pattern": pattern,
+                "count": count,
+                "key_hash": pattern,
+            }
+            if reason:
+                fields["reason"] = reason
+            if entity_id:
+                fields["entity_id"] = entity_id
+            if removed_entries:
+                template = removed_entries[0].path_template
+                if template:
+                    fields.setdefault("path_template", template)
+            self._log_operation(operation, status, **fields)
+            return count
+        except Exception:
+            if self._fail_open:
+                self._log_operation("error", "error", pattern=pattern)
                 return 0
             raise
 
@@ -176,17 +265,17 @@ class ResponseCache:
                 if not self._cache:
                     return
                 self._cache.clear()
-            _log_cache_event("clear", "cleared")
+            self._log_operation("clear", "cleared")
         except Exception:
             if self._fail_open:
-                _log_cache_event("error", "error")
+                self._log_operation("error", "error")
                 return
             raise
 
     def _enforce_limit(self) -> None:
         while len(self._cache) > self._max_items:
             key, _ = self._cache.popitem(last=False)
-            _log_cache_event("evict", "evicted", key_hash=key)
+            self._log_operation("evict", "evicted", key_hash=key)
 
     def _resolve_ttl(self, ttl: float | None) -> float:
         if ttl is None:
@@ -196,6 +285,28 @@ class ResponseCache:
     @property
     def fail_open(self) -> bool:
         return self._fail_open
+
+    @property
+    def write_through(self) -> bool:
+        return self._write_through
+
+    @property
+    def log_evictions(self) -> bool:
+        return self._log_evictions
+
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        trimmed = (path or "").strip()
+        if not trimmed:
+            return "/"
+        if not trimmed.startswith("/"):
+            return f"/{trimmed}"
+        return trimmed
+
+    def _log_operation(self, operation: str, status: str, **fields: object) -> None:
+        if operation == "evict" and not self._log_evictions:
+            return
+        _log_cache_event(operation, status, **fields)
 
 
 def _hash_from_items(items: Iterable[tuple[str, str]]) -> str:
