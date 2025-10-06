@@ -23,8 +23,7 @@ _REQUIRED_QUEUE_COLUMNS = {
 _REQUIRED_QUEUE_INDEXES = {
     "ix_queue_jobs_type_status_available_at",
     "ix_queue_jobs_lease_expires_at",
-    "ix_queue_jobs_idempotency_key",
-    "ix_queue_jobs_type_idempotency_key_not_null",
+    "ix_queue_jobs_idempotency_key_not_null",
 }
 
 

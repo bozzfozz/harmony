@@ -13,9 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .helpers import make_config
 
-_MIGRATION = import_module(
-    "app.migrations.versions.202409091200_queue_job_partial_idempotency_index"
-)
+_MIGRATION = import_module("app.migrations.versions.202409201200_queue_job_idempotency_key_unique")
 
 
 def _insert_job(
@@ -56,7 +54,7 @@ def test_queue_job_idempotency_migration_is_reentrant(tmp_path: Path) -> None:
     try:
         inspector = sa.inspect(engine)
         indexes = {index["name"] for index in inspector.get_indexes("queue_jobs")}
-        assert "ix_queue_jobs_type_idempotency_key_not_null" in indexes
+        assert "ix_queue_jobs_idempotency_key_not_null" in indexes
     finally:
         engine.dispose()
 
@@ -87,10 +85,16 @@ def test_queue_job_idempotency_enforces_uniqueness(tmp_path: Path) -> None:
             _insert_job(connection, queue_jobs, job_type="sync", idempotency_key=None)
             _insert_job(connection, queue_jobs, job_type="sync", idempotency_key=None)
 
-            _insert_job(connection, queue_jobs, job_type="other", idempotency_key="dupe")
+            with pytest.raises(IntegrityError):
+                _insert_job(
+                    connection,
+                    queue_jobs,
+                    job_type="other",
+                    idempotency_key="dupe",
+                )
 
         inspector = sa.inspect(engine)
         indexes = {index["name"]: index for index in inspector.get_indexes("queue_jobs")}
-        assert indexes["ix_queue_jobs_type_idempotency_key_not_null"]["unique"]
+        assert indexes["ix_queue_jobs_idempotency_key_not_null"]["unique"]
     finally:
         engine.dispose()
