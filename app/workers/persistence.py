@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config import settings
+from app.services.retry_policy_provider import get_retry_policy_provider
 from app.db import session_scope
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -59,6 +60,19 @@ def _emit_worker_tick(job_type: str, *, status: str, count: int | None = None) -
 
 
 def _emit_retry_exhausted(job: "QueueJobDTO", *, stop_reason: str) -> None:
+    provider = get_retry_policy_provider()
+    policy = provider.get_retry_policy(job.type)
+    bounded_attempt = max(0, min(int(job.attempts), 6))
+    base_delay = policy.base_seconds * (2**bounded_attempt)
+    meta: dict[str, Any] = {
+        "policy_ttl_s": provider.reload_interval,
+        "attempt": int(job.attempts),
+        "max_attempts": int(policy.max_attempts),
+        "backoff_ms": int(base_delay * 1000),
+        "jitter_pct": float(policy.jitter_pct),
+    }
+    if policy.timeout_seconds is not None:
+        meta["timeout_s"] = float(policy.timeout_seconds)
     log_event(
         logger,
         "worker.retry_exhausted",
@@ -68,6 +82,7 @@ def _emit_retry_exhausted(job: "QueueJobDTO", *, stop_reason: str) -> None:
         status="retry_exhausted",
         stop_reason=stop_reason,
         attempts=int(job.attempts),
+        meta=meta,
     )
 
 

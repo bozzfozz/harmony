@@ -497,6 +497,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `RETRY_MAX_ATTEMPTS` | int | `10` | Max. automatische Neuversuche je Download. | — |
 | `RETRY_BASE_SECONDS` | float | `60` | Grundverzögerung für Download-Retries. | — |
 | `RETRY_JITTER_PCT` | float | `0.2` | Jitter-Faktor für Download-Retries. | — |
+| `RETRY_POLICY_RELOAD_S` | float | `10` | TTL (Sekunden) für den gecachten Retry-Policy-Snapshot des Providers. | — |
 | `RETRY_SCAN_INTERVAL_SEC` | float | `60` | Intervall der Retry-Scans. | — |
 | `RETRY_SCAN_BATCH_LIMIT` | int | `100` | Limit pro Retry-Scan. | — |
 | `MATCHING_WORKER_BATCH_SIZE` | int | `10` | Batchgröße des Matching-Workers (Default aus Settings). | — |
@@ -512,7 +513,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `DLQ_PURGE_LIMIT` | int | `1000` | Limit für Bulk-Purge. | — |
 | `MUSIC_DIR` | path | `./music` | Zielpfad für organisierte Downloads. | — |
 
-> **Retry-Präzedenz:** `load_sync_retry_policy()` liest bei jedem Aufruf eine frische Snapshot-Konfiguration. Die Auflösung folgt der Reihenfolge: explizite Funktionsargumente → übergebene Defaults (z. B. Tests oder Provider) → aktuelle ENV-/Settings-Werte → Code-Defaults aus `app/config.py`. Nutze `refresh_sync_retry_policy()` oder `SyncWorker.refresh_retry_policy()`, um geänderte ENV-Werte ohne Neustart zu übernehmen.
+> **Retry-Provider:** `RetryPolicyProvider` lädt die Backoff-Parameter (`RETRY_*`) zur Laufzeit aus der Umgebung, cached sie für `RETRY_POLICY_RELOAD_S` Sekunden (Default 10 s) und unterstützt Job-spezifische Overrides (`RETRY_SYNC_MAX_ATTEMPTS`, `RETRY_MATCHING_BASE_SECONDS`, …). `get_retry_policy(<job_type>)` liefert Snapshots für Orchestrator/Worker, `SyncWorker.refresh_retry_policy()` invalidiert den Cache ohne Neustart.
 
 > **Hinweis:** Spotify- und slskd-Zugangsdaten können über `/settings` in der Datenbank persistiert werden. Beim Laden der Anwendung haben Datenbankwerte Vorrang vor Umgebungsvariablen; ENV-Variablen dienen als Fallback und Basis für neue Deployments. Eine ausführliche Laufzeitreferenz inkl. Überschneidungen mit Datenbank-Settings befindet sich in [`docs/ops/runtime-config.md`](docs/ops/runtime-config.md).
 

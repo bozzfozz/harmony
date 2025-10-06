@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from app.logging_events import log_event
 from app.utils.settings_store import increment_counter
@@ -70,6 +70,7 @@ def emit_dispatch_event(
     job_type: str,
     status: str,
     attempts: int | None = None,
+    meta: Mapping[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {
         "entity_id": str(job_id),
@@ -78,7 +79,7 @@ def emit_dispatch_event(
     }
     if attempts is not None:
         payload["attempts"] = attempts
-    _emit_event(logger, "orchestrator.dispatch", payload)
+    _emit_event(logger, "orchestrator.dispatch", payload, meta=meta)
 
 
 def emit_commit_event(
@@ -184,9 +185,10 @@ def _emit_event(
     event: str,
     payload: dict[str, Any],
     *,
+    meta: Mapping[str, Any] | None = None,
     track_metric: bool = False,
 ) -> None:
-    log_event(logger, event, **payload)
+    log_event(logger, event, meta=meta, **payload)
     if track_metric:
         _increment_metric(event, payload.get("status"))
 
