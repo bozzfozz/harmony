@@ -294,7 +294,8 @@ class ProviderGateway:
                 error=error,
             )
 
-        assert last_error is not None
+        if last_error is None:
+            raise RuntimeError("Retry loop exited without error classification.")
         return ProviderGatewaySearchResult(
             provider=track_provider.name,
             tracks=tuple(),

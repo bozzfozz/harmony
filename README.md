@@ -224,7 +224,7 @@ black --check .
 mypy app
 pytest -q
 python scripts/audit_wiring.py
-bandit -r app
+bandit -c .bandit -r app
 
 cd frontend
 npm ci
@@ -233,8 +233,9 @@ npm run typecheck
 npm run build
 ```
 
-Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -r app` entspricht dem neuen CI-Step und sollte vor jedem Commit
-lokal ausgeführt werden, damit Findings gar nicht erst im Pull Request landen.
+Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app` nutzt die Repository-Konfiguration (Scope,
+Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings
+gar nicht erst im Pull Request landen.
 
 ## Datenbank-Migrationen
 

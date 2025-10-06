@@ -584,7 +584,8 @@ def complete(
         record.updated_at = now
         session.add(record)
         dto = _refresh_instance(session, record)
-    assert dto is not None
+    if dto is None:
+        raise RuntimeError("Queue job refresh failed after completion.")
     _emit_worker_job_event(dto, "completed", has_result=dto.result_payload is not None)
     return True
 
@@ -647,7 +648,8 @@ def to_dlq(
         record.updated_at = now
         session.add(record)
         dto = _refresh_instance(session, record)
-    assert dto is not None
+    if dto is None:
+        raise RuntimeError("Queue job refresh failed after moving to dead-letter queue.")
     _emit_worker_job_event(dto, "dead_letter", stop_reason=reason)
     if reason == "max_retries_exhausted":
         _emit_retry_exhausted(dto, stop_reason=reason)

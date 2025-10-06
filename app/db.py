@@ -99,7 +99,8 @@ def _ensure_engine(*, auto_init: bool = True) -> None:
 def get_session() -> Session:
     if SessionLocal is None:
         _ensure_engine()
-    assert SessionLocal is not None  # For type checkers
+    if SessionLocal is None:
+        raise RuntimeError("Database session factory is not initialized.")
     return SessionLocal()
 
 
@@ -125,7 +126,8 @@ def init_db() -> None:
     _initializing_db = True
     try:
         _ensure_engine(auto_init=False)
-        assert _engine is not None
+        if _engine is None:
+            raise RuntimeError("Database engine was not initialised before migrations.")
         if command is None or Config is None:
             _logger.warning("Alembic is not available; falling back to Base.metadata.create_all().")
             from app import models  # noqa: F401  # Import models for metadata side-effects
@@ -153,7 +155,8 @@ def reset_engine_for_tests() -> None:
 
 
 def _configure_alembic(database_url: str) -> Config:
-    assert Config is not None  # For type checkers; guarded by init_db
+    if Config is None:
+        raise RuntimeError("Alembic configuration is unavailable; ensure alembic is installed.")
     config = Config(str(_ALEMBIC_INI_PATH))
     config.set_main_option("script_location", str(_ALEMBIC_SCRIPT_LOCATION))
     config.set_main_option("sqlalchemy.url", database_url)
