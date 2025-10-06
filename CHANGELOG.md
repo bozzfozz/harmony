@@ -7,6 +7,7 @@
 - chore(db): align Alembic environment, migrations and queue job schema with the
   current ORM (additive, idempotent) [CODX-P0-MIG-105]
 - chore(frontend): align Radix UI dependencies and fix imports [CODX-FE-RADIX-302]
+- chore(frontend): bump Radix UI/test stack, add pointer polyfills & smoke tests [CODX-FE-RADIX-301]
 - feat(orchestrator): configurable priorities, pools, visibility, heartbeat, timer [CODX-ORCH-084]
   - Dokumentiert den Orchestrator im README, ergänzt Runtime-Guides (Prioritäten, Pools, Heartbeats) und verweist im PR-Template auf Migrations-/ENV-Hinweise.
 - refactor(api): domain router registry, unified middleware chain & error handlers; remove `/metrics` wiring [CODX-API-REF-312]

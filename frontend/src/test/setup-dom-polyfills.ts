@@ -1,17 +1,7 @@
-// Pointer capture polyfills for jsdom
-if (!('hasPointerCapture' in HTMLElement.prototype)) {
-  // @ts-expect-error jsdom lacks this API
-  (HTMLElement.prototype as any).hasPointerCapture = () => false;
-}
-
+// Pointer capture polyfill for jsdom (setPointerCapture only; has/release handled in dedicated setup)
 if (!('setPointerCapture' in HTMLElement.prototype)) {
   // @ts-expect-error jsdom lacks this API
   (HTMLElement.prototype as any).setPointerCapture = () => {};
-}
-
-if (!('releasePointerCapture' in HTMLElement.prototype)) {
-  // @ts-expect-error jsdom lacks this API
-  (HTMLElement.prototype as any).releasePointerCapture = () => {};
 }
 
 // PointerEvent polyfill

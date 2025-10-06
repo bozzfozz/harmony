@@ -3,11 +3,13 @@ module.exports = {
   ignorePatterns: ['dist', 'node_modules'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    ecmaVersion: 2020,
+    ecmaVersion: 2022,
     sourceType: 'module',
     ecmaFeatures: {
       jsx: true
-    }
+    },
+    project: './tsconfig.json',
+    tsconfigRootDir: __dirname
   },
   plugins: ['@typescript-eslint', 'react', 'react-hooks'],
   extends: [
