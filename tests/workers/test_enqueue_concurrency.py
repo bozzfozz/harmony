@@ -51,7 +51,7 @@ async def test_enqueue_idempotent_concurrency_creates_single_row() -> None:
         record = session.execute(record_stmt).scalars().one()
         assert record.status == "pending"
         # The final payload should correspond to one of the attempted updates.
-        assert record.payload["payload"]["value"] in range(8)
+        assert record.payload["payload"]["value"] in range(concurrency)
 
 
 @pytest.mark.anyio
