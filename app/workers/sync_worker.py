@@ -264,7 +264,6 @@ class SyncWorker:
             lyrics_service=self._lyrics,
             music_dir=self._music_dir,
             retry_policy_provider=self._retry_provider,
-            retry_policy_override=self._retry_config,
             rng=self._retry_rng,
         )
 
