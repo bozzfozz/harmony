@@ -107,7 +107,7 @@ describe('Radix primitives smoke tests', () => {
 
     try {
       renderWithToastProvider(
-        <ToastPrimitive.Root open duration={100}>
+        <ToastPrimitive.Root defaultOpen duration={100}>
           <ToastPrimitive.Title>Toast title</ToastPrimitive.Title>
           <ToastPrimitive.Description>Toast description</ToastPrimitive.Description>
         </ToastPrimitive.Root>
