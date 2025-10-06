@@ -101,7 +101,9 @@ async def test_process_sync_payload_marks_downloads_downloading(tmp_path: Path) 
     client = StubSoulseekClient()
     deps = SyncHandlerDeps(
         soulseek_client=client,
-        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -145,7 +147,9 @@ async def test_process_sync_payload_handles_failure(tmp_path: Path) -> None:
     client = StubSoulseekClient(error=RuntimeError("boom"))
     deps = SyncHandlerDeps(
         soulseek_client=client,
-        retry_policy=SyncRetryPolicy(max_attempts=5, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=5, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -191,7 +195,9 @@ async def test_process_sync_payload_dead_letters_on_limit(tmp_path: Path) -> Non
     client = StubSoulseekClient(error=RuntimeError("boom"))
     deps = SyncHandlerDeps(
         soulseek_client=client,
-        retry_policy=SyncRetryPolicy(max_attempts=1, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=1, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -269,7 +275,9 @@ async def test_fanout_download_completion_invokes_services(
         artwork_service=artwork_service,
         lyrics_service=lyrics_service,
         music_dir=tmp_path,
-        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
     )
 

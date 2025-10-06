@@ -160,7 +160,6 @@ def test_dlq_after_max_attempts_update(monkeypatch: pytest.MonkeyPatch) -> None:
     # Tighten policy and wait for TTL so the next load observes the new value.
     env["RETRY_MAX_ATTEMPTS"] = "1"
     now[0] += 0.2
-    deps = SyncHandlerDeps(soulseek_client=_StubSoulseekClient(), rng=random.Random(0))
 
     asyncio.run(handle_sync_download_failure(job, files, deps, "boom again"))
 
