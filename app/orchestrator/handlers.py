@@ -28,7 +28,7 @@ from typing import (
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from app.config import WatchlistWorkerConfig
+from app.config import WatchlistWorkerConfig, settings
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -66,6 +66,7 @@ _RETRY_DEFAULT_SCAN_INTERVAL = 60.0
 _RETRY_DEFAULT_BATCH_LIMIT = 100
 _WATCHLIST_MAX_BACKOFF_MS = 5_000
 _WATCHLIST_LOG_COMPONENT = "orchestrator.watchlist"
+_ARTIST_REFRESH_LOG_COMPONENT = "orchestrator.artist_refresh"
 
 
 SyncRetryPolicy = RetryPolicy
@@ -239,6 +240,21 @@ async def enqueue_sync_job(
     return await asyncio.to_thread(
         persistence.enqueue,
         "sync",
+        payload,
+        priority=priority,
+        idempotency_key=idempotency_key,
+    )
+
+
+async def enqueue_artist_delta_job(
+    payload: Mapping[str, Any],
+    *,
+    priority: int | None = None,
+    idempotency_key: str | None = None,
+) -> QueueJobDTO | None:
+    return await asyncio.to_thread(
+        persistence.enqueue,
+        "artist_delta",
         payload,
         priority=priority,
         idempotency_key=idempotency_key,
@@ -585,7 +601,31 @@ class RetryHandlerDeps:
 
 
 @dataclass(slots=True)
-class WatchlistHandlerDeps:
+class ArtistRefreshHandlerDeps:
+    """Dependencies required to enqueue artist delta jobs from refresh work."""
+
+    config: WatchlistWorkerConfig
+    dao: WatchlistDAO = field(default_factory=WatchlistDAO)
+    submit_delta_job: SyncJobSubmitter = enqueue_artist_delta_job
+    now_factory: Callable[[], datetime] = datetime.utcnow
+    delta_priority: int = field(
+        default_factory=lambda: settings.orchestrator.priority_map.get("artist_delta", 0)
+    )
+    refresh_priority: int = field(
+        default_factory=lambda: settings.orchestrator.priority_map.get("artist_refresh", 0)
+    )
+    retry_budget: int = field(init=False)
+    cooldown_minutes: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.delta_priority = _coerce_priority(self.delta_priority)
+        self.refresh_priority = _coerce_priority(self.refresh_priority)
+        self.retry_budget = max(1, int(self.config.retry_budget_per_artist))
+        self.cooldown_minutes = max(0, int(self.config.cooldown_minutes))
+
+
+@dataclass(slots=True)
+class ArtistDeltaHandlerDeps:
     """Dependencies required by the watchlist orchestrator handler."""
 
     spotify_client: SpotifyClient
@@ -620,6 +660,9 @@ class WatchlistHandlerDeps:
         self.retry_max = max(1, int(self.config.retry_max))
 
 
+WatchlistHandlerDeps = ArtistDeltaHandlerDeps
+
+
 class WatchlistProcessingError(Exception):
     """Raised when watchlist artist processing fails."""
 
@@ -640,7 +683,7 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
         return None
 
 
-def _calculate_watchlist_backoff_ms(attempt: int, deps: WatchlistHandlerDeps) -> int:
+def _calculate_watchlist_backoff_ms(attempt: int, deps: ArtistDeltaHandlerDeps) -> int:
     base = deps.backoff_base_ms
     exponent = max(int(attempt) - 1, 0)
     delay = base * (2**exponent)
@@ -652,14 +695,16 @@ def _calculate_watchlist_backoff_ms(attempt: int, deps: WatchlistHandlerDeps) ->
     return min(max(int(delay), 0), _WATCHLIST_MAX_BACKOFF_MS)
 
 
-def _watchlist_cooldown_until(deps: WatchlistHandlerDeps) -> datetime:
+def _watchlist_cooldown_until(deps: ArtistDeltaHandlerDeps) -> datetime:
     now = deps.now_factory()
     if deps.cooldown_minutes <= 0:
         return now
     return now + timedelta(minutes=deps.cooldown_minutes)
 
 
-async def _watchlist_dao_call(deps: WatchlistHandlerDeps, method_name: str, /, *args, **kwargs):
+async def _watchlist_dao_call(
+    deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs
+):
     method = getattr(deps.dao, method_name)
     if deps.db_mode == "thread":
         return await asyncio.to_thread(method, *args, **kwargs)
@@ -771,7 +816,9 @@ def _watchlist_parse_release_date(album: Mapping[str, Any]) -> datetime | None:
     return None
 
 
-async def _watchlist_process_artist(artist: WatchlistArtistRow, deps: WatchlistHandlerDeps) -> int:
+async def _watchlist_process_artist(
+    artist: WatchlistArtistRow, deps: ArtistDeltaHandlerDeps
+) -> int:
     try:
         albums = await _invoke_with_timeout(
             asyncio.to_thread(
@@ -870,7 +917,7 @@ async def _watchlist_schedule_download(
     artist: WatchlistArtistRow,
     album: Mapping[str, Any],
     track: Mapping[str, Any],
-    deps: WatchlistHandlerDeps,
+    deps: ArtistDeltaHandlerDeps,
 ) -> bool:
     query = _watchlist_build_search_query(artist.name, album, track)
     if not query:
@@ -961,7 +1008,119 @@ async def _watchlist_schedule_download(
     return True
 
 
-async def handle_watchlist(job: QueueJobDTO, deps: WatchlistHandlerDeps) -> Mapping[str, Any]:
+async def handle_artist_refresh(
+    job: QueueJobDTO, deps: ArtistRefreshHandlerDeps
+) -> Mapping[str, Any]:
+    payload = dict(job.payload or {})
+    artist_id_raw = payload.get("artist_id")
+    if artist_id_raw is None:
+        raise MatchingJobError("invalid_payload", "missing artist_id", retry=False)
+
+    try:
+        artist_pk = int(artist_id_raw)
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive logging
+        raise MatchingJobError("invalid_payload", "invalid artist_id", retry=False) from exc
+
+    artist = await _watchlist_dao_call(deps, "get_artist", artist_pk)
+    if artist is None:
+        log_event(
+            logger,
+            "artist_refresh.job",
+            component=_ARTIST_REFRESH_LOG_COMPONENT,
+            status="missing",
+            artist_id=artist_pk,
+        )
+        return {
+            "status": "missing",
+            "artist_id": artist_pk,
+            "attempts": int(job.attempts or 0),
+        }
+
+    now = deps.now_factory()
+    if artist.retry_block_until and artist.retry_block_until > now:
+        log_event(
+            logger,
+            "artist_refresh.job",
+            component=_ARTIST_REFRESH_LOG_COMPONENT,
+            status="cooldown",
+            entity_id=artist.spotify_artist_id,
+            retry_block_until=artist.retry_block_until.isoformat(),
+        )
+        return {
+            "status": "cooldown",
+            "artist_id": artist.spotify_artist_id,
+            "attempts": int(job.attempts or 0),
+            "retry_block_until": artist.retry_block_until.isoformat(),
+        }
+
+    cutoff = _parse_iso_datetime(payload.get("cutoff"))
+    if cutoff and artist.last_checked and artist.last_checked > cutoff:
+        log_event(
+            logger,
+            "artist_refresh.job",
+            component=_ARTIST_REFRESH_LOG_COMPONENT,
+            status="noop",
+            entity_id=artist.spotify_artist_id,
+            reason="stale",
+        )
+        return {
+            "status": "noop",
+            "artist_id": artist.spotify_artist_id,
+            "attempts": int(job.attempts or 0),
+            "reason": "stale",
+        }
+
+    delta_payload: dict[str, Any] = {"artist_id": artist_pk}
+    if cutoff:
+        delta_payload["cutoff"] = cutoff.isoformat()
+    delta_idempotency = payload.get("delta_idempotency")
+    if not delta_idempotency:
+        cutoff_token = cutoff.isoformat() if cutoff else "never"
+        delta_idempotency = f"artist-delta:{artist_pk}:{cutoff_token}"
+
+    priority = deps.delta_priority
+    try:
+        await deps.submit_delta_job(
+            delta_payload,
+            priority=priority,
+            idempotency_key=delta_idempotency,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        log_event(
+            logger,
+            "artist_refresh.job",
+            component=_ARTIST_REFRESH_LOG_COMPONENT,
+            status="error",
+            entity_id=artist.spotify_artist_id,
+            error="delta_enqueue_failed",
+        )
+        raise MatchingJobError(
+            "delta_enqueue_failed",
+            f"failed to enqueue artist delta for {artist.spotify_artist_id}",
+            retry=True,
+        ) from exc
+
+    log_event(
+        logger,
+        "artist_refresh.job",
+        component=_ARTIST_REFRESH_LOG_COMPONENT,
+        status="queued",
+        entity_id=artist.spotify_artist_id,
+        delta_idempotency=delta_idempotency,
+        delta_priority=priority,
+    )
+    return {
+        "status": "enqueued",
+        "artist_id": artist.spotify_artist_id,
+        "attempts": int(job.attempts or 0),
+        "delta_idempotency_key": delta_idempotency,
+        "delta_priority": priority,
+    }
+
+
+async def handle_artist_delta(
+    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
+) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1129,13 +1288,31 @@ async def handle_watchlist(job: QueueJobDTO, deps: WatchlistHandlerDeps) -> Mapp
     return result
 
 
-def build_watchlist_handler(
-    deps: WatchlistHandlerDeps,
+def build_artist_refresh_handler(
+    deps: ArtistRefreshHandlerDeps,
 ) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
     async def _handler(job: QueueJobDTO) -> Mapping[str, Any]:
-        return await handle_watchlist(job, deps)
+        return await handle_artist_refresh(job, deps)
 
     return _handler
+
+
+def build_artist_delta_handler(
+    deps: ArtistDeltaHandlerDeps,
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
+    async def _handler(job: QueueJobDTO) -> Mapping[str, Any]:
+        return await handle_artist_delta(job, deps)
+
+    return _handler
+
+
+def build_watchlist_handler(
+    deps: ArtistDeltaHandlerDeps,
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
+    return build_artist_delta_handler(deps)
+
+
+handle_watchlist = handle_artist_delta
 
 
 @dataclass(slots=True)
@@ -2046,27 +2223,32 @@ __all__ = [
     "SyncHandlerDeps",
     "RetryHandlerDeps",
     "MatchingHandlerDeps",
+    "ArtistRefreshHandlerDeps",
+    "ArtistDeltaHandlerDeps",
     "WatchlistHandlerDeps",
     "MatchingJobError",
-    "build_matching_handler",
-    "handle_matching",
-    "build_watchlist_handler",
-    "handle_watchlist",
-    "build_retry_handler",
-    "handle_retry",
+    "WatchlistProcessingError",
     "build_sync_handler",
-    "SyncRetryPolicy",
+    "build_retry_handler",
+    "build_matching_handler",
+    "build_artist_refresh_handler",
+    "build_artist_delta_handler",
+    "build_watchlist_handler",
+    "handle_sync",
+    "handle_retry",
+    "handle_matching",
+    "handle_artist_refresh",
+    "handle_artist_delta",
+    "handle_watchlist",
     "calculate_retry_backoff_seconds",
     "enqueue_sync_job",
+    "enqueue_artist_delta_job",
     "enqueue_retry_scan_job",
     "enqueue_spotify_backfill",
     "fanout_download_completion",
     "get_spotify_backfill_status",
     "enqueue_spotify_free_import",
     "get_spotify_free_import_job",
-    "handle_sync",
-    "handle_sync_download_failure",
-    "handle_sync_retry_success",
     "load_sync_retry_policy",
     "load_matching_confidence_threshold",
     "process_sync_payload",

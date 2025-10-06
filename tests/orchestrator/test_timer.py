@@ -83,14 +83,20 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
 
     job_ids = count(1)
 
-    def fake_enqueue(job_type: str, payload: dict[str, object], *, idempotency_key: str):
-        assert job_type == "watchlist"
+    def fake_enqueue(
+        job_type: str,
+        payload: dict[str, object],
+        *,
+        idempotency_key: str,
+        priority: int,
+    ):
+        assert job_type == "artist_refresh"
         fake_time.value += 0.05
         job = persistence.QueueJobDTO(
             id=next(job_ids),
             type=job_type,
             payload=dict(payload),
-            priority=0,
+            priority=priority,
             attempts=0,
             available_at=now_value,
             lease_expires_at=None,
@@ -115,10 +121,20 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
     assert dao.args[0] == 2
     assert dao.args[1] == now_value
     payloads = [job.payload for job in enqueued]
-    assert payloads[0] == {"artist_id": 1}
-    assert payloads[1] == {"artist_id": 2, "cutoff": "2023-01-01T10:00:00"}
+    assert payloads[0] == {
+        "artist_id": 1,
+        "delta_idempotency": "artist-delta:1:never",
+    }
+    assert payloads[1] == {
+        "artist_id": 2,
+        "cutoff": "2023-01-01T10:00:00",
+        "delta_idempotency": "artist-delta:2:2023-01-01T10:00:00",
+    }
     keys = [job.idempotency_key for job in enqueued]
-    assert keys == ["watchlist:1:never", "watchlist:2:2023-01-01T10:00:00"]
+    assert keys == [
+        "artist-refresh:1:never",
+        "artist-refresh:2:2023-01-01T10:00:00",
+    ]
 
     assert logged
     event_name, meta = logged[-1]

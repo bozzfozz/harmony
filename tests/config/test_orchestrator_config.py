@@ -14,10 +14,10 @@ def test_priority_json_and_csv_fallback() -> None:
 
     csv_env = {
         "ORCH_PRIORITY_JSON": "not-json",
-        "ORCH_PRIORITY_CSV": "matching:40,watchlist:10",
+        "ORCH_PRIORITY_CSV": "matching:40,artist_refresh:10",
     }
     csv_config = OrchestratorConfig.from_env(csv_env)
-    assert csv_config.priority_map == {"matching": 40, "watchlist": 10}
+    assert csv_config.priority_map == {"matching": 40, "artist_refresh": 10}
 
     default_config = OrchestratorConfig.from_env({})
     assert default_config.priority_map == DEFAULT_ORCH_PRIORITY_MAP
@@ -29,7 +29,8 @@ def test_bounds_and_defaults_applied() -> None:
         "ORCH_POOL_SYNC": "0",
         "ORCH_POOL_MATCHING": "-5",
         "ORCH_POOL_RETRY": "-1",
-        "ORCH_POOL_WATCHLIST": "3",
+        "ORCH_POOL_ARTIST_REFRESH": "3",
+        "ORCH_POOL_ARTIST_DELTA": "4",
         "ORCH_VISIBILITY_TIMEOUT_S": "2",
         "ORCH_HEARTBEAT_S": "-10",
         "ORCH_POLL_INTERVAL_MS": "5",
@@ -40,7 +41,8 @@ def test_bounds_and_defaults_applied() -> None:
     assert config.pool_sync == 1
     assert config.pool_matching == 1
     assert config.pool_retry == 1
-    assert config.pool_watchlist == 3
+    assert config.pool_artist_refresh == 3
+    assert config.pool_artist_delta == 4
     assert config.visibility_timeout_s == 5
     assert config.heartbeat_s == 1
     assert config.poll_interval_ms == 10

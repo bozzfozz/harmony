@@ -37,7 +37,7 @@ def test_scheduler_orders_jobs_by_priority_and_time(
     )
     job_watchlist = queue_job_factory(
         job_id=4,
-        job_type="watchlist",
+        job_type="artist_refresh",
         priority=50,
         available_at=base + timedelta(seconds=2),
     )
@@ -45,7 +45,7 @@ def test_scheduler_orders_jobs_by_priority_and_time(
     for job in (job_retry, job_sync_early, job_sync_late, job_watchlist):
         stub_queue_persistence.add_ready(job)
 
-    config = PriorityConfig(priorities={"retry": 90, "sync": 60, "watchlist": 30})
+    config = PriorityConfig(priorities={"retry": 90, "sync": 60, "artist_refresh": 30})
     scheduler = Scheduler(
         priority_config=config,
         poll_interval_ms=10,
