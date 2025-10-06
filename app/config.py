@@ -483,6 +483,8 @@ class CacheMiddlewareConfig:
     fail_open: bool
     stale_while_revalidate: int | None
     cacheable_paths: tuple[CacheRule, ...]
+    write_through: bool
+    log_evictions: bool
 
 
 @dataclass(slots=True)
@@ -1679,6 +1681,8 @@ def load_config() -> AppConfig:
             (os.getenv("CACHE_STALE_WHILE_REVALIDATE_S") or "").strip() or None
         ),
         cacheable_paths=cache_rules,
+        write_through=_as_bool(os.getenv("CACHE_WRITE_THROUGH"), default=True),
+        log_evictions=_as_bool(os.getenv("CACHE_LOG_EVICTIONS"), default=True),
     )
 
     cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")

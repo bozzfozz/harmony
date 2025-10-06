@@ -70,6 +70,7 @@ Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und da
 - **Konfigurationsmatrix:** `docs/ops/runtime-config.md` listet relevante ENV-Variablen (Ingest, Watchlist, Provider, Orchestrator). Neue Parameter dort und in dieser Übersicht verlinken.
 - **Feature-Flags:** `ENABLE_LYRICS`, `ENABLE_ARTWORK`, `INGEST_MAX_PENDING_JOBS`, `WATCHLIST_MAX_CONCURRENCY` u. a. werden in Services geprüft und müssen hier dokumentiert bleiben.
 - **Observability:** Structured Logs sind primär, Metriken entfallen. Externe Systeme abonnieren `event=request`, `event=worker_job`, `event=integration_call`.
+- **Caching:** `CACHE_WRITE_THROUGH` sorgt für sofortige Invalidierung der Spotify-Playlist-Routen; `cache.evict`-Events dokumentieren gezielte Räumungen.
 
 ## Erweiterungspunkte
 

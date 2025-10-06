@@ -386,6 +386,8 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `CACHE_FAIL_OPEN` | bool | `true` | Liefert bei Cache-Fehlern die originale Response (Fail-Open). | — |
 | `CACHEABLE_PATHS` | string | _(leer)_ | Optionale Regeln `pfad|ttl|stale`; Pfade werden automatisch mit `API_BASE_PATH` normalisiert. | — |
 | `CACHE_STRATEGY_ETAG` | string | `strong` | Art der ETag-Berechnung (`strong`/`weak`). | — |
+| `CACHE_WRITE_THROUGH` | bool | `true` | Invalidiert Spotify-Playlist-Routen unmittelbar nach Persistierung. | — |
+| `CACHE_LOG_EVICTIONS` | bool | `true` | Steuert `cache.evict`-Logs für gezielte Invalidierungen. | — |
 | `SECRET_VALIDATE_TIMEOUT_MS` | int | `800` | Timeout für Live-Secret-Validierungen (Spotify/slskd). | — |
 | `SECRET_VALIDATE_MAX_PER_MIN` | int | `3` | Rate-Limit (Requests/min) pro Provider für Secret-Prüfungen. | — |
 
@@ -647,7 +649,7 @@ Das vollständige Schema steht über `${API_BASE_PATH}/openapi.json` bereit und 
 - **Logging:** emittiert strukturierte `api.request`-Events mit `duration_ms`, `status_code`, `method`, `path` und optional `entity_id` (Request-ID).
 - **API-Key Auth:** nur aktiv, wenn `FEATURE_REQUIRE_AUTH=true`; Schlüssel stammen aus `HARMONY_API_KEYS` oder `HARMONY_API_KEYS_FILE` und werden über `Authorization: ApiKey <key>` oder `X-API-Key` übermittelt. Allowlist-Pfade lassen sich via `AUTH_ALLOWLIST` ergänzen.
 - **Rate-Limiting:** optional (`FEATURE_RATE_LIMITING`), Token-Bucket pro `IP|Key|Route`; Parameter `RATE_LIMIT_BUCKET_CAP` und `RATE_LIMIT_REFILL_PER_SEC` steuern das Verhalten. Limit-Verstöße erzeugen `RATE_LIMITED`-Fehler inklusive `Retry-After`-Hinweisen.
-- **Conditional Cache:** gesteuert über `CACHE_ENABLED`, `CACHE_DEFAULT_TTL_S`, `CACHE_MAX_ITEMS`, `CACHE_STRATEGY_ETAG` (`strong`/`weak`) und `CACHEABLE_PATHS` (Regex/CSV). Unterstützt GET/HEAD, liefert ETags und 304-Antworten.
+- **Conditional Cache:** gesteuert über `CACHE_ENABLED`, `CACHE_DEFAULT_TTL_S`, `CACHE_MAX_ITEMS`, `CACHE_STRATEGY_ETAG` (`strong`/`weak`) und `CACHEABLE_PATHS` (Regex/CSV). `CACHE_WRITE_THROUGH` invalidiert Spotify-Playlist-Routen nach Persistierung, `CACHE_LOG_EVICTIONS` steuert strukturierte `cache.evict`-Logs. Unterstützt GET/HEAD, liefert ETags und 304-Antworten.
 - **Error-Mapping:** zentral registriert; mappt Validation-, HTTP- und Dependency-Fehler konsistent auf `VALIDATION_ERROR`, `NOT_FOUND`, `DEPENDENCY_ERROR`, `RATE_LIMITED` oder `INTERNAL_ERROR`.
 
 Beispielkonfiguration (dev-friendly Defaults):
