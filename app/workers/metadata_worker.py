@@ -300,7 +300,8 @@ class MetadataUpdateWorker:
             return await self.status()
 
         self._stop_event.set()
-        assert task is not None  # for type-checkers
+        if task is None:
+            raise RuntimeError("Metadata refresh task missing despite running state.")
         await task
         return await self.status()
 

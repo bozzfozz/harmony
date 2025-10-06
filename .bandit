@@ -1,0 +1,5 @@
+[bandit]
+targets = app
+exclude = tests,app/migrations
+severity = MEDIUM
+confidence = MEDIUM
