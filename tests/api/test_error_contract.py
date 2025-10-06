@@ -96,3 +96,23 @@ def test_unhandled_exception_translates_to_internal_error(
         "ok": False,
         "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred."},
     }
+
+
+def test_debug_header_present_when_envelope_disabled(
+    client: SimpleTestClient,
+    add_temp_route: Callable[[str, Callable[..., Any]], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.errors._FEATURE_ENABLED", False)
+
+    async def failing_handler() -> None:
+        raise RuntimeError("boom")
+
+    add_temp_route("/__test__/legacy-error", failing_handler)
+
+    response = client.get("/__test__/legacy-error", use_raw_path=True)
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    assert debug_header is not None
+    assert response.json() == {"detail": "An unexpected error occurred."}

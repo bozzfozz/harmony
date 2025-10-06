@@ -216,25 +216,27 @@ def _build_response(
     meta: Mapping[str, Any] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
-    if not _FEATURE_ENABLED:
-        return JSONResponse(status_code=status_code, content={"detail": message})
-
     debug_id = uuid4().hex
-    safe_meta = _copy_meta(meta)
-    if _DEBUG_DETAILS:
-        if safe_meta is None:
-            safe_meta = {}
-        safe_meta.setdefault("debug_id", debug_id)
-        safe_meta.setdefault("hint", "Provide the debug_id when contacting support.")
 
-    payload: MutableMapping[str, Any] = {
-        "ok": False,
-        "error": {"code": code.value, "message": message},
-    }
-    if safe_meta:
-        payload["error"]["meta"] = safe_meta
+    if not _FEATURE_ENABLED:
+        response = JSONResponse(status_code=status_code, content={"detail": message})
+    else:
+        safe_meta = _copy_meta(meta)
+        if _DEBUG_DETAILS:
+            if safe_meta is None:
+                safe_meta = {}
+            safe_meta.setdefault("debug_id", debug_id)
+            safe_meta.setdefault("hint", "Provide the debug_id when contacting support.")
 
-    response = JSONResponse(status_code=status_code, content=payload)
+        payload: MutableMapping[str, Any] = {
+            "ok": False,
+            "error": {"code": code.value, "message": message},
+        }
+        if safe_meta:
+            payload["error"]["meta"] = safe_meta
+
+        response = JSONResponse(status_code=status_code, content=payload)
+
     response.headers["X-Debug-Id"] = debug_id
     if headers:
         for name, value in headers.items():
