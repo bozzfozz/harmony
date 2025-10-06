@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 from app.api import search as search_module
@@ -77,3 +78,19 @@ def test_search_endpoint_emits_logging(monkeypatch) -> None:
     assert payload["status"] == "ok"
     assert payload["method"] == "POST"
     assert payload["path"].endswith("/api/v1/search")
+
+
+def test_search_max_limit_env_validation(monkeypatch) -> None:
+    """Invalid environment overrides should fall back to the default limit."""
+
+    global search_module
+
+    monkeypatch.setenv("SEARCH_MAX_LIMIT", "-10")
+    search_module = importlib.reload(search_module)
+
+    try:
+        assert search_module.SEARCH_MAX_LIMIT == 100
+        assert search_module._resolve_search_max_limit() == 100
+    finally:
+        monkeypatch.delenv("SEARCH_MAX_LIMIT", raising=False)
+        search_module = importlib.reload(search_module)

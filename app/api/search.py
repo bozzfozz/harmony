@@ -53,9 +53,14 @@ def _resolve_search_max_limit(default: int = 100) -> int:
     if not trimmed_value:
         return default
     try:
-        return int(trimmed_value)
+        parsed = int(trimmed_value)
     except (TypeError, ValueError):
         return default
+
+    if parsed <= 0:
+        return default
+
+    return parsed
 
 
 SEARCH_MAX_LIMIT = _resolve_search_max_limit()
