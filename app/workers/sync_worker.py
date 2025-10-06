@@ -422,8 +422,15 @@ class SyncWorker:
         candidate = self._peek_higher_priority_entry(current_priority)
         if candidate is None:
             return None
-        priority, sequence, job = await self._queue.get()
+        try:
+            priority, sequence, job = self._queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
         if job is None:
+            self._queue.task_done()
+            await self._queue.put((priority, sequence, job))
+            return None
+        if priority >= current_priority:
             self._queue.task_done()
             await self._queue.put((priority, sequence, job))
             return None
