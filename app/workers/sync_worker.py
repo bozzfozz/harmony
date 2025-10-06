@@ -539,9 +539,7 @@ class SyncWorker:
         )
         return True
 
-    async def _maybe_preempt_after_lease(
-        self, current_priority: int, leased: QueueJobDTO
-    ) -> bool:
+    async def _maybe_preempt_after_lease(self, current_priority: int, leased: QueueJobDTO) -> bool:
         candidate = await self._wait_for_higher_priority(current_priority)
         if candidate is None:
             return False
@@ -634,9 +632,7 @@ class SyncWorker:
             return None
         return _PriorityQueueEntry(queue_priority, sequence, job)
 
-    def _peek_higher_priority_entry(
-        self, current_priority: int
-    ) -> Optional[_PriorityQueueEntry]:
+    def _peek_higher_priority_entry(self, current_priority: int) -> Optional[_PriorityQueueEntry]:
         candidate = self._peek_queue_entry()
         if candidate is None:
             return None

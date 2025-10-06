@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import importlib
-
-system_router_module = importlib.import_module("app.routers.system_router")
+from app.api import system as system_router_module
 
 
 def test_status_endpoint_reports_workers(client) -> None:

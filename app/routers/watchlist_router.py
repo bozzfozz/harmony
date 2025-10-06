@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from warnings import warn
-
 from app.api.routers.watchlist import router
+from app.routers._deprecation import emit_router_deprecation
 
-warn(
-    "app.routers.watchlist_router is deprecated; use app.api.routers.watchlist.router instead.",
-    DeprecationWarning,
-    stacklevel=2,
+emit_router_deprecation(
+    "app.routers.watchlist_router",
+    "app.api.routers.watchlist.router",
 )
 
 __all__ = ["router"]

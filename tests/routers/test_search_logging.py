@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import importlib
-
-search_module = importlib.import_module("app.routers.search_router")
+from app.api import search as search_module
 
 
 def test_search_router_emits_api_request_event(monkeypatch, client) -> None:
@@ -15,6 +13,8 @@ def test_search_router_emits_api_request_event(monkeypatch, client) -> None:
         captured.append(payload)
 
     monkeypatch.setattr(search_module, "log_event", _capture)
+    monkeypatch.setattr(search_module, "_log_event", _capture)
+    monkeypatch.setattr("app.logging_events.log_event", _capture)
 
     payload = {
         "query": "Track",

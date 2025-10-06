@@ -4,21 +4,52 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
+    field_validator,
+)
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema
 
 
-class ID(str):
+class _ValidatedString(str):
+    """Base helper implementing Pydantic v2 hooks for string wrappers."""
+
+    _json_schema_extra: ClassVar[Dict[str, Any]] = {"type": "string"}
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        return core_schema.no_info_after_validator_function(cls.validate, handler(str))
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        json_schema = handler(schema)
+        json_schema.update(cls._json_schema_extra)
+        return json_schema
+
+    @classmethod
+    def validate(cls, value: Any) -> Self:
+        raise NotImplementedError
+
+
+class ID(_ValidatedString):
     """Identifier exposed via the public API."""
 
-    @classmethod
-    def __get_validators__(cls):  # pragma: no cover - pydantic hook
-        yield cls.validate
+    _json_schema_extra: ClassVar[Dict[str, Any]] = {"type": "string", "title": "ID"}
 
     @classmethod
-    def validate(cls, value: Any, _: Any = None) -> "ID":
+    def validate(cls, value: Any) -> "ID":
         if isinstance(value, cls):
             return value
         if isinstance(value, (bytes, bytearray)):
@@ -31,15 +62,17 @@ class ID(str):
         return cls(stripped)
 
 
-class URI(str):
+class URI(_ValidatedString):
     """Simple URI wrapper performing light validation."""
 
-    @classmethod
-    def __get_validators__(cls):  # pragma: no cover - pydantic hook
-        yield cls.validate
+    _json_schema_extra: ClassVar[Dict[str, Any]] = {
+        "type": "string",
+        "format": "uri",
+        "title": "URI",
+    }
 
     @classmethod
-    def validate(cls, value: Any, _: Any = None) -> "URI":
+    def validate(cls, value: Any) -> "URI":
         if isinstance(value, cls):
             return value
         if isinstance(value, (bytes, bytearray)):
@@ -55,15 +88,17 @@ class URI(str):
         return cls(stripped)
 
 
-class ISODateTime(str):
+class ISODateTime(_ValidatedString):
     """Datetime serialised to ISO8601 string."""
 
-    @classmethod
-    def __get_validators__(cls):  # pragma: no cover - pydantic hook
-        yield cls.validate
+    _json_schema_extra: ClassVar[Dict[str, Any]] = {
+        "type": "string",
+        "format": "date-time",
+        "title": "ISODateTime",
+    }
 
     @classmethod
-    def validate(cls, value: Any, _: Any = None) -> "ISODateTime":
+    def validate(cls, value: Any) -> "ISODateTime":
         if isinstance(value, cls):
             return value
         if isinstance(value, datetime):

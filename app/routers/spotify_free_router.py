@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from warnings import warn
-
 from app.api.spotify import free_router as router
+from app.routers._deprecation import emit_router_deprecation
 
-warn(
-    "app.routers.spotify_free_router is deprecated; use app.api.spotify.free_router instead.",
-    DeprecationWarning,
-    stacklevel=2,
+emit_router_deprecation(
+    "app.routers.spotify_free_router",
+    "app.api.spotify.free_router",
 )
 
 __all__ = ["router"]

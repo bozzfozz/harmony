@@ -1,9 +1,5 @@
-import pytest
-
 from app.db import session_scope
 from app.models import ArtistPreference
-
-pytestmark = pytest.mark.skip(reason="Artist worker depends on archived integrations")
 
 
 def test_followed_artists_endpoint(client) -> None:

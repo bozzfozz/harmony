@@ -49,6 +49,7 @@ class BlockingRecordingSoulseekClient(RecordingSoulseekClient):
     def release(self) -> None:
         self._release.set()
 
+
 @pytest.mark.asyncio
 async def test_high_priority_jobs_are_processed_first() -> None:
     reset_engine_for_tests()
@@ -135,7 +136,9 @@ async def test_high_priority_job_preempts_recent_low_priority_lease() -> None:
     low_leased = asyncio.Event()
     allow_processing = asyncio.Event()
 
-    async def tracking_lease(job_id: int, job_type: str, lease_seconds: int | None) -> QueueJobDTO | None:
+    async def tracking_lease(
+        job_id: int, job_type: str, lease_seconds: int | None
+    ) -> QueueJobDTO | None:
         leased_job = await lease_async(job_id, job_type=job_type, lease_seconds=lease_seconds)
         if leased_job and any(
             isinstance(item, dict) and int(item.get("download_id", 0)) == low_id

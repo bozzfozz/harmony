@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from warnings import warn
-
 from app.api.routers.search import log_event, router
+from app.routers._deprecation import emit_router_deprecation
 
-warn(
-    "app.routers.search_router is deprecated; use app.api.routers.search.router instead.",
-    DeprecationWarning,
-    stacklevel=2,
+emit_router_deprecation(
+    "app.routers.search_router",
+    "app.api.routers.search.router",
 )
 
 __all__ = ["router", "log_event"]
