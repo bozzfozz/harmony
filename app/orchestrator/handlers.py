@@ -37,6 +37,12 @@ from app.integrations.normalizers import normalize_slskd_candidate, normalize_sp
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Download, IngestItem, IngestItemState, Match
+from app.services.artist_delta import (
+    AlbumRelease,
+    ArtistTrackCandidate,
+    build_artist_delta,
+    filter_new_releases,
+)
 from app.services.backfill_service import BackfillJobStatus
 from app.services.retry_policy_provider import (
     RetryPolicy,
@@ -790,30 +796,46 @@ def _watchlist_extract_priority(payload: Mapping[str, Any]) -> int:
         return 0
 
 
-def _watchlist_is_new_release(album: Mapping[str, Any], last_checked: datetime | None) -> bool:
-    if last_checked is None:
-        return True
-    release_date = _watchlist_parse_release_date(album)
-    if release_date is None:
-        return False
-    return release_date > last_checked
+def _watchlist_album_payload(candidate: ArtistTrackCandidate) -> Mapping[str, Any]:
+    if candidate.raw_album:
+        return candidate.raw_album
+    album = candidate.release.album
+    artists = [
+        {"name": artist.name}
+        for artist in getattr(album, "artists", ())
+        if getattr(artist, "name", None)
+    ]
+    payload: dict[str, Any] = {
+        "id": album.source_id or "",
+        "name": album.title,
+        "artists": artists,
+    }
+    return payload
 
 
-def _watchlist_parse_release_date(album: Mapping[str, Any]) -> datetime | None:
-    value = album.get("release_date")
-    if not value:
-        return None
-    precision = str(album.get("release_date_precision") or "day").lower()
-    try:
-        if precision == "day":
-            return datetime.strptime(str(value), "%Y-%m-%d")
-        if precision == "month":
-            return datetime.strptime(str(value), "%Y-%m")
-        if precision == "year":
-            return datetime.strptime(str(value), "%Y")
-    except ValueError:
-        return None
-    return None
+def _watchlist_track_payload(candidate: ArtistTrackCandidate) -> Mapping[str, Any]:
+    if candidate.raw_track:
+        return candidate.raw_track
+    track = candidate.track
+    artists = [
+        {"name": artist.name}
+        for artist in getattr(track, "artists", ())
+        if getattr(artist, "name", None)
+    ]
+    payload: dict[str, Any] = {
+        "id": track.source_id or "",
+        "name": track.title,
+        "artists": artists,
+    }
+    if track.album is not None:
+        payload.setdefault(
+            "album",
+            {
+                "id": track.album.source_id or "",
+                "name": track.album.title,
+            },
+        )
+    return payload
 
 
 async def _watchlist_process_artist(
@@ -846,16 +868,19 @@ async def _watchlist_process_artist(
     elif isinstance(albums, Iterable):
         album_list = [album for album in albums if isinstance(album, Mapping)]
 
-    last_checked = artist.last_checked
-    recent_albums = [
-        album for album in album_list if _watchlist_is_new_release(album, last_checked)
+    releases = [
+        release
+        for album in album_list
+        for release in [AlbumRelease.from_mapping(album, source="spotify")]
+        if release is not None
     ]
-    if not recent_albums:
+    recent_releases = filter_new_releases(releases, last_checked=artist.last_checked)
+    if not recent_releases:
         return 0
 
-    track_candidates: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
-    for album in recent_albums:
-        album_id = str(album.get("id") or "").strip()
+    track_candidates: list[ArtistTrackCandidate] = []
+    for release in recent_releases:
+        album_id = release.album_id or ""
         if not album_id:
             continue
         try:
@@ -882,33 +907,34 @@ async def _watchlist_process_artist(
         elif isinstance(tracks, Iterable):
             track_list = [track for track in tracks if isinstance(track, Mapping)]
         for track in track_list:
-            track_id = str(track.get("id") or "").strip()
-            if not track_id:
-                continue
-            track_candidates.append((album, track))
+            candidate = ArtistTrackCandidate.from_mapping(track, release, source="spotify")
+            if candidate is not None:
+                track_candidates.append(candidate)
 
     if not track_candidates:
         return 0
 
-    track_ids = [
-        str(track.get("id"))
-        for _, track in track_candidates
-        if isinstance(track.get("id"), (str, int))
-    ]
+    track_ids = [candidate.track_id for candidate in track_candidates if candidate.track_id]
     existing: set[str] = set()
     if track_ids:
         fetched = await _watchlist_dao_call(deps, "load_existing_track_ids", track_ids)
         if fetched:
             existing = {str(item) for item in fetched}
 
+    delta = build_artist_delta(
+        track_candidates,
+        existing,
+        last_checked=artist.last_checked,
+    )
+    pending_candidates = list(delta.new) + list(delta.updated)
+    if not pending_candidates:
+        return 0
+
     queued = 0
-    scheduled: set[str] = set()
-    for album, track in track_candidates:
-        track_id = str(track.get("id") or "").strip()
-        if not track_id or track_id in existing or track_id in scheduled:
-            continue
-        scheduled.add(track_id)
-        if await _watchlist_schedule_download(artist, album, track, deps):
+    for candidate in pending_candidates:
+        album_payload = _watchlist_album_payload(candidate)
+        track_payload = _watchlist_track_payload(candidate)
+        if await _watchlist_schedule_download(artist, album_payload, track_payload, deps):
             queued += 1
     return queued
 
