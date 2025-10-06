@@ -274,9 +274,17 @@ def _upsert_queue_job(
             if _is_duplicate_integrity_error(exc):
                 existing = _select_existing(with_lock=False)
                 if existing is not None:
+                    deduped = _apply_existing_job_updates(
+                        existing,
+                        payload=payload,
+                        priority=priority,
+                        scheduled_for=scheduled_for,
+                        now=now,
+                    )
                     session.add(existing)
-                    _log_dedupe()
-                    return existing, True
+                    if deduped:
+                        _log_dedupe()
+                    return existing, deduped
 
                 attempts += 1
                 time.sleep(min(0.01, 0.001 * attempts))

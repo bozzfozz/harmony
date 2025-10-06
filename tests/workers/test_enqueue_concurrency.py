@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
@@ -270,3 +270,70 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
         payload_data = record.payload.get("payload") if isinstance(record.payload, dict) else None
         assert isinstance(payload_data, dict)
         assert payload_data.get("attempt") in range(concurrency + 1)
+
+
+def test_enqueue_integrity_error_applies_latest_updates(monkeypatch: pytest.MonkeyPatch) -> None:
+    job_type = "integrity-dedupe"
+    dedupe_key = f"{job_type}-job"
+
+    initial = enqueue(
+        job_type,
+        {"idempotency_key": dedupe_key, "payload": {"sequence": "initial"}},
+        priority=1,
+    )
+
+    assert initial.priority == 1
+    assert initial.payload["payload"]["sequence"] == "initial"
+
+    original_execute = sa.orm.session.Session.execute
+    call_state = {"active": True, "count": 0}
+
+    class EmptyResult:
+        def scalars(self) -> "EmptyResult":
+            return self
+
+        def first(self) -> Any:
+            return None
+
+    def fake_execute(self: sa.orm.session.Session, statement: Any, *args: Any, **kwargs: Any):
+        result = original_execute(self, statement, *args, **kwargs)
+
+        if call_state["active"] and isinstance(statement, Select):
+            froms = statement.get_final_froms()
+            if any(getattr(from_, "name", None) == QueueJob.__tablename__ for from_ in froms):
+                has_idempotency_filter = any(
+                    getattr(getattr(clause, "left", None), "name", None) == "idempotency_key"
+                    for clause in statement._where_criteria
+                )
+                if not has_idempotency_filter:
+                    return result
+                call_state["count"] += 1
+                call_state["active"] = False
+                return EmptyResult()
+
+        return result
+
+    monkeypatch.setattr(sa.orm.session.Session, "execute", fake_execute, raising=False)
+
+    updated = enqueue(
+        job_type,
+        {"idempotency_key": dedupe_key, "payload": {"sequence": "updated"}},
+        priority=7,
+    )
+
+    assert call_state["count"] == 1, "Expected the integrity error path to be triggered"
+    assert updated.id == initial.id
+    assert updated.priority == 7
+    assert updated.payload["payload"]["sequence"] == "updated"
+
+    with session_scope() as session:
+        record = (
+            session.execute(
+                select(QueueJob).where(QueueJob.type == job_type, QueueJob.id == updated.id)
+            )
+            .scalars()
+            .one()
+        )
+
+        assert record.priority == 7
+        assert record.payload["payload"]["sequence"] == "updated"
