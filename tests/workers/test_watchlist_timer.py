@@ -85,7 +85,7 @@ async def test_watchlist_timer_enqueues_idempotently(monkeypatch: pytest.MonkeyP
     assert dao.calls == 2
 
     with session_scope() as session:
-        jobs = session.query(QueueJob).filter(QueueJob.type == "watchlist").all()
+        jobs = session.query(QueueJob).filter(QueueJob.type == "artist_refresh").all()
         assert len(jobs) == 1
 
 

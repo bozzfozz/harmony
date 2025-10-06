@@ -22,6 +22,8 @@ from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
     from app.orchestrator.handlers import (
+        ArtistDeltaHandlerDeps,
+        ArtistRefreshHandlerDeps,
         MatchingHandlerDeps,
         RetryHandlerDeps,
         SyncHandlerDeps,
@@ -38,10 +40,14 @@ def default_handlers(
     matching_deps: "MatchingHandlerDeps" | None = None,
     retry_deps: "RetryHandlerDeps" | None = None,
     watchlist_deps: "WatchlistHandlerDeps" | None = None,
+    artist_refresh_deps: "ArtistRefreshHandlerDeps" | None = None,
+    artist_delta_deps: "ArtistDeltaHandlerDeps" | None = None,
 ) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
     from app.orchestrator.handlers import (
+        build_artist_delta_handler,
+        build_artist_refresh_handler,
         build_matching_handler,
         build_retry_handler,
         build_sync_handler,
@@ -55,6 +61,10 @@ def default_handlers(
         handlers["retry"] = build_retry_handler(retry_deps)
     if watchlist_deps is not None:
         handlers["watchlist"] = build_watchlist_handler(watchlist_deps)
+    if artist_refresh_deps is not None:
+        handlers["artist_refresh"] = build_artist_refresh_handler(artist_refresh_deps)
+    if artist_delta_deps is not None:
+        handlers["artist_delta"] = build_artist_delta_handler(artist_delta_deps)
     return handlers
 
 

@@ -62,7 +62,11 @@ async def test_worker_enqueues_due_artists() -> None:
     assert all(outcome.enqueued for outcome in outcomes)
 
     with session_scope() as session:
-        jobs = session.execute(select(QueueJob).where(QueueJob.type == "watchlist")).scalars().all()
+        jobs = (
+            session.execute(select(QueueJob).where(QueueJob.type == "artist_refresh"))
+            .scalars()
+            .all()
+        )
         assert len(jobs) == 3
         keys = {job.idempotency_key for job in jobs}
         assert len(keys) == 3
@@ -90,7 +94,11 @@ async def test_worker_idempotency_prevents_duplicates() -> None:
     assert second_run[0].enqueued
 
     with session_scope() as session:
-        jobs = session.execute(select(QueueJob).where(QueueJob.type == "watchlist")).scalars().all()
+        jobs = (
+            session.execute(select(QueueJob).where(QueueJob.type == "artist_refresh"))
+            .scalars()
+            .all()
+        )
         assert len(jobs) == 1
         job = jobs[0]
         assert job.idempotency_key is not None

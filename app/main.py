@@ -104,7 +104,16 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
 
 
 def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
-    jobs = ("sync", "matching", "retry", "watchlist", "artwork", "lyrics")
+    jobs = (
+        "sync",
+        "matching",
+        "retry",
+        "artist_refresh",
+        "artist_delta",
+        "watchlist",
+        "artwork",
+        "lyrics",
+    )
     probes: dict[str, Callable[[], DependencyStatus]] = {
         "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
         "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),

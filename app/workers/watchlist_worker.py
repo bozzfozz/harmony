@@ -6,7 +6,7 @@ import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.config import WatchlistWorkerConfig
+from app.config import WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
@@ -48,6 +48,7 @@ class WatchlistWorker:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._tick_budget_seconds = max(self._config.tick_budget_ms, 0) / 1000.0
+        self._priority = int(settings.orchestrator.priority_map.get("artist_refresh", 0))
 
         log_event(
             logger,
@@ -178,13 +179,16 @@ class WatchlistWorker:
         payload = {"artist_id": int(artist.id)}
         if cutoff:
             payload["cutoff"] = cutoff
-        idempotency_key = f"watchlist:{artist.id}:{cutoff or 'never'}"
+        delta_idempotency = f"artist-delta:{artist.id}:{cutoff or 'never'}"
+        payload["delta_idempotency"] = delta_idempotency
+        idempotency_key = f"artist-refresh:{artist.id}:{cutoff or 'never'}"
         try:
             await asyncio.to_thread(
                 persistence.enqueue,
-                "watchlist",
+                "artist_refresh",
                 payload,
                 idempotency_key=idempotency_key,
+                priority=self._priority,
             )
         except Exception:  # pragma: no cover - defensive logging
             logger.exception(

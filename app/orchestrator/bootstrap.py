@@ -16,6 +16,8 @@ from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
 from app.orchestrator.scheduler import Scheduler
 from app.orchestrator.handlers import ArtworkService, LyricsService, MetadataService
 from app.orchestrator.providers import (
+    build_artist_delta_handler_deps,
+    build_artist_refresh_handler_deps,
     build_matching_handler_deps,
     build_retry_handler_deps,
     build_sync_handler_deps,
@@ -68,6 +70,12 @@ def bootstrap_orchestrator(
         soulseek_client=soulseek_client,
         config=config.watchlist,
     )
+    artist_refresh_deps = build_artist_refresh_handler_deps(config=config.watchlist)
+    artist_delta_deps = build_artist_delta_handler_deps(
+        spotify_client=spotify_client,
+        soulseek_client=soulseek_client,
+        config=config.watchlist,
+    )
 
     scheduler = Scheduler()
     handlers = default_handlers(
@@ -75,6 +83,8 @@ def bootstrap_orchestrator(
         matching_deps=matching_deps,
         retry_deps=retry_deps,
         watchlist_deps=watchlist_deps,
+        artist_refresh_deps=artist_refresh_deps,
+        artist_delta_deps=artist_delta_deps,
     )
     dispatcher = Dispatcher(scheduler, handlers)
 
@@ -88,7 +98,14 @@ def bootstrap_orchestrator(
     import_worker = ImportWorker(free_ingest_service=free_ingest_service)
 
     enabled_jobs: dict[str, bool] = {}
-    for job_type in ("sync", "matching", "retry", "watchlist"):
+    for job_type in (
+        "sync",
+        "matching",
+        "retry",
+        "watchlist",
+        "artist_refresh",
+        "artist_delta",
+    ):
         enabled_jobs[job_type] = job_type in handlers
     enabled_jobs["artwork"] = bool(features.enable_artwork)
     enabled_jobs["lyrics"] = bool(features.enable_lyrics)

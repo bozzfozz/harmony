@@ -18,6 +18,8 @@ from app.dependencies import (
     get_spotify_client,
 )
 from app.orchestrator.handlers import (
+    ArtistDeltaHandlerDeps,
+    ArtistRefreshHandlerDeps,
     ArtworkService,
     MatchingHandlerDeps,
     LyricsService,
@@ -102,9 +104,46 @@ def build_watchlist_handler_deps(
     )
 
 
+def build_artist_refresh_handler_deps(
+    *,
+    config: WatchlistWorkerConfig | None = None,
+    submit_delta_job: SyncJobSubmitter | None = None,
+) -> ArtistRefreshHandlerDeps:
+    """Construct handler dependencies for artist refresh jobs."""
+
+    resolved_config = config or get_app_config().watchlist
+    kwargs: dict[str, object] = {}
+    if submit_delta_job is not None:
+        kwargs["submit_delta_job"] = submit_delta_job
+    return ArtistRefreshHandlerDeps(config=resolved_config, **kwargs)
+
+
+def build_artist_delta_handler_deps(
+    *,
+    spotify_client: SpotifyClient | None = None,
+    soulseek_client: SoulseekClient | None = None,
+    config: WatchlistWorkerConfig | None = None,
+    submit_sync_job: SyncJobSubmitter | None = None,
+) -> ArtistDeltaHandlerDeps:
+    """Construct handler dependencies for artist delta jobs."""
+
+    resolved_config = config or get_app_config().watchlist
+    kwargs: dict[str, object] = {}
+    if submit_sync_job is not None:
+        kwargs["submit_sync_job"] = submit_sync_job
+    return ArtistDeltaHandlerDeps(
+        spotify_client=spotify_client or get_spotify_client(),
+        soulseek_client=soulseek_client or get_soulseek_client(),
+        config=resolved_config,
+        **kwargs,
+    )
+
+
 __all__ = [
     "build_sync_handler_deps",
     "build_matching_handler_deps",
     "build_retry_handler_deps",
     "build_watchlist_handler_deps",
+    "build_artist_refresh_handler_deps",
+    "build_artist_delta_handler_deps",
 ]

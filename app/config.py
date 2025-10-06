@@ -203,7 +203,8 @@ class OrchestratorConfig:
     pool_sync: int
     pool_matching: int
     pool_retry: int
-    pool_watchlist: int
+    pool_artist_refresh: int
+    pool_artist_delta: int
     priority_map: dict[str, int]
     visibility_timeout_s: int
     heartbeat_s: int
@@ -215,7 +216,10 @@ class OrchestratorConfig:
             "sync": max(1, self.pool_sync or self.global_concurrency),
             "matching": max(1, self.pool_matching or self.global_concurrency),
             "retry": max(1, self.pool_retry or self.global_concurrency),
-            "watchlist": max(1, self.pool_watchlist or self.global_concurrency),
+            "artist_refresh": max(
+                1, self.pool_artist_refresh or self.global_concurrency
+            ),
+            "artist_delta": max(1, self.pool_artist_delta or self.global_concurrency),
         }
 
     @classmethod
@@ -244,9 +248,14 @@ class OrchestratorConfig:
             default=DEFAULT_ORCH_POOL_RETRY,
             minimum=1,
         )
-        pool_watchlist = _bounded_int(
-            env.get("ORCH_POOL_WATCHLIST"),
-            default=DEFAULT_ORCH_POOL_WATCHLIST,
+        pool_artist_refresh = _bounded_int(
+            env.get("ORCH_POOL_ARTIST_REFRESH"),
+            default=DEFAULT_ORCH_POOL_ARTIST_REFRESH,
+            minimum=1,
+        )
+        pool_artist_delta = _bounded_int(
+            env.get("ORCH_POOL_ARTIST_DELTA"),
+            default=DEFAULT_ORCH_POOL_ARTIST_DELTA,
             minimum=1,
         )
         visibility_timeout = _bounded_int(
@@ -276,7 +285,8 @@ class OrchestratorConfig:
             pool_sync=pool_sync,
             pool_matching=pool_matching,
             pool_retry=pool_retry,
-            pool_watchlist=pool_watchlist,
+            pool_artist_refresh=pool_artist_refresh,
+            pool_artist_delta=pool_artist_delta,
             priority_map=priority_map,
             visibility_timeout_s=visibility_timeout,
             heartbeat_s=heartbeat_s,
@@ -588,12 +598,14 @@ DEFAULT_ORCH_GLOBAL_CONCURRENCY = 8
 DEFAULT_ORCH_POOL_SYNC = 4
 DEFAULT_ORCH_POOL_MATCHING = 4
 DEFAULT_ORCH_POOL_RETRY = 2
-DEFAULT_ORCH_POOL_WATCHLIST = 2
+DEFAULT_ORCH_POOL_ARTIST_REFRESH = 2
+DEFAULT_ORCH_POOL_ARTIST_DELTA = 2
 DEFAULT_ORCH_PRIORITY_MAP = {
     "sync": 100,
     "matching": 90,
     "retry": 80,
-    "watchlist": 50,
+    "artist_refresh": 50,
+    "artist_delta": 45,
 }
 DEFAULT_ORCH_VISIBILITY_TIMEOUT_S = 60
 DEFAULT_ORCH_HEARTBEAT_S = 20

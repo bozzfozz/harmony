@@ -79,7 +79,10 @@ class RecordingScheduler:
         persistence_module=persistence,
     ) -> None:
         self._persistence = persistence_module
-        self._job_types = tuple(job_types or ("sync", "matching", "retry", "watchlist"))
+        self._job_types = tuple(
+            job_types
+            or ("sync", "matching", "retry", "artist_refresh", "artist_delta", "watchlist")
+        )
         self.poll_interval = 0.01
         self.started = asyncio.Event()
         self.stopped = asyncio.Event()

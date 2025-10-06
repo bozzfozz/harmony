@@ -86,6 +86,7 @@ class WatchlistTimer:
             self._sleep_jitter_pct = int(round(jitter_value * 100))
         else:
             self._sleep_jitter_pct = int(round(jitter_value))
+        self._priority = int(settings.orchestrator.priority_map.get("artist_refresh", 0))
 
     @property
     def interval(self) -> float:
@@ -283,12 +284,15 @@ class WatchlistTimer:
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
         if cutoff:
             payload["cutoff"] = cutoff
-        idempotency = f"watchlist:{artist.id}:{cutoff or 'never'}"
+        delta_idempotency = f"artist-delta:{artist.id}:{cutoff or 'never'}"
+        payload["delta_idempotency"] = delta_idempotency
+        idempotency = f"artist-refresh:{artist.id}:{cutoff or 'never'}"
         return await asyncio.to_thread(
             self._persistence.enqueue,
-            "watchlist",
+            "artist_refresh",
             payload,
             idempotency_key=idempotency,
+            priority=self._priority,
         )
 
 
