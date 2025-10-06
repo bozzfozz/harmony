@@ -405,7 +405,9 @@ async def test_default_handlers_bind_sync_job(tmp_path: Path) -> None:
     soulseek = InlineSoulseekClient()
     deps = SyncHandlerDeps(
         soulseek_client=soulseek,
-        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -457,7 +459,9 @@ async def test_default_handlers_bind_matching_job(tmp_path: Path) -> None:
     soulseek = InlineSoulseekClient()
     deps = SyncHandlerDeps(
         soulseek_client=soulseek,  # type: ignore[arg-type]
-        retry_policy=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )

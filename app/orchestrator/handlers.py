@@ -9,7 +9,7 @@ import random
 import statistics
 import time
 from contextlib import AbstractContextManager
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import (
@@ -499,7 +499,7 @@ class SyncHandlerDeps:
 
     soulseek_client: SoulseekClient
     session_factory: Callable[[], AbstractContextManager[Session]] = session_scope
-    retry_policy: SyncRetryPolicy = field(default_factory=load_sync_retry_policy)
+    retry_policy_provider: RetryPolicyProvider | None = None
     rng: random.Random = field(default_factory=random.Random)
     metadata_service: MetadataService | None = None
     artwork_service: ArtworkService | None = None
@@ -510,6 +510,38 @@ class SyncHandlerDeps:
     external_timeout_ms: int = field(
         default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
     )
+    retry_job_type: str = "sync"
+    retry_policy_override: InitVar[SyncRetryPolicy | None] = None
+    _retry_policy_override: SyncRetryPolicy | None = field(
+        init=False, default=None, repr=False
+    )
+
+    def __post_init__(
+        self, retry_policy_override: SyncRetryPolicy | None
+    ) -> None:
+        self._retry_policy_override = retry_policy_override
+        if self.retry_policy_provider is None:
+            self.retry_policy_provider = get_retry_policy_provider()
+        if not self.retry_job_type:
+            self.retry_job_type = "sync"
+
+    def get_retry_policy(
+        self, *, job_type: str | None = None, force_reload: bool = False
+    ) -> SyncRetryPolicy:
+        if self._retry_policy_override is not None and not force_reload:
+            return self._retry_policy_override
+
+        provider = self.retry_policy_provider or get_retry_policy_provider()
+        self.retry_policy_provider = provider
+        resolved_job_type = job_type or self.retry_job_type or "sync"
+        if force_reload:
+            provider.invalidate(resolved_job_type)
+            self._retry_policy_override = None
+        return provider.get_retry_policy(resolved_job_type)
+
+    @property
+    def retry_policy(self) -> SyncRetryPolicy:
+        return self.get_retry_policy()
 
 
 @dataclass(slots=True)
@@ -1243,6 +1275,7 @@ async def _handle_retry_enqueue_failure(
     )
 
     now = deps.now_factory()
+    policy = deps.retry_policy
     with deps.session_factory() as session:
         record = session.get(Download, candidate.download_id)
         if record is None:
@@ -1251,7 +1284,7 @@ async def _handle_retry_enqueue_failure(
         record.last_error = message
         delay = calculate_retry_backoff_seconds(
             int(record.retry_count or candidate.retry_count),
-            deps.retry_policy,
+            policy,
             deps.rng,
         )
         record.next_retry_at = now + timedelta(seconds=delay)
@@ -1323,6 +1356,7 @@ async def handle_retry(
     should_reschedule = _coerce_bool(payload.get("auto_reschedule"), deps.auto_reschedule)
 
     now = deps.now_factory()
+    policy = deps.retry_policy
     candidates: list[_RetryCandidate] = []
     dead_letters: list[Mapping[str, Any]] = []
 
@@ -1331,7 +1365,7 @@ async def handle_retry(
             session,
             now=now,
             limit=batch_limit,
-            max_attempts=deps.retry_policy.max_attempts,
+            max_attempts=policy.max_attempts,
         )
         for record in records:
             candidate, error_message = _prepare_retry_candidate(record)
@@ -1496,7 +1530,9 @@ async def handle_sync_download_failure(
     username = job.get("username")
     error_message = truncate_error(str(error))
     now = datetime.utcnow()
-    provider = get_retry_policy_provider()
+    policy = deps.retry_policy
+    provider = deps.retry_policy_provider or get_retry_policy_provider()
+    deps.retry_policy_provider = provider
     policy_ttl = provider.reload_interval
 
     with deps.session_factory() as session:
@@ -1517,7 +1553,7 @@ async def handle_sync_download_failure(
             download.progress = 0.0
             download.updated_at = now
 
-            if download.retry_count > deps.retry_policy.max_attempts:
+            if download.retry_count > policy.max_attempts:
                 download.state = "dead_letter"
                 download.next_retry_at = None
                 dead_letters.append(
@@ -1535,19 +1571,19 @@ async def handle_sync_download_failure(
                     )
             else:
                 delay_seconds = calculate_retry_backoff_seconds(
-                    download.retry_count, deps.retry_policy, deps.rng
+                    download.retry_count, policy, deps.rng
                 )
                 download.state = "failed"
                 download.next_retry_at = now + timedelta(seconds=delay_seconds)
                 meta = {
                     "policy_ttl_s": policy_ttl,
                     "attempt": int(download.retry_count),
-                    "max_attempts": int(deps.retry_policy.max_attempts),
+                    "max_attempts": int(policy.max_attempts),
                     "backoff_ms": int(delay_seconds * 1000),
-                    "jitter_pct": float(deps.retry_policy.jitter_pct),
+                    "jitter_pct": float(policy.jitter_pct),
                 }
-                if deps.retry_policy.timeout_seconds is not None:
-                    meta["timeout_s"] = float(deps.retry_policy.timeout_seconds)
+                if policy.timeout_seconds is not None:
+                    meta["timeout_s"] = float(policy.timeout_seconds)
                 log_event(
                     logger,
                     "worker.retry",
