@@ -39,7 +39,7 @@ def test_request_validation_error_envelope(client: SimpleTestClient) -> None:
         json={"playlist_links": "not-a-list"},
     )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     payload = response.json()
     assert payload["ok"] is False
     assert payload["error"]["code"] == "VALIDATION_ERROR"
