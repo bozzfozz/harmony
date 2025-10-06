@@ -56,7 +56,7 @@ async def create_free_import(
     if body_size > hard_cap_bytes:
         raise ValidationAppError(
             "payload exceeds maximum allowed size",
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
         )
 
     content_type = request.headers.get("content-type")
@@ -72,7 +72,7 @@ async def create_free_import(
     except TooManyItemsError as exc:
         raise ValidationAppError(
             f"received {exc.provided} links which exceeds hard limit {exc.limit}",
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
         ) from exc
     except InvalidPayloadError as exc:
         raise ValidationAppError(f"invalid payload: {exc.message}") from exc
