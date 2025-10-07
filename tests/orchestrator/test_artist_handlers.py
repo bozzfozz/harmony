@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import WatchlistWorkerConfig, settings
 from app.dependencies import get_app_config
 from app.orchestrator.handlers import (
+    ARTIST_SCAN_JOB_TYPE,
     ArtistDeltaHandlerDeps,
     ArtistRefreshHandlerDeps,
     handle_artist_delta,
@@ -248,6 +249,7 @@ async def test_artist_refresh_uses_priority_override() -> None:
     cache = _StubCacheService()
     submitter = _RecordingSubmitter()
     previous_priorities = dict(settings.orchestrator.priority_map)
+    settings.orchestrator.priority_map[ARTIST_SCAN_JOB_TYPE] = 77
     settings.orchestrator.priority_map["artist_delta"] = 77
     try:
         deps = ArtistRefreshHandlerDeps(
@@ -319,7 +321,7 @@ async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> Non
         cache_service=cache,
     )
 
-    job = _queue_job(job_type="artist_delta", payload={"artist_id": artist.id})
+    job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": artist.id})
     result = await handle_artist_delta(job, deps)
 
     assert result["status"] == "ok"
@@ -356,7 +358,7 @@ async def test_artist_delta_updates_cache_hint_on_no_changes() -> None:
         cache_service=cache,
     )
 
-    job = _queue_job(job_type="artist_delta", payload={"artist_id": artist.id})
+    job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": artist.id})
     result = await handle_artist_delta(job, deps)
 
     assert result["status"] == "noop"

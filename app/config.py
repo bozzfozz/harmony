@@ -309,7 +309,12 @@ class OrchestratorConfig:
                 minimum=0,
             )
             priority_map["artist_refresh"] = artist_priority
+            priority_map["artist_scan"] = artist_priority
             priority_map["artist_delta"] = artist_priority
+        if "artist_scan" not in priority_map and "artist_delta" in priority_map:
+            priority_map["artist_scan"] = priority_map["artist_delta"]
+        if "artist_delta" not in priority_map and "artist_scan" in priority_map:
+            priority_map["artist_delta"] = priority_map["artist_scan"]
         return cls(
             workers_enabled=workers_enabled,
             global_concurrency=global_limit,
@@ -638,6 +643,7 @@ DEFAULT_ORCH_PRIORITY_MAP = {
     "matching": 90,
     "retry": 80,
     "artist_refresh": 50,
+    "artist_scan": 45,
     "artist_delta": 45,
 }
 DEFAULT_ARTIST_PRIORITY = DEFAULT_ORCH_PRIORITY_MAP["artist_refresh"]

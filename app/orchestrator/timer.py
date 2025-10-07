@@ -15,6 +15,7 @@ from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
+from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.utils.time import sleep_jitter_ms
 from app.workers import persistence
@@ -94,7 +95,7 @@ class WatchlistTimer:
             self._sleep_jitter_pct = int(round(jitter_value * 100))
         else:
             self._sleep_jitter_pct = int(round(jitter_value))
-        self._priority = int(settings.orchestrator.priority_map.get("artist_refresh", 0))
+        self._priority = int(settings.orchestrator.priority_map.get(ARTIST_REFRESH_JOB_TYPE, 0))
 
     @property
     def interval(self) -> float:
@@ -294,12 +295,20 @@ class WatchlistTimer:
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
         if cutoff:
             payload["cutoff"] = cutoff
-        delta_idempotency = f"artist-delta:{artist.id}:{cutoff or 'never'}"
+        delta_idempotency = f"{ARTIST_SCAN_JOB_TYPE}:{artist.id}:{cutoff or 'never'}"
         payload["delta_idempotency"] = delta_idempotency
-        idempotency = f"artist-refresh:{artist.id}:{cutoff or 'never'}"
+        idempotency = f"{ARTIST_REFRESH_JOB_TYPE}:{artist.id}:{cutoff or 'never'}"
+        enqueue_async = getattr(self._persistence, "enqueue_async", None)
+        if callable(enqueue_async):
+            return await enqueue_async(
+                ARTIST_REFRESH_JOB_TYPE,
+                payload,
+                idempotency_key=idempotency,
+                priority=self._priority,
+            )
         return await asyncio.to_thread(
             self._persistence.enqueue,
-            "artist_refresh",
+            ARTIST_REFRESH_JOB_TYPE,
             payload,
             idempotency_key=idempotency,
             priority=self._priority,

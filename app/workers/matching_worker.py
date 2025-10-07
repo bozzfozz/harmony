@@ -23,6 +23,7 @@ from app.workers.persistence import (
     fail,
     lease,
     release_active_leases,
+    to_dlq,
 )
 
 logger = get_logger(__name__)
@@ -169,18 +170,41 @@ class MatchingWorker:
             try:
                 result = await handle_matching(leased, self._handler_deps)
             except MatchingJobError as exc:
-                retry_in = exc.retry_in if exc.retry else None
-                fail(leased.id, job_type=self._job_type, error=exc.code, retry_in=retry_in)
-                record_activity(
-                    "metadata",
-                    "matching_job_failed",
-                    details={
-                        "job_id": leased.id,
-                        "error": exc.code,
-                        "retry": bool(exc.retry),
-                        "retry_in": retry_in,
-                    },
-                )
+                if not exc.retry and exc.stop_reason:
+                    to_dlq(
+                        leased.id,
+                        job_type=self._job_type,
+                        reason=exc.stop_reason,
+                        payload=exc.result_payload,
+                    )
+                    record_activity(
+                        "metadata",
+                        "matching_job_failed",
+                        details={
+                            "job_id": leased.id,
+                            "error": exc.code,
+                            "retry": False,
+                            "stop_reason": exc.stop_reason,
+                        },
+                    )
+                else:
+                    retry_in = exc.retry_in if exc.retry else None
+                    fail(
+                        leased.id,
+                        job_type=self._job_type,
+                        error=exc.code,
+                        retry_in=retry_in,
+                    )
+                    record_activity(
+                        "metadata",
+                        "matching_job_failed",
+                        details={
+                            "job_id": leased.id,
+                            "error": exc.code,
+                            "retry": bool(exc.retry),
+                            "retry_in": retry_in,
+                        },
+                    )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to process matching job %s: %s", leased.id, exc)
                 fail(leased.id, job_type=self._job_type, error="internal_error")

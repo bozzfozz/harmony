@@ -14,7 +14,13 @@ from app.dependencies import (
 )
 from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
 from app.orchestrator.scheduler import Scheduler
-from app.orchestrator.handlers import ArtworkService, LyricsService, MetadataService
+from app.orchestrator.handlers import (
+    ARTIST_REFRESH_JOB_TYPE,
+    ARTIST_SCAN_JOB_TYPE,
+    ArtworkService,
+    LyricsService,
+    MetadataService,
+)
 from app.orchestrator.providers import (
     build_artist_delta_handler_deps,
     build_artist_refresh_handler_deps,
@@ -101,15 +107,17 @@ def bootstrap_orchestrator(
     import_worker = ImportWorker(free_ingest_service=free_ingest_service)
 
     enabled_jobs: dict[str, bool] = {}
-    for job_type in (
+    job_types = [
         "sync",
         "matching",
         "retry",
         "watchlist",
-        "artist_refresh",
-        "artist_delta",
+        ARTIST_REFRESH_JOB_TYPE,
+        ARTIST_SCAN_JOB_TYPE,
         "artist_sync",
-    ):
+        "artist_delta",
+    ]
+    for job_type in job_types:
         enabled_jobs[job_type] = job_type in handlers
     enabled_jobs["artwork"] = bool(features.enable_artwork)
     enabled_jobs["lyrics"] = bool(features.enable_lyrics)

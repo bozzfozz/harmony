@@ -8,9 +8,20 @@ import pytest
 from app.config import WatchlistWorkerConfig
 from app.models import QueueJobStatus
 from app.orchestrator import timer as timer_module
+from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.workers import persistence
+
+
+class RecordingDAO:
+    def __init__(self, rows):
+        self.rows = list(rows)
+        self.args = None
+
+    def load_batch(self, limit: int, *, cutoff: datetime):
+        self.args = (limit, cutoff)
+        return self.rows[:limit]
 
 
 def _build_config(**overrides) -> WatchlistWorkerConfig:
@@ -63,15 +74,6 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
         ),
     ]
 
-    class RecordingDAO:
-        def __init__(self, rows):
-            self.rows = list(rows)
-            self.args = None
-
-        def load_batch(self, limit: int, *, cutoff: datetime):
-            self.args = (limit, cutoff)
-            return self.rows[:limit]
-
     dao = RecordingDAO(artists)
 
     fake_time = SimpleNamespace(value=0.0)
@@ -90,7 +92,7 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
         idempotency_key: str,
         priority: int,
     ):
-        assert job_type == "artist_refresh"
+        assert job_type == ARTIST_REFRESH_JOB_TYPE
         fake_time.value += 0.05
         job = persistence.QueueJobDTO(
             id=next(job_ids),
@@ -123,17 +125,17 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
     payloads = [job.payload for job in enqueued]
     assert payloads[0] == {
         "artist_id": 1,
-        "delta_idempotency": "artist-delta:1:never",
+        "delta_idempotency": f"{ARTIST_SCAN_JOB_TYPE}:1:never",
     }
     assert payloads[1] == {
         "artist_id": 2,
         "cutoff": "2023-01-01T10:00:00",
-        "delta_idempotency": "artist-delta:2:2023-01-01T10:00:00",
+        "delta_idempotency": f"{ARTIST_SCAN_JOB_TYPE}:2:2023-01-01T10:00:00",
     }
     keys = [job.idempotency_key for job in enqueued]
     assert keys == [
-        "artist-refresh:1:never",
-        "artist-refresh:2:2023-01-01T10:00:00",
+        f"{ARTIST_REFRESH_JOB_TYPE}:1:never",
+        f"{ARTIST_REFRESH_JOB_TYPE}:2:2023-01-01T10:00:00",
     ]
 
     assert logged
@@ -162,7 +164,7 @@ async def test_trigger_disabled_logs(monkeypatch):
     monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
     monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
-    timer = WatchlistTimer(config=_build_config(), enabled=False)
+    timer = WatchlistTimer(config=_build_config(), enabled=False, dao=RecordingDAO([]))
 
     result = await timer.trigger()
 
@@ -185,7 +187,7 @@ async def test_trigger_skips_when_busy(monkeypatch):
     monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
     monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
-    timer = WatchlistTimer(config=_build_config())
+    timer = WatchlistTimer(config=_build_config(), dao=RecordingDAO([]))
 
     await timer._lock.acquire()
     try:
@@ -205,7 +207,10 @@ async def test_start_stop_lifecycle(monkeypatch):
 
     monkeypatch.setattr(timer_module.asyncio, "to_thread", immediate_to_thread)
 
-    timer = WatchlistTimer(config=_build_config(shutdown_grace_ms=50))
+    timer = WatchlistTimer(
+        config=_build_config(shutdown_grace_ms=50),
+        dao=RecordingDAO([]),
+    )
 
     started = asyncio.Event()
     stopped = asyncio.Event()
