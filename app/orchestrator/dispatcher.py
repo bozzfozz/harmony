@@ -29,9 +29,13 @@ if TYPE_CHECKING:  # pragma: no cover - import for typing only
         SyncHandlerDeps,
         WatchlistHandlerDeps,
     )
+    from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
 
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]
+
+
+_ARTIST_SYNC_JOB_TYPE = "artist_sync"
 
 
 def default_handlers(
@@ -42,9 +46,11 @@ def default_handlers(
     watchlist_deps: "WatchlistHandlerDeps" | None = None,
     artist_refresh_deps: "ArtistRefreshHandlerDeps" | None = None,
     artist_delta_deps: "ArtistDeltaHandlerDeps" | None = None,
+    artist_sync_deps: "ArtistSyncHandlerDeps" | None = None,
 ) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
+    from app.orchestrator.artist_sync import build_artist_sync_handler
     from app.orchestrator.handlers import (
         build_artist_delta_handler,
         build_artist_refresh_handler,
@@ -65,6 +71,8 @@ def default_handlers(
         handlers["artist_refresh"] = build_artist_refresh_handler(artist_refresh_deps)
     if artist_delta_deps is not None:
         handlers["artist_delta"] = build_artist_delta_handler(artist_delta_deps)
+    if artist_sync_deps is not None:
+        handlers[_ARTIST_SYNC_JOB_TYPE] = build_artist_sync_handler(artist_sync_deps)
     return handlers
 
 

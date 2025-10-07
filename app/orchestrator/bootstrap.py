@@ -18,6 +18,7 @@ from app.orchestrator.handlers import ArtworkService, LyricsService, MetadataSer
 from app.orchestrator.providers import (
     build_artist_delta_handler_deps,
     build_artist_refresh_handler_deps,
+    build_artist_sync_handler_deps,
     build_matching_handler_deps,
     build_retry_handler_deps,
     build_sync_handler_deps,
@@ -76,6 +77,7 @@ def bootstrap_orchestrator(
         soulseek_client=soulseek_client,
         config=config.watchlist,
     )
+    artist_sync_deps = build_artist_sync_handler_deps()
 
     scheduler = Scheduler()
     handlers = default_handlers(
@@ -85,6 +87,7 @@ def bootstrap_orchestrator(
         watchlist_deps=watchlist_deps,
         artist_refresh_deps=artist_refresh_deps,
         artist_delta_deps=artist_delta_deps,
+        artist_sync_deps=artist_sync_deps,
     )
     dispatcher = Dispatcher(scheduler, handlers)
 
@@ -105,6 +108,7 @@ def bootstrap_orchestrator(
         "watchlist",
         "artist_refresh",
         "artist_delta",
+        "artist_sync",
     ):
         enabled_jobs[job_type] = job_type in handlers
     enabled_jobs["artwork"] = bool(features.enable_artwork)
