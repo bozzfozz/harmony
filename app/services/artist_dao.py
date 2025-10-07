@@ -172,6 +172,7 @@ class ArtistWatchlistItem:
     artist_key: str
     priority: int
     last_enqueued_at: datetime | None
+    last_synced_at: datetime | None
     cooldown_until: datetime | None
 
 
@@ -534,6 +535,7 @@ class ArtistDao:
                     artist_key=record.artist_key,
                     priority=int(record.priority or 0),
                     last_enqueued_at=record.last_enqueued_at,
+                    last_synced_at=record.last_synced_at,
                     cooldown_until=record.cooldown_until,
                 )
                 for record in records
@@ -554,6 +556,37 @@ class ArtistDao:
             record.last_enqueued_at = timestamp
             if cooldown_until is not None:
                 record.cooldown_until = cooldown_until.replace(tzinfo=None)
+            record.updated_at = timestamp
+            session.add(record)
+        return True
+
+    def mark_synced(
+        self,
+        artist_key: str,
+        *,
+        synced_at: datetime,
+        cooldown_until: datetime | None = None,
+        priority_decay: int | None = None,
+    ) -> bool:
+        key = (artist_key or "").strip()
+        if not key:
+            return False
+        timestamp = synced_at.replace(tzinfo=None)
+        cooldown = _normalise_datetime(cooldown_until)
+        with session_scope() as session:
+            record = session.get(ArtistWatchlistEntry, key)
+            if record is None:
+                return False
+            record.last_synced_at = timestamp
+            record.cooldown_until = cooldown
+            if priority_decay:
+                try:
+                    decay = int(priority_decay)
+                except (TypeError, ValueError):
+                    decay = 0
+                if decay > 0:
+                    current = int(record.priority or 0)
+                    record.priority = max(0, current - decay)
             record.updated_at = timestamp
             session.add(record)
         return True
@@ -587,6 +620,7 @@ class ArtistDao:
                         artist_key=record.artist_key,
                         priority=int(record.priority or 0),
                         last_enqueued_at=record.last_enqueued_at,
+                        last_synced_at=record.last_synced_at,
                         cooldown_until=record.cooldown_until,
                         created_at=record.created_at,
                         updated_at=record.updated_at,
@@ -613,6 +647,7 @@ class ArtistDao:
                     artist_key=key,
                     priority=int(priority or 0),
                     cooldown_until=normalised_cooldown,
+                    last_synced_at=None,
                     created_at=timestamp,
                     updated_at=timestamp,
                 )
@@ -627,6 +662,7 @@ class ArtistDao:
                 artist_key=record.artist_key,
                 priority=int(record.priority or 0),
                 last_enqueued_at=record.last_enqueued_at,
+                last_synced_at=record.last_synced_at,
                 cooldown_until=record.cooldown_until,
                 created_at=record.created_at,
                 updated_at=record.updated_at,

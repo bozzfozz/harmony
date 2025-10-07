@@ -126,8 +126,12 @@ def _derive_idempotency_key(job_type: str, payload: Mapping[str, Any]) -> str | 
 
     if isinstance(candidate, (dict, list, tuple, set)):
         serialised = safe_dumps(candidate)
-    else:
-        serialised = str(candidate)
+        return make_idempotency_key(job_type, serialised)
+
+    if isinstance(candidate, str):
+        return candidate
+
+    serialised = str(candidate)
     return make_idempotency_key(job_type, serialised)
 
 

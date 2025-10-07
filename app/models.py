@@ -303,6 +303,7 @@ class ArtistWatchlistEntry(Base):
     artist_key = Column(String(255), primary_key=True)
     priority = Column(Integer, nullable=False, default=0)
     last_enqueued_at = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
     cooldown_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(

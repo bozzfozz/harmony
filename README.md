@@ -130,6 +130,21 @@ curl -X POST -H "Content-Type: application/json" -H "X-API-Key: $HARMONY_API_KEY
 }
 ```
 
+### Artist Sync (Backend)
+
+Der Orchestrator-Job `artist_sync` ruft die Künstlerdaten über den `ProviderGateway` ab, normalisiert sie und führt sie in der
+Artist-Persistenz zusammen. Ablauf im Überblick:
+
+- Startet mit dem Payload `{"artist_key": ..., "force": bool}` und loggt den Lauf über `worker.job`.
+- Für jeden angebundenen Provider wird ein `api.dependency`-Event mit Status (`ok`/`partial`/`failed`) protokolliert. Schlägt ein
+  Provider vollständig fehl, wird der Job mit einem retry-fähigen Fehler beendet (Retry-Politik aus `RetryPolicyProvider`).
+- Persistiert Künstler- und Release-Daten via `ArtistDao.upsert_*`; fehlende Releases können optional per Flag `ARTIST_SYNC_PRUNE`
+  als inaktiv markiert werden.
+- Aktualisiert Watchlist-Einträge (`last_synced_at`, `cooldown_until`) und reduziert die Priorität optional über
+  `ARTIST_SYNC_PRIORITY_DECAY`.
+- Invalidiert HTTP-Caches (`ResponseCache.invalidate_prefix`) für `/artists/{artist_key}` (inkl. API-Basispfad), sodass API-Aufrufe
+  sofort die neuen Daten erhalten.
+
 Der Watchlist-Response enthält zusätzlich `priority`, `last_enqueued_at` und `cooldown_until`, sodass Clients kommende Läufe einplanen können. Fehlerantworten folgen dem Schema `{ "ok": false, "error": { "code": "…", "message": "…" } }`.
 
 ## Artist Watchlist
