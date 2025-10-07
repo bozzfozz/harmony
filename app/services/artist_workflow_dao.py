@@ -286,4 +286,3 @@ class ArtistWorkflowDAO:
 
 
 __all__ = ["ArtistWorkflowDAO", "ArtistWorkflowArtistRow"]
-

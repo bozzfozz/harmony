@@ -16,7 +16,9 @@ def clean_database() -> None:
     reset_engine_for_tests()
 
 
-def _create_artist(*, last_checked: datetime | None = None, retry_block_until: datetime | None = None) -> int:
+def _create_artist(
+    *, last_checked: datetime | None = None, retry_block_until: datetime | None = None
+) -> int:
     with session_scope() as session:
         record = WatchlistArtist(
             spotify_artist_id=f"artist-{datetime.utcnow().timestamp()}",
@@ -44,7 +46,9 @@ def test_mark_success_updates_state_and_known_releases() -> None:
         assert artist.retry_block_until is None
         rows = (
             session.execute(
-                select(ArtistKnownReleaseRecord).where(ArtistKnownReleaseRecord.artist_id == artist_id)
+                select(ArtistKnownReleaseRecord).where(
+                    ArtistKnownReleaseRecord.artist_id == artist_id
+                )
             )
             .scalars()
             .all()
@@ -96,7 +100,9 @@ def test_create_download_record_persists_known_release_transactionally() -> None
         assert download.spotify_track_id == "track-42"
         stored = (
             session.execute(
-                select(ArtistKnownReleaseRecord).where(ArtistKnownReleaseRecord.artist_id == artist_id)
+                select(ArtistKnownReleaseRecord).where(
+                    ArtistKnownReleaseRecord.artist_id == artist_id
+                )
             )
             .scalars()
             .one()
@@ -180,4 +186,3 @@ def test_create_download_record_updates_known_release_versioning() -> None:
         stored = rows[0]
         assert stored.etag == "etag-new"
         assert stored.fetched_at == datetime(2024, 2, 1, 8, 30, 0)
-

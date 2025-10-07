@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from app.core import ProviderAlbumDTO, ProviderTrackDTO, ensure_album_dto, ensure_track_dto
+from app.services.artist_dao import ArtistReleaseRow, ArtistReleaseUpsertDTO
 
 
 @dataclass(slots=True, frozen=True)
@@ -77,6 +78,58 @@ class TrackDelta:
 
 
 @dataclass(slots=True, frozen=True)
+class ReleaseDeltaSummary:
+    title: str
+    source: str | None
+    source_id: str | None
+    release_date: str | None
+    release_type: str | None
+
+    @classmethod
+    def from_dto(cls, dto: ArtistReleaseUpsertDTO) -> "ReleaseDeltaSummary":
+        return cls(
+            title=dto.title,
+            source=dto.source,
+            source_id=dto.source_id,
+            release_date=_format_release_date(dto.release_date),
+            release_type=dto.release_type,
+        )
+
+    @classmethod
+    def from_snapshot(cls, snapshot: ReleaseSnapshot) -> "ReleaseDeltaSummary":
+        return cls(
+            title=snapshot.title,
+            source=snapshot.source,
+            source_id=snapshot.source_id,
+            release_date=_format_release_date(snapshot.release_date),
+            release_type=snapshot.release_type,
+        )
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "title": self.title,
+            "source": self.source,
+            "source_id": self.source_id,
+            "release_date": self.release_date,
+            "release_type": self.release_type,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class DeltaSummaryView:
+    added: Tuple[ReleaseDeltaSummary, ...]
+    updated: Tuple[ReleaseDeltaSummary, ...]
+    removed: Tuple[ReleaseDeltaSummary, ...]
+    alias_added: Tuple[str, ...]
+    alias_removed: Tuple[str, ...]
+    added_count: int
+    updated_count: int
+    removed_count: int
+    alias_added_count: int
+    alias_removed_count: int
+
+
+@dataclass(slots=True, frozen=True)
 class ArtistLocalState:
     releases: Tuple[ReleaseSnapshot, ...] = ()
     aliases: Tuple[str, ...] = ()
@@ -104,7 +157,9 @@ def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> Delta
         bucket = release_index.setdefault(key, [])
         bucket.append(snapshot)
     for bucket in release_index.values():
-        bucket.sort(key=lambda item: (item.inactive_at is not None, item.updated_at or datetime.min))
+        bucket.sort(
+            key=lambda item: (item.inactive_at is not None, item.updated_at or datetime.min)
+        )
 
     added: list[ArtistReleaseUpsertDTO] = []
     updated: list[ReleaseUpdate] = []
@@ -144,6 +199,58 @@ def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> Delta
     )
 
 
+def summarise_delta(delta: DeltaResult, *, limit: int = 20) -> DeltaSummaryView:
+    """Return a condensed summary for presentation layers."""
+
+    preview_limit = int(limit)
+    if preview_limit > 0:
+        added_candidates = delta.releases.added[:preview_limit]
+        updated_candidates = delta.releases.updated[:preview_limit]
+        removed_candidates = delta.releases.removed[:preview_limit]
+        alias_added_candidates = delta.aliases.added[:preview_limit]
+        alias_removed_candidates = delta.aliases.removed[:preview_limit]
+    else:
+        added_candidates = delta.releases.added
+        updated_candidates = delta.releases.updated
+        removed_candidates = delta.releases.removed
+        alias_added_candidates = delta.aliases.added
+        alias_removed_candidates = delta.aliases.removed
+
+    added_preview = tuple(ReleaseDeltaSummary.from_dto(dto) for dto in added_candidates)
+    updated_preview = tuple(
+        ReleaseDeltaSummary.from_dto(change.after) for change in updated_candidates
+    )
+    removed_preview = tuple(
+        ReleaseDeltaSummary.from_snapshot(snapshot) for snapshot in removed_candidates
+    )
+    alias_added_preview = tuple(alias_added_candidates)
+    alias_removed_preview = tuple(alias_removed_candidates)
+
+    return DeltaSummaryView(
+        added=added_preview,
+        updated=updated_preview,
+        removed=removed_preview,
+        alias_added=alias_added_preview,
+        alias_removed=alias_removed_preview,
+        added_count=len(delta.releases.added),
+        updated_count=len(delta.releases.updated),
+        removed_count=len(delta.releases.removed),
+        alias_added_count=len(delta.aliases.added),
+        alias_removed_count=len(delta.aliases.removed),
+    )
+
+
+def _format_release_date(value: object | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
 def _determine_alias_delta(
     local_aliases: Sequence[str], remote_aliases: Sequence[str]
 ) -> AliasDelta:
@@ -166,9 +273,7 @@ def _alias_map(values: Sequence[str]) -> dict[str, str]:
     return mapping
 
 
-def _requires_release_update(
-    snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsertDTO
-) -> bool:
+def _requires_release_update(snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsertDTO) -> bool:
     if snapshot.inactive_at is not None:
         return True
     return _release_fingerprint_from_snapshot(snapshot) != _release_fingerprint_from_dto(dto)
@@ -263,7 +368,6 @@ def _hash_mapping(mapping: Mapping[str, object] | None) -> str:
     except TypeError:
         payload = json.dumps({key: str(value) for key, value in mapping.items()}, sort_keys=True)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
-from app.services.artist_dao import ArtistReleaseRow, ArtistReleaseUpsertDTO
 
 
 @dataclass(frozen=True)
@@ -328,7 +432,9 @@ class AlbumRelease:
             album_payload["year"] = release_date.year
         album = ensure_album_dto(album_payload, default_source=source)
         etag = _optional_str(payload.get("etag"))
-        return cls(album=album, release_date=release_date, etag=etag, raw=cls._coerce_mapping(payload))
+        return cls(
+            album=album, release_date=release_date, etag=etag, raw=cls._coerce_mapping(payload)
+        )
 
 
 @dataclass(frozen=True)
@@ -517,8 +623,12 @@ def _optional_str(value: Any) -> str | None:
     return text or None
 
 
-def _is_release_new(release: AlbumRelease | ArtistTrackCandidate, last_checked: datetime | None) -> bool:
-    release_date = release.release_date if isinstance(release, ArtistTrackCandidate) else release.release_date
+def _is_release_new(
+    release: AlbumRelease | ArtistTrackCandidate, last_checked: datetime | None
+) -> bool:
+    release_date = (
+        release.release_date if isinstance(release, ArtistTrackCandidate) else release.release_date
+    )
     if last_checked is None:
         return True
     if release_date is None:
@@ -538,9 +648,7 @@ def _normalise_known_releases(
             if isinstance(value, ArtistKnownRelease):
                 mapping[track_id] = value
             elif isinstance(value, str):
-                mapping[track_id] = ArtistKnownRelease(
-                    track_id=track_id, etag=_optional_str(value)
-                )
+                mapping[track_id] = ArtistKnownRelease(track_id=track_id, etag=_optional_str(value))
             else:
                 mapping[track_id] = ArtistKnownRelease(track_id=track_id, etag=None)
         return mapping
@@ -587,12 +695,15 @@ __all__ = [
     "ArtistTrackCandidate",
     "ArtistRemoteState",
     "DeltaResult",
+    "DeltaSummaryView",
     "ReleaseDelta",
+    "ReleaseDeltaSummary",
     "ReleaseSnapshot",
     "ReleaseUpdate",
     "TrackDelta",
     "build_artist_delta",
     "determine_delta",
+    "summarise_delta",
     "filter_new_releases",
     "parse_release_date",
 ]

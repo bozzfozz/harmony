@@ -13,6 +13,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.api import router_registry
+from app.api.admin_artists import maybe_register_admin_routes
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import (
@@ -577,6 +578,8 @@ router_registry.register_all(
     emit_log=True,
     router=_versioned_router,
 )
+
+maybe_register_admin_routes(app, config=_config_snapshot)
 
 
 def _is_allowlisted_path(path: str) -> bool:

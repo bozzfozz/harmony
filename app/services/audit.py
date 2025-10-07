@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+
+from sqlalchemy import Select, select
 
 from app.db import session_scope
 from app.models import ArtistAuditRecord
@@ -93,4 +95,60 @@ def write_audit(
         )
 
 
-__all__ = ["ArtistAuditRow", "write_audit"]
+def list_audit_events(
+    artist_key: str,
+    *,
+    limit: int = 100,
+    cursor: int | None = None,
+) -> tuple[list[ArtistAuditRow], int | None]:
+    """Return recent audit events for the provided artist key."""
+
+    key = (artist_key or "").strip()
+    if not key:
+        return [], None
+
+    try:
+        resolved_limit = int(limit)
+    except (TypeError, ValueError):
+        resolved_limit = 100
+    resolved_limit = max(1, min(resolved_limit, 200))
+
+    statement: Select[ArtistAuditRecord] = select(ArtistAuditRecord).where(
+        ArtistAuditRecord.artist_key == key
+    )
+    if cursor is not None:
+        try:
+            cursor_value = int(cursor)
+        except (TypeError, ValueError):
+            cursor_value = None
+        else:
+            statement = statement.where(ArtistAuditRecord.id < cursor_value)
+
+    statement = statement.order_by(ArtistAuditRecord.id.desc()).limit(resolved_limit + 1)
+
+    with session_scope() as session:
+        records: Sequence[ArtistAuditRecord] = session.execute(statement).scalars().all()
+
+    next_cursor: int | None = None
+    if len(records) > resolved_limit:
+        next_cursor = int(records[resolved_limit].id)
+        records = records[:resolved_limit]
+
+    rows = [
+        ArtistAuditRow(
+            id=int(record.id),
+            created_at=record.created_at,
+            job_id=record.job_id,
+            artist_key=record.artist_key,
+            entity_type=record.entity_type,
+            entity_id=record.entity_id,
+            event=record.event,
+            before=record.before_json,
+            after=record.after_json,
+        )
+        for record in records
+    ]
+    return rows, next_cursor
+
+
+__all__ = ["ArtistAuditRow", "write_audit", "list_audit_events"]
