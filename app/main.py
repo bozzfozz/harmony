@@ -30,6 +30,7 @@ from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
+from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
@@ -46,7 +47,8 @@ def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool)
             "matching": True,
             "retry": True,
             "watchlist": True,
-            "artist_refresh": True,
+            ARTIST_REFRESH_JOB_TYPE: True,
+            ARTIST_SCAN_JOB_TYPE: True,
             "artist_delta": True,
             "artwork": artwork_enabled,
             "lyrics": lyrics_enabled,
@@ -111,7 +113,8 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
         "sync",
         "matching",
         "retry",
-        "artist_refresh",
+        ARTIST_REFRESH_JOB_TYPE,
+        ARTIST_SCAN_JOB_TYPE,
         "artist_delta",
         "watchlist",
         "artwork",
@@ -436,7 +439,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "matching": True,
             "retry": True,
             "watchlist": True,
-            "artist_refresh": True,
+            ARTIST_REFRESH_JOB_TYPE: True,
+            ARTIST_SCAN_JOB_TYPE: True,
             "artist_delta": True,
             "artwork": enable_artwork,
             "lyrics": enable_lyrics,

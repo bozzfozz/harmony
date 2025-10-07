@@ -289,3 +289,4 @@ async def test_watchlist_handler_moves_to_dlq_after_retries(
         assert record is not None
         assert record.status == QueueJobStatus.CANCELLED.value
         assert record.last_error is not None
+        assert record.stop_reason in {"retry_budget_exhausted", "max_retries_exhausted"}

@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any
 from app.config import ExternalCallPolicy, OrchestratorConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
-from app.orchestrator.handlers import MatchingJobError
+from app.orchestrator.handlers import (
+    ARTIST_REFRESH_JOB_TYPE,
+    ARTIST_SCAN_JOB_TYPE,
+    MatchingJobError,
+)
 from app.orchestrator.scheduler import Scheduler
 from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.concurrency import BoundedPools
@@ -52,8 +56,8 @@ def default_handlers(
 
     from app.orchestrator.artist_sync import build_artist_sync_handler
     from app.orchestrator.handlers import (
-        build_artist_delta_handler,
         build_artist_refresh_handler,
+        build_artist_scan_handler,
         build_matching_handler,
         build_retry_handler,
         build_sync_handler,
@@ -68,9 +72,11 @@ def default_handlers(
     if watchlist_deps is not None:
         handlers["watchlist"] = build_watchlist_handler(watchlist_deps)
     if artist_refresh_deps is not None:
-        handlers["artist_refresh"] = build_artist_refresh_handler(artist_refresh_deps)
+        handlers[ARTIST_REFRESH_JOB_TYPE] = build_artist_refresh_handler(artist_refresh_deps)
     if artist_delta_deps is not None:
-        handlers["artist_delta"] = build_artist_delta_handler(artist_delta_deps)
+        scan_handler = build_artist_scan_handler(artist_delta_deps)
+        handlers[ARTIST_SCAN_JOB_TYPE] = scan_handler
+        handlers.setdefault("artist_delta", scan_handler)
     if artist_sync_deps is not None:
         handlers[_ARTIST_SYNC_JOB_TYPE] = build_artist_sync_handler(artist_sync_deps)
     return handlers
@@ -316,6 +322,25 @@ class Dispatcher:
     ) -> None:
         duration_ms = int((time.perf_counter() - start) * 1000)
         attempts = int(job.attempts)
+        if not exc.retry and exc.stop_reason:
+            payload = exc.result_payload if isinstance(exc.result_payload, Mapping) else None
+            self._persistence.to_dlq(
+                job.id,
+                job_type=job.type,
+                reason=exc.stop_reason,
+                payload=payload,
+            )
+            orchestrator_events.emit_dlq_event(
+                self._logger,
+                job_id=job.id,
+                job_type=job.type,
+                status="dead_letter",
+                attempts=attempts,
+                duration_ms=duration_ms,
+                stop_reason=exc.stop_reason,
+                error=exc.code,
+            )
+            return
         if exc.retry:
             retry_in = exc.retry_in
             if retry_in is None:

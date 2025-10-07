@@ -58,6 +58,7 @@ def test_artist_pool_and_priority_overrides() -> None:
     assert config.pool_artist_refresh == 5
     assert config.pool_artist_delta == 5
     assert config.priority_map["artist_refresh"] == 88
+    assert config.priority_map["artist_scan"] == 88
     assert config.priority_map["artist_delta"] == 88
 
 

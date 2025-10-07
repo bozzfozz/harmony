@@ -73,6 +73,9 @@ from app.workers.persistence import QueueJobDTO
 
 logger = get_logger(__name__)
 
+ARTIST_SCAN_JOB_TYPE = "artist_scan"
+ARTIST_REFRESH_JOB_TYPE = "artist_refresh"
+
 _DEFAULT_TIMEOUT_MS = 10_000
 _RETRY_DEFAULT_SCAN_INTERVAL = 60.0
 _RETRY_DEFAULT_BATCH_LIMIT = 100
@@ -258,7 +261,7 @@ async def enqueue_sync_job(
     )
 
 
-async def enqueue_artist_delta_job(
+async def enqueue_artist_scan_job(
     payload: Mapping[str, Any],
     *,
     priority: int | None = None,
@@ -266,7 +269,20 @@ async def enqueue_artist_delta_job(
 ) -> QueueJobDTO | None:
     return await asyncio.to_thread(
         persistence.enqueue,
-        "artist_delta",
+        ARTIST_SCAN_JOB_TYPE,
+        payload,
+        priority=priority,
+        idempotency_key=idempotency_key,
+    )
+
+
+async def enqueue_artist_delta_job(
+    payload: Mapping[str, Any],
+    *,
+    priority: int | None = None,
+    idempotency_key: str | None = None,
+) -> QueueJobDTO | None:
+    return await enqueue_artist_scan_job(
         payload,
         priority=priority,
         idempotency_key=idempotency_key,
@@ -378,11 +394,15 @@ class MatchingJobError(Exception):
         *,
         retry: bool,
         retry_in: int | None = None,
+        stop_reason: str | None = None,
+        result_payload: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(message or code)
         self.code = code
         self.retry = retry
         self.retry_in = retry_in
+        self.stop_reason = stop_reason
+        self.result_payload = dict(result_payload or {}) if result_payload else None
 
 
 def load_matching_confidence_threshold(
@@ -1325,6 +1345,48 @@ async def _enqueue_downloads(
     return queued
 
 
+def _enforce_retry_budget(
+    job: QueueJobDTO,
+    budget: int,
+    *,
+    component: str,
+    job_type: str,
+    artist_id: str | int | None = None,
+) -> None:
+    allowed_attempts = max(1, int(budget))
+    attempts = max(int(job.attempts or 0), 1)
+    if attempts <= allowed_attempts:
+        return
+
+    stop_reason = "retry_budget_exhausted"
+    log_kwargs: dict[str, Any] = {
+        "status": "retry_exhausted",
+        "component": component,
+        "attempts": attempts,
+        "retry_budget": allowed_attempts,
+        "job_type": job_type,
+    }
+    if artist_id is not None:
+        log_kwargs["entity_id"] = artist_id
+    log_event(logger, "artist.watch", **log_kwargs)
+
+    payload: dict[str, Any] = {
+        "attempts": attempts,
+        "retry_budget": allowed_attempts,
+        "job_type": job_type,
+    }
+    if artist_id is not None:
+        payload["artist_id"] = artist_id
+
+    raise MatchingJobError(
+        stop_reason,
+        f"{job_type} retry budget exhausted",
+        retry=False,
+        stop_reason=stop_reason,
+        result_payload=payload,
+    )
+
+
 async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
@@ -1352,6 +1414,14 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
             "artist_id": artist_pk,
             "attempts": attempts,
         }
+
+    _enforce_retry_budget(
+        job,
+        deps.retry_budget,
+        component=_ARTIST_REFRESH_LOG_COMPONENT,
+        job_type=ARTIST_REFRESH_JOB_TYPE,
+        artist_id=artist.spotify_artist_id,
+    )
 
     now = deps.now_factory()
     if artist.retry_block_until and artist.retry_block_until > now:
@@ -1456,7 +1526,7 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     }
 
 
-async def artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
+async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1483,6 +1553,14 @@ async def artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mappin
             "queued": 0,
             "attempts": attempts,
         }
+
+    _enforce_retry_budget(
+        job,
+        deps.retry_budget,
+        component=_WATCHLIST_LOG_COMPONENT,
+        job_type=ARTIST_SCAN_JOB_TYPE,
+        artist_id=artist.spotify_artist_id,
+    )
 
     now = deps.now_factory()
     if artist.retry_block_until and artist.retry_block_until > now:
@@ -1640,8 +1718,12 @@ async def handle_artist_refresh(
     return await artist_refresh(job, deps)
 
 
+async def handle_artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
+    return await artist_scan(job, deps)
+
+
 async def handle_artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
-    return await artist_delta(job, deps)
+    return await artist_scan(job, deps)
 
 
 def build_artist_refresh_handler(
@@ -1653,22 +1735,29 @@ def build_artist_refresh_handler(
     return _handler
 
 
-def build_artist_delta_handler(
+def build_artist_scan_handler(
     deps: ArtistDeltaHandlerDeps,
 ) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
     async def _handler(job: QueueJobDTO) -> Mapping[str, Any]:
-        return await artist_delta(job, deps)
+        return await artist_scan(job, deps)
 
     return _handler
+
+
+def build_artist_delta_handler(
+    deps: ArtistDeltaHandlerDeps,
+) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
+    return build_artist_scan_handler(deps)
 
 
 def build_watchlist_handler(
     deps: ArtistDeltaHandlerDeps,
 ) -> Callable[[QueueJobDTO], Awaitable[Mapping[str, Any]]]:
-    return build_artist_delta_handler(deps)
+    return build_artist_scan_handler(deps)
 
 
 handle_watchlist = handle_artist_delta
+artist_delta = artist_scan
 
 
 @dataclass(slots=True)
@@ -2575,6 +2664,8 @@ def get_spotify_free_import_job(
 
 
 __all__ = [
+    "ARTIST_SCAN_JOB_TYPE",
+    "ARTIST_REFRESH_JOB_TYPE",
     "SyncRetryPolicy",
     "SyncHandlerDeps",
     "RetryHandlerDeps",
@@ -2588,18 +2679,22 @@ __all__ = [
     "build_retry_handler",
     "build_matching_handler",
     "build_artist_refresh_handler",
+    "build_artist_scan_handler",
     "build_artist_delta_handler",
     "build_watchlist_handler",
     "artist_refresh",
+    "artist_scan",
     "artist_delta",
     "handle_sync",
     "handle_retry",
     "handle_matching",
     "handle_artist_refresh",
+    "handle_artist_scan",
     "handle_artist_delta",
     "handle_watchlist",
     "calculate_retry_backoff_seconds",
     "enqueue_sync_job",
+    "enqueue_artist_scan_job",
     "enqueue_artist_delta_job",
     "enqueue_retry_scan_job",
     "enqueue_spotify_backfill",
