@@ -32,6 +32,7 @@ from app.orchestrator.handlers import (
     WatchlistHandlerDeps,
 )
 from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
+from app.services.cache import ResponseCache
 from app.services.artist_dao import ArtistDao
 
 
@@ -149,6 +150,10 @@ def build_artist_sync_handler_deps(
     dao: ArtistDao | None = None,
     providers: Sequence[str] | None = None,
     release_limit: int | None = None,
+    response_cache: ResponseCache | None = None,
+    cooldown_minutes: int | None = None,
+    priority_decay: int | None = None,
+    api_base_path: str | None = None,
 ) -> ArtistSyncHandlerDeps:
     """Construct handler dependencies for artist sync jobs."""
 
@@ -156,11 +161,25 @@ def build_artist_sync_handler_deps(
     resolved_dao = dao or ArtistDao()
     provider_tuple = tuple(providers) if providers else ()
     limit = release_limit if release_limit is not None else 50
+    config = get_app_config()
+    kwargs: dict[str, object] = {
+        "providers": provider_tuple if provider_tuple else ("spotify",),
+        "release_limit": int(limit),
+    }
+    if response_cache is not None:
+        kwargs["response_cache"] = response_cache
+    if cooldown_minutes is not None:
+        kwargs["cooldown_minutes"] = cooldown_minutes
+    if priority_decay is not None:
+        kwargs["priority_decay"] = priority_decay
+    if api_base_path is not None:
+        kwargs["api_base_path"] = api_base_path
+    else:
+        kwargs["api_base_path"] = config.api_base_path
     return ArtistSyncHandlerDeps(
         gateway=resolved_gateway,
         dao=resolved_dao,
-        providers=provider_tuple if provider_tuple else ("spotify",),
-        release_limit=int(limit),
+        **kwargs,
     )
 
 

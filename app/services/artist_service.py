@@ -252,22 +252,22 @@ class ArtistService:
             entity_id=key,
         )
 
-    async def enqueue_sync(self, artist_key: str) -> EnqueueResult:
+    async def enqueue_sync(self, artist_key: str, *, force: bool = False) -> EnqueueResult:
         """Schedule an artist sync job in the orchestrator queue."""
 
         key = self._normalise_key(artist_key)
         if not key:
             raise ValidationAppError("artist_key must not be empty.")
 
-        payload = {"artist_key": key}
-        idempotency_hint = json.dumps(payload, sort_keys=True, default=str)
-        idempotency_key = make_idempotency_key(_ARTIST_SYNC_JOB, key, idempotency_hint)
+        job_payload = {"artist_key": key, "force": bool(force)}
+        args_hash = json.dumps(job_payload, sort_keys=True, default=str)
+        idempotency_key = make_idempotency_key(_ARTIST_SYNC_JOB, key, args_hash)
         existing = self._persistence_module.find_by_idempotency(_ARTIST_SYNC_JOB, idempotency_key)
 
         start = perf_counter()
         try:
             enqueue = self._resolve_enqueue_fn()
-            job = await enqueue(key, idempotency_hint=idempotency_hint)
+            job = await enqueue(key, force=force)
         except ValidationAppError:
             raise
         except ValueError as exc:
@@ -298,7 +298,11 @@ class ArtistService:
             status="ok",
             duration_ms=round(duration_ms, 3),
             entity_id=key,
-            meta={"already_enqueued": already_enqueued, "job_id": int(job.id)},
+            meta={
+                "already_enqueued": already_enqueued,
+                "job_id": int(job.id),
+                "force": bool(force),
+            },
         )
         return EnqueueResult(job=job, already_enqueued=already_enqueued)
 

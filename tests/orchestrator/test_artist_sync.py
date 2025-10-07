@@ -41,8 +41,8 @@ async def test_enqueue_artist_sync_is_redelivery_safe() -> None:
     reset_engine_for_tests()
     init_db()
 
-    first = await enqueue_artist_sync("spotify:artist-1", "payload-v1")
-    second = await enqueue_artist_sync("spotify:artist-1", "payload-v1")
+    first = await enqueue_artist_sync("spotify:artist-1")
+    second = await enqueue_artist_sync("spotify:artist-1")
 
     assert first.id == second.id
     ready = persistence.fetch_ready("artist_sync")
