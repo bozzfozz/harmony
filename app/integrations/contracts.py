@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from app.integrations.base import TrackCandidate
 
@@ -19,11 +20,19 @@ class SearchQuery:
 
 @dataclass(slots=True, frozen=True)
 class ProviderArtist:
-    """Artist metadata returned by a provider search."""
+    """Artist metadata returned by a provider."""
 
+    source: str
     name: str
-    id: str | None = None
+    source_id: str | None = None
+    popularity: int | None = None
+    genres: tuple[str, ...] = ()
+    images: tuple[str, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
+
+    @property
+    def id(self) -> str | None:  # pragma: no cover - compatibility alias
+        return self.source_id
 
 
 @dataclass(slots=True, frozen=True)
@@ -122,6 +131,22 @@ class ProviderInternalError(ProviderError):
     """Raised when the provider returned an unexpected payload."""
 
 
+@dataclass(slots=True, frozen=True)
+class ProviderRelease:
+    """Release metadata returned by a provider."""
+
+    source: str
+    source_id: str | None
+    artist_source_id: str | None
+    title: str
+    release_date: str | None = None
+    type: str | None = None
+    total_tracks: int | None = None
+    version: str | None = None
+    updated_at: str | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
 class TrackProvider(Protocol):
     """Protocol implemented by download-capable provider adapters."""
 
@@ -129,6 +154,16 @@ class TrackProvider(Protocol):
 
     async def search_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
         """Return downloadable tracks for the supplied query."""
+
+    async def fetch_artist(
+        self, *, artist_id: str | None = None, name: str | None = None
+    ) -> ProviderArtist | None:
+        """Return artist metadata for the supplied identifier."""
+
+    async def fetch_artist_releases(
+        self, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderRelease]:
+        """Return releases associated with the supplied artist."""
 
 
 __all__ = [
@@ -140,6 +175,7 @@ __all__ = [
     "ProviderNotFoundError",
     "ProviderRateLimitedError",
     "ProviderTimeoutError",
+    "ProviderRelease",
     "ProviderTrack",
     "ProviderValidationError",
     "SearchQuery",

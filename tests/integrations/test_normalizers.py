@@ -1,4 +1,11 @@
-from app.integrations.normalizers import normalize_slskd_track, normalize_spotify_track
+from app.integrations.normalizers import (
+    from_slskd_artist,
+    from_slskd_release,
+    from_spotify_artist,
+    from_spotify_release,
+    normalize_slskd_track,
+    normalize_spotify_track,
+)
 
 
 def test_normalize_spotify_track_handles_missing_fields() -> None:
@@ -23,3 +30,76 @@ def test_normalize_slskd_track_handles_partial_payload() -> None:
     candidate = track.candidates[0]
     assert candidate.title == "Loose"
     assert candidate.source == "slskd"
+
+
+def test_normalize_spotify_artist_and_releases() -> None:
+    artist_payload = {
+        "id": "artist-1",
+        "name": "Test Artist",
+        "popularity": 83,
+        "genres": ["alt-rock", "indie"],
+        "images": [{"url": "https://example.com/image.jpg"}],
+        "followers": {"total": 12345},
+    }
+    artist = from_spotify_artist(artist_payload)
+
+    assert artist.source == "spotify"
+    assert artist.source_id == "artist-1"
+    assert artist.name == "Test Artist"
+    assert artist.popularity == 83
+    assert artist.genres == ("alt-rock", "indie")
+    assert artist.images == ("https://example.com/image.jpg",)
+    assert artist.metadata["followers"] == 12345
+
+    release_payload = {
+        "id": "release-1",
+        "name": "Album",
+        "release_date": "2024-01-01",
+        "album_type": "album",
+        "total_tracks": 11,
+        "release_date_precision": "day",
+        "available_markets": ["US", "DE"],
+    }
+    release = from_spotify_release(release_payload, "artist-1")
+
+    assert release.source == "spotify"
+    assert release.source_id == "release-1"
+    assert release.artist_source_id == "artist-1"
+    assert release.title == "Album"
+    assert release.type == "album"
+    assert release.total_tracks == 11
+    assert release.release_date == "2024-01-01"
+    assert release.metadata["available_markets"] == ["US", "DE"]
+
+
+def test_normalize_slskd_artist_and_releases() -> None:
+    artist_payload = {
+        "id": "artist-1",
+        "name": "Soulseek Artist",
+        "genres": ["metal"],
+        "aliases": ["Alias"],
+        "metadata": {"origin": "community"},
+    }
+    artist = from_slskd_artist(artist_payload)
+
+    assert artist.source == "slskd"
+    assert artist.source_id == "artist-1"
+    assert artist.name == "Soulseek Artist"
+    assert artist.genres == ("metal",)
+    assert artist.metadata["origin"] == "community"
+    assert artist.metadata["aliases"] == ["Alias"]
+
+    release_payload = {
+        "id": "release-1",
+        "title": "Live Bootleg",
+        "total_tracks": 8,
+        "metadata": {"format": "FLAC"},
+    }
+    release = from_slskd_release(release_payload, "artist-1")
+
+    assert release.source == "slskd"
+    assert release.source_id == "release-1"
+    assert release.artist_source_id == "artist-1"
+    assert release.title == "Live Bootleg"
+    assert release.total_tracks == 8
+    assert release.metadata["format"] == "FLAC"

@@ -30,7 +30,7 @@ class _StubIntegrationService:
                 name="Example Track",
                 provider=name,
                 id=f"{name}-track",
-                artists=(ProviderArtist(name="Example Artist"),),
+                artists=(ProviderArtist(source=name, name="Example Artist"),),
                 album=ProviderAlbum(name="Example Album"),
             )
             results.append(ProviderGatewaySearchResult(provider=name, tracks=(track,)))

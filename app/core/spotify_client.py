@@ -247,6 +247,11 @@ class SpotifyClient:
         )
         return self._execute(self._client.search, q=search_query, type="artist", limit=limit)
 
+    def get_artist(self, artist_id: str) -> Dict[str, Any] | None:
+        if not artist_id:
+            return None
+        return self._execute(self._client.artist, artist_id)
+
     def search_albums(
         self,
         query: str,
