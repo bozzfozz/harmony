@@ -208,6 +208,32 @@ class WatchlistArtist(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class ArtistKnownReleaseRecord(Base):
+    __tablename__ = "artist_known_releases"
+    __table_args__ = (
+        Index(
+            "ix_artist_known_releases_artist_track",
+            "artist_id",
+            "track_id",
+            unique=True,
+        ),
+        Index("ix_artist_known_releases_artist_id", "artist_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    artist_id = Column(Integer, ForeignKey("watchlist_artists.id", ondelete="CASCADE"), nullable=False)
+    track_id = Column(String(128), nullable=False)
+    etag = Column(String(255), nullable=True)
+    fetched_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
 class ImportSession(Base):
     __tablename__ = "import_sessions"
     __table_args__ = (CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),)

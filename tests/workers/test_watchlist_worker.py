@@ -12,7 +12,7 @@ from app.db import session_scope
 from app.models import Download, QueueJob, QueueJobStatus, WatchlistArtist
 from app.orchestrator.dispatcher import Dispatcher
 from app.orchestrator.handlers import WatchlistHandlerDeps, build_watchlist_handler
-from app.services.watchlist_dao import WatchlistDAO
+from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers import persistence
 
 
@@ -147,7 +147,7 @@ async def test_watchlist_handler_success_enqueues_sync_job() -> None:
         spotify_client=spotify,
         soulseek_client=soulseek,
         config=config,
-        dao=WatchlistDAO(),
+        dao=ArtistWorkflowDAO(),
         submit_sync_job=submitter,
     )
     handler = build_watchlist_handler(deps)
@@ -188,7 +188,7 @@ async def test_watchlist_handler_retryable_failure_reschedules() -> None:
         spotify_client=spotify,
         soulseek_client=soulseek,
         config=config,
-        dao=WatchlistDAO(),
+        dao=ArtistWorkflowDAO(),
         submit_sync_job=submitter,
     )
     handler = build_watchlist_handler(deps)
@@ -210,7 +210,7 @@ async def test_watchlist_handler_retryable_failure_reschedules() -> None:
         assert artist.last_checked > datetime.utcnow()
 
 
-class FailingDAO(WatchlistDAO):
+class FailingDAO(ArtistWorkflowDAO):
     def create_download_record(self, *args, **kwargs):  # type: ignore[override]
         raise RuntimeError("persist failure")
 

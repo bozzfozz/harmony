@@ -14,7 +14,7 @@ from typing import Sequence
 from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
-from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.utils.time import sleep_jitter_ms
 from app.workers import persistence
 
@@ -51,7 +51,7 @@ class WatchlistTimer:
         timer_config: WatchlistTimerConfig | None = None,
         interval_seconds: float | int | str | None = None,
         enabled: bool | None = None,
-        dao: WatchlistDAO | None = None,
+        dao: ArtistWorkflowDAO | None = None,
         persistence_module=persistence,
         now_factory: Callable[[], datetime] = datetime.utcnow,
         time_source: Callable[[], float] = time.perf_counter,
@@ -68,7 +68,7 @@ class WatchlistTimer:
         )
         default_enabled = timer_settings.enabled
         self._enabled = default_enabled if enabled is None else bool(enabled)
-        self._dao = dao or WatchlistDAO()
+        self._dao = dao or ArtistWorkflowDAO()
         self._persistence = persistence_module
         self._now_factory = now_factory
         self._time_source = time_source
@@ -264,7 +264,7 @@ class WatchlistTimer:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-    async def _load_due_artists(self) -> list[WatchlistArtistRow]:
+    async def _load_due_artists(self) -> list[ArtistWorkflowArtistRow]:
         if self._max_per_tick <= 0:
             return []
         cutoff = self._now_factory()
@@ -279,7 +279,9 @@ class WatchlistTimer:
             cutoff=cutoff,
         )
 
-    async def _enqueue_artist(self, artist: WatchlistArtistRow) -> persistence.QueueJobDTO | None:
+    async def _enqueue_artist(
+        self, artist: ArtistWorkflowArtistRow
+    ) -> persistence.QueueJobDTO | None:
         payload: dict[str, object] = {"artist_id": int(artist.id)}
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
         if cutoff:

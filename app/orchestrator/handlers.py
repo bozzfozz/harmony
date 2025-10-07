@@ -42,17 +42,18 @@ from app.services.artist_delta import (
     AlbumRelease,
     ArtistCacheHint,
     ArtistDelta,
+    ArtistKnownRelease,
     ArtistTrackCandidate,
     build_artist_delta,
     filter_new_releases,
 )
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.services.backfill_service import BackfillJobStatus
 from app.services.retry_policy_provider import (
     RetryPolicy,
     RetryPolicyProvider,
     get_retry_policy_provider,
 )
-from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
 
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
@@ -625,7 +626,7 @@ class ArtistRefreshHandlerDeps:
     """Dependencies required to enqueue artist delta jobs from refresh work."""
 
     config: WatchlistWorkerConfig
-    dao: WatchlistDAO = field(default_factory=WatchlistDAO)
+    dao: ArtistWorkflowDAO = field(default_factory=ArtistWorkflowDAO)
     submit_delta_job: SyncJobSubmitter = enqueue_artist_delta_job
     now_factory: Callable[[], datetime] = datetime.utcnow
     delta_priority: int = field(
@@ -652,7 +653,7 @@ class ArtistDeltaHandlerDeps:
     spotify_client: SpotifyClient
     soulseek_client: SoulseekClient
     config: WatchlistWorkerConfig
-    dao: WatchlistDAO = field(default_factory=WatchlistDAO)
+    dao: ArtistWorkflowDAO = field(default_factory=ArtistWorkflowDAO)
     submit_sync_job: SyncJobSubmitter = enqueue_sync_job
     rng: random.Random = field(default_factory=random.Random)
     now_factory: Callable[[], datetime] = datetime.utcnow
@@ -724,7 +725,7 @@ def _artist_cooldown_until(deps: ArtistDeltaHandlerDeps) -> datetime:
     return now + timedelta(minutes=deps.cooldown_minutes)
 
 
-async def _call_watchlist_dao(
+async def _call_workflow_dao(
     deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs
 ):
     method = getattr(deps.dao, method_name)
@@ -854,7 +855,7 @@ class _DownloadJobSpec:
 
 
 async def _fetch_artist_candidates(
-    artist: WatchlistArtistRow, deps: ArtistDeltaHandlerDeps
+    artist: ArtistWorkflowArtistRow, deps: ArtistDeltaHandlerDeps
 ) -> list[ArtistTrackCandidate]:
     started = time.perf_counter()
     try:
@@ -976,7 +977,7 @@ async def _fetch_artist_candidates(
 
 
 async def _compute_artist_delta(
-    artist: WatchlistArtistRow,
+    artist: ArtistWorkflowArtistRow,
     candidates: Sequence[ArtistTrackCandidate],
     deps: ArtistDeltaHandlerDeps,
 ) -> ArtistDelta | None:
@@ -995,16 +996,24 @@ async def _compute_artist_delta(
             await deps.cache_service.update_hint(artist_id=artist.spotify_artist_id, hint=None)
         return None
 
+    known_releases = await _call_workflow_dao(deps, "load_known_releases", artist.id)
+    known_mapping = dict(known_releases)
     track_ids = [candidate.track_id for candidate in candidates if candidate.track_id]
-    existing: set[str] = set()
     if track_ids:
-        fetched = await _call_watchlist_dao(deps, "load_existing_track_ids", track_ids)
+        fetched = await _call_workflow_dao(deps, "load_existing_track_ids", track_ids)
         if fetched:
-            existing = {str(item) for item in fetched}
+            for track_id in fetched:
+                text = str(track_id).strip()
+                if text and text not in known_mapping:
+                    known_mapping[text] = ArtistKnownRelease(
+                        track_id=text,
+                        etag=None,
+                        fetched_at=None,
+                    )
 
     delta = build_artist_delta(
         candidates,
-        existing,
+        known_mapping,
         last_checked=artist.last_checked,
     )
     new_count = len(delta.new)
@@ -1016,7 +1025,7 @@ async def _compute_artist_delta(
         "entity_id": artist.spotify_artist_id,
         "new_count": new_count,
         "updated_count": updated_count,
-        "known_count": len(existing),
+        "known_count": len(known_mapping),
     }
     if delta.cache_hint is not None:
         fields["cache_etag"] = delta.cache_hint.etag
@@ -1033,7 +1042,7 @@ async def _compute_artist_delta(
 
 
 async def _persist_candidates(
-    artist: WatchlistArtistRow,
+    artist: ArtistWorkflowArtistRow,
     candidates: Sequence[ArtistTrackCandidate],
     deps: ArtistDeltaHandlerDeps,
 ) -> tuple[list[_DownloadJobSpec], dict[str, int]]:
@@ -1115,7 +1124,12 @@ async def _persist_candidates(
         track_id = str(track_payload.get("id") or "").strip()
         album_id = str(album_payload.get("id") or "").strip()
 
-        download_id = await _call_watchlist_dao(
+        known_release = ArtistKnownRelease(
+            track_id=track_id,
+            etag=candidate.cache_key,
+            fetched_at=deps.now_factory(),
+        )
+        download_id = await _call_workflow_dao(
             deps,
             "create_download_record",
             username=username,
@@ -1124,6 +1138,8 @@ async def _persist_candidates(
             spotify_track_id=track_id,
             spotify_album_id=album_id,
             payload=payload,
+            artist_id=artist.id,
+            known_release=known_release,
         )
         if download_id is None:
             log_event(
@@ -1207,7 +1223,7 @@ async def _submit_with_retry(
 
 
 async def _enqueue_downloads(
-    artist: WatchlistArtistRow,
+    artist: ArtistWorkflowArtistRow,
     jobs: Sequence[_DownloadJobSpec],
     deps: ArtistDeltaHandlerDeps,
     *,
@@ -1240,7 +1256,7 @@ async def _enqueue_downloads(
                 idempotency_key=job.idempotency_key,
             )
         except IntegrityError as exc:
-            await _call_watchlist_dao(
+            await _call_workflow_dao(
                 deps,
                 "mark_download_failed",
                 int(job.download_id),
@@ -1261,7 +1277,7 @@ async def _enqueue_downloads(
                 retryable=True,
             ) from exc
         except Exception as exc:  # pragma: no cover - defensive logging
-            await _call_watchlist_dao(
+            await _call_workflow_dao(
                 deps,
                 "mark_download_failed",
                 int(job.download_id),
@@ -1444,7 +1460,7 @@ async def artist_delta(
     except (TypeError, ValueError) as exc:  # pragma: no cover - defensive logging
         raise MatchingJobError("invalid_payload", "invalid artist_id", retry=False) from exc
 
-    artist = await _call_watchlist_dao(deps, "get_artist", artist_pk)
+    artist = await _call_workflow_dao(deps, "get_artist", artist_pk)
     attempts = max(int(job.attempts or 0), 1)
     if artist is None:
         log_event(
@@ -1505,7 +1521,7 @@ async def artist_delta(
         candidates = await _fetch_artist_candidates(artist, deps)
         delta = await _compute_artist_delta(artist, candidates, deps)
         if delta is None or (not delta.new and not delta.updated):
-            await _call_watchlist_dao(
+            await _call_workflow_dao(
                 deps,
                 "mark_success",
                 artist.id,
@@ -1540,7 +1556,7 @@ async def artist_delta(
         )
     except WatchlistProcessingError as exc:
         if not exc.retryable:
-            await _call_watchlist_dao(
+            await _call_workflow_dao(
                 deps,
                 "mark_failed",
                 artist.id,
@@ -1564,7 +1580,7 @@ async def artist_delta(
         backoff_ms = _calculate_artist_backoff_ms(attempts, deps)
         retry_seconds = max(1, backoff_ms // 1000)
         retry_at = deps.now_factory() + timedelta(seconds=retry_seconds)
-        await _call_watchlist_dao(
+        await _call_workflow_dao(
             deps,
             "mark_failed",
             artist.id,
@@ -1585,7 +1601,7 @@ async def artist_delta(
         )
         raise MatchingJobError(exc.code, str(exc), retry=True, retry_in=retry_seconds) from exc
 
-    await _call_watchlist_dao(
+    await _call_workflow_dao(
         deps,
         "mark_success",
         artist.id,

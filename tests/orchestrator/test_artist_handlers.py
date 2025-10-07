@@ -14,7 +14,7 @@ from app.orchestrator.handlers import (
     handle_artist_delta,
     handle_artist_refresh,
 )
-from app.services.watchlist_dao import WatchlistArtistRow
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.workers.persistence import QueueJobDTO, QueueJobStatus
 
 
@@ -68,23 +68,26 @@ def _queue_job(
 
 
 class _StubRefreshDAO:
-    def __init__(self, artist: WatchlistArtistRow | None) -> None:
+    def __init__(self, artist: ArtistWorkflowArtistRow | None) -> None:
         self._artist = artist
 
-    def get_artist(self, artist_id: int) -> WatchlistArtistRow | None:
+    def get_artist(self, artist_id: int) -> ArtistWorkflowArtistRow | None:
         return self._artist
 
 
 class _StubDeltaDAO:
-    def __init__(self, artist: WatchlistArtistRow) -> None:
+    def __init__(self, artist: ArtistWorkflowArtistRow) -> None:
         self._artist = artist
         self.created: list[dict[str, Any]] = []
         self.failures: list[tuple[int, str]] = []
         self.marked_success: list[int] = []
         self.marked_failed: list[dict[str, Any]] = []
 
-    def get_artist(self, artist_id: int) -> WatchlistArtistRow | None:
+    def get_artist(self, artist_id: int) -> ArtistWorkflowArtistRow | None:
         return self._artist if self._artist.id == artist_id else None
+
+    def load_known_releases(self, artist_id: int) -> dict[str, object]:
+        return {}
 
     def load_existing_track_ids(self, track_ids: list[str]) -> set[str]:
         return set()
@@ -98,6 +101,8 @@ class _StubDeltaDAO:
         spotify_track_id: str,
         spotify_album_id: str,
         payload: Mapping[str, Any],
+        artist_id: int | None = None,
+        known_release=None,
     ) -> int:
         download_id = len(self.created) + 1
         self.created.append(
@@ -108,6 +113,8 @@ class _StubDeltaDAO:
                 "spotify_track_id": spotify_track_id,
                 "spotify_album_id": spotify_album_id,
                 "payload": dict(payload),
+                "artist_id": artist_id,
+                "known_release": known_release,
             }
         )
         return download_id
@@ -115,7 +122,13 @@ class _StubDeltaDAO:
     def mark_download_failed(self, download_id: int, reason: str) -> None:
         self.failures.append((download_id, reason))
 
-    def mark_success(self, artist_id: int, *, checked_at: datetime | None = None) -> None:
+    def mark_success(
+        self,
+        artist_id: int,
+        *,
+        checked_at: datetime | None = None,
+        known_releases=None,
+    ) -> None:
         self.marked_success.append(artist_id)
 
     def mark_failed(
@@ -184,7 +197,7 @@ class _RecordingSubmitter:
 
 @pytest.mark.asyncio
 async def test_artist_refresh_retries_on_integrity_error() -> None:
-    artist = WatchlistArtistRow(
+    artist = ArtistWorkflowArtistRow(
         id=1,
         spotify_artist_id="artist-1",
         name="Artist",
@@ -213,7 +226,7 @@ async def test_artist_refresh_retries_on_integrity_error() -> None:
 
 @pytest.mark.asyncio
 async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> None:
-    artist = WatchlistArtistRow(
+    artist = ArtistWorkflowArtistRow(
         id=1,
         spotify_artist_id="artist-1",
         name="Artist",

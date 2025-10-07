@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.config import load_config
 from app.db import session_scope
 from app.models import QueueJob, WatchlistArtist
-from app.services.watchlist_dao import WatchlistDAO
+from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers.watchlist_worker import WatchlistWorker
 from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
@@ -54,7 +54,7 @@ async def test_worker_enqueues_due_artists() -> None:
     worker = WatchlistWorker(
         config=_make_config(max_per_tick=5),
         interval_seconds=0.01,
-        dao=WatchlistDAO(),
+        dao=ArtistWorkflowDAO(),
     )
 
     outcomes = await worker.run_once()
@@ -82,7 +82,7 @@ async def test_worker_idempotency_prevents_duplicates() -> None:
     worker = WatchlistWorker(
         config=_make_config(max_per_tick=1),
         interval_seconds=0.01,
-        dao=WatchlistDAO(),
+        dao=ArtistWorkflowDAO(),
     )
 
     first_run = await worker.run_once()
