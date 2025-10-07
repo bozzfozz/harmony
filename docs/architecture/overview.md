@@ -53,10 +53,10 @@ Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und da
 ### Watchlist Timer → Enqueue → Handler
 
 1. Timer löst gemäß `WATCHLIST_INTERVAL` aus, liest Artists mit fälligem `last_checked`.
-2. Service erstellt pro Artist einen Job (`watchlist.sync`) und setzt Idempotency-Key `watchlist:<artist-id>:<tick-start>`.
+2. Service erstellt pro Artist einen `artist_refresh`-Job und setzt Idempotency-Key `artist-refresh:<artist-id>:<tick-start>`.
 3. Worker lädt Spotify-Releases, mappt auf Downloads und triggert Soulseek-Enqueue über den ProviderGateway.
-4. Erfolgreiche Läufe löschen Retry-Cooldowns (`event=watchlist.cooldown.clear`), Fehler loggen `event=watchlist.cooldown.skip` und respektieren Budget/Backoff. `ARTIST_MAX_RETRY_PER_ARTIST` und `ARTIST_COOLDOWN_S` überschreiben die Watchlist-Defaults für Budget und Cooldown sekundengenau.
-5. Ist `ARTIST_CACHE_INVALIDATE=true`, schreiben die Refresh-/Delta-Handler Cache-Hints (`event=artist.delta`) bzw. räumen Einträge via `cache.evict`.
+4. Erfolgreiche Läufe loggen `event=artist.scan status=ok` und löschen Retry-Cooldowns; Fehler emittieren `event=artist.scan status=retry|failed` und respektieren Budget/Backoff. `ARTIST_MAX_RETRY_PER_ARTIST` und `ARTIST_COOLDOWN_S` überschreiben die Watchlist-Defaults für Budget und Cooldown sekundengenau.
+5. Ist `ARTIST_CACHE_INVALIDATE=true`, schreiben die Refresh-/Delta-Handler Cache-Hints (`event=artist.delta`) bzw. räumen Einträge via `cache.evict`; Persistenz-Schritte loggen `event=artist.persist`.
 
 ## Fehler-, Retry- und Idempotenzverträge
 
@@ -70,7 +70,7 @@ Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und da
 
 - **Konfigurationsmatrix:** `docs/ops/runtime-config.md` listet relevante ENV-Variablen (Ingest, Watchlist, Provider, Orchestrator). Neue Parameter dort und in dieser Übersicht verlinken.
 - **Feature-Flags:** `ENABLE_LYRICS`, `ENABLE_ARTWORK`, `ARTIST_CACHE_INVALIDATE`, `INGEST_MAX_PENDING_JOBS`, `WATCHLIST_MAX_CONCURRENCY` u. a. werden in Services geprüft und müssen hier dokumentiert bleiben.
-- **Observability:** Structured Logs sind primär, Metriken entfallen. Externe Systeme abonnieren `event=request`, `event=worker_job`, `event=integration_call`.
+- **Observability:** Structured Logs bleiben primär; ergänzend stehen Prometheus-Metriken für Scan/Refresh (`artist_scan_outcomes_total`, `artist_refresh_duration_seconds` u. a.) zur Verfügung. Externe Systeme abonnieren `event=request`, `event=worker_job`, `event=integration_call`.
 - **Caching:** `CACHE_WRITE_THROUGH` sorgt für sofortige Invalidierung der Spotify-Playlist-Routen; `cache.evict`-Events dokumentieren gezielte Räumungen.
 
 ## Erweiterungspunkte

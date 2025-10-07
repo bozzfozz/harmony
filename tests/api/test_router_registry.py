@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from app.api import router_registry
-from app.api import artists, search, spotify, system
-from app.api.routers import watchlist as watchlist_domain
+from app.api import artists, search, spotify, system, watchlist
 from app.routers import (
     activity_router,
     download_router,
@@ -41,7 +40,7 @@ def test_domain_router_metadata_is_registered_in_order() -> None:
     assert lookup["spotify"].router is spotify.router
     assert lookup["artists"].router is artists.router
     assert lookup["system"].router is system.router
-    assert lookup["watchlist"].router is watchlist_domain.router
+    assert lookup["watchlist"].router is watchlist.router
     assert lookup["search"].router is search.router
 
     expected_tags = {

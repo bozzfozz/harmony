@@ -121,8 +121,9 @@ def get_session_runner() -> SessionRunner:
     return runner
 
 
-def get_watchlist_service(session: Session = Depends(get_db)) -> WatchlistService:
-    return WatchlistService(session=session)
+@lru_cache()
+def get_watchlist_service() -> WatchlistService:
+    return WatchlistService()
 
 
 @lru_cache()
