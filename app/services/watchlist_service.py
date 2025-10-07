@@ -89,6 +89,7 @@ class WatchlistService:
             spotify_artist_id=spotify_id,
             name=name,
             last_checked=now,
+            last_scan_at=now,
         )
         self.session.add(record)
         self.session.commit()

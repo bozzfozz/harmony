@@ -9,6 +9,7 @@ from datetime import datetime
 from app.config import WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.db_async import get_async_sessionmaker
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
@@ -43,7 +44,14 @@ class WatchlistWorker:
         self._config = config
         interval = float(interval_seconds or DEFAULT_INTERVAL_SECONDS)
         self._interval = max(interval, MIN_INTERVAL_SECONDS)
-        self._dao = dao or ArtistWorkflowDAO()
+        resolved_dao = dao or ArtistWorkflowDAO()
+        mode = (config.db_io_mode or "thread").strip().lower()
+        if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
+            if not resolved_dao.supports_async:
+                resolved_dao = resolved_dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
+        self._dao = resolved_dao
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()

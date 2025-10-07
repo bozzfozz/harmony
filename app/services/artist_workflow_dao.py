@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import session_scope
 from app.models import ArtistKnownReleaseRecord, Download, WatchlistArtist
+from app.services.artist_dao_async import ArtistWatchlistAsyncDAO
 from app.services.artist_delta import ArtistKnownRelease
 
 
@@ -29,6 +31,15 @@ class ArtistWorkflowArtistRow:
 
 class ArtistWorkflowDAO:
     """Async-friendly access layer for orchestrating artist workflows."""
+
+    def __init__(
+        self,
+        *,
+        now_factory: Callable[[], datetime] | None = None,
+        async_session_factory: Callable[[], AsyncSession] | None = None,
+    ) -> None:
+        self._now_factory = now_factory or datetime.utcnow
+        self._async_session_factory = async_session_factory
 
     def get_artist(self, artist_id: int) -> ArtistWorkflowArtistRow | None:
         """Return a single artist row by primary key."""
@@ -53,14 +64,17 @@ class ArtistWorkflowDAO:
         limit: int,
         *,
         cutoff: datetime | None = None,
-    ) -> list[ArtistWorkflowArtistRow]:
+    ) -> list[ArtistWorkflowArtistRow] | Awaitable[list[ArtistWorkflowArtistRow]]:
         """Return a batch of artists ordered by their ``last_checked`` timestamp."""
 
         if limit <= 0:
             return []
 
+        if self._async_session_factory is not None:
+            return self._load_batch_async(limit, cutoff)
+
         def _query() -> list[ArtistWorkflowArtistRow]:
-            now = cutoff or datetime.utcnow()
+            now = cutoff or self._now_factory()
             with session_scope() as session:
                 statement: Select[tuple[WatchlistArtist]] = (
                     select(WatchlistArtist)
@@ -128,7 +142,7 @@ class ArtistWorkflowDAO:
     ) -> None:
         """Record a successful run and optionally persist known releases."""
 
-        timestamp = checked_at or datetime.utcnow()
+        timestamp = checked_at or self._now_factory()
 
         def _mark() -> None:
             with session_scope() as session:
@@ -136,7 +150,9 @@ class ArtistWorkflowDAO:
                 if record is None:
                     return
                 record.last_checked = timestamp
+                record.last_scan_at = timestamp
                 record.retry_block_until = None
+                record.updated_at = self._now_factory()
                 session.add(record)
                 if known_releases:
                     for release in known_releases:
@@ -159,7 +175,7 @@ class ArtistWorkflowDAO:
     ) -> None:
         """Persist the failure outcome along with the next retry timestamp."""
 
-        next_time = retry_at or datetime.utcnow()
+        next_time = retry_at or self._now_factory()
 
         def _mark() -> None:
             with session_scope() as session:
@@ -167,11 +183,47 @@ class ArtistWorkflowDAO:
                 if record is None:
                     return
                 record.last_checked = next_time
+                record.last_scan_at = next_time
                 if retry_block_until is not _UNSET:
                     record.retry_block_until = retry_block_until
+                record.updated_at = self._now_factory()
                 session.add(record)
 
         _mark()
+
+    @property
+    def supports_async(self) -> bool:
+        return self._async_session_factory is not None
+
+    def with_async_session_factory(
+        self, factory: Callable[[], AsyncSession]
+    ) -> ArtistWorkflowDAO:
+        return ArtistWorkflowDAO(
+            now_factory=self._now_factory,
+            async_session_factory=factory,
+        )
+
+    async def _load_batch_async(
+        self, limit: int, cutoff: datetime | None
+    ) -> list[ArtistWorkflowArtistRow]:
+        if limit <= 0:
+            return []
+        factory = self._async_session_factory
+        if factory is None:
+            return []
+        async with factory() as session:
+            dao = ArtistWatchlistAsyncDAO(session)
+            rows = await dao.get_due(limit)
+        return [
+            ArtistWorkflowArtistRow(
+                id=row.id,
+                spotify_artist_id=row.spotify_artist_id,
+                name=row.name,
+                last_checked=row.last_scan_at,
+                retry_block_until=row.retry_block_until,
+            )
+            for row in rows
+        ]
 
     def load_existing_track_ids(self, track_ids: Sequence[str]) -> set[str]:
         """Return already scheduled Spotify track identifiers."""

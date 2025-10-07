@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Sequence
 
 from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
+from app.db_async import get_async_sessionmaker
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
@@ -68,7 +69,14 @@ class WatchlistTimer:
         )
         default_enabled = timer_settings.enabled
         self._enabled = default_enabled if enabled is None else bool(enabled)
-        self._dao = dao or ArtistWorkflowDAO()
+        resolved_dao = dao or ArtistWorkflowDAO()
+        mode = (config.db_io_mode or "thread").strip().lower()
+        if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
+            if not resolved_dao.supports_async:
+                resolved_dao = resolved_dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
+        self._dao = resolved_dao
         self._persistence = persistence_module
         self._now_factory = now_factory
         self._time_source = time_source
