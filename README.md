@@ -186,6 +186,31 @@ Artist-Persistenz zusammen. Ablauf im Überblick:
 
 Der Watchlist-Response enthält zusätzlich `priority`, `last_enqueued_at` und `cooldown_until`, sodass Clients kommende Läufe einplanen können. Fehlerantworten folgen dem Schema `{ "ok": false, "error": { "code": "…", "message": "…" } }`.
 
+## Artist Workflow
+
+Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusive Fehlerszenarien, Idempotenz-Strategien und Cache-Invalidierung ist im Architektur-Dokument [docs/architecture/artist-workflow.md](docs/architecture/artist-workflow.md) festgehalten. Die End-to-End-Tests in `tests/e2e/test_artist_flow.py` prüfen den Happy Path, Cache-Bust nach Persistierung, Provider-Retries bis zur DLQ sowie doppelte Enqueue-Versuche.
+
+### Relevante ENV-Flags
+
+| Variable | Default | Beschreibung |
+| --- | --- | --- |
+| `WORKERS_ENABLED` | `true` | Globales Feature-Flag, das Scheduler, Dispatcher und Timer beim Start erzwingt bzw. deaktiviert. |
+| `WATCHLIST_INTERVAL` | `86400` | Intervall in Sekunden, in dem der Watchlist-Worker Spotify/Soulseek prüft (leer = 24 h). |
+| `WATCHLIST_TIMER_ENABLED` | `true` | Aktiviert den asynchronen Watchlist-Timer, der fällige Artists in die Queue legt. |
+| `WATCHLIST_TIMER_INTERVAL_S` | `900` | Abstand zwischen Timer-Ticks in Sekunden (Default 15 Minuten). |
+| `WATCHLIST_MAX_CONCURRENCY` | `3` | Maximale Anzahl paralleler Artists, die pro Tick verarbeitet werden. |
+| `WATCHLIST_MAX_PER_TICK` | `20` | Obergrenze für neu enqueued Artists je Timer-Lauf. |
+| `WATCHLIST_RETRY_MAX` | `3` | Versuche pro Tick, bevor der Eintrag auf den nächsten Lauf verschoben wird. |
+| `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | `6` | Gesamtbudget pro Artist; bei Erschöpfung wird ein Cooldown gesetzt. |
+| `WATCHLIST_COOLDOWN_MINUTES` | `15` | Dauer des Cooldowns für blockierte Artists. |
+| `WATCHLIST_BACKOFF_BASE_MS` | `250` | Basiswert für exponentielles Retry-Backoff (mit ±Jitter). |
+| `WATCHLIST_JITTER_PCT` | `0.2` | Prozentualer Jitter für Backoff-Berechnungen (0.2 = 20 %). |
+| `RETRY_POLICY_RELOAD_S` | `10` | TTL des Retry-Policy-Caches; steuert, wie oft ENV-Overrides neu eingelesen werden. |
+| `RETRY_ARTIST_SYNC_MAX_ATTEMPTS` | `10` | Maximale Wiederholungen für `artist_sync`-Jobs bevor DLQ ausgelöst wird. |
+| `RETRY_ARTIST_SYNC_BASE_SECONDS` | `60` | Grundintervall in Sekunden für den Backoff des `artist_sync`-Jobs. |
+| `RETRY_ARTIST_SYNC_JITTER_PCT` | `0.2` | Jitter-Faktor für den Backoff des `artist_sync`-Jobs. |
+| `RETRY_ARTIST_SYNC_TIMEOUT_SECONDS` | `–` | Optionales Timeout (Sekunden) für `artist_sync`-Retries; leer = kein Timeout. |
+
 ## Artist Watchlist
 
 Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Releases. Ein periodischer Worker fragt die Spotify-API (Default alle 24 Stunden) nach frischen Alben und Singles ab, gleicht die enthaltenen Tracks mit der Download-Datenbank ab und stößt nur für fehlende Songs einen Soulseek-Download über den bestehenden `SyncWorker` an.

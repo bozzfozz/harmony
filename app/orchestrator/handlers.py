@@ -467,8 +467,6 @@ async def handle_matching(
 ) -> Mapping[str, Any]:
     """Process a matching job and persist qualifying candidates."""
 
-    started = time.perf_counter()
-    started = time.perf_counter()
     payload = dict(job.payload or {})
     job_type = str(payload.get("type") or job.type or "matching")
     spotify_track = payload.get("spotify_track")

@@ -3126,28 +3126,32 @@
         "title": "ValidationError",
         "type": "object"
       },
-      "WatchlistArtistCreate": {
+      "WatchlistEntryCreate": {
         "properties": {
-          "name": {
-            "description": "Display name for the artist",
-            "title": "Name",
+          "artist_key": {
+            "description": "Domain identifier of the artist",
+            "title": "Artist Key",
             "type": "string"
           },
-          "spotify_artist_id": {
-            "description": "Spotify artist identifier",
-            "title": "Spotify Artist Id",
-            "type": "string"
+          "priority": {
+            "default": 0,
+            "description": "Scheduling priority (higher runs first)",
+            "title": "Priority",
+            "type": "integer"
           }
         },
         "required": [
-          "spotify_artist_id",
-          "name"
+          "artist_key"
         ],
-        "title": "WatchlistArtistCreate",
+        "title": "WatchlistEntryCreate",
         "type": "object"
       },
-      "WatchlistArtistEntry": {
+      "WatchlistEntryResponse": {
         "properties": {
+          "artist_key": {
+            "title": "Artist Key",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3157,7 +3161,26 @@
             "title": "Id",
             "type": "integer"
           },
-          "last_checked": {
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pause Reason"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "resume_at": {
             "anyOf": [
               {
                 "format": "date-time",
@@ -3167,24 +3190,23 @@
                 "type": "null"
               }
             ],
-            "title": "Last Checked"
+            "title": "Resume At"
           },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "spotify_artist_id": {
-            "title": "Spotify Artist Id",
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
             "type": "string"
           }
         },
         "required": [
           "id",
-          "spotify_artist_id",
-          "name",
-          "created_at"
+          "artist_key",
+          "priority",
+          "paused",
+          "created_at",
+          "updated_at"
         ],
-        "title": "WatchlistArtistEntry",
+        "title": "WatchlistEntryResponse",
         "type": "object"
       },
       "WatchlistItemIn": {
@@ -3283,7 +3305,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/WatchlistArtistEntry"
+              "$ref": "#/components/schemas/WatchlistEntryResponse"
             },
             "title": "Items",
             "type": "array"
@@ -3324,6 +3346,51 @@
           "offset"
         ],
         "title": "WatchlistPageOut",
+        "type": "object"
+      },
+      "WatchlistPauseRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional note explaining why the artist is paused",
+            "title": "Reason"
+          },
+          "resume_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional timestamp describing when to revisit the pause",
+            "title": "Resume At"
+          }
+        },
+        "title": "WatchlistPauseRequest",
+        "type": "object"
+      },
+      "WatchlistPriorityUpdate": {
+        "properties": {
+          "priority": {
+            "description": "Updated scheduling priority",
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "priority"
+        ],
+        "title": "WatchlistPriorityUpdate",
         "type": "object"
       },
       "app__api__spotify__EnqueueResponse": {
@@ -4104,6 +4171,21 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "artist_key": "spotify:artist:1",
+                      "cooldown_until": null,
+                      "created_at": "2024-02-10T08:00:00Z",
+                      "last_enqueued_at": "2024-03-01T11:45:00Z",
+                      "priority": 5,
+                      "updated_at": "2024-03-01T11:45:00Z"
+                    }
+                  ],
+                  "limit": 25,
+                  "offset": 0,
+                  "total": 1
+                },
                 "schema": {
                   "$ref": "#/components/schemas/WatchlistPageOut"
                 }
@@ -4520,6 +4602,46 @@
           "200": {
             "content": {
               "application/json": {
+                "example": {
+                  "artist_key": "spotify:artist:1",
+                  "created_at": "2023-11-12T09:15:00Z",
+                  "etag": "\"artist-sync-7b4a5c90\"",
+                  "genres": [
+                    "indie",
+                    "shoegaze"
+                  ],
+                  "id": 42,
+                  "images": [
+                    "https://images.example/harmony/artist-1/640x640.jpg",
+                    "https://images.example/harmony/artist-1/320x320.jpg"
+                  ],
+                  "metadata": {
+                    "followers": 1203456,
+                    "label": "Harmony Records"
+                  },
+                  "name": "Test Artist",
+                  "popularity": 67,
+                  "releases": [
+                    {
+                      "artist_key": "spotify:artist:1",
+                      "created_at": "2024-03-01T12:00:00Z",
+                      "etag": "\"release-cc928fb6\"",
+                      "id": 101,
+                      "release_date": "2024-03-01",
+                      "release_type": "album",
+                      "source": "spotify",
+                      "source_id": "6s84u2TUpR3wdUv4NgKA2j",
+                      "title": "Harmony Release",
+                      "total_tracks": 10,
+                      "updated_at": "2024-03-01T12:00:00Z",
+                      "version": null
+                    }
+                  ],
+                  "source": "spotify",
+                  "source_id": "1Xyo4u8uXC1ZmMpatF05PJ",
+                  "updated_at": "2024-03-01T12:00:00Z",
+                  "version": "2024-03-01T12:00:00Z"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ArtistOut"
                 }
@@ -4700,6 +4822,14 @@
           "202": {
             "content": {
               "application/json": {
+                "example": {
+                  "already_enqueued": false,
+                  "available_at": "2024-03-01T12:00:00Z",
+                  "job_id": 9182736,
+                  "job_type": "artist_sync",
+                  "priority": 10,
+                  "status": "pending"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/app__schemas__artists__EnqueueResponse"
                 }
@@ -18967,7 +19097,6 @@
     },
     "/api/v1/watchlist": {
       "get": {
-        "description": "Return all registered watchlist artists.",
         "operationId": "list_watchlist_api_v1_watchlist_get",
         "responses": {
           "200": {
@@ -19124,13 +19253,12 @@
         ]
       },
       "post": {
-        "description": "Add a new artist to the automated release watchlist.",
-        "operationId": "add_watchlist_artist_api_v1_watchlist_post",
+        "operationId": "create_watchlist_entry_api_v1_watchlist_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WatchlistArtistCreate"
+                "$ref": "#/components/schemas/WatchlistEntryCreate"
               }
             }
           },
@@ -19141,7 +19269,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WatchlistArtistEntry"
+                  "$ref": "#/components/schemas/WatchlistEntryResponse"
                 }
               }
             },
@@ -19238,24 +19366,23 @@
             "description": "Gateway timeout"
           }
         },
-        "summary": "Add Watchlist Artist",
+        "summary": "Create Watchlist Entry",
         "tags": [
           "Watchlist"
         ]
       }
     },
-    "/api/v1/watchlist/{artist_id}": {
+    "/api/v1/watchlist/{artist_key}": {
       "delete": {
-        "description": "Remove an artist from the release watchlist.",
-        "operationId": "remove_watchlist_artist_api_v1_watchlist__artist_id__delete",
+        "operationId": "delete_watchlist_entry_api_v1_watchlist__artist_key__delete",
         "parameters": [
           {
             "in": "path",
-            "name": "artist_id",
+            "name": "artist_key",
             "required": true,
             "schema": {
-              "title": "Artist Id",
-              "type": "integer"
+              "title": "Artist Key",
+              "type": "string"
             }
           }
         ],
@@ -19354,7 +19481,391 @@
             "description": "Gateway timeout"
           }
         },
-        "summary": "Remove Watchlist Artist",
+        "summary": "Delete Watchlist Entry",
+        "tags": [
+          "Watchlist"
+        ]
+      },
+      "patch": {
+        "operationId": "update_watchlist_priority_api_v1_watchlist__artist_key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_key",
+            "required": true,
+            "schema": {
+              "title": "Artist Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistPriorityUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistEntryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Update Watchlist Priority",
+        "tags": [
+          "Watchlist"
+        ]
+      }
+    },
+    "/api/v1/watchlist/{artist_key}/pause": {
+      "post": {
+        "operationId": "pause_watchlist_entry_api_v1_watchlist__artist_key__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_key",
+            "required": true,
+            "schema": {
+              "title": "Artist Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistPauseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistEntryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Pause Watchlist Entry",
+        "tags": [
+          "Watchlist"
+        ]
+      }
+    },
+    "/api/v1/watchlist/{artist_key}/resume": {
+      "post": {
+        "operationId": "resume_watchlist_entry_api_v1_watchlist__artist_key__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artist_key",
+            "required": true,
+            "schema": {
+              "title": "Artist Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistEntryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Resume Watchlist Entry",
         "tags": [
           "Watchlist"
         ]
