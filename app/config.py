@@ -102,6 +102,7 @@ class FeatureFlags:
     enable_artwork: bool
     enable_lyrics: bool
     enable_legacy_routes: bool
+    enable_artist_cache_invalidation: bool
 
 
 @dataclass(slots=True)
@@ -258,6 +259,15 @@ class OrchestratorConfig:
             default=DEFAULT_ORCH_POOL_ARTIST_DELTA,
             minimum=1,
         )
+        artist_pool_raw = env.get("ARTIST_POOL_CONCURRENCY")
+        if artist_pool_raw is not None:
+            shared_pool = _bounded_int(
+                artist_pool_raw,
+                default=DEFAULT_ARTIST_POOL_CONCURRENCY,
+                minimum=1,
+            )
+            pool_artist_refresh = shared_pool
+            pool_artist_delta = shared_pool
         visibility_timeout = _bounded_int(
             env.get("ORCH_VISIBILITY_TIMEOUT_S"),
             default=DEFAULT_ORCH_VISIBILITY_TIMEOUT_S,
@@ -279,6 +289,15 @@ class OrchestratorConfig:
             minimum=poll_interval,
         )
         priority_map = _parse_priority_map(env)
+        artist_priority_raw = env.get("ARTIST_PRIORITY")
+        if artist_priority_raw is not None:
+            artist_priority = _bounded_int(
+                artist_priority_raw,
+                default=DEFAULT_ARTIST_PRIORITY,
+                minimum=0,
+            )
+            priority_map["artist_refresh"] = artist_priority
+            priority_map["artist_delta"] = artist_priority
         return cls(
             workers_enabled=workers_enabled,
             global_concurrency=global_limit,
@@ -607,6 +626,7 @@ DEFAULT_ORCH_PRIORITY_MAP = {
     "artist_refresh": 50,
     "artist_delta": 45,
 }
+DEFAULT_ARTIST_PRIORITY = DEFAULT_ORCH_PRIORITY_MAP["artist_refresh"]
 DEFAULT_ORCH_VISIBILITY_TIMEOUT_S = 60
 DEFAULT_ORCH_HEARTBEAT_S = 20
 DEFAULT_ORCH_POLL_INTERVAL_MS = 200
@@ -624,6 +644,10 @@ DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS = 2_000
 DEFAULT_WATCHLIST_DB_IO_MODE = "thread"
 DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST = 6
 DEFAULT_WATCHLIST_COOLDOWN_MINUTES = 15
+DEFAULT_ARTIST_POOL_CONCURRENCY = DEFAULT_ORCH_POOL_ARTIST_REFRESH
+DEFAULT_ARTIST_MAX_RETRY_PER_ARTIST = DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST
+DEFAULT_ARTIST_COOLDOWN_SECONDS = DEFAULT_WATCHLIST_COOLDOWN_MINUTES * 60
+DEFAULT_ARTIST_CACHE_INVALIDATE = False
 DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
 DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
 DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
@@ -1474,6 +1498,10 @@ def load_config() -> AppConfig:
             os.getenv("FEATURE_ENABLE_LEGACY_ROUTES"),
             default=False,
         ),
+        enable_artist_cache_invalidation=_as_bool(
+            os.getenv("ARTIST_CACHE_INVALIDATE"),
+            default=DEFAULT_ARTIST_CACHE_INVALIDATE,
+        ),
     )
 
     integrations = IntegrationsConfig(
@@ -1560,27 +1588,48 @@ def load_config() -> AppConfig:
         ),
     )
 
+    retry_budget_env = os.getenv("ARTIST_MAX_RETRY_PER_ARTIST")
+    if retry_budget_env is None:
+        retry_budget_env = os.getenv("WATCHLIST_RETRY_BUDGET_PER_ARTIST")
     retry_budget = min(
         20,
         max(
             1,
             _as_int(
-                os.getenv("WATCHLIST_RETRY_BUDGET_PER_ARTIST"),
-                default=DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST,
+                retry_budget_env,
+                default=DEFAULT_ARTIST_MAX_RETRY_PER_ARTIST,
             ),
         ),
     )
 
-    cooldown_minutes = min(
-        240,
-        max(
-            0,
-            _as_int(
-                os.getenv("WATCHLIST_COOLDOWN_MINUTES"),
-                default=DEFAULT_WATCHLIST_COOLDOWN_MINUTES,
+    cooldown_seconds_env = os.getenv("ARTIST_COOLDOWN_S")
+    if cooldown_seconds_env is not None:
+        cooldown_minutes = min(
+            240,
+            max(
+                0,
+                (max(
+                    0,
+                    _as_int(
+                        cooldown_seconds_env,
+                        default=DEFAULT_ARTIST_COOLDOWN_SECONDS,
+                    ),
+                )
+                + 59)
+                // 60,
             ),
-        ),
-    )
+        )
+    else:
+        cooldown_minutes = min(
+            240,
+            max(
+                0,
+                _as_int(
+                    os.getenv("WATCHLIST_COOLDOWN_MINUTES"),
+                    default=DEFAULT_WATCHLIST_COOLDOWN_MINUTES,
+                ),
+            ),
+        )
 
     db_io_mode_raw = (
         (os.getenv("WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE).strip().lower()

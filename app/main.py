@@ -45,6 +45,8 @@ def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool)
             "matching": True,
             "retry": True,
             "watchlist": True,
+            "artist_refresh": True,
+            "artist_delta": True,
             "artwork": artwork_enabled,
             "lyrics": lyrics_enabled,
         },
@@ -433,6 +435,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "matching": True,
             "retry": True,
             "watchlist": True,
+            "artist_refresh": True,
+            "artist_delta": True,
             "artwork": enable_artwork,
             "lyrics": enable_lyrics,
         }

@@ -480,9 +480,10 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `WATCHLIST_TICK_BUDGET_MS` | int | `8000` | Budget pro Verarbeitungsschritt. | — |
 | `WATCHLIST_BACKOFF_BASE_MS` | int | `250` | Basiswert für den Backoff bei Fehlern. | — |
 | `WATCHLIST_RETRY_MAX` | int | `3` | Retries pro Tick vor Eskalation. | — |
-| `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | int | `6` | Gesamtretry-Budget pro Artist innerhalb des Cooldowns. | — |
+| `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | int | `6` | Gesamtretry-Budget pro Artist innerhalb des Cooldowns (Fallback, wenn kein Artist-Override gesetzt ist). | — |
+| `ARTIST_MAX_RETRY_PER_ARTIST` | int | `6` | Override für das Retry-Budget einzelner Artists; ersetzt den Watchlist-Wert und wird auf `[1, 20]` begrenzt. | — |
 | `WATCHLIST_COOLDOWN_MINUTES` | int | `15` | Pause nach fehlerhaften Läufen. | — |
-| `WATCHLIST_COOLDOWN_S` | int | `300` | Alternative Sekundenangabe für den Artist-Cooldown (überschreibt Minutenwert). | — |
+| `ARTIST_COOLDOWN_S` | int | `900` | Sekundenbasierter Cooldown pro Artist; wird auf Minuten gerundet und überschreibt den Minutenwert. | — |
 | `WATCHLIST_DB_IO_MODE` | string | `thread` | Datenbankmodus (`thread` oder `async`). | — |
 | `WATCHLIST_JITTER_PCT` | float | `0.2` | Zufallsjitter für Backoff-Delays. | — |
 | `WATCHLIST_SHUTDOWN_GRACE_MS` | int | `2000` | Grace-Periode beim Shutdown. | — |
@@ -552,6 +553,9 @@ Harmony bündelt alle Hintergrundjobs in einem Orchestrator, der die Queue prior
 | `ORCH_GLOBAL_CONCURRENCY` | int | `8` | Globale Obergrenze paralleler Dispatcher-Tasks. | — |
 | `ORCH_HEARTBEAT_S` | int | `20` | Zielintervall für Dispatcher-Heartbeats (greift zusätzlich zur 50%-Lease-Regel). | — |
 | `ORCH_POOL_<JOB>` | int | `sync=4`, `matching=4`, `retry=2`, `watchlist=2` | Optionale per-Job-Limits (z. B. `ORCH_POOL_SYNC=3`). Fällt ohne Wert auf das globale Limit zurück. | — |
+| `ARTIST_POOL_CONCURRENCY` | int | `2` | Gemeinsames Limit für `artist_refresh`- und `artist_delta`-Pools; überschreibt die Einzelwerte. | — |
+| `ARTIST_PRIORITY` | int | `50` | Setzt eine einheitliche Priorität für Artist-Jobs und überschreibt `ORCH_PRIORITY_*`. | — |
+| `ARTIST_CACHE_INVALIDATE` | bool | `false` | Aktiviert Cache-Hints & Invalidierung für Artist-Workflows im Orchestrator. | — |
 
 ### Background Workers
 
