@@ -1,12 +1,17 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from app.services.artist_delta import (
     AlbumRelease,
+    ArtistLocalState,
     ArtistKnownRelease,
+    ArtistRemoteState,
     ArtistTrackCandidate,
+    ReleaseSnapshot,
     build_artist_delta,
+    determine_delta,
     filter_new_releases,
 )
+from app.services.artist_dao import ArtistReleaseUpsertDTO
 
 
 def _make_album_payload(**overrides: object) -> dict[str, object]:
@@ -45,6 +50,79 @@ def _build_candidate(release: AlbumRelease, **overrides: object) -> ArtistTrackC
     candidate = ArtistTrackCandidate.from_mapping(payload, release, source="spotify")
     assert candidate is not None
     return candidate
+
+
+def test_delta_detects_added_updated_removed() -> None:
+    local_existing = ReleaseSnapshot(
+        id=1,
+        artist_key="spotify:artist-1",
+        source="spotify",
+        source_id="release-existing",
+        title="Existing",
+        release_date=date(2024, 1, 1),
+        release_type="album",
+        total_tracks=10,
+        metadata={"tag": "old"},
+        version=None,
+        etag=None,
+        updated_at=datetime(2024, 1, 1, 12, 0, 0),
+        inactive_at=None,
+        inactive_reason=None,
+    )
+    local_removed = ReleaseSnapshot(
+        id=2,
+        artist_key="spotify:artist-1",
+        source="spotify",
+        source_id="release-removed",
+        title="To Be Removed",
+        release_date=date(2023, 12, 1),
+        release_type="single",
+        total_tracks=3,
+        metadata={},
+        version=None,
+        etag=None,
+        updated_at=datetime(2024, 1, 1, 12, 0, 0),
+        inactive_at=None,
+        inactive_reason=None,
+    )
+    local_state = ArtistLocalState(
+        releases=(local_existing, local_removed),
+        aliases=("Old Alias",),
+    )
+
+    remote_updated = ArtistReleaseUpsertDTO(
+        artist_key="spotify:artist-1",
+        source="spotify",
+        source_id="release-existing",
+        title="Existing (Remastered)",
+        release_date="2024-02-01",
+        release_type="album",
+        total_tracks=12,
+        metadata={"tag": "new"},
+    )
+    remote_added = ArtistReleaseUpsertDTO(
+        artist_key="spotify:artist-1",
+        source="spotify",
+        source_id="release-new",
+        title="Brand New",
+        release_date="2024-03-01",
+        release_type="single",
+        total_tracks=2,
+    )
+    remote_state = ArtistRemoteState(
+        releases=(remote_added, remote_updated),
+        aliases=("Old Alias", "New Alias"),
+    )
+
+    delta = determine_delta(local_state, remote_state)
+
+    assert [dto.source_id for dto in delta.releases.added] == ["release-new"]
+    assert len(delta.releases.updated) == 1
+    assert delta.releases.updated[0].before.id == local_existing.id
+    assert delta.releases.updated[0].after.title == "Existing (Remastered)"
+    assert [snapshot.id for snapshot in delta.releases.removed] == [local_removed.id]
+    assert delta.aliases.added == ("New Alias",)
+    assert delta.aliases.removed == ()
 
 
 def test_filter_new_releases_respects_last_checked() -> None:

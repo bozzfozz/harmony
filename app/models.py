@@ -273,6 +273,7 @@ class ArtistReleaseRecord(Base):
         Index("ix_artist_releases_artist_key", "artist_key"),
         Index("ix_artist_releases_release_date", "release_date"),
         Index("ix_artist_releases_updated_at", "updated_at"),
+        Index("ix_artist_releases_inactive_at", "inactive_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -294,6 +295,27 @@ class ArtistReleaseRecord(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+    inactive_at = Column(DateTime, nullable=True)
+    inactive_reason = Column(Text, nullable=True)
+
+
+class ArtistAuditRecord(Base):
+    __tablename__ = "artist_audit"
+    __table_args__ = (
+        Index("ix_artist_audit_artist_key", "artist_key"),
+        Index("ix_artist_audit_event", "event"),
+        Index("ix_artist_audit_created_at", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    job_id = Column(String(64), nullable=True)
+    artist_key = Column(String(255), nullable=False)
+    entity_type = Column(String(50), nullable=False)
+    entity_id = Column(String(255), nullable=True)
+    event = Column(String(32), nullable=False)
+    before_json = Column("before", JSON, nullable=True)
+    after_json = Column("after", JSON, nullable=True)
 
 
 class ArtistWatchlistEntry(Base):
