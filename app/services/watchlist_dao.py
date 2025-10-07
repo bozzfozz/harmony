@@ -133,7 +133,9 @@ class WatchlistDAO:
                 if record is None:
                     return
                 record.last_checked = timestamp
+                record.last_scan_at = timestamp
                 record.retry_block_until = None
+                record.updated_at = datetime.utcnow()
                 session.add(record)
 
         _mark()
@@ -156,8 +158,10 @@ class WatchlistDAO:
                 if record is None:
                     return
                 record.last_checked = next_time
+                record.last_scan_at = next_time
                 if retry_block_until is not _UNSET:
                     record.retry_block_until = retry_block_until
+                record.updated_at = datetime.utcnow()
                 session.add(record)
 
         _mark()

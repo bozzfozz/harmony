@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import WatchlistWorkerConfig, settings
+from app.db_async import get_async_sessionmaker
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -641,6 +642,12 @@ class ArtistRefreshHandlerDeps:
         self.refresh_priority = _coerce_priority(self.refresh_priority)
         self.retry_budget = max(1, int(self.config.retry_budget_per_artist))
         self.cooldown_minutes = max(0, int(self.config.cooldown_minutes))
+        mode = (self.config.db_io_mode or "thread").strip().lower()
+        if mode == "async" and isinstance(self.dao, ArtistWorkflowDAO):
+            if not self.dao.supports_async:
+                self.dao = self.dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
         if not get_app_config().features.enable_artist_cache_invalidation:
             self.cache_service = None
 
@@ -680,6 +687,11 @@ class ArtistDeltaHandlerDeps:
         self.backoff_base_ms = max(0, int(self.config.backoff_base_ms))
         self.jitter_pct = max(0.0, float(self.config.jitter_pct))
         self.retry_max = max(1, int(self.config.retry_max))
+        if self.db_mode == "async" and isinstance(self.dao, ArtistWorkflowDAO):
+            if not self.dao.supports_async:
+                self.dao = self.dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
         if not get_app_config().features.enable_artist_cache_invalidation:
             self.cache_service = None
 

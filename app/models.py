@@ -199,6 +199,19 @@ class WatchlistArtist(Base):
             "spotify_artist_id",
             unique=True,
         ),
+        Index(
+            "ix_watchlist_artists_source_artist_id",
+            "source_artist_id",
+            unique=True,
+        ),
+        Index(
+            "ix_watchlist_artists_priority_last_scan",
+            "priority",
+            "last_scan_at",
+            "id",
+        ),
+        Index("ix_watchlist_artists_stop_reason", "stop_reason"),
+        Index("ix_watchlist_artists_retry_budget_left", "retry_budget_left"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -206,7 +219,20 @@ class WatchlistArtist(Base):
     name = Column(String(512), nullable=False)
     last_checked = Column(DateTime, nullable=True)
     retry_block_until = Column(DateTime, nullable=True)
+    source_artist_id = Column(Integer, nullable=True)
+    priority = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    cooldown_s = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    last_scan_at = Column(DateTime, nullable=True)
+    last_hash = Column(String(128), nullable=True)
+    retry_budget_left = Column(Integer, nullable=True)
+    stop_reason = Column(String(128), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
 
 
 class ArtistKnownReleaseRecord(Base):

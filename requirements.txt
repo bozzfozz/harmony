@@ -3,6 +3,8 @@ uvicorn
 sqlalchemy
 alembic
 aiohttp
+aiosqlite
+asyncpg
 spotipy
 pydantic
 pytest
