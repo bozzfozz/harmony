@@ -1,24 +1,38 @@
 from __future__ import annotations
 
+import pytest
+
+from app import dependencies as deps
+
+
+@pytest.fixture(autouse=True)
+def reset_watchlist_service() -> None:
+    deps.get_watchlist_service.cache_clear()
+    service = deps.get_watchlist_service()
+    service.reset()
+    yield
+    service.reset()
+    deps.get_watchlist_service.cache_clear()
+
 
 def test_add_artist_to_watchlist(client) -> None:
     response = client.post(
         "/watchlist",
-        json={"spotify_artist_id": "artist-42", "name": "Example Artist"},
+        json={"artist_key": "spotify:artist-42", "priority": 5},
     )
     assert response.status_code == 201
     payload = response.json()
-    assert payload["spotify_artist_id"] == "artist-42"
-    assert payload["name"] == "Example Artist"
+    assert payload["artist_key"] == "spotify:artist-42"
+    assert payload["priority"] == 5
 
     listing = client.get("/watchlist")
     assert listing.status_code == 200
     body = listing.json()
-    assert any(item["spotify_artist_id"] == "artist-42" for item in body["items"])
+    assert any(item["artist_key"] == "spotify:artist-42" for item in body["items"])
 
 
 def test_prevent_duplicate_artists(client) -> None:
-    payload = {"spotify_artist_id": "artist-99", "name": "Duplicate"}
+    payload = {"artist_key": "spotify:artist-99", "priority": 0}
     first = client.post("/watchlist", json=payload)
     assert first.status_code == 201
 

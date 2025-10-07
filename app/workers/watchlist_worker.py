@@ -200,13 +200,13 @@ class WatchlistWorker:
             )
         except Exception:  # pragma: no cover - defensive logging
             logger.exception(
-                "event=watchlist.enqueue status=error artist_id=%s", artist.spotify_artist_id
+                "event=artist.start status=error artist_id=%s", artist.spotify_artist_id
             )
             return False
 
         log_event(
             logger,
-            "watchlist.enqueue",
+            "artist.start",
             component="worker.watchlist",
             status="queued",
             entity_id=artist.spotify_artist_id,

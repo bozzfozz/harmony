@@ -1,105 +1,86 @@
 from __future__ import annotations
 
-import os
-import tempfile
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 
 import pytest
 
 from app import dependencies as deps
-from app.db import init_db, reset_engine_for_tests
 from app.main import app
 from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture(autouse=True)
-def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def reset_watchlist_service(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
     monkeypatch.setenv("FEATURE_REQUIRE_AUTH", "0")
-    db_fd, db_file = tempfile.mkstemp(prefix="harmony-watchlist-", suffix=".db")
-    os.close(db_fd)
-    db_path = Path(db_file)
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
-    init_db()
-    deps.get_app_config.cache_clear()
-    deps.get_artist_service.cache_clear()
+    deps.get_watchlist_service.cache_clear()
+    service = deps.get_watchlist_service()
+    service.reset()
     app.openapi_schema = None
     yield
-    deps.get_app_config.cache_clear()
-    deps.get_artist_service.cache_clear()
+    service.reset()
+    deps.get_watchlist_service.cache_clear()
     app.openapi_schema = None
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
 
 
-def test_watchlist_crud_add_list_delete() -> None:
+def test_watchlist_crud_flow() -> None:
     with SimpleTestClient(app) as client:
         created = client.post(
-            api_path("/artists/watchlist"),
+            api_path("/watchlist"),
             json={"artist_key": "spotify:alpha", "priority": 7},
         )
         assert created.status_code == 201
-        body = created.json()
-        assert body["artist_key"] == "spotify:alpha"
-        assert body["priority"] == 7
+        payload = created.json()
+        assert payload["artist_key"] == "spotify:alpha"
+        assert payload["priority"] == 7
+        assert payload["paused"] is False
 
-        listing = client.get(api_path("/artists/watchlist"))
+        listing = client.get(api_path("/watchlist"))
         assert listing.status_code == 200
-        items = listing.json()
-        assert items["total"] == 1
-        assert items["items"][0]["artist_key"] == "spotify:alpha"
+        body = listing.json()
+        assert len(body["items"]) == 1
+        assert body["items"][0]["artist_key"] == "spotify:alpha"
 
-        deleted = client.delete(api_path("/artists/watchlist/spotify:alpha"))
+        updated = client.patch(
+            api_path("/watchlist/spotify:alpha"),
+            json={"priority": 42},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["priority"] == 42
+
+        deleted = client.delete(api_path("/watchlist/spotify:alpha"))
         assert deleted.status_code == 204
 
-        after = client.get(api_path("/artists/watchlist"))
+        after = client.get(api_path("/watchlist"))
         assert after.status_code == 200
         assert after.json()["items"] == []
 
 
-def test_watchlist_pagination_and_sorting_by_priority() -> None:
-    first_cooldown = datetime(2024, 1, 1, 12, 0, 0)
+def test_watchlist_pause_and_resume() -> None:
+    resume_time = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
 
     with SimpleTestClient(app) as client:
         client.post(
-            api_path("/artists/watchlist"), json={"artist_key": "spotify:one", "priority": 10}
-        )
-        client.post(
-            api_path("/artists/watchlist"),
-            json={
-                "artist_key": "spotify:two",
-                "priority": 10,
-                "cooldown_until": first_cooldown.isoformat(),
-            },
-        )
-        client.post(
-            api_path("/artists/watchlist"), json={"artist_key": "spotify:three", "priority": 5}
+            api_path("/watchlist"),
+            json={"artist_key": "spotify:beta", "priority": 3},
         )
 
-        first_page = client.get(
-            api_path("/artists/watchlist"),
-            params={"limit": 2, "offset": 0},
+        paused = client.post(
+            api_path("/watchlist/spotify:beta/pause"),
+            json={"reason": "manual", "resume_at": resume_time.isoformat()},
         )
-        assert first_page.status_code == 200
-        payload = first_page.json()
-        assert payload["total"] == 3
-        assert payload["limit"] == 2
-        assert [item["artist_key"] for item in payload["items"]] == [
-            "spotify:one",
-            "spotify:two",
-        ]
+        assert paused.status_code == 200
+        pause_body = paused.json()
+        assert pause_body["paused"] is True
+        assert pause_body["pause_reason"] == "manual"
+        resumed_at = datetime.fromisoformat(pause_body["resume_at"].replace("Z", "+00:00"))
+        assert resumed_at == resume_time
 
-        second_page = client.get(
-            api_path("/artists/watchlist"),
-            params={"limit": 2, "offset": 2},
-        )
-        assert second_page.status_code == 200
-        payload = second_page.json()
-        assert payload["total"] == 3
-        assert [item["artist_key"] for item in payload["items"]] == ["spotify:three"]
+        resumed = client.post(api_path("/watchlist/spotify:beta/resume"))
+        assert resumed.status_code == 200
+        resume_body = resumed.json()
+        assert resume_body["paused"] is False
+        assert resume_body["pause_reason"] is None
+        assert resume_body["resume_at"] is None
+

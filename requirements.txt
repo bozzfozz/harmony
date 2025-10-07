@@ -13,3 +13,4 @@ httpx
 psutil
 psycopg[binary]
 mutagen
+prometheus_client

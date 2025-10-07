@@ -69,6 +69,7 @@ from app.utils.events import (
     DOWNLOAD_RETRY_SCHEDULED,
 )
 from app.utils.file_utils import organize_file
+from app.utils.metrics import counter, histogram
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
 
@@ -77,6 +78,37 @@ logger = get_logger(__name__)
 
 ARTIST_SCAN_JOB_TYPE = "artist_scan"
 ARTIST_REFRESH_JOB_TYPE = "artist_refresh"
+
+_SCAN_OUTCOME_COUNTER = counter(
+    "artist_scan_outcomes_total",
+    "Total number of artist scan outcomes grouped by status",
+    label_names=("status",),
+)
+_SCAN_DURATION_SECONDS = histogram(
+    "artist_scan_duration_seconds",
+    "Time spent processing artist scan jobs",
+)
+
+_REFRESH_OUTCOME_COUNTER = counter(
+    "artist_refresh_outcomes_total",
+    "Total number of artist refresh outcomes grouped by status",
+    label_names=("status",),
+)
+_REFRESH_DURATION_SECONDS = histogram(
+    "artist_refresh_duration_seconds",
+    "Time spent processing artist refresh jobs",
+)
+
+
+def _observe_refresh_metrics(status: str, duration_ms: float) -> None:
+    _REFRESH_OUTCOME_COUNTER.labels(status=status).inc()
+    _REFRESH_DURATION_SECONDS.observe(max(duration_ms / 1000.0, 0.0))
+
+
+def _observe_scan_metrics(status: str, duration_ms: float) -> None:
+    _SCAN_OUTCOME_COUNTER.labels(status=status).inc()
+    _SCAN_DURATION_SECONDS.observe(max(duration_ms / 1000.0, 0.0))
+
 
 _DEFAULT_TIMEOUT_MS = 10_000
 _RETRY_DEFAULT_SCAN_INTERVAL = 60.0
@@ -435,6 +467,8 @@ async def handle_matching(
 ) -> Mapping[str, Any]:
     """Process a matching job and persist qualifying candidates."""
 
+    started = time.perf_counter()
+    started = time.perf_counter()
     payload = dict(job.payload or {})
     job_type = str(payload.get("type") or job.type or "matching")
     spotify_track = payload.get("spotify_track")
@@ -1381,7 +1415,7 @@ async def _enqueue_downloads(
             )
             log_event(
                 logger,
-                "artist.enqueue",
+                "artist.persist",
                 component=_WATCHLIST_LOG_COMPONENT,
                 status="error",
                 entity_id=artist.spotify_artist_id,
@@ -1402,7 +1436,7 @@ async def _enqueue_downloads(
             )
             log_event(
                 logger,
-                "artist.enqueue",
+                "artist.persist",
                 component=_WATCHLIST_LOG_COMPONENT,
                 status="error",
                 entity_id=artist.spotify_artist_id,
@@ -1420,7 +1454,7 @@ async def _enqueue_downloads(
     duration_ms = int((time.perf_counter() - started) * 1000)
     log_event(
         logger,
-        "artist.enqueue",
+        "artist.persist",
         component=_WATCHLIST_LOG_COMPONENT,
         status="ok" if queued else "noop",
         entity_id=artist.spotify_artist_id,
@@ -1455,7 +1489,7 @@ def _enforce_retry_budget(
     }
     if artist_id is not None:
         log_kwargs["entity_id"] = artist_id
-    log_event(logger, "artist.watch", **log_kwargs)
+    log_event(logger, "artist.scan", **log_kwargs)
 
     payload: dict[str, Any] = {
         "attempts": attempts,
@@ -1475,6 +1509,7 @@ def _enforce_retry_budget(
 
 
 async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Mapping[str, Any]:
+    started = time.perf_counter()
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1490,12 +1525,14 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     if artist is None:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_ARTIST_REFRESH_LOG_COMPONENT,
             status="missing",
             artist_id=artist_pk,
             attempts=attempts,
         )
+        duration_ms = (time.perf_counter() - started) * 1000
+        _observe_refresh_metrics("missing", duration_ms)
         return {
             "status": "missing",
             "artist_id": artist_pk,
@@ -1514,13 +1551,15 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     if artist.retry_block_until and artist.retry_block_until > now:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_ARTIST_REFRESH_LOG_COMPONENT,
             status="cooldown",
             entity_id=artist.spotify_artist_id,
             attempts=attempts,
             retry_block_until=artist.retry_block_until.isoformat(),
         )
+        duration_ms = (time.perf_counter() - started) * 1000
+        _observe_refresh_metrics("cooldown", duration_ms)
         return {
             "status": "cooldown",
             "artist_id": artist.spotify_artist_id,
@@ -1532,13 +1571,15 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     if cutoff and artist.last_checked and artist.last_checked > cutoff:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_ARTIST_REFRESH_LOG_COMPONENT,
             status="noop",
             entity_id=artist.spotify_artist_id,
             attempts=attempts,
             reason="stale",
         )
+        duration_ms = (time.perf_counter() - started) * 1000
+        _observe_refresh_metrics("noop", duration_ms)
         return {
             "status": "noop",
             "artist_id": artist.spotify_artist_id,
@@ -1565,12 +1606,14 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     except IntegrityError as exc:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_ARTIST_REFRESH_LOG_COMPONENT,
             status="error",
             entity_id=artist.spotify_artist_id,
             error="delta_enqueue_failed",
         )
+        duration_ms = (time.perf_counter() - started) * 1000
+        _observe_refresh_metrics("error", duration_ms)
         raise MatchingJobError(
             "delta_enqueue_failed",
             f"failed to enqueue artist delta for {artist.spotify_artist_id}",
@@ -1579,12 +1622,14 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
     except Exception as exc:  # pragma: no cover - defensive logging
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_ARTIST_REFRESH_LOG_COMPONENT,
             status="error",
             entity_id=artist.spotify_artist_id,
             error="delta_enqueue_failed",
         )
+        duration_ms = (time.perf_counter() - started) * 1000
+        _observe_refresh_metrics("error", duration_ms)
         raise MatchingJobError(
             "delta_enqueue_failed",
             f"failed to enqueue artist delta for {artist.spotify_artist_id}",
@@ -1596,7 +1641,7 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
 
     log_event(
         logger,
-        "artist.watch",
+        "artist.start",
         component=_ARTIST_REFRESH_LOG_COMPONENT,
         status="queued",
         entity_id=artist.spotify_artist_id,
@@ -1604,6 +1649,8 @@ async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Ma
         delta_idempotency=delta_idempotency,
         delta_priority=priority,
     )
+    duration_ms = (time.perf_counter() - started) * 1000
+    _observe_refresh_metrics("enqueued", duration_ms)
     return {
         "status": "enqueued",
         "artist_id": artist.spotify_artist_id,
@@ -1624,16 +1671,19 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
         raise MatchingJobError("invalid_payload", "invalid artist_id", retry=False) from exc
 
     artist = await _call_workflow_dao(deps, "get_artist", artist_pk)
+    start = time.perf_counter()
     attempts = max(int(job.attempts or 0), 1)
     if artist is None:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_WATCHLIST_LOG_COMPONENT,
             status="missing",
             artist_id=artist_pk,
             attempts=attempts,
         )
+        duration_ms = (time.perf_counter() - start) * 1000
+        _observe_scan_metrics("missing", duration_ms)
         return {
             "status": "missing",
             "artist_id": artist_pk,
@@ -1653,13 +1703,15 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
     if artist.retry_block_until and artist.retry_block_until > now:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_WATCHLIST_LOG_COMPONENT,
             status="cooldown",
             entity_id=artist.spotify_artist_id,
             attempts=attempts,
             retry_block_until=artist.retry_block_until.isoformat(),
         )
+        duration_ms = (time.perf_counter() - start) * 1000
+        _observe_scan_metrics("cooldown", duration_ms)
         return {
             "status": "cooldown",
             "artist_id": artist.spotify_artist_id,
@@ -1672,13 +1724,15 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
     if cutoff and artist.last_checked and artist.last_checked > cutoff:
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_WATCHLIST_LOG_COMPONENT,
             status="noop",
             entity_id=artist.spotify_artist_id,
             attempts=attempts,
             reason="stale",
         )
+        duration_ms = (time.perf_counter() - start) * 1000
+        _observe_scan_metrics("noop", duration_ms)
         return {
             "status": "noop",
             "artist_id": artist.spotify_artist_id,
@@ -1687,7 +1741,6 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
             "reason": "stale",
         }
 
-    start = time.perf_counter()
     previous_hash = artist.last_hash or ""
     content_hash = ""
     try:
@@ -1710,7 +1763,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,
-                "artist.watch",
+                "artist.scan",
                 component=_WATCHLIST_LOG_COMPONENT,
                 status="noop",
                 entity_id=artist.spotify_artist_id,
@@ -1719,6 +1772,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
                 queued=0,
                 reason="unchanged",
             )
+            _observe_scan_metrics("noop", duration_ms)
             return {
                 "status": "noop",
                 "artist_id": artist.spotify_artist_id,
@@ -1745,7 +1799,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,
-                "artist.watch",
+                "artist.scan",
                 component=_WATCHLIST_LOG_COMPONENT,
                 status="noop",
                 entity_id=artist.spotify_artist_id,
@@ -1753,6 +1807,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
                 duration_ms=duration_ms,
                 queued=0,
             )
+            _observe_scan_metrics("noop", duration_ms)
             return {
                 "status": "noop",
                 "artist_id": artist.spotify_artist_id,
@@ -1782,7 +1837,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,
-                "artist.watch",
+                "artist.scan",
                 component=_WATCHLIST_LOG_COMPONENT,
                 status="failed",
                 entity_id=artist.spotify_artist_id,
@@ -1790,6 +1845,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
                 duration_ms=duration_ms,
                 error=exc.code,
             )
+            _observe_scan_metrics("failed", duration_ms)
             raise MatchingJobError(exc.code, str(exc), retry=False) from exc
 
         backoff_ms = _calculate_artist_backoff_ms(attempts, deps)
@@ -1805,7 +1861,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
         duration_ms = int((time.perf_counter() - start) * 1000)
         log_event(
             logger,
-            "artist.watch",
+            "artist.scan",
             component=_WATCHLIST_LOG_COMPONENT,
             status="retry",
             entity_id=artist.spotify_artist_id,
@@ -1814,6 +1870,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
             retry_in=retry_seconds,
             error=exc.code,
         )
+        _observe_scan_metrics("retry", duration_ms)
         raise MatchingJobError(exc.code, str(exc), retry=True, retry_in=retry_seconds) from exc
 
     await _call_workflow_dao(
@@ -1830,7 +1887,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
     status = "ok" if queued else "noop"
     log_event(
         logger,
-        "artist.watch",
+        "artist.scan",
         component=_WATCHLIST_LOG_COMPONENT,
         status=status,
         entity_id=artist.spotify_artist_id,
@@ -1838,6 +1895,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
         duration_ms=duration_ms,
         queued=queued,
     )
+    _observe_scan_metrics(status, duration_ms)
     return {
         "status": status,
         "artist_id": artist.spotify_artist_id,

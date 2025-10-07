@@ -94,33 +94,6 @@ class RecommendationsResponse(BaseModel):
     seeds: List[Dict[str, Any]]
 
 
-class WatchlistArtistCreate(BaseModel):
-    spotify_artist_id: str = Field(..., description="Spotify artist identifier")
-    name: str = Field(..., description="Display name for the artist")
-
-    @field_validator("spotify_artist_id", "name")
-    @classmethod
-    def _ensure_non_empty(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("Value must not be empty")
-        return stripped
-
-
-class WatchlistArtistEntry(BaseModel):
-    id: int
-    spotify_artist_id: str
-    name: str
-    last_checked: Optional[datetime] = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class WatchlistListResponse(BaseModel):
-    items: List[WatchlistArtistEntry]
-
-
 class SoulseekSearchRequest(BaseModel):
     query: str
 

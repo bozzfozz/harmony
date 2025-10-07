@@ -101,6 +101,29 @@ Unter `/api/v1/artists` steht eine schlanke REST-API bereit, die die gespeichert
 - `POST /artists/watchlist` legt einen Eintrag an bzw. aktualisiert ihn (`artist_key`, optional `priority`, `cooldown_until` im ISO-8601-Format).
 - `DELETE /artists/watchlist/{artist_key}` entfernt einen Eintrag aus der Watchlist.
 
+## Watchlist API
+
+Die neue Watchlist-Domain unter `/api/v1/watchlist` kapselt CRUD-Operationen für die automatische Release-Überwachung und hält den Zustand vollständig im Service-Layer. Alle Endpunkte liefern strukturierte Events (`event=api.request`) inklusive Request-ID.
+
+- `GET /watchlist` listet alle bekannten Einträge sortiert nach Priorität.
+- `POST /watchlist` legt einen Eintrag mit `artist_key` und optionaler `priority` an (duplizierte Schlüssel resultieren in `409 CONFLICT`).
+- `PATCH /watchlist/{artist_key}` aktualisiert die Priorität eines bestehenden Eintrags.
+- `POST /watchlist/{artist_key}/pause` markiert einen Eintrag als pausiert und akzeptiert optionale Felder `reason` sowie `resume_at` (ISO-8601).
+- `POST /watchlist/{artist_key}/resume` hebt eine Pause wieder auf.
+- `DELETE /watchlist/{artist_key}` entfernt den Eintrag.
+
+Beispiel:
+
+```bash
+curl -X POST -H "Content-Type: application/json" -H "X-API-Key: $HARMONY_API_KEY" \
+  -d '{"artist_key": "spotify:alpha", "priority": 10}' \
+  "https://harmony.local/api/v1/watchlist"
+
+curl -X POST -H "Content-Type: application/json" -H "X-API-Key: $HARMONY_API_KEY" \
+  -d '{"reason": "vacation", "resume_at": "2025-01-01T12:00:00Z"}' \
+  "https://harmony.local/api/v1/watchlist/spotify:alpha/pause"
+```
+
 ### Beispiele
 
 ```bash
@@ -752,7 +775,7 @@ GZIP_MIN_SIZE=1024
 
 ### Logging & Observability
 
-Harmony setzt vollständig auf strukturierte Logs – ein Prometheus-Endpoint (`/metrics`) wird nicht mehr bereitgestellt. Die wichtigsten Event-Typen sind:
+Harmony priorisiert strukturierte Logs. Ergänzend instrumentiert die Orchestrator-Pipeline Prometheus-Counter/Histogramme (z. B. `artist_scan_outcomes_total`, `artist_refresh_duration_seconds`). Die wichtigsten Event-Typen sind:
 
 - `event=request`, ergänzt um `route`, `status`, `duration_ms` und optional `cache_status`.
 - `event=worker_job`, ergänzt um `job_id`, `attempt`, `status`, `duration_ms`.
