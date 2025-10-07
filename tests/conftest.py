@@ -2,7 +2,11 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 
-pytest_plugins = ["tests.fixtures.async_client"]
+pytest_plugins = [
+    "tests.fixtures.async_client",
+    "tests.fixtures.mocks_providers",
+    "tests.fixtures.artists",
+]
 
 import asyncio
 from datetime import datetime
@@ -1440,7 +1444,10 @@ def db_session():
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
+def client(
+    monkeypatch: pytest.MonkeyPatch,
+    artist_gateway_stub,
+) -> SimpleTestClient:
     stub_spotify = StubSpotifyClient()
     stub_soulseek = StubSoulseekClient()
     stub_transfers = StubTransfersApi(stub_soulseek)
@@ -1494,6 +1501,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> SimpleTestClient:
             api_base_path=getattr(test_client.app.state, "api_base_path", "") or "",
         )
         test_client.app.state.provider_gateway_stub = stub_gateway
+        test_client.app.state.artist_gateway_stub = artist_gateway_stub
         test_client.app.state.integration_service_stub = stub_service
         yield test_client
 

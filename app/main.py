@@ -13,6 +13,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.api import router_registry
+from app.api.openapi_examples import apply_artist_examples
 from app.api.admin_artists import maybe_register_admin_routes
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
@@ -787,6 +788,24 @@ def custom_openapi() -> dict[str, Any]:
                 existing.setdefault("description", description)
                 content = existing.setdefault("content", {})
                 content.setdefault("application/json", {"schema": error_ref})
+
+    artist_collection_path = router_registry.compose_prefix(config.api_base_path, "/artists")
+    artist_watchlist_path = router_registry.compose_prefix(
+        config.api_base_path, "/artists/watchlist"
+    )
+    artist_detail_path = router_registry.compose_prefix(
+        config.api_base_path, "/artists/{artist_key}"
+    )
+    artist_enqueue_path = router_registry.compose_prefix(
+        config.api_base_path, "/artists/{artist_key}/enqueue-sync"
+    )
+    apply_artist_examples(
+        openapi_schema,
+        collection_path=artist_collection_path,
+        watchlist_path=artist_watchlist_path,
+        detail_path=artist_detail_path,
+        enqueue_path=artist_enqueue_path,
+    )
 
     health_path = router_registry.compose_prefix(config.api_base_path, "/health")
     ready_path = router_registry.compose_prefix(config.api_base_path, "/ready")
