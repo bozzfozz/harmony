@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
+from datetime import date, datetime
 from difflib import SequenceMatcher
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from app.schemas.errors import ApiError, ErrorCode
-from app.schemas.provider import ProviderAlbum, ProviderTrack
+from app.schemas.provider import ProviderAlbum, ProviderArtist, ProviderTrack
 from app.services.errors import ServiceError
 from app.utils.text_normalization import normalize_unicode
 
@@ -76,6 +79,103 @@ class LibraryService:
                     ),
                 )
             )
+
+    def _canonical_artist(self, artist: ProviderArtist) -> Mapping[str, object]:
+        payload: dict[str, object] = {"name": artist.name}
+        if artist.id:
+            payload["id"] = artist.id
+        if artist.uri:
+            payload["uri"] = artist.uri
+        if artist.genres:
+            payload["genres"] = list(artist.genres)
+        if artist.metadata:
+            payload["metadata"] = self._normalize_value(artist.metadata)
+        return payload
+
+    def _canonical_album(self, entry: _AlbumEntry) -> Mapping[str, object]:
+        album = entry.album
+        payload: dict[str, object] = {
+            "id": album.id or "",
+            "name": album.name,
+            "artists": [
+                self._canonical_artist(artist)
+                for artist in sorted(album.artists, key=lambda item: (item.name, item.id or ""))
+            ],
+        }
+        if album.release_date:
+            payload["release_date"] = self._normalize_value(album.release_date)
+        if album.total_tracks is not None:
+            payload["total_tracks"] = int(album.total_tracks)
+        if album.metadata:
+            payload["metadata"] = self._normalize_value(album.metadata)
+        return payload
+
+    def _canonical_track(self, entry: _TrackEntry) -> Mapping[str, object]:
+        track = entry.track
+        payload: dict[str, object] = {
+            "id": track.id or "",
+            "name": track.name,
+            "provider": track.provider,
+            "artists": [
+                self._canonical_artist(artist)
+                for artist in sorted(track.artists, key=lambda item: (item.name, item.id or ""))
+            ],
+        }
+        if track.duration_ms is not None:
+            payload["duration_ms"] = int(track.duration_ms)
+        if track.isrc:
+            payload["isrc"] = track.isrc
+        if track.album is not None:
+            payload["album"] = self._normalize_value(
+                {
+                    "id": track.album.id or "",
+                    "name": track.album.name,
+                    "artists": [
+                        self._canonical_artist(artist)
+                        for artist in sorted(
+                            track.album.artists, key=lambda item: (item.name, item.id or "")
+                        )
+                    ],
+                    "release_date": self._normalize_value(track.album.release_date)
+                    if track.album.release_date
+                    else None,
+                    "total_tracks": track.album.total_tracks,
+                    "metadata": self._normalize_value(track.album.metadata),
+                }
+            )
+        if track.metadata:
+            payload["metadata"] = self._normalize_value(track.metadata)
+        return payload
+
+    def _normalize_value(self, value: object) -> object:
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, Mapping):
+            return {str(key): self._normalize_value(subvalue) for key, subvalue in sorted(value.items())}
+        if isinstance(value, (list, tuple)):
+            return [self._normalize_value(item) for item in value]
+        return value
+
+    def build_snapshot(self) -> Mapping[str, Sequence[Mapping[str, object]]]:
+        albums = [self._canonical_album(entry) for entry in sorted(self._albums, key=lambda item: (item.album.id or "", item.album.name))]
+        tracks = [
+            self._canonical_track(entry)
+            for entry in sorted(
+                self._tracks,
+                key=lambda item: (
+                    item.track.provider,
+                    item.track.id or "",
+                    item.track.name,
+                ),
+            )
+        ]
+        return {"albums": albums, "tracks": tracks}
+
+    def compute_content_hash(self) -> str:
+        snapshot = self.build_snapshot()
+        payload = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return digest
 
     def get_album(self, album_id: int) -> ProviderAlbum | None:
         for entry in self._albums:

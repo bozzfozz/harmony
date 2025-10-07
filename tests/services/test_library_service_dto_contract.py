@@ -67,3 +67,39 @@ def test_library_service_normalized_lookup() -> None:
 
     matches = service.search_tracks_like_normalized(["Song A"], ["Artist"], limit=5)
     assert matches and matches[0].name == "Sóng Á"
+
+
+def test_library_service_content_hash_is_deterministic() -> None:
+    payloads = [
+        _track_payload("Song A", "Artist One", track_id=1),
+        _track_payload("Song B", "Artist Two", track_id=2),
+    ]
+    albums = [
+        _album_payload("Album A", "Artist One", album_id=10),
+        _album_payload("Album B", "Artist Two", album_id=11),
+    ]
+
+    service = LibraryService()
+    service.add_tracks(payloads)
+    service.add_albums(albums)
+    first_hash = service.compute_content_hash()
+
+    reordered = LibraryService()
+    reordered.add_tracks(list(reversed(payloads)))
+    reordered.add_albums(list(reversed(albums)))
+
+    assert reordered.compute_content_hash() == first_hash
+
+
+def test_library_service_content_hash_changes_on_mutation() -> None:
+    base = LibraryService()
+    base.add_tracks([_track_payload("Song", "Artist", track_id=1)])
+    base.add_albums([_album_payload("Album", "Artist", album_id=1)])
+    base_hash = base.compute_content_hash()
+
+    mutated = LibraryService()
+    mutated.add_tracks([_track_payload("Song", "Artist", track_id=1)])
+    mutated.add_albums([_album_payload("Album", "Artist", album_id=1)])
+    mutated.add_tracks([_track_payload("Song Two", "Artist", track_id=2)])
+
+    assert mutated.compute_content_hash() != base_hash

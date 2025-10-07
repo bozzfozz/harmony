@@ -37,13 +37,19 @@ def test_mark_success_updates_state_and_known_releases() -> None:
     checked_at = datetime(2024, 1, 1, 12, 0, 0)
     release = ArtistKnownRelease(track_id="track-1", etag="etag-1", fetched_at=checked_at)
 
-    dao.mark_success(artist_id, checked_at=checked_at, known_releases=[release])
+    dao.mark_success(
+        artist_id,
+        checked_at=checked_at,
+        known_releases=[release],
+        content_hash="hash-123",
+    )
 
     with session_scope() as session:
         artist = session.get(WatchlistArtist, artist_id)
         assert artist is not None
         assert artist.last_checked == checked_at
         assert artist.retry_block_until is None
+        assert artist.last_hash == "hash-123"
         rows = (
             session.execute(
                 select(ArtistKnownReleaseRecord).where(
