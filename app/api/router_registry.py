@@ -180,7 +180,7 @@ def register_all(
 # Built-in router registrations
 # ---------------------------------------------------------------------------
 
-from app.api import search, spotify, system  # noqa: E402
+from app.api import artists, search, spotify, system  # noqa: E402
 from app.api.routers import watchlist as watchlist_domain  # noqa: E402
 from app.routers import (  # noqa: E402
     activity_router,
@@ -197,6 +197,7 @@ from app.routers import (  # noqa: E402
 )
 
 register_domain("spotify", spotify.router, tags=())
+register_domain("artists", artists.router, prefix="")
 register_router("imports", imports_router)
 register_router("soulseek", soulseek_router, prefix="/soulseek", tags=("Soulseek",))
 register_router("matching", matching_router, prefix="/matching", tags=("Matching",))

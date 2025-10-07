@@ -89,6 +89,49 @@ Die Ergebnisse lassen sich über `sort` nach `relevance`, `bitrate`, `year` oder
 
 Die Discography-Funktion benötigte zusätzliche Bibliotheksintegrationen (u. a. Plex) und ist im MVP deaktiviert. Der zugehörige Legacy-Code wurde aus dem Repository entfernt.
 
+## Artists API
+
+Unter `/api/v1/artists` steht eine schlanke REST-API bereit, die die gespeicherten Künstlerdaten aus der neuen Persistenzschicht exponiert. Die Endpunkte liefern ausschließlich die normalisierten DTOs (`ArtistOut`, `ReleaseOut`) und folgen dem konsistenten Fehler-Contract (`VALIDATION_ERROR`, `NOT_FOUND`, `DEPENDENCY_ERROR`, `INTERNAL_ERROR`).
+
+### Endpunkte
+
+- `GET /artists/{artist_key}` gibt das Künstlerprofil inklusive aller bekannten Releases zurück. `artist_key` entspricht der normalisierten Form `source:source_id` (z. B. `spotify:1Xyo4u8uXC1ZmMpatF05PJ`).
+- `POST /artists/{artist_key}/enqueue-sync` stößt einen Orchestrator-Job an, um den Künstler bei den angebundenen Providern erneut zu synchronisieren. Mehrfaches Aufrufen ist idempotent und liefert `already_enqueued=true`, sobald der Job bereits in der Queue steht.
+- `GET /artists/watchlist?limit=25&offset=0` liefert eine paginierte Ansicht der Watchlist-Einträge, sortiert nach Priorität und nächstem Cooldown (`limit` ∈ [1, 100], `offset` ≥ 0).
+- `POST /artists/watchlist` legt einen Eintrag an bzw. aktualisiert ihn (`artist_key`, optional `priority`, `cooldown_until` im ISO-8601-Format).
+- `DELETE /artists/watchlist/{artist_key}` entfernt einen Eintrag aus der Watchlist.
+
+### Beispiele
+
+```bash
+curl -H "X-API-Key: $HARMONY_API_KEY" \
+  "https://harmony.local/api/v1/artists/spotify:1Xyo4u8uXC1ZmMpatF05PJ"
+
+curl -X POST -H "X-API-Key: $HARMONY_API_KEY" \
+  "https://harmony.local/api/v1/artists/spotify:1Xyo4u8uXC1ZmMpatF05PJ/enqueue-sync"
+
+curl -X POST -H "Content-Type: application/json" -H "X-API-Key: $HARMONY_API_KEY" \
+  -d '{"artist_key": "spotify:alpha", "priority": 10, "cooldown_until": "2024-04-01T08:00:00Z"}' \
+  "https://harmony.local/api/v1/artists/watchlist"
+```
+
+```json
+{
+  "artist_key": "spotify:1Xyo4u8uXC1ZmMpatF05PJ",
+  "name": "The Weeknd",
+  "source": "spotify",
+  "releases": [
+    {
+      "title": "After Hours",
+      "release_type": "album",
+      "release_date": "2020-03-20"
+    }
+  ]
+}
+```
+
+Der Watchlist-Response enthält zusätzlich `priority`, `last_enqueued_at` und `cooldown_until`, sodass Clients kommende Läufe einplanen können. Fehlerantworten folgen dem Schema `{ "ok": false, "error": { "code": "…", "message": "…" } }`.
+
 ## Artist Watchlist
 
 Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Releases. Ein periodischer Worker fragt die Spotify-API (Default alle 24 Stunden) nach frischen Alben und Singles ab, gleicht die enthaltenen Tracks mit der Download-Datenbank ab und stößt nur für fehlende Songs einen Soulseek-Download über den bestehenden `SyncWorker` an.

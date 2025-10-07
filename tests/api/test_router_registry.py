@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.api import router_registry
-from app.api import search, spotify, system
+from app.api import artists, search, spotify, system
 from app.api.routers import watchlist as watchlist_domain
 from app.routers import (
     activity_router,
@@ -35,16 +35,18 @@ def test_compose_prefix_handles_empty_segments() -> None:
 def test_domain_router_metadata_is_registered_in_order() -> None:
     entries = list(router_registry.iter_domain_routers())
     keys = [entry.key for entry in entries]
-    assert keys == ["spotify", "system", "watchlist", "search"]
+    assert keys == ["spotify", "artists", "system", "watchlist", "search"]
 
     lookup = {entry.key: entry for entry in entries}
     assert lookup["spotify"].router is spotify.router
+    assert lookup["artists"].router is artists.router
     assert lookup["system"].router is system.router
     assert lookup["watchlist"].router is watchlist_domain.router
     assert lookup["search"].router is search.router
 
     expected_tags = {
         "spotify": (),
+        "artists": ("Artists",),
         "system": (),
         "watchlist": (),
         "search": (),
@@ -59,6 +61,7 @@ def test_full_registry_matches_expected_configuration() -> None:
     keys = [entry.key for entry in entries]
     assert keys == [
         "spotify",
+        "artists",
         "imports",
         "soulseek",
         "matching",
@@ -76,6 +79,7 @@ def test_full_registry_matches_expected_configuration() -> None:
     ]
 
     lookup = {entry.key: entry for entry in entries}
+    assert lookup["artists"].router is artists.router
     assert lookup["imports"].router is imports_router
     assert lookup["soulseek"].router is soulseek_router
     assert lookup["matching"].router is matching_router

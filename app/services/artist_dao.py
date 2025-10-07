@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Callable, Iterable, Mapping, Sequence
 
 from sqlalchemy import Select, desc, func, or_, select
@@ -65,6 +65,14 @@ def _normalise_metadata(metadata: Mapping[str, object] | None) -> dict[str, obje
             continue
         result[key] = value
     return result
+
+
+def _normalise_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=None)
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _coerce_int(value: object | None) -> int | None:
@@ -165,6 +173,12 @@ class ArtistWatchlistItem:
     priority: int
     last_enqueued_at: datetime | None
     cooldown_until: datetime | None
+
+
+@dataclass(slots=True, frozen=True)
+class ArtistWatchlistEntryRow(ArtistWatchlistItem):
+    created_at: datetime
+    updated_at: datetime
 
 
 class ArtistDao:
@@ -426,6 +440,69 @@ class ArtistDao:
                 )
         return rows
 
+    def get_artist(self, artist_key: str) -> ArtistRow | None:
+        key = (artist_key or "").strip()
+        if not key:
+            return None
+        statement: Select[ArtistRecord] = (
+            select(ArtistRecord).where(ArtistRecord.artist_key == key).limit(1)
+        )
+        with session_scope() as session:
+            record = session.execute(statement).scalars().first()
+            if record is None:
+                return None
+            return ArtistRow(
+                id=int(record.id),
+                artist_key=record.artist_key,
+                source=record.source,
+                source_id=record.source_id,
+                name=record.name,
+                genres=tuple(record.genres or []),
+                images=tuple(record.images or []),
+                popularity=_coerce_int(record.popularity),
+                metadata=dict(record.metadata_json or {}),
+                version=record.version,
+                etag=record.etag,
+                updated_at=record.updated_at,
+                created_at=record.created_at,
+            )
+
+    def get_artist_releases(self, artist_key: str) -> list[ArtistReleaseRow]:
+        key = (artist_key or "").strip()
+        if not key:
+            return []
+        statement: Select[ArtistReleaseRecord] = (
+            select(ArtistReleaseRecord)
+            .where(ArtistReleaseRecord.artist_key == key)
+            .order_by(
+                desc(ArtistReleaseRecord.release_date),
+                desc(ArtistReleaseRecord.updated_at),
+                ArtistReleaseRecord.id.asc(),
+            )
+        )
+        with session_scope() as session:
+            records = session.execute(statement).scalars().all()
+            rows: list[ArtistReleaseRow] = []
+            for record in records:
+                rows.append(
+                    ArtistReleaseRow(
+                        id=int(record.id),
+                        artist_id=int(record.artist_id),
+                        artist_key=record.artist_key,
+                        source=record.source,
+                        source_id=record.source_id,
+                        title=record.title,
+                        release_date=record.release_date,
+                        release_type=record.release_type,
+                        total_tracks=_coerce_int(record.total_tracks),
+                        version=record.version,
+                        etag=record.etag,
+                        updated_at=record.updated_at,
+                        created_at=record.created_at,
+                    )
+                )
+            return rows
+
     def get_watchlist_batch(
         self,
         limit: int,
@@ -481,6 +558,91 @@ class ArtistDao:
             session.add(record)
         return True
 
+    def list_watchlist_entries(
+        self, *, limit: int, offset: int = 0
+    ) -> tuple[list[ArtistWatchlistEntryRow], int]:
+        resolved_limit = max(0, limit)
+        resolved_offset = max(0, offset)
+        with session_scope() as session:
+            total = session.execute(
+                select(func.count()).select_from(ArtistWatchlistEntry)
+            ).scalar_one()
+            if resolved_limit == 0 or total == 0 or resolved_offset >= total:
+                return ([], int(total))
+            statement: Select[ArtistWatchlistEntry] = (
+                select(ArtistWatchlistEntry)
+                .order_by(
+                    desc(ArtistWatchlistEntry.priority),
+                    func.coalesce(ArtistWatchlistEntry.cooldown_until, datetime.min),
+                    ArtistWatchlistEntry.artist_key.asc(),
+                )
+                .offset(resolved_offset)
+                .limit(resolved_limit)
+            )
+            records = session.execute(statement).scalars().all()
+            items: list[ArtistWatchlistEntryRow] = []
+            for record in records:
+                items.append(
+                    ArtistWatchlistEntryRow(
+                        artist_key=record.artist_key,
+                        priority=int(record.priority or 0),
+                        last_enqueued_at=record.last_enqueued_at,
+                        cooldown_until=record.cooldown_until,
+                        created_at=record.created_at,
+                        updated_at=record.updated_at,
+                    )
+                )
+            return items, int(total)
+
+    def upsert_watchlist_entry(
+        self,
+        artist_key: str,
+        *,
+        priority: int = 0,
+        cooldown_until: datetime | None = None,
+    ) -> ArtistWatchlistEntryRow:
+        key = (artist_key or "").strip()
+        if not key:
+            raise ValueError("artist_key must be provided")
+        timestamp = self._now()
+        normalised_cooldown = _normalise_datetime(cooldown_until)
+        with session_scope() as session:
+            record = session.get(ArtistWatchlistEntry, key)
+            if record is None:
+                record = ArtistWatchlistEntry(
+                    artist_key=key,
+                    priority=int(priority or 0),
+                    cooldown_until=normalised_cooldown,
+                    created_at=timestamp,
+                    updated_at=timestamp,
+                )
+            else:
+                record.priority = int(priority or 0)
+                record.cooldown_until = normalised_cooldown
+                record.updated_at = timestamp
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            return ArtistWatchlistEntryRow(
+                artist_key=record.artist_key,
+                priority=int(record.priority or 0),
+                last_enqueued_at=record.last_enqueued_at,
+                cooldown_until=record.cooldown_until,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+
+    def remove_watchlist_entry(self, artist_key: str) -> bool:
+        key = (artist_key or "").strip()
+        if not key:
+            return False
+        with session_scope() as session:
+            record = session.get(ArtistWatchlistEntry, key)
+            if record is None:
+                return False
+            session.delete(record)
+        return True
+
 
 __all__ = [
     "ArtistDao",
@@ -488,6 +650,7 @@ __all__ = [
     "ArtistReleaseUpsertDTO",
     "ArtistRow",
     "ArtistUpsertDTO",
+    "ArtistWatchlistEntryRow",
     "ArtistWatchlistItem",
     "build_artist_key",
 ]

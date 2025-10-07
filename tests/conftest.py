@@ -1354,6 +1354,7 @@ def configure_environment(
         write_setting("SPOTIFY_CLIENT_SECRET", "stub-secret")
         write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
         write_setting("SLSKD_URL", "http://localhost:5030")
+        write_setting("SLSKD_API_KEY", "test-key")
 
     if configured_url:
         try:
