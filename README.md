@@ -11,6 +11,7 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 ## Features
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
+- **Artist Watchlist & Detail UI** unter `/artists` mit Prioritäts-Management, Match-Kuration und Queue-Aktionen (siehe [docs/frontend/artists-ui.md](docs/frontend/artists-ui.md)).
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
 - **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.

@@ -7,6 +7,8 @@ import SettingsPage from '../pages/SettingsPage';
 import SoulseekPage from '../pages/SoulseekPage';
 import SpotifyPage from '../pages/SpotifyPage';
 import SpotifyProOAuthCallbackPage from '../pages/SpotifyProOAuthCallback';
+import ArtistsPage from '../pages/Artists/ArtistsPage';
+import ArtistDetailPage from '../pages/Artists/ArtistDetailPage';
 
 const AppRoutes = () => (
   <Routes>
@@ -14,8 +16,9 @@ const AppRoutes = () => (
     <Route path="/dashboard" element={<DashboardPage />} />
     <Route path="/library" element={<LibraryPage />} />
     <Route path="/downloads" element={<Navigate to="/library?tab=downloads" replace />} />
-    <Route path="/artists" element={<Navigate to="/library?tab=artists" replace />} />
-    <Route path="/watchlist" element={<Navigate to="/library?tab=watchlist" replace />} />
+    <Route path="/artists" element={<ArtistsPage />} />
+    <Route path="/artists/:id" element={<ArtistDetailPage />} />
+    <Route path="/watchlist" element={<Navigate to="/artists" replace />} />
     <Route path="/spotify" element={<SpotifyPage />} />
     <Route path="/spotify/oauth/callback" element={<SpotifyProOAuthCallbackPage />} />
     <Route path="/soulseek" element={<SoulseekPage />} />
