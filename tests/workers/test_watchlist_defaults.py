@@ -43,6 +43,19 @@ def test_defaults_loaded_and_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.jitter_pct == 1.0
 
 
+def test_watchlist_cooldown_and_retry_budget_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("ARTIST_COOLDOWN_S", "59")
+    monkeypatch.setenv("ARTIST_MAX_RETRY_PER_ARTIST", "25")
+    monkeypatch.setenv("WATCHLIST_COOLDOWN_MINUTES", "5")
+    monkeypatch.setenv("WATCHLIST_RETRY_BUDGET_PER_ARTIST", "2")
+
+    config = load_config().watchlist
+
+    assert config.cooldown_minutes == 1
+    assert config.retry_budget_per_artist == 20
+
+
 @pytest.mark.asyncio
 async def test_worker_enqueues_due_artists() -> None:
     for index in range(3):

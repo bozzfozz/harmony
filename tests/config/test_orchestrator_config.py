@@ -48,6 +48,19 @@ def test_bounds_and_defaults_applied() -> None:
     assert config.poll_interval_ms == 10
 
 
+def test_artist_pool_and_priority_overrides() -> None:
+    env = {
+        "ARTIST_POOL_CONCURRENCY": "5",
+        "ARTIST_PRIORITY": "88",
+    }
+    config = OrchestratorConfig.from_env(env)
+
+    assert config.pool_artist_refresh == 5
+    assert config.pool_artist_delta == 5
+    assert config.priority_map["artist_refresh"] == 88
+    assert config.priority_map["artist_delta"] == 88
+
+
 def test_settings_retry_policy_from_env() -> None:
     env = {
         "RETRY_MAX_ATTEMPTS": "7",

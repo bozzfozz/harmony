@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.config import WatchlistWorkerConfig
+from app.config import WatchlistWorkerConfig, settings
+from app.dependencies import get_app_config
 from app.orchestrator.handlers import (
     ArtistDeltaHandlerDeps,
     ArtistRefreshHandlerDeps,
@@ -28,6 +29,17 @@ class _StubCacheService:
 
     async def evict_artist(self, *, artist_id: str) -> None:
         self.evicted.append(artist_id)
+
+
+@pytest.fixture(autouse=True)
+def _enable_artist_cache_flag() -> Iterator[None]:
+    config = get_app_config()
+    previous = config.features.enable_artist_cache_invalidation
+    config.features.enable_artist_cache_invalidation = True
+    try:
+        yield
+    finally:
+        config.features.enable_artist_cache_invalidation = previous
 
 
 def _watchlist_config() -> WatchlistWorkerConfig:
@@ -225,6 +237,37 @@ async def test_artist_refresh_retries_on_integrity_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_artist_refresh_uses_priority_override() -> None:
+    artist = ArtistWorkflowArtistRow(
+        id=1,
+        spotify_artist_id="artist-1",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+    )
+    cache = _StubCacheService()
+    submitter = _RecordingSubmitter()
+    previous_priorities = dict(settings.orchestrator.priority_map)
+    settings.orchestrator.priority_map["artist_delta"] = 77
+    try:
+        deps = ArtistRefreshHandlerDeps(
+            config=_watchlist_config(),
+            dao=_StubRefreshDAO(artist),
+            submit_delta_job=submitter,
+            cache_service=cache,
+        )
+
+        job = _queue_job(job_type="artist_refresh", payload={"artist_id": artist.id})
+        result = await handle_artist_refresh(job, deps)
+    finally:
+        settings.orchestrator.priority_map.update(previous_priorities)
+
+    assert result["status"] == "enqueued"
+    assert submitter.calls
+    assert submitter.calls[0]["priority"] == 77
+
+
+@pytest.mark.asyncio
 async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> None:
     artist = ArtistWorkflowArtistRow(
         id=1,
@@ -287,3 +330,34 @@ async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> Non
     assert dao.failures == []
     assert dao.marked_success == [artist.id]
     assert cache.hints and cache.hints[0][0] == artist.spotify_artist_id
+    hint = cache.hints[-1][1]
+    assert hint is not None
+    assert hint.etag.startswith('"artist-delta:')
+
+
+@pytest.mark.asyncio
+async def test_artist_delta_updates_cache_hint_on_no_changes() -> None:
+    artist = ArtistWorkflowArtistRow(
+        id=1,
+        spotify_artist_id="artist-1",
+        name="Artist",
+        last_checked=datetime.utcnow(),
+        retry_block_until=None,
+    )
+    dao = _StubDeltaDAO(artist)
+    spotify = _StubSpotifyClient()
+    soulseek = _StubSoulseekClient()
+    cache = _StubCacheService()
+    deps = ArtistDeltaHandlerDeps(
+        spotify_client=spotify,
+        soulseek_client=soulseek,
+        config=_watchlist_config(),
+        dao=dao,
+        cache_service=cache,
+    )
+
+    job = _queue_job(job_type="artist_delta", payload={"artist_id": artist.id})
+    result = await handle_artist_delta(job, deps)
+
+    assert result["status"] == "noop"
+    assert cache.hints == [(artist.spotify_artist_id, None)]

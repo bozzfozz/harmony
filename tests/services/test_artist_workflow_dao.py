@@ -129,3 +129,55 @@ def test_create_download_record_persists_known_release_transactionally() -> None
         )
         assert downloads == []
 
+
+def test_create_download_record_updates_known_release_versioning() -> None:
+    artist_id = _create_artist()
+    dao = ArtistWorkflowDAO()
+    initial = ArtistKnownRelease(
+        track_id="track-ver",
+        etag="etag-old",
+        fetched_at=datetime(2024, 1, 1, 12, 0, 0),
+    )
+    dao.create_download_record(
+        username="tester",
+        filename="first.flac",
+        priority=1,
+        spotify_track_id="track-ver",
+        spotify_album_id="album-1",
+        payload={},
+        artist_id=artist_id,
+        known_release=initial,
+    )
+
+    updated = ArtistKnownRelease(
+        track_id="track-ver",
+        etag="etag-new",
+        fetched_at=datetime(2024, 2, 1, 8, 30, 0),
+    )
+    dao.create_download_record(
+        username="tester",
+        filename="second.flac",
+        priority=1,
+        spotify_track_id="track-ver",
+        spotify_album_id="album-1",
+        payload={},
+        artist_id=artist_id,
+        known_release=updated,
+    )
+
+    with session_scope() as session:
+        rows = (
+            session.execute(
+                select(ArtistKnownReleaseRecord).where(
+                    ArtistKnownReleaseRecord.artist_id == artist_id,
+                    ArtistKnownReleaseRecord.track_id == "track-ver",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1
+        stored = rows[0]
+        assert stored.etag == "etag-new"
+        assert stored.fetched_at == datetime(2024, 2, 1, 8, 30, 0)
+

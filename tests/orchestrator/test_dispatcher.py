@@ -5,13 +5,14 @@ import random
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+import dataclasses
 import logging
 from typing import Any, Callable, Iterable, Mapping
 
 import pytest
 from sqlalchemy import select
 
-from app.config import ExternalCallPolicy
+from app.config import ExternalCallPolicy, settings
 from app.core.matching_engine import MusicMatchingEngine
 from app.models import QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
@@ -194,6 +195,36 @@ async def test_dispatcher_executes_job_and_marks_complete(
     ]
     assert heartbeat_events
     assert heartbeat_events[-1]["status"] == "stopped"
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_heartbeat_interval_respects_visibility() -> None:
+    async def handler(record: persistence.QueueJobDTO) -> Mapping[str, Any]:
+        return {}
+
+    scheduler = StubScheduler([[]])
+    storage = StubPersistence()
+
+    custom_config = dataclasses.replace(
+        settings.orchestrator,
+        visibility_timeout_s=120,
+        heartbeat_s=30,
+    )
+    dispatcher = Dispatcher(
+        scheduler,
+        {"sync": handler},
+        persistence_module=storage,
+        orchestrator_config=custom_config,
+    )
+
+    job_with_lease = make_job(99, "sync", attempts=1, lease_timeout=40)
+    interval_with_lease = dispatcher._heartbeat_interval(job_with_lease)
+    assert interval_with_lease == 20
+
+    job_without_lease = make_job(100, "sync", attempts=1, lease_timeout=40)
+    job_without_lease.lease_timeout_seconds = None
+    interval_without_lease = dispatcher._heartbeat_interval(job_without_lease)
+    assert interval_without_lease == 30
 
 
 @pytest.mark.asyncio

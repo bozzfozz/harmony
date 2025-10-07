@@ -97,6 +97,34 @@ def test_build_artist_delta_detects_updated_tracks() -> None:
     assert delta.updated == (candidate,)
 
 
+def test_artist_track_candidate_from_mapping_normalises_variants() -> None:
+    release = _build_release()
+    payload = {
+        "id": 42,
+        "name": "Variant Track",
+        "artists": [{"name": "Variant"}],
+        "duration": "321000",
+    }
+    candidate = ArtistTrackCandidate.from_mapping(payload, release, source="spotify")
+    assert candidate is not None
+    assert candidate.track.title == "Variant Track"
+    assert candidate.track.duration_ms == 321_000
+    assert candidate.cache_key.startswith("artist-track:")
+
+
+def test_build_artist_delta_cache_hint_captures_latest_release() -> None:
+    newer = _build_release(id="album-new", release_date="2024-02-01")
+    older = _build_release(id="album-old", release_date="2024-01-01")
+    candidates = [_build_candidate(newer), _build_candidate(older, id="track-older")]
+
+    delta = build_artist_delta(candidates, set(), last_checked=datetime(2023, 1, 1))
+
+    assert delta.cache_hint is not None
+    assert delta.cache_hint.release_count == 2
+    assert delta.cache_hint.latest_release_at == newer.release_date
+    assert delta.cache_hint.etag.startswith('"artist-delta:')
+
+
 def test_album_release_from_mapping_returns_none_without_identifier() -> None:
     release = AlbumRelease.from_mapping({"name": "Invalid"}, source="spotify")
     assert release is None
