@@ -95,6 +95,7 @@ class _StubDeltaDAO:
         self.failures: list[tuple[int, str]] = []
         self.marked_success: list[int] = []
         self.marked_failed: list[dict[str, Any]] = []
+        self.last_hash: str | None = artist.last_hash
 
     def get_artist(self, artist_id: int) -> ArtistWorkflowArtistRow | None:
         return self._artist if self._artist.id == artist_id else None
@@ -141,8 +142,10 @@ class _StubDeltaDAO:
         *,
         checked_at: datetime | None = None,
         known_releases=None,
+        content_hash: str | None = None,
     ) -> None:
         self.marked_success.append(artist_id)
+        self.last_hash = content_hash
 
     def mark_failed(
         self,
@@ -216,6 +219,7 @@ async def test_artist_refresh_retries_on_integrity_error() -> None:
         name="Artist",
         last_checked=None,
         retry_block_until=None,
+        last_hash=None,
     )
     cache = _StubCacheService()
     submitter = _RecordingSubmitter(fail_once=True)
@@ -245,6 +249,7 @@ async def test_artist_refresh_uses_priority_override() -> None:
         name="Artist",
         last_checked=None,
         retry_block_until=None,
+        last_hash=None,
     )
     cache = _StubCacheService()
     submitter = _RecordingSubmitter()
@@ -277,6 +282,7 @@ async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> Non
         name="Artist",
         last_checked=None,
         retry_block_until=None,
+        last_hash=None,
     )
     dao = _StubDeltaDAO(artist)
     spotify = _StubSpotifyClient()
@@ -335,6 +341,7 @@ async def test_artist_delta_queues_downloads_with_idempotency_and_retry() -> Non
     hint = cache.hints[-1][1]
     assert hint is not None
     assert hint.etag.startswith('"artist-delta:')
+    assert cache.evicted == [artist.spotify_artist_id]
 
 
 @pytest.mark.asyncio
@@ -345,6 +352,7 @@ async def test_artist_delta_updates_cache_hint_on_no_changes() -> None:
         name="Artist",
         last_checked=datetime.utcnow(),
         retry_block_until=None,
+        last_hash=None,
     )
     dao = _StubDeltaDAO(artist)
     spotify = _StubSpotifyClient()
@@ -363,3 +371,92 @@ async def test_artist_delta_updates_cache_hint_on_no_changes() -> None:
 
     assert result["status"] == "noop"
     assert cache.hints == [(artist.spotify_artist_id, None)]
+    assert cache.evicted == [artist.spotify_artist_id]
+
+
+@pytest.mark.asyncio
+async def test_artist_delta_skips_when_content_hash_matches() -> None:
+    base_artist = ArtistWorkflowArtistRow(
+        id=1,
+        spotify_artist_id="artist-1",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+        last_hash=None,
+    )
+    dao = _StubDeltaDAO(base_artist)
+    spotify = _StubSpotifyClient()
+    album_id = "album-unchanged"
+    track_id = "track-unchanged"
+    spotify.albums = [
+        {
+            "id": album_id,
+            "name": "Album",
+            "release_date": "2024-01-01",
+            "release_date_precision": "day",
+        }
+    ]
+    spotify.tracks[album_id] = [
+        {
+            "id": track_id,
+            "name": "Track",
+            "artists": [{"name": "Artist"}],
+            "duration_ms": 120_000,
+        }
+    ]
+    soulseek = _StubSoulseekClient()
+    soulseek.results = [
+        {
+            "username": "user",
+            "files": [
+                {
+                    "filename": "Artist - Track.flac",
+                    "priority": 1,
+                }
+            ],
+        }
+    ]
+    cache = _StubCacheService()
+    submitter = _RecordingSubmitter()
+    deps = ArtistDeltaHandlerDeps(
+        spotify_client=spotify,
+        soulseek_client=soulseek,
+        config=_watchlist_config(),
+        dao=dao,
+        submit_sync_job=submitter,
+        cache_service=cache,
+    )
+    job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": base_artist.id})
+    await handle_artist_delta(job, deps)
+    previous_hash = dao.last_hash
+    assert previous_hash
+
+    unchanged_artist = ArtistWorkflowArtistRow(
+        id=1,
+        spotify_artist_id="artist-1",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+        last_hash=previous_hash,
+    )
+    unchanged_dao = _StubDeltaDAO(unchanged_artist)
+    unchanged_cache = _StubCacheService()
+    unchanged_submitter = _RecordingSubmitter()
+    unchanged_deps = ArtistDeltaHandlerDeps(
+        spotify_client=spotify,
+        soulseek_client=soulseek,
+        config=_watchlist_config(),
+        dao=unchanged_dao,
+        submit_sync_job=unchanged_submitter,
+        cache_service=unchanged_cache,
+    )
+    second_job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": unchanged_artist.id})
+    result = await handle_artist_delta(second_job, unchanged_deps)
+
+    assert result["status"] == "noop"
+    assert result["queued"] == 0
+    assert result.get("reason") == "unchanged"
+    assert unchanged_submitter.calls == []
+    assert unchanged_cache.hints == [(unchanged_artist.spotify_artist_id, None)]
+    assert unchanged_cache.evicted == []
+    assert unchanged_dao.last_hash == previous_hash

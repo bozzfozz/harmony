@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.config import WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
 from app.core.matching_engine import MusicMatchingEngine
+from app.core.types import ProviderArtistDTO
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import run_session, session_scope
@@ -50,6 +51,7 @@ from app.services.artist_delta import (
     filter_new_releases,
 )
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
+from app.services.library_service import LibraryService
 from app.services.backfill_service import BackfillJobStatus
 from app.services.retry_policy_provider import (
     RetryPolicy,
@@ -889,7 +891,7 @@ class _DownloadJobSpec:
 
 async def _fetch_artist_candidates(
     artist: ArtistWorkflowArtistRow, deps: ArtistDeltaHandlerDeps
-) -> list[ArtistTrackCandidate]:
+) -> tuple[list[ArtistTrackCandidate], tuple[AlbumRelease, ...]]:
     started = time.perf_counter()
     try:
         albums = await _invoke_with_timeout(
@@ -1006,7 +1008,92 @@ async def _fetch_artist_candidates(
         track_count=len(track_candidates),
         duration_ms=duration_ms,
     )
-    return track_candidates
+    return track_candidates, tuple(recent_releases)
+
+
+def _artist_hash_payload(artist: ProviderArtistDTO) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "name": artist.name,
+        "source": artist.source,
+    }
+    if artist.source_id:
+        payload["id"] = artist.source_id
+    metadata: dict[str, Any] = {}
+    if artist.aliases:
+        metadata["aliases"] = list(artist.aliases)
+    if artist.popularity is not None:
+        metadata["popularity"] = int(artist.popularity)
+    if artist.metadata:
+        metadata.setdefault("extra", dict(artist.metadata))
+    if metadata:
+        payload["metadata"] = metadata
+    return payload
+
+
+def _album_hash_payload(release: AlbumRelease) -> dict[str, Any]:
+    album = release.album
+    payload: dict[str, Any] = {
+        "id": album.source_id or "",
+        "name": album.title,
+        "source": album.source,
+        "artists": [_artist_hash_payload(artist) for artist in album.artists],
+    }
+    if release.release_date is not None:
+        payload["release_date"] = release.release_date.date().isoformat()
+    if album.year is not None:
+        payload["year"] = int(album.year)
+    if album.total_tracks is not None:
+        payload["total_tracks"] = int(album.total_tracks)
+    metadata = dict(album.metadata)
+    if album.edition_tags:
+        metadata.setdefault("edition_tags", list(album.edition_tags))
+    if release.etag:
+        metadata.setdefault("etag", release.etag)
+    if metadata:
+        payload["metadata"] = metadata
+    return payload
+
+
+def _track_hash_payload(candidate: ArtistTrackCandidate) -> dict[str, Any]:
+    track = candidate.track
+    payload: dict[str, Any] = {
+        "id": track.source_id or "",
+        "name": track.title,
+        "provider": track.source,
+        "artists": [_artist_hash_payload(artist) for artist in track.artists],
+    }
+    if track.duration_ms is not None:
+        payload["duration_ms"] = int(track.duration_ms)
+    if track.year is not None:
+        payload["year"] = int(track.year)
+    metadata = dict(track.metadata)
+    if track.edition_tags:
+        metadata.setdefault("edition_tags", list(track.edition_tags))
+    if metadata:
+        payload["metadata"] = metadata
+    payload["album"] = _album_hash_payload(candidate.release)
+    return payload
+
+
+def _compute_artist_content_hash(
+    releases: Sequence[AlbumRelease], candidates: Sequence[ArtistTrackCandidate]
+) -> str:
+    library = LibraryService()
+    seen_albums: set[tuple[str, str]] = set()
+    album_entries: list[dict[str, Any]] = []
+    for release in releases:
+        payload = _album_hash_payload(release)
+        key = (str(payload.get("id") or ""), str(payload.get("name") or ""))
+        if key in seen_albums:
+            continue
+        seen_albums.add(key)
+        album_entries.append(payload)
+    if album_entries:
+        library.add_albums(album_entries)
+    track_entries = [_track_hash_payload(candidate) for candidate in candidates]
+    if track_entries:
+        library.add_tracks(track_entries)
+    return library.compute_content_hash()
 
 
 async def _compute_artist_delta(
@@ -1601,8 +1688,46 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
         }
 
     start = time.perf_counter()
+    previous_hash = artist.last_hash or ""
+    content_hash = ""
     try:
-        candidates = await _fetch_artist_candidates(artist, deps)
+        candidates, releases = await _fetch_artist_candidates(artist, deps)
+        content_hash = _compute_artist_content_hash(releases, candidates)
+        if content_hash == previous_hash:
+            await _call_workflow_dao(
+                deps,
+                "mark_success",
+                artist.id,
+                checked_at=deps.now_factory(),
+                known_releases=(),
+                content_hash=content_hash,
+            )
+            if deps.cache_service is not None:
+                await deps.cache_service.update_hint(
+                    artist_id=artist.spotify_artist_id,
+                    hint=None,
+                )
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            log_event(
+                logger,
+                "artist.watch",
+                component=_WATCHLIST_LOG_COMPONENT,
+                status="noop",
+                entity_id=artist.spotify_artist_id,
+                attempts=attempts,
+                duration_ms=duration_ms,
+                queued=0,
+                reason="unchanged",
+            )
+            return {
+                "status": "noop",
+                "artist_id": artist.spotify_artist_id,
+                "queued": 0,
+                "attempts": attempts,
+                "duration_ms": duration_ms,
+                "reason": "unchanged",
+            }
+
         delta = await _compute_artist_delta(artist, candidates, deps)
         if delta is None or (not delta.new and not delta.updated):
             await _call_workflow_dao(
@@ -1610,7 +1735,13 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
                 "mark_success",
                 artist.id,
                 checked_at=deps.now_factory(),
+                known_releases=(),
+                content_hash=content_hash,
             )
+            if deps.cache_service is not None and content_hash != previous_hash:
+                await deps.cache_service.evict_artist(
+                    artist_id=artist.spotify_artist_id
+                )
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,
@@ -1690,7 +1821,11 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
         "mark_success",
         artist.id,
         checked_at=deps.now_factory(),
+        known_releases=(),
+        content_hash=content_hash,
     )
+    if deps.cache_service is not None and content_hash != previous_hash:
+        await deps.cache_service.evict_artist(artist_id=artist.spotify_artist_id)
     duration_ms = int((time.perf_counter() - start) * 1000)
     status = "ok" if queued else "noop"
     log_event(

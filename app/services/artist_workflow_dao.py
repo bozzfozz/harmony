@@ -27,6 +27,7 @@ class ArtistWorkflowArtistRow:
     name: str
     last_checked: datetime | None
     retry_block_until: datetime | None
+    last_hash: str | None
 
 
 class ArtistWorkflowDAO:
@@ -55,6 +56,7 @@ class ArtistWorkflowDAO:
                     name=record.name,
                     last_checked=record.last_checked,
                     retry_block_until=record.retry_block_until,
+                    last_hash=record.last_hash,
                 )
 
         return _query()
@@ -104,6 +106,7 @@ class ArtistWorkflowDAO:
                         name=record.name,
                         last_checked=record.last_checked,
                         retry_block_until=record.retry_block_until,
+                        last_hash=record.last_hash,
                     )
                     for record in records
                 ]
@@ -139,6 +142,7 @@ class ArtistWorkflowDAO:
         *,
         checked_at: datetime | None = None,
         known_releases: Sequence[ArtistKnownRelease] | None = None,
+        content_hash: str | None = None,
     ) -> None:
         """Record a successful run and optionally persist known releases."""
 
@@ -151,6 +155,7 @@ class ArtistWorkflowDAO:
                     return
                 record.last_checked = timestamp
                 record.last_scan_at = timestamp
+                record.last_hash = content_hash
                 record.retry_block_until = None
                 record.updated_at = self._now_factory()
                 session.add(record)
@@ -221,6 +226,7 @@ class ArtistWorkflowDAO:
                 name=row.name,
                 last_checked=row.last_scan_at,
                 retry_block_until=row.retry_block_until,
+                last_hash=row.last_hash,
             )
             for row in rows
         ]
