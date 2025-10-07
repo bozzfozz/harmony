@@ -422,3 +422,86 @@ export interface DownloadExportFilters {
   from?: string;
   to?: string;
 }
+
+export type ArtistPriority = 'low' | 'medium' | 'high' | (string & {});
+
+export interface ArtistWatchlistSettings {
+  id?: string | null;
+  enabled: boolean;
+  priority: ArtistPriority;
+  interval_days: number | null;
+  last_synced_at: string | null;
+  next_sync_at: string | null;
+}
+
+export interface ArtistSummary {
+  id: string;
+  name: string;
+  image_url?: string | null;
+  external_ids?: Record<string, string>;
+  watchlist: ArtistWatchlistSettings | null;
+  health_status?: string | null;
+  releases_total?: number | null;
+  matches_pending?: number | null;
+  updated_at?: string | null;
+}
+
+export interface ArtistRelease {
+  id: string;
+  title: string;
+  type?: string | null;
+  released_at?: string | null;
+  spotify_url?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export type ArtistMatchStatus = 'pending' | 'accepted' | 'rejected' | (string & {});
+
+export interface ArtistMatchBadge {
+  label: string;
+  tone?: 'default' | 'info' | 'success' | 'warning' | 'destructive';
+}
+
+export interface ArtistMatch {
+  id: string;
+  title: string;
+  confidence: number | null;
+  release_title?: string | null;
+  provider?: string | null;
+  status: ArtistMatchStatus;
+  badges?: ArtistMatchBadge[];
+  submitted_at?: string | null;
+}
+
+export interface ArtistActivityEntry {
+  id: string;
+  created_at: string;
+  message: string;
+  category?: string | null;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface ArtistQueueStatus {
+  job_id?: string | null;
+  status?: string | null;
+  attempts?: number | null;
+  eta?: string | null;
+  queued_at?: string | null;
+  started_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ArtistDetailResponse {
+  artist: ArtistSummary;
+  releases: ArtistRelease[];
+  matches: ArtistMatch[];
+  activity: ArtistActivityEntry[];
+  queue?: ArtistQueueStatus | null;
+}
+
+export interface ArtistListResponse {
+  items: ArtistSummary[];
+  total: number;
+  page: number;
+  per_page: number;
+}

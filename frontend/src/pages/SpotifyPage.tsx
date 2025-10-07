@@ -377,18 +377,18 @@ const SpotifyPage = () => {
                   <Button
                     type="button"
                     asChild
-                    variant={pendingDestination === '/library?tab=watchlist' ? 'default' : 'secondary'}
+                    variant={pendingDestination === '/artists' ? 'default' : 'secondary'}
                   >
-                    <Link to="/library?tab=watchlist" onClick={handleCloseSuccessDialog}>
+                    <Link to="/artists" onClick={handleCloseSuccessDialog}>
                       Watchlist öffnen
                     </Link>
                   </Button>
                   <Button
                     type="button"
                     asChild
-                    variant={pendingDestination === '/library?tab=artists' ? 'default' : 'secondary'}
+                    variant={pendingDestination === '/artists' ? 'default' : 'secondary'}
                   >
-                    <Link to="/library?tab=artists" onClick={handleCloseSuccessDialog}>
+                    <Link to="/artists" onClick={handleCloseSuccessDialog}>
                       Künstlerbibliothek
                     </Link>
                   </Button>
@@ -529,17 +529,13 @@ const SpotifyPage = () => {
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => handleProNavigate('/library?tab=watchlist')}
-                disabled={proDisabled}
-              >
+              <Button type="button" onClick={() => handleProNavigate('/artists')} disabled={proDisabled}>
                 {renderProButtonLabel('Watchlist öffnen')}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => handleProNavigate('/library?tab=artists')}
+                onClick={() => handleProNavigate('/artists')}
                 disabled={proDisabled}
               >
                 {renderProButtonLabel('Künstlerbibliothek')}
