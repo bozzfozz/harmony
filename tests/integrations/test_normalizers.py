@@ -1,6 +1,8 @@
 from app.integrations.normalizers import (
+    from_slskd_album_details,
     from_slskd_artist,
     from_slskd_release,
+    from_spotify_album_details,
     from_spotify_artist,
     from_spotify_release,
     normalize_slskd_track,
@@ -72,6 +74,38 @@ def test_normalize_spotify_artist_and_releases() -> None:
     assert release.metadata["available_markets"] == ["US", "DE"]
 
 
+def test_from_spotify_album_details_includes_tracks() -> None:
+    album_payload = {
+        "id": "album-1",
+        "name": "Example Album",
+        "release_date": "2024-01-01",
+        "total_tracks": 2,
+        "images": ["https://example.com/cover.jpg"],
+        "artists": [{"id": "artist-1", "name": "Artist"}],
+        "label": "Indie",
+        "available_markets": ["US", "DE"],
+    }
+    track_payloads = [
+        {
+            "id": "track-1",
+            "name": "Track One",
+            "duration_ms": 180000,
+            "artists": [{"id": "artist-1", "name": "Artist"}],
+        }
+    ]
+
+    details = from_spotify_album_details(album_payload, tracks=track_payloads)
+
+    assert details.source == "spotify"
+    assert details.album.name == "Example Album"
+    assert details.album.release_date == "2024-01-01"
+    assert details.album.total_tracks == 2
+    assert details.album.images == ("https://example.com/cover.jpg",)
+    assert len(details.tracks) == 1
+    assert details.tracks[0].album is not None
+    assert details.tracks[0].album.name == "Example Album"
+
+
 def test_normalize_slskd_artist_and_releases() -> None:
     artist_payload = {
         "id": "artist-1",
@@ -103,3 +137,22 @@ def test_normalize_slskd_artist_and_releases() -> None:
     assert release.title == "Live Bootleg"
     assert release.total_tracks == 8
     assert release.metadata["format"] == "FLAC"
+
+
+def test_from_slskd_album_details_derives_metadata_from_tracks() -> None:
+    track = normalize_slskd_track(
+        {
+            "title": "Song A",
+            "artist": "Soulseek Artist",
+            "album": "Live Bootleg",
+            "year": 1999,
+            "genre": "metal",
+        }
+    )
+
+    details = from_slskd_album_details({"id": "rel-1", "title": "Live Bootleg"}, tracks=[track])
+
+    assert details.source == "slskd"
+    assert details.album.name == "Live Bootleg"
+    assert details.album.total_tracks == 1
+    assert details.tracks[0].name == "Song A"

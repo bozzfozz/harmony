@@ -9,6 +9,7 @@ from typing import Awaitable, Callable, Mapping, Sequence, TypeVar
 
 from app.config import ExternalCallPolicy, ProviderProfile, settings
 from app.integrations.contracts import (
+    ProviderAlbumDetails,
     ProviderArtist,
     ProviderDependencyError,
     ProviderError,
@@ -347,6 +348,23 @@ class ProviderGateway:
             lambda adapter: adapter.fetch_artist_releases(artist_source_id, limit=limit),
         )
         return list(releases)
+
+    async def fetch_album(self, provider: str, album_source_id: str) -> ProviderAlbumDetails | None:
+        return await self._execute_provider_call(
+            provider,
+            "fetch_album",
+            lambda adapter: adapter.fetch_album(album_source_id),
+        )
+
+    async def fetch_artist_top_tracks(
+        self, provider: str, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderTrack]:
+        tracks = await self._execute_provider_call(
+            provider,
+            "fetch_artist_top_tracks",
+            lambda adapter: adapter.fetch_artist_top_tracks(artist_source_id, limit=limit),
+        )
+        return list(tracks)
 
     @staticmethod
     def _jitter_pct(policy: ProviderRetryPolicy) -> int:

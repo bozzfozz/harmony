@@ -486,6 +486,14 @@ class SpotifyClient:
             album_type="album,single,compilation",
         )
 
+    def get_artist_top_tracks(
+        self, artist_id: str, *, market: Optional[str] = None
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if market:
+            params["market"] = market
+        return self._execute(self._client.artist_top_tracks, artist_id, **params)
+
     def get_album_tracks(  # noqa: F811
         self, album_id: str, *, market: Optional[str] = None
     ) -> Dict[str, Any]:

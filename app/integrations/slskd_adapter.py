@@ -13,6 +13,7 @@ import httpx
 
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import (
+    ProviderAlbumDetails,
     ProviderArtist,
     ProviderDependencyError,
     ProviderInternalError,
@@ -26,6 +27,7 @@ from app.integrations.contracts import (
     TrackProvider,
 )
 from app.integrations.normalizers import (
+    from_slskd_album_details,
     from_slskd_artist,
     from_slskd_release,
     normalize_slskd_track,
@@ -579,6 +581,86 @@ class SlskdAdapter(TrackProvider):
                 break
 
         return list(releases.values())
+
+    async def fetch_album(self, album_source_id: str) -> ProviderAlbumDetails | None:
+        identifier = (album_source_id or "").strip()
+        if not identifier:
+            raise ProviderValidationError(
+                self.name,
+                "album_source_id must not be empty",
+                status_code=400,
+            )
+
+        search_limit = self._max_results
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=search_limit)
+        tracks = await self.search_tracks(search_query)
+        if not tracks:
+            raise ProviderNotFoundError(self.name, "album not found", status_code=404)
+
+        payload: dict[str, Any] = {"id": identifier, "title": identifier}
+        metadata: dict[str, Any] = {}
+        release_candidates: list[str] = []
+        total_candidates: list[int] = []
+        genre_candidates: set[str] = set()
+
+        for track in tracks:
+            if track.album and track.album.name and payload.get("title") == identifier:
+                payload["title"] = track.album.name
+            if track.album and track.album.id and payload.get("id") == identifier:
+                payload["id"] = track.album.id
+            if track.album and track.album.metadata:
+                for key, value in track.album.metadata.items():
+                    metadata.setdefault(key, value)
+            if track.album and track.album.release_date:
+                release_candidates.append(track.album.release_date)
+            if track.album and track.album.total_tracks is not None:
+                total_candidates.append(track.album.total_tracks)
+
+            track_metadata = dict(track.metadata or {})
+            if "release_date" in track_metadata:
+                release_candidates.append(str(track_metadata["release_date"]))
+            if "year" in track_metadata:
+                release_candidates.append(str(track_metadata["year"]))
+            if "total_tracks" in track_metadata:
+                candidate_total = _coerce_int(track_metadata["total_tracks"])
+                if candidate_total is not None:
+                    total_candidates.append(candidate_total)
+            if "genre" in track_metadata:
+                genre_candidates.add(str(track_metadata["genre"]))
+
+        if metadata:
+            payload["metadata"] = metadata
+        if release_candidates:
+            payload["release_date"] = release_candidates[0]
+        if total_candidates:
+            payload["total_tracks"] = max(total_candidates)
+        if genre_candidates:
+            payload["genre"] = sorted(genre_candidates)[0]
+
+        return from_slskd_album_details(payload, tracks=tracks, provider=self.name)
+
+    async def fetch_artist_top_tracks(
+        self, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderTrack]:
+        identifier = (artist_source_id or "").strip()
+        if not identifier:
+            raise ProviderValidationError(
+                self.name,
+                "artist_source_id must not be empty",
+                status_code=400,
+            )
+
+        try:
+            max_items = max(1, int(limit)) if limit is not None else None
+        except (TypeError, ValueError):
+            max_items = None
+
+        effective_limit = max_items or self._max_results
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=effective_limit)
+        tracks = await self.search_tracks(search_query)
+        if max_items is not None:
+            return tracks[:max_items]
+        return tracks
 
     async def check_health(self) -> Mapping[str, Any]:
         try:
