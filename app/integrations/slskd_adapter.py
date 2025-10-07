@@ -13,17 +13,23 @@ import httpx
 
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import (
+    ProviderArtist,
     ProviderDependencyError,
     ProviderInternalError,
     ProviderNotFoundError,
     ProviderRateLimitedError,
+    ProviderRelease,
     ProviderTimeoutError,
     ProviderTrack,
     ProviderValidationError,
     SearchQuery,
     TrackProvider,
 )
-from app.integrations.normalizers import normalize_slskd_track
+from app.integrations.normalizers import (
+    from_slskd_artist,
+    from_slskd_release,
+    normalize_slskd_track,
+)
 from app.logging import get_logger
 from app.utils.text_normalization import clean_track_title, normalize_quotes
 
@@ -457,6 +463,122 @@ class SlskdAdapter(TrackProvider):
         raise ProviderInternalError(
             self.name, f"slskd responded with an unexpected status ({status_code})"
         )
+
+    async def fetch_artist(
+        self, *, artist_id: str | None = None, name: str | None = None
+    ) -> ProviderArtist | None:
+        identifier = (artist_id or "").strip()
+        query_name = (name or "").strip()
+        artist_name = query_name or identifier
+        if not artist_name:
+            raise ProviderValidationError(
+                self.name,
+                "artist_id or name must be provided",
+                status_code=400,
+            )
+
+        search_query = SearchQuery(text=artist_name, artist=artist_name, limit=1)
+        tracks = await self.search_tracks(search_query)
+        if not tracks:
+            raise ProviderNotFoundError(self.name, "artist not found", status_code=404)
+
+        primary_track = tracks[0]
+        metadata = dict(primary_track.metadata or {})
+        payload: dict[str, Any] = {
+            "id": identifier or artist_name,
+            "name": artist_name,
+            "metadata": dict(metadata),
+        }
+
+        genres = metadata.get("genres")
+        if isinstance(genres, (list, tuple)):
+            payload["genres"] = [str(item) for item in genres if item]
+        elif genres:
+            payload["genres"] = [str(genres)]
+        genre = metadata.get("genre")
+        if genre and "genres" not in payload:
+            payload["genre"] = str(genre)
+
+        aliases: list[str] = []
+        for track in tracks:
+            for artist in track.artists:
+                candidate = artist.name.strip()
+                if candidate and candidate.lower() != artist_name.lower():
+                    aliases.append(candidate)
+        if aliases:
+            payload["aliases"] = aliases
+
+        try:
+            return from_slskd_artist(payload)
+        except ValueError as exc:  # pragma: no cover - defensive guard
+            raise ProviderInternalError(self.name, "invalid artist payload") from exc
+
+    async def fetch_artist_releases(
+        self, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderRelease]:
+        identifier = (artist_source_id or "").strip()
+        if not identifier:
+            raise ProviderValidationError(
+                self.name,
+                "artist_source_id must not be empty",
+                status_code=400,
+            )
+
+        try:
+            max_items = max(1, int(limit)) if limit is not None else None
+        except (TypeError, ValueError):
+            max_items = None
+
+        search_limit = max_items or self._max_results
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=search_limit)
+        tracks = await self.search_tracks(search_query)
+        if not tracks:
+            return []
+
+        releases: dict[str, ProviderRelease] = {}
+        for track in tracks:
+            album_payload: dict[str, Any] = {}
+            if track.album is not None and track.album.name:
+                album_payload["name"] = track.album.name
+                if track.album.id:
+                    album_payload["id"] = track.album.id
+                if track.album.metadata:
+                    album_payload["metadata"] = dict(track.album.metadata)
+                    for key, value in track.album.metadata.items():
+                        if key not in album_payload:
+                            album_payload[key] = value
+
+            track_metadata = dict(track.metadata or {})
+            if not album_payload.get("name") and track_metadata.get("album"):
+                album_payload["name"] = str(track_metadata["album"])
+            if track_metadata.get("year") and "release_date" not in album_payload:
+                album_payload["release_date"] = str(track_metadata["year"])
+
+            if "metadata" in album_payload:
+                combined_metadata = dict(album_payload["metadata"])
+                combined_metadata.update(
+                    {k: v for k, v in track_metadata.items() if k not in combined_metadata}
+                )
+                album_payload["metadata"] = combined_metadata
+            elif track_metadata:
+                album_payload["metadata"] = dict(track_metadata)
+
+            if not album_payload.get("name"):
+                continue
+
+            try:
+                release = from_slskd_release(album_payload, identifier)
+            except ValueError:
+                continue
+
+            key = release.source_id or release.title
+            if key in releases:
+                continue
+            releases[key] = release
+            if max_items is not None and len(releases) >= max_items:
+                break
+
+        return list(releases.values())
 
     async def check_health(self) -> Mapping[str, Any]:
         try:

@@ -51,7 +51,7 @@ class _StubGateway:
                 name="Track",
                 provider=provider,
                 id="track-1",
-                artists=(ProviderArtist(name="Artist"),),
+                artists=(ProviderArtist(source=provider, name="Artist"),),
                 album=ProviderAlbum(name="Album"),
                 candidates=(
                     TrackCandidate(
@@ -77,7 +77,7 @@ class _StubGateway:
             name="Track",
             provider=providers[0],
             id="track-2",
-            artists=(ProviderArtist(name="Artist"),),
+            artists=(ProviderArtist(source=providers[0], name="Artist"),),
         )
         result = ProviderGatewaySearchResult(provider=providers[0], tracks=(track,))
         return ProviderGatewaySearchResponse(results=(result,))

@@ -38,7 +38,7 @@ async def test_search_service_builds_response_and_scores() -> None:
         name="Example Track",
         provider="spotify",
         id="track-1",
-        artists=(ProviderArtist(name="Example Artist"),),
+        artists=(ProviderArtist(source="spotify", name="Example Artist"),),
         album=ProviderAlbum(name="Example Album"),
         metadata={"bitrate_kbps": 320, "genres": ["rock"]},
     )

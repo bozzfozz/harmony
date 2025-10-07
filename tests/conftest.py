@@ -983,14 +983,26 @@ class StubSearchGateway:
             artists: list[ProviderArtist] = []
             for artist_payload in raw.get("artists") or []:
                 if isinstance(artist_payload, dict):
-                    artists.append(ProviderArtist(name=str(artist_payload.get("name") or "")))
+                    artists.append(
+                        ProviderArtist(
+                            source="spotify",
+                            source_id=str(artist_payload.get("id") or ""),
+                            name=str(artist_payload.get("name") or ""),
+                        )
+                    )
             album_payload = raw.get("album") if isinstance(raw.get("album"), dict) else None
             album = None
             if isinstance(album_payload, dict):
                 album_artists: list[ProviderArtist] = []
                 for entry in album_payload.get("artists") or []:
                     if isinstance(entry, dict):
-                        album_artists.append(ProviderArtist(name=str(entry.get("name") or "")))
+                        album_artists.append(
+                            ProviderArtist(
+                                source="spotify",
+                                source_id=str(entry.get("id") or ""),
+                                name=str(entry.get("name") or ""),
+                            )
+                        )
                 album_metadata: dict[str, object] = {}
                 release_date = album_payload.get("release_date")
                 if release_date:
@@ -1073,7 +1085,17 @@ class StubSearchGateway:
                     download_uri=file_info.get("filename"),
                     metadata=metadata,
                 )
-                provider_artists = (ProviderArtist(name=str(artist_name)),) if artist_name else ()
+                provider_artists = (
+                    (
+                        ProviderArtist(
+                            source="slskd",
+                            source_id=str(artist_name),
+                            name=str(artist_name),
+                        ),
+                    )
+                    if artist_name
+                    else ()
+                )
                 album = None
                 if file_info.get("album"):
                     album = ProviderAlbum(name=str(file_info.get("album")), id=None, artists=())

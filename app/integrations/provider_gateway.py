@@ -5,15 +5,17 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Mapping, Sequence
+from typing import Awaitable, Callable, Mapping, Sequence, TypeVar
 
 from app.config import ExternalCallPolicy, ProviderProfile, settings
 from app.integrations.contracts import (
+    ProviderArtist,
     ProviderDependencyError,
     ProviderError,
     ProviderInternalError,
     ProviderNotFoundError,
     ProviderRateLimitedError,
+    ProviderRelease,
     ProviderTimeoutError,
     ProviderTrack,
     ProviderValidationError,
@@ -26,6 +28,9 @@ from app.utils.retry import RetryDirective, with_retry
 
 
 logger = get_logger(__name__)
+
+
+T = TypeVar("T")
 
 
 @dataclass(slots=True, frozen=True)
@@ -235,9 +240,12 @@ class ProviderGateway:
             )
         return ProviderGatewaySearchResponse(results=tuple(results))
 
-    async def _search_provider(
-        self, provider: str, query: SearchQuery
-    ) -> ProviderGatewaySearchResult:
+    async def _execute_provider_call(
+        self,
+        provider: str,
+        operation: str,
+        call: Callable[[TrackProvider], Awaitable[T]],
+    ) -> T:
         normalized = provider.lower()
         if normalized not in self._providers:
             raise KeyError(f"Provider {provider!r} is not registered")
@@ -247,28 +255,30 @@ class ProviderGateway:
         jitter_pct = self._jitter_pct(policy)
         attempt_counter = 0
         started = 0.0
-        last_error: ProviderGatewayError | None = None
 
-        async def _call() -> tuple[ProviderTrack, ...]:
+        async def _call() -> T:
             nonlocal attempt_counter, started
             attempt_counter += 1
             started = perf_counter()
             async with self._semaphore:
-                result = await track_provider.search_tracks(query)
-            return tuple(result)
+                return await call(track_provider)
 
         def _classify(exc: Exception) -> RetryDirective:
-            nonlocal last_error
             error = self._normalise_error(track_provider, policy, exc)
-            last_error = error
-            self._log(track_provider.name, "error", attempt_counter, attempts, started, error)
+            self._log(
+                track_provider.name,
+                operation,
+                "error",
+                attempt_counter,
+                attempts,
+                started,
+                error,
+            )
             should_retry = self._should_retry(error) and attempt_counter < attempts
             return RetryDirective(retry=should_retry, error=error)
 
-        error: Exception | None = None
-
         try:
-            tracks = await with_retry(
+            result = await with_retry(
                 _call,
                 attempts=attempts,
                 base_ms=policy.backoff_base_ms,
@@ -276,31 +286,67 @@ class ProviderGateway:
                 timeout_ms=policy.timeout_ms,
                 classify_err=_classify,
             )
-        except ProviderGatewayError as exc:
-            error = exc
+        except ProviderGatewayError as error:
+            raise error
         except Exception as exc:  # pragma: no cover - defensive guard
-            error = ProviderGatewayInternalError(track_provider.name, "unexpected error", cause=exc)
-        else:
-            self._log(track_provider.name, "success", attempt_counter, attempts, started)
-            return ProviderGatewaySearchResult(
-                provider=track_provider.name,
-                tracks=tracks,
-            )
+            raise ProviderGatewayInternalError(
+                track_provider.name, "unexpected error", cause=exc
+            ) from exc
 
-        if isinstance(error, ProviderGatewayError):
+        self._log(
+            track_provider.name,
+            operation,
+            "success",
+            attempt_counter,
+            attempts,
+            started,
+        )
+        return result
+
+    async def _search_provider(
+        self, provider: str, query: SearchQuery
+    ) -> ProviderGatewaySearchResult:
+        normalized = provider.lower()
+        if normalized not in self._providers:
+            raise KeyError(f"Provider {provider!r} is not registered")
+        track_provider = self._providers[normalized]
+
+        try:
+            tracks = await self._execute_provider_call(
+                provider,
+                "search_tracks",
+                lambda adapter: adapter.search_tracks(query),
+            )
+        except ProviderGatewayError as error:
             return ProviderGatewaySearchResult(
                 provider=track_provider.name,
                 tracks=tuple(),
                 error=error,
             )
 
-        if last_error is None:
-            raise RuntimeError("Retry loop exited without error classification.")
         return ProviderGatewaySearchResult(
             provider=track_provider.name,
-            tracks=tuple(),
-            error=last_error,
+            tracks=tuple(tracks),
         )
+
+    async def fetch_artist(
+        self, provider: str, *, artist_id: str | None = None, name: str | None = None
+    ) -> ProviderArtist | None:
+        return await self._execute_provider_call(
+            provider,
+            "fetch_artist",
+            lambda adapter: adapter.fetch_artist(artist_id=artist_id, name=name),
+        )
+
+    async def fetch_artist_releases(
+        self, provider: str, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderRelease]:
+        releases = await self._execute_provider_call(
+            provider,
+            "fetch_artist_releases",
+            lambda adapter: adapter.fetch_artist_releases(artist_source_id, limit=limit),
+        )
+        return list(releases)
 
     @staticmethod
     def _jitter_pct(policy: ProviderRetryPolicy) -> int:
@@ -354,6 +400,7 @@ class ProviderGateway:
     def _log(
         self,
         provider: str,
+        operation: str,
         status: str,
         attempt: int,
         attempts: int,
@@ -365,7 +412,7 @@ class ProviderGateway:
         payload: dict[str, object] = {
             "component": "provider_gateway",
             "dependency": provider,
-            "operation": "search_tracks",
+            "operation": operation,
             "status": "ok" if status == "success" else "error",
             "duration_ms": duration_ms,
             "meta": meta,
