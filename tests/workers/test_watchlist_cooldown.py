@@ -6,7 +6,7 @@ from sqlalchemy import inspect
 
 from app.db import session_scope
 from app.models import WatchlistArtist
-from app.services.watchlist_dao import WatchlistDAO
+from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers.watchlist_worker import WatchlistWorker
 from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
@@ -33,7 +33,7 @@ async def test_worker_skips_artists_with_active_cooldown() -> None:
     worker = WatchlistWorker(
         config=_make_config(max_per_tick=1),
         interval_seconds=0.01,
-        dao=WatchlistDAO(),
+        dao=ArtistWorkflowDAO(),
     )
     outcomes = await worker.run_once()
     assert outcomes == []

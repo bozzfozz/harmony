@@ -9,7 +9,7 @@ from app.config import WatchlistWorkerConfig
 from app.models import QueueJobStatus
 from app.orchestrator import timer as timer_module
 from app.orchestrator.timer import WatchlistTimer
-from app.services.watchlist_dao import WatchlistArtistRow
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.workers import persistence
 
 
@@ -47,14 +47,14 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
     monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
 
     artists = [
-        WatchlistArtistRow(
+        ArtistWorkflowArtistRow(
             id=1,
             spotify_artist_id="a1",
             name="Artist 1",
             last_checked=None,
             retry_block_until=None,
         ),
-        WatchlistArtistRow(
+        ArtistWorkflowArtistRow(
             id=2,
             spotify_artist_id="a2",
             name="Artist 2",

@@ -9,7 +9,7 @@ from datetime import datetime
 from app.config import WatchlistWorkerConfig, settings
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.watchlist_dao import WatchlistArtistRow, WatchlistDAO
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.utils.events import WORKER_STOPPED
@@ -25,7 +25,7 @@ MIN_INTERVAL_SECONDS = 60.0
 class WatchlistEnqueueResult:
     """Outcome for a single watchlist enqueue attempt."""
 
-    artist: WatchlistArtistRow
+    artist: ArtistWorkflowArtistRow
     enqueued: bool
     reason: str | None = None
 
@@ -38,12 +38,12 @@ class WatchlistWorker:
         *,
         config: WatchlistWorkerConfig,
         interval_seconds: float | None = None,
-        dao: WatchlistDAO | None = None,
+        dao: ArtistWorkflowDAO | None = None,
     ) -> None:
         self._config = config
         interval = float(interval_seconds or DEFAULT_INTERVAL_SECONDS)
         self._interval = max(interval, MIN_INTERVAL_SECONDS)
-        self._dao = dao or WatchlistDAO()
+        self._dao = dao or ArtistWorkflowDAO()
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
@@ -174,7 +174,7 @@ class WatchlistWorker:
         )
         return outcomes
 
-    async def _enqueue_artist_job(self, artist: WatchlistArtistRow) -> bool:
+    async def _enqueue_artist_job(self, artist: ArtistWorkflowArtistRow) -> bool:
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
         payload = {"artist_id": int(artist.id)}
         if cutoff:

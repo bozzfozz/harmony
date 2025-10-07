@@ -11,11 +11,11 @@ from app.config import WatchlistWorkerConfig
 from app.db import session_scope
 from app.models import QueueJob
 from app.orchestrator.timer import WatchlistTimer
-from app.services.watchlist_dao import WatchlistArtistRow
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 
 
 class _StubWatchlistDAO:
-    def __init__(self, artists: list[WatchlistArtistRow]) -> None:
+    def __init__(self, artists: list[ArtistWorkflowArtistRow]) -> None:
         self._artists = artists
         self.calls = 0
 
@@ -25,7 +25,7 @@ class _StubWatchlistDAO:
 
 
 class _BlockingWatchlistDAO:
-    def __init__(self, artists: list[WatchlistArtistRow], gate: asyncio.Event) -> None:
+    def __init__(self, artists: list[ArtistWorkflowArtistRow], gate: asyncio.Event) -> None:
         self._artists = artists
         self._gate = gate
         self.started = asyncio.Event()
@@ -55,7 +55,7 @@ def _timer_config() -> WatchlistWorkerConfig:
 
 @pytest.mark.asyncio
 async def test_watchlist_timer_enqueues_idempotently(monkeypatch: pytest.MonkeyPatch) -> None:
-    artist = WatchlistArtistRow(
+    artist = ArtistWorkflowArtistRow(
         id=101,
         spotify_artist_id="artist-101",
         name="Test Artist",
@@ -91,7 +91,7 @@ async def test_watchlist_timer_enqueues_idempotently(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_watchlist_timer_skips_reentrant_trigger(monkeypatch: pytest.MonkeyPatch) -> None:
-    artist = WatchlistArtistRow(
+    artist = ArtistWorkflowArtistRow(
         id=202,
         spotify_artist_id="artist-202",
         name="Artist",
