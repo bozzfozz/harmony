@@ -7,6 +7,7 @@ from typing import Any, Iterable, Mapping
 
 from app.core.spotify_client import SpotifyClient
 from app.integrations.contracts import (
+    ProviderAlbumDetails,
     ProviderArtist,
     ProviderDependencyError,
     ProviderInternalError,
@@ -18,6 +19,7 @@ from app.integrations.contracts import (
     TrackProvider,
 )
 from app.integrations.normalizers import (
+    from_spotify_album_details,
     from_spotify_artist,
     from_spotify_release,
     normalize_spotify_track,
@@ -196,6 +198,111 @@ class SpotifyAdapter(TrackProvider):
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
             raise ProviderInternalError(self.name, "spotify artist releases failed") from exc
+
+    async def fetch_album(self, album_source_id: str) -> ProviderAlbumDetails | None:
+        identifier = (album_source_id or "").strip()
+        if not identifier:
+            raise ProviderValidationError(
+                self.name,
+                "album_source_id must not be empty",
+                status_code=400,
+            )
+
+        def _load() -> ProviderAlbumDetails:
+            try:
+                album_payload: Any = self._client.get_album_details(identifier)
+            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+                raise ProviderDependencyError(
+                    self.name, "spotify album lookup failed", cause=exc
+                ) from exc
+
+            if not isinstance(album_payload, Mapping):
+                raise ProviderNotFoundError(self.name, "album not found", status_code=404)
+
+            try:
+                tracks_payload: Any = self._client.get_album_tracks(identifier)
+            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+                raise ProviderDependencyError(
+                    self.name, "spotify album tracks failed", cause=exc
+                ) from exc
+
+            track_entries: list[Mapping[str, Any]] = []
+            if isinstance(tracks_payload, Mapping):
+                candidates = tracks_payload.get("items") or tracks_payload.get("tracks")
+                if isinstance(candidates, list):
+                    track_entries.extend(
+                        entry for entry in candidates if isinstance(entry, Mapping)
+                    )
+            elif isinstance(tracks_payload, list):
+                track_entries.extend(entry for entry in tracks_payload if isinstance(entry, Mapping))
+
+            return from_spotify_album_details(
+                album_payload,
+                tracks=track_entries,
+                provider=self.name,
+            )
+
+        try:
+            return await asyncio.to_thread(_load)
+        except ProviderDependencyError:
+            raise
+        except ProviderNotFoundError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive guard
+            raise ProviderInternalError(self.name, "spotify album lookup failed") from exc
+
+    async def fetch_artist_top_tracks(
+        self, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderTrack]:
+        identifier = (artist_source_id or "").strip()
+        if not identifier:
+            raise ProviderValidationError(
+                self.name,
+                "artist_source_id must not be empty",
+                status_code=400,
+            )
+
+        try:
+            max_items = max(1, int(limit)) if limit is not None else None
+        except (TypeError, ValueError):
+            max_items = None
+
+        def _load() -> list[ProviderTrack]:
+            try:
+                payload: Any = self._client.get_artist_top_tracks(identifier)
+            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+                raise ProviderDependencyError(
+                    self.name, "spotify artist top tracks failed", cause=exc
+                ) from exc
+
+            track_entries: list[Mapping[str, Any]] = []
+            if isinstance(payload, Mapping):
+                candidates = payload.get("tracks") or payload.get("items")
+                if isinstance(candidates, list):
+                    track_entries.extend(
+                        entry for entry in candidates if isinstance(entry, Mapping)
+                    )
+            elif isinstance(payload, list):
+                track_entries.extend(entry for entry in payload if isinstance(entry, Mapping))
+
+            results: list[ProviderTrack] = []
+            for entry in track_entries:
+                try:
+                    results.append(normalize_spotify_track(entry, provider=self.name))
+                except Exception as exc:  # pragma: no cover - defensive guard
+                    logger.warning("Failed to normalise Spotify top track", exc_info=exc)
+                if max_items is not None and len(results) >= max_items:
+                    break
+            return results
+
+        try:
+            return await asyncio.to_thread(_load)
+        except ProviderDependencyError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive guard
+            raise ProviderInternalError(
+                self.name, "spotify artist top tracks failed"
+            ) from exc
 
 
 __all__ = ["SpotifyAdapter"]

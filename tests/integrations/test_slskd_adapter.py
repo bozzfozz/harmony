@@ -7,6 +7,8 @@ import pytest
 
 from app.integrations.slskd_adapter import SlskdAdapter
 from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderAlbumDetails,
     ProviderDependencyError,
     ProviderNotFoundError,
     ProviderRateLimitedError,
@@ -135,3 +137,51 @@ async def test_adapter_maps_server_errors_to_dependency_error() -> None:
             await adapter.search_tracks(SearchQuery(text="Song", artist=None, limit=1))
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fetch_artist_top_tracks_limits_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter, client = _build_adapter(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
+
+    tracks = [
+        ProviderTrack(name="First", provider="slskd"),
+        ProviderTrack(name="Second", provider="slskd"),
+    ]
+
+    async def _fake_search(query: SearchQuery) -> list[ProviderTrack]:
+        return tracks
+
+    monkeypatch.setattr(adapter, "search_tracks", _fake_search)
+
+    try:
+        results = await adapter.fetch_artist_top_tracks("artist-1", limit=1)
+    finally:
+        await client.aclose()
+
+    assert [track.name for track in results] == ["First"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_album_builds_details_from_tracks(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter, client = _build_adapter(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
+
+    track = ProviderTrack(
+        name="Song",
+        provider="slskd",
+        album=ProviderAlbum(name="Collected", id="album-1"),
+        metadata={"genre": "metal", "year": 2000},
+    )
+
+    async def _fake_search(query: SearchQuery) -> list[ProviderTrack]:
+        return [track]
+
+    monkeypatch.setattr(adapter, "search_tracks", _fake_search)
+
+    try:
+        details = await adapter.fetch_album("album-1")
+    finally:
+        await client.aclose()
+
+    assert isinstance(details, ProviderAlbumDetails)
+    assert details.album.name == "Collected"
+    assert len(details.tracks) == 1

@@ -43,6 +43,19 @@ class ProviderAlbum:
     id: str | None = None
     artists: tuple[ProviderArtist, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
+    release_date: str | None = None
+    total_tracks: int | None = None
+    images: tuple[str, ...] = ()
+
+
+@dataclass(slots=True, frozen=True)
+class ProviderAlbumDetails:
+    """Detailed album metadata including the canonical track listing."""
+
+    source: str
+    album: ProviderAlbum
+    tracks: tuple["ProviderTrack", ...] = ()
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -165,9 +178,18 @@ class TrackProvider(Protocol):
     ) -> list[ProviderRelease]:
         """Return releases associated with the supplied artist."""
 
+    async def fetch_album(self, album_source_id: str) -> ProviderAlbumDetails | None:
+        """Return detailed album metadata for the supplied identifier."""
+
+    async def fetch_artist_top_tracks(
+        self, artist_source_id: str, *, limit: int | None = None
+    ) -> list[ProviderTrack]:
+        """Return the provider's notion of an artist's top tracks."""
+
 
 __all__ = [
     "ProviderAlbum",
+    "ProviderAlbumDetails",
     "ProviderArtist",
     "ProviderDependencyError",
     "ProviderError",
