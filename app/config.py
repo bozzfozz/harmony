@@ -103,6 +103,14 @@ class FeatureFlags:
     enable_lyrics: bool
     enable_legacy_routes: bool
     enable_artist_cache_invalidation: bool
+    enable_admin_api: bool
+
+
+@dataclass(slots=True)
+class AdminConfig:
+    api_enabled: bool
+    staleness_max_minutes: int
+    retry_budget_max: int
 
 
 @dataclass(slots=True)
@@ -223,9 +231,7 @@ class OrchestratorConfig:
             "sync": max(1, self.pool_sync or self.global_concurrency),
             "matching": max(1, self.pool_matching or self.global_concurrency),
             "retry": max(1, self.pool_retry or self.global_concurrency),
-            "artist_refresh": max(
-                1, self.pool_artist_refresh or self.global_concurrency
-            ),
+            "artist_refresh": max(1, self.pool_artist_refresh or self.global_concurrency),
             "artist_delta": max(1, self.pool_artist_delta or self.global_concurrency),
         }
 
@@ -375,6 +381,7 @@ class AppConfig:
     watchlist: WatchlistWorkerConfig
     matching: MatchingConfig
     environment: EnvironmentConfig
+    admin: AdminConfig
 
 
 @dataclass(slots=True, frozen=True)
@@ -655,6 +662,9 @@ DEFAULT_ARTIST_POOL_CONCURRENCY = DEFAULT_ORCH_POOL_ARTIST_REFRESH
 DEFAULT_ARTIST_MAX_RETRY_PER_ARTIST = DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST
 DEFAULT_ARTIST_COOLDOWN_SECONDS = DEFAULT_WATCHLIST_COOLDOWN_MINUTES * 60
 DEFAULT_ARTIST_CACHE_INVALIDATE = False
+DEFAULT_ADMIN_API_ENABLED = False
+DEFAULT_ADMIN_STALENESS_MAX_MINUTES = 30
+DEFAULT_ADMIN_RETRY_BUDGET_MAX = 6
 DEFAULT_MATCH_FUZZY_MAX_CANDIDATES = 50
 DEFAULT_MATCH_MIN_ARTIST_SIM = 0.6
 DEFAULT_MATCH_COMPLETE_THRESHOLD = 0.9
@@ -1509,6 +1519,10 @@ def load_config() -> AppConfig:
             os.getenv("ARTIST_CACHE_INVALIDATE"),
             default=DEFAULT_ARTIST_CACHE_INVALIDATE,
         ),
+        enable_admin_api=_as_bool(
+            os.getenv("FEATURE_ADMIN_API"),
+            default=DEFAULT_ADMIN_API_ENABLED,
+        ),
     )
 
     artist_sync_config = ArtistSyncConfig(
@@ -1620,14 +1634,16 @@ def load_config() -> AppConfig:
             240,
             max(
                 0,
-                (max(
-                    0,
-                    _as_int(
-                        cooldown_seconds_env,
-                        default=DEFAULT_ARTIST_COOLDOWN_SECONDS,
-                    ),
+                (
+                    max(
+                        0,
+                        _as_int(
+                            cooldown_seconds_env,
+                            default=DEFAULT_ARTIST_COOLDOWN_SECONDS,
+                        ),
+                    )
+                    + 59
                 )
-                + 59)
                 // 60,
             ),
         )
@@ -1703,6 +1719,24 @@ def load_config() -> AppConfig:
     )
 
     matching_config = load_matching_config()
+
+    admin_config = AdminConfig(
+        api_enabled=features.enable_admin_api,
+        staleness_max_minutes=max(
+            1,
+            _as_int(
+                os.getenv("ARTIST_STALENESS_MAX_MIN"),
+                default=DEFAULT_ADMIN_STALENESS_MAX_MINUTES,
+            ),
+        ),
+        retry_budget_max=max(
+            0,
+            _as_int(
+                os.getenv("ARTIST_RETRY_BUDGET_MAX"),
+                default=DEFAULT_ADMIN_RETRY_BUDGET_MAX,
+            ),
+        ),
+    )
 
     raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
@@ -1820,6 +1854,7 @@ def load_config() -> AppConfig:
         watchlist=watchlist_config,
         matching=matching_config,
         environment=environment_config,
+        admin=admin_config,
     )
 
 

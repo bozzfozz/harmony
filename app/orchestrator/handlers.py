@@ -550,13 +550,9 @@ class SyncHandlerDeps:
     )
     retry_job_type: str = "sync"
     retry_policy_override: InitVar[SyncRetryPolicy | None] = None
-    _retry_policy_override: SyncRetryPolicy | None = field(
-        init=False, default=None, repr=False
-    )
+    _retry_policy_override: SyncRetryPolicy | None = field(init=False, default=None, repr=False)
 
-    def __post_init__(
-        self, retry_policy_override: SyncRetryPolicy | None
-    ) -> None:
+    def __post_init__(self, retry_policy_override: SyncRetryPolicy | None) -> None:
         self._retry_policy_override = retry_policy_override
         if self.retry_policy_provider is None:
             self.retry_policy_provider = get_retry_policy_provider()
@@ -730,9 +726,7 @@ def _artist_cooldown_until(deps: ArtistDeltaHandlerDeps) -> datetime:
     return now + timedelta(minutes=deps.cooldown_minutes)
 
 
-async def _call_workflow_dao(
-    deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs
-):
+async def _call_workflow_dao(deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs):
     method = getattr(deps.dao, method_name)
     if deps.db_mode == "thread":
         return await asyncio.to_thread(method, *args, **kwargs)
@@ -742,7 +736,9 @@ async def _call_workflow_dao(
     return result
 
 
-def _build_search_query(artist_name: str, album: Mapping[str, Any], track: Mapping[str, Any]) -> str:
+def _build_search_query(
+    artist_name: str, album: Mapping[str, Any], track: Mapping[str, Any]
+) -> str:
     parts: list[str] = []
     candidate_artist = artist_name or _primary_artist_name(track, album)
     if candidate_artist:
@@ -1120,10 +1116,7 @@ async def _persist_candidates(
 
         payload = dict(file_info)
         filename = str(
-            payload.get("filename")
-            or payload.get("name")
-            or track_payload.get("name")
-            or "unknown"
+            payload.get("filename") or payload.get("name") or track_payload.get("name") or "unknown"
         )
         priority = _extract_priority(payload)
         track_id = str(track_payload.get("id") or "").strip()
@@ -1320,9 +1313,7 @@ async def _enqueue_downloads(
     return queued
 
 
-async def artist_refresh(
-    job: QueueJobDTO, deps: ArtistRefreshHandlerDeps
-) -> Mapping[str, Any]:
+async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1453,9 +1444,7 @@ async def artist_refresh(
     }
 
 
-async def artist_delta(
-    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
-) -> Mapping[str, Any]:
+async def artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1639,9 +1628,7 @@ async def handle_artist_refresh(
     return await artist_refresh(job, deps)
 
 
-async def handle_artist_delta(
-    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
-) -> Mapping[str, Any]:
+async def handle_artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     return await artist_delta(job, deps)
 
 

@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from time import perf_counter
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -34,7 +34,7 @@ from app.services.artist_delta import (
     determine_delta,
 )
 from app.services.audit import write_audit
-from app.services.cache import ResponseCache, build_path_param_hash
+from app.services.cache import ResponseCache, bust_artist_cache
 from app.utils.idempotency import make_idempotency_key
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
@@ -132,8 +132,9 @@ async def enqueue_artist_sync(
     artist_key: str,
     *,
     force: bool = False,
+    force_resync: bool | None = None,
     payload: Mapping[str, object] | None = None,
-    priority: int = 0,
+    priority: int | None = None,
     persistence_module=persistence,
 ) -> QueueJobDTO:
     """Enqueue an artist sync job while enforcing idempotency."""
@@ -142,12 +143,27 @@ async def enqueue_artist_sync(
     if not key:
         raise ValueError("artist_key must be provided")
 
-    job_payload: dict[str, object] = {"artist_key": key, "force": bool(force)}
+    resolved_force = bool(force)
+    job_payload: dict[str, object] = {"artist_key": key}
+    if force_resync is not None:
+        if force_resync:
+            resolved_force = True
+        job_payload["force_resync"] = bool(force_resync)
+    job_payload["force"] = resolved_force
     if payload:
         for candidate, value in payload.items():
             if not isinstance(candidate, str) or not candidate:
                 continue
             job_payload[candidate] = value
+
+    if priority is not None:
+        try:
+            priority_override = int(priority)
+        except (TypeError, ValueError):
+            priority_override = 0
+        else:
+            if priority_override != 0:
+                job_payload.setdefault("priority_override", priority_override)
 
     args_hash = json.dumps(job_payload, sort_keys=True, default=str)
     idempotency_key = make_idempotency_key(_JOB_TYPE, key, args_hash)
@@ -168,7 +184,7 @@ async def enqueue_artist_sync(
     job = await persistence_module.enqueue_async(
         _JOB_TYPE,
         job_payload,
-        priority=int(priority),
+        priority=int(priority or 0),
         idempotency_key=idempotency_key,
     )
     log_event(
@@ -179,7 +195,7 @@ async def enqueue_artist_sync(
         job_type=_JOB_TYPE,
         entity_id=key,
         deduped=False,
-        priority=int(priority),
+        priority=int(priority or job.priority or 0),
     )
     return job
 
@@ -571,7 +587,9 @@ async def handle_artist_sync(
 
     artist_row = await asyncio.to_thread(deps.dao.upsert_artist, artist_dto)
 
-    upsert_targets = list(delta.releases.added) + [change.after for change in delta.releases.updated]
+    upsert_targets = list(delta.releases.added) + [
+        change.after for change in delta.releases.updated
+    ]
     persisted_rows: list[ArtistReleaseRow] = []
     if upsert_targets:
         persisted_rows = await asyncio.to_thread(deps.dao.upsert_releases, upsert_targets)
@@ -592,9 +610,7 @@ async def handle_artist_sync(
     alias_removed = len(delta.aliases.removed)
     removed_count = len(delta.releases.removed)
     if deps.prune_removed:
-        inactivated_count = (
-            removed_count if deps.hard_delete_removed else len(inactive_rows)
-        )
+        inactivated_count = removed_count if deps.hard_delete_removed else len(inactive_rows)
     else:
         inactivated_count = 0
 
@@ -742,37 +758,15 @@ async def handle_artist_sync(
 
 async def _evict_cache(deps: ArtistSyncHandlerDeps, artist_key: str) -> int:
     cache = deps.response_cache
-    if cache is None or not getattr(cache, "write_through", True):
+    if cache is None:
         return 0
-    templates = _cache_templates(deps.api_base_path)
-    path_hash = build_path_param_hash({"artist_key": artist_key})
-    evicted = 0
-    for template in templates:
-        prefix = f"GET:{template}:{path_hash}:"
-        evicted += await cache.invalidate_prefix(
-            prefix,
-            reason="artist_sync",
-            entity_id=artist_key,
-            path=template,
-        )
-    return evicted
-
-
-def _cache_templates(base_path: str | None) -> tuple[str, ...]:
-    detail_template = "/artists/{artist_key}"
-    templates = [detail_template]
-    if base_path:
-        normalized = base_path.rstrip("/")
-        if normalized:
-            templates.append(f"{normalized}{detail_template}")
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for template in templates:
-        if template not in seen:
-            ordered.append(template)
-            seen.add(template)
-    return tuple(ordered)
+    return await bust_artist_cache(
+        cache,
+        artist_key=artist_key,
+        base_path=deps.api_base_path,
+        reason="artist_sync",
+        entity_id=artist_key,
+    )
 
 
 def build_artist_sync_handler(

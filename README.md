@@ -130,6 +130,17 @@ curl -X POST -H "Content-Type: application/json" -H "X-API-Key: $HARMONY_API_KEY
 }
 ```
 
+## Admin Artist Ops
+
+Für Betriebs- und Supportaufgaben stehen zusätzliche Endpunkte unter `/admin/artists/*` bereit. Sie sind standardmäßig deaktiviert und werden nur eingebunden, wenn die Umgebungsvariable `FEATURE_ADMIN_API=true` gesetzt ist. Die Routen verwenden dieselbe API-Key-Authentifizierung wie die öffentlichen Schnittstellen und emittieren strukturierte Logs (`artist.admin.{dry_run,resync,audit,invalidate}`).
+
+- `POST /admin/artists/{artist_key}/reconcile?dry_run=true|false` zeigt Delta-Vorschauen oder erzwingt eine sofortige Synchronisation. Bei `dry_run=true` werden keine Änderungen persistiert. Vor einem Write werden Locks (laufende Jobs) sowie das konfigurierbare Retry-Budget (`ARTIST_RETRY_BUDGET_MAX`, Default `6`) geprüft.
+- `POST /admin/artists/{artist_key}/resync` legt einen `artist_sync`-Job mit erhöhter Priorität (`sync+10`) in die Queue und verweigert den Aufruf, falls bereits ein aktives Lease existiert oder das Retry-Budget ausgeschöpft ist.
+- `GET /admin/artists/{artist_key}/audit?limit=100&cursor=<id>` liefert die jüngsten Audit-Ereignisse eines Künstlers paginiert (Cursor basiert auf der Audit-ID).
+- `POST /admin/artists/{artist_key}/invalidate` verwirft zwischengespeicherte Responses (Artist- und Release-Routen) und stößt eine Cache-Neusynchronisation an.
+
+Zusätzliche Sicherheitschecks informieren über veraltete Daten (konfigurierbar via `ARTIST_STALENESS_MAX_MIN`, Default `30` Minuten) und liefern Hinweise in der API-Antwort, ohne die Ausführung zu blockieren. Die Admin-Routen können jederzeit per Feature-Flag deaktiviert werden und haben keine Auswirkung auf die öffentliche `/api/v1`-API.
+
 ### Artist Sync (Backend)
 
 Der Orchestrator-Job `artist_sync` ruft die Künstlerdaten über den `ProviderGateway` ab, normalisiert sie und führt sie in der

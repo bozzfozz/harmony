@@ -527,7 +527,9 @@ class ArtistDao:
         reason: str,
         hard_delete: bool = False,
     ) -> list[ArtistReleaseRow]:
-        ids = {int(value) for value in release_ids if isinstance(value, int) or str(value).isdigit()}
+        ids = {
+            int(value) for value in release_ids if isinstance(value, int) or str(value).isdigit()
+        }
         if not ids:
             return []
         timestamp = self._now()

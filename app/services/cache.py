@@ -357,6 +357,50 @@ def resolve_auth_variant(authorization_header: str | None) -> str:
     return digest.hexdigest()
 
 
+def artist_cache_templates(base_path: str | None) -> tuple[str, ...]:
+    """Return canonical cache templates for artist resources."""
+
+    detail_template = "/artists/{artist_key}"
+    templates = [detail_template]
+    if base_path:
+        normalized = base_path.rstrip("/")
+        if normalized and normalized != "/":
+            templates.append(f"{normalized}{detail_template}")
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for template in templates:
+        if template not in seen:
+            ordered.append(template)
+            seen.add(template)
+    return tuple(ordered)
+
+
+async def bust_artist_cache(
+    cache: "ResponseCache" | None,
+    *,
+    artist_key: str,
+    base_path: str | None = None,
+    reason: str = "manual",
+    entity_id: str | None = None,
+) -> int:
+    """Invalidate cached responses associated with an artist resource."""
+
+    if cache is None or not getattr(cache, "write_through", True):
+        return 0
+
+    path_hash = build_path_param_hash({"artist_key": artist_key})
+    total = 0
+    for template in artist_cache_templates(base_path):
+        prefix = f"GET:{template}:{path_hash}:"
+        total += await cache.invalidate_prefix(
+            prefix,
+            reason=reason,
+            entity_id=entity_id or artist_key,
+            path=template,
+        )
+    return total
+
+
 def _log_cache_event(operation: str, status: str, **fields: object) -> None:
     legacy_payload = dict(fields)
     legacy_payload.setdefault("component", "service.cache")
