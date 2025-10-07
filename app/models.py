@@ -10,6 +10,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -221,10 +222,88 @@ class ArtistKnownReleaseRecord(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    artist_id = Column(Integer, ForeignKey("watchlist_artists.id", ondelete="CASCADE"), nullable=False)
+    artist_id = Column(
+        Integer, ForeignKey("watchlist_artists.id", ondelete="CASCADE"), nullable=False
+    )
     track_id = Column(String(128), nullable=False)
     etag = Column(String(255), nullable=True)
     fetched_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class ArtistRecord(Base):
+    __tablename__ = "artists"
+    __table_args__ = (
+        Index("ix_artists_artist_key", "artist_key", unique=True),
+        Index("ix_artists_updated_at", "updated_at"),
+        Index("uq_artists_source_source_id", "source", "source_id", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    artist_key = Column(String(255), nullable=False)
+    source = Column(String(50), nullable=False)
+    source_id = Column(String(255), nullable=True)
+    name = Column(String(512), nullable=False)
+    genres = Column(JSON, nullable=False, default=list)
+    images = Column(JSON, nullable=False, default=list)
+    popularity = Column(Integer, nullable=True)
+    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
+    etag = Column(String(64), nullable=False)
+    version = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class ArtistReleaseRecord(Base):
+    __tablename__ = "artist_releases"
+    __table_args__ = (
+        Index("uq_artist_releases_source_source_id", "source", "source_id", unique=True),
+        Index("ix_artist_releases_artist_id", "artist_id"),
+        Index("ix_artist_releases_artist_key", "artist_key"),
+        Index("ix_artist_releases_release_date", "release_date"),
+        Index("ix_artist_releases_updated_at", "updated_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    artist_id = Column(Integer, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
+    artist_key = Column(String(255), nullable=False)
+    source = Column(String(50), nullable=False)
+    source_id = Column(String(255), nullable=True)
+    title = Column(String(512), nullable=False)
+    release_date = Column(Date, nullable=True)
+    release_type = Column(String(50), nullable=True)
+    total_tracks = Column(Integer, nullable=True)
+    version = Column(String(64), nullable=True)
+    etag = Column(String(64), nullable=False)
+    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class ArtistWatchlistEntry(Base):
+    __tablename__ = "artist_watchlist"
+    __table_args__ = (Index("ix_artist_watchlist_priority", "priority", "last_enqueued_at"),)
+
+    artist_key = Column(String(255), primary_key=True)
+    priority = Column(Integer, nullable=False, default=0)
+    last_enqueued_at = Column(DateTime, nullable=True)
+    cooldown_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,

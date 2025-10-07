@@ -282,10 +282,12 @@ def _upsert_queue_job(
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
         stmt = sqlite_insert(QueueJob).values(**insert_values)
-        try:
-            stmt = stmt.on_conflict_do_nothing(index_elements=["idempotency_key"])
-        except AttributeError:
-            stmt = stmt.prefix_with("OR IGNORE")
+        # SQLite cannot reference the partial unique index on
+        # ``idempotency_key`` inside an ``ON CONFLICT`` clause reliably.
+        # Falling back to ``OR IGNORE`` keeps the same semantics without
+        # triggering ``OperationalError`` loops in environments that do not
+        # support the richer syntax.
+        stmt = stmt.prefix_with("OR IGNORE")
         try:
             stmt = stmt.returning(QueueJob.id)
             returning_supported = True

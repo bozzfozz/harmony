@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 
 from sqlalchemy.orm import Session
@@ -14,9 +14,11 @@ from app.core.spotify_client import SpotifyClient
 from app.dependencies import (
     get_app_config,
     get_matching_engine,
+    get_provider_gateway,
     get_soulseek_client,
     get_spotify_client,
 )
+from app.integrations.artist_gateway import ArtistGateway
 from app.orchestrator.handlers import (
     ArtistDeltaHandlerDeps,
     ArtistRefreshHandlerDeps,
@@ -29,6 +31,8 @@ from app.orchestrator.handlers import (
     SyncJobSubmitter,
     WatchlistHandlerDeps,
 )
+from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
+from app.services.artist_dao import ArtistDao
 
 
 def build_sync_handler_deps(
@@ -139,6 +143,27 @@ def build_artist_delta_handler_deps(
     )
 
 
+def build_artist_sync_handler_deps(
+    *,
+    gateway: ArtistGateway | None = None,
+    dao: ArtistDao | None = None,
+    providers: Sequence[str] | None = None,
+    release_limit: int | None = None,
+) -> ArtistSyncHandlerDeps:
+    """Construct handler dependencies for artist sync jobs."""
+
+    resolved_gateway = gateway or ArtistGateway(provider_gateway=get_provider_gateway())
+    resolved_dao = dao or ArtistDao()
+    provider_tuple = tuple(providers) if providers else ()
+    limit = release_limit if release_limit is not None else 50
+    return ArtistSyncHandlerDeps(
+        gateway=resolved_gateway,
+        dao=resolved_dao,
+        providers=provider_tuple if provider_tuple else ("spotify",),
+        release_limit=int(limit),
+    )
+
+
 __all__ = [
     "build_sync_handler_deps",
     "build_matching_handler_deps",
@@ -146,4 +171,5 @@ __all__ = [
     "build_watchlist_handler_deps",
     "build_artist_refresh_handler_deps",
     "build_artist_delta_handler_deps",
+    "build_artist_sync_handler_deps",
 ]
