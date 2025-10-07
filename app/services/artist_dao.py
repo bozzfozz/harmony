@@ -161,10 +161,13 @@ class ArtistReleaseRow:
     release_date: date | None
     release_type: str | None
     total_tracks: int | None
+    metadata: Mapping[str, object]
     version: str | None
     etag: str
     updated_at: datetime
     created_at: datetime
+    inactive_at: datetime | None
+    inactive_reason: str | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -402,6 +405,10 @@ class ArtistDao:
                     if record.release_date != release_date:
                         record.release_date = release_date
                         changed = True
+                    if record.inactive_at is not None or record.inactive_reason:
+                        record.inactive_at = None
+                        record.inactive_reason = None
+                        changed = True
                     if changed:
                         record.updated_at = timestamp
                         record.etag = _hash_values(
@@ -433,10 +440,13 @@ class ArtistDao:
                         release_date=record.release_date,
                         release_type=record.release_type,
                         total_tracks=_coerce_int(record.total_tracks),
+                        metadata=dict(record.metadata_json or {}),
                         version=record.version,
                         etag=record.etag,
                         updated_at=record.updated_at,
                         created_at=record.created_at,
+                        inactive_at=record.inactive_at,
+                        inactive_reason=record.inactive_reason,
                     )
                 )
         return rows
@@ -468,18 +478,21 @@ class ArtistDao:
                 created_at=record.created_at,
             )
 
-    def get_artist_releases(self, artist_key: str) -> list[ArtistReleaseRow]:
+    def get_artist_releases(
+        self, artist_key: str, *, include_inactive: bool = False
+    ) -> list[ArtistReleaseRow]:
         key = (artist_key or "").strip()
         if not key:
             return []
-        statement: Select[ArtistReleaseRecord] = (
-            select(ArtistReleaseRecord)
-            .where(ArtistReleaseRecord.artist_key == key)
-            .order_by(
-                desc(ArtistReleaseRecord.release_date),
-                desc(ArtistReleaseRecord.updated_at),
-                ArtistReleaseRecord.id.asc(),
-            )
+        statement: Select[ArtistReleaseRecord] = select(ArtistReleaseRecord).where(
+            ArtistReleaseRecord.artist_key == key
+        )
+        if not include_inactive:
+            statement = statement.where(ArtistReleaseRecord.inactive_at.is_(None))
+        statement = statement.order_by(
+            desc(ArtistReleaseRecord.release_date),
+            desc(ArtistReleaseRecord.updated_at),
+            ArtistReleaseRecord.id.asc(),
         )
         with session_scope() as session:
             records = session.execute(statement).scalars().all()
@@ -496,13 +509,66 @@ class ArtistDao:
                         release_date=record.release_date,
                         release_type=record.release_type,
                         total_tracks=_coerce_int(record.total_tracks),
+                        metadata=dict(record.metadata_json or {}),
                         version=record.version,
                         etag=record.etag,
                         updated_at=record.updated_at,
                         created_at=record.created_at,
+                        inactive_at=record.inactive_at,
+                        inactive_reason=record.inactive_reason,
                     )
                 )
             return rows
+
+    def mark_releases_inactive(
+        self,
+        release_ids: Sequence[int],
+        *,
+        reason: str,
+        hard_delete: bool = False,
+    ) -> list[ArtistReleaseRow]:
+        ids = {int(value) for value in release_ids if isinstance(value, int) or str(value).isdigit()}
+        if not ids:
+            return []
+        timestamp = self._now()
+        updated: list[ArtistReleaseRow] = []
+        with session_scope() as session:
+            statement = select(ArtistReleaseRecord).where(ArtistReleaseRecord.id.in_(ids))
+            records = session.execute(statement).scalars().all()
+            if hard_delete:
+                for record in records:
+                    session.delete(record)
+                return []
+            for record in records:
+                if record.inactive_at and record.inactive_reason == reason:
+                    continue
+                record.inactive_at = timestamp
+                record.inactive_reason = reason
+                record.updated_at = timestamp
+                session.add(record)
+                session.flush()
+                session.refresh(record)
+                updated.append(
+                    ArtistReleaseRow(
+                        id=int(record.id),
+                        artist_id=int(record.artist_id),
+                        artist_key=record.artist_key,
+                        source=record.source,
+                        source_id=record.source_id,
+                        title=record.title,
+                        release_date=record.release_date,
+                        release_type=record.release_type,
+                        total_tracks=_coerce_int(record.total_tracks),
+                        metadata=dict(record.metadata_json or {}),
+                        version=record.version,
+                        etag=record.etag,
+                        updated_at=record.updated_at,
+                        created_at=record.created_at,
+                        inactive_at=record.inactive_at,
+                        inactive_reason=record.inactive_reason,
+                    )
+                )
+        return updated
 
     def get_watchlist_batch(
         self,

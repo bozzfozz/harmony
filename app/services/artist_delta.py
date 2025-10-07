@@ -3,11 +3,267 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Iterable, Mapping, Sequence
+import json
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from app.core import ProviderAlbumDTO, ProviderTrackDTO, ensure_album_dto, ensure_track_dto
+
+
+@dataclass(slots=True, frozen=True)
+class ReleaseSnapshot:
+    """Minimal view of a persisted release used for delta calculations."""
+
+    id: int
+    artist_key: str
+    source: str
+    source_id: str | None
+    title: str
+    release_date: date | None
+    release_type: str | None
+    total_tracks: int | None
+    metadata: Mapping[str, object]
+    version: str | None
+    etag: str | None
+    updated_at: datetime | None
+    inactive_at: datetime | None
+    inactive_reason: str | None
+
+    @classmethod
+    def from_row(cls, row: ArtistReleaseRow) -> "ReleaseSnapshot":
+        return cls(
+            id=row.id,
+            artist_key=row.artist_key,
+            source=row.source,
+            source_id=row.source_id,
+            title=row.title,
+            release_date=row.release_date,
+            release_type=row.release_type,
+            total_tracks=row.total_tracks,
+            metadata=dict(row.metadata),
+            version=row.version,
+            etag=row.etag,
+            updated_at=row.updated_at,
+            inactive_at=row.inactive_at,
+            inactive_reason=row.inactive_reason,
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class ReleaseUpdate:
+    before: ReleaseSnapshot
+    after: ArtistReleaseUpsertDTO
+
+
+@dataclass(slots=True, frozen=True)
+class ReleaseDelta:
+    added: Tuple[ArtistReleaseUpsertDTO, ...]
+    updated: Tuple[ReleaseUpdate, ...]
+    removed: Tuple[ReleaseSnapshot, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class AliasDelta:
+    added: Tuple[str, ...]
+    removed: Tuple[str, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class TrackDelta:
+    added: Tuple[Any, ...] = ()
+    updated: Tuple[Any, ...] = ()
+    removed: Tuple[Any, ...] = ()
+
+
+@dataclass(slots=True, frozen=True)
+class ArtistLocalState:
+    releases: Tuple[ReleaseSnapshot, ...] = ()
+    aliases: Tuple[str, ...] = ()
+
+
+@dataclass(slots=True, frozen=True)
+class ArtistRemoteState:
+    releases: Tuple[ArtistReleaseUpsertDTO, ...] = ()
+    aliases: Tuple[str, ...] = ()
+
+
+@dataclass(slots=True, frozen=True)
+class DeltaResult:
+    releases: ReleaseDelta
+    aliases: AliasDelta
+    tracks: TrackDelta = field(default_factory=TrackDelta)
+
+
+def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> DeltaResult:
+    """Return the delta between the persisted artist state and provider payloads."""
+
+    release_index: dict[Tuple[str, ...], list[ReleaseSnapshot]] = {}
+    for snapshot in local.releases:
+        key = _release_identity_from_snapshot(snapshot)
+        bucket = release_index.setdefault(key, [])
+        bucket.append(snapshot)
+    for bucket in release_index.values():
+        bucket.sort(key=lambda item: (item.inactive_at is not None, item.updated_at or datetime.min))
+
+    added: list[ArtistReleaseUpsertDTO] = []
+    updated: list[ReleaseUpdate] = []
+    seen_remote: set[Tuple[str, ...]] = set()
+
+    for dto in remote.releases:
+        identity = _release_identity_from_dto(dto)
+        if identity in seen_remote:
+            continue
+        seen_remote.add(identity)
+        candidates = release_index.get(identity)
+        snapshot = candidates.pop(0) if candidates else None
+        if candidates is not None and not candidates:
+            release_index.pop(identity, None)
+        if snapshot is None:
+            added.append(dto)
+            continue
+        if _requires_release_update(snapshot, dto):
+            updated.append(ReleaseUpdate(before=snapshot, after=dto))
+
+    removed: list[ReleaseSnapshot] = []
+    for remaining in release_index.values():
+        for snapshot in remaining:
+            if snapshot.inactive_at is None:
+                removed.append(snapshot)
+
+    alias_delta = _determine_alias_delta(local.aliases, remote.aliases)
+
+    return DeltaResult(
+        releases=ReleaseDelta(
+            added=tuple(added),
+            updated=tuple(updated),
+            removed=tuple(removed),
+        ),
+        aliases=alias_delta,
+        tracks=TrackDelta(),
+    )
+
+
+def _determine_alias_delta(
+    local_aliases: Sequence[str], remote_aliases: Sequence[str]
+) -> AliasDelta:
+    local_map = _alias_map(local_aliases)
+    remote_map = _alias_map(remote_aliases)
+    added_keys = remote_map.keys() - local_map.keys()
+    removed_keys = local_map.keys() - remote_map.keys()
+    added = tuple(remote_map[key] for key in sorted(added_keys))
+    removed = tuple(local_map[key] for key in sorted(removed_keys))
+    return AliasDelta(added=added, removed=removed)
+
+
+def _alias_map(values: Sequence[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for value in values:
+        text = _clean_text(value)
+        if not text:
+            continue
+        mapping[text.casefold()] = text
+    return mapping
+
+
+def _requires_release_update(
+    snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsertDTO
+) -> bool:
+    if snapshot.inactive_at is not None:
+        return True
+    return _release_fingerprint_from_snapshot(snapshot) != _release_fingerprint_from_dto(dto)
+
+
+def _release_identity_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...]:
+    source = _clean_source(snapshot.source)
+    source_id = _clean_optional(snapshot.source_id)
+    if source_id:
+        return ("id", source, source_id)
+    return (
+        "composite",
+        source,
+        _clean_text(snapshot.title).casefold(),
+        _normalised_date(snapshot.release_date),
+        _clean_text(snapshot.release_type).casefold(),
+    )
+
+
+def _release_identity_from_dto(dto: ArtistReleaseUpsertDTO) -> Tuple[str, ...]:
+    source = _clean_source(dto.source)
+    source_id = _clean_optional(dto.source_id)
+    if source_id:
+        return ("id", source, source_id)
+    return (
+        "composite",
+        source,
+        _clean_text(dto.title).casefold(),
+        _normalised_date(dto.release_date),
+        _clean_text(dto.release_type).casefold(),
+    )
+
+
+def _release_fingerprint_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...]:
+    return (
+        _clean_text(snapshot.title).casefold(),
+        _normalised_date(snapshot.release_date),
+        _clean_text(snapshot.release_type).casefold(),
+        str(snapshot.total_tracks or ""),
+        _hash_mapping(snapshot.metadata),
+    )
+
+
+def _release_fingerprint_from_dto(dto: ArtistReleaseUpsertDTO) -> Tuple[str, ...]:
+    return (
+        _clean_text(dto.title).casefold(),
+        _normalised_date(dto.release_date),
+        _clean_text(dto.release_type).casefold(),
+        str(dto.total_tracks or ""),
+        _hash_mapping(dto.metadata),
+    )
+
+
+def _normalised_date(value: object | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = _clean_text(value)
+    if not text:
+        return ""
+    if len(text) == 4 and text.isdigit():
+        return text
+    if len(text) == 7 and text[:4].isdigit():
+        return text
+    return text
+
+
+def _clean_source(value: object | None) -> str:
+    text = _clean_text(value)
+    return text.casefold() or "unknown"
+
+
+def _clean_optional(value: object | None) -> str | None:
+    text = _clean_text(value)
+    return text or None
+
+
+def _clean_text(value: object | None) -> str:
+    if value in (None, ""):
+        return ""
+    return str(value).strip()
+
+
+def _hash_mapping(mapping: Mapping[str, object] | None) -> str:
+    if not mapping:
+        return ""
+    try:
+        payload = json.dumps(mapping, sort_keys=True, default=str, separators=(",", ":"))
+    except TypeError:
+        payload = json.dumps({key: str(value) for key, value in mapping.items()}, sort_keys=True)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+from app.services.artist_dao import ArtistReleaseRow, ArtistReleaseUpsertDTO
 
 
 @dataclass(frozen=True)
@@ -322,12 +578,21 @@ def _build_cache_hint(
 
 
 __all__ = [
+    "AliasDelta",
     "AlbumRelease",
     "ArtistCacheHint",
+    "ArtistLocalState",
     "ArtistDelta",
     "ArtistKnownRelease",
     "ArtistTrackCandidate",
+    "ArtistRemoteState",
+    "DeltaResult",
+    "ReleaseDelta",
+    "ReleaseSnapshot",
+    "ReleaseUpdate",
+    "TrackDelta",
     "build_artist_delta",
+    "determine_delta",
     "filter_new_releases",
     "parse_release_date",
 ]

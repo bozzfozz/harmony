@@ -138,8 +138,13 @@ Artist-Persistenz zusammen. Ablauf im Überblick:
 - Startet mit dem Payload `{"artist_key": ..., "force": bool}` und loggt den Lauf über `worker.job`.
 - Für jeden angebundenen Provider wird ein `api.dependency`-Event mit Status (`ok`/`partial`/`failed`) protokolliert. Schlägt ein
   Provider vollständig fehl, wird der Job mit einem retry-fähigen Fehler beendet (Retry-Politik aus `RetryPolicyProvider`).
-- Persistiert Künstler- und Release-Daten via `ArtistDao.upsert_*`; fehlende Releases können optional per Flag `ARTIST_SYNC_PRUNE`
-  als inaktiv markiert werden.
+- Ermittelt über `app.services.artist_delta.determine_delta` nur die geänderten Releases und führt anschließend gezielt
+  `ArtistDao.upsert_*`-Operationen aus; unveränderte Datensätze bleiben unangetastet, was Idempotenz und geringere Last sicherstellt.
+- Entfernte Releases werden bei gesetztem `ARTIST_SYNC_PRUNE=true` weich deaktiviert (`inactive_at`, `inactive_reason='pruned'`).
+  Mit `ARTIST_SYNC_HARD_DELETE=true` lassen sich entfernte Releases optional endgültig löschen – standardmäßig bleibt das Flag
+  ausgeschaltet, sodass immer eine rücksetzbare Soft-Delete-Spur erhalten bleibt.
+- Jeder Create/Update/Inactivate-Pfad schreibt einen Audit-Eintrag in die Tabelle `artist_audit` (Event, Entity, Before/After,
+  `job_id`, `artist_key`). Alias-Änderungen werden als separate `event=updated`-Auditzeile festgehalten.
 - Aktualisiert Watchlist-Einträge (`last_synced_at`, `cooldown_until`) und reduziert die Priorität optional über
   `ARTIST_SYNC_PRIORITY_DECAY`.
 - Invalidiert HTTP-Caches (`ResponseCache.invalidate_prefix`) für `/artists/{artist_key}` (inkl. API-Basispfad), sodass API-Aufrufe

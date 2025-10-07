@@ -120,6 +120,11 @@ async def test_orchestrator_handler_persists_artist_and_releases() -> None:
     assert result["artist_key"] == "spotify:artist-1"
     assert result["release_count"] == 2
     assert result["artist_version"]
+    assert result["added_releases"] == 2
+    assert result["updated_releases"] == 0
+    assert result["inactivated_releases"] == 0
+    assert result["alias_added"] == 0
+    assert result["alias_removed"] == 0
 
     with session_scope() as session:
         artist_record = (
@@ -144,7 +149,64 @@ async def test_orchestrator_handler_persists_artist_and_releases() -> None:
         assert titles == {"First (alt)", "Second"}
 
 
+@pytest.mark.asyncio
+async def test_idempotent_second_run_noops() -> None:
+    reset_engine_for_tests()
+    init_db()
+
+    response = ArtistGatewayResponse(
+        artist_id="artist-2",
+        results=(
+            ArtistGatewayResult(
+                provider="spotify",
+                artist=ProviderArtist(
+                    source="spotify",
+                    source_id="artist-2",
+                    name="Repeat Artist",
+                ),
+                releases=(
+                    ProviderRelease(
+                        source="spotify",
+                        source_id="release-10",
+                        artist_source_id="artist-2",
+                        title="Only Release",
+                        type="album",
+                        release_date="2024-05-01",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    gateway = _StubGateway(response)
+    dao = ArtistDao(now_factory=lambda: datetime(2024, 5, 2, 9, 0, 0))
+    deps = ArtistSyncHandlerDeps(gateway=gateway, dao=dao, providers=("spotify",), release_limit=5)
+
+    job = QueueJobDTO(
+        id=2,
+        type="artist_sync",
+        payload={"artist_key": "spotify:artist-2"},
+        priority=0,
+        attempts=0,
+        available_at=datetime.utcnow(),
+        lease_expires_at=None,
+        status=QueueJobStatus.PENDING,
+        idempotency_key="artist-sync-2",
+    )
+
+    first = await handle_artist_sync(job, deps)
+    assert first["added_releases"] == 1
+
+    second = await handle_artist_sync(job, deps)
+    assert second["status"] == "ok"
+    assert second["added_releases"] == 0
+    assert second["updated_releases"] == 0
+    assert second["inactivated_releases"] == 0
+    assert second["release_count"] == 0
+
+
 __all__ = [
     "test_enqueue_artist_sync_is_redelivery_safe",
     "test_orchestrator_handler_persists_artist_and_releases",
+    "test_idempotent_second_run_noops",
 ]

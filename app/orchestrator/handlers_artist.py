@@ -21,7 +21,19 @@ from app.integrations.provider_gateway import (
 )
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.artist_dao import ArtistDao, ArtistReleaseUpsertDTO, ArtistUpsertDTO
+from app.services.artist_dao import (
+    ArtistDao,
+    ArtistReleaseRow,
+    ArtistReleaseUpsertDTO,
+    ArtistUpsertDTO,
+)
+from app.services.artist_delta import (
+    ArtistLocalState,
+    ArtistRemoteState,
+    ReleaseSnapshot,
+    determine_delta,
+)
+from app.services.audit import write_audit
 from app.services.cache import ResponseCache, build_path_param_hash
 from app.utils.idempotency import make_idempotency_key
 from app.workers import persistence
@@ -83,6 +95,9 @@ class ArtistSyncHandlerDeps:
     prune_removed: bool = field(
         default_factory=lambda: _coerce_bool(os.getenv("ARTIST_SYNC_PRUNE"), False)
     )
+    hard_delete_removed: bool = field(
+        default_factory=lambda: _coerce_bool(os.getenv("ARTIST_SYNC_HARD_DELETE"), False)
+    )
     api_base_path: str | None = None
 
     def __post_init__(self) -> None:
@@ -107,6 +122,10 @@ class ArtistSyncHandlerDeps:
             if base_path and not base_path.startswith("/"):
                 base_path = f"/{base_path}"
             self.api_base_path = base_path
+        artist_sync = getattr(config, "artist_sync", None)
+        if artist_sync is not None:
+            self.prune_removed = bool(artist_sync.prune_removed)
+            self.hard_delete_removed = bool(artist_sync.hard_delete)
 
 
 async def enqueue_artist_sync(
@@ -290,6 +309,111 @@ def _is_retryable_error(error: ProviderGatewayError) -> bool:
     )
 
 
+def _normalise_alias_sequence(values: object | None) -> tuple[str, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, (str, bytes)):
+        candidates = [values]
+    elif isinstance(values, Mapping):
+        candidates = list(values.values())
+    else:
+        try:
+            candidates = list(values)  # type: ignore[arg-type]
+        except TypeError:
+            candidates = [values]
+    result: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        text = str(candidate).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+    return tuple(result)
+
+
+def _extract_aliases(metadata: Mapping[str, object] | None) -> tuple[str, ...]:
+    if not isinstance(metadata, Mapping):
+        return ()
+    return _normalise_alias_sequence(metadata.get("aliases"))
+
+
+def _normalise_release_date_value(value: object | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    if not text:
+        return ""
+    if len(text) == 4 and text.isdigit():
+        return text
+    if len(text) == 7 and text[:4].isdigit():
+        return text
+    return text
+
+
+def _release_identity_for_row(row: ArtistReleaseRow) -> tuple[str, ...]:
+    source = (row.source or "unknown").strip().lower()
+    source_id = (row.source_id or "").strip()
+    if source_id:
+        return ("id", source, source_id)
+    return (
+        "composite",
+        source,
+        (row.title or "").strip().casefold(),
+        _normalise_release_date_value(row.release_date),
+        (row.release_type or "").strip().casefold(),
+    )
+
+
+def _release_identity_for_dto(dto: ArtistReleaseUpsertDTO) -> tuple[str, ...]:
+    source = (dto.source or "unknown").strip().lower()
+    source_id = (dto.source_id or "").strip()
+    if source_id:
+        return ("id", source, source_id)
+    return (
+        "composite",
+        source,
+        (dto.title or "").strip().casefold(),
+        _normalise_release_date_value(dto.release_date),
+        (dto.release_type or "").strip().casefold(),
+    )
+
+
+def _release_audit_payload_from_row(row: ArtistReleaseRow | None) -> Mapping[str, object] | None:
+    if row is None:
+        return None
+    return {
+        "source": row.source,
+        "source_id": row.source_id,
+        "title": row.title,
+        "release_date": row.release_date.isoformat() if row.release_date else None,
+        "release_type": row.release_type,
+        "total_tracks": row.total_tracks,
+        "inactive_at": row.inactive_at.isoformat() if row.inactive_at else None,
+        "inactive_reason": row.inactive_reason,
+    }
+
+
+def _release_audit_payload_from_snapshot(snapshot: ReleaseSnapshot) -> Mapping[str, object]:
+    return {
+        "source": snapshot.source,
+        "source_id": snapshot.source_id,
+        "title": snapshot.title,
+        "release_date": snapshot.release_date.isoformat() if snapshot.release_date else None,
+        "release_type": snapshot.release_type,
+        "total_tracks": snapshot.total_tracks,
+        "inactive_at": snapshot.inactive_at.isoformat() if snapshot.inactive_at else None,
+        "inactive_reason": snapshot.inactive_reason,
+    }
+
+
 async def handle_artist_sync(
     job: QueueJobDTO,
     deps: ArtistSyncHandlerDeps,
@@ -429,9 +553,130 @@ async def handle_artist_sync(
         fallback_name=fallback_name,
     )
 
-    artist_row = await asyncio.to_thread(deps.dao.upsert_artist, artist_dto)
     releases = _build_release_dtos(artist_key, response.releases)
-    release_rows = await asyncio.to_thread(deps.dao.upsert_releases, releases)
+
+    existing_artist_row = await asyncio.to_thread(deps.dao.get_artist, artist_key)
+    existing_release_rows = await asyncio.to_thread(
+        deps.dao.get_artist_releases, artist_key, include_inactive=True
+    )
+    local_state = ArtistLocalState(
+        releases=tuple(ReleaseSnapshot.from_row(row) for row in existing_release_rows),
+        aliases=_extract_aliases(existing_artist_row.metadata if existing_artist_row else None),
+    )
+    remote_state = ArtistRemoteState(
+        releases=tuple(releases),
+        aliases=_extract_aliases(artist_dto.metadata),
+    )
+    delta = determine_delta(local_state, remote_state)
+
+    artist_row = await asyncio.to_thread(deps.dao.upsert_artist, artist_dto)
+
+    upsert_targets = list(delta.releases.added) + [change.after for change in delta.releases.updated]
+    persisted_rows: list[ArtistReleaseRow] = []
+    if upsert_targets:
+        persisted_rows = await asyncio.to_thread(deps.dao.upsert_releases, upsert_targets)
+
+    inactive_rows: list[ArtistReleaseRow] = []
+    if deps.prune_removed and delta.releases.removed:
+        ids_to_prune = [snapshot.id for snapshot in delta.releases.removed]
+        inactive_rows = await asyncio.to_thread(
+            deps.dao.mark_releases_inactive,
+            ids_to_prune,
+            reason="pruned",
+            hard_delete=bool(deps.hard_delete_removed),
+        )
+
+    added_count = len(delta.releases.added)
+    updated_count = len(delta.releases.updated)
+    alias_added = len(delta.aliases.added)
+    alias_removed = len(delta.aliases.removed)
+    removed_count = len(delta.releases.removed)
+    if deps.prune_removed:
+        inactivated_count = (
+            removed_count if deps.hard_delete_removed else len(inactive_rows)
+        )
+    else:
+        inactivated_count = 0
+
+    existing_ids = {snapshot.id for snapshot in local_state.releases}
+    persisted_by_id = {row.id: row for row in persisted_rows}
+    new_rows = [row for row in persisted_rows if row.id not in existing_ids]
+    new_identity_map = {_release_identity_for_row(row): row for row in new_rows}
+    inactive_map = {row.id: row for row in inactive_rows}
+    local_aliases = tuple(local_state.aliases)
+    remote_aliases = tuple(remote_state.aliases)
+
+    audit_tasks: list[asyncio.Future[Any]] = []
+    job_identifier = job.id
+    for dto in delta.releases.added:
+        row = new_identity_map.get(_release_identity_for_dto(dto))
+        if row is None:
+            continue
+        audit_tasks.append(
+            asyncio.to_thread(
+                write_audit,
+                event="created",
+                entity_type="release",
+                artist_key=artist_key,
+                entity_id=row.id,
+                job_id=job_identifier,
+                before=None,
+                after=_release_audit_payload_from_row(row),
+            )
+        )
+    for change in delta.releases.updated:
+        after_row = persisted_by_id.get(change.before.id)
+        if after_row is None:
+            continue
+        audit_tasks.append(
+            asyncio.to_thread(
+                write_audit,
+                event="updated",
+                entity_type="release",
+                artist_key=artist_key,
+                entity_id=after_row.id,
+                job_id=job_identifier,
+                before=_release_audit_payload_from_snapshot(change.before),
+                after=_release_audit_payload_from_row(after_row),
+            )
+        )
+    if deps.prune_removed:
+        for snapshot in delta.releases.removed:
+            after_row = inactive_map.get(snapshot.id)
+            after_payload = (
+                _release_audit_payload_from_row(after_row)
+                if after_row is not None
+                else {
+                    "inactive_reason": "pruned",
+                    "inactive": True,
+                    "deleted": bool(deps.hard_delete_removed),
+                }
+            )
+            audit_tasks.append(
+                asyncio.to_thread(
+                    write_audit,
+                    event="inactivated",
+                    entity_type="release",
+                    artist_key=artist_key,
+                    entity_id=snapshot.id,
+                    job_id=job_identifier,
+                    before=_release_audit_payload_from_snapshot(snapshot),
+                    after=after_payload,
+                )
+            )
+    if alias_added or alias_removed:
+        audit_tasks.append(
+            asyncio.to_thread(
+                write_audit,
+                event="updated",
+                entity_type="alias",
+                artist_key=artist_key,
+                entity_id=None,
+                job_id=job_identifier,
+                before={"aliases": list(local_aliases)},
+                after={"aliases": list(remote_aliases)},
+            )
+        )
 
     cooldown = _cooldown_until(now, int(deps.cooldown_minutes or 0), force=force_sync)
     decay = deps.priority_decay if not force_sync and deps.priority_decay > 0 else 0
@@ -445,7 +690,16 @@ async def handle_artist_sync(
 
     cache_evicted = await _evict_cache(deps, artist_key)
 
-    result_status = "ok" if release_rows or provider_artist is not None else "noop"
+    if audit_tasks:
+        await asyncio.gather(*audit_tasks)
+
+    artist_created = existing_artist_row is None
+    total_changes = added_count + updated_count + (inactivated_count if deps.prune_removed else 0)
+    if alias_added or alias_removed:
+        total_changes += 1
+    if artist_created:
+        total_changes += 1
+    result_status = "ok" if total_changes > 0 or provider_artist is not None else "noop"
     duration_ms = (perf_counter() - started) * 1000
     log_event(
         logger,
@@ -455,10 +709,16 @@ async def handle_artist_sync(
         job_type=_JOB_TYPE,
         entity_id=artist_key,
         attempts=attempts,
-        release_count=len(release_rows),
+        release_count=len(persisted_rows),
         providers=",".join(providers),
         watchlist_updated=bool(watchlist_updated),
         cache_evicted=int(cache_evicted),
+        artist_created=bool(artist_created),
+        added_releases=added_count,
+        updated_releases=updated_count,
+        inactivated_releases=inactivated_count,
+        alias_added=alias_added,
+        alias_removed=alias_removed,
         duration_ms=round(duration_ms, 3),
         force=force_sync,
     )
@@ -468,10 +728,15 @@ async def handle_artist_sync(
         "artist_key": artist_key,
         "artist_id": artist_row.id,
         "artist_version": artist_row.version,
-        "release_count": len(release_rows),
+        "release_count": len(persisted_rows),
         "providers": list(providers),
         "watchlist_updated": bool(watchlist_updated),
         "cache_evicted": int(cache_evicted),
+        "added_releases": added_count,
+        "updated_releases": updated_count,
+        "inactivated_releases": inactivated_count,
+        "alias_added": alias_added,
+        "alias_removed": alias_removed,
     }
 
 

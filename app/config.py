@@ -106,6 +106,12 @@ class FeatureFlags:
 
 
 @dataclass(slots=True)
+class ArtistSyncConfig:
+    prune_removed: bool
+    hard_delete: bool
+
+
+@dataclass(slots=True)
 class IntegrationsConfig:
     enabled: tuple[str, ...]
     timeouts_ms: dict[str, int]
@@ -360,6 +366,7 @@ class AppConfig:
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
     features: FeatureFlags
+    artist_sync: ArtistSyncConfig
     integrations: IntegrationsConfig
     security: "SecurityConfig"
     middleware: MiddlewareConfig
@@ -1504,6 +1511,11 @@ def load_config() -> AppConfig:
         ),
     )
 
+    artist_sync_config = ArtistSyncConfig(
+        prune_removed=_as_bool(os.getenv("ARTIST_SYNC_PRUNE"), default=False),
+        hard_delete=_as_bool(os.getenv("ARTIST_SYNC_HARD_DELETE"), default=False),
+    )
+
     integrations = IntegrationsConfig(
         enabled=_parse_enabled_providers(os.getenv("INTEGRATIONS_ENABLED")),
         timeouts_ms=_parse_provider_timeouts(os.environ),
@@ -1799,6 +1811,7 @@ def load_config() -> AppConfig:
         ingest=ingest,
         free_ingest=free_ingest,
         features=features,
+        artist_sync=artist_sync_config,
         integrations=integrations,
         security=security,
         middleware=middleware_config,

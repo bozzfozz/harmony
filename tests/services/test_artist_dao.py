@@ -160,8 +160,48 @@ def test_watchlist_batch_respects_cooldown_and_priority() -> None:
         assert entry.cooldown_until == later
 
 
+def test_prune_marks_inactive_with_reason() -> None:
+    _setup_database()
+
+    created = datetime(2024, 4, 1, 12, 0, 0)
+    dao = ArtistDao(now_factory=lambda: created)
+    artist = dao.upsert_artist(
+        ArtistUpsertDTO(
+            artist_key=build_artist_key("spotify", "artist-prune"),
+            source="spotify",
+            source_id="artist-prune",
+            name="Prune Artist",
+        )
+    )
+    release = ArtistReleaseUpsertDTO(
+        artist_key=artist.artist_key,
+        source="spotify",
+        source_id="release-prune",
+        title="Transient EP",
+        release_date="2024-04-01",
+        release_type="single",
+    )
+    rows = dao.upsert_releases([release])
+    assert len(rows) == 1
+
+    later = created + timedelta(hours=2)
+    dao = ArtistDao(now_factory=lambda: later)
+    inactive_rows = dao.mark_releases_inactive([rows[0].id], reason="pruned")
+    assert len(inactive_rows) == 1
+    inactive = inactive_rows[0]
+    assert inactive.inactive_reason == "pruned"
+    assert inactive.inactive_at == later
+
+    with session_scope() as session:
+        record = session.get(ArtistReleaseRecord, inactive.id)
+        assert record is not None
+        assert record.inactive_reason == "pruned"
+        assert record.inactive_at == later
+
+
 __all__ = [
     "test_artist_upsert_is_idempotent_and_updates_version",
     "test_release_upsert_batch_handles_duplicates",
     "test_watchlist_batch_respects_cooldown_and_priority",
+    "test_prune_marks_inactive_with_reason",
 ]
