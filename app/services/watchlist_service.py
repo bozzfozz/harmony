@@ -1,22 +1,27 @@
-"""In-memory watchlist state service exposed to the public API."""
+"""Database-backed watchlist service exposed to the public API."""
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from datetime import datetime
-from threading import RLock
+from datetime import datetime, timezone
+from typing import Callable
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db import session_scope
 from app.errors import AppError, ErrorCode, NotFoundError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.models import ArtistRecord, WatchlistArtist
 
-
-_SENTINEL = object()
+SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
 @dataclass(slots=True)
 class WatchlistEntry:
-    """Representation of a watchlist artist stored in memory."""
+    """Representation of a persisted watchlist artist."""
 
     id: int
     artist_key: str
@@ -32,17 +37,14 @@ class WatchlistEntry:
 class WatchlistService:
     """Manage watchlist entries and expose CRUD operations to the API layer."""
 
+    session_factory: SessionFactory = field(default=session_scope, repr=False)
     _logger: any = field(default_factory=lambda: get_logger(__name__), init=False, repr=False)
-    _lock: RLock = field(default_factory=RLock, init=False, repr=False)
-    _entries: dict[str, WatchlistEntry] = field(default_factory=dict, init=False, repr=False)
-    _sequence: int = field(default=0, init=False, repr=False)
 
     def reset(self) -> None:
-        """Reset the in-memory state (primarily used in tests)."""
+        """Reset persisted watchlist entries (primarily used in tests)."""
 
-        with self._lock:
-            self._entries.clear()
-            self._sequence = 0
+        with self.session_factory() as session:
+            session.query(WatchlistArtist).delete(synchronize_session=False)
 
     # ------------------------------------------------------------------
     # Public API
@@ -51,16 +53,25 @@ class WatchlistService:
     def list_entries(self) -> list[WatchlistEntry]:
         """Return watchlist entries sorted by priority and creation time."""
 
-        with self._lock:
-            items = list(self._entries.values())
-        return sorted(items, key=lambda entry: (-entry.priority, entry.created_at, entry.id))
+        with self.session_factory() as session:
+            records = session.execute(
+                select(WatchlistArtist)
+                .order_by(
+                    WatchlistArtist.priority.desc(),
+                    WatchlistArtist.created_at.asc(),
+                    WatchlistArtist.id.asc(),
+                )
+            ).scalars().all()
+            return [self._to_entry(session, record) for record in records]
 
     def create_entry(self, *, artist_key: str, priority: int = 0) -> WatchlistEntry:
         key = self._normalise_key(artist_key)
         priority_value = self._validate_priority(priority)
+        _, identifier = self._parse_artist_key(key)
 
-        with self._lock:
-            if key in self._entries:
+        with self.session_factory() as session:
+            existing = self._find_by_identifier(session, identifier)
+            if existing is not None:
                 log_event(
                     self._logger,
                     "service.call",
@@ -77,8 +88,8 @@ class WatchlistService:
                     meta={"artist_key": key},
                 )
 
-            entry = self._build_entry(key, priority_value)
-            self._entries[key] = entry
+            record = self._insert_record(session, key, identifier, priority_value)
+            entry = self._to_entry(session, record)
 
         log_event(
             self._logger,
@@ -93,22 +104,29 @@ class WatchlistService:
 
     def get_entry(self, artist_key: str) -> WatchlistEntry:
         key = self._normalise_key(artist_key)
-        with self._lock:
-            entry = self._entries.get(key)
-        if entry is None:
-            raise NotFoundError("Watchlist entry not found.")
-        return entry
+        _, identifier = self._parse_artist_key(key)
+
+        with self.session_factory() as session:
+            record = self._find_by_identifier(session, identifier)
+            if record is None:
+                raise NotFoundError("Watchlist entry not found.")
+            return self._to_entry(session, record)
 
     def update_priority(self, *, artist_key: str, priority: int) -> WatchlistEntry:
         key = self._normalise_key(artist_key)
         priority_value = self._validate_priority(priority)
+        _, identifier = self._parse_artist_key(key)
 
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is None:
+        with self.session_factory() as session:
+            record = self._find_by_identifier(session, identifier)
+            if record is None:
                 raise NotFoundError("Watchlist entry not found.")
-            updated = self._replace(entry, priority=priority_value)
-            self._entries[key] = updated
+            record.priority = priority_value
+            record.updated_at = datetime.utcnow()
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            entry = self._to_entry(session, record)
 
         log_event(
             self._logger,
@@ -119,7 +137,7 @@ class WatchlistService:
             entity_id=key,
             priority=priority_value,
         )
-        return updated
+        return entry
 
     def pause_entry(
         self,
@@ -130,18 +148,20 @@ class WatchlistService:
     ) -> WatchlistEntry:
         key = self._normalise_key(artist_key)
         pause_reason = self._normalise_reason(reason)
+        _, identifier = self._parse_artist_key(key)
+        resume_at_value = self._normalise_datetime(resume_at)
 
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is None:
+        with self.session_factory() as session:
+            record = self._find_by_identifier(session, identifier)
+            if record is None:
                 raise NotFoundError("Watchlist entry not found.")
-            updated = self._replace(
-                entry,
-                paused=True,
-                pause_reason=pause_reason,
-                resume_at=resume_at,
-            )
-            self._entries[key] = updated
+            record.stop_reason = pause_reason or "paused"
+            record.retry_block_until = resume_at_value
+            record.updated_at = datetime.utcnow()
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            entry = self._to_entry(session, record)
 
         payload = {
             "component": "service.watchlist",
@@ -151,20 +171,28 @@ class WatchlistService:
         }
         if pause_reason:
             payload["reason"] = pause_reason
-        if resume_at:
-            payload["resume_at"] = resume_at.isoformat()
+        if resume_at_value:
+            payload["resume_at"] = (
+                resume_at_value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+            )
         log_event(self._logger, "service.call", **payload)
-        return updated
+        return entry
 
     def resume_entry(self, *, artist_key: str) -> WatchlistEntry:
         key = self._normalise_key(artist_key)
+        _, identifier = self._parse_artist_key(key)
 
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is None:
+        with self.session_factory() as session:
+            record = self._find_by_identifier(session, identifier)
+            if record is None:
                 raise NotFoundError("Watchlist entry not found.")
-            updated = self._replace(entry, paused=False, pause_reason=None, resume_at=None)
-            self._entries[key] = updated
+            record.stop_reason = None
+            record.retry_block_until = None
+            record.updated_at = datetime.utcnow()
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            entry = self._to_entry(session, record)
 
         log_event(
             self._logger,
@@ -174,14 +202,18 @@ class WatchlistService:
             status="ok",
             entity_id=key,
         )
-        return updated
+        return entry
 
     def remove_entry(self, *, artist_key: str) -> None:
         key = self._normalise_key(artist_key)
-        with self._lock:
-            entry = self._entries.pop(key, None)
-        if entry is None:
-            raise NotFoundError("Watchlist entry not found.")
+        _, identifier = self._parse_artist_key(key)
+
+        with self.session_factory() as session:
+            record = self._find_by_identifier(session, identifier)
+            if record is None:
+                raise NotFoundError("Watchlist entry not found.")
+            session.delete(record)
+
         log_event(
             self._logger,
             "service.call",
@@ -189,53 +221,6 @@ class WatchlistService:
             operation="delete",
             status="ok",
             entity_id=key,
-        )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _build_entry(self, artist_key: str, priority: int) -> WatchlistEntry:
-        now = datetime.utcnow()
-        self._sequence += 1
-        return WatchlistEntry(
-            id=self._sequence,
-            artist_key=artist_key,
-            priority=priority,
-            paused=False,
-            pause_reason=None,
-            resume_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-
-    def _replace(
-        self,
-        entry: WatchlistEntry,
-        *,
-        priority: int | None = None,
-        paused: bool | None = None,
-        pause_reason: str | None | object = _SENTINEL,
-        resume_at: datetime | None | object = _SENTINEL,
-    ) -> WatchlistEntry:
-        new_priority = entry.priority if priority is None else priority
-        new_paused = entry.paused if paused is None else paused
-        new_reason = entry.pause_reason if pause_reason is _SENTINEL else pause_reason
-        new_resume = entry.resume_at if resume_at is _SENTINEL else resume_at
-
-        if not new_paused:
-            new_reason = None
-            new_resume = None
-
-        return WatchlistEntry(
-            id=entry.id,
-            artist_key=entry.artist_key,
-            priority=new_priority,
-            paused=new_paused,
-            pause_reason=new_reason,
-            resume_at=new_resume,
-            created_at=entry.created_at,
-            updated_at=datetime.utcnow(),
         )
 
     @staticmethod
@@ -266,6 +251,103 @@ class WatchlistService:
             return None
         candidate = reason.strip()
         return candidate or None
+
+    @staticmethod
+    def _normalise_datetime(timestamp: datetime | None) -> datetime | None:
+        if timestamp is None:
+            return None
+        if timestamp.tzinfo is not None:
+            return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+        return timestamp
+
+    def _insert_record(
+        self,
+        session: Session,
+        artist_key: str,
+        identifier: str,
+        priority: int,
+    ) -> WatchlistArtist:
+        now = datetime.utcnow()
+        artist = self._lookup_artist(session, artist_key)
+        record = WatchlistArtist(
+            spotify_artist_id=identifier,
+            name=(artist.name if artist else identifier),
+            priority=priority,
+            cooldown_s=0,
+            stop_reason=None,
+            retry_block_until=None,
+            source_artist_id=(artist.id if artist else None),
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(record)
+        session.flush()
+        session.refresh(record)
+        return record
+
+    def _find_by_identifier(
+        self, session: Session, identifier: str
+    ) -> WatchlistArtist | None:
+        statement = select(WatchlistArtist).where(
+            WatchlistArtist.spotify_artist_id == identifier
+        )
+        return session.execute(statement).scalars().first()
+
+    def _lookup_artist(self, session: Session, artist_key: str) -> ArtistRecord | None:
+        statement = select(ArtistRecord).where(ArtistRecord.artist_key == artist_key)
+        return session.execute(statement).scalars().first()
+
+    def _to_entry(self, session: Session, record: WatchlistArtist) -> WatchlistEntry:
+        artist_key = self._resolve_artist_key(session, record)
+        pause_reason = self._clean_reason(record.stop_reason)
+        paused = bool(record.stop_reason and record.stop_reason.strip())
+        resume_at = record.retry_block_until
+        if resume_at is not None:
+            resume_at = resume_at.replace(tzinfo=timezone.utc)
+        return WatchlistEntry(
+            id=int(record.id),
+            artist_key=artist_key,
+            priority=int(record.priority or 0),
+            paused=paused,
+            pause_reason=pause_reason if paused else None,
+            resume_at=resume_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def _resolve_artist_key(self, session: Session, record: WatchlistArtist) -> str:
+        if record.source_artist_id:
+            artist = session.get(ArtistRecord, record.source_artist_id)
+            if artist and artist.artist_key:
+                return artist.artist_key
+        identifier = (record.spotify_artist_id or "").strip()
+        return f"spotify:{identifier}" if identifier else "spotify:"
+
+    @staticmethod
+    def _clean_reason(value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @staticmethod
+    def _parse_artist_key(artist_key: str) -> tuple[str, str]:
+        prefix, _, identifier = artist_key.partition(":")
+        source = prefix.strip().lower()
+        if not identifier:
+            raise AppError(
+                "artist_key must include a provider and identifier.",
+                code=ErrorCode.VALIDATION_ERROR,
+                http_status=422,
+            )
+        if source != "spotify":
+            raise AppError(
+                "Only spotify:* artist keys are supported.",
+                code=ErrorCode.VALIDATION_ERROR,
+                http_status=422,
+                meta={"artist_key": artist_key},
+            )
+        return source, identifier
 
 
 __all__ = ["WatchlistEntry", "WatchlistService"]
