@@ -11,18 +11,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import (TYPE_CHECKING, Any, Awaitable, Callable, Dict, Iterable,
+                    List, Optional, Sequence, Tuple)
 from urllib.parse import urlparse
 
 from sqlalchemy import func, select
@@ -31,13 +21,8 @@ from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.db import SessionCallable, run_session, session_scope
 from app.logging import get_logger
-from app.models import (
-    Download,
-    IngestItem,
-    IngestItemState,
-    IngestJob,
-    IngestJobState,
-)
+from app.models import (Download, IngestItem, IngestItemState, IngestJob,
+                        IngestJobState)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.workers.sync_worker import SyncWorker

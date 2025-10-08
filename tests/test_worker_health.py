@@ -1,12 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 from app.utils.settings_store import read_setting, write_setting
-from app.utils.worker_health import (
-    heartbeat_key,
-    mark_worker_status,
-    record_worker_heartbeat,
-    status_key,
-)
+from app.utils.worker_health import (heartbeat_key, mark_worker_status,
+                                     record_worker_heartbeat, status_key)
 
 
 def test_worker_heartbeat_persists_setting(client) -> None:

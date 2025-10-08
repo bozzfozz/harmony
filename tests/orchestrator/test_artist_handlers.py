@@ -9,13 +9,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import WatchlistWorkerConfig, settings
 from app.dependencies import get_app_config
-from app.orchestrator.handlers import (
-    ARTIST_SCAN_JOB_TYPE,
-    ArtistDeltaHandlerDeps,
-    ArtistRefreshHandlerDeps,
-    handle_artist_delta,
-    handle_artist_refresh,
-)
+from app.orchestrator.handlers import (ARTIST_SCAN_JOB_TYPE,
+                                       ArtistDeltaHandlerDeps,
+                                       ArtistRefreshHandlerDeps,
+                                       handle_artist_delta,
+                                       handle_artist_refresh)
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.workers.persistence import QueueJobDTO, QueueJobStatus
 

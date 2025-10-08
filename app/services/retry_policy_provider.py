@@ -9,12 +9,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from app.config import (
-    DEFAULT_RETRY_BASE_SECONDS,
-    DEFAULT_RETRY_JITTER_PCT,
-    DEFAULT_RETRY_MAX_ATTEMPTS,
-    DEFAULT_RETRY_POLICY_RELOAD_S,
-)
+from app.config import (DEFAULT_RETRY_BASE_SECONDS, DEFAULT_RETRY_JITTER_PCT,
+                        DEFAULT_RETRY_MAX_ATTEMPTS,
+                        DEFAULT_RETRY_POLICY_RELOAD_S)
 from app.logging import get_logger
 
 logger = get_logger(__name__)

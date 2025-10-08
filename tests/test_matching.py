@@ -1,7 +1,8 @@
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
+from app.integrations.normalizers import (normalize_slskd_candidate,
+                                          normalize_spotify_track)
 from app.models import Match
 from tests.simple_client import SimpleTestClient
 

@@ -130,7 +130,8 @@ def init_db() -> None:
             raise RuntimeError("Database engine was not initialised before migrations.")
         if command is None or Config is None:
             _logger.warning("Alembic is not available; falling back to Base.metadata.create_all().")
-            from app import models  # noqa: F401  # Import models for metadata side-effects
+            from app import \
+                models  # noqa: F401  # Import models for metadata side-effects
 
             Base.metadata.create_all(bind=_engine, checkfirst=True)
         else:

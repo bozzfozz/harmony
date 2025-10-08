@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db, get_matching_engine
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
+from app.integrations.normalizers import (normalize_slskd_candidate,
+                                          normalize_spotify_track)
 from app.logging import get_logger
 from app.models import Download, Match
 from app.schemas import MatchingRequest, MatchingResponse

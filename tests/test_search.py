@@ -6,12 +6,11 @@ from typing import Any, Dict
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.dependencies import get_integration_service as dependency_integration_service
-from app.integrations.provider_gateway import (
-    ProviderGatewayInternalError,
-    ProviderGatewaySearchResponse,
-    ProviderGatewaySearchResult,
-)
+from app.dependencies import \
+    get_integration_service as dependency_integration_service
+from app.integrations.provider_gateway import (ProviderGatewayInternalError,
+                                               ProviderGatewaySearchResponse,
+                                               ProviderGatewaySearchResult)
 
 
 def test_search_max_limit_invalid_env(monkeypatch: pytest.MonkeyPatch) -> None:

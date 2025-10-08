@@ -18,16 +18,15 @@ from app.api.openapi_schema import build_openapi_schema
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
-from app.dependencies import (
-    get_app_config,
-    get_soulseek_client,
-    get_spotify_client,
-)
+from app.dependencies import (get_app_config, get_soulseek_client,
+                              get_spotify_client)
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
 from app.middleware import install_middleware
-from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
-from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
+from app.orchestrator.bootstrap import (OrchestratorRuntime,
+                                        bootstrap_orchestrator)
+from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
+                                       ARTIST_SCAN_JOB_TYPE)
 from app.orchestrator.timer import WatchlistTimer
 from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService

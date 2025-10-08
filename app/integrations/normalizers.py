@@ -6,13 +6,9 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import (
-    ProviderAlbum,
-    ProviderAlbumDetails,
-    ProviderArtist,
-    ProviderRelease,
-    ProviderTrack,
-)
+from app.integrations.contracts import (ProviderAlbum, ProviderAlbumDetails,
+                                        ProviderArtist, ProviderRelease,
+                                        ProviderTrack)
 
 _TRACK_COUNT_KEYS = (
     "total_tracks",

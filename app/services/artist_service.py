@@ -8,15 +8,12 @@ from datetime import datetime
 from time import perf_counter
 from typing import Any, Awaitable, Callable, Sequence
 
-from app.errors import DependencyError, InternalServerError, NotFoundError, ValidationAppError
+from app.errors import (DependencyError, InternalServerError, NotFoundError,
+                        ValidationAppError)
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.artist_dao import (
-    ArtistDao,
-    ArtistReleaseRow,
-    ArtistRow,
-    ArtistWatchlistEntryRow,
-)
+from app.services.artist_dao import (ArtistDao, ArtistReleaseRow, ArtistRow,
+                                     ArtistWatchlistEntryRow)
 from app.utils.idempotency import make_idempotency_key
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
@@ -309,9 +306,8 @@ class ArtistService:
         fn = self._enqueue_fn
         if fn is not None:
             return fn
-        from app.orchestrator.artist_sync import (
-            enqueue_artist_sync as _enqueue,
-        )  # local import to avoid circulars
+        from app.orchestrator.artist_sync import \
+            enqueue_artist_sync as _enqueue  # local import to avoid circulars
 
         object.__setattr__(self, "_enqueue_fn", _enqueue)
         return _enqueue

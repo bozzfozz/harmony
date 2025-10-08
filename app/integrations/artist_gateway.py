@@ -5,13 +5,11 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from app.integrations.contracts import ProviderArtist, ProviderRelease
-from app.integrations.provider_gateway import (
-    ProviderGateway,
-    ProviderGatewayDependencyError,
-    ProviderGatewayError,
-    ProviderGatewayRateLimitedError,
-    ProviderGatewayTimeoutError,
-)
+from app.integrations.provider_gateway import (ProviderGateway,
+                                               ProviderGatewayDependencyError,
+                                               ProviderGatewayError,
+                                               ProviderGatewayRateLimitedError,
+                                               ProviderGatewayTimeoutError)
 
 
 @dataclass(slots=True, frozen=True)

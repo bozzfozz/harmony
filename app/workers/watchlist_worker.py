@@ -10,7 +10,8 @@ from app.config import WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
+from app.services.artist_workflow_dao import (ArtistWorkflowArtistRow,
+                                              ArtistWorkflowDAO)
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat

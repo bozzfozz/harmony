@@ -10,21 +10,16 @@ from typing import Any, Dict, List
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
 from app.logging import get_logger
-from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
-from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.orchestrator.handlers import (MatchingHandlerDeps, MatchingJobError,
+                                       handle_matching)
+from app.utils.activity import (record_activity, record_worker_started,
+                                record_worker_stopped)
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.workers.persistence import (
-    QueueJobDTO,
-    complete,
-    enqueue,
-    fail,
-    fetch_ready,
-    lease,
-    release_active_leases,
-    to_dlq,
-)
+from app.workers.persistence import (QueueJobDTO, complete, enqueue, fail,
+                                     fetch_ready, lease, release_active_leases,
+                                     to_dlq)
 
 logger = get_logger(__name__)
 

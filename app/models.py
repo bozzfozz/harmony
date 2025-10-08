@@ -6,20 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import (
-    Boolean,
-    CheckConstraint,
-    Column,
-    Date,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    text,
-)
+from sqlalchemy import (Boolean, CheckConstraint, Column, Date, DateTime,
+                        Float, ForeignKey, Index, Integer, String, Text, text)
 
 # JSON is optional depending on database backend; fall back to Text if unavailable
 try:  # pragma: no cover - fallback handling

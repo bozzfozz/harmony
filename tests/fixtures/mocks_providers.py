@@ -7,7 +7,8 @@ from typing import Any, Sequence
 
 import pytest
 
-from app.integrations.artist_gateway import ArtistGatewayResponse, ArtistGatewayResult
+from app.integrations.artist_gateway import (ArtistGatewayResponse,
+                                             ArtistGatewayResult)
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.integrations.provider_gateway import ProviderGatewayError
 from app.orchestrator import providers as orchestrator_providers

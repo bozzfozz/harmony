@@ -8,26 +8,15 @@ import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, QueueJobStatus
-from app.orchestrator.handlers import (
-    RetryHandlerDeps,
-    SyncRetryPolicy,
-    calculate_retry_backoff_seconds,
-    handle_retry,
-    load_sync_retry_policy,
-)
+from app.orchestrator.handlers import (RetryHandlerDeps, SyncRetryPolicy,
+                                       calculate_retry_backoff_seconds,
+                                       handle_retry, load_sync_retry_policy)
 from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.activity import activity_manager
-from app.utils.events import (
-    DOWNLOAD_RETRY_FAILED,
-    DOWNLOAD_RETRY_SCHEDULED,
-)
+from app.utils.events import DOWNLOAD_RETRY_FAILED, DOWNLOAD_RETRY_SCHEDULED
 from app.workers.persistence import QueueJobDTO
-from app.workers.sync_worker import (
-    DownloadJobError,
-    RetryConfig,
-    SyncWorker,
-    _calculate_backoff_seconds,
-)
+from app.workers.sync_worker import (DownloadJobError, RetryConfig, SyncWorker,
+                                     _calculate_backoff_seconds)
 
 
 class FlakySoulseekClient:

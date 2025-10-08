@@ -8,7 +8,8 @@ import pytest
 
 from app.config import HealthConfig
 from app.errors import ErrorCode
-from app.services.health import DependencyStatus, HealthService, ReadinessResult
+from app.services.health import (DependencyStatus, HealthService,
+                                 ReadinessResult)
 from tests.helpers import api_path
 
 

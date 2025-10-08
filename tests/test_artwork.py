@@ -8,19 +8,13 @@ from typing import Any, Dict, List
 import pytest
 
 import app.workers.artwork_worker as artwork_worker
-from app.config import (
-    ArtworkConfig,
-    ArtworkFallbackConfig,
-    ArtworkPostProcessingConfig,
-)
+from app.config import (ArtworkConfig, ArtworkFallbackConfig,
+                        ArtworkPostProcessingConfig)
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
-from app.workers.artwork_worker import (
-    ArtworkJob,
-    ArtworkProcessingResult,
-    ArtworkWorker,
-)
+from app.workers.artwork_worker import (ArtworkJob, ArtworkProcessingResult,
+                                        ArtworkWorker)
 from app.workers.sync_worker import SyncWorker
 from tests.conftest import StubSoulseekClient
 

@@ -11,28 +11,19 @@ from time import perf_counter
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from app.dependencies import get_app_config
-from app.integrations.artist_gateway import ArtistGateway, ArtistGatewayResponse
+from app.integrations.artist_gateway import (ArtistGateway,
+                                             ArtistGatewayResponse)
 from app.integrations.contracts import ProviderArtist, ProviderRelease
-from app.integrations.provider_gateway import (
-    ProviderGatewayDependencyError,
-    ProviderGatewayError,
-    ProviderGatewayRateLimitedError,
-    ProviderGatewayTimeoutError,
-)
+from app.integrations.provider_gateway import (ProviderGatewayDependencyError,
+                                               ProviderGatewayError,
+                                               ProviderGatewayRateLimitedError,
+                                               ProviderGatewayTimeoutError)
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.artist_dao import (
-    ArtistDao,
-    ArtistReleaseRow,
-    ArtistReleaseUpsertDTO,
-    ArtistUpsertDTO,
-)
-from app.services.artist_delta import (
-    ArtistLocalState,
-    ArtistRemoteState,
-    ReleaseSnapshot,
-    determine_delta,
-)
+from app.services.artist_dao import (ArtistDao, ArtistReleaseRow,
+                                     ArtistReleaseUpsertDTO, ArtistUpsertDTO)
+from app.services.artist_delta import (ArtistLocalState, ArtistRemoteState,
+                                       ReleaseSnapshot, determine_delta)
 from app.services.audit import write_audit
 from app.services.cache import ResponseCache, bust_artist_cache
 from app.utils.idempotency import make_idempotency_key

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from app.config import DEFAULT_ORCH_PRIORITY_MAP, OrchestratorConfig, Settings, load_config
+from app.config import (DEFAULT_ORCH_PRIORITY_MAP, OrchestratorConfig,
+                        Settings, load_config)
 from app.orchestrator import handlers as orchestrator_handlers
 
 

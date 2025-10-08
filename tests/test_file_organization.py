@@ -6,11 +6,8 @@ import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download
-from app.utils.file_utils import (
-    guess_album_from_filename,
-    organize_file,
-    sanitize_name,
-)
+from app.utils.file_utils import (guess_album_from_filename, organize_file,
+                                  sanitize_name)
 from app.workers.sync_worker import SyncWorker
 
 

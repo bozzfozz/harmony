@@ -18,23 +18,13 @@ from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
 from app.logging_events import log_event as _log_event
-from app.schemas_search import (
-    ItemTypeLiteral,
-    SearchItem,
-    SearchRequest,
-    SearchResponse,
-    SourceLiteral,
-)
+from app.schemas_search import (ItemTypeLiteral, SearchItem, SearchRequest,
+                                SearchResponse, SourceLiteral)
 from app.services.integration_service import IntegrationService
-from app.utils.normalize import (
-    boost_for_bitrate,
-    boost_for_format,
-    clamp_score,
-    format_priority_index,
-    normalize_genres,
-    normalize_text,
-    year_distance_bonus,
-)
+from app.utils.normalize import (boost_for_bitrate, boost_for_format,
+                                 clamp_score, format_priority_index,
+                                 normalize_genres, normalize_text,
+                                 year_distance_bonus)
 
 logger = get_logger(__name__)
 
