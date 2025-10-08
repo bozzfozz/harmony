@@ -47,7 +47,7 @@ für die Shell und `immutable` für fingerprinted Assets; ein integrierter Healt
 ```yaml
 services:
   frontend:
-    image: ghcr.io/<owner>/<repo>/frontend:latest
+    image: ghcr.io/<owner>/<repo>/fullstack:latest
     ports:
       - "8080:80"
     environment:

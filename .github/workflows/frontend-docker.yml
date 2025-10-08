@@ -1,4 +1,4 @@
-name: frontend docker image
+name: full-stack docker image
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 env:
-  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}/frontend
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}/fullstack
 
 jobs:
   build-and-publish:
@@ -22,21 +22,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -44,40 +29,41 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.frontend
+          file: Dockerfile
           load: true
-          tags: harmony-frontend:test
+          tags: harmony-fullstack:test
 
       - name: Smoke test container
         run: |
           set -euo pipefail
           docker run -d \
-            --name harmony-frontend-smoke \
-            -p 18081:80 \
-            -e PUBLIC_BACKEND_URL="http://api:8000" \
-            -e PUBLIC_SENTRY_DSN="https://sentry.example/1" \
-            -e PUBLIC_FEATURE_FLAGS='{"beta":true}' \
-            harmony-frontend:test
+            --name harmony-fullstack-smoke \
+            -p 18080:8000 \
+            -e FEATURE_RUN_MIGRATIONS=off \
+            -e DATABASE_URL=sqlite:///./harmony.db \
+            harmony-fullstack:test
           cleanup() {
-            docker rm -f harmony-frontend-smoke >/dev/null 2>&1 || true
+            docker rm -f harmony-fullstack-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          for attempt in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:18081/ >/tmp/frontend-index.html; then
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/health >/tmp/health.json; then
               break
             fi
             sleep 2
           done
-          curl -fsS http://127.0.0.1:18081/ >/tmp/frontend-index.html
-          curl -fsS http://127.0.0.1:18081/env.runtime.js >/tmp/env.runtime.js
-          grep -q "http://api:8000" /tmp/env.runtime.js
-          grep -q '"beta":true' /tmp/env.runtime.js
-          curl -fsSI http://127.0.0.1:18081/index.html | grep -i 'cache-control: no-store'
-          asset_path=$(docker exec harmony-frontend-smoke sh -c 'if [ -d /config/www/assets ]; then find /config/www/assets -maxdepth 1 -type f -name "*.js" | head -n1; fi')
-          if [ -n "$asset_path" ]; then
-            asset_name=$(basename "$asset_path")
-            curl -fsSI "http://127.0.0.1:18081/assets/${asset_name}" | grep -i 'cache-control: public, max-age=31536000, immutable'
-          fi
+          curl -fsS http://127.0.0.1:18080/health >/tmp/health.json
+          python - <<'PY'
+import json
+from pathlib import Path
+import sys
+
+payload = json.loads(Path("/tmp/health.json").read_text())
+if payload.get("status") != "ok":
+    sys.exit("Health check did not return status=ok")
+PY
+          docker exec harmony-fullstack-smoke test -d /app/frontend_dist
+          docker exec harmony-fullstack-smoke test -f /app/frontend_dist/index.html
 
       - name: Compute tags
         id: meta
@@ -98,7 +84,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.frontend
+          file: Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY_IMAGE }}:latest
