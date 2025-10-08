@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
-from collections import deque
+import asyncio
+from collections import OrderedDict, deque
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Deque, Dict, Iterable, List, Literal, MutableMapping, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Deque,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    MutableMapping,
+    Optional,
+    Tuple,
+)
 
+from app.logging import get_logger
 from sqlalchemy import func
 
 from app.db import session_scope
@@ -20,6 +33,10 @@ from app.utils.events import (
 )
 from app.utils.worker_health import read_worker_status
 
+if TYPE_CHECKING:
+    from app.services.cache import ResponseCache
+
+logger = get_logger(__name__)
 
 def _timestamp_to_utc_isoformat(value: datetime) -> str:
     """Return a UTC-normalised ISO 8601 representation ending with Z."""
@@ -56,16 +73,25 @@ class ActivityEntry:
         return payload
 
 
+_PageCacheEntry = Tuple[Tuple["ActivityEntry", ...], int]
+
+
 class ActivityManager:
     """Manage a bounded list of recent activity events."""
 
-    def __init__(self, max_entries: int = 50) -> None:
+    def __init__(self, max_entries: int = 50, page_cache_limit: int = 128) -> None:
         if max_entries <= 0:
             raise ValueError("max_entries must be positive")
         self._max_entries = max_entries
         self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
         self._cache_initialized = False
+        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = (
+            OrderedDict()
+        )
+        self._page_cache_limit = max(1, page_cache_limit)
+        self._response_cache: "ResponseCache | None" = None
+        self._response_cache_paths: tuple[str, ...] = ()
 
     def _entry_from_event(self, event: ActivityEvent) -> ActivityEntry:
         details: MutableMapping[str, object] = dict(event.details or {})
@@ -96,10 +122,22 @@ class ActivityManager:
             self._entries.clear()
             self._entries.extend(entries)
             self._cache_initialized = True
+            self._page_cache.clear()
+        self._invalidate_response_cache()
 
     def _ensure_cache(self) -> None:
         if not self._cache_initialized:
             self.refresh_cache()
+
+    def _cache_key(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        type_filter: Optional[str],
+        status_filter: Optional[str],
+    ) -> Tuple[int, int, Optional[str], Optional[str]]:
+        return (limit, offset, type_filter, status_filter)
 
     def record(
         self,
@@ -128,7 +166,9 @@ class ActivityManager:
         with self._lock:
             self._entries.appendleft(entry)
             self._cache_initialized = True
+            self._page_cache.clear()
 
+        self._invalidate_response_cache()
         return entry
 
     def list(self) -> List[Dict[str, object]]:
@@ -154,20 +194,47 @@ class ActivityManager:
         if status_filter:
             filters.append(ActivityEvent.status == status_filter)
 
+        cache_key = self._cache_key(
+            limit=limit,
+            offset=offset,
+            type_filter=type_filter,
+            status_filter=status_filter,
+        )
+
+        with self._lock:
+            cached = self._page_cache.get(cache_key)
+            if cached is not None:
+                self._page_cache.move_to_end(cache_key)
+                cached_entries, cached_total = cached
+                return [entry.as_dict() for entry in cached_entries], cached_total
+
         with session_scope() as session:
-            total = (session.query(func.count(ActivityEvent.id)).filter(*filters).scalar()) or 0
+            count_query = session.query(func.count(ActivityEvent.id))
+            events_query = session.query(ActivityEvent)
+            if filters:
+                count_query = count_query.filter(*filters)
+                events_query = events_query.filter(*filters)
+
+            total = (count_query.scalar()) or 0
 
             events = (
-                session.query(ActivityEvent)
-                .filter(*filters)
+                events_query
                 .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
             )
 
-        entries = [self._entry_from_event(event).as_dict() for event in events]
-        return entries, int(total)
+        total_int = int(total)
+        entries = tuple(self._entry_from_event(event) for event in events)
+
+        with self._lock:
+            self._page_cache[cache_key] = (entries, total_int)
+            self._page_cache.move_to_end(cache_key)
+            while len(self._page_cache) > self._page_cache_limit:
+                self._page_cache.popitem(last=False)
+
+        return [entry.as_dict() for entry in entries], total_int
 
     def extend(self, entries: Iterable[ActivityEntry]) -> None:
         """Insert multiple entries into the cache, preserving their order."""
@@ -176,13 +243,66 @@ class ActivityManager:
             for entry in reversed(list(entries)):
                 self._entries.appendleft(entry)
             self._cache_initialized = True
+            self._page_cache.clear()
+        self._invalidate_response_cache()
 
     def clear(self) -> None:
         """Remove all cached entries without touching persistent storage."""
 
         with self._lock:
             self._entries.clear()
-            self._cache_initialized = True
+            self._cache_initialized = False
+            self._page_cache.clear()
+        self._invalidate_response_cache()
+
+    def configure_response_cache(
+        self,
+        cache: "ResponseCache | None",
+        *,
+        paths: Iterable[str] | None = None,
+    ) -> None:
+        """Configure the HTTP response cache invalidation strategy."""
+
+        normalized_paths = self._normalise_cache_paths(paths or ())
+        with self._lock:
+            self._response_cache = cache
+            self._response_cache_paths = normalized_paths
+
+    def _invalidate_response_cache(self) -> None:
+        cache = self._response_cache
+        paths = self._response_cache_paths
+        if cache is None or not paths:
+            return
+
+        async def _invalidate_async() -> None:
+            for path in paths:
+                try:
+                    await cache.invalidate_path(path, reason="activity_updated")
+                except Exception:  # pragma: no cover - defensive logging
+                    logger.exception("Failed to invalidate response cache for activity path", extra={"path": path})
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(_invalidate_async())
+            return
+
+        loop.call_soon_threadsafe(lambda: asyncio.create_task(_invalidate_async()))
+
+    @staticmethod
+    def _normalise_cache_paths(paths: Iterable[str]) -> tuple[str, ...]:
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for raw in paths:
+            if not raw:
+                continue
+            path = raw if raw.startswith("/") else f"/{raw}"
+            if len(path) > 1 and path.endswith("/"):
+                path = path.rstrip("/")
+            if path not in seen:
+                ordered.append(path)
+                seen.add(path)
+        return tuple(ordered)
 
     def serialise_event(self, event: ActivityEvent) -> Dict[str, object]:
         """Return the API representation for a stored activity event."""

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
+from app.db import session_scope
+from app.models import ActivityEvent
 from app.utils import activity_manager, record_activity
 
 
@@ -70,3 +74,92 @@ def test_activity_history_persists_after_cache_clear(client) -> None:
     assert payload["total_count"] == 1
     assert payload["items"][0]["type"] == "metadata"
     assert payload["items"][0]["status"] == "partial"
+
+
+def test_activity_total_matches_inserted_rows(client) -> None:
+    activity_manager.clear()
+    for index in range(23):
+        record_activity("job", "done", details={"index": index})
+
+    response = client.get("/activity", params={"limit": 5, "offset": 10})
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["total_count"] == 23
+    assert [entry["details"]["index"] for entry in payload["items"]] == [12, 11, 10, 9, 8]
+
+
+def test_activity_order_is_desc_by_created_at_then_id(client) -> None:
+    activity_manager.clear()
+    base_time = datetime(2024, 1, 1, 12, 0, 0)
+    for index in range(3):
+        record_activity(
+            "sorted",
+            "ok",
+            timestamp=base_time + timedelta(minutes=index),
+            details={"index": index},
+        )
+    # Insert an entry with an older timestamp after newer ones to ensure ordering
+    record_activity(
+        "sorted",
+        "ok",
+        timestamp=base_time - timedelta(minutes=5),
+        details={"index": "older"},
+    )
+    # Create two entries with identical timestamps to validate ID tiebreaker
+    record_activity(
+        "sorted",
+        "ok",
+        timestamp=base_time + timedelta(minutes=2),
+        details={"index": "tie_a"},
+    )
+    record_activity(
+        "sorted",
+        "ok",
+        timestamp=base_time + timedelta(minutes=2),
+        details={"index": "tie_b"},
+    )
+
+    response = client.get("/activity", params={"type": "sorted"})
+    assert response.status_code == 200
+
+    items = response.json()["items"]
+    timestamps = [item["timestamp"] for item in items]
+    assert timestamps == sorted(timestamps, reverse=True)
+    returned_indices = [item["details"]["index"] for item in items]
+    assert returned_indices[:3] == ["tie_b", "tie_a", 2]
+    assert returned_indices[-1] == "older"
+
+
+def test_activity_refresh_after_bulk_insert(client) -> None:
+    activity_manager.clear()
+    for index in range(2):
+        record_activity("seed", "ok", details={"index": index})
+
+    first_response = client.get("/activity")
+    assert first_response.status_code == 200
+    assert first_response.json()["total_count"] == 2
+
+    now = datetime.utcnow()
+    with session_scope() as session:
+        session.bulk_save_objects(
+            [
+                ActivityEvent(
+                    type="seed",
+                    status="ok",
+                    timestamp=now + timedelta(minutes=offset),
+                    details={"index": f"bulk-{offset}"},
+                )
+                for offset in range(3)
+            ]
+        )
+
+    # Refresh in-memory caches after the bulk write and ensure pagination cache is invalidated
+    activity_manager.refresh_cache()
+
+    refreshed = client.get("/activity")
+    assert refreshed.status_code == 200
+    payload = refreshed.json()
+    assert payload["total_count"] == 5
+    returned_indices = [entry["details"]["index"] for entry in payload["items"][:3]]
+    assert returned_indices == ["bulk-2", "bulk-1", "bulk-0"]

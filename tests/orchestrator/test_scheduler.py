@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Mapping
+from typing import Mapping, TYPE_CHECKING
 
 from dataclasses import replace
 
@@ -12,6 +12,9 @@ from app.config import settings
 from app.models import QueueJobStatus
 from app.orchestrator.scheduler import PriorityConfig, Scheduler
 from app.workers.persistence import QueueJobDTO
+
+if TYPE_CHECKING:
+    from tests.conftest import StubQueuePersistence
 
 
 class StubPersistence:
@@ -179,7 +182,7 @@ def test_scheduler_backpressure_resets_after_work() -> None:
 
 
 def test_priority_state_isolated_between_runs(
-    stub_queue_persistence: "StubQueuePersistence",
+    stub_queue_persistence: StubQueuePersistence,
 ) -> None:
     base_config = replace(
         settings.orchestrator,
