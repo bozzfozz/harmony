@@ -451,6 +451,59 @@ class ArtistDao:
                 )
         return rows
 
+    def refresh_artist_version(self, artist_key: str) -> ArtistRow | None:
+        key = (artist_key or "").strip()
+        if not key:
+            return None
+
+        timestamp = self._now()
+        statement: Select[ArtistRecord] = (
+            select(ArtistRecord).where(ArtistRecord.artist_key == key).limit(1)
+        )
+
+        with session_scope() as session:
+            artist = session.execute(statement).scalars().first()
+            if artist is None:
+                return None
+            release_stmt: Select[str] = (
+                select(ArtistReleaseRecord.etag)
+                .where(ArtistReleaseRecord.artist_key == key)
+                .where(ArtistReleaseRecord.inactive_at.is_(None))
+                .order_by(ArtistReleaseRecord.id.asc())
+            )
+            active_etags = [
+                value
+                for value in session.execute(release_stmt).scalars().all()
+                if isinstance(value, str) and value
+            ]
+            artist.updated_at = timestamp
+            artist.etag = _hash_values(
+                artist.name,
+                tuple(artist.genres or []),
+                tuple(artist.images or []),
+                artist.updated_at.isoformat(timespec="seconds"),
+                tuple(active_etags),
+            )
+            artist.version = artist.etag
+            session.add(artist)
+            session.flush()
+            session.refresh(artist)
+            return ArtistRow(
+                id=int(artist.id),
+                artist_key=artist.artist_key,
+                source=artist.source,
+                source_id=artist.source_id,
+                name=artist.name,
+                genres=tuple(artist.genres or []),
+                images=tuple(artist.images or []),
+                popularity=_coerce_int(artist.popularity),
+                metadata=dict(artist.metadata_json or {}),
+                version=artist.version,
+                etag=artist.etag,
+                updated_at=artist.updated_at,
+                created_at=artist.created_at,
+            )
+
     def get_artist(self, artist_key: str) -> ArtistRow | None:
         key = (artist_key or "").strip()
         if not key:

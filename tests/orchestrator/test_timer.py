@@ -24,6 +24,31 @@ class RecordingDAO:
         return self.rows[:limit]
 
 
+def test_artist_row_defaults_last_hash_to_none() -> None:
+    row = ArtistWorkflowArtistRow(
+        id=42,
+        spotify_artist_id="artist-42",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+    )
+
+    assert row.last_hash is None
+
+
+def test_artist_row_normalizes_blank_last_hash() -> None:
+    row = ArtistWorkflowArtistRow(
+        id=7,
+        spotify_artist_id="artist-7",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+        last_hash="   ",
+    )
+
+    assert row.last_hash is None
+
+
 def _build_config(**overrides) -> WatchlistWorkerConfig:
     params = {
         "max_concurrency": 3,

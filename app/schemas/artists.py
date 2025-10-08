@@ -96,9 +96,16 @@ class EnqueueResponse(BaseModel):
     already_enqueued: bool
 
 
+class EnqueueSyncRequest(BaseModel):
+    """Request payload for triggering an artist sync."""
+
+    force: bool = False
+
+
 __all__ = [
     "ArtistOut",
     "EnqueueResponse",
+    "EnqueueSyncRequest",
     "ReleaseOut",
     "WatchlistItemIn",
     "WatchlistItemOut",

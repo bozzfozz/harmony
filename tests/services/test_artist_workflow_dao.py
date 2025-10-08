@@ -66,6 +66,23 @@ def test_mark_success_updates_state_and_known_releases() -> None:
         assert stored.fetched_at == checked_at
 
 
+def test_mark_success_normalizes_blank_hash() -> None:
+    artist_id = _create_artist()
+    dao = ArtistWorkflowDAO()
+
+    dao.mark_success(
+        artist_id,
+        checked_at=datetime(2024, 5, 1, 12, 0, 0),
+        known_releases=None,
+        content_hash="  ",
+    )
+
+    with session_scope() as session:
+        artist = session.get(WatchlistArtist, artist_id)
+        assert artist is not None
+        assert artist.last_hash is None
+
+
 def test_load_batch_respects_cutoff_and_cooldown() -> None:
     now = datetime(2024, 1, 1, 10, 0, 0)
     due_id = _create_artist(last_checked=now - timedelta(days=1))
@@ -77,6 +94,22 @@ def test_load_batch_respects_cutoff_and_cooldown() -> None:
     ids = {row.id for row in rows}
     assert due_id in ids
     assert len(ids) == 1
+
+
+def test_load_batch_normalizes_persisted_blank_hash() -> None:
+    artist_id = _create_artist()
+    with session_scope() as session:
+        artist = session.get(WatchlistArtist, artist_id)
+        assert artist is not None
+        artist.last_hash = "\t"
+        session.add(artist)
+
+    dao = ArtistWorkflowDAO()
+    rows = dao.load_batch(1, cutoff=datetime.utcnow())
+
+    assert rows
+    assert rows[0].id == artist_id
+    assert rows[0].last_hash is None
 
 
 def test_create_download_record_persists_known_release_transactionally() -> None:

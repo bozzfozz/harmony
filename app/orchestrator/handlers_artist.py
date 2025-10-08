@@ -614,6 +614,12 @@ async def handle_artist_sync(
     else:
         inactivated_count = 0
 
+    release_mutations = added_count + updated_count + inactivated_count
+    if release_mutations > 0:
+        refreshed_row = await asyncio.to_thread(deps.dao.refresh_artist_version, artist_key)
+        if refreshed_row is not None:
+            artist_row = refreshed_row
+
     existing_ids = {snapshot.id for snapshot in local_state.releases}
     persisted_by_id = {row.id: row for row in persisted_rows}
     new_rows = [row for row in persisted_rows if row.id not in existing_ids]

@@ -1195,6 +1195,18 @@
         "title": "EnqueueRequest",
         "type": "object"
       },
+      "EnqueueSyncRequest": {
+        "description": "Request payload for triggering an artist sync.",
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          }
+        },
+        "title": "EnqueueSyncRequest",
+        "type": "object"
+      },
       "ErrorObject": {
         "properties": {
           "code": {
@@ -4818,6 +4830,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EnqueueSyncRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
