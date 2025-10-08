@@ -88,7 +88,7 @@ describe('FreeLinksPage', () => {
     { status: 429, message: 'Zu viele Versuche' },
     { status: 503, message: 'Der Dienst antwortet aktuell nicht' }
   ])('handles $status errors with a user friendly toast', async ({ status, message }) => {
-    const apiError = new ApiError({ code: 'ERR', message: 'upstream', status });
+    const apiError = new ApiError({ code: 'ERR', message, status });
     mockedPostFreePlaylistLinks.mockRejectedValue(apiError);
 
     renderWithProviders(<FreeLinksPage />, { route: '/free/links', toastFn: toastMock });
