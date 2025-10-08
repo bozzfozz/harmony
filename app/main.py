@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
@@ -133,10 +139,36 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
 _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
 
+_FRONTEND_DIST_ENV_VAR = "FRONTEND_DIST"
+_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend_dist"
+_frontend_dist_override = os.environ.get(_FRONTEND_DIST_ENV_VAR)
+if _frontend_dist_override:
+    FRONTEND_DIST = Path(_frontend_dist_override).expanduser().resolve()
+else:
+    FRONTEND_DIST = _DEFAULT_FRONTEND_DIST.resolve()
+_FRONTEND_INDEX_PATH = FRONTEND_DIST / "index.html"
+
 
 def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None:
     app.state.security_config = security
     app.openapi_schema = None
+
+
+def _is_api_path(path: str) -> bool:
+    base = _API_BASE_PATH.rstrip("/")
+    if not base:
+        return False
+    if not base.startswith("/"):
+        base = f"/{base}"
+    return path == base or path.startswith(f"{base}/")
+
+
+def _accepts_html(request: Request) -> bool:
+    accept = request.headers.get("accept")
+    if not accept:
+        return True
+    accept_lower = accept.lower()
+    return "text/html" in accept_lower or "*/*" in accept_lower
 
 
 def _should_start_workers(*, config: AppConfig | None = None) -> bool:
@@ -569,6 +601,33 @@ app.state.health_service = HealthService(
 app.state.secret_validation_service = SecretValidationService()
 
 install_middleware(app, _config_snapshot)
+
+_previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
+if _FRONTEND_INDEX_PATH.is_file():
+    logger.info("Serving frontend assets from %s", FRONTEND_DIST)
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+
+    async def _frontend_fallback(
+        request: Request, exc: StarletteHTTPException
+    ) -> Response:
+        path = request.url.path
+        if (
+            exc.status_code == 404
+            and request.method.upper() == "GET"
+            and _accepts_html(request)
+            and not _is_api_path(path)
+            and path not in {_docs_url, _redoc_url, _openapi_url}
+        ):
+            return FileResponse(_FRONTEND_INDEX_PATH)
+        if _previous_http_exception_handler is not None:
+            return await _previous_http_exception_handler(request, exc)
+        raise exc
+
+    app.add_exception_handler(StarletteHTTPException, _frontend_fallback)
+else:
+    logger.info(
+        "Frontend assets not found at %s; skipping static mount", FRONTEND_DIST
+    )
 
 _response_cache = getattr(app.state, "response_cache", None)
 _activity_paths = {
