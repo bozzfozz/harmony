@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -9,6 +10,7 @@ from fastapi import FastAPI, Request
 from app.api import spotify_free_links as free_links_module
 from app.api.spotify_free_links import get_free_ingest_service
 from app.errors import AppError
+from app.dependencies import get_app_config
 from tests.simple_client import SimpleTestClient
 
 
@@ -159,6 +161,48 @@ def test_deduplicates_by_playlist_id(
         {"url": "spotify:playlist:AAA", "reason": "duplicate"}
     ]
     assert stub.calls[0] == ["AAA"]
+
+
+def test_accepts_user_playlist_urls_when_enabled(
+    client: Callable[[StubFreeIngestService], SimpleTestClient]
+) -> None:
+    from app import dependencies as deps
+
+    deps.get_app_config.cache_clear()
+    config = deepcopy(deps.get_app_config())
+    config.spotify.free_accept_user_urls = True
+
+    stub = StubFreeIngestService()
+    stub.set_result(accepted_ids=["AAA"])
+    test_client = client(stub)
+    test_client.app.dependency_overrides[get_app_config] = lambda config=config: config
+
+    response = test_client.post(
+        "/api/v1/spotify/free/links",
+        json={"urls": ["https://open.spotify.com/user/foo/playlist/AAA?si=xyz"]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted"] == [
+        {"playlist_id": "AAA", "url": "https://open.spotify.com/playlist/AAA"}
+    ]
+    assert body["skipped"] == []
+    assert stub.calls[-1] == ["AAA"]
+
+    stub.set_result(accepted_ids=["BBB"])
+    response = test_client.post(
+        "/api/v1/spotify/free/links",
+        json={"urls": ["spotify:user:bar:playlist:BBB"]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted"] == [
+        {"playlist_id": "BBB", "url": "https://open.spotify.com/playlist/BBB"}
+    ]
+    assert body["skipped"] == []
+    assert stub.calls[-1] == ["BBB"]
+
+    test_client.app.dependency_overrides.pop(get_app_config, None)
 
 
 def test_enqueues_via_free_ingest_service(
