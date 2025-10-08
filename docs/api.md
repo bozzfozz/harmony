@@ -99,6 +99,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
   oder `If-Modified-Since` senden, um `304 Not Modified` ohne Body zu erhalten.
 - Serverseitig puffert ein In-Memory-LRU-Cache (`ResponseCache`) erfolgreiche `GET`-Antworten unter Berücksichtigung von Query-Params,
   Pfadparametern und Authentifizierungsvarianten. Schreiboperationen (`POST/PUT/PATCH/DELETE`) invalidieren die entsprechenden Schlüssel.
+- `GET /spotify/status` umgeht die Response-Cache-Schicht explizit, damit Credential-Änderungen ohne zusätzlichen Bust sofort sichtbar werden.
 - Feature-Flags & Konfiguration:
 
 | Variable | Default | Beschreibung |

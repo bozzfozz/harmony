@@ -17,6 +17,11 @@ def test_spotify_status_reports_capabilities(client: SimpleTestClient) -> None:
 def test_spotify_pro_features_require_credentials(client: SimpleTestClient, monkeypatch) -> None:
     from app.dependencies import get_spotify_client as dependency_spotify_client
 
+    # Prime the cache to ensure the status endpoint does not serve stale data after credential changes.
+    baseline = client.get("/spotify/status")
+    assert baseline.status_code == 200
+    assert baseline.json()["status"] != "unconfigured"
+
     for key in ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"):
         write_setting(key, "")
 

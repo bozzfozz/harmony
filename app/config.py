@@ -607,11 +607,12 @@ DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
+# Exclude `/spotify/status` from caching so credential changes are reflected immediately.
 DEFAULT_CACHEABLE_PATH_PATTERNS = (
     "^/$|30|120",
     "^/activity$|60|180",
     "^/activity/export$|300|600",
-    "^/spotify(?:/.*)?$|45|180",
+    "^/spotify(?:/(?!status$).*)?$|45|180",
 )
 DEFAULT_PROVIDER_MAX_CONCURRENCY = 4
 DEFAULT_SLSKD_TIMEOUT_MS = 8_000
