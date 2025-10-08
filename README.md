@@ -26,45 +26,55 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
-## Frontend Container
+## Unified Docker Image
 
-Der Standard-Docker-Build (`Dockerfile`) erzeugt ein Full-Stack-Image, das das FastAPI-Backend und das vorgerenderte React-
-Frontend gemeinsam ausliefert. `docker-compose.yml` startet lediglich diesen Container (`backend`-Service) und stellt ihn unter
-`http://localhost:8000` bereit – API und Weboberfläche teilen sich damit eine Origin. Änderungen am Backend können für die
-Entwicklung über `docker-compose.override.yml` mit `uvicorn --reload` genutzt werden; das Frontend wird weiterhin im Build-Schritt
-generiert.
+Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört standardmäßig auf Port `8080` – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
 
-### Build & Run
+### Quickstart (`docker run`)
 
 ```bash
-docker compose build backend
-docker compose up
+docker run -d \
+  --name harmony \
+  -p 8080:8080 \
+  -e HARMONY_API_KEYS=change-me \
+  -e DATABASE_URL=sqlite:////data/harmony.db \
+  -e PUBLIC_BACKEND_URL=http://localhost:8080 \
+  -e ALLOWED_ORIGINS=http://localhost:8080 \
+  -v $(pwd)/data:/data \
+  ghcr.io/bozzfozz/harmony:latest
 ```
 
-Das Override-File bindet den Quellcode aus `./app` ein, sodass Backend-Anpassungen ohne erneutes Image-Build sichtbar werden. Für
-Frontend-Änderungen ist weiterhin ein Rebuild des Full-Stack-Images erforderlich (`docker compose build backend`).
+### `compose.yaml`
 
-### Runtime-Umgebungsvariablen (kombiniertes Image)
+Im Repository liegt ein vorkonfiguriertes [`compose.yaml`](compose.yaml), das genau einen Service (`harmony`) startet. Die Healthcheck-Definition prüft `GET http://localhost:8080/api/health/ready`; `docker compose up -d` genügt für lokale Tests.
 
-| Variable               | Beschreibung                                                                 | Compose-Voreinstellung |
-| ---------------------- | ----------------------------------------------------------------------------- | ---------------------- |
-| `ALLOWED_ORIGINS`      | CORS-Origin-Liste für das Backend; lokale Tests nutzen `http://localhost:8000`. | `http://localhost:8000` |
-| `PUBLIC_BACKEND_URL`   | Basis-URL des Harmony-Backends für das Frontend-Runtime-Skript.              | `http://localhost:8000` |
-| `PUBLIC_SENTRY_DSN`    | Optionaler Sentry-DSN für das Frontend.                                       | _leer_                  |
-| `PUBLIC_FEATURE_FLAGS` | Optionales JSON-Objekt für Feature-Flags (z. B. `{ "beta": true }`).        | `{}`                   |
+```bash
+docker compose up -d
+open http://localhost:8080
+```
 
-Die Variablen lassen sich direkt in `docker-compose.yml`/`.override.yml` oder via `.env` setzen. Abhängig von der Zielumgebung
-empfiehlt es sich, `PUBLIC_BACKEND_URL` auf die externe URL des Deployments und `ALLOWED_ORIGINS` auf die tatsächlichen
-Frontend-Hosts zu konfigurieren.
+Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) bereit. Das Override aktiviert den lokalen Build (`build: .`), setzt `uvicorn --reload` und bindet `./app` in den Container ein.
 
-### Legacy: Eigenständiger Frontend-Container _(archiviert)_
+### Relevante Umgebungsvariablen
 
-Das frühere Setup lieferte das React-Frontend über ein separates Container-Image auf Basis von `lscr.io/linuxserver/nginx` aus.
-Das Multi-Stage-Build nutzte Node.js 20 für die Asset-Erzeugung, kopierte das Ergebnis in ein Nginx-Runtime-Image und erzeugte
-beim Start ein `env.runtime.js` via `envsubst`, um Laufzeitvariablen zu injizieren. Die Nginx-Konfiguration stellte SPA-Routen
-über `index.html` bereit, deaktivierte das Caching für die Shell und markierte fingerprinted Assets als `immutable`; ein
-Healthcheck überwachte `GET /`. Dieses Setup bleibt hier zu Dokumentationszwecken erhalten, wird aber nicht länger aktiv
-bereitgestellt.
+| Variable                 | Beschreibung                                                                  | Default (`compose.yaml`) |
+| ------------------------ | ------------------------------------------------------------------------------ | ------------------------ |
+| `DATABASE_URL`           | Persistente Datenbank; für SQLite wird `/data/harmony.db` genutzt.             | `sqlite:////data/harmony.db` |
+| `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                           | `change-me`              |
+| `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`  |
+| `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`  |
+| `PUBLIC_SENTRY_DSN`      | Optionaler Sentry-DSN für das Frontend.                                        | leer                     |
+| `PUBLIC_FEATURE_FLAGS`   | Optionales JSON für Feature-Flags (z. B. `{ "beta": true }`).                 | `{}`                     |
+| `FEATURE_RUN_MIGRATIONS` | Steuert, ob der Container beim Start Alembic-Migrationen ausführt.             | `on`                     |
+
+Weitere Konfigurationsvariablen findest du in [`app/config.py`](app/config.py) und der Tabelle in [`.env.example`](.env.example).
+
+### Migration vom Dual-Image-Setup
+
+- Entferne verwaiste Services (`backend`, `frontend`) aus eigenen Compose-/Kubernetes-Manifests und ersetze sie durch den einzigen Service `harmony`.
+- Aktualisiere Port-Mappings auf `8080` und passe Upstream-Proxys entsprechend an.
+- Health-Checks wechseln von `GET /ready` oder `/health` auf `GET /api/health/ready`.
+- Die GitHub-Registry publiziert nur noch `ghcr.io/bozzfozz/harmony:<tag>` (`sha-<short>`, `v<semver>`, `latest`).
 
 ### Integrations-Gateway
 
@@ -485,69 +495,57 @@ Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet di
 
 ### Docker
 
-Für den Betrieb steht ein linuxserver.io-kompatibles Image auf Basis von `lscr.io/linuxserver/baseimage-alpine` zur Verfügung. Es
-wird automatisch als Multi-Arch-Build (`linux/amd64`, `linux/arm64`) nach [GitHub Container Registry](https://ghcr.io) veröf
-fentlicht:
+Das veröffentlichte Container-Image `ghcr.io/bozzfozz/harmony` bündelt Backend und Frontend als Multi-Arch-Build (`linux/amd64`, `linux/arm64`). Die Tags werden von GitHub Actions vergeben:
 
-- `ghcr.io/<org>/harmony:latest` – jeweils der letzte `v*`-Tag
-- `ghcr.io/<org>/harmony:vX.Y.Z` – Release-Builds pro SemVer-Tag
-- `ghcr.io/<org>/harmony:sha-<commit>` – Nightly-Builds pro Commit auf `main`
+- `ghcr.io/bozzfozz/harmony:sha-<short>` – jeder Commit auf `main`
+- `ghcr.io/bozzfozz/harmony:v<semver>` – Release-Tags (`vX.Y.Z`)
+- `ghcr.io/bozzfozz/harmony:latest` – nur der Kopf von `main`
 
-Die Images folgen dem linuxserver.io-Konzept mit nicht privilegiertem Benutzer (`abc`) und `/config` als Persistenzpfad. Wichtige
-Umgebungsvariablen:
-
-| Variable | Default | Beschreibung |
-| --- | --- | --- |
-| `PUID` | `1000` | UID des Service-Users (Mapping auf Host-UID). |
-| `PGID` | `1000` | GID des Service-Users (Mapping auf Host-GID). |
-| `TZ` | `UTC` | Zeitzone für Logs und Cronjobs. |
-| `UMASK` | `022` | Standard-Dateiberechtigungen. |
-| `DATABASE_URL` | `sqlite:////config/harmony.db` | Persistente SQLite-Datenbank unter `/config`; kann auf PostgreSQL zeigen. |
-| `HARMONY_PROFILE` | `prod` | Aktiviert produktive Defaults (z. B. ohne Debug-Reload). |
-| `FEATURE_RUN_MIGRATIONS` | `on` | Führt beim Start automatisch Alembic-Migrationen aus (`off` für manuelle Kontrolle). |
-
-Minimaler Run-Beispiel:
+Die wichtigsten Laufzeit-Variablen und Healthchecks sind im Abschnitt [„Unified Docker Image“](#unified-docker-image) dokumentiert. Für ein minimalistisches Deployment genügt:
 
 ```bash
 docker run -d \
   --name harmony \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TZ=Europe/Berlin \
-  -e UMASK=022 \
-  -e HARMONY_PROFILE=prod \
-  -p 8000:8000 \
-  -v $(pwd)/config:/config \
-  ghcr.io/<org>/harmony:latest
+  -p 8080:8080 \
+  -e HARMONY_API_KEYS=change-me \
+  -e DATABASE_URL=sqlite:////data/harmony.db \
+  -v $(pwd)/data:/data \
+  ghcr.io/bozzfozz/harmony:latest
 ```
 
-Der Container veröffentlicht HTTP-Port `8000` (FastAPI/Uvicorn) und liefert den Readiness-Check unter `http://127.0.0.1:8000/ready`
-oder via Docker-Healthcheck. Persistente Daten (Konfiguration, SQLite-DB, Cache) liegen unter `/config` und sollten auf ein Host-
-Volume gemountet werden. Für Upgrades genügt es, das bestehende Volume beizubehalten, das neue Tag zu pullen und den Container neu
-zu starten (`docker pull … && docker compose up -d`).
+Der Container lauscht auf `8080`, liefert `GET /` als HTML und meldet seine Bereitschaft über `GET /api/health/ready`. Persistente Daten (SQLite, Caches, Artefakte) sollten auf ein Host-Volume unter `/data` gemountet werden. Ein Update erfolgt klassisch per `docker pull ghcr.io/bozzfozz/harmony:latest && docker compose up -d`.
 
 ### Docker Compose
+
+Das Repository bringt ein [`compose.yaml`](compose.yaml) mit, das den Service `harmony` direkt aus der GitHub Container Registry startet. Optional lassen sich zusätzliche Einstellungen über `.env` oder ein Override-File steuern.
 
 ```yaml
 services:
   harmony:
-    image: ghcr.io/<org>/harmony:latest
-    container_name: harmony
+    image: ghcr.io/bozzfozz/harmony:latest
+    env_file:
+      - ./.env
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Berlin
-      - UMASK=022
-      - HARMONY_PROFILE=prod
-    volumes:
-      - ./config:/config
+      DATABASE_URL: sqlite:////data/harmony.db
+      HARMONY_API_KEYS: change-me
+      ALLOWED_ORIGINS: http://localhost:8080
+      PUBLIC_BACKEND_URL: http://localhost:8080
     ports:
-      - "8000:8000"
-    restart: unless-stopped
+      - "8080:8080"
+    volumes:
+      - harmony-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  harmony-data:
 ```
 
-Optional können zusätzliche Variablen aus `.env` mittels `env_file` eingebunden werden (z. B. Secrets, externe API-Keys). Das Dev-
-Override (`docker-compose.override.yml`) aktiviert weiterhin Hot-Reloading und Debug-Logging für lokale Entwicklungszwecke.
+[`compose.override.yaml`](compose.override.yaml) aktiviert bei Bedarf Hot-Reloading (`uvicorn --reload`) und einen lokalen Build. Zusätzliche Secrets können über `env_file` oder Compose-Profile eingebunden werden.
 
 ### GitHub Actions
 
@@ -567,7 +565,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
 | `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
 | `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
-| `PORT` | int | `8000` | TCP-Port der API-Instanz. | — |
+| `PORT` | int | `8080` | TCP-Port der API-Instanz. | — |
 | `HARMONY_DISABLE_WORKERS` | bool (`0/1`) | `false` | `true` deaktiviert alle Hintergrund-Worker (Tests/Demos). | — |
 | `API_BASE_PATH` | string | `/api/v1` | Präfix für alle öffentlichen API-Routen inkl. OpenAPI & Docs. | — |
 | `FEATURE_ENABLE_LEGACY_ROUTES` | bool | `false` | Aktiviert unversionierte Legacy-Routen – nur für Migrationsphasen. | — |

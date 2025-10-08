@@ -606,7 +606,14 @@ DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
 DEFAULT_API_BASE_PATH = "/api/v1"
-DEFAULT_ALLOWLIST_SUFFIXES = ("/health", "/ready", "/docs", "/redoc", "/openapi.json")
+DEFAULT_ALLOWLIST_SUFFIXES = (
+    "/health",
+    "/ready",
+    "/health/ready",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+)
 # Exclude `/spotify/status` from caching so credential changes are reflected immediately.
 DEFAULT_CACHEABLE_PATH_PATTERNS = (
     "^/$|30|120",
@@ -1749,6 +1756,7 @@ def load_config() -> AppConfig:
     default_allowlist = [
         _compose_allowlist_entry(api_base_path, suffix) for suffix in DEFAULT_ALLOWLIST_SUFFIXES
     ]
+    default_allowlist.append("/api/health/ready")
     allowlist_override_entries = [
         _normalise_prefix(entry) for entry in _parse_list(os.getenv("AUTH_ALLOWLIST"))
     ]

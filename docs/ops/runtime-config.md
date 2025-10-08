@@ -26,7 +26,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ### Auth & CORS
 
 - `FEATURE_REQUIRE_AUTH=true` bindet die API-Key-Dependency global ein. Setze den Flag nur für lokale Testläufe auf `false`.
-- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut.
+- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/health/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut. `/api/health/ready` wird unabhängig vom API-Basispfad freigestellt.
 - `ALLOWED_ORIGINS` akzeptiert CSV oder Zeilen. Ein leerer Wert blockt sämtliche Browser-Anfragen.
 
 ### Caching

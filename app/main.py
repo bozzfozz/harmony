@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -644,6 +644,17 @@ activity_manager.configure_response_cache(
 
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
+
+
+@app.get("/api/health/ready", tags=["System"], include_in_schema=False)
+async def legacy_health_ready() -> dict[str, str]:
+    """Compatibility readiness probe for legacy orchestrators."""
+
+    health_service: HealthService = app.state.health_service
+    result = await health_service.readiness()
+    if not result.ok:
+        raise HTTPException(status_code=503, detail={"status": "error"})
+    return {"status": "ok"}
 
 
 _versioned_router = APIRouter()

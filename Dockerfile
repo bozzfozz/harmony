@@ -17,15 +17,19 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip \
+    && pip install -r requirements.txt
 
 COPY . .
 COPY --from=frontend-builder /app/frontend/dist ./frontend_dist
 
 RUN chmod +x scripts/docker-entrypoint.sh
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Standard: Production
 ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
