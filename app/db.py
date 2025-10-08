@@ -92,7 +92,7 @@ def _ensure_engine(*, auto_init: bool = True) -> None:
     )
     _configured_database_url = database_url
 
-    if auto_init and not _initializing_db and sqlite_path is not None and not sqlite_path.exists():
+    if auto_init and not _initializing_db:
         init_db()
 
 
