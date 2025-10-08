@@ -4,8 +4,11 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Mapping
 
+from dataclasses import replace
+
 import pytest
 
+from app.config import settings
 from app.models import QueueJobStatus
 from app.orchestrator.scheduler import PriorityConfig, Scheduler
 from app.workers.persistence import QueueJobDTO
@@ -173,3 +176,28 @@ def test_scheduler_backpressure_resets_after_work() -> None:
 
     scheduler.lease_ready_jobs()
     assert scheduler.poll_interval > 0.01
+
+
+def test_priority_state_isolated_between_runs(
+    stub_queue_persistence: "StubQueuePersistence",
+) -> None:
+    base_config = replace(
+        settings.orchestrator,
+        priority_map={"sync": 10},
+    )
+    scheduler_one = Scheduler(
+        config=base_config,
+        poll_interval_ms=5,
+        persistence_module=stub_queue_persistence,
+    )
+
+    base_config.priority_map["sync"] = 99
+    scheduler_two = Scheduler(
+        config=base_config,
+        poll_interval_ms=5,
+        persistence_module=stub_queue_persistence,
+    )
+
+    assert scheduler_one._priority.get("sync") == 10
+    assert scheduler_two._priority.get("sync") == 99
+    assert settings.orchestrator.priority_map.get("sync") != 99
