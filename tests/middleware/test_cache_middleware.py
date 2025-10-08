@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.responses import StreamingResponse
 
@@ -146,3 +146,104 @@ def test_cache_fail_open_streaming_body_preserved_on_store_error(
 
     assert response.status_code == 200
     assert response.text == "streamed"
+
+
+def test_playlist_tracks_cache_key_preserves_query_and_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    relevant_keys = {
+        "CACHE_DEFAULT_TTL_S",
+        "CACHE_STALE_WHILE_REVALIDATE_S",
+        "CACHE_FAIL_OPEN",
+        "CACHE_ENABLED",
+        "CACHE_MAX_ITEMS",
+        "CACHE_STRATEGY_ETAG",
+        "CACHEABLE_PATHS",
+        "CACHE_WRITE_THROUGH",
+        "CACHE_LOG_EVICTIONS",
+        "DATABASE_URL",
+    }
+    for key in relevant_keys:
+        monkeypatch.delenv(key, raising=False)
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("CACHE_ENABLED", "true")
+    monkeypatch.setenv("CACHE_DEFAULT_TTL_S", "120")
+    monkeypatch.setenv("CACHE_MAX_ITEMS", "50")
+    monkeypatch.setenv("CACHEABLE_PATHS", "^/spotify/playlists/[^/]+/tracks$|60|")
+
+    config = load_config()
+    cache_config = config.middleware.cache
+
+    app = FastAPI()
+    app.state.api_base_path = config.api_base_path
+
+    call_counts: dict[tuple[int, str], int] = {}
+
+    @app.get("/spotify/playlists/{playlist_id}/tracks")
+    async def playlist_tracks(request: Request, playlist_id: str, limit: int = 20) -> dict[str, object]:
+        header = request.headers.get("authorization") or "anon"
+        key = (limit, header)
+        call_counts[key] = call_counts.get(key, 0) + 1
+        return {"playlist_id": playlist_id, "limit": limit, "authorization": header}
+
+    response_cache = ResponseCache(
+        max_items=cache_config.max_items,
+        default_ttl=float(cache_config.default_ttl),
+        fail_open=cache_config.fail_open,
+        write_through=cache_config.write_through,
+        log_evictions=cache_config.log_evictions,
+    )
+
+    app.state.response_cache = response_cache
+    app.add_middleware(CacheMiddleware, cache=response_cache, config=cache_config)
+
+    client = TestClient(app)
+
+    auth_a = {"Authorization": "Bearer token-a"}
+    auth_b = {"Authorization": "Bearer token-b"}
+
+    first = client.get(
+        "/spotify/playlists/playlist-1/tracks",
+        params={"limit": 25},
+        headers=auth_a,
+    )
+    assert first.status_code == 200
+    assert first.json()["limit"] == 25
+    assert call_counts[(25, "Bearer token-a")] == 1
+
+    cached_same = client.get(
+        "/spotify/playlists/playlist-1/tracks",
+        params={"limit": 25},
+        headers=auth_a,
+    )
+    assert cached_same.status_code == 200
+    assert cached_same.json()["limit"] == 25
+    assert call_counts[(25, "Bearer token-a")] == 1
+
+    different_limit = client.get(
+        "/spotify/playlists/playlist-1/tracks",
+        params={"limit": 100},
+        headers=auth_a,
+    )
+    assert different_limit.status_code == 200
+    assert different_limit.json()["limit"] == 100
+    assert call_counts[(100, "Bearer token-a")] == 1
+
+    different_auth = client.get(
+        "/spotify/playlists/playlist-1/tracks",
+        params={"limit": 25},
+        headers=auth_b,
+    )
+    assert different_auth.status_code == 200
+    assert different_auth.json()["authorization"] == "Bearer token-b"
+    assert call_counts[(25, "Bearer token-b")] == 1
+
+    cached_auth_variant = client.get(
+        "/spotify/playlists/playlist-1/tracks",
+        params={"limit": 25},
+        headers=auth_b,
+    )
+    assert cached_auth_variant.status_code == 200
+    assert cached_auth_variant.json()["authorization"] == "Bearer token-b"
+    assert call_counts[(25, "Bearer token-b")] == 1
