@@ -66,32 +66,3 @@ def test_soulseek_health_requires_base_url(client) -> None:
     payload = response.json()
     assert payload["status"] == "fail"
     assert payload["missing"] == ["SLSKD_URL"]
-
-
-def test_plex_health_reports_missing_credentials(client) -> None:
-    response = client.get("/health/plex")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["service"] == "plex"
-    assert payload["status"] == "fail"
-    assert payload["missing"] == ["PLEX_BASE_URL", "PLEX_TOKEN", "PLEX_LIBRARY"]
-    assert payload["optional_missing"] == []
-
-
-def test_plex_health_ok_when_all_values_present(client) -> None:
-    _insert_settings(
-        {
-            "PLEX_BASE_URL": "http://plex",
-            "PLEX_TOKEN": "token",
-            "PLEX_LIBRARY": "Music",
-        }
-    )
-
-    response = client.get("/health/plex")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["service"] == "plex"
-    assert payload["status"] == "ok"
-    assert payload["missing"] == []

@@ -835,12 +835,10 @@ def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:
 def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]:
     defaults: dict[str, int] = {
         "spotify": 15000,
-        "plex": 15000,
         "slskd": DEFAULT_SLSKD_TIMEOUT_MS,
     }
     for key, provider in (
         ("SPOTIFY_TIMEOUT_MS", "spotify"),
-        ("PLEX_TIMEOUT_MS", "plex"),
         ("SLSKD_TIMEOUT_MS", "slskd"),
     ):
         raw = env.get(key)
@@ -888,7 +886,7 @@ def _load_provider_profiles(
     env: Mapping[str, Any], default_policy: ExternalCallPolicy
 ) -> dict[str, ProviderProfile]:
     profiles: dict[str, ProviderProfile] = {}
-    candidates = {"spotify", "slskd", "plex"}
+    candidates = {"spotify", "slskd"}
     for provider in candidates:
         prefix = f"PROVIDER_{provider.upper()}"
         keys = {

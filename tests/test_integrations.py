@@ -8,20 +8,18 @@ from app.services.integration_service import IntegrationService
 
 
 def test_parse_enabled_providers_deduplicates_and_normalises() -> None:
-    result = _parse_enabled_providers("Spotify, Plex, spotify \n slskd")
-    assert result == ("spotify", "plex", "slskd")
+    result = _parse_enabled_providers("Spotify, spotify \n slskd, SLSKD")
+    assert result == ("spotify", "slskd")
 
 
 def test_parse_provider_timeouts_reads_env_values() -> None:
     result = _parse_provider_timeouts(
         {
             "SPOTIFY_TIMEOUT_MS": "2000",
-            "PLEX_TIMEOUT_MS": "3000",
             "SLSKD_TIMEOUT_MS": "not-a-number",
         }
     )
     assert result["spotify"] == 2000
-    assert result["plex"] == 3000
     assert result["slskd"] == 8000
 
 
