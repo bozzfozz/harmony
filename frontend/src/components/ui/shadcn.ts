@@ -9,5 +9,6 @@ export {
 } from './card';
 export { Input, type InputProps } from './input';
 export { Badge, type BadgeProps } from './badge';
+export { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';

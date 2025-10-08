@@ -14,6 +14,7 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **Artist Watchlist & Detail UI** unter `/artists` mit Prioritäts-Management, Match-Kuration und Queue-Aktionen (siehe [docs/frontend/artists-ui.md](docs/frontend/artists-ui.md)).
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
+- **Free Playlist Links UI** unter `/free/links` ermöglicht das direkte Erfassen, Validieren und Speichern einzelner oder mehrerer Spotify-Playlist-Links inklusive Erfolgs- und Skip-Status.
 - **Spotify PRO Backfill** reichert bestehende FREE-Ingest-Daten nach OAuth-Setup automatisch mit Spotify-IDs, ISRCs und Laufzeiten an und expandiert gemeldete Playlist-Links zu vollständigen Tracklisten.
 - **Soulseek-Anbindung** inklusive Download-/Upload-Verwaltung, Warteschlangen und Benutzerinformationen.
 - **Integrations-Gateway** kapselt Spotify/slskd-Aufrufe hinter einem gemeinsamen `TrackProvider`-Contract. Retries, Timeout/Jitter, strukturiertes Logging (`api.dependency`) und Health-Checks laufen zentral; aktivierte Provider werden über `INTEGRATIONS_ENABLED` registriert.
