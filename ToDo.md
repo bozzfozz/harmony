@@ -151,12 +151,12 @@
   - [x] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
 
 ## TD-20251008-009 Reinstate bandit security scanning
-- **Status:** todo
+- **Status:** in-progress
 - **Priority:** P2
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T09:45:00Z
 - **Tags:** security, tooling
 - **Description:** `bandit` is not installed in the tooling environment, so security scans silently skip the backend. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【2a7069†L1-L1】
 - **Acceptance Criteria:**
@@ -167,4 +167,5 @@
 - **Dependencies:** TD-20251008-008 (align tooling updates).
 - **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/bandit_app.txt`. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【F:reports/analysis/_evidence/bandit_app.txt†L1-L1】
 - **Subtasks:**
-  - [ ] CODX-P2-SEC-319 — Add bandit dependency, configure baseline, and integrate with CI.
+  - [x] CODX-P2-SEC-319 — Add bandit dependency, configure baseline, and integrate with CI (Makefile + CI tee output to `reports/analysis/_evidence/bandit_app.txt`).
+  - [ ] CODX-P1-SEC-401 — Provide offline Bandit wheel and capture first-run findings so high-severity issues can be triaged.

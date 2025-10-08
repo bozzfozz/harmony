@@ -364,6 +364,9 @@ Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app
 Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings
 gar nicht erst im Pull Request landen.
 
+Die Ausgabe landet zusätzlich in `reports/analysis/_evidence/bandit_app.txt`, sodass Sicherheitsnachweise versioniert werden
+können. `make security` erzeugt die Datei automatisch und aktualisiert sie bei jeder Ausführung.
+
 ## Datenbank-Migrationen
 
 - `make db.upgrade` führt `alembic upgrade head` aus und wendet alle offenen Migrationen auf die konfigurierte Datenbank an.

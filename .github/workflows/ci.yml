@@ -113,4 +113,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install bandit==1.7.9
       - name: Security scan (Bandit)
-        run: bandit -c .bandit -r app
+        run: |
+          mkdir -p reports/analysis/_evidence
+          set -o pipefail
+          bandit -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt

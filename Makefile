@@ -25,7 +25,8 @@ security:
 ifeq ($(OFF),true)
 	@echo "⚠️ CI_OFFLINE=true → skipping security tools (bandit, pip-audit)."
 else
-	bandit -c .bandit -r app
+	@mkdir -p reports/analysis/_evidence
+	@bash -c "set -o pipefail; bandit -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt"
 	pip-audit -r requirements.txt || true
 endif
 

@@ -12,7 +12,7 @@
 | `black --check .` | ✅ | No formatting drift detected. |
 | `mypy app` | ✅ | Strict settings honoured; no untyped defs in `app/**`. |
 | `pytest -q` | ✅ | Full suite passes; FastAPI lifespan migration eliminates prior `on_event` warnings. |
-| `bandit -q -r app` | ⚠️ | Tool not installed and cannot be fetched because the execution environment blocks outbound package downloads. |
+| `bandit -q -r app` | ⚠️ | Pinned in `requirements-dev.txt` and wired into CI/`make security`; offline environments still need a vendored wheel before the scan can run. Evidence is written to `reports/analysis/_evidence/bandit_app.txt`. |
 | `vulture app tests --exclude .venv` | ⚠️ | Binary unavailable in the offline environment; cannot verify dead-code findings without vendored wheel. |
 | `radon cc -s -a app` | ⚠️ | CLI missing and pip installation is blocked; recommend bundling radon for deterministic local runs. |
 | `pip-audit` | ⚠️ | Not installable offline; dependency audit deferred. |
