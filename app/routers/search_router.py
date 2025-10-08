@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.api._deprecation import warn_legacy_import
+from app._legacy import warn_legacy_import
 from app.api.routers.search import log_event, router
 
 warn_legacy_import(

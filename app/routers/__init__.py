@@ -1,7 +1,7 @@
 from importlib import import_module
 from typing import Any
 
-from app.api._deprecation import warn_legacy_import
+from app._legacy import warn_legacy_import
 
 from .activity_router import router as activity_router
 from .dlq_router import router as dlq_router
