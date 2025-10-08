@@ -1522,7 +1522,6 @@ def client(
             stub_spotify,
             interval_seconds=0.1,
             response_cache=getattr(test_client.app.state, "response_cache", None),
-            api_base_path=getattr(test_client.app.state, "api_base_path", "") or "",
         )
         test_client.app.state.provider_gateway_stub = stub_gateway
         test_client.app.state.artist_gateway_stub = artist_gateway_stub

@@ -357,6 +357,30 @@ def resolve_auth_variant(authorization_header: str | None) -> str:
     return digest.hexdigest()
 
 
+PLAYLIST_LIST_CACHE_PREFIX = "cache:playlists:list"
+PLAYLIST_DETAIL_CACHE_PREFIX = "cache:playlists:detail"
+
+
+def playlist_filters_hash(query_string: str) -> str:
+    """Return a stable hash for playlist listing filters."""
+
+    return build_query_hash(query_string)
+
+
+def playlist_list_cache_key(*, query_string: str = "", filters_hash: str | None = None) -> str:
+    """Construct the canonical cache key for playlist collection responses."""
+
+    resolved_hash = filters_hash if filters_hash is not None else playlist_filters_hash(query_string)
+    return f"{PLAYLIST_LIST_CACHE_PREFIX}:{resolved_hash}"
+
+
+def playlist_detail_cache_key(playlist_id: str) -> str:
+    """Construct the canonical cache key for a playlist detail response."""
+
+    normalized = playlist_id.strip()
+    return f"{PLAYLIST_DETAIL_CACHE_PREFIX}:{normalized}" if normalized else f"{PLAYLIST_DETAIL_CACHE_PREFIX}:"
+
+
 def artist_cache_templates(base_path: str | None) -> tuple[str, ...]:
     """Return canonical cache templates for artist resources."""
 

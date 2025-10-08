@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from datetime import datetime
 from typing import Any, Iterable
 
@@ -15,7 +14,7 @@ from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.logging_events import log_event
-from app.services.cache import ResponseCache, build_path_param_hash
+from app.services.cache import PLAYLIST_LIST_CACHE_PREFIX, ResponseCache, playlist_detail_cache_key
 
 logger = get_logger(__name__)
 
@@ -28,14 +27,11 @@ class PlaylistCacheInvalidator:
         cache: ResponseCache,
         *,
         loop: asyncio.AbstractEventLoop,
-        list_paths: tuple[str, ...],
-        detail_templates: tuple[str, ...],
     ) -> None:
         self._cache = cache
         self._loop = loop
-        self._list_paths = list_paths
-        self._detail_templates = detail_templates
         self._reason = "playlist_updated"
+        self._list_prefix = f"{PLAYLIST_LIST_CACHE_PREFIX}:"
 
     def invalidate(self, playlist_ids: Iterable[str]) -> None:
         ordered_ids: list[str] = []
@@ -48,9 +44,6 @@ class PlaylistCacheInvalidator:
                 continue
             ordered_ids.append(trimmed)
             seen_ids.add(trimmed)
-
-        if not self._list_paths and not self._detail_templates:
-            return
 
         future = asyncio.run_coroutine_threadsafe(
             self._invalidate_targets(tuple(ordered_ids)), self._loop
@@ -88,29 +81,20 @@ class PlaylistCacheInvalidator:
 
     async def _invalidate_targets(self, playlist_ids: tuple[str, ...]) -> int:
         total = 0
-        for path in self._list_paths:
-            total += await self._cache.invalidate_path(
-                path,
+        total += await self._cache.invalidate_prefix(
+            self._list_prefix,
+            reason=self._reason,
+            path="/spotify/playlists",
+        )
+
+        for playlist_id in playlist_ids:
+            key_prefix = playlist_detail_cache_key(playlist_id)
+            total += await self._cache.invalidate_prefix(
+                key_prefix,
                 reason=self._reason,
+                entity_id=playlist_id,
+                path="/spotify/playlists/{playlist_id}/tracks",
             )
-
-        for template in self._detail_templates:
-            if "{playlist_id}" not in template:
-                total += await self._cache.invalidate_path(
-                    template,
-                    reason=self._reason,
-                )
-                continue
-
-            escaped_template = re.escape(template)
-            for playlist_id in playlist_ids:
-                path_hash = build_path_param_hash({"playlist_id": playlist_id})
-                pattern = rf"^GET:{escaped_template}:{path_hash}:"
-                total += await self._cache.invalidate_pattern(
-                    pattern,
-                    reason=self._reason,
-                    entity_id=playlist_id,
-                )
 
         return total
 
@@ -124,15 +108,12 @@ class PlaylistSyncWorker:
         interval_seconds: float = 900.0,
         *,
         response_cache: ResponseCache | None = None,
-        api_base_path: str = "",
     ) -> None:
         self._client = spotify_client
         self._interval = interval_seconds
         self._task: asyncio.Task[None] | None = None
         self._running = False
         self._response_cache = response_cache
-        self._api_base_path = (api_base_path or "").strip()
-        self._list_paths: tuple[str, ...] | None = None
 
     async def start(self) -> None:
         if self._task is None or self._task.done():
@@ -248,49 +229,6 @@ class PlaylistSyncWorker:
 
         return processed
 
-    def _resolve_list_paths(self) -> tuple[str, ...]:
-        if self._list_paths is not None:
-            return self._list_paths
-
-        playlist_path = "/spotify/playlists"
-        paths: list[str] = []
-
-        base_path = self._compose_path(playlist_path)
-        if base_path:
-            paths.append(base_path)
-
-        paths.append(playlist_path)
-
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for path in paths:
-            if path not in seen:
-                ordered.append(path)
-                seen.add(path)
-
-        self._list_paths = tuple(ordered)
-        return self._list_paths
-
-    def _resolve_detail_templates(self) -> tuple[str, ...]:
-        detail_path = "/spotify/playlists/{playlist_id}/tracks"
-        templates: list[str] = []
-
-        base_template = self._compose_path(detail_path)
-        if base_template:
-            templates.append(base_template)
-
-        templates.append(detail_path)
-
-        # Deduplicate while preserving order
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for template in templates:
-            if template not in seen:
-                ordered.append(template)
-                seen.add(template)
-
-        return tuple(ordered)
-
     def _build_cache_invalidator(self) -> "PlaylistCacheInvalidator | None":
         if self._response_cache is None:
             return None
@@ -307,17 +245,7 @@ class PlaylistSyncWorker:
         return PlaylistCacheInvalidator(
             self._response_cache,
             loop=loop,
-            list_paths=self._resolve_list_paths(),
-            detail_templates=self._resolve_detail_templates(),
         )
-
-    def _compose_path(self, path: str) -> str:
-        normalized_path = path if path.startswith("/") else f"/{path}"
-        base = self._api_base_path
-        if not base or base == "/":
-            return normalized_path
-        base_prefix = base.rstrip("/")
-        return f"{base_prefix}{normalized_path}"
 
     @staticmethod
     def _extract_track_count(payload: dict[str, Any]) -> int:
