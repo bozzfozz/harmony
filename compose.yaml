@@ -3,10 +3,12 @@ services:
     image: ghcr.io/bozzfozz/harmony:latest
     container_name: harmony
     restart: unless-stopped
+    depends_on:
+      - postgres
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: sqlite:////data/harmony.db
+      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:8080
       PUBLIC_BACKEND_URL: http://localhost:8080
@@ -23,5 +25,18 @@ services:
       retries: 3
       start_period: 10s
 
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: harmony
+      POSTGRES_USER: harmony
+      POSTGRES_PASSWORD: harmony
+    ports:
+      - "5432:5432"
+    volumes:
+      - harmony-pg-data:/var/lib/postgresql/data
+
 volumes:
   harmony-data:
+  harmony-pg-data:

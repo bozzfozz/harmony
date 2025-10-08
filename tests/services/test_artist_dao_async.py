@@ -1,85 +1,36 @@
 from __future__ import annotations
 
-import os
-import uuid
 from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
-import sqlalchemy as sa
-from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import (AsyncEngine, async_sessionmaker,
-                                    create_async_engine)
-from sqlalchemy.schema import CreateSchema, DropSchema
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.db import Base
 from app.models import WatchlistArtist
 from app.services.artist_dao_async import ArtistWatchlistAsyncDAO
+from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 
 
 # pytest-asyncio strict mode requires explicit async fixtures.
-@pytest_asyncio.fixture(params=["sqlite", "postgresql"], ids=["sqlite", "postgresql"])
-async def async_session(request: pytest.FixtureRequest):
-    backend = request.param
-
-    if backend == "sqlite":
-        pytest.importorskip("aiosqlite")
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
+@pytest_asyncio.fixture()
+async def async_session(monkeypatch: pytest.MonkeyPatch):
+    pytest.importorskip("asyncpg")
+    async_engine: AsyncEngine | None = None
+    with postgres_schema("artist_async", monkeypatch=monkeypatch) as schema:
+        async_engine = create_async_engine(schema.async_url(), future=True)
         try:
-            async with engine.begin() as conn:
+            async with async_engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            session_factory = async_sessionmaker(engine, expire_on_commit=False)
+            session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
             async with session_factory() as session:
                 yield session
                 await session.rollback()
         finally:
-            await engine.dispose()
-        return
-
-    pytest.importorskip("asyncpg")
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        pytest.skip("DATABASE_URL is not configured for PostgreSQL tests")
-
-    url = make_url(database_url)
-    if url.get_backend_name() != "postgresql":
-        pytest.skip("PostgreSQL URL required for async DAO tests")
-
-    schema_name: str | None = None
-    base_engine = sa.create_engine(url)
-    engine: AsyncEngine | None = None
-    try:
-        schema_name = f"test_artist_async_{uuid.uuid4().hex}"
-        with base_engine.connect() as connection:
-            connection.execute(CreateSchema(schema_name))
-            connection.commit()
-
-        scoped_url = url.set(
-            query={**url.query, "options": f"-csearch_path={schema_name}"}
-        )
-        async_url = scoped_url.set(drivername="postgresql+asyncpg")
-        engine = create_async_engine(str(async_url), future=True)
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        session_factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with session_factory() as session:
-            yield session
-            await session.rollback()
-    finally:
-        if engine is not None:
-            await engine.dispose()
-        if schema_name is not None:
-            with base_engine.connect() as connection:
-                try:
-                    connection.execute(DropSchema(schema_name, cascade=True))
-                    connection.commit()
-                except ProgrammingError:
-                    connection.rollback()
-        base_engine.dispose()
-    return
+            if async_engine is not None:
+                await async_engine.dispose()
 
 
 async def _create_artist(

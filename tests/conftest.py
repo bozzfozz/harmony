@@ -26,7 +26,9 @@ os.environ.setdefault("ALLOWED_ORIGINS", "https://app.local")
 os.environ.setdefault("CACHE_ENABLED", "true")
 os.environ.setdefault("CACHE_DEFAULT_TTL_S", "30")
 os.environ.setdefault("CACHE_MAX_ITEMS", "256")
-os.environ.setdefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/harmony")
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/harmony"
+)
 
 import pytest
 import sqlalchemy as sa

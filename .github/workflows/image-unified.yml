@@ -55,15 +55,31 @@ jobs:
       - name: Run smoke tests
         run: |
           set -euo pipefail
+          docker network create harmony-smoke
+          docker run -d \
+            --name harmony-postgres \
+            --network harmony-smoke \
+            -e POSTGRES_DB=harmony \
+            -e POSTGRES_USER=harmony \
+            -e POSTGRES_PASSWORD=harmony \
+            postgres:16
+          for attempt in $(seq 1 20); do
+            if docker exec harmony-postgres pg_isready -U harmony -d harmony >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
           docker run -d \
             --name harmony-smoke \
-            -e DATABASE_URL=sqlite:///./harmony.db \
+            --network harmony-smoke \
+            -e DATABASE_URL=postgresql+psycopg://harmony:harmony@harmony-postgres:5432/harmony \
             -e HARMONY_API_KEYS=dev-key \
             -e PUBLIC_BACKEND_URL=http://127.0.0.1:8080 \
             -p 8080:8080 \
             harmony:ci-test
           cleanup() {
-            docker rm -f harmony-smoke >/dev/null 2>&1 || true
+            docker rm -f harmony-smoke harmony-postgres >/dev/null 2>&1 || true
+            docker network rm harmony-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 

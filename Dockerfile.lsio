@@ -23,7 +23,7 @@ ENV PUID=1000 \
     PIP_NO_CACHE_DIR=1 \
     APP_PORT=8000 \
     HARMONY_PROFILE=prod \
-    DATABASE_URL="sqlite:////config/harmony.db"
+    DATABASE_URL="postgresql+psycopg://harmony:harmony@postgres:5432/harmony"
 
 WORKDIR /app
 

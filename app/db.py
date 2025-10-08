@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
+from contextlib import AbstractContextManager, contextmanager
 from typing import Callable, Iterator, Optional, TypeVar
 
 try:  # pragma: no cover - optional dependency support for local tooling
@@ -15,7 +15,6 @@ except ImportError:  # pragma: no cover - allow fallback during tests/offline us
     command = None  # type: ignore[assignment]
     Config = None  # type: ignore[assignment]
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import load_config
@@ -45,24 +44,7 @@ SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
 def _build_engine(database_url: str) -> Engine:
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, connect_args=connect_args)
-
-
-def _resolve_sqlite_path(database_url: str) -> Optional[Path]:
-    try:
-        url = make_url(database_url)
-    except Exception:  # pragma: no cover - defensive parsing
-        return None
-
-    if url.get_backend_name() != "sqlite":
-        return None
-
-    database = url.database or ""
-    if database in {":memory:", ""}:
-        return None
-
-    return Path(database)
+    return create_engine(database_url)
 
 
 def _ensure_engine(*, auto_init: bool = True) -> None:
@@ -70,14 +52,7 @@ def _ensure_engine(*, auto_init: bool = True) -> None:
 
     config = load_config()
     database_url = config.database.url
-    sqlite_path = _resolve_sqlite_path(database_url)
-
-    reuse_existing = False
     if _engine is not None and database_url == _configured_database_url:
-        if sqlite_path is None or sqlite_path.exists() or not auto_init:
-            reuse_existing = True
-
-    if reuse_existing:
         return
 
     if _engine is not None:

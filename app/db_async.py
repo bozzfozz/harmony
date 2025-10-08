@@ -16,9 +16,7 @@ _configured_async_url: str | None = None
 def _to_async_url(database_url: str) -> str:
     url = make_url(database_url)
     driver = url.drivername
-    if driver.startswith("sqlite"):
-        async_url = url.set(drivername="sqlite+aiosqlite")
-    elif "psycopg" in driver:
+    if "psycopg" in driver:
         async_url = url.set(drivername="postgresql+asyncpg")
     elif driver.startswith("postgresql"):
         async_url = url.set(drivername="postgresql+asyncpg")

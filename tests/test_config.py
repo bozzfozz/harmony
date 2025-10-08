@@ -96,8 +96,8 @@ def test_configuration_supports_legacy_slskd_host_port(
     assert config.soulseek.base_url == "http://slskd.local:2235"
 
 
-def test_load_config_rejects_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+def test_load_config_rejects_non_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "mysql+pymysql://user:pass@db/test")
 
     with pytest.raises(ValidationAppError):
         load_config()

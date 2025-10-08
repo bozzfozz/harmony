@@ -3,8 +3,7 @@
 This project uses [Alembic](https://alembic.sqlalchemy.org/) to manage schema
 changes. All migration scripts live under `app/migrations` and are executed via
 `alembic` commands. Migrations **must** remain additive and idempotent so that
-they can run on both SQLite (the default development database) and PostgreSQL
-(the production database).
+they can run repeatedly against PostgreSQL without manual clean-up.
 
 ## Running migrations
 
@@ -33,13 +32,17 @@ configuration. Override the target database with the `sqlalchemy.url` value or
 4. Provide downgrade steps. If a non-lossy downgrade is impossible, leave a
    documented `no-op` explaining why.
 
-### Dialect compatibility
+### Dialekt-Hinweise
 
-* Use SQLAlchemy types that work on both SQLite and PostgreSQL. For JSON data,
-  prefer `sa.JSON().with_variant(sa.Text(), "sqlite")`.
-* Avoid database-specific DDL unless wrapped in dialect checks.
-* When adding NOT NULL columns to existing tables, fill historic rows and apply
-  the constraint via `batch_alter_table` to keep SQLite compatible.
+* Verwende native PostgreSQL-Typen (`sa.JSON`, `sa.JSONB`, `sa.UUID`, …) und
+  nutze `postgresql_using=`/`postgresql_where=` für partielle Indizes statt
+  SQLite-Fallbacks.
+* Vermeide datenbank-spezifische DDL ohne Guards; prüfe z. B. mit
+  `if connection.dialect.name == "postgresql"` bevor du Postgres-spezifische
+  Funktionen aufrufst.
+* Beim Hinzufügen von NOT NULL-Spalten zu bestehenden Tabellen: Fülle Alt-Daten
+  in denselben Migrationen und setze die Constraint anschließend via
+  `batch_alter_table`.
 
 ### Naming conventions
 
@@ -50,8 +53,7 @@ configuration. Override the target database with the `sqlalchemy.url` value or
 
 ## Testing migrations
 
-Run the dedicated migration smoke tests to ensure both SQLite and PostgreSQL
-coverage:
+Run the dedicated migration smoke tests to ensure PostgreSQL coverage:
 
 ```bash
 pytest tests/migrations -q
