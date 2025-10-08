@@ -25,3 +25,19 @@ task cancellation primitives that keep the tests deterministic. The recording
 dispatcher collects processed jobs so tests can assert structured outcomes
 even though the production logging setup reconfigures handlers during the
 FastAPI lifespan startup.
+
+## PostgreSQL test matrix
+
+- Der Marker `@pytest.mark.postgres` kennzeichnet Tests, die explizit gegen
+  PostgreSQL laufen und Dialekt-Parität sicherstellen (Queue-Idempotenz,
+  Orchestrator-Leases/Heartbeats, Activity-Historie, Async-DAO und der Alembic
+  Roundtrip). Die Marker werden von `pytest.ini` registriert und können per
+  `pytest -m postgres -q` selektiv ausgeführt werden.
+- Im CI übernimmt [`backend-postgres.yml`](../.github/workflows/backend-postgres.yml)
+  die Ausführung: `alembic upgrade head` → `pytest -m postgres -q` →
+  `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit
+  temporären Schemas je Testlauf (`search_path`-Isolation).
+- Lokal können dieselben Schritte mit einer Docker-Instanz reproduziert werden.
+  Setzt man `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony`,
+  führen die Tests automatisch Schema-Cleanup (`DropSchema(cascade=True)`) durch
+  und hinterlassen keine Datenbankartefakte.

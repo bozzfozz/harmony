@@ -22,6 +22,8 @@ from app.models import QueueJob
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO, enqueue
 
+pytestmark = pytest.mark.postgres
+
 
 @pytest.mark.anyio
 async def test_enqueue_idempotent_concurrency_creates_single_row() -> None:
