@@ -117,6 +117,24 @@ def test_enqueue_sync_is_idempotent_returns_202() -> None:
         assert job.type == "artist_sync"
 
 
+def test_enqueue_sync_force_creates_new_job() -> None:
+    artist_key = build_artist_key("spotify", "force-refresh")
+    path = api_path(f"/artists/{artist_key}/enqueue-sync")
+
+    with SimpleTestClient(app) as client:
+        initial = client.post(path)
+        forced = client.post(path, json={"force": True})
+
+    assert initial.status_code == 202
+    assert forced.status_code == 202
+
+    initial_body = initial.json()
+    forced_body = forced.json()
+    assert initial_body["already_enqueued"] is False
+    assert forced_body["already_enqueued"] is False
+    assert forced_body["job_id"] != initial_body["job_id"]
+
+
 def test_error_mapping_not_found_and_validation() -> None:
     with SimpleTestClient(app) as client:
         missing_response = client.get(api_path("/artists/spotify:missing"))

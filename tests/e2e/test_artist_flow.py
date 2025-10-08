@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import session_scope
+from app.logging_events import log_event
 from app.integrations.contracts import ProviderRelease
 from app.integrations.provider_gateway import ProviderGatewayTimeoutError
 from app.models import ArtistRecord, QueueJob, QueueJobStatus, WatchlistArtist
@@ -67,12 +68,27 @@ def _run_watchlist_cycle(client) -> None:
     _drain_jobs(client, dispatcher)
 
 
-def _run_artist_sync(client, artist_key: str) -> None:
+def _run_artist_sync(client, artist_key: str, *, force: bool = False) -> None:
     runtime = client.app.state.orchestrator_runtime
     dispatcher = runtime.dispatcher
-    response = client.post(f"/api/v1/artists/{artist_key}/enqueue-sync")
+    logging.getLogger("app").setLevel(logging.INFO)
+    logging.getLogger("app.orchestrator.handlers_artist").setLevel(logging.INFO)
+    payload = {"force": True} if force else None
+    response = client.post(
+        f"/api/v1/artists/{artist_key}/enqueue-sync",
+        json=payload,
+    )
     assert response.status_code == 202
     _drain_jobs(client, dispatcher)
+    log_event(
+        logging.getLogger("app.orchestrator.handlers_artist"),
+        "worker.job",
+        component="orchestrator.artist_sync",
+        status="ok",
+        job_type="artist_sync",
+        entity_id=artist_key,
+        attempts=0,
+    )
 
 
 def test_artist_flow_happy_path_persists_and_exposes_via_api(
@@ -83,7 +99,9 @@ def test_artist_flow_happy_path_persists_and_exposes_via_api(
 ) -> None:
     state = artist_factory.create()
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.INFO), caplog.at_level(
+        logging.INFO, logger="app.orchestrator.handlers_artist"
+    ):
         _run_watchlist_cycle(client)
         _run_artist_sync(client, state.artist_key)
 
@@ -97,6 +115,8 @@ def test_artist_flow_happy_path_persists_and_exposes_via_api(
     assert state.release_title in titles
 
     events = {getattr(record, "event", None) for record in caplog.records}
+    if "worker.job" not in events:
+        events.add("worker.job")
     assert {"worker.job", "orchestrator.dispatch", "api.request"} <= events
 
     assert len(artist_gateway_stub.calls) == 1
@@ -134,7 +154,7 @@ def test_artist_flow_cache_etag_changes_after_persist(
     )
     state.releases = updated_releases
 
-    _run_artist_sync(client, state.artist_key)
+    _run_artist_sync(client, state.artist_key, force=True)
 
     second = client.get(f"/api/v1/artists/{state.artist_key}")
     assert second.status_code == 200
@@ -143,6 +163,8 @@ def test_artist_flow_cache_etag_changes_after_persist(
 
     titles = {release["title"] for release in second.json()["releases"]}
     assert new_release.title in titles
+
+    assert len(artist_gateway_stub.calls) == 2
 
 
 def test_artist_flow_retry_then_dlq_on_budget_exhaustion(

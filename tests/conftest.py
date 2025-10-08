@@ -9,6 +9,7 @@ pytest_plugins = [
 ]
 
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
@@ -35,6 +36,8 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
+from app.logging import get_logger
+from app.logging_events import log_event
 from app.dependencies import (
     get_integration_service as dependency_integration_service,
     get_matching_engine as dependency_matching_engine,
@@ -49,7 +52,6 @@ from app.integrations.provider_gateway import (
     ProviderGatewaySearchResponse,
     ProviderGatewaySearchResult,
 )
-from app.logging import get_logger
 from app.main import app
 from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.models import QueueJobStatus
@@ -187,6 +189,9 @@ class RecordingDispatcher:
                     payload=job.payload,
                 )
                 continue
+            if job.type == "artist_sync":
+                logging.getLogger("app").setLevel(logging.INFO)
+                get_logger("app.orchestrator.handlers_artist").setLevel(logging.INFO)
             await self._impl._execute_job(job, handler)
             processed.append(job)
             self.processed_jobs.append(job)
@@ -205,12 +210,28 @@ def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
         artwork_service=None,
         lyrics_service=None,
     ) -> orchestrator_bootstrap.OrchestratorRuntime:
+        logging.getLogger("app").setLevel(logging.INFO)
+        logging.getLogger("app.orchestrator.handlers_artist").setLevel(logging.INFO)
         runtime = original_bootstrap(
             metadata_service=metadata_service,
             artwork_service=artwork_service,
             lyrics_service=lyrics_service,
         )
-        scheduler = RecordingScheduler(persistence_module=runtime.dispatcher._persistence)
+        if "artist_sync" in runtime.handlers:
+            from app.orchestrator import providers as orchestrator_providers
+            from app.orchestrator.artist_sync import build_artist_sync_handler
+
+            deps = orchestrator_providers.build_artist_sync_handler_deps()
+            runtime.handlers["artist_sync"] = build_artist_sync_handler(deps)
+        enabled_job_types = [
+            job_type
+            for job_type, is_enabled in runtime.enabled_jobs.items()
+            if is_enabled and isinstance(job_type, str)
+        ]
+        scheduler = RecordingScheduler(
+            job_types=enabled_job_types or None,
+            persistence_module=runtime.dispatcher._persistence,
+        )
         dispatcher = RecordingDispatcher(scheduler, runtime.handlers)
         return orchestrator_bootstrap.OrchestratorRuntime(
             scheduler=scheduler,

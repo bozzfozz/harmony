@@ -18,6 +18,15 @@ from app.services.artist_delta import ArtistKnownRelease
 _UNSET = object()
 
 
+def _normalize_hash(value: str | None) -> str | None:
+    """Return ``None`` when the provided hash is empty or whitespace."""
+
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
 @dataclass(slots=True)
 class ArtistWorkflowArtistRow:
     """Lightweight representation of an artist monitored by the workflow."""
@@ -27,7 +36,10 @@ class ArtistWorkflowArtistRow:
     name: str
     last_checked: datetime | None
     retry_block_until: datetime | None
-    last_hash: str | None
+    last_hash: str | None = None
+
+    def __post_init__(self) -> None:
+        self.last_hash = _normalize_hash(self.last_hash)
 
 
 class ArtistWorkflowDAO:
@@ -155,7 +167,7 @@ class ArtistWorkflowDAO:
                     return
                 record.last_checked = timestamp
                 record.last_scan_at = timestamp
-                record.last_hash = content_hash
+                record.last_hash = _normalize_hash(content_hash)
                 record.retry_block_until = None
                 record.updated_at = self._now_factory()
                 session.add(record)

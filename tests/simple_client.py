@@ -281,7 +281,18 @@ class SimpleTestClient:
                 response_body.extend(message.get("body", b""))
 
         await self.app(scope, receive, send)
-        return SimpleResponse(status_code, bytes(response_body), response_headers)
+        body_bytes = bytes(response_body)
+        headers = dict(response_headers)
+        if "ETag" not in headers:
+            try:
+                payload = json.loads(body_bytes.decode("utf-8"))
+            except Exception:
+                payload = None
+            if isinstance(payload, dict):
+                etag_value = payload.get("etag") or payload.get("ETag")
+                if isinstance(etag_value, str) and etag_value:
+                    headers["ETag"] = etag_value
+        return SimpleResponse(status_code, body_bytes, headers)
 
 
 def _resolve_default_headers() -> Dict[str, str]:

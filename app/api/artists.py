@@ -5,7 +5,7 @@ from __future__ import annotations
 from time import perf_counter
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Query, Request, Response, status
 
 from app.dependencies import get_artist_service
 from app.errors import AppError, InternalServerError
@@ -14,6 +14,7 @@ from app.logging_events import log_event
 from app.schemas.artists import (
     ArtistOut,
     EnqueueResponse,
+    EnqueueSyncRequest,
     ReleaseOut,
     WatchlistItemIn,
     WatchlistItemOut,
@@ -269,11 +270,13 @@ def get_artist(
 async def enqueue_artist_sync_endpoint(
     artist_key: str,
     request: Request,
+    payload: EnqueueSyncRequest | None = Body(default=None),
     service: ArtistService = Depends(get_artist_service),
 ) -> EnqueueResponse:
     started = perf_counter()
     try:
-        result = await service.enqueue_sync(artist_key)
+        force = bool(payload.force) if payload is not None else False
+        result = await service.enqueue_sync(artist_key, force=force)
     except AppError as exc:
         duration_ms = (perf_counter() - started) * 1000
         _emit_api_event(
