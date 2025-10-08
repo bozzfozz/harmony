@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
 import time
 from dataclasses import dataclass
@@ -360,17 +361,71 @@ async def get_status(request: Request) -> Dict[str, Any]:
     }
 
 
-def _resolve_psutil():
+def _call_dependency_override(
+    override: Callable[..., Any], request: Request | None
+) -> Any:
+    if request is None:
+        return override()
+
+    try:
+        signature = inspect.signature(override)
+    except (TypeError, ValueError):
+        try:
+            return override(request)
+        except TypeError:
+            return override()
+
+    parameters = list(signature.parameters.values())
+    if not parameters:
+        return override()
+
+    for parameter in parameters:
+        if parameter.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.VAR_POSITIONAL,
+        ):
+            return override(request)
+
+    request_parameter = signature.parameters.get("request")
+    if request_parameter is not None and request_parameter.kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    ):
+        return override(request=request)
+
+    return override()
+
+
+def _resolve_psutil(request: Request | None = None):
+    candidate = None
+    if request is not None:
+        overrides = getattr(request.app, "dependency_overrides", None)
+        if overrides:
+            override = overrides.get(_resolve_psutil)
+            if override is not None:
+                candidate = _call_dependency_override(override, request)
+        if candidate is not None:
+            return candidate
+
+        state_psutil = getattr(request.app.state, "psutil", None)
+        if state_psutil is not None:
+            return state_psutil
+
     shim = sys.modules.get("app.routers.system_router")
-    candidate = getattr(shim, "psutil", None) if shim is not None else None
-    return candidate if candidate is not None else psutil
+    if shim is not None:
+        candidate = getattr(shim, "psutil", None)
+        if candidate is not None:
+            return candidate
+
+    return psutil
 
 
 @router.get("/system/stats", tags=["System"])
-async def get_system_stats() -> Dict[str, Any]:
+async def get_system_stats(request: Request) -> Dict[str, Any]:
     """Return system statistics such as CPU, memory and disk usage."""
 
-    current_psutil = _resolve_psutil()
+    current_psutil = _resolve_psutil(request)
     if current_psutil is None:
         logger.error("psutil is not available; cannot provide system statistics")
         raise HTTPException(status_code=503, detail="System statistics unavailable")
