@@ -51,6 +51,7 @@ def emit_lease_event(
     status: str,
     priority: int,
     lease_timeout: int,
+    duration_ms: int,
 ) -> None:
     payload = {
         "entity_id": str(job_id),
@@ -58,6 +59,7 @@ def emit_lease_event(
         "status": status,
         "priority": priority,
         "lease_timeout": lease_timeout,
+        "duration_ms": duration_ms,
     }
     _emit_event(logger, "orchestrator.lease", payload)
 
