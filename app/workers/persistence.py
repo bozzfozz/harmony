@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Iterable, List, Mapping, Sequence
+from datetime import datetime
+from typing import Any, Callable, Iterable, List, Mapping, Sequence
 
-from sqlalchemy import Select, func, or_, select, update
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy import Select, bindparam, case, func, or_, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+try:  # pragma: no cover - optional dependency guard
+    from psycopg.errors import UniqueViolation
+except Exception:  # pragma: no cover - fallback for alternative drivers
+    UniqueViolation = None  # type: ignore[assignment]
 
 from app.config import settings
 from app.db import session_scope
@@ -22,7 +26,11 @@ from app.utils.idempotency import make_idempotency_key
 from app.utils.jsonx import safe_dumps
 from app.utils.time import now_utc
 
+LeaseTelemetryHook = Callable[["QueueJobDTO", str, Mapping[str, Any]], None]
+
+
 logger = get_logger(__name__)
+_lease_telemetry_hook: LeaseTelemetryHook | None = None
 
 
 def _utcnow() -> datetime:
@@ -45,6 +53,34 @@ def _emit_worker_job_event(
         meta = {"dedup": bool(deduped)}
     payload.update({key: value for key, value in extra.items() if value is not None})
     log_event(logger, "worker.job", meta=meta, **payload)
+
+
+def register_lease_telemetry_hook(
+    hook: LeaseTelemetryHook | None,
+) -> None:
+    """Register a callback that receives lease lifecycle telemetry."""
+
+    global _lease_telemetry_hook
+    _lease_telemetry_hook = hook
+
+
+def _emit_lease_telemetry(job: "QueueJobDTO", status: str, *, lease_timeout: int) -> None:
+    if _lease_telemetry_hook is None:
+        return
+
+    try:
+        _lease_telemetry_hook(
+            job,
+            status,
+            {
+                "lease_timeout": int(lease_timeout),
+                "priority": int(job.priority),
+            },
+        )
+    except Exception:  # pragma: no cover - defensive hook guard
+        logger.exception(
+            "Lease telemetry hook raised", extra={"event": "queue.lease.telemetry_error"}
+        )
 
 
 def _emit_worker_tick(job_type: str, *, status: str, count: int | None = None) -> None:
@@ -179,45 +215,6 @@ def _refresh_instance(session: Session, record: QueueJob) -> QueueJobDTO:
     return _to_dto(record)
 
 
-def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
-    """Return ``True`` when an integrity error represents a duplicate insert."""
-
-    original = getattr(exc, "orig", exc)
-    pgcode = getattr(original, "pgcode", None)
-    if pgcode == "23505":  # unique_violation
-        return True
-
-    message = str(original).upper()
-    return "UNIQUE" in message or "DUPLICATE" in message
-
-
-def _apply_existing_job_updates(
-    existing: QueueJob,
-    *,
-    payload: Mapping[str, Any],
-    priority: int,
-    scheduled_for: datetime,
-    now: datetime,
-) -> bool:
-    previous_status = existing.status
-    existing.payload = dict(payload)
-    existing.priority = priority
-    existing.available_at = scheduled_for
-    existing.status = QueueJobStatus.PENDING.value
-    existing.lease_expires_at = None
-    existing.last_error = None
-    existing.result_payload = None
-    existing.stop_reason = None
-    existing.updated_at = now
-    if previous_status in {
-        QueueJobStatus.COMPLETED.value,
-        QueueJobStatus.CANCELLED.value,
-    }:
-        existing.attempts = 0
-        return False
-    return True
-
-
 def _upsert_queue_job(
     session: Session,
     *,
@@ -225,8 +222,7 @@ def _upsert_queue_job(
     dedupe_key: str,
     payload: Mapping[str, Any],
     priority: int,
-    scheduled_for: datetime,
-    now: datetime,
+    scheduled_for: datetime | None,
 ) -> tuple[QueueJob, bool]:
     """Insert or update a queue job guarded by the idempotency key."""
 
@@ -234,7 +230,6 @@ def _upsert_queue_job(
     dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
 
     stmt_base: Select[QueueJob] = select(QueueJob).where(QueueJob.idempotency_key == dedupe_key)
-    attempts = 0
 
     def _log_dedupe() -> None:
         logger.debug(
@@ -247,125 +242,104 @@ def _upsert_queue_job(
             },
         )
 
-    def _select_existing(with_lock: bool = True) -> QueueJob | None:
-        stmt = stmt_base
-        if with_lock and dialect_name not in {"", "sqlite"}:
-            stmt = stmt.with_for_update()
-        return session.execute(stmt).scalars().first()
-
-    insert_values: dict[str, Any] = {
-        "type": job_type,
-        "payload": dict(payload),
-        "priority": priority,
-        "available_at": scheduled_for,
-        "idempotency_key": dedupe_key,
-        "status": QueueJobStatus.PENDING.value,
-        "stop_reason": None,
-        "lease_expires_at": None,
-        "last_error": None,
-        "result_payload": None,
-        "attempts": 0,
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    insert_stmt: Any | None = None
-    returning_supported = False
-
-    if dialect_name == "postgresql":
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-        insert_stmt = (
-            pg_insert(QueueJob)
-            .values(**insert_values)
-            .on_conflict_do_nothing(index_elements=["idempotency_key"])
-            .returning(QueueJob.id)
+    if dialect_name != "postgresql":
+        logger.error(
+            "Queue job persistence now requires PostgreSQL",  # pragma: no cover - guard rail
+            extra={
+                "event": "queue.job.unsupported_dialect",
+                "idempotency_key": dedupe_key,
+                "dialect": dialect_name or "unknown",
+            },
         )
-        returning_supported = True
-    elif dialect_name == "sqlite":
-        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+        raise RuntimeError("Queue job persistence requires PostgreSQL")
 
-        stmt = sqlite_insert(QueueJob).values(**insert_values)
-        # SQLite cannot reference the partial unique index on
-        # ``idempotency_key`` inside an ``ON CONFLICT`` clause reliably.
-        # Falling back to ``OR IGNORE`` keeps the same semantics without
-        # triggering ``OperationalError`` loops in environments that do not
-        # support the richer syntax.
-        stmt = stmt.prefix_with("OR IGNORE")
-        try:
-            stmt = stmt.returning(QueueJob.id)
-            returning_supported = True
-        except AttributeError:
-            returning_supported = False
-        insert_stmt = stmt
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    while True:
-        inserted_record: QueueJob | None = None
-        if insert_stmt is None:
-            record = QueueJob(**insert_values)
-            session.add(record)
-            try:
-                session.flush()
-            except IntegrityError as exc:
-                session.rollback()
-                if not _is_duplicate_integrity_error(exc):
-                    raise
-            except OperationalError:
-                session.rollback()
-            else:
-                return record, False
-        else:
-            try:
-                result = session.execute(insert_stmt)
-            except IntegrityError as exc:
-                session.rollback()
-                if not _is_duplicate_integrity_error(exc):
-                    raise
-            except OperationalError:
-                session.rollback()
-            else:
-                if returning_supported:
-                    inserted_id = result.scalars().first()
-                    if inserted_id is not None:
-                        inserted_record = session.get(QueueJob, inserted_id)
-                        if inserted_record is None:
-                            inserted_record = _select_existing(with_lock=False)
-                elif result.rowcount and result.rowcount > 0:
-                    inserted_record = _select_existing(with_lock=False)
+    available_value: Any = scheduled_for if scheduled_for is not None else func.now()
+    now_value = func.now()
+    insert_stmt = pg_insert(QueueJob).values(
+        type=job_type,
+        payload=dict(payload),
+        priority=priority,
+        available_at=available_value,
+        idempotency_key=dedupe_key,
+        status=QueueJobStatus.PENDING.value,
+        stop_reason=None,
+        lease_expires_at=None,
+        last_error=None,
+        result_payload=None,
+        attempts=0,
+        created_at=now_value,
+        updated_at=now_value,
+    )
+    excluded = insert_stmt.excluded
+    update_stmt = insert_stmt.on_conflict_do_update(
+        index_elements=["idempotency_key"],
+        set_={
+            "payload": excluded.payload,
+            "priority": excluded.priority,
+            "available_at": excluded.available_at,
+            "status": QueueJobStatus.PENDING.value,
+            "stop_reason": None,
+            "lease_expires_at": None,
+            "last_error": None,
+            "result_payload": None,
+            "updated_at": now_value,
+            "attempts": case(
+                (
+                    QueueJob.status.in_(
+                        [
+                            QueueJobStatus.COMPLETED.value,
+                            QueueJobStatus.CANCELLED.value,
+                        ]
+                    ),
+                    0,
+                ),
+                else_=QueueJob.attempts,
+            ),
+        },
+        where=(QueueJob.type == job_type),
+    ).returning(QueueJob.id, text("xmax = 0").label("inserted"))
 
-        if inserted_record is not None:
-            return inserted_record, False
+    try:
+        result = session.execute(update_stmt)
+    except IntegrityError as exc:
+        original = getattr(exc, "orig", exc)
+        if UniqueViolation is not None and isinstance(original, UniqueViolation):
+            existing = session.execute(stmt_base).scalars().first()
+            if existing is None:
+                raise
+            _log_dedupe()
+            return existing, True
+        raise
 
-        existing = _select_existing()
-        if existing is not None:
-            if existing.type != job_type:
-                logger.warning(
-                    "Queue job idempotency key reused by different job type",
-                    extra={
-                        "event": "queue.job.dedupe_conflict",
-                        "requested_type": job_type,
-                        "existing_type": existing.type,
-                        "idempotency_key": dedupe_key,
-                        "dialect": dialect_name or "unknown",
-                    },
-                )
-                _log_dedupe()
-                return existing, True
-
-            deduped = _apply_existing_job_updates(
-                existing,
-                payload=payload,
-                priority=priority,
-                scheduled_for=scheduled_for,
-                now=now,
+    row = result.first()
+    if row is None:
+        existing = session.execute(stmt_base).scalars().first()
+        if existing is None:
+            raise RuntimeError("Queue job upsert conflict without existing record")
+        if existing.type != job_type:
+            logger.warning(
+                "Queue job idempotency key reused by different job type",
+                extra={
+                    "event": "queue.job.dedupe_conflict",
+                    "requested_type": job_type,
+                    "existing_type": existing.type,
+                    "idempotency_key": dedupe_key,
+                    "dialect": dialect_name or "unknown",
+                },
             )
-            session.add(existing)
-            if deduped:
-                _log_dedupe()
-            return existing, deduped
+        _log_dedupe()
+        return existing, True
 
-        attempts += 1
-        time.sleep(min(0.01, 0.001 * attempts))
+    record = session.get(QueueJob, row.id)
+    if record is None:
+        raise RuntimeError("Queue job record missing after upsert")
+
+    deduped = not bool(row.inserted)
+    if deduped:
+        _log_dedupe()
+    return record, deduped
 
 
 def enqueue(
@@ -378,8 +352,7 @@ def enqueue(
 ) -> QueueJobDTO:
     """Insert a new queue job or upsert by idempotency key."""
 
-    now = _utcnow()
-    scheduled_for = available_at or now
+    scheduled_for = available_at
     payload_dict = dict(payload)
     dedupe_key = idempotency_key or _derive_idempotency_key(job_type, payload_dict)
     resolved_priority = priority if priority is not None else _resolve_priority(payload_dict)
@@ -393,14 +366,14 @@ def enqueue(
                 payload=payload_dict,
                 priority=resolved_priority,
                 scheduled_for=scheduled_for,
-                now=now,
             )
         else:
+            now = _utcnow()
             record = QueueJob(
                 type=job_type,
                 payload=payload_dict,
                 priority=resolved_priority,
-                available_at=scheduled_for,
+                available_at=scheduled_for or now,
                 idempotency_key=None,
                 status=QueueJobStatus.PENDING.value,
                 stop_reason=None,
@@ -433,54 +406,47 @@ def enqueue_many(
     return jobs
 
 
-def _release_expired_leases(session: Session, job_type: str, now: datetime) -> bool:
-    released_at = _utcnow()
+def _release_expired_leases(session: Session, job_type: str) -> bool:
+    now_expr = func.now()
     stmt = (
         update(QueueJob)
         .where(
             QueueJob.type == job_type,
             QueueJob.status == QueueJobStatus.LEASED.value,
             QueueJob.lease_expires_at.is_not(None),
-            QueueJob.lease_expires_at <= now,
+            QueueJob.lease_expires_at <= now_expr,
         )
         .values(
             status=QueueJobStatus.PENDING.value,
             lease_expires_at=None,
-            available_at=released_at,
-            updated_at=released_at,
+            available_at=now_expr,
+            updated_at=now_expr,
         )
     )
     result = session.execute(stmt)
-    released = result.rowcount or 0
-    if released:
-        session.flush()
-        return True
-    return False
+    return bool(result.rowcount)
 
 
 def fetch_ready(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
     """Return queue jobs ready for processing (expired leases are reset)."""
 
-    now = _utcnow()
     with session_scope() as session:
-        released = _release_expired_leases(session, job_type, now)
-        if released:
-            now = _utcnow()
-
         stmt: Select[QueueJob] = (
             select(QueueJob)
             .where(
                 QueueJob.type == job_type,
                 QueueJob.status == QueueJobStatus.PENDING.value,
-                QueueJob.available_at <= now,
+                QueueJob.available_at <= func.now(),
             )
             .order_by(
                 QueueJob.priority.desc(),
                 QueueJob.available_at.asc(),
                 QueueJob.id.asc(),
             )
+            .with_for_update(skip_locked=True)
             .limit(limit)
         )
+        _release_expired_leases(session, job_type)
         records = session.execute(stmt).scalars().all()
         jobs = [_to_dto(record) for record in records]
     _emit_worker_tick(job_type, status="ready", count=len(jobs))
@@ -495,49 +461,49 @@ def lease(
 ) -> QueueJobDTO | None:
     """Attempt to lease a job for execution."""
 
-    now = _utcnow()
     with session_scope() as session:
-        record = (
-            session.execute(
-                select(QueueJob).where(QueueJob.id == job_id, QueueJob.type == job_type)
+        stmt = (
+            select(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.PENDING.value,
+                QueueJob.available_at <= func.now(),
+                or_(
+                    QueueJob.lease_expires_at.is_(None),
+                    QueueJob.lease_expires_at <= func.now(),
+                ),
             )
-            .scalars()
-            .first()
+            .with_for_update(skip_locked=True)
         )
+        record = session.execute(stmt).scalars().first()
         if record is None:
             return None
 
-        if record.status != QueueJobStatus.PENDING.value:
-            return None
-
-        if record.available_at > now:
-            return None
-
-        if record.lease_expires_at and record.lease_expires_at > now:
-            return None
-
         timeout = _resolve_visibility_timeout(record.payload or {}, lease_seconds)
-        lease_deadline = now + timedelta(seconds=timeout)
+        lease_interval = func.make_interval(secs=bindparam("lease_timeout"))
+        now_expr = func.now()
         update_stmt = (
             update(QueueJob)
             .where(
                 QueueJob.id == job_id,
                 QueueJob.type == job_type,
                 QueueJob.status == QueueJobStatus.PENDING.value,
-                QueueJob.available_at <= now,
+                QueueJob.available_at <= func.now(),
                 or_(
                     QueueJob.lease_expires_at.is_(None),
-                    QueueJob.lease_expires_at <= now,
+                    QueueJob.lease_expires_at <= func.now(),
                 ),
             )
             .values(
                 status=QueueJobStatus.LEASED.value,
                 attempts=QueueJob.attempts + 1,
-                lease_expires_at=lease_deadline,
-                updated_at=now,
+                lease_expires_at=now_expr + lease_interval,
+                updated_at=now_expr,
             )
+            .returning(QueueJob.id)
         )
-        result = session.execute(update_stmt)
+        result = session.execute(update_stmt, {"lease_timeout": int(timeout)})
         if not result.rowcount:
             return None
 
@@ -545,6 +511,7 @@ def lease(
         session.refresh(record)
         dto = _to_dto(record)
     _emit_worker_job_event(dto, "leased", lease_timeout_s=timeout)
+    _emit_lease_telemetry(dto, "leased", lease_timeout=timeout)
     return dto
 
 
@@ -556,7 +523,6 @@ def heartbeat(
 ) -> bool:
     """Extend the lease for an in-progress job."""
 
-    now = _utcnow()
     with session_scope() as session:
         stmt: Select[QueueJob] = (
             select(QueueJob)
@@ -573,14 +539,29 @@ def heartbeat(
         if record.status != QueueJobStatus.LEASED.value:
             return False
 
-        if record.lease_expires_at and record.lease_expires_at <= now:
-            return False
-
         timeout = _resolve_visibility_timeout(record.payload or {}, lease_seconds)
-        record.lease_expires_at = now + timedelta(seconds=timeout)
-        record.updated_at = now
-        session.add(record)
-        return True
+        update_stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.LEASED.value,
+                QueueJob.lease_expires_at.is_not(None),
+                QueueJob.lease_expires_at > func.now(),
+            )
+            .values(
+                lease_expires_at=func.now() + func.make_interval(secs=bindparam("lease_timeout")),
+                updated_at=func.now(),
+            )
+        )
+        result = session.execute(update_stmt, {"lease_timeout": int(timeout)})
+        if result.rowcount:
+            session.flush()
+            session.refresh(record)
+            dto = _to_dto(record)
+            _emit_lease_telemetry(dto, "heartbeat", lease_timeout=timeout)
+            return True
+        return False
 
 
 def complete(
@@ -681,7 +662,6 @@ def to_dlq(
 def release_active_leases(job_type: str) -> None:
     """Release all leases for a job type regardless of expiry."""
 
-    now = _utcnow()
     with session_scope() as session:
         stmt = (
             update(QueueJob)
@@ -692,7 +672,7 @@ def release_active_leases(job_type: str) -> None:
             .values(
                 status=QueueJobStatus.PENDING.value,
                 lease_expires_at=None,
-                updated_at=now,
+                updated_at=func.now(),
             )
         )
         session.execute(stmt)
@@ -908,4 +888,5 @@ __all__ = [
     "complete_async",
     "fail_async",
     "release_active_leases_async",
+    "register_lease_telemetry_hook",
 ]
