@@ -11,7 +11,8 @@ from app.config import WatchlistWorkerConfig
 from app.db import session_scope
 from app.models import Download, QueueJob, QueueJobStatus, WatchlistArtist
 from app.orchestrator.dispatcher import Dispatcher
-from app.orchestrator.handlers import WatchlistHandlerDeps, build_watchlist_handler
+from app.orchestrator.handlers import (WatchlistHandlerDeps,
+                                       build_watchlist_handler)
 from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers import persistence
 

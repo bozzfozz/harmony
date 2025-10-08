@@ -6,13 +6,12 @@ from typing import Any
 
 import pytest
 
-from app.integrations.contracts import ProviderDependencyError, ProviderTrack, SearchQuery
-from app.integrations.provider_gateway import (
-    ProviderGateway,
-    ProviderGatewayConfig,
-    ProviderGatewayTimeoutError,
-    ProviderRetryPolicy,
-)
+from app.integrations.contracts import (ProviderDependencyError, ProviderTrack,
+                                        SearchQuery)
+from app.integrations.provider_gateway import (ProviderGateway,
+                                               ProviderGatewayConfig,
+                                               ProviderGatewayTimeoutError,
+                                               ProviderRetryPolicy)
 
 
 @dataclass

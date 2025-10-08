@@ -15,8 +15,10 @@ from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
-from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
-from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
+from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
+                                       ARTIST_SCAN_JOB_TYPE)
+from app.services.artist_workflow_dao import (ArtistWorkflowArtistRow,
+                                              ArtistWorkflowDAO)
 from app.utils.time import sleep_jitter_ms
 from app.workers import persistence
 

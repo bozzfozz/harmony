@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.errors import InternalServerError, ValidationAppError
-from app.services.dlq_service import DLQListResult, DLQRequeueResult, DLQService, DLQStats
+from app.services.dlq_service import (DLQListResult, DLQRequeueResult,
+                                      DLQService, DLQStats)
 
 router = APIRouter(tags=["DLQ"])
 

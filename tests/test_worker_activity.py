@@ -1,18 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from app.utils.activity import activity_manager, record_worker_started, record_worker_stopped
-from app.utils.events import (
-    WORKER_RESTARTED,
-    WORKER_STALE,
-    WORKER_STARTED,
-    WORKER_STOPPED,
-)
+from app.utils.activity import (activity_manager, record_worker_started,
+                                record_worker_stopped)
+from app.utils.events import (WORKER_RESTARTED, WORKER_STALE, WORKER_STARTED,
+                              WORKER_STOPPED)
 from app.utils.settings_store import write_setting
-from app.utils.worker_health import (
-    STALE_TIMEOUT_SECONDS,
-    heartbeat_key,
-    mark_worker_status,
-)
+from app.utils.worker_health import (STALE_TIMEOUT_SECONDS, heartbeat_key,
+                                     mark_worker_status)
 
 
 def _iso(dt: datetime) -> str:

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping, Sequence
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import (APIRouter, Depends, FastAPI, HTTPException, Query,
+                     Request, status)
 from pydantic import BaseModel, Field
 
 from app.config import AppConfig, settings
@@ -16,28 +17,21 @@ from app.dependencies import get_app_config
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import QueueJob, QueueJobStatus
-from app.orchestrator.handlers_artist import (
-    ArtistSyncHandlerDeps,
-    QueueJobDTO,
-    _build_artist_dto,
-    _build_release_dtos,
-    _extract_aliases,
-    _resolve_providers,
-    _resolve_release_limit,
-    _select_artist,
-    _split_artist_key,
-    enqueue_artist_sync,
-    handle_artist_sync,
-)
+from app.orchestrator.handlers_artist import (ArtistSyncHandlerDeps,
+                                              QueueJobDTO, _build_artist_dto,
+                                              _build_release_dtos,
+                                              _extract_aliases,
+                                              _resolve_providers,
+                                              _resolve_release_limit,
+                                              _select_artist,
+                                              _split_artist_key,
+                                              enqueue_artist_sync,
+                                              handle_artist_sync)
 from app.orchestrator.providers import build_artist_sync_handler_deps
 from app.services.artist_dao import ArtistDao
-from app.services.artist_delta import (
-    ArtistLocalState,
-    ArtistRemoteState,
-    ReleaseSnapshot,
-    determine_delta,
-    summarise_delta,
-)
+from app.services.artist_delta import (ArtistLocalState, ArtistRemoteState,
+                                       ReleaseSnapshot, determine_delta,
+                                       summarise_delta)
 from app.services.audit import list_audit_events
 from app.services.cache import ResponseCache, bust_artist_cache
 

@@ -9,13 +9,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.errors import (
-    AppError,
-    ErrorCode,
-    InternalServerError,
-    rate_limit_meta,
-    to_response,
-)
+from app.errors import (AppError, ErrorCode, InternalServerError,
+                        rate_limit_meta, to_response)
 from app.logging import get_logger
 
 try:  # pragma: no cover - Python <3.11 fallback

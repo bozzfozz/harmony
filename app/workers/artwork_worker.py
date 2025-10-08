@@ -11,7 +11,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Iterable, Mapping, Optional, Sequence, cast
+from typing import (Any, Awaitable, Callable, Dict, Iterable, Mapping,
+                    Optional, Sequence, cast)
 from urllib.parse import urlparse
 
 from app.config import ArtworkConfig, ArtworkPostProcessingConfig, load_config

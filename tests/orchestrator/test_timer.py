@@ -8,7 +8,8 @@ import pytest
 from app.config import WatchlistWorkerConfig
 from app.models import QueueJobStatus
 from app.orchestrator import timer as timer_module
-from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
+from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
+                                       ARTIST_SCAN_JOB_TYPE)
 from app.orchestrator.timer import WatchlistTimer
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.workers import persistence

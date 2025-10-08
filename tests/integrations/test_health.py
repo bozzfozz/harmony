@@ -6,7 +6,8 @@ from typing import Any, Mapping
 
 import pytest
 
-from app.integrations.contracts import ProviderTrack, SearchQuery, TrackProvider
+from app.integrations.contracts import (ProviderTrack, SearchQuery,
+                                        TrackProvider)
 from app.integrations.health import IntegrationHealth, ProviderHealthMonitor
 
 

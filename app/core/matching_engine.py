@@ -11,12 +11,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from app.config import MatchingConfig, load_matching_config
 
 from .errors import InvalidInputError
-from .types import (
-    MatchResult,
-    MatchScore,
-    ProviderTrackDTO,
-    ensure_track_dto,
-)
+from .types import MatchResult, MatchScore, ProviderTrackDTO, ensure_track_dto
 
 _DEFAULT_MATCHING_CONFIG = load_matching_config()
 

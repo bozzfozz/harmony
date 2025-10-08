@@ -9,7 +9,8 @@ import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (AsyncEngine, async_sessionmaker,
+                                    create_async_engine)
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.db import Base

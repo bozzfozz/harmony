@@ -5,30 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
-from app.dependencies import (
-    get_app_config,
-    get_matching_engine,
-    get_session_runner,
-    get_soulseek_client,
-    get_spotify_client,
-)
-from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
-from app.orchestrator.handlers import (
-    ARTIST_REFRESH_JOB_TYPE,
-    ARTIST_SCAN_JOB_TYPE,
-    ArtworkService,
-    LyricsService,
-    MetadataService,
-)
-from app.orchestrator.providers import (
-    build_artist_delta_handler_deps,
-    build_artist_refresh_handler_deps,
-    build_artist_sync_handler_deps,
-    build_matching_handler_deps,
-    build_retry_handler_deps,
-    build_sync_handler_deps,
-    build_watchlist_handler_deps,
-)
+from app.dependencies import (get_app_config, get_matching_engine,
+                              get_session_runner, get_soulseek_client,
+                              get_spotify_client)
+from app.orchestrator.dispatcher import (Dispatcher, JobHandler,
+                                         default_handlers)
+from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
+                                       ARTIST_SCAN_JOB_TYPE, ArtworkService,
+                                       LyricsService, MetadataService)
+from app.orchestrator.providers import (build_artist_delta_handler_deps,
+                                        build_artist_refresh_handler_deps,
+                                        build_artist_sync_handler_deps,
+                                        build_matching_handler_deps,
+                                        build_retry_handler_deps,
+                                        build_sync_handler_deps,
+                                        build_watchlist_handler_deps)
 from app.orchestrator.scheduler import Scheduler
 from app.services.free_ingest_service import FreeIngestService
 from app.workers.import_worker import ImportWorker

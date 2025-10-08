@@ -12,14 +12,9 @@ from sqlalchemy.orm import Session
 from app.core.config import DEFAULT_SETTINGS
 from app.dependencies import get_db
 from app.models import ArtistPreference, Setting, SettingHistory
-from app.schemas import (
-    ArtistPreferenceEntry,
-    ArtistPreferencesPayload,
-    ArtistPreferencesResponse,
-    SettingsHistoryResponse,
-    SettingsPayload,
-    SettingsResponse,
-)
+from app.schemas import (ArtistPreferenceEntry, ArtistPreferencesPayload,
+                         ArtistPreferencesResponse, SettingsHistoryResponse,
+                         SettingsPayload, SettingsResponse)
 
 CONFIGURATION_KEYS: Final[tuple[str, ...]] = (
     "SPOTIFY_CLIENT_ID",

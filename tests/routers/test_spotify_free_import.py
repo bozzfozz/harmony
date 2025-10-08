@@ -2,7 +2,8 @@ from typing import Any
 
 import pytest
 
-from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
+from app.services.free_ingest_service import (IngestAccepted, IngestSkipped,
+                                              IngestSubmission)
 from tests.simple_client import SimpleTestClient
 
 

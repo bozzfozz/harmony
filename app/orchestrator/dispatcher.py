@@ -13,11 +13,8 @@ from typing import TYPE_CHECKING, Any
 from app.config import ExternalCallPolicy, OrchestratorConfig, settings
 from app.logging import get_logger
 from app.orchestrator import events as orchestrator_events
-from app.orchestrator.handlers import (
-    ARTIST_REFRESH_JOB_TYPE,
-    ARTIST_SCAN_JOB_TYPE,
-    MatchingJobError,
-)
+from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
+                                       ARTIST_SCAN_JOB_TYPE, MatchingJobError)
 from app.orchestrator.scheduler import Scheduler
 from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.concurrency import BoundedPools
@@ -26,14 +23,11 @@ from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
     from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
-    from app.orchestrator.handlers import (
-        ArtistDeltaHandlerDeps,
-        ArtistRefreshHandlerDeps,
-        MatchingHandlerDeps,
-        RetryHandlerDeps,
-        SyncHandlerDeps,
-        WatchlistHandlerDeps,
-    )
+    from app.orchestrator.handlers import (ArtistDeltaHandlerDeps,
+                                           ArtistRefreshHandlerDeps,
+                                           MatchingHandlerDeps,
+                                           RetryHandlerDeps, SyncHandlerDeps,
+                                           WatchlistHandlerDeps)
 
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]
@@ -55,14 +49,12 @@ def default_handlers(
     """Return the default orchestrator handler mapping."""
 
     from app.orchestrator.artist_sync import build_artist_sync_handler
-    from app.orchestrator.handlers import (
-        build_artist_refresh_handler,
-        build_artist_scan_handler,
-        build_matching_handler,
-        build_retry_handler,
-        build_sync_handler,
-        build_watchlist_handler,
-    )
+    from app.orchestrator.handlers import (build_artist_refresh_handler,
+                                           build_artist_scan_handler,
+                                           build_matching_handler,
+                                           build_retry_handler,
+                                           build_sync_handler,
+                                           build_watchlist_handler)
 
     handlers: dict[str, JobHandler] = {"sync": build_sync_handler(sync_deps)}
     if matching_deps is not None:

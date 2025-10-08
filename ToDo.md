@@ -132,12 +132,12 @@
   - [ ] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
 
 ## TD-20251008-008 Enforce isort formatting
-- **Status:** todo
+- **Status:** done
 - **Priority:** P2
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T09:21:10Z
 - **Tags:** tooling, lint, formatting
 - **Description:** `isort --check-only` fails on numerous backend modules, signaling drift from the repo import style baseline. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【8bf225†L1-L20】
 - **Acceptance Criteria:**
@@ -148,7 +148,7 @@
 - **Dependencies:** None.
 - **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/isort_check.txt`. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【F:reports/analysis/_evidence/isort_check.txt†L1-L20】
 - **Subtasks:**
-  - [ ] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
+  - [x] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
 
 ## TD-20251008-009 Reinstate bandit security scanning
 - **Status:** todo

@@ -8,21 +8,14 @@ from time import perf_counter
 from typing import Awaitable, Callable, Mapping, Sequence, TypeVar
 
 from app.config import ExternalCallPolicy, ProviderProfile, settings
-from app.integrations.contracts import (
-    ProviderAlbumDetails,
-    ProviderArtist,
-    ProviderDependencyError,
-    ProviderError,
-    ProviderInternalError,
-    ProviderNotFoundError,
-    ProviderRateLimitedError,
-    ProviderRelease,
-    ProviderTimeoutError,
-    ProviderTrack,
-    ProviderValidationError,
-    SearchQuery,
-    TrackProvider,
-)
+from app.integrations.contracts import (ProviderAlbumDetails, ProviderArtist,
+                                        ProviderDependencyError, ProviderError,
+                                        ProviderInternalError,
+                                        ProviderNotFoundError,
+                                        ProviderRateLimitedError,
+                                        ProviderRelease, ProviderTimeoutError,
+                                        ProviderTrack, ProviderValidationError,
+                                        SearchQuery, TrackProvider)
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.retry import RetryDirective, with_retry

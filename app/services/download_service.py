@@ -11,28 +11,17 @@ from sqlalchemy.orm import Session
 
 from app.core.transfers_api import TransfersApi, TransfersApiError
 from app.db import SessionCallable
-from app.errors import (
-    AppError,
-    DependencyError,
-    ErrorCode,
-    InternalServerError,
-    NotFoundError,
-    ValidationAppError,
-)
+from app.errors import (AppError, DependencyError, ErrorCode,
+                        InternalServerError, NotFoundError, ValidationAppError)
 from app.logging import get_logger
 from app.models import Download
 from app.schemas import DownloadPriorityUpdate, SoulseekDownloadRequest
 from app.schemas.errors import ApiError
 from app.services.errors import to_api_error
 from app.utils.activity import record_activity
-from app.utils.downloads import (
-    ACTIVE_STATES,
-    coerce_priority,
-    determine_priority,
-    render_downloads_csv,
-    resolve_status_filter,
-    serialise_download,
-)
+from app.utils.downloads import (ACTIVE_STATES, coerce_priority,
+                                 determine_priority, render_downloads_csv,
+                                 resolve_status_filter, serialise_download)
 from app.utils.events import DOWNLOAD_BLOCKED
 from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import update_priority as update_worker_priority

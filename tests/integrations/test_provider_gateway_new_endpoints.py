@@ -1,21 +1,14 @@
 import pytest
 
-from app.integrations.contracts import (
-    ProviderAlbumDetails,
-    ProviderArtist,
-    ProviderNotFoundError,
-    ProviderRelease,
-    ProviderTimeoutError,
-    ProviderTrack,
-    SearchQuery,
-)
-from app.integrations.provider_gateway import (
-    ProviderGateway,
-    ProviderGatewayConfig,
-    ProviderGatewayNotFoundError,
-    ProviderGatewayTimeoutError,
-    ProviderRetryPolicy,
-)
+from app.integrations.contracts import (ProviderAlbumDetails, ProviderArtist,
+                                        ProviderNotFoundError, ProviderRelease,
+                                        ProviderTimeoutError, ProviderTrack,
+                                        SearchQuery)
+from app.integrations.provider_gateway import (ProviderGateway,
+                                               ProviderGatewayConfig,
+                                               ProviderGatewayNotFoundError,
+                                               ProviderGatewayTimeoutError,
+                                               ProviderRetryPolicy)
 
 
 class _StubProvider:

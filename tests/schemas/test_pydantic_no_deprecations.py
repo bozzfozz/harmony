@@ -7,12 +7,10 @@ from datetime import datetime, timezone
 
 from app.schemas import DownloadFileRequest
 from app.schemas.common import ID, URI, ISODateTime, ProblemDetail
-from app.schemas.watchlist import (
-    WatchlistEntryResponse,
-    WatchlistListResponse,
-    WatchlistPauseRequest,
-    WatchlistPriorityUpdate,
-)
+from app.schemas.watchlist import (WatchlistEntryResponse,
+                                   WatchlistListResponse,
+                                   WatchlistPauseRequest,
+                                   WatchlistPriorityUpdate)
 
 
 def test_pydantic_models_emit_no_deprecations() -> None:

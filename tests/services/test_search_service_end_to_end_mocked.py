@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
-from app.integrations.provider_gateway import (
-    ProviderGatewaySearchResponse,
-    ProviderGatewaySearchResult,
-    ProviderGatewayTimeoutError,
-)
+from app.integrations.contracts import (ProviderAlbum, ProviderArtist,
+                                        ProviderTrack)
+from app.integrations.provider_gateway import (ProviderGatewaySearchResponse,
+                                               ProviderGatewaySearchResult,
+                                               ProviderGatewayTimeoutError)
 from app.schemas.common import SourceEnum
 from app.schemas.search import SearchQuery
 from app.services.search_service import SearchService

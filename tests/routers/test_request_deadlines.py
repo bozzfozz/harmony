@@ -6,7 +6,8 @@ import time
 
 import pytest
 
-from app import db, dependencies as deps
+from app import db
+from app import dependencies as deps
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
 from tests.fixtures.async_client import AsyncDeadlineClient
 from tests.helpers import api_path

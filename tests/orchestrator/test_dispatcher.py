@@ -17,7 +17,8 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, Match, QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
-from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
+from app.orchestrator.handlers import (MatchingHandlerDeps, SyncHandlerDeps,
+                                       SyncRetryPolicy)
 from app.utils.activity import activity_manager
 from app.workers import persistence
 

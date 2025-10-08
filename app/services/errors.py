@@ -7,15 +7,13 @@ from typing import Any, Mapping
 
 from app.core.transfers_api import TransfersApiError
 from app.errors import AppError
-from app.integrations.provider_gateway import (
-    ProviderGatewayDependencyError,
-    ProviderGatewayError,
-    ProviderGatewayInternalError,
-    ProviderGatewayNotFoundError,
-    ProviderGatewayRateLimitedError,
-    ProviderGatewayTimeoutError,
-    ProviderGatewayValidationError,
-)
+from app.integrations.provider_gateway import (ProviderGatewayDependencyError,
+                                               ProviderGatewayError,
+                                               ProviderGatewayInternalError,
+                                               ProviderGatewayNotFoundError,
+                                               ProviderGatewayRateLimitedError,
+                                               ProviderGatewayTimeoutError,
+                                               ProviderGatewayValidationError)
 from app.schemas.errors import ApiError, ErrorCode
 
 

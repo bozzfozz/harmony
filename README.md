@@ -342,6 +342,7 @@ npm run build     # TypeScript + Vite Build
 Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
 
 ```bash
+isort --check-only .
 ruff check .
 black --check .
 mypy app
@@ -356,8 +357,8 @@ npm run typecheck
 npm run build
 ```
 
-`ruff` erzwingt neben klassischen Lint-Regeln auch die Import-Reihenfolge (I-Rules). Nutze bei Bedarf `ruff check . --select I --fix`,
-um Imports automatisch sortieren zu lassen. `black` bleibt der einzige Formatter; zusätzliche `isort`-Läufe sind nicht erforderlich.
+`isort --check-only .` stellt sicher, dass die konfigurierte Import-Reihenfolge eingehalten wird. Verwende `isort .` oder
+alternativ `ruff check . --select I --fix`, um Imports automatisch zu sortieren. `black` bleibt der einzige Formatter.
 
 Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app` nutzt die Repository-Konfiguration (Scope,
 Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings

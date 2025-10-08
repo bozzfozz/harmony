@@ -5,11 +5,8 @@ from typing import Any, Dict
 
 import pytest
 
-from app.config import (
-    ArtworkConfig,
-    ArtworkFallbackConfig,
-    ArtworkPostProcessingConfig,
-)
+from app.config import (ArtworkConfig, ArtworkFallbackConfig,
+                        ArtworkPostProcessingConfig)
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils

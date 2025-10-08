@@ -12,18 +12,8 @@ from contextlib import AbstractContextManager
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Awaitable,
-    Callable,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Protocol,
-    Sequence,
-)
+from typing import (TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Mapping,
+                    MutableMapping, Optional, Protocol, Sequence)
 
 from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
@@ -37,37 +27,30 @@ from app.core.types import ProviderArtistDTO
 from app.db import run_session, session_scope
 from app.db_async import get_async_sessionmaker
 from app.dependencies import get_app_config
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
+from app.integrations.normalizers import (normalize_slskd_candidate,
+                                          normalize_spotify_track)
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Download, IngestItem, IngestItemState, Match
-from app.services.artist_delta import (
-    AlbumRelease,
-    ArtistCacheHint,
-    ArtistDelta,
-    ArtistKnownRelease,
-    ArtistTrackCandidate,
-    build_artist_delta,
-    filter_new_releases,
-)
-from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
+from app.services.artist_delta import (AlbumRelease, ArtistCacheHint,
+                                       ArtistDelta, ArtistKnownRelease,
+                                       ArtistTrackCandidate,
+                                       build_artist_delta, filter_new_releases)
+from app.services.artist_workflow_dao import (ArtistWorkflowArtistRow,
+                                              ArtistWorkflowDAO)
 from app.services.backfill_service import BackfillJobStatus
 from app.services.library_service import LibraryService
-from app.services.retry_policy_provider import (
-    RetryPolicy,
-    RetryPolicyProvider,
-    get_retry_policy_provider,
-)
+from app.services.retry_policy_provider import (RetryPolicy,
+                                                RetryPolicyProvider,
+                                                get_retry_policy_provider)
 
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
+
 from app.services.spotify_domain_service import SpotifyDomainService
 from app.utils.activity import record_activity
-from app.utils.events import (
-    DOWNLOAD_RETRY_COMPLETED,
-    DOWNLOAD_RETRY_FAILED,
-    DOWNLOAD_RETRY_SCHEDULED,
-)
+from app.utils.events import (DOWNLOAD_RETRY_COMPLETED, DOWNLOAD_RETRY_FAILED,
+                              DOWNLOAD_RETRY_SCHEDULED)
 from app.utils.file_utils import organize_file
 from app.utils.metrics import counter, histogram
 from app.workers import persistence

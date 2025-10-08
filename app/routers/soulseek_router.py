@@ -20,19 +20,12 @@ from app.errors import DependencyError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import DiscographyJob, Download
-from app.schemas import (
-    SOULSEEK_RETRYABLE_STATES,
-    DiscographyDownloadRequest,
-    DiscographyJobResponse,
-    DownloadMetadataResponse,
-    SoulseekCancelResponse,
-    SoulseekDownloadRequest,
-    SoulseekDownloadResponse,
-    SoulseekDownloadStatus,
-    SoulseekSearchRequest,
-    SoulseekSearchResponse,
-    StatusResponse,
-)
+from app.schemas import (SOULSEEK_RETRYABLE_STATES, DiscographyDownloadRequest,
+                         DiscographyJobResponse, DownloadMetadataResponse,
+                         SoulseekCancelResponse, SoulseekDownloadRequest,
+                         SoulseekDownloadResponse, SoulseekDownloadStatus,
+                         SoulseekSearchRequest, SoulseekSearchResponse,
+                         StatusResponse)
 from app.utils import artwork_utils
 from app.workers.sync_worker import SyncWorker
 

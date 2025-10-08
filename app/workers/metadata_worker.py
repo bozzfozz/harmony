@@ -6,7 +6,8 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, ContextManager, Dict, Iterable, Mapping, Optional
+from typing import (Any, Callable, ContextManager, Dict, Iterable, Mapping,
+                    Optional)
 
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope

@@ -8,7 +8,8 @@ import random
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import (Any, Awaitable, Callable, Dict, Iterable, List, Mapping,
+                    Optional, Set, Tuple)
 
 from sqlalchemy.orm import Session
 
@@ -16,46 +17,35 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
-from app.orchestrator.handlers import (
-    SyncHandlerDeps,
-    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
-    extract_basic_metadata,
-    extract_ingest_item_id,
-    extract_spotify_album_id,
-    extract_spotify_id,
-    fanout_download_completion,
-    handle_sync_download_failure,
-    handle_sync_retry_success,
-    process_sync_payload,
-    resolve_download_path,
-    resolve_text,
-    truncate_error,
-    update_ingest_item_state,
-)
-from app.services.retry_policy_provider import (
-    RetryPolicy,
-    get_retry_policy_provider,
-)
-from app.utils.activity import (
-    record_activity,
-    record_worker_started,
-    record_worker_stopped,
-)
+from app.orchestrator.handlers import SyncHandlerDeps
+from app.orchestrator.handlers import \
+    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds
+from app.orchestrator.handlers import (extract_basic_metadata,
+                                       extract_ingest_item_id,
+                                       extract_spotify_album_id,
+                                       extract_spotify_id,
+                                       fanout_download_completion,
+                                       handle_sync_download_failure,
+                                       handle_sync_retry_success,
+                                       process_sync_payload,
+                                       resolve_download_path, resolve_text,
+                                       truncate_error,
+                                       update_ingest_item_state)
+from app.services.retry_policy_provider import (RetryPolicy,
+                                                get_retry_policy_provider)
+from app.utils.activity import (record_activity, record_worker_started,
+                                record_worker_stopped)
 from app.utils.events import WORKER_STOPPED
-from app.utils.settings_store import increment_counter, read_setting, write_setting
+from app.utils.settings_store import (increment_counter, read_setting,
+                                      write_setting)
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
-from app.workers.persistence import (
-    QueueJobDTO,
-    complete_async,
-    enqueue_async,
-    fail_async,
-    fetch_ready_async,
-    lease_async,
-    release_active_leases_async,
-)
+from app.workers.persistence import (QueueJobDTO, complete_async,
+                                     enqueue_async, fail_async,
+                                     fetch_ready_async, lease_async,
+                                     release_active_leases_async)
 
 # Backwards compatible alias used by existing tests and callers relying on the
 # original synchronous API facade.
