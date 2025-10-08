@@ -104,4 +104,3 @@ async def test_artist_refresh_records_missing_metrics() -> None:
     samples = _collect_metric_samples()
     assert samples[("artist_refresh_outcomes_total", (("status", "missing"),))] == 1.0
     assert samples[("artist_refresh_duration_seconds_count", ())] == 1.0
-

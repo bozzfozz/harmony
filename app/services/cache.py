@@ -370,7 +370,9 @@ def playlist_filters_hash(query_string: str) -> str:
 def playlist_list_cache_key(*, query_string: str = "", filters_hash: str | None = None) -> str:
     """Construct the canonical cache key for playlist collection responses."""
 
-    resolved_hash = filters_hash if filters_hash is not None else playlist_filters_hash(query_string)
+    resolved_hash = (
+        filters_hash if filters_hash is not None else playlist_filters_hash(query_string)
+    )
     return f"{PLAYLIST_LIST_CACHE_PREFIX}:{resolved_hash}"
 
 
@@ -378,7 +380,11 @@ def playlist_detail_cache_key(playlist_id: str) -> str:
     """Construct the canonical cache key for a playlist detail response."""
 
     normalized = playlist_id.strip()
-    return f"{PLAYLIST_DETAIL_CACHE_PREFIX}:{normalized}" if normalized else f"{PLAYLIST_DETAIL_CACHE_PREFIX}:"
+    return (
+        f"{PLAYLIST_DETAIL_CACHE_PREFIX}:{normalized}"
+        if normalized
+        else f"{PLAYLIST_DETAIL_CACHE_PREFIX}:"
+    )
 
 
 def artist_cache_templates(base_path: str | None) -> tuple[str, ...]:

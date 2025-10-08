@@ -1,16 +1,16 @@
 """Create base schema"""
 
 from __future__ import annotations
+
 from typing import Any, Dict, Iterable
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect
-
-from app.db import Base
 
 # Import models to populate metadata
 from app import models  # noqa: F401
+from app.db import Base
 
 revision = "7c9bdb5e1a3d"
 down_revision = None

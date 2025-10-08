@@ -20,7 +20,6 @@ from app.schemas.watchlist import (
 )
 from app.services.watchlist_service import WatchlistService
 
-
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 _logger = get_logger(__name__)
 
@@ -312,4 +311,3 @@ def delete_watchlist_entry(
 
 
 __all__ = ["router"]
-

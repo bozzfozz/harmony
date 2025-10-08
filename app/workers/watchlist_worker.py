@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import time
 import contextlib
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
 from app.config import WatchlistWorkerConfig, settings
+from app.db_async import get_async_sessionmaker
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.db_async import get_async_sessionmaker
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.utils.activity import record_worker_started, record_worker_stopped
-from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.utils.events import WORKER_STOPPED
+from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers import persistence
 
 logger = get_logger(__name__)
@@ -48,9 +48,7 @@ class WatchlistWorker:
         mode = (config.db_io_mode or "thread").strip().lower()
         if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
             if not resolved_dao.supports_async:
-                resolved_dao = resolved_dao.with_async_session_factory(
-                    get_async_sessionmaker()
-                )
+                resolved_dao = resolved_dao.with_async_session_factory(get_async_sessionmaker())
         self._dao = resolved_dao
         self._running = False
         self._task: asyncio.Task[None] | None = None

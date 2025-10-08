@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, MutableMapping
 
-import math
-import re
-
 from .errors import InvalidInputError
-
 
 _EDITION_KEYWORDS = {
     "anniversary",

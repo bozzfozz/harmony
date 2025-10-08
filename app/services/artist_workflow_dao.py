@@ -14,7 +14,6 @@ from app.models import ArtistKnownReleaseRecord, Download, WatchlistArtist
 from app.services.artist_dao_async import ArtistWatchlistAsyncDAO
 from app.services.artist_delta import ArtistKnownRelease
 
-
 _UNSET = object()
 
 
@@ -212,9 +211,7 @@ class ArtistWorkflowDAO:
     def supports_async(self) -> bool:
         return self._async_session_factory is not None
 
-    def with_async_session_factory(
-        self, factory: Callable[[], AsyncSession]
-    ) -> ArtistWorkflowDAO:
+    def with_async_session_factory(self, factory: Callable[[], AsyncSession]) -> ArtistWorkflowDAO:
         return ArtistWorkflowDAO(
             now_factory=self._now_factory,
             async_session_factory=factory,

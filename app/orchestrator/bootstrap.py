@@ -8,12 +8,11 @@ from typing import Mapping, Optional
 from app.dependencies import (
     get_app_config,
     get_matching_engine,
+    get_session_runner,
     get_soulseek_client,
     get_spotify_client,
-    get_session_runner,
 )
 from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
-from app.orchestrator.scheduler import Scheduler
 from app.orchestrator.handlers import (
     ARTIST_REFRESH_JOB_TYPE,
     ARTIST_SCAN_JOB_TYPE,
@@ -30,6 +29,7 @@ from app.orchestrator.providers import (
     build_sync_handler_deps,
     build_watchlist_handler_deps,
 )
+from app.orchestrator.scheduler import Scheduler
 from app.services.free_ingest_service import FreeIngestService
 from app.workers.import_worker import ImportWorker
 

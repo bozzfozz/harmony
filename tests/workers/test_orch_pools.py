@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import random
+from dataclasses import replace
 
 import pytest
-
-from dataclasses import replace
 
 from app.config import settings
 from app.orchestrator.dispatcher import Dispatcher

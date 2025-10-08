@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-
 SourceLiteral = Literal["spotify", "soulseek"]
 ItemTypeLiteral = Literal["track", "album", "artist"]
 SearchTypeLiteral = Literal["track", "album", "artist", "mixed"]

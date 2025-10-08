@@ -17,10 +17,9 @@ from app.services.artist_dao import (
     ArtistRow,
     ArtistWatchlistEntryRow,
 )
+from app.utils.idempotency import make_idempotency_key
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
-from app.utils.idempotency import make_idempotency_key
-
 
 _ARTIST_SYNC_JOB = "artist_sync"
 

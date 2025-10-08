@@ -20,10 +20,10 @@ from typing import (
     Tuple,
 )
 
-from app.logging import get_logger
 from sqlalchemy import func
 
 from app.db import session_scope
+from app.logging import get_logger
 from app.models import ActivityEvent
 from app.utils.events import (
     WORKER_RESTARTED,
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from app.services.cache import ResponseCache
 
 logger = get_logger(__name__)
+
 
 def _timestamp_to_utc_isoformat(value: datetime) -> str:
     """Return a UTC-normalised ISO 8601 representation ending with Z."""
@@ -86,9 +87,9 @@ class ActivityManager:
         self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
         self._cache_initialized = False
-        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = (
-            OrderedDict()
-        )
+        self._page_cache: (
+            "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]"
+        ) = OrderedDict()
         self._page_cache_limit = max(1, page_cache_limit)
         self._response_cache: "ResponseCache | None" = None
         self._response_cache_paths: tuple[str, ...] = ()
@@ -218,8 +219,7 @@ class ActivityManager:
             total = (count_query.scalar()) or 0
 
             events = (
-                events_query
-                .order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+                events_query.order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
@@ -279,7 +279,10 @@ class ActivityManager:
                 try:
                     await cache.invalidate_path(path, reason="activity_updated")
                 except Exception:  # pragma: no cover - defensive logging
-                    logger.exception("Failed to invalidate response cache for activity path", extra={"path": path})
+                    logger.exception(
+                        "Failed to invalidate response cache for activity path",
+                        extra={"path": path},
+                    )
 
         try:
             loop = asyncio.get_running_loop()

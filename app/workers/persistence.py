@@ -9,19 +9,18 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
 
 from sqlalchemy import Select, func, or_, select, update
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.services.retry_policy_provider import get_retry_policy_provider
 from app.db import session_scope
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import QueueJob, QueueJobStatus
+from app.services.retry_policy_provider import get_retry_policy_provider
 from app.utils.idempotency import make_idempotency_key
 from app.utils.jsonx import safe_dumps
 from app.utils.time import now_utc
-
 
 logger = get_logger(__name__)
 

@@ -17,7 +17,6 @@ from app.config import (
 )
 from app.logging import get_logger
 
-
 logger = get_logger(__name__)
 
 _DEFAULT_JOB_KEY = "__default__"

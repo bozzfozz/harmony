@@ -9,7 +9,6 @@ from typing import Any, Mapping
 from app.logging_events import log_event
 from app.utils.settings_store import increment_counter
 
-
 logger = logging.getLogger("app.orchestrator.metrics")
 
 

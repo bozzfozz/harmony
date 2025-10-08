@@ -6,9 +6,9 @@ import csv
 import io
 from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional
 
+from app.errors import ValidationAppError
 from app.models import Download
 from app.schemas import DownloadEntryResponse
-from app.errors import ValidationAppError
 
 STATUS_FILTERS: Dict[str, set[str]] = {
     "running": {"running", "downloading"},

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from app.utils.activity import activity_manager
-
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
 
 

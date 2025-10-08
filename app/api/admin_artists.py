@@ -11,9 +11,11 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from pydantic import BaseModel, Field
 
 from app.config import AppConfig, settings
+from app.db import session_scope
 from app.dependencies import get_app_config
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.models import QueueJob, QueueJobStatus
 from app.orchestrator.handlers_artist import (
     ArtistSyncHandlerDeps,
     QueueJobDTO,
@@ -38,9 +40,6 @@ from app.services.artist_delta import (
 )
 from app.services.audit import list_audit_events
 from app.services.cache import ResponseCache, bust_artist_cache
-from app.models import QueueJob, QueueJobStatus
-from app.db import session_scope
-
 
 router = APIRouter(prefix="/artists", tags=["Admin Artists"])
 logger = get_logger(__name__)

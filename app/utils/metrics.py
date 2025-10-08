@@ -9,6 +9,7 @@ from typing import Final
 try:  # pragma: no cover - exercised indirectly in tests
     from prometheus_client import CollectorRegistry, Counter, Histogram
 except ModuleNotFoundError:  # pragma: no cover - fallback for offline environments
+
     class Sample:
         __slots__ = ("name", "labels", "value")
 
@@ -47,7 +48,9 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
             self._labels = labels
 
         def inc(self, amount: int = 1) -> None:
-            self._parent._values[self._labels] = self._parent._values.get(self._labels, 0.0) + amount
+            self._parent._values[self._labels] = (
+                self._parent._values.get(self._labels, 0.0) + amount
+            )
 
     class Counter:  # type: ignore[override]
         def __init__(
@@ -134,6 +137,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
                     )
                 )
             return samples
+
 
 __all__ = [
     "get_registry",
@@ -223,4 +227,3 @@ def histogram(
             )
             _histograms[cache_key] = metric
         return metric
-

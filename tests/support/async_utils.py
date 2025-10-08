@@ -6,7 +6,6 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
-
 Predicate = Callable[[], Awaitable[bool] | bool]
 T = TypeVar("T")
 

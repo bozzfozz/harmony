@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
-import re
 from typing import Any, Dict, List, Optional
 
 from app.config import SpotifyConfig
@@ -13,8 +13,8 @@ from app.logging import get_logger
 try:  # pragma: no cover - import guard
     import spotipy
     from spotipy import Spotify
-    from spotipy.oauth2 import SpotifyOAuth
     from spotipy.exceptions import SpotifyException
+    from spotipy.oauth2 import SpotifyOAuth
 except Exception:  # pragma: no cover - during tests we mock the client
     spotipy = None
     Spotify = Any  # type: ignore

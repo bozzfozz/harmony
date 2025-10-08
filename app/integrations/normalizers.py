@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from typing import Any
+
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import (
     ProviderAlbum,
@@ -12,7 +13,6 @@ from app.integrations.contracts import (
     ProviderRelease,
     ProviderTrack,
 )
-
 
 _TRACK_COUNT_KEYS = (
     "total_tracks",
@@ -370,8 +370,7 @@ def from_spotify_album_details(
                 album_metadata[key] = value
 
     normalized_tracks = [
-        _ensure_spotify_track(entry, provider=provider, album_payload=mapping)
-        for entry in tracks
+        _ensure_spotify_track(entry, provider=provider, album_payload=mapping) for entry in tracks
     ]
 
     effective_total_tracks = total_tracks
@@ -693,13 +692,13 @@ def from_slskd_album_details(
         raise ValueError("slskd album payload missing 'name'")
 
     source_id = _coerce_str(mapping.get("id") or mapping.get("album_id"))
-    release_date = _coerce_str(mapping.get("release_date") or mapping.get("date") or mapping.get("year"))
+    release_date = _coerce_str(
+        mapping.get("release_date") or mapping.get("date") or mapping.get("year")
+    )
     total_tracks = _coerce_int(mapping.get("total_tracks") or mapping.get("track_count"))
     images = _collect_image_urls(mapping.get("images") or mapping.get("image"))
 
-    normalized_tracks = [
-        _ensure_slskd_track(entry, provider=provider) for entry in tracks
-    ]
+    normalized_tracks = [_ensure_slskd_track(entry, provider=provider) for entry in tracks]
 
     if total_tracks is None and normalized_tracks:
         total_tracks = len(normalized_tracks)
@@ -729,11 +728,7 @@ def from_slskd_album_details(
     )
 
     extra_metadata: dict[str, Any] = {}
-    aliases = [
-        str(item)
-        for item in _iter_sequence(mapping.get("aliases"))
-        if _coerce_str(item)
-    ]
+    aliases = [str(item) for item in _iter_sequence(mapping.get("aliases")) if _coerce_str(item)]
     if aliases:
         extra_metadata["aliases"] = aliases
 

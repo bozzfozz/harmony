@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
-import anyio
-import threading
-from concurrent.futures import ThreadPoolExecutor
 
+import anyio
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import Select, func, select

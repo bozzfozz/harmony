@@ -10,6 +10,7 @@ from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.core.transfers_api import TransfersApi, TransfersApiError
+from app.db import SessionCallable
 from app.errors import (
     AppError,
     DependencyError,
@@ -20,7 +21,6 @@ from app.errors import (
 )
 from app.logging import get_logger
 from app.models import Download
-from app.db import SessionCallable
 from app.schemas import DownloadPriorityUpdate, SoulseekDownloadRequest
 from app.schemas.errors import ApiError
 from app.services.errors import to_api_error
@@ -36,7 +36,6 @@ from app.utils.downloads import (
 from app.utils.events import DOWNLOAD_BLOCKED
 from app.utils.service_health import collect_missing_credentials
 from app.workers.persistence import update_priority as update_worker_priority
-
 
 logger = get_logger(__name__)
 

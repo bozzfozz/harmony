@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from difflib import SequenceMatcher
 import re
 import unicodedata
+from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any, Iterable, Mapping, Sequence
 
 from app.config import MatchingConfig, load_matching_config

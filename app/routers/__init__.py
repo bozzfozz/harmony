@@ -3,8 +3,8 @@ from typing import Any
 
 from ._deprecation import emit_router_deprecation
 from .activity_router import router as activity_router
-from .download_router import router as download_router
 from .dlq_router import router as dlq_router
+from .download_router import router as download_router
 from .health_router import router as health_router
 from .imports_router import router as imports_router
 from .integrations import router as integrations_router

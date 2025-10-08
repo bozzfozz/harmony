@@ -73,8 +73,8 @@ def test_retry_provider_typ_specific_overrides_fallbacks() -> None:
 
 
 def test_handler_uses_updated_policy_without_restart(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services import retry_policy_provider as provider_module
     from app.orchestrator.handlers import load_sync_retry_policy
+    from app.services import retry_policy_provider as provider_module
 
     env: dict[str, Any] = {
         "RETRY_MAX_ATTEMPTS": "2",

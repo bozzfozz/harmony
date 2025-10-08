@@ -25,6 +25,7 @@ from app.utils.retry import exp_backoff_delays
 from app.workers import persistence
 
 if TYPE_CHECKING:  # pragma: no cover - import for typing only
+    from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
     from app.orchestrator.handlers import (
         ArtistDeltaHandlerDeps,
         ArtistRefreshHandlerDeps,
@@ -33,7 +34,6 @@ if TYPE_CHECKING:  # pragma: no cover - import for typing only
         SyncHandlerDeps,
         WatchlistHandlerDeps,
     )
-    from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
 
 
 JobHandler = Callable[[persistence.QueueJobDTO], Awaitable[Mapping[str, Any] | None]]

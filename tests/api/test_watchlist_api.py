@@ -83,4 +83,3 @@ def test_watchlist_pause_and_resume() -> None:
         assert resume_body["paused"] is False
         assert resume_body["pause_reason"] is None
         assert resume_body["resume_at"] is None
-

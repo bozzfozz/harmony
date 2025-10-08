@@ -39,7 +39,6 @@ from app.utils.idempotency import make_idempotency_key
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
 
-
 logger = get_logger(__name__)
 
 _JOB_TYPE = "artist_sync"

@@ -15,8 +15,8 @@ from sqlalchemy import Select, func, select
 
 from app.config import SpotifyConfig
 from app.core.spotify_client import SpotifyClient
-from app.errors import DependencyError
 from app.db import session_scope
+from app.errors import DependencyError
 from app.logging import get_logger
 from app.models import BackfillJob, IngestItem, IngestItemState, SpotifyCache
 

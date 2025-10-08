@@ -26,6 +26,7 @@ skip-magic-trailing-comma = false
 
 [tool.ruff.lint]
 select = ["E", "F"]
+extend-select = ["I"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]

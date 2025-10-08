@@ -10,12 +10,21 @@ from typing import Any, Callable, Dict, Literal, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.logging import get_logger
 from app.db import session_scope
-from app.models import Download, QueueJob, QueueJobStatus
 from app.dependencies import get_db
+from app.errors import DependencyError
+from app.logging import get_logger
+from app.models import Download, QueueJob, QueueJobStatus
+from app.services.health import HealthService
+from app.services.secret_store import SecretStore
+from app.services.secret_validation import (
+    SecretValidationResult,
+    SecretValidationService,
+    SecretValidationSettings,
+)
 from app.utils.activity import record_worker_stale
 from app.utils.events import WORKER_STALE
 from app.utils.service_health import evaluate_all_service_health
@@ -28,15 +37,6 @@ from app.utils.worker_health import (
     read_worker_status,
     resolve_status,
 )
-from app.errors import DependencyError
-from app.services.secret_store import SecretStore
-from app.services.secret_validation import (
-    SecretValidationResult,
-    SecretValidationService,
-    SecretValidationSettings,
-)
-from app.services.health import HealthService
-from sqlalchemy import func, select
 
 try:  # pragma: no cover - import guarded for environments without psutil
     import psutil as _psutil  # type: ignore

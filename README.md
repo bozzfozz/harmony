@@ -356,6 +356,9 @@ npm run typecheck
 npm run build
 ```
 
+`ruff` erzwingt neben klassischen Lint-Regeln auch die Import-Reihenfolge (I-Rules). Nutze bei Bedarf `ruff check . --select I --fix`,
+um Imports automatisch sortieren zu lassen. `black` bleibt der einzige Formatter; zusätzliche `isort`-Läufe sind nicht erforderlich.
+
 Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app` nutzt die Repository-Konfiguration (Scope,
 Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings
 gar nicht erst im Pull Request landen.

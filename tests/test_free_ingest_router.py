@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.dependencies import get_app_config
 from app.db import session_scope
+from app.dependencies import get_app_config
 from app.models import IngestItem, IngestJob
 from tests.simple_client import SimpleTestClient
 

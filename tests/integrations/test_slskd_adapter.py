@@ -5,7 +5,6 @@ from typing import Any
 import httpx
 import pytest
 
-from app.integrations.slskd_adapter import SlskdAdapter
 from app.integrations.contracts import (
     ProviderAlbum,
     ProviderAlbumDetails,
@@ -17,6 +16,7 @@ from app.integrations.contracts import (
     ProviderValidationError,
     SearchQuery,
 )
+from app.integrations.slskd_adapter import SlskdAdapter
 
 
 def _build_adapter(
@@ -141,7 +141,9 @@ async def test_adapter_maps_server_errors_to_dependency_error() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_artist_top_tracks_limits_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    adapter, client = _build_adapter(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
+    adapter, client = _build_adapter(
+        httpx.MockTransport(lambda request: httpx.Response(200, json={}))
+    )
 
     tracks = [
         ProviderTrack(name="First", provider="slskd"),
@@ -163,7 +165,9 @@ async def test_fetch_artist_top_tracks_limits_results(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_fetch_album_builds_details_from_tracks(monkeypatch: pytest.MonkeyPatch) -> None:
-    adapter, client = _build_adapter(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
+    adapter, client = _build_adapter(
+        httpx.MockTransport(lambda request: httpx.Response(200, json={}))
+    )
 
     track = ProviderTrack(
         name="Song",

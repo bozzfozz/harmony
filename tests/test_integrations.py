@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.config import _parse_enabled_providers, _parse_provider_timeouts
-from app.integrations.contracts import TrackProvider
 import pytest
 
+from app.config import _parse_enabled_providers, _parse_provider_timeouts
+from app.integrations.contracts import TrackProvider
 from app.services.integration_service import IntegrationService
 
 

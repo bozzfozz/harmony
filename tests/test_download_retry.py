@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import random
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
-import random
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, QueueJobStatus

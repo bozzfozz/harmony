@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope

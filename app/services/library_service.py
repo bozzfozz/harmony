@@ -136,9 +136,11 @@ class LibraryService:
                             track.album.artists, key=lambda item: (item.name, item.id or "")
                         )
                     ],
-                    "release_date": self._normalize_value(track.album.release_date)
-                    if track.album.release_date
-                    else None,
+                    "release_date": (
+                        self._normalize_value(track.album.release_date)
+                        if track.album.release_date
+                        else None
+                    ),
                     "total_tracks": track.album.total_tracks,
                     "metadata": self._normalize_value(track.album.metadata),
                 }
@@ -151,13 +153,20 @@ class LibraryService:
         if isinstance(value, (datetime, date)):
             return value.isoformat()
         if isinstance(value, Mapping):
-            return {str(key): self._normalize_value(subvalue) for key, subvalue in sorted(value.items())}
+            return {
+                str(key): self._normalize_value(subvalue) for key, subvalue in sorted(value.items())
+            }
         if isinstance(value, (list, tuple)):
             return [self._normalize_value(item) for item in value]
         return value
 
     def build_snapshot(self) -> Mapping[str, Sequence[Mapping[str, object]]]:
-        albums = [self._canonical_album(entry) for entry in sorted(self._albums, key=lambda item: (item.album.id or "", item.album.name))]
+        albums = [
+            self._canonical_album(entry)
+            for entry in sorted(
+                self._albums, key=lambda item: (item.album.id or "", item.album.name)
+            )
+        ]
         tracks = [
             self._canonical_track(entry)
             for entry in sorted(

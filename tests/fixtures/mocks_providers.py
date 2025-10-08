@@ -96,4 +96,3 @@ def artist_gateway_stub(monkeypatch: pytest.MonkeyPatch) -> ArtistGatewayMock:
         build_stubbed_deps,
     )
     return stub
-

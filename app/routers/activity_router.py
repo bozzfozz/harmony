@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+import csv
+import json
 from datetime import datetime, timezone
 from io import StringIO
 from typing import Any, Dict, Literal
-
-import csv
-import json
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, Response
 
 from app.api.cache_policy import CACHEABLE_RESPONSES
-from app.logging import get_logger
-from app.errors import ValidationAppError
 from app.db import session_scope
+from app.errors import ValidationAppError
+from app.logging import get_logger
 from app.models import ActivityEvent
 from app.utils.activity import activity_manager
 

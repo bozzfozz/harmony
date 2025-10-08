@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.schemas.common import ID, ISODateTime, URI
+from app.schemas.common import ID, URI, ISODateTime
 
 
 @pytest.mark.parametrize(

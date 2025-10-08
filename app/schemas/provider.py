@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.common import ID, ISODateTime, URI
+from app.schemas.common import ID, URI, ISODateTime
 
 
 class ProviderArtist(BaseModel):

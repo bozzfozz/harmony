@@ -59,9 +59,7 @@ class DummyProvider:
         return ProviderAlbumDetails(
             source=self.name,
             album=album,
-            tracks=(
-                ProviderTrack(name="Top Song", provider=self.name),
-            ),
+            tracks=(ProviderTrack(name="Top Song", provider=self.name),),
         )
 
     async def fetch_artist_top_tracks(

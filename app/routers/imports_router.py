@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
-
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import DiscographyJob, Download
 from app.schemas import (
+    SOULSEEK_RETRYABLE_STATES,
     DiscographyDownloadRequest,
     DiscographyJobResponse,
     DownloadMetadataResponse,
@@ -27,15 +29,12 @@ from app.schemas import (
     SoulseekDownloadRequest,
     SoulseekDownloadResponse,
     SoulseekDownloadStatus,
-    SOULSEEK_RETRYABLE_STATES,
     SoulseekSearchRequest,
     SoulseekSearchResponse,
     StatusResponse,
 )
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
-
-from app.workers.sync_worker import SyncWorker
 from app.utils import artwork_utils
+from app.workers.sync_worker import SyncWorker
 
 
 def _feature_disabled_error(feature: str) -> DependencyError:

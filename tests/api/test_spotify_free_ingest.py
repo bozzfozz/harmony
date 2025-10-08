@@ -15,7 +15,6 @@ from app.models import IngestItem, IngestItemState, IngestJob, IngestJobState
 from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
 
-
 pytestmark = pytest.mark.anyio("asyncio")
 
 

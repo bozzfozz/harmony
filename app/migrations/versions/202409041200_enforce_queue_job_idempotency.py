@@ -1,7 +1,7 @@
 """Enforce queue job idempotency uniqueness."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.engine import Connection
 
 # revision identifiers, used by Alembic.
