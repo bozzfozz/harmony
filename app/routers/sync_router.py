@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-
 from sqlalchemy.orm import Session
 
 from app import dependencies

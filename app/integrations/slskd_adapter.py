@@ -35,7 +35,6 @@ from app.integrations.normalizers import (
 from app.logging import get_logger
 from app.utils.text_normalization import clean_track_title, normalize_quotes
 
-
 logger = get_logger(__name__)
 
 _DEFAULT_SEARCH_PATH = "/api/v0/search/tracks"

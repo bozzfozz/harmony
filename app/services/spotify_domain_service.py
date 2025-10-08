@@ -21,13 +21,13 @@ from sqlalchemy.orm import Session
 from app.config import AppConfig, SpotifyConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.db import SessionCallable
 from app.errors import DependencyError
+from app.integrations.contracts import ProviderTrack
+from app.integrations.normalizers import normalize_spotify_track
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Playlist
-from app.db import SessionCallable
-from app.integrations.contracts import ProviderTrack
-from app.integrations.normalizers import normalize_spotify_track
 from app.services.backfill_service import (
     BackfillJobSpec,
     BackfillJobStatus,

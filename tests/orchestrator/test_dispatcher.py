@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import logging
 import random
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-import dataclasses
-import logging
 from typing import Any, Callable, Iterable, Mapping
 
 import pytest
@@ -14,13 +14,12 @@ from sqlalchemy import select
 
 from app.config import ExternalCallPolicy, settings
 from app.core.matching_engine import MusicMatchingEngine
-from app.models import QueueJobStatus
+from app.db import init_db, reset_engine_for_tests, session_scope
+from app.models import Download, Match, QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
 from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
-from app.workers import persistence
 from app.utils.activity import activity_manager
-from app.db import init_db, reset_engine_for_tests, session_scope
-from app.models import Download, Match
+from app.workers import persistence
 
 
 class StubScheduler:

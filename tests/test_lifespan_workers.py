@@ -5,7 +5,6 @@ import pytest
 from app.main import app
 from tests.support.async_utils import wait_for_event
 
-
 pytestmark = [pytest.mark.usefixtures("lifespan_worker_settings")]
 
 

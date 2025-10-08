@@ -54,14 +54,17 @@ class WatchlistService:
         """Return watchlist entries sorted by priority and creation time."""
 
         with self.session_factory() as session:
-            records = session.execute(
-                select(WatchlistArtist)
-                .order_by(
-                    WatchlistArtist.priority.desc(),
-                    WatchlistArtist.created_at.asc(),
-                    WatchlistArtist.id.asc(),
+            records = (
+                session.execute(
+                    select(WatchlistArtist).order_by(
+                        WatchlistArtist.priority.desc(),
+                        WatchlistArtist.created_at.asc(),
+                        WatchlistArtist.id.asc(),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return [self._to_entry(session, record) for record in records]
 
     def create_entry(self, *, artist_key: str, priority: int = 0) -> WatchlistEntry:
@@ -285,12 +288,8 @@ class WatchlistService:
         session.refresh(record)
         return record
 
-    def _find_by_identifier(
-        self, session: Session, identifier: str
-    ) -> WatchlistArtist | None:
-        statement = select(WatchlistArtist).where(
-            WatchlistArtist.spotify_artist_id == identifier
-        )
+    def _find_by_identifier(self, session: Session, identifier: str) -> WatchlistArtist | None:
+        statement = select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == identifier)
         return session.execute(statement).scalars().first()
 
     def _lookup_artist(self, session: Session, artist_key: str) -> ArtistRecord | None:
@@ -351,4 +350,3 @@ class WatchlistService:
 
 
 __all__ = ["WatchlistEntry", "WatchlistService"]
-

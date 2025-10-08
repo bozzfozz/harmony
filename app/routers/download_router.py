@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 
 from app.dependencies import get_download_service
+from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.schemas import (
@@ -19,7 +20,6 @@ from app.schemas import (
     SoulseekDownloadRequest,
 )
 from app.services.download_service import DownloadService
-from app.errors import ValidationAppError
 
 router = APIRouter(tags=["Download"])
 logger = get_logger(__name__)

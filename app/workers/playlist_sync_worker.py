@@ -9,12 +9,12 @@ from typing import Any, Iterable
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import Playlist
+from app.services.cache import PLAYLIST_LIST_CACHE_PREFIX, ResponseCache, playlist_detail_cache_key
 from app.utils.activity import record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.logging_events import log_event
-from app.services.cache import PLAYLIST_LIST_CACHE_PREFIX, ResponseCache, playlist_detail_cache_key
 
 logger = get_logger(__name__)
 

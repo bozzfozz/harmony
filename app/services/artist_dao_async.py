@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import WatchlistArtist
 
-
 _MIN_COOLDOWN_SECONDS = 900
 _MAX_COOLDOWN_SECONDS = 14_400
 

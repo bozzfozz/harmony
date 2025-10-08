@@ -183,8 +183,8 @@ def register_all(
 from app.api import artists, search, spotify, system, watchlist  # noqa: E402
 from app.routers import (  # noqa: E402
     activity_router,
-    download_router,
     dlq_router,
+    download_router,
     health_router,
     imports_router,
     integrations_router,

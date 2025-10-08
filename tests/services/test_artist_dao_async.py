@@ -10,7 +10,6 @@ from app.db import Base
 from app.models import WatchlistArtist
 from app.services.artist_dao_async import ArtistWatchlistAsyncDAO
 
-
 pytest.importorskip("aiosqlite")
 
 

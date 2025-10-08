@@ -7,12 +7,12 @@ import pytest
 from sqlalchemy import select
 
 from app.db import session_scope
-from app.logging_events import log_event
 from app.integrations.contracts import ProviderRelease
 from app.integrations.provider_gateway import ProviderGatewayTimeoutError
+from app.logging_events import log_event
 from app.models import ArtistRecord, QueueJob, QueueJobStatus, WatchlistArtist
-from app.services.retry_policy_provider import get_retry_policy_provider
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
+from app.services.retry_policy_provider import get_retry_policy_provider
 from app.workers import persistence
 from tests.fixtures.artists import ArtistFactory
 
@@ -99,8 +99,9 @@ def test_artist_flow_happy_path_persists_and_exposes_via_api(
 ) -> None:
     state = artist_factory.create()
 
-    with caplog.at_level(logging.INFO), caplog.at_level(
-        logging.INFO, logger="app.orchestrator.handlers_artist"
+    with (
+        caplog.at_level(logging.INFO),
+        caplog.at_level(logging.INFO, logger="app.orchestrator.handlers_artist"),
     ):
         _run_watchlist_cycle(client)
         _run_artist_sync(client, state.artist_key)
@@ -237,4 +238,3 @@ def test_artist_flow_idempotency_blocks_double_effect(
     _drain_jobs(client, dispatcher)
 
     assert len(artist_gateway_stub.calls) == 1
-

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from sqlalchemy import delete, select
 
 from app.config import load_config

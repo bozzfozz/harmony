@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import load_config
 
-
 _async_engine: AsyncEngine | None = None
 AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 _configured_async_url: str | None = None

@@ -26,7 +26,6 @@ from app.integrations.normalizers import (
 )
 from app.logging import get_logger
 
-
 logger = get_logger(__name__)
 
 
@@ -234,7 +233,9 @@ class SpotifyAdapter(TrackProvider):
                         entry for entry in candidates if isinstance(entry, Mapping)
                     )
             elif isinstance(tracks_payload, list):
-                track_entries.extend(entry for entry in tracks_payload if isinstance(entry, Mapping))
+                track_entries.extend(
+                    entry for entry in tracks_payload if isinstance(entry, Mapping)
+                )
 
             return from_spotify_album_details(
                 album_payload,
@@ -300,9 +301,7 @@ class SpotifyAdapter(TrackProvider):
         except ProviderDependencyError:
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
-            raise ProviderInternalError(
-                self.name, "spotify artist top tracks failed"
-            ) from exc
+            raise ProviderInternalError(self.name, "spotify artist top tracks failed") from exc
 
 
 __all__ = ["SpotifyAdapter"]

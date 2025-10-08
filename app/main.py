@@ -13,29 +13,29 @@ from fastapi import APIRouter, FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.api import router_registry
-from app.api.openapi_examples import apply_artist_examples
 from app.api.admin_artists import maybe_register_admin_routes
+from app.api.openapi_examples import apply_artist_examples
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
+from app.db import get_session, init_db
 from app.dependencies import (
     get_app_config,
     get_soulseek_client,
     get_spotify_client,
 )
-from app.db import get_session, init_db
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
 from app.middleware import install_middleware
+from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
+from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
+from app.orchestrator.timer import WatchlistTimer
 from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
-from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
-from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
-from app.orchestrator.timer import WatchlistTimer
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
-from app.workers.metadata_worker import MetadataWorker, MetadataUpdateWorker
+from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)

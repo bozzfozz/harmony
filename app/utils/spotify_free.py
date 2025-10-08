@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Iterable, List, Sequence
 from urllib.parse import urlparse
 
-
 __all__ = [
     "PlaylistLink",
     "RejectedLink",

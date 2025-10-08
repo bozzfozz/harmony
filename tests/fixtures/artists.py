@@ -81,9 +81,13 @@ class ArtistFactory:
         spotify_id = identifier or artist_key
 
         with session_scope() as session:
-            existing = session.execute(
-                select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == spotify_id)
-            ).scalars().first()
+            existing = (
+                session.execute(
+                    select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == spotify_id)
+                )
+                .scalars()
+                .first()
+            )
             if existing is not None:
                 session.delete(existing)
                 session.flush()
@@ -140,7 +144,9 @@ class ArtistFactory:
             }
         ]
 
-        provider_artist = ProviderArtist(source=source or "spotify", name=name, source_id=spotify_id)
+        provider_artist = ProviderArtist(
+            source=source or "spotify", name=name, source_id=spotify_id
+        )
         provider_release = ProviderRelease(
             source=source or "spotify",
             source_id=album_id,
@@ -179,4 +185,3 @@ def artist_factory(client, artist_gateway_stub) -> ArtistFactory:
         soulseek_stub=client.app.state.soulseek_stub,
         gateway_stub=artist_gateway_stub,
     )
-

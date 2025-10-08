@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 import re
 import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Mapping, Protocol, Sequence
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.db import session_scope
 from app.errors import NotFoundError, ValidationAppError
 from app.logging import get_logger
-from app.db import session_scope
 from app.models import Download, DownloadState
 from app.workers.sync_worker import SyncWorker, _truncate_error
 

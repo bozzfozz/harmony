@@ -11,7 +11,6 @@ from app.integrations.registry import ProviderRegistry
 from app.logging import get_logger
 from app.logging_events import log_event
 
-
 logger = get_logger(__name__)
 
 

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 import hmac
+from functools import lru_cache
 from typing import Any, Awaitable, Callable, Generator
 
 from fastapi import Depends, Request, status
-
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig, load_config
@@ -16,15 +15,14 @@ from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
 from app.db import SessionCallable, get_session, run_session
+from app.errors import AppError, ErrorCode
 from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
-from app.errors import AppError, ErrorCode
 from app.logging import get_logger
 from app.services.artist_service import ArtistService
 from app.services.download_service import DownloadService
 from app.services.integration_service import IntegrationService
 from app.services.watchlist_service import WatchlistService
-
 
 _integration_service_override: IntegrationService | None = None
 

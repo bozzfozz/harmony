@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
 from sqlalchemy import select
-
 from sqlalchemy.orm import Session
 
 from app.models import Setting

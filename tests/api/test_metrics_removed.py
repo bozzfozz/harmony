@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tests.simple_client import SimpleTestClient
 from app.main import app
+from tests.simple_client import SimpleTestClient
 
 
 def test_metrics_endpoint_is_not_exposed() -> None:

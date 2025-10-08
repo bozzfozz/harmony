@@ -19,21 +19,21 @@ from app.dependencies import (
     get_spotify_client,
 )
 from app.integrations.artist_gateway import ArtistGateway
+from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
 from app.orchestrator.handlers import (
     ArtistDeltaHandlerDeps,
     ArtistRefreshHandlerDeps,
     ArtworkService,
-    MatchingHandlerDeps,
     LyricsService,
+    MatchingHandlerDeps,
     MetadataService,
     RetryHandlerDeps,
     SyncHandlerDeps,
     SyncJobSubmitter,
     WatchlistHandlerDeps,
 )
-from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
-from app.services.cache import ResponseCache
 from app.services.artist_dao import ArtistDao
+from app.services.cache import ResponseCache
 
 
 def build_sync_handler_deps(

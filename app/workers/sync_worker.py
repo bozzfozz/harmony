@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
@@ -32,6 +32,10 @@ from app.orchestrator.handlers import (
     truncate_error,
     update_ingest_item_state,
 )
+from app.services.retry_policy_provider import (
+    RetryPolicy,
+    get_retry_policy_provider,
+)
 from app.utils.activity import (
     record_activity,
     record_worker_started,
@@ -40,10 +44,6 @@ from app.utils.activity import (
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.services.retry_policy_provider import (
-    RetryPolicy,
-    get_retry_policy_provider,
-)
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
@@ -51,8 +51,8 @@ from app.workers.persistence import (
     QueueJobDTO,
     complete_async,
     enqueue_async,
-    fetch_ready_async,
     fail_async,
+    fetch_ready_async,
     lease_async,
     release_active_leases_async,
 )

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import NoSuchTableError

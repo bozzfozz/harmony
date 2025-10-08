@@ -22,7 +22,6 @@ from app.schemas.artists import (
 )
 from app.services.artist_service import ArtistDetails, ArtistService, WatchlistPage
 
-
 router = APIRouter(prefix="/artists", tags=["Artists"])
 _logger = get_logger(__name__)
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Mapping
-from types import MappingProxyType
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any
 
 from app.config import OrchestratorConfig, settings

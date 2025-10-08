@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from app.api import router_registry
-from app.api import artists, search, spotify, system, watchlist
+from app.api import artists, router_registry, search, spotify, system, watchlist
 from app.routers import (
     activity_router,
-    download_router,
     dlq_router,
+    download_router,
     health_router,
     imports_router,
     integrations_router,

@@ -27,7 +27,6 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.retry import RetryDirective, with_retry
 
-
 logger = get_logger(__name__)
 
 

@@ -35,7 +35,7 @@ ARTIST_DETAIL_EXAMPLE: Mapping[str, Any] = {
     "popularity": 67,
     "metadata": {"followers": 1203456, "label": "Harmony Records"},
     "version": "2024-03-01T12:00:00Z",
-    "etag": "\"artist-sync-7b4a5c90\"",
+    "etag": '"artist-sync-7b4a5c90"',
     "updated_at": "2024-03-01T12:00:00Z",
     "created_at": "2023-11-12T09:15:00Z",
     "releases": [
@@ -49,7 +49,7 @@ ARTIST_DETAIL_EXAMPLE: Mapping[str, Any] = {
             "release_type": "album",
             "total_tracks": 10,
             "version": None,
-            "etag": "\"release-cc928fb6\"",
+            "etag": '"release-cc928fb6"',
             "updated_at": "2024-03-01T12:00:00Z",
             "created_at": "2024-03-01T12:00:00Z",
         }
@@ -111,4 +111,3 @@ def apply_artist_examples(
         _set_json_example(paths, watchlist_path, "get", "200", ARTIST_COLLECTION_EXAMPLE)
     _set_json_example(paths, detail_path, "get", "200", ARTIST_DETAIL_EXAMPLE)
     _set_json_example(paths, enqueue_path, "post", "202", ARTIST_ENQUEUE_EXAMPLE)
-

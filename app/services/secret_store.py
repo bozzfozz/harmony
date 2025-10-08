@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app.models import Setting
 
-
 _PROVIDER_SETTINGS = {
     "slskd_api_key": ("SLSKD_API_KEY", "SLSKD_URL"),
     "spotify_client_secret": ("SPOTIFY_CLIENT_SECRET", "SPOTIFY_CLIENT_ID"),

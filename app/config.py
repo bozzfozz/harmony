@@ -15,7 +15,6 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.priority import parse_priority_map
 
-
 logger = get_logger(__name__)
 
 

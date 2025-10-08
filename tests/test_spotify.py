@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from tests.simple_client import SimpleTestClient
-
 from app.db import session_scope
 from app.models import Playlist
+from tests.simple_client import SimpleTestClient
 
 
 def test_playlist_sync_worker_persists_playlists(client: SimpleTestClient) -> None:

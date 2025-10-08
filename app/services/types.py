@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence
 
-from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.integrations.contracts import ProviderTrack, SearchQuery
+from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 
 
 class ProviderGatewayProtocol(Protocol):

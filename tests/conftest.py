@@ -10,14 +10,12 @@ pytest_plugins = [
 
 import asyncio
 import logging
+import os
+import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
-
-import os
-import uuid
-
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -34,9 +32,9 @@ import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
+
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.logging import get_logger
 from app.dependencies import (
     get_integration_service as dependency_integration_service,
     get_matching_engine as dependency_matching_engine,
@@ -46,24 +44,25 @@ from app.dependencies import (
 )
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack, SearchQuery
+from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.integrations.provider_gateway import (
     ProviderGatewayInternalError,
     ProviderGatewaySearchResponse,
     ProviderGatewaySearchResult,
 )
+from app.logging import get_logger
 from app.main import app
-from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.models import ActivityEvent, QueueJobStatus
+from app.orchestrator import bootstrap as orchestrator_bootstrap
 from app.services.backfill_service import BackfillService
-from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.utils.activity import activity_manager
 from app.utils.settings_store import write_setting
-from app.workers.playlist_sync_worker import PlaylistSyncWorker
-from app.workers.sync_worker import SyncWorker
+from app.workers import persistence
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
-from app.workers import persistence
+from app.workers.playlist_sync_worker import PlaylistSyncWorker
+from app.workers.sync_worker import SyncWorker
 from tests.simple_client import SimpleTestClient
 
 

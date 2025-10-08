@@ -450,7 +450,9 @@ async def test_artist_delta_skips_when_content_hash_matches() -> None:
         submit_sync_job=unchanged_submitter,
         cache_service=unchanged_cache,
     )
-    second_job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": unchanged_artist.id})
+    second_job = _queue_job(
+        job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": unchanged_artist.id}
+    )
     result = await handle_artist_delta(second_job, unchanged_deps)
 
     assert result["status"] == "noop"

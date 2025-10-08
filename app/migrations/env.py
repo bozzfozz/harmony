@@ -9,11 +9,10 @@ from alembic import context
 from alembic.config import Config
 from sqlalchemy import engine_from_config, pool
 
-from app.config import load_config
-from app.db import metadata
-
 # Import models for metadata registration
 from app import models  # noqa: F401
+from app.config import load_config
+from app.db import metadata
 
 _context_config = getattr(context, "config", None)
 config = _context_config if _context_config is not None else Config()

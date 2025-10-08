@@ -13,7 +13,6 @@ from app.integrations.slskd_adapter import SlskdAdapter
 from app.integrations.spotify_adapter import SpotifyAdapter
 from app.logging import get_logger
 
-
 logger = get_logger(__name__)
 
 

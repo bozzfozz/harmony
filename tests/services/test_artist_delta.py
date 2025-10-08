@@ -1,9 +1,10 @@
 from datetime import date, datetime
 
+from app.services.artist_dao import ArtistReleaseUpsertDTO
 from app.services.artist_delta import (
     AlbumRelease,
-    ArtistLocalState,
     ArtistKnownRelease,
+    ArtistLocalState,
     ArtistRemoteState,
     ArtistTrackCandidate,
     ReleaseSnapshot,
@@ -11,7 +12,6 @@ from app.services.artist_delta import (
     determine_delta,
     filter_new_releases,
 )
-from app.services.artist_dao import ArtistReleaseUpsertDTO
 
 
 def _make_album_payload(**overrides: object) -> dict[str, object]:

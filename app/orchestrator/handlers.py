@@ -30,12 +30,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import WatchlistWorkerConfig, settings
-from app.db_async import get_async_sessionmaker
 from app.core.matching_engine import MusicMatchingEngine
-from app.core.types import ProviderArtistDTO
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
+from app.core.types import ProviderArtistDTO
 from app.db import run_session, session_scope
+from app.db_async import get_async_sessionmaker
 from app.dependencies import get_app_config
 from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
@@ -51,8 +51,8 @@ from app.services.artist_delta import (
     filter_new_releases,
 )
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
-from app.services.library_service import LibraryService
 from app.services.backfill_service import BackfillJobStatus
+from app.services.library_service import LibraryService
 from app.services.retry_policy_provider import (
     RetryPolicy,
     RetryPolicyProvider,
@@ -72,7 +72,6 @@ from app.utils.file_utils import organize_file
 from app.utils.metrics import counter, histogram
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO
-
 
 logger = get_logger(__name__)
 
@@ -699,9 +698,7 @@ class ArtistRefreshHandlerDeps:
         mode = (self.config.db_io_mode or "thread").strip().lower()
         if mode == "async" and isinstance(self.dao, ArtistWorkflowDAO):
             if not self.dao.supports_async:
-                self.dao = self.dao.with_async_session_factory(
-                    get_async_sessionmaker()
-                )
+                self.dao = self.dao.with_async_session_factory(get_async_sessionmaker())
         if not get_app_config().features.enable_artist_cache_invalidation:
             self.cache_service = None
 
@@ -743,9 +740,7 @@ class ArtistDeltaHandlerDeps:
         self.retry_max = max(1, int(self.config.retry_max))
         if self.db_mode == "async" and isinstance(self.dao, ArtistWorkflowDAO):
             if not self.dao.supports_async:
-                self.dao = self.dao.with_async_session_factory(
-                    get_async_sessionmaker()
-                )
+                self.dao = self.dao.with_async_session_factory(get_async_sessionmaker())
         if not get_app_config().features.enable_artist_cache_invalidation:
             self.cache_service = None
 
@@ -1791,9 +1786,7 @@ async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping
                 content_hash=content_hash,
             )
             if deps.cache_service is not None and content_hash != previous_hash:
-                await deps.cache_service.evict_artist(
-                    artist_id=artist.spotify_artist_id
-                )
+                await deps.cache_service.evict_artist(artist_id=artist.spotify_artist_id)
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,

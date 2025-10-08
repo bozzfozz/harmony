@@ -19,7 +19,6 @@ from app.errors import DependencyError, RateLimitedError, ValidationAppError
 from app.logging import get_logger
 from app.services.secret_store import SecretRecord, SecretStore
 
-
 logger = get_logger(__name__)
 
 ValidationMode = Literal["live", "format"]

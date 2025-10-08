@@ -58,4 +58,3 @@ class WatchlistEntryResponse(BaseModel):
 
 class WatchlistListResponse(BaseModel):
     items: list[WatchlistEntryResponse]
-

@@ -74,9 +74,7 @@ class WatchlistTimer:
         mode = (config.db_io_mode or "thread").strip().lower()
         if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
             if not resolved_dao.supports_async:
-                resolved_dao = resolved_dao.with_async_session_factory(
-                    get_async_sessionmaker()
-                )
+                resolved_dao = resolved_dao.with_async_session_factory(get_async_sessionmaker())
         self._dao = resolved_dao
         self._persistence = persistence_module
         self._now_factory = now_factory

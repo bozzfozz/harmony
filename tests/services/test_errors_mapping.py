@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from app.core.transfers_api import TransfersDependencyError
 from app.errors import DependencyError, ValidationAppError
 from app.integrations.provider_gateway import (
     ProviderGatewayDependencyError,
     ProviderGatewayRateLimitedError,
     ProviderGatewayTimeoutError,
 )
-from app.core.transfers_api import TransfersDependencyError
 from app.services.errors import ServiceError, to_api_error
 
 

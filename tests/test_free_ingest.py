@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.dependencies import get_app_config
 from app.db import session_scope
+from app.dependencies import get_app_config
 from app.models import IngestItem, IngestItemState, IngestJob, IngestJobState
 from app.services.free_ingest_service import FreeIngestService
 
