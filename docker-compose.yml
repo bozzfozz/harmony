@@ -8,8 +8,9 @@ services:
       - DATABASE_URL=sqlite:///./harmony.db
       - HARMONY_LOG_LEVEL=INFO
       - HARMONY_API_KEYS=dev-key
-      - ALLOWED_ORIGINS=http://localhost:5173
+      - ALLOWED_ORIGINS=http://localhost:8000
+      - PUBLIC_BACKEND_URL=http://localhost:8000
+      - PUBLIC_SENTRY_DSN=
+      - PUBLIC_FEATURE_FLAGS={}
     ports:
       - "8000:8000"
-    volumes:
-      - ./:/app
