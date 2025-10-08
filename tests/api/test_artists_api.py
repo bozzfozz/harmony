@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import os
-import tempfile
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -14,31 +11,30 @@ from app.models import QueueJob
 from app.services.artist_dao import (ArtistDao, ArtistReleaseUpsertDTO,
                                      ArtistUpsertDTO, build_artist_key)
 from tests.helpers import api_path
+from tests.support.postgres import postgres_schema
 from tests.simple_client import SimpleTestClient
+
+
+pytestmark = pytest.mark.postgres
 
 
 @pytest.fixture(autouse=True)
 def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
     monkeypatch.setenv("FEATURE_REQUIRE_AUTH", "0")
-    db_fd, db_file = tempfile.mkstemp(prefix="harmony-artists-", suffix=".db")
-    os.close(db_fd)
-    db_path = Path(db_file)
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
-    init_db()
-    deps.get_app_config.cache_clear()
-    deps.get_artist_service.cache_clear()
-    app.openapi_schema = None
-    yield
-    deps.get_app_config.cache_clear()
-    deps.get_artist_service.cache_clear()
-    app.openapi_schema = None
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
+    with postgres_schema("artists", monkeypatch=monkeypatch):
+        reset_engine_for_tests()
+        init_db()
+        deps.get_app_config.cache_clear()
+        deps.get_artist_service.cache_clear()
+        app.openapi_schema = None
+        try:
+            yield
+        finally:
+            deps.get_app_config.cache_clear()
+            deps.get_artist_service.cache_clear()
+            app.openapi_schema = None
+            reset_engine_for_tests()
 
 
 def _seed_artist_with_release() -> str:

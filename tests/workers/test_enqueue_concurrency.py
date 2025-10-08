@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import threading
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import anyio
 import pytest
-import sqlalchemy as sa
 from sqlalchemy import func, select
-from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import QueueJob, QueueJobStatus
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO, enqueue
+from tests.support.postgres import postgres_schema
 
 pytestmark = [pytest.mark.postgres, pytest.mark.usefixtures("queue_database_backend")]
 
@@ -177,47 +172,14 @@ def test_enqueue_redelivery_does_not_duplicate_on_retry() -> None:
 
 
 @pytest.fixture()
-def queue_database_backend(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    original_url = os.environ["DATABASE_URL"]
-    schema_name: str | None = None
-    base_engine: sa.Engine | None = None
-    configured_url: str | None = None
-
-    try:
-        database_url = os.getenv("DATABASE_URL")
-        if not database_url:
-            pytest.skip("DATABASE_URL is not configured for PostgreSQL tests")
-
-        url = make_url(database_url)
-        if url.get_backend_name() != "postgresql":
-            pytest.skip("PostgreSQL URL required for worker persistence tests")
-
-        schema_name = f"test_workers_{uuid.uuid4().hex}"
-        base_engine = sa.create_engine(url)
-        with base_engine.connect() as connection:
-            connection.execute(CreateSchema(schema_name))
-            connection.commit()
-
-        scoped_url = url.set(query={**url.query, "options": f"-csearch_path={schema_name}"})
-        configured_url = str(scoped_url)
-        monkeypatch.setenv("DATABASE_URL", configured_url)
+def queue_database_backend(monkeypatch: pytest.MonkeyPatch):
+    with postgres_schema("workers", monkeypatch=monkeypatch):
         reset_engine_for_tests()
         init_db()
-        yield "postgresql"
-    finally:
-        reset_engine_for_tests()
-        monkeypatch.setenv("DATABASE_URL", original_url)
-
-        if base_engine is not None and schema_name is not None:
-            with base_engine.connect() as connection:
-                try:
-                    connection.execute(DropSchema(schema_name, cascade=True))
-                    connection.commit()
-                except ProgrammingError:
-                    connection.rollback()
-            base_engine.dispose()
+        try:
+            yield "postgresql"
+        finally:
+            reset_engine_for_tests()
 
 
 @pytest.mark.anyio

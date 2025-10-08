@@ -22,7 +22,7 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **Globale API-Key-Authentifizierung** schützt sämtliche Produktiv-Endpunkte (`X-API-Key` oder `Authorization: Bearer`). Keys werden über `HARMONY_API_KEYS`/`HARMONY_API_KEYS_FILE` verwaltet, Ausnahmen via `AUTH_ALLOWLIST`, CORS über `ALLOWED_ORIGINS` restriktiv konfiguriert.
 - **Automatic Lyrics** *(Feature-Flag `ENABLE_LYRICS`, Default: deaktiviert)*: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten. Die Lyrics stammen vorrangig aus der Spotify-API; falls dort keine Texte verfügbar sind, greift Harmony auf externe Provider wie Musixmatch oder lyrics.ovh zurück.
 - **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Soulseek inklusive Persistierung (Plex-Matching archiviert).
-- **SQLite-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
+- **PostgreSQL-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
@@ -37,12 +37,18 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
-  -e DATABASE_URL=sqlite:////data/harmony.db \
+  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony \
   -e PUBLIC_BACKEND_URL=http://localhost:8080 \
   -e ALLOWED_ORIGINS=http://localhost:8080 \
   -v $(pwd)/data:/data \
   ghcr.io/bozzfozz/harmony:latest
 ```
+
+> ℹ️ Stelle sicher, dass ein PostgreSQL-Server (z. B. `postgres:16`) im selben
+> Docker-Netzwerk unter dem Hostnamen `postgres` erreichbar ist. Für lokale
+> Tests genügt `docker network create harmony && docker run --rm -d --network
+> harmony --name postgres -e POSTGRES_DB=harmony -e POSTGRES_USER=harmony -e
+> POSTGRES_PASSWORD=harmony postgres:16`.
 
 ### `compose.yaml`
 
@@ -59,7 +65,7 @@ Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) b
 
 | Variable                 | Beschreibung                                                                  | Default (`compose.yaml`) |
 | ------------------------ | ------------------------------------------------------------------------------ | ------------------------ |
-| `DATABASE_URL`           | Persistente Datenbank; für SQLite wird `/data/harmony.db` genutzt.             | `sqlite:////data/harmony.db` |
+| `DATABASE_URL`           | Persistente PostgreSQL-Datenbank (z. B. `postgresql+psycopg://user:pass@host:5432/db`). | `postgresql+psycopg://harmony:harmony@postgres:5432/harmony` |
 | `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                           | `change-me`              |
 | `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`  |
 | `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`  |
@@ -508,12 +514,14 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
-  -e DATABASE_URL=sqlite:////data/harmony.db \
+  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony \
   -v $(pwd)/data:/data \
   ghcr.io/bozzfozz/harmony:latest
+
+> ℹ️ Die Runtime erwartet einen PostgreSQL-Server im selben Docker-Netzwerk.
 ```
 
-Der Container lauscht auf `8080`, liefert `GET /` als HTML und meldet seine Bereitschaft über `GET /api/health/ready`. Persistente Daten (SQLite, Caches, Artefakte) sollten auf ein Host-Volume unter `/data` gemountet werden. Ein Update erfolgt klassisch per `docker pull ghcr.io/bozzfozz/harmony:latest && docker compose up -d`.
+Der Container lauscht auf `8080`, liefert `GET /` als HTML und meldet seine Bereitschaft über `GET /api/health/ready`. Persistente Daten (PostgreSQL-Datenbank, Caches, Artefakte) sollten auf ein Host-Volume unter `/data` gemountet werden. Ein Update erfolgt klassisch per `docker pull ghcr.io/bozzfozz/harmony:latest && docker compose up -d`.
 
 ### Docker Compose
 
@@ -523,10 +531,12 @@ Das Repository bringt ein [`compose.yaml`](compose.yaml) mit, das den Service `h
 services:
   harmony:
     image: ghcr.io/bozzfozz/harmony:latest
+    depends_on:
+      - postgres
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: sqlite:////data/harmony.db
+      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:8080
       PUBLIC_BACKEND_URL: http://localhost:8080
@@ -541,8 +551,20 @@ services:
       retries: 3
       start_period: 10s
 
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: harmony
+      POSTGRES_USER: harmony
+      POSTGRES_PASSWORD: harmony
+    ports:
+      - "5432:5432"
+    volumes:
+      - harmony-pg-data:/var/lib/postgresql/data
+
 volumes:
   harmony-data:
+  harmony-pg-data:
 ```
 
 [`compose.override.yaml`](compose.override.yaml) aktiviert bei Bedarf Hot-Reloading (`uvicorn --reload`) und einen lokalen Build. Zusätzliche Secrets können über `env_file` oder Compose-Profile eingebunden werden.
@@ -561,7 +583,7 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `DATABASE_URL` | string | `sqlite:///./harmony.db` | SQLAlchemy-Verbindungsstring; SQLite-Dateien werden bei Bedarf automatisch angelegt. | 🔒 enthält ggf. Zugangsdaten
+| `DATABASE_URL` | string | `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` | SQLAlchemy-Verbindungsstring zu einer PostgreSQL-Instanz. | 🔒 enthält ggf. Zugangsdaten
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
 | `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
 | `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
@@ -786,7 +808,7 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 
 ```bash
 # Auszug; vollständige Liste siehe `.env.example`
-DATABASE_URL=sqlite:///./harmony.db
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
 HARMONY_API_KEYS=local-dev-key
 FEATURE_REQUIRE_AUTH=false
 WATCHLIST_MAX_CONCURRENCY=3

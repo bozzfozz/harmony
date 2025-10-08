@@ -583,7 +583,7 @@ class Settings:
         )
 
 
-DEFAULT_DB_URL = "postgres://postgres:postgres@localhost:5432/harmony"
+DEFAULT_DB_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/harmony"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
@@ -751,20 +751,25 @@ def _bounded_float(
     return resolved
 
 
-_POSTGRES_ALLOWED_PREFIXES = ("postgres://", "postgresql+asyncpg://")
+_POSTGRES_ALLOWED_PREFIXES = (
+    "postgresql+psycopg://",
+    "postgresql+asyncpg://",
+    "postgresql://",
+    "postgres://",
+)
 
 
 def _require_postgres_database_url(candidate: Optional[str]) -> str:
     value = (candidate or "").strip()
     if not value:
         raise ValidationAppError(
-            "DATABASE_URL must be configured with a postgres:// or postgresql+asyncpg:// connection string, "
+            "DATABASE_URL must be configured with a postgresql+psycopg:// or postgresql+asyncpg:// connection string, "
             f"for example {DEFAULT_DB_URL}.",
             meta={"field": "DATABASE_URL"},
         )
     if not value.lower().startswith(_POSTGRES_ALLOWED_PREFIXES):
         raise ValidationAppError(
-            "DATABASE_URL must use a postgres:// or postgresql+asyncpg:// connection string.",
+            "DATABASE_URL must use a postgresql+psycopg:// or postgresql+asyncpg:// connection string.",
             meta={"field": "DATABASE_URL"},
         )
     return value

@@ -1,7 +1,5 @@
 import os
-import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Callable, Sequence
 
 import pytest
@@ -21,7 +19,11 @@ from app.orchestrator.handlers_artist import ArtistSyncHandlerDeps
 from app.services.artist_dao import (ArtistDao, ArtistReleaseUpsertDTO,
                                      ArtistUpsertDTO)
 from app.services.cache import CacheEntry, ResponseCache, build_cache_key
+from tests.support.postgres import postgres_schema
 from tests.simple_client import SimpleTestClient
+
+
+pytestmark = pytest.mark.postgres
 
 
 class StubGateway:
@@ -65,50 +67,45 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for key, value in overrides.items():
         os.environ[key] = value
 
-    fd, tmp_path = tempfile.mkstemp(prefix="harmony-admin-", suffix=".db")
-    os.close(fd)
-    db_path = Path(tmp_path)
-    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+    with postgres_schema("admin") as schema:
+        os.environ["DATABASE_URL"] = schema.sync_url()
 
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
-    init_db()
+        reset_engine_for_tests()
+        init_db()
 
-    deps.get_app_config.cache_clear()
-    maybe_register_admin_routes(app, config=deps.get_app_config())
-    app.state.response_cache = None
-    app.state.cache_write_through = None
-    app.state.cache_log_evictions = None
-    app.state.openapi_config = deps.get_app_config()
-    app.openapi_schema = None
+        deps.get_app_config.cache_clear()
+        maybe_register_admin_routes(app, config=deps.get_app_config())
+        app.state.response_cache = None
+        app.state.cache_write_through = None
+        app.state.cache_log_evictions = None
+        app.state.openapi_config = deps.get_app_config()
+        app.openapi_schema = None
 
-    yield
+        try:
+            yield
+        finally:
+            deps.get_app_config.cache_clear()
 
-    deps.get_app_config.cache_clear()
+            for key, original in original_env.items():
+                if original is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = original
 
-    for key, original in original_env.items():
-        if original is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = original
+            if original_database_url is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = original_database_url
 
-    if original_database_url is None:
-        os.environ.pop("DATABASE_URL", None)
-    else:
-        os.environ["DATABASE_URL"] = original_database_url
-
-    deps.get_app_config.cache_clear()
-    restored_config = deps.get_app_config()
-    maybe_register_admin_routes(app, config=restored_config)
-    app.state.response_cache = original_response_cache
-    app.state.cache_write_through = original_cache_write_through
-    app.state.cache_log_evictions = original_cache_log_evictions
-    app.state.openapi_config = original_openapi_config
-    app.openapi_schema = None
-    reset_engine_for_tests()
-    if db_path.exists():
-        db_path.unlink()
+            deps.get_app_config.cache_clear()
+            restored_config = deps.get_app_config()
+            maybe_register_admin_routes(app, config=restored_config)
+            app.state.response_cache = original_response_cache
+            app.state.cache_write_through = original_cache_write_through
+            app.state.cache_log_evictions = original_cache_log_evictions
+            app.state.openapi_config = original_openapi_config
+            app.openapi_schema = None
+            reset_engine_for_tests()
 
 
 @pytest.fixture

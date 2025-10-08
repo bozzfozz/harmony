@@ -10,13 +10,18 @@ from app.errors import ValidationAppError
 
 def test_get_database_url_prefers_config_override() -> None:
     config = Config()
-    config.set_main_option("sqlalchemy.url", "sqlite:///override.db")
+    config.set_main_option(
+        "sqlalchemy.url", "postgresql+psycopg://user:pass@db:5432/override"
+    )
 
-    assert env.get_database_url(config) == "sqlite:///override.db"
+    assert (
+        env.get_database_url(config)
+        == "postgresql+psycopg://user:pass@db:5432/override"
+    )
 
 
 def test_get_database_url_requires_postgres(monkeypatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test-env.db")
+    monkeypatch.setenv("DATABASE_URL", "mysql+pymysql://db/test")
     config = Config()
     config.set_main_option("sqlalchemy.url", "")
 

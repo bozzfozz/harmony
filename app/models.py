@@ -439,7 +439,6 @@ class QueueJob(Base):
             "idempotency_key",
             unique=True,
             postgresql_where=text("idempotency_key IS NOT NULL"),
-            sqlite_where=text("idempotency_key IS NOT NULL"),
         ),
     )
 
