@@ -198,6 +198,55 @@ async def test_dispatcher_executes_job_and_marks_complete(
 
 
 @pytest.mark.asyncio
+async def test_dispatcher_drains_queue_under_mixed_load() -> None:
+    jobs = [
+        [
+            make_job(1, "sync", attempts=0, lease_timeout=5),
+            make_job(2, "matching", attempts=0, lease_timeout=5),
+        ],
+        [make_job(3, "sync", attempts=0, lease_timeout=5)],
+        [],
+    ]
+    scheduler = StubScheduler(jobs)
+    storage = StubPersistence()
+    completions: list[int] = []
+
+    async def sync_handler(job: persistence.QueueJobDTO) -> Mapping[str, Any]:
+        await asyncio.sleep(0)
+        completions.append(job.id)
+        return {"ok": True}
+
+    async def matching_handler(job: persistence.QueueJobDTO) -> Mapping[str, Any]:
+        await asyncio.sleep(0)
+        completions.append(job.id)
+        return {"ok": True}
+
+    dispatcher = Dispatcher(
+        scheduler,
+        {"sync": sync_handler, "matching": matching_handler},
+        persistence_module=storage,
+        global_concurrency=2,
+        pool_concurrency={"sync": 2, "matching": 1},
+    )
+
+    task = asyncio.create_task(dispatcher.run())
+    try:
+        await asyncio.wait_for(_wait_for_completions(storage, expected=3), timeout=1)
+    finally:
+        dispatcher.request_stop()
+        await asyncio.wait_for(task, timeout=1)
+
+    assert sorted(job_id for job_id, *_ in storage.complete_calls) == [1, 2, 3]
+    assert sorted(completions) == [1, 2, 3]
+    assert scheduler.lease_ready_jobs() == []
+
+
+async def _wait_for_completions(storage: StubPersistence, *, expected: int) -> None:
+    while len(storage.complete_calls) < expected:
+        await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
 async def test_dispatcher_heartbeat_interval_respects_visibility() -> None:
     async def handler(record: persistence.QueueJobDTO) -> Mapping[str, Any]:
         return {}

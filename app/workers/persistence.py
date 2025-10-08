@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable, List, Mapping, Sequence
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -434,30 +434,28 @@ def enqueue_many(
 
 
 def _release_expired_leases(session: Session, job_type: str, now: datetime) -> bool:
-    stmt: Select[QueueJob] = (
-        select(QueueJob)
+    released_at = _utcnow()
+    stmt = (
+        update(QueueJob)
         .where(
             QueueJob.type == job_type,
             QueueJob.status == QueueJobStatus.LEASED.value,
             QueueJob.lease_expires_at.is_not(None),
             QueueJob.lease_expires_at <= now,
         )
-        .with_for_update(skip_locked=True)
+        .values(
+            status=QueueJobStatus.PENDING.value,
+            lease_expires_at=None,
+            available_at=released_at,
+            updated_at=released_at,
+        )
     )
-    expired = session.execute(stmt).scalars().all()
-    if not expired:
-        return False
-
-    released_at = _utcnow()
-    for record in expired:
-        record.status = QueueJobStatus.PENDING.value
-        record.lease_expires_at = None
-        record.available_at = released_at
-        record.updated_at = released_at
-        session.add(record)
-
-    session.flush()
-    return True
+    result = session.execute(stmt)
+    released = result.rowcount or 0
+    if released:
+        session.flush()
+        return True
+    return False
 
 
 def fetch_ready(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
@@ -499,35 +497,53 @@ def lease(
 
     now = _utcnow()
     with session_scope() as session:
-        stmt: Select[QueueJob] = (
-            select(QueueJob)
-            .where(QueueJob.id == job_id, QueueJob.type == job_type)
-            .with_for_update(skip_locked=True)
+        record = (
+            session.execute(
+                select(QueueJob).where(QueueJob.id == job_id, QueueJob.type == job_type)
+            )
+            .scalars()
+            .first()
         )
-        record = session.execute(stmt).scalars().first()
         if record is None:
             return None
 
-        if record.status not in {
-            QueueJobStatus.PENDING.value,
-            QueueJobStatus.LEASED.value,
-        }:
+        if record.status != QueueJobStatus.PENDING.value:
             return None
 
-        if record.status == QueueJobStatus.PENDING.value and record.available_at > now:
+        if record.available_at > now:
             return None
 
-        if record.status == QueueJobStatus.LEASED.value and record.lease_expires_at:
-            if record.lease_expires_at > now:
-                return None
+        if record.lease_expires_at and record.lease_expires_at > now:
+            return None
 
         timeout = _resolve_visibility_timeout(record.payload or {}, lease_seconds)
-        record.status = QueueJobStatus.LEASED.value
-        record.attempts = int(record.attempts or 0) + 1
-        record.lease_expires_at = now + timedelta(seconds=timeout)
-        record.updated_at = now
-        session.add(record)
-        dto = _refresh_instance(session, record)
+        lease_deadline = now + timedelta(seconds=timeout)
+        update_stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+                QueueJob.status == QueueJobStatus.PENDING.value,
+                QueueJob.available_at <= now,
+                or_(
+                    QueueJob.lease_expires_at.is_(None),
+                    QueueJob.lease_expires_at <= now,
+                ),
+            )
+            .values(
+                status=QueueJobStatus.LEASED.value,
+                attempts=QueueJob.attempts + 1,
+                lease_expires_at=lease_deadline,
+                updated_at=now,
+            )
+        )
+        result = session.execute(update_stmt)
+        if not result.rowcount:
+            return None
+
+        session.flush()
+        session.refresh(record)
+        dto = _to_dto(record)
     _emit_worker_job_event(dto, "leased", lease_timeout_s=timeout)
     return dto
 

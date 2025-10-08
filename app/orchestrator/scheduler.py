@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Mapping
+from types import MappingProxyType
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -15,11 +16,14 @@ from app.orchestrator import events as orchestrator_events
 from app.workers import persistence
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class PriorityConfig:
     """Configuration for orchestrator job type polling priorities."""
 
-    priorities: dict[str, int]
+    priorities: Mapping[str, int]
+
+    def __post_init__(self) -> None:  # noqa: D401 - dataclass hook
+        object.__setattr__(self, "priorities", MappingProxyType(dict(self.priorities)))
 
     @classmethod
     def from_config(cls, config: OrchestratorConfig) -> "PriorityConfig":
@@ -40,12 +44,13 @@ class PriorityConfig:
         return tuple(
             sorted(
                 self.priorities.keys(),
-                key=lambda item: (-self.priorities[item], item),
+                key=lambda item: (-int(self.priorities[item]), item),
             )
         )
 
     def get(self, job_type: str, default: int = 0) -> int:
-        return self.priorities.get(job_type, default)
+        priority = self.priorities.get(job_type, default)
+        return int(priority)
 
 
 class Scheduler:
