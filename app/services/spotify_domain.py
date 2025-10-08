@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from warnings import warn
+from app._legacy import warn_legacy_import
 
 from .spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
 
-warn(
-    "app.services.spotify_domain is deprecated; import from app.services.spotify_domain_service instead.",
-    DeprecationWarning,
-    stacklevel=2,
+warn_legacy_import(
+    "app.services.spotify_domain",
+    "app.services.spotify_domain_service",
 )
 
 __all__ = ["SpotifyDomainService", "PlaylistItemsResult"]
