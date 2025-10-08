@@ -26,6 +26,48 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+## Frontend Container
+
+Das React-Frontend wird als statische Anwendung über ein eigenes Container-Image ausgeliefert. Das Multi-Stage-Build nutzt
+Node.js 20 zum Erzeugen der Produktions-Assets und übernimmt sie anschließend in ein `lscr.io/linuxserver/nginx`-Runtime-Image.
+Beim Containerstart rendert ein `env.runtime.js` die Laufzeitkonfiguration via `envsubst`, sodass Werte wie die Backend-URL ohne
+erneutes Build angepasst werden können. Die Nginx-Config liefert SPA-Routen über `index.html`, setzt `Cache-Control: no-store`
+für die Shell und `immutable` für fingerprinted Assets; ein integrierter Healthcheck prüft `GET /`.
+
+### Runtime-Umgebungsvariablen
+
+| Variable               | Beschreibung                                                                 | Default |
+| ---------------------- | ----------------------------------------------------------------------------- | ------- |
+| `PUBLIC_BACKEND_URL`   | Basis-URL des Harmony-Backends, überschreibt die im Build gesetzte API-URL.  | leer    |
+| `PUBLIC_SENTRY_DSN`    | Optionaler Sentry-DSN für das Frontend.                                       | leer    |
+| `PUBLIC_FEATURE_FLAGS` | Optionales JSON-Objekt für Feature-Flags (z. B. `{ "beta": true }`).        | `{}`    |
+
+### Docker-Compose-Beispiel
+
+```yaml
+services:
+  frontend:
+    image: ghcr.io/<owner>/<repo>/frontend:latest
+    ports:
+      - "8080:80"
+    environment:
+      PUBLIC_BACKEND_URL: "http://backend:8000"
+      PUBLIC_SENTRY_DSN: "https://sentry.example.com/1"
+      PUBLIC_FEATURE_FLAGS: '{"beta": true}'
+    volumes:
+      - frontend-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - backend
+
+volumes:
+  frontend-config:
+```
+
 ### Integrations-Gateway
 
 - **Contracts & DTOs:** Spotify- und slskd-Adapter liefern `ProviderTrack`-, `ProviderAlbum`- und `ProviderArtist`-Modelle mit optionalen Kandidaten (`TrackCandidate`). Normalizer (`app/integrations/normalizers.py`) sorgen für defensive Konvertierung.
