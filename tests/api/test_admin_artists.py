@@ -47,16 +47,29 @@ def _make_gateway_response(
 
 @pytest.fixture(autouse=True)
 def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "1")
-    monkeypatch.setenv("FEATURE_REQUIRE_AUTH", "0")
-    monkeypatch.setenv("FEATURE_ADMIN_API", "1")
-    monkeypatch.setenv("ARTIST_STALENESS_MAX_MIN", "30")
-    monkeypatch.setenv("ARTIST_RETRY_BUDGET_MAX", "3")
+    _ = monkeypatch  # ensure fixture is requested for compatibility
+    overrides = {
+        "HARMONY_DISABLE_WORKERS": "1",
+        "FEATURE_REQUIRE_AUTH": "0",
+        "FEATURE_ADMIN_API": "1",
+        "ARTIST_STALENESS_MAX_MIN": "30",
+        "ARTIST_RETRY_BUDGET_MAX": "3",
+    }
+
+    original_env = {key: os.environ.get(key) for key in overrides}
+    original_database_url = os.environ.get("DATABASE_URL")
+    original_response_cache = getattr(app.state, "response_cache", None)
+    original_cache_write_through = getattr(app.state, "cache_write_through", None)
+    original_cache_log_evictions = getattr(app.state, "cache_log_evictions", None)
+    original_openapi_config = getattr(app.state, "openapi_config", None)
+
+    for key, value in overrides.items():
+        os.environ[key] = value
 
     fd, tmp_path = tempfile.mkstemp(prefix="harmony-admin-", suffix=".db")
     os.close(fd)
     db_path = Path(tmp_path)
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
 
     reset_engine_for_tests()
     if db_path.exists():
@@ -66,13 +79,33 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     deps.get_app_config.cache_clear()
     maybe_register_admin_routes(app, config=deps.get_app_config())
     app.state.response_cache = None
+    app.state.cache_write_through = None
+    app.state.cache_log_evictions = None
+    app.state.openapi_config = deps.get_app_config()
     app.openapi_schema = None
 
     yield
 
     deps.get_app_config.cache_clear()
-    maybe_register_admin_routes(app, config=deps.get_app_config())
-    app.state.response_cache = None
+
+    for key, original in original_env.items():
+        if original is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = original
+
+    if original_database_url is None:
+        os.environ.pop("DATABASE_URL", None)
+    else:
+        os.environ["DATABASE_URL"] = original_database_url
+
+    deps.get_app_config.cache_clear()
+    restored_config = deps.get_app_config()
+    maybe_register_admin_routes(app, config=restored_config)
+    app.state.response_cache = original_response_cache
+    app.state.cache_write_through = original_cache_write_through
+    app.state.cache_log_evictions = original_cache_log_evictions
+    app.state.openapi_config = original_openapi_config
     app.openapi_schema = None
     reset_engine_for_tests()
     if db_path.exists():
