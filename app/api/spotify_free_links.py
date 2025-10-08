@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Request, status
 
+from app.config import AppConfig
 from app.dependencies import (
     SessionRunner,
     get_app_config,
@@ -73,13 +74,24 @@ def _emit_api_event(
     log_event(_logger, "api.request", **payload)
 
 
-def _classify_invalid_reason(raw_url: str) -> str:
+def _classify_invalid_reason(raw_url: str, *, allow_user_urls: bool) -> str:
     text = (raw_url or "").strip()
     if text.lower().startswith("spotify:"):
-        parts = text.split(":", 2)
-        if len(parts) >= 2 and parts[1].lower() != "playlist":
-            return "non_playlist"
-        return "invalid"
+        parts = [segment for segment in text.split(":") if segment]
+        if len(parts) < 2:
+            return "invalid"
+        kind = parts[1].lower()
+        if kind == "playlist":
+            return "invalid"
+        if kind == "user":
+            if not allow_user_urls:
+                return "non_playlist"
+            if len(parts) < 5:
+                return "invalid"
+            if parts[3].lower() != "playlist":
+                return "non_playlist"
+            return "invalid"
+        return "non_playlist"
 
     parsed = urlparse(text)
     if parsed.scheme not in {"http", "https"}:
@@ -91,9 +103,18 @@ def _classify_invalid_reason(raw_url: str) -> str:
         segments = segments[1:]
     if not segments:
         return "invalid"
-    if segments[0].lower() != "playlist":
-        return "non_playlist"
-    return "invalid"
+    head = segments[0].lower()
+    if head == "playlist":
+        return "invalid"
+    if head == "user":
+        if not allow_user_urls:
+            return "non_playlist"
+        if len(segments) < 4:
+            return "invalid"
+        if segments[2].lower() != "playlist":
+            return "non_playlist"
+        return "invalid"
+    return "non_playlist"
 
 
 def _canonical_playlist_url(playlist_id: str) -> str:
@@ -105,6 +126,7 @@ async def submit_playlist_links(
     payload: FreeLinksRequest,
     request: Request,
     service: FreeIngestService = Depends(get_free_ingest_service),
+    config: AppConfig = Depends(get_app_config),
 ) -> FreeLinksResponse:
     started = perf_counter()
     raw_urls = list(payload.iter_urls())
@@ -122,9 +144,15 @@ async def submit_playlist_links(
         if not text:
             skipped.append(SkippedPlaylist(url=raw, reason="invalid"))
             continue
-        playlist_id = parse_playlist_id(text)
+        playlist_id = parse_playlist_id(
+            text,
+            allow_user_urls=config.spotify.free_accept_user_urls,
+        )
         if playlist_id is None:
-            reason = _classify_invalid_reason(text)
+            reason = _classify_invalid_reason(
+                text,
+                allow_user_urls=config.spotify.free_accept_user_urls,
+            )
             skipped.append(SkippedPlaylist(url=raw, reason=reason))
             continue
         if playlist_id in seen:
