@@ -1,3 +1,5 @@
+"""Ensure legacy router modules emit consistent deprecation warnings."""
+
 from __future__ import annotations
 
 import importlib
@@ -8,48 +10,27 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    ("module_name", "replacement"),
+    ("legacy_module", "target"),
     [
-        ("app.routers.spotify_router", "app.api.spotify.core_router"),
+        ("app.routers.backfill_router", "app.api.routers.spotify.backfill_router"),
+        ("app.routers.free_ingest_router", "app.api.routers.spotify.free_ingest_router"),
         ("app.routers.search_router", "app.api.routers.search.router"),
-        ("app.routers.spotify_free_router", "app.api.spotify.free_router"),
-        ("app.routers.free_ingest_router", "app.api.spotify.free_ingest_router"),
-        ("app.routers.watchlist_router", "app.api.routers.watchlist.router"),
+        ("app.routers.spotify_free_router", "app.api.routers.spotify.free_router"),
+        ("app.routers.spotify_router", "app.api.routers.spotify.core_router"),
         ("app.routers.system_router", "app.api.routers.system.router"),
-        ("app.routers.backfill_router", "app.api.spotify.backfill_router"),
+        ("app.routers.watchlist_router", "app.api.routers.watchlist.router"),
     ],
 )
-def test_importing_legacy_router_modules_emits_deprecation_warning(
-    module_name: str, replacement: str
-) -> None:
-    sys.modules.pop(module_name, None)
-    try:
-        with pytest.deprecated_call(match=re.escape(replacement)):
-            importlib.import_module(module_name)
-    finally:
-        sys.modules.pop(module_name, None)
+def test_legacy_router_shim_emits_warning_and_reexports(legacy_module: str, target: str) -> None:
+    """Importing a legacy router triggers a warning and re-exports the new router."""
 
+    sys.modules.pop(legacy_module, None)
+    warning_pattern = re.escape(f"{legacy_module} is deprecated; use {target}")
 
-@pytest.mark.parametrize(
-    ("attribute", "module_path", "replacement"),
-    [
-        ("search_router", "app.api.routers.search", "app.api.routers.search.router"),
-        ("system_router", "app.api.routers.system", "app.api.routers.system.router"),
-        (
-            "watchlist_router",
-            "app.api.routers.watchlist",
-            "app.api.routers.watchlist.router",
-        ),
-    ],
-)
-def test_package_level_access_emits_deprecation_warning(
-    attribute: str, module_path: str, replacement: str
-) -> None:
-    package = importlib.import_module("app.routers")
-    package.__dict__.pop(attribute, None)
+    with pytest.deprecated_call(match=warning_pattern):
+        shim = importlib.import_module(legacy_module)
 
-    with pytest.deprecated_call(match=re.escape(replacement)):
-        exported = getattr(package, attribute)
+    target_module_path, target_attr = target.rsplit(".", 1)
+    target_module = importlib.import_module(target_module_path)
 
-    replacement_module = importlib.import_module(module_path)
-    assert exported is getattr(replacement_module, "router")
+    assert shim.router is getattr(target_module, target_attr)

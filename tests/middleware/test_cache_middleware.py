@@ -181,7 +181,9 @@ def test_playlist_tracks_cache_key_preserves_query_and_auth(
     call_counts: dict[tuple[int, str], int] = {}
 
     @app.get("/spotify/playlists/{playlist_id}/tracks")
-    async def playlist_tracks(request: Request, playlist_id: str, limit: int = 20) -> dict[str, object]:
+    async def playlist_tracks(
+        request: Request, playlist_id: str, limit: int = 20
+    ) -> dict[str, object]:
         header = request.headers.get("authorization") or "anon"
         key = (limit, header)
         call_counts[key] = call_counts.get(key, 0) + 1
