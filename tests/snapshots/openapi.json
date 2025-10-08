@@ -1,6 +1,26 @@
 {
   "components": {
     "schemas": {
+      "AcceptedPlaylist": {
+        "properties": {
+          "playlist_id": {
+            "description": "Normalized Spotify playlist identifier",
+            "title": "Playlist Id",
+            "type": "string"
+          },
+          "url": {
+            "description": "Canonical Spotify playlist URL",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "playlist_id",
+          "url"
+        ],
+        "title": "AcceptedPlaylist",
+        "type": "object"
+      },
       "ArtistOut": {
         "description": "Artist metadata enriched with the latest known releases.",
         "properties": {
@@ -1299,6 +1319,60 @@
         "title": "FreeIngestRequest",
         "type": "object"
       },
+      "FreeLinksRequest": {
+        "description": "Input payload accepting a single URL or multiple URLs.",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Single Spotify playlist link",
+            "title": "Url"
+          },
+          "urls": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Collection of Spotify playlist links",
+            "title": "Urls"
+          }
+        },
+        "title": "FreeLinksRequest",
+        "type": "object"
+      },
+      "FreeLinksResponse": {
+        "properties": {
+          "accepted": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedPlaylist"
+            },
+            "title": "Accepted",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedPlaylist"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "title": "FreeLinksResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1846,11 +1920,40 @@
               "type": "string"
             },
             "type": "object"
+          },
+          "orchestrator": {
+            "properties": {
+              "components": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "enabled_jobs": {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              "jobs": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "components",
+              "jobs",
+              "enabled_jobs"
+            ],
+            "type": "object"
           }
         },
         "required": [
           "db",
-          "deps"
+          "deps",
+          "orchestrator"
         ],
         "type": "object"
       },
@@ -2442,6 +2545,30 @@
           "updated_at"
         ],
         "title": "SettingsResponse",
+        "type": "object"
+      },
+      "SkippedPlaylist": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "duplicate",
+              "invalid",
+              "non_playlist"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "url": {
+            "description": "Original URL submitted by the user",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "reason"
+        ],
+        "title": "SkippedPlaylist",
         "type": "object"
       },
       "SoulseekCancelResponse": {
@@ -3476,7 +3603,7 @@
   "info": {
     "title": "Harmony Backend",
     "version": "1.4.0",
-    "x-schema-hash": "1c8cc8b5ba9e799f7121d329347dfc0c81de2b849e5a9369be71b5dc26f0d441"
+    "x-schema-hash": "057b5739575ebed647e3235b16937268174e6732d905182e95ef849bf36fe797"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3714,7 +3841,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -3988,7 +4115,7 @@
                 "schema": {}
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -8000,7 +8127,20 @@
                 "example": {
                   "data": {
                     "db": "up",
-                    "deps": {}
+                    "deps": {
+                      "spotify": "up"
+                    },
+                    "orchestrator": {
+                      "components": {
+                        "scheduler": "up"
+                      },
+                      "enabled_jobs": {
+                        "sync": true
+                      },
+                      "jobs": {
+                        "sync": "idle"
+                      }
+                    }
                   },
                   "error": null,
                   "ok": true
@@ -8113,6 +8253,17 @@
                       "db": "down",
                       "deps": {
                         "spotify": "down"
+                      },
+                      "orchestrator": {
+                        "components": {
+                          "scheduler": "down"
+                        },
+                        "enabled_jobs": {
+                          "sync": false
+                        },
+                        "jobs": {
+                          "sync": "failed"
+                        }
                       }
                     }
                   },
@@ -13395,7 +13546,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -13581,7 +13732,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -13756,7 +13907,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -13933,7 +14084,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -14119,7 +14270,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -14700,6 +14851,128 @@
         "summary": "Enqueue Tracks",
         "tags": [
           "Spotify FREE"
+        ]
+      }
+    },
+    "/api/v1/spotify/free/links": {
+      "post": {
+        "operationId": "submit_playlist_links_api_v1_spotify_free_links_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreeLinksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreeLinksResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed dependency"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Submit Playlist Links",
+        "tags": [
+          "Spotify FREE Links",
+          "Spotify FREE Links"
         ]
       }
     },
@@ -15358,7 +15631,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -15537,7 +15810,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -15726,7 +15999,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -15911,7 +16184,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -16098,7 +16371,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -16281,7 +16554,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -16456,7 +16729,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -16642,7 +16915,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -16838,7 +17111,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -17034,7 +17307,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -17228,7 +17501,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -17465,7 +17738,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -17652,7 +17925,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -17839,7 +18112,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -18026,7 +18299,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -18201,7 +18474,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",
@@ -18377,7 +18650,7 @@
                 }
               }
             },
-            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header.",
+            "description": "Successful response with cache metadata. Subsequent cache hits may include an Age header. The `/spotify/status` endpoint bypasses the response cache so credential changes are reflected immediately.",
             "headers": {
               "Cache-Control": {
                 "description": "Cache directives for the representation.",

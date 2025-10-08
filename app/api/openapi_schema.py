@@ -323,7 +323,15 @@ def _apply_health_examples(app: FastAPI, paths: MutableMapping[str, Any]) -> Non
                         "schema": {"$ref": "#/components/schemas/ReadySuccessResponse"},
                         "example": {
                             "ok": True,
-                            "data": {"db": "up", "deps": {}},
+                            "data": {
+                                "db": "up",
+                                "deps": {"spotify": "up"},
+                                "orchestrator": {
+                                    "components": {"scheduler": "up"},
+                                    "jobs": {"sync": "idle"},
+                                    "enabled_jobs": {"sync": True},
+                                },
+                            },
                             "error": None,
                         },
                     }
@@ -339,7 +347,15 @@ def _apply_health_examples(app: FastAPI, paths: MutableMapping[str, Any]) -> Non
                             "error": {
                                 "code": "DEPENDENCY_ERROR",
                                 "message": "not ready",
-                                "meta": {"db": "down", "deps": {"spotify": "down"}},
+                                "meta": {
+                                    "db": "down",
+                                    "deps": {"spotify": "down"},
+                                    "orchestrator": {
+                                        "components": {"scheduler": "down"},
+                                        "jobs": {"sync": "failed"},
+                                        "enabled_jobs": {"sync": False},
+                                    },
+                                },
                             },
                         },
                     }
@@ -442,10 +458,31 @@ def build_openapi_schema(app: FastAPI, *, config: AppConfig) -> dict[str, Any]:
         "ReadyData",
         {
             "type": "object",
-            "required": ["db", "deps"],
+            "required": ["db", "deps", "orchestrator"],
             "properties": {
                 "db": {"type": "string"},
-                "deps": {"type": "object", "additionalProperties": {"type": "string"}},
+                "deps": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+                "orchestrator": {
+                    "type": "object",
+                    "required": ["components", "jobs", "enabled_jobs"],
+                    "properties": {
+                        "components": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "jobs": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "enabled_jobs": {
+                            "type": "object",
+                            "additionalProperties": {"type": "boolean"},
+                        },
+                    },
+                },
             },
         },
     )
