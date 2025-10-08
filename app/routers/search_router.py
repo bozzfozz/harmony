@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from app.api._deprecation import warn_legacy_import
 from app.api.routers.search import log_event, router
-from app.routers._deprecation import emit_router_deprecation
 
-emit_router_deprecation(
+warn_legacy_import(
     "app.routers.search_router",
     "app.api.routers.search.router",
 )

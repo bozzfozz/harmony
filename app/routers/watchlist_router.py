@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from app.api._deprecation import warn_legacy_import
 from app.api.routers.watchlist import router
-from app.routers._deprecation import emit_router_deprecation
 
-emit_router_deprecation(
+warn_legacy_import(
     "app.routers.watchlist_router",
-    "app.api.watchlist.router",
+    "app.api.routers.watchlist.router",
 )
 
 __all__ = ["router"]

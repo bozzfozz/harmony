@@ -1,7 +1,8 @@
 from importlib import import_module
 from typing import Any
 
-from ._deprecation import emit_router_deprecation
+from app.api._deprecation import warn_legacy_import
+
 from .activity_router import router as activity_router
 from .dlq_router import router as dlq_router
 from .download_router import router as download_router
@@ -41,10 +42,9 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     if name in _DEPRECATED_EXPORTS:
         module_path, attribute = _DEPRECATED_EXPORTS[name]
-        emit_router_deprecation(
+        warn_legacy_import(
             f"app.routers.{name}",
             f"{module_path}.{attribute}",
-            stacklevel=3,
         )
         module = import_module(module_path)
         value = getattr(module, attribute)

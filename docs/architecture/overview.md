@@ -30,7 +30,7 @@ Diese Übersicht definiert den gemeinsamen Bezugsrahmen für Router, Services, C
 | Integrationen (`app/integrations/*`)                          | Provider-spezifische Adapters, Mapping von DTOs, Timeout/Retries.                  | Integrations-Team | Logging `event=integration_call`, Fehler auf Taxonomie gemappt.            |
 | Orchestrator (`app/workers/*`, `app/services/dlq_service.py`) | Job-Planung, Dispatch, Visibility, Dead-Letter-Handling.                           | Platform-Team     | Lease-Verträge eingehalten, Heartbeat-Events, DLQ gepflegt.                |
 
-Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und darf nicht mehr als Quelle für neue Endpunkte verwendet werden.
+Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und darf nicht mehr als Quelle für neue Endpunkte verwendet werden. Beim Import geben diese Module eine `DeprecationWarning` mit dem Zielpfad (`app.api.routers.*`) aus und reichen den aktuellen Router unverändert weiter.
 
 ## Kern-Flows
 
