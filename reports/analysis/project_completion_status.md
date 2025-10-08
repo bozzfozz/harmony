@@ -17,5 +17,5 @@
 - **Coverage:** Execute `pytest --cov=app/schemas/common.py --cov-report=term-missing` to regenerate the coverage artefact for the
   updated schema helpers.
 - **Lint/Type/Bandit:** All gates run as dedicated steps in the `backend` job (`ruff check .`, `black --check .`, `mypy app`,
-  `bandit -r app`).
+  `bandit -r app`). Bandit output is archived at `reports/analysis/_evidence/bandit_app.txt` via CI and `make security`.
 - **OpenAPI drift:** The `openapi` job compares the generated schema gegen `tests/snapshots/openapi.json` and fails on drift.
