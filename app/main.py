@@ -570,6 +570,18 @@ app.state.secret_validation_service = SecretValidationService()
 
 install_middleware(app, _config_snapshot)
 
+_response_cache = getattr(app.state, "response_cache", None)
+_activity_paths = {
+    router_registry.compose_prefix(_API_BASE_PATH, "/activity"),
+    router_registry.compose_prefix(_API_BASE_PATH, "/activity/export"),
+    "/activity",
+    "/activity/export",
+}
+activity_manager.configure_response_cache(
+    _response_cache,
+    paths=_activity_paths,
+)
+
 
 async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}

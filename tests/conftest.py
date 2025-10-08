@@ -37,7 +37,6 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.logging import get_logger
-from app.logging_events import log_event
 from app.dependencies import (
     get_integration_service as dependency_integration_service,
     get_matching_engine as dependency_matching_engine,
@@ -54,7 +53,7 @@ from app.integrations.provider_gateway import (
 )
 from app.main import app
 from app.orchestrator import bootstrap as orchestrator_bootstrap
-from app.models import QueueJobStatus
+from app.models import ActivityEvent, QueueJobStatus
 from app.services.backfill_service import BackfillService
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.utils.activity import activity_manager
@@ -1454,8 +1453,12 @@ def configure_environment(
 @pytest.fixture(autouse=True)
 def reset_activity_manager() -> None:
     activity_manager.clear()
+    with session_scope() as session:
+        session.query(ActivityEvent).delete()
     yield
     activity_manager.clear()
+    with session_scope() as session:
+        session.query(ActivityEvent).delete()
 
 
 @pytest.fixture
