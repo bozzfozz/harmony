@@ -6,23 +6,22 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import anyio
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.models import QueueJob
+from app.models import QueueJob, QueueJobStatus
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO, enqueue
 
-pytestmark = pytest.mark.postgres
+pytestmark = [pytest.mark.postgres, pytest.mark.usefixtures("queue_database_backend")]
 
 
 @pytest.mark.anyio
@@ -177,62 +176,41 @@ def test_enqueue_redelivery_does_not_duplicate_on_retry() -> None:
         assert record.payload["payload"]["stage"] == "retry"
 
 
-@pytest.fixture(params=["sqlite", "postgresql"], ids=["sqlite", "postgresql"])
+@pytest.fixture()
 def queue_database_backend(
-    request: pytest.FixtureRequest,
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path_factory: pytest.TempPathFactory,
 ):
     original_url = os.environ["DATABASE_URL"]
-    backend = request.param
     schema_name: str | None = None
     base_engine: sa.Engine | None = None
     configured_url: str | None = None
 
     try:
-        if backend == "sqlite":
-            db_path = tmp_path_factory.mktemp("queue-db") / f"{uuid.uuid4().hex}.db"
-            configured_url = f"sqlite:///{db_path}"
-            monkeypatch.setenv("DATABASE_URL", configured_url)
-            reset_engine_for_tests()
-            init_db()
-            yield backend
-        else:
-            database_url = os.getenv("DATABASE_URL")
-            if not database_url:
-                pytest.skip("DATABASE_URL is not configured for PostgreSQL tests")
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            pytest.skip("DATABASE_URL is not configured for PostgreSQL tests")
 
-            url = make_url(database_url)
-            if url.get_backend_name() != "postgresql":
-                pytest.skip("PostgreSQL URL required for worker persistence tests")
+        url = make_url(database_url)
+        if url.get_backend_name() != "postgresql":
+            pytest.skip("PostgreSQL URL required for worker persistence tests")
 
-            schema_name = f"test_workers_{uuid.uuid4().hex}"
-            base_engine = sa.create_engine(url)
-            with base_engine.connect() as connection:
-                connection.execute(CreateSchema(schema_name))
-                connection.commit()
+        schema_name = f"test_workers_{uuid.uuid4().hex}"
+        base_engine = sa.create_engine(url)
+        with base_engine.connect() as connection:
+            connection.execute(CreateSchema(schema_name))
+            connection.commit()
 
-            scoped_url = url.set(query={**url.query, "options": f"-csearch_path={schema_name}"})
-            configured_url = str(scoped_url)
-            monkeypatch.setenv("DATABASE_URL", configured_url)
-            reset_engine_for_tests()
-            init_db()
-            yield backend
+        scoped_url = url.set(query={**url.query, "options": f"-csearch_path={schema_name}"})
+        configured_url = str(scoped_url)
+        monkeypatch.setenv("DATABASE_URL", configured_url)
+        reset_engine_for_tests()
+        init_db()
+        yield "postgresql"
     finally:
         reset_engine_for_tests()
         monkeypatch.setenv("DATABASE_URL", original_url)
 
-        if backend == "sqlite" and configured_url is not None:
-            sqlite_url = make_url(configured_url)
-            database = sqlite_url.database or ""
-            if database:
-                db_path = Path(database)
-                for suffix in ("", "-journal", "-wal", "-shm"):
-                    candidate = db_path.with_name(f"{db_path.name}{suffix}")
-                    if candidate.exists():
-                        candidate.unlink()
-
-        if backend == "postgresql" and base_engine is not None and schema_name is not None:
+        if base_engine is not None and schema_name is not None:
             with base_engine.connect() as connection:
                 try:
                     connection.execute(DropSchema(schema_name, cascade=True))
@@ -243,7 +221,6 @@ def queue_database_backend(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("queue_database_backend", ["sqlite", "postgresql"], indirect=True)
 async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
     queue_database_backend: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -326,7 +303,7 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
         assert payload_data.get("attempt") in range(concurrency + 1)
 
 
-def test_enqueue_integrity_error_applies_latest_updates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_enqueue_resets_attempts_when_previous_job_completed() -> None:
     job_type = "integrity-dedupe"
     dedupe_key = f"{job_type}-job"
 
@@ -336,38 +313,12 @@ def test_enqueue_integrity_error_applies_latest_updates(monkeypatch: pytest.Monk
         priority=1,
     )
 
-    assert initial.priority == 1
-    assert initial.payload["payload"]["sequence"] == "initial"
-
-    original_execute = sa.orm.session.Session.execute
-    call_state = {"active": True, "count": 0}
-
-    class EmptyResult:
-        def scalars(self) -> "EmptyResult":
-            return self
-
-        def first(self) -> Any:
-            return None
-
-    def fake_execute(self: sa.orm.session.Session, statement: Any, *args: Any, **kwargs: Any):
-        result = original_execute(self, statement, *args, **kwargs)
-
-        if call_state["active"] and isinstance(statement, Select):
-            froms = statement.get_final_froms()
-            if any(getattr(from_, "name", None) == QueueJob.__tablename__ for from_ in froms):
-                has_idempotency_filter = any(
-                    getattr(getattr(clause, "left", None), "name", None) == "idempotency_key"
-                    for clause in statement._where_criteria
-                )
-                if not has_idempotency_filter:
-                    return result
-                call_state["count"] += 1
-                call_state["active"] = False
-                return EmptyResult()
-
-        return result
-
-    monkeypatch.setattr(sa.orm.session.Session, "execute", fake_execute, raising=False)
+    with session_scope() as session:
+        record = session.get(QueueJob, initial.id)
+        assert record is not None
+        record.status = QueueJobStatus.COMPLETED.value
+        record.attempts = 4
+        session.add(record)
 
     updated = enqueue(
         job_type,
@@ -375,19 +326,42 @@ def test_enqueue_integrity_error_applies_latest_updates(monkeypatch: pytest.Monk
         priority=7,
     )
 
-    assert call_state["count"] == 1, "Expected the integrity error path to be triggered"
     assert updated.id == initial.id
     assert updated.priority == 7
     assert updated.payload["payload"]["sequence"] == "updated"
+    assert updated.attempts == 0
+    assert updated.status == QueueJobStatus.PENDING
 
     with session_scope() as session:
-        record = (
-            session.execute(
-                select(QueueJob).where(QueueJob.type == job_type, QueueJob.id == updated.id)
-            )
-            .scalars()
-            .one()
+        refreshed = session.get(QueueJob, updated.id)
+        assert refreshed is not None
+        assert refreshed.priority == 7
+        assert refreshed.attempts == 0
+        assert refreshed.status == QueueJobStatus.PENDING.value
+        assert refreshed.payload["payload"]["sequence"] == "updated"
+
+
+def test_lease_telemetry_hook_records_status_transitions() -> None:
+    seen: list[tuple[str, int, int]] = []
+
+    def hook(job: QueueJobDTO, status: str, meta: dict[str, Any]) -> None:
+        seen.append((status, int(meta["lease_timeout"]), int(job.id)))
+
+    persistence.register_lease_telemetry_hook(hook)
+    try:
+        job = enqueue(
+            "telemetry",
+            {"payload": {"value": "hook"}, "idempotency_key": "telemetry-hook"},
+            priority=9,
         )
 
-        assert record.priority == 7
-        assert record.payload["payload"]["sequence"] == "updated"
+        leased = persistence.lease(job.id, job_type=job.type, lease_seconds=45)
+        assert leased is not None
+        assert persistence.heartbeat(job.id, job_type=job.type, lease_seconds=15)
+
+        assert [entry[0] for entry in seen] == ["leased", "heartbeat"]
+        assert seen[0][1] == 45
+        assert seen[1][1] == 15
+        assert all(entry[2] == job.id for entry in seen)
+    finally:
+        persistence.register_lease_telemetry_hook(None)

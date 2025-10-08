@@ -26,6 +26,7 @@ os.environ.setdefault("ALLOWED_ORIGINS", "https://app.local")
 os.environ.setdefault("CACHE_ENABLED", "true")
 os.environ.setdefault("CACHE_DEFAULT_TTL_S", "30")
 os.environ.setdefault("CACHE_MAX_ITEMS", "256")
+os.environ.setdefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/harmony")
 
 import pytest
 import sqlalchemy as sa
@@ -1385,66 +1386,44 @@ def configure_environment(
         write_setting("SLSKD_URL", "http://localhost:5030")
         write_setting("SLSKD_API_KEY", "test-key")
 
-    if configured_url:
-        try:
-            resolved_url = make_url(configured_url)
-        except Exception:  # pragma: no cover - defensive parsing
-            resolved_url = None
+    if not configured_url:
+        pytest.skip("DATABASE_URL must point to a PostgreSQL database for test execution")
 
-        if resolved_url is not None and resolved_url.get_backend_name() == "postgresql":
-            schema_name = f"test_suite_{uuid.uuid4().hex}"
-            base_engine = sa.create_engine(resolved_url)
-            with base_engine.connect() as connection:
-                connection.execute(CreateSchema(schema_name))
-                connection.commit()
-            scoped_url = resolved_url.set(
-                query={**resolved_url.query, "options": f"-csearch_path={schema_name}"}
-            )
-            monkeypatch.setenv("DATABASE_URL", str(scoped_url))
-            reset_engine_for_tests()
-            init_db()
-            _seed_settings()
-            try:
-                yield
-            finally:
-                reset_engine_for_tests()
-                with base_engine.connect() as connection:
-                    try:
-                        connection.execute(DropSchema(schema_name, cascade=True))
-                        connection.commit()
-                    except ProgrammingError:
-                        connection.rollback()
-                base_engine.dispose()
-            return
+    try:
+        resolved_url = make_url(configured_url)
+    except Exception as exc:  # pragma: no cover - defensive parsing
+        pytest.skip(f"DATABASE_URL is not a valid SQLAlchemy URL: {exc}")
 
-        monkeypatch.setenv("DATABASE_URL", configured_url)
-        reset_engine_for_tests()
-        init_db()
-        _seed_settings()
-        try:
-            yield
-        finally:
-            reset_engine_for_tests()
-        return
+    if resolved_url.get_backend_name() != "postgresql":
+        pytest.skip("DATABASE_URL must reference a PostgreSQL backend for this test suite")
 
-    db_dir = tmp_path_factory.mktemp("db")
-    db_path = db_dir / "test.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    schema_name = f"test_suite_{uuid.uuid4().hex}"
+    base_engine = sa.create_engine(resolved_url)
+    try:
+        with base_engine.connect() as connection:
+            connection.execute(CreateSchema(schema_name))
+            connection.commit()
+    except Exception as exc:  # pragma: no cover - environment guard
+        base_engine.dispose()
+        pytest.skip(f"PostgreSQL database unavailable: {exc}")
+    scoped_url = resolved_url.set(
+        query={**resolved_url.query, "options": f"-csearch_path={schema_name}"}
+    )
+    monkeypatch.setenv("DATABASE_URL", str(scoped_url))
     reset_engine_for_tests()
-    for suffix in ("", "-journal", "-wal", "-shm"):
-        candidate = db_path.with_name(f"{db_path.name}{suffix}")
-        if candidate.exists():
-            candidate.unlink()
     init_db()
     _seed_settings()
     try:
         yield
     finally:
         reset_engine_for_tests()
-        for suffix in ("", "-journal", "-wal", "-shm"):
-            candidate = db_path.with_name(f"{db_path.name}{suffix}")
-            if candidate.exists():
-                candidate.unlink()
+        with base_engine.connect() as connection:
+            try:
+                connection.execute(DropSchema(schema_name, cascade=True))
+                connection.commit()
+            except ProgrammingError:
+                connection.rollback()
+        base_engine.dispose()
 
 
 @pytest.fixture(autouse=True)
