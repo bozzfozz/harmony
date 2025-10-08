@@ -51,6 +51,7 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
     }
   }
   ```
+- **Alias:** `GET /api/health/ready` liefert für Infrastruktur-Checks ein reduziertes `{ "status": "ok" }` bzw. `503` im Fehlerfall.
 - **Behaviour:** Database checks honour `HEALTH_DB_TIMEOUT_MS`. Dependency checks run in parallel with the timeout configured by `HEALTH_DEP_TIMEOUT_MS`. When `HEALTH_READY_REQUIRE_DB=false` the database state is still reported but does not gate readiness.
 
 ## Configuration

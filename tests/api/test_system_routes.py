@@ -48,3 +48,10 @@ def test_ready_endpoint_reports_dependencies() -> None:
     body = response.json()
     assert body["ok"] is True
     assert "deps" in body["data"]
+
+
+def test_health_ready_alias_returns_status_ok() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/health/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

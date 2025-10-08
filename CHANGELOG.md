@@ -1,4 +1,5 @@
 ## v2.0.0 — unreleased
+- infra(docker): konsolidierte Build-Pipeline, Compose & Doku für das einheitliche Harmony-Image (`ghcr.io/bozzfozz/harmony`) mit Health-Check `/api/health/ready` und Port 8080. [CODX-P0-IMG-600]
 - feat(middleware): request-id, structured logging, optional auth/rate limiting, ETag cache, CORS/GZip and unified error mapping [CODX-P0-MW-104]
 - refactor(core): DTO-basierte Matching-Engine mit konfigurierbaren Schwellen, deterministischem Ranking und neuen Core-Tests [CODX-CORE-REF-311]
 - docs(architecture): add overview, contracts, diagrams, ADR template [CODX-ARCH-DOC-301]
