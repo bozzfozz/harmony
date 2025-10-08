@@ -62,6 +62,7 @@ def test_full_registry_matches_expected_configuration() -> None:
         "system",
         "download",
         "activity",
+        "spotify_free_links",
         "integrations",
         "health",
         "watchlist",
