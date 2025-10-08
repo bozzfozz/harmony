@@ -21,6 +21,7 @@ from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.db import SessionCallable, run_session, session_scope
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.models import (Download, IngestItem, IngestItemState, IngestJob,
                         IngestJobState)
 
@@ -104,6 +105,16 @@ class JobStatus:
     failed_tracks: int
     skipped_tracks: int
     skip_reason: Optional[str]
+
+
+@dataclass(slots=True)
+class PlaylistEnqueueResult:
+    """Outcome returned when enqueueing playlist identifiers."""
+
+    accepted_ids: list[str]
+    duplicate_ids: list[str]
+    error: Optional[str] = None
+    job_id: Optional[str] = None
 
 
 SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
@@ -242,6 +253,99 @@ class FreeIngestService:
             accepted=accepted,
             skipped=skipped,
             error=submission_error,
+        )
+
+    async def enqueue_playlists(
+        self, playlist_ids: Sequence[str]
+    ) -> PlaylistEnqueueResult:
+        """Enqueue playlist identifiers via the FREE ingest pipeline."""
+
+        unique_ids: list[str] = []
+        seen: set[str] = set()
+        for raw in playlist_ids:
+            candidate = (raw or "").strip()
+            if not candidate:
+                continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            unique_ids.append(candidate)
+
+        if not unique_ids:
+            return PlaylistEnqueueResult(accepted_ids=[], duplicate_ids=[])
+
+        hashed_ids: list[tuple[str, str]] = [
+            (playlist_id, self._hash_parts(playlist_id)) for playlist_id in unique_ids
+        ]
+        digests = [digest for _, digest in hashed_ids]
+
+        def _load_existing(session) -> set[str]:
+            rows = (
+                session.execute(
+                    select(IngestItem.dedupe_hash)
+                    .where(IngestItem.dedupe_hash.in_(digests))
+                    .where(
+                        IngestItem.state.in_(
+                            [
+                                IngestItemState.REGISTERED.value,
+                                IngestItemState.NORMALIZED.value,
+                                IngestItemState.QUEUED.value,
+                            ]
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return set(rows)
+
+        existing_hashes = await self._run_session(_load_existing)
+
+        duplicate_ids = [
+            playlist_id for playlist_id, digest in hashed_ids if digest in existing_hashes
+        ]
+        pending_ids = [
+            playlist_id for playlist_id, digest in hashed_ids if digest not in existing_hashes
+        ]
+
+        if not pending_ids:
+            return PlaylistEnqueueResult(accepted_ids=[], duplicate_ids=duplicate_ids)
+
+        canonical_links = [
+            f"https://open.spotify.com/playlist/{playlist_id}" for playlist_id in pending_ids
+        ]
+        submission = await self.submit(playlist_links=canonical_links)
+
+        accepted_count = min(len(pending_ids), submission.accepted.playlists)
+        accepted_ids = pending_ids[:accepted_count]
+        skipped_ids = pending_ids[accepted_count:]
+
+        status_label = "enqueued" if accepted_count else "skipped"
+        payload: dict[str, Any] = {
+            "component": "service.free_ingest",
+            "entity_id": submission.job_id,
+            "job_type": "spotify_free_links",
+            "status": status_label,
+            "attempts": 1,
+            "accepted": submission.accepted.playlists,
+            "skipped": submission.skipped.playlists,
+        }
+        if submission.error:
+            payload["error"] = submission.error
+        log_event(
+            logger,
+            "worker.job",
+            meta={"playlist_ids": pending_ids, "accepted": accepted_count},
+            **payload,
+        )
+
+        duplicate_ids.extend(skipped_ids)
+
+        return PlaylistEnqueueResult(
+            accepted_ids=accepted_ids,
+            duplicate_ids=duplicate_ids,
+            error=submission.error,
+            job_id=submission.job_id,
         )
 
     def get_job_status(self, job_id: str) -> JobStatus | None:

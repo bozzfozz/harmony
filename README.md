@@ -48,6 +48,7 @@ Imports ohne Spotify-Credentials. Der Modus wird per `GET/POST /spotify/mode` ve
 Im FREE-Modus stehen neben den Parser-Endpunkten (`/spotify/free/*`) auch die Free-Ingest-Schnittstellen zur Verfügung:
 
 - `POST /spotify/import/free` akzeptiert bis zu 100 Playlist-Links (`open.spotify.com`) sowie umfangreiche Tracklisten aus dem Request-Body, normalisiert Artist/Titel/Album/Dauer und legt persistente `ingest_jobs`/`ingest_items` an.
+- `POST /spotify/free/links` erlaubt die direkte Eingabe einzelner oder mehrerer Playlist-Links/URIs, extrahiert die Playlist-ID, dedupliziert bereits laufende Jobs und stößt denselben Free-Ingest-Flow an (Response mit `accepted`/`skipped`).
 - `POST /spotify/import/free/upload` nimmt `multipart/form-data` (CSV/TXT/JSON) entgegen, parst serverseitig in Tracks und ruft intern den Free-Ingest-Service auf.
 - `GET /spotify/import/jobs/{job_id}` liefert den Job-Status inklusive Zählern (`registered`, `normalized`, `queued`, `failed`, `completed`) sowie Skip-Gründen.
 
