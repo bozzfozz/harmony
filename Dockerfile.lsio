@@ -27,12 +27,14 @@ ENV PUID=1000 \
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel wget && \
+RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel wget postgresql-libs && \
+    apk add --no-cache --virtual .build-deps build-base python3-dev musl-dev libffi-dev openssl-dev postgresql-dev linux-headers && \
     python3 -m ensurepip && \
     pip3 install --no-cache-dir --upgrade pip
 
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt && \
+    apk del --no-network .build-deps
 
 COPY . .
 COPY docker/lsio/root/ /
