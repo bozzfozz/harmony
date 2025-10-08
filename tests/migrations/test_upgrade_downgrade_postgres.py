@@ -1,5 +1,4 @@
 """Migration smoke tests against PostgreSQL when available."""
-
 from __future__ import annotations
 
 import os
@@ -13,6 +12,8 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from .helpers import assert_queue_jobs_schema, make_config
+
+pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.skipif(

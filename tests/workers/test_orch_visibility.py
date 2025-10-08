@@ -11,6 +11,7 @@ from app.models import QueueJob, QueueJobStatus
 from app.orchestrator.scheduler import PriorityConfig, Scheduler
 from app.workers import persistence
 
+pytestmark = pytest.mark.postgres
 
 def test_scheduler_orders_jobs_by_priority_and_time(
     queue_job_factory,

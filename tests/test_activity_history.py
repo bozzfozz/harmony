@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.db import session_scope
 from app.models import ActivityEvent
 from app.utils import activity_manager, record_activity
 
+pytestmark = pytest.mark.postgres
 
 def test_activity_history_paging_and_total_count(client) -> None:
     activity_manager.clear()

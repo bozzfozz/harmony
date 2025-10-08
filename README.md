@@ -868,23 +868,32 @@ pytest
 Die Tests mocken externe Dienste und können lokal wie auch via GitHub Actions ausgeführt werden. Für deterministische
 Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
 
-### PostgreSQL smoke suite
+### PostgreSQL parity suite
 
-- GitHub Actions führt zusätzlich zum regulären Backend-Lauf einen `backend-postgres`-Job aus. Der Job startet einen
-  PostgreSQL-16-Service, führt `alembic upgrade/downgrade` als Roundtrip aus und testet die wichtigsten Datenbankpfade
-  (`tests/migrations/test_upgrade_downgrade_postgres.py`, `tests/test_artists.py`,
-  `tests/workers/test_watchlist_worker.py::test_watchlist_handler_success_enqueues_sync_job`).
-- Lokal lässt sich der Lauf mit einer bereitstehenden Datenbank reproduzieren:
+- Das Workflow-File [`backend-postgres.yml`](.github/workflows/backend-postgres.yml) betreibt einen separaten CI-Lauf mit
+  PostgreSQL 16. Der Job führt `alembic upgrade head`, startet `pytest -m postgres -q` für alle mit dem Marker versehenen
+  Datenbanktests (Queue-Idempotenz, Orchestrator-Leases, Activity-Historie, Async-DAO) und validiert anschließend mit
+  `alembic downgrade base`, dass die Migrationen auch rückwärts ausführbar bleiben.
+- Lokal lässt sich der Lauf mit einem Docker-Container spiegeln:
+
+  ```bash
+  docker run --rm \
+    -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_DB=harmony \
+    -p 5432:5432 postgres:16
+  ```
+
+  In einem zweiten Terminal:
 
   ```bash
   export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
   alembic upgrade head
-  pytest tests/migrations/test_upgrade_downgrade_postgres.py -q
-  pytest tests/test_artists.py -q
-  pytest tests/workers/test_watchlist_worker.py::test_watchlist_handler_success_enqueues_sync_job -q
+  pytest -m postgres -q
+  alembic downgrade base
   ```
 
-  Die Tests erzeugen bei PostgreSQL automatisch ein isoliertes Schema pro Testlauf und entfernen es im Anschluss.
+  Die Tests erzeugen pro Lauf isolierte Schemas (`search_path`) und räumen diese nach Abschluss automatisch auf.
 
 ## Lizenz
 
