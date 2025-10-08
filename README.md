@@ -28,45 +28,43 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 
 ## Frontend Container
 
-Das React-Frontend wird als statische Anwendung über ein eigenes Container-Image ausgeliefert. Das Multi-Stage-Build nutzt
-Node.js 20 zum Erzeugen der Produktions-Assets und übernimmt sie anschließend in ein `lscr.io/linuxserver/nginx`-Runtime-Image.
-Beim Containerstart rendert ein `env.runtime.js` die Laufzeitkonfiguration via `envsubst`, sodass Werte wie die Backend-URL ohne
-erneutes Build angepasst werden können. Die Nginx-Config liefert SPA-Routen über `index.html`, setzt `Cache-Control: no-store`
-für die Shell und `immutable` für fingerprinted Assets; ein integrierter Healthcheck prüft `GET /`.
+Der Standard-Docker-Build (`Dockerfile`) erzeugt ein Full-Stack-Image, das das FastAPI-Backend und das vorgerenderte React-
+Frontend gemeinsam ausliefert. `docker-compose.yml` startet lediglich diesen Container (`backend`-Service) und stellt ihn unter
+`http://localhost:8000` bereit – API und Weboberfläche teilen sich damit eine Origin. Änderungen am Backend können für die
+Entwicklung über `docker-compose.override.yml` mit `uvicorn --reload` genutzt werden; das Frontend wird weiterhin im Build-Schritt
+generiert.
 
-### Runtime-Umgebungsvariablen
+### Build & Run
 
-| Variable               | Beschreibung                                                                 | Default |
-| ---------------------- | ----------------------------------------------------------------------------- | ------- |
-| `PUBLIC_BACKEND_URL`   | Basis-URL des Harmony-Backends, überschreibt die im Build gesetzte API-URL.  | leer    |
-| `PUBLIC_SENTRY_DSN`    | Optionaler Sentry-DSN für das Frontend.                                       | leer    |
-| `PUBLIC_FEATURE_FLAGS` | Optionales JSON-Objekt für Feature-Flags (z. B. `{ "beta": true }`).        | `{}`    |
-
-### Docker-Compose-Beispiel
-
-```yaml
-services:
-  frontend:
-    image: ghcr.io/<owner>/<repo>/fullstack:latest
-    ports:
-      - "8080:80"
-    environment:
-      PUBLIC_BACKEND_URL: "http://backend:8000"
-      PUBLIC_SENTRY_DSN: "https://sentry.example.com/1"
-      PUBLIC_FEATURE_FLAGS: '{"beta": true}'
-    volumes:
-      - frontend-config:/config
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      - backend
-
-volumes:
-  frontend-config:
+```bash
+docker compose build backend
+docker compose up
 ```
+
+Das Override-File bindet den Quellcode aus `./app` ein, sodass Backend-Anpassungen ohne erneutes Image-Build sichtbar werden. Für
+Frontend-Änderungen ist weiterhin ein Rebuild des Full-Stack-Images erforderlich (`docker compose build backend`).
+
+### Runtime-Umgebungsvariablen (kombiniertes Image)
+
+| Variable               | Beschreibung                                                                 | Compose-Voreinstellung |
+| ---------------------- | ----------------------------------------------------------------------------- | ---------------------- |
+| `ALLOWED_ORIGINS`      | CORS-Origin-Liste für das Backend; lokale Tests nutzen `http://localhost:8000`. | `http://localhost:8000` |
+| `PUBLIC_BACKEND_URL`   | Basis-URL des Harmony-Backends für das Frontend-Runtime-Skript.              | `http://localhost:8000` |
+| `PUBLIC_SENTRY_DSN`    | Optionaler Sentry-DSN für das Frontend.                                       | _leer_                  |
+| `PUBLIC_FEATURE_FLAGS` | Optionales JSON-Objekt für Feature-Flags (z. B. `{ "beta": true }`).        | `{}`                   |
+
+Die Variablen lassen sich direkt in `docker-compose.yml`/`.override.yml` oder via `.env` setzen. Abhängig von der Zielumgebung
+empfiehlt es sich, `PUBLIC_BACKEND_URL` auf die externe URL des Deployments und `ALLOWED_ORIGINS` auf die tatsächlichen
+Frontend-Hosts zu konfigurieren.
+
+### Legacy: Eigenständiger Frontend-Container _(archiviert)_
+
+Das frühere Setup lieferte das React-Frontend über ein separates Container-Image auf Basis von `lscr.io/linuxserver/nginx` aus.
+Das Multi-Stage-Build nutzte Node.js 20 für die Asset-Erzeugung, kopierte das Ergebnis in ein Nginx-Runtime-Image und erzeugte
+beim Start ein `env.runtime.js` via `envsubst`, um Laufzeitvariablen zu injizieren. Die Nginx-Konfiguration stellte SPA-Routen
+über `index.html` bereit, deaktivierte das Caching für die Shell und markierte fingerprinted Assets als `immutable`; ein
+Healthcheck überwachte `GET /`. Dieses Setup bleibt hier zu Dokumentationszwecken erhalten, wird aber nicht länger aktiv
+bereitgestellt.
 
 ### Integrations-Gateway
 
