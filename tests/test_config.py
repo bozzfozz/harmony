@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from app.config import load_config
+from app.errors import ValidationAppError
 from app.db import session_scope
 from app.models import Setting
 
@@ -93,3 +94,10 @@ def test_configuration_supports_legacy_slskd_host_port(
     config = load_config()
 
     assert config.soulseek.base_url == "http://slskd.local:2235"
+
+
+def test_load_config_rejects_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+
+    with pytest.raises(ValidationAppError):
+        load_config()

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.priority import parse_priority_map
@@ -582,7 +583,7 @@ class Settings:
         )
 
 
-DEFAULT_DB_URL = "sqlite:///./harmony.db"
+DEFAULT_DB_URL = "postgres://postgres:postgres@localhost:5432/harmony"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
@@ -748,6 +749,31 @@ def _bounded_float(
     if maximum is not None:
         resolved = min(maximum, resolved)
     return resolved
+
+
+_POSTGRES_ALLOWED_PREFIXES = ("postgres://", "postgresql+asyncpg://")
+
+
+def _require_postgres_database_url(candidate: Optional[str]) -> str:
+    value = (candidate or "").strip()
+    if not value:
+        raise ValidationAppError(
+            "DATABASE_URL must be configured with a postgres:// or postgresql+asyncpg:// connection string, "
+            f"for example {DEFAULT_DB_URL}.",
+            meta={"field": "DATABASE_URL"},
+        )
+    if not value.lower().startswith(_POSTGRES_ALLOWED_PREFIXES):
+        raise ValidationAppError(
+            "DATABASE_URL must use a postgres:// or postgresql+asyncpg:// connection string.",
+            meta={"field": "DATABASE_URL"},
+        )
+    return value
+
+
+def _resolve_database_url(explicit: Optional[str]) -> str:
+    if explicit is not None:
+        return _require_postgres_database_url(explicit)
+    return _require_postgres_database_url(os.getenv("DATABASE_URL"))
 
 
 def _parse_bool_override(value: Any) -> bool | None:
@@ -1199,14 +1225,10 @@ def _load_settings_from_db(
 ) -> dict[str, Optional[str]]:
     """Fetch selected settings from the database."""
 
-    database_url = database_url or os.getenv("DATABASE_URL", DEFAULT_DB_URL)
-    if not database_url:
-        return {}
-
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+    database_url = _resolve_database_url(database_url)
 
     try:
-        engine = create_engine(database_url, connect_args=connect_args)
+        engine = create_engine(database_url)
     except SQLAlchemyError:
         return {}
 
@@ -1268,7 +1290,7 @@ def _legacy_slskd_url() -> Optional[str]:
 def load_config() -> AppConfig:
     """Load application configuration prioritising database backed settings."""
 
-    database_url = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
+    database_url = _resolve_database_url(None)
 
     config_keys = [
         "SPOTIFY_CLIENT_ID",
