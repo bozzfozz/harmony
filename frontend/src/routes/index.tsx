@@ -9,6 +9,7 @@ import SpotifyPage from '../pages/SpotifyPage';
 import SpotifyProOAuthCallbackPage from '../pages/SpotifyProOAuthCallback';
 import ArtistsPage from '../pages/Artists/ArtistsPage';
 import ArtistDetailPage from '../pages/Artists/ArtistDetailPage';
+import FreeLinksPage from '../pages/free/LinksPage';
 
 const AppRoutes = () => (
   <Routes>
@@ -21,6 +22,7 @@ const AppRoutes = () => (
     <Route path="/watchlist" element={<Navigate to="/artists" replace />} />
     <Route path="/spotify" element={<SpotifyPage />} />
     <Route path="/spotify/oauth/callback" element={<SpotifyProOAuthCallbackPage />} />
+    <Route path="/free/links" element={<FreeLinksPage />} />
     <Route path="/soulseek" element={<SoulseekPage />} />
     <Route path="/matching" element={<MatchingPage />} />
     <Route path="/settings" element={<SettingsPage />} />
