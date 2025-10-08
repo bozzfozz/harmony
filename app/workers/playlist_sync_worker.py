@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Iterable
 
 from app.core.spotify_client import SpotifyClient
@@ -17,6 +17,8 @@ from app.utils.events import WORKER_STOPPED
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 
 logger = get_logger(__name__)
+
+_UPDATED_AT_INCREMENT = timedelta(microseconds=1)
 
 
 class PlaylistCacheInvalidator:
@@ -192,8 +194,10 @@ class PlaylistSyncWorker:
         cache_invalidator: "PlaylistCacheInvalidator | None",
     ) -> int:
         processed = 0
-        updated_ids: set[str] = set()
+        updated_ids: list[str] = []
+        seen_ids: set[str] = set()
         commit_successful = False
+        last_assigned: datetime | None = None
 
         try:
             with session_scope() as session:
@@ -212,15 +216,27 @@ class PlaylistSyncWorker:
                             name=str(name),
                             track_count=track_count,
                         )
-                        playlist.updated_at = timestamp
+                        playlist.updated_at = self._compute_next_updated_at(
+                            previous=None,
+                            candidate=timestamp,
+                            floor=last_assigned,
+                        )
                         session.add(playlist)
                     else:
                         playlist.name = str(name)
                         playlist.track_count = track_count
-                        playlist.updated_at = timestamp
+                        playlist.updated_at = self._compute_next_updated_at(
+                            previous=playlist.updated_at,
+                            candidate=timestamp,
+                            floor=last_assigned,
+                        )
 
+                    last_assigned = playlist.updated_at
                     processed += 1
-                    updated_ids.add(str(playlist_id))
+                    playlist_id_str = str(playlist_id)
+                    if playlist_id_str not in seen_ids:
+                        updated_ids.append(playlist_id_str)
+                        seen_ids.add(playlist_id_str)
 
             commit_successful = True
         finally:
@@ -228,6 +244,28 @@ class PlaylistSyncWorker:
                 cache_invalidator.invalidate(tuple(updated_ids))
 
         return processed
+
+    @staticmethod
+    def _compute_next_updated_at(
+        *,
+        previous: datetime | None,
+        candidate: datetime,
+        floor: datetime | None,
+    ) -> datetime:
+        """Ensure the assigned timestamp is strictly newer than prior values."""
+
+        target = candidate
+
+        if floor is not None and target <= floor:
+            target = floor + _UPDATED_AT_INCREMENT
+
+        if previous is not None and target <= previous:
+            target = previous + _UPDATED_AT_INCREMENT
+
+        if floor is not None and target <= floor:
+            target = floor + _UPDATED_AT_INCREMENT
+
+        return target
 
     def _build_cache_invalidator(self) -> "PlaylistCacheInvalidator | None":
         if self._response_cache is None:

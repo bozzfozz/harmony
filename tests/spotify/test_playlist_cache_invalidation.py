@@ -158,13 +158,25 @@ def test_playlist_list_returns_304_when_unchanged(client: SimpleTestClient) -> N
     assert conditional.text == ""
 
 
-def test_playlist_list_busts_cache_on_update_response(client: SimpleTestClient) -> None:
+def test_playlist_list_busts_cache_on_update_response(
+    client: SimpleTestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stub = client.app.state.spotify_stub
     stub.playlists = [
         {"id": "playlist-1", "name": "Focus", "tracks": {"total": 10}},
     ]
 
     worker = client.app.state.playlist_worker
+
+    frozen_now = datetime(2024, 1, 1, 12, 0, 0)
+
+    class FrozenDatetime(datetime):  # type: ignore[misc]
+        @classmethod
+        def utcnow(cls) -> datetime:
+            return frozen_now
+
+    monkeypatch.setattr("app.workers.playlist_sync_worker.datetime", FrozenDatetime)
+
     client._loop.run_until_complete(worker.sync_once())
 
     initial = client.get("/spotify/playlists")
@@ -182,3 +194,4 @@ def test_playlist_list_busts_cache_on_update_response(client: SimpleTestClient) 
     payload = refreshed.json()
     assert payload["playlists"][0]["name"] == "Focus Updated"
     assert refreshed.headers.get("etag") != initial_etag
+    assert payload != initial.json()
