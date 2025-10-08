@@ -6,15 +6,15 @@ import asyncio
 import inspect
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from fastapi import APIRouter, FastAPI
-from fastapi.openapi.utils import get_openapi
 
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
-from app.api.openapi_examples import apply_artist_examples
+from app.api.openapi_schema import build_openapi_schema
 from app.config import AppConfig, SecurityConfig, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
@@ -553,6 +553,7 @@ app = FastAPI(
 )
 
 _apply_security_dependencies(app, _config_snapshot.security)
+app.state.openapi_config = deepcopy(_config_snapshot)
 
 app.state.start_time = _APP_START_TIME
 app.state.orchestrator_status = _initial_orchestrator_status(
@@ -599,301 +600,14 @@ router_registry.register_all(
 maybe_register_admin_routes(app, config=_config_snapshot)
 
 
-def _is_allowlisted_path(path: str) -> bool:
-    security_config = get_app_config().security
-    return any(
-        prefix
-        and (path == prefix or path.startswith(f"{prefix}/"))
-        or (prefix == "/" and path == "/")
-        for prefix in security_config.allowlist
-    )
-
-
 def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
 
-    openapi_schema = get_openapi(
-        title=app.title,
-        version=app.version,
-        routes=app.routes,
-        description=app.description,
-    )
-
-    config = get_app_config()
-    server_url = config.api_base_path or "/"
-    if server_url != "/" and not server_url.startswith("/"):
-        server_url = f"/{server_url}"
-    openapi_schema["servers"] = [{"url": server_url}]
-
-    security_scheme_name = "ApiKeyAuth"
-    security_scheme = {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-API-Key",
-        "description": "Provide the configured API key via the X-API-Key header. Authorization: Bearer is also supported.",
-    }
-
-    components = openapi_schema.setdefault("components", {})
-    components.setdefault("securitySchemes", {})[security_scheme_name] = security_scheme
-
-    error_object_schema = {
-        "type": "object",
-        "required": ["code", "message"],
-        "properties": {
-            "code": {
-                "type": "string",
-                "enum": [
-                    "VALIDATION_ERROR",
-                    "NOT_FOUND",
-                    "RATE_LIMITED",
-                    "DEPENDENCY_ERROR",
-                    "INTERNAL_ERROR",
-                ],
-            },
-            "message": {"type": "string"},
-            "meta": {"type": "object", "additionalProperties": True},
-        },
-    }
-    error_response_schema = {
-        "type": "object",
-        "required": ["ok", "error"],
-        "properties": {
-            "ok": {"type": "boolean", "const": False},
-            "error": {"$ref": "#/components/schemas/ErrorObject"},
-        },
-    }
-    schemas_section = components.setdefault("schemas", {})
-    schemas_section.setdefault("ErrorObject", error_object_schema)
-    schemas_section.setdefault("ErrorResponse", error_response_schema)
-    schemas_section.setdefault(
-        "HealthData",
-        {
-            "type": "object",
-            "required": ["status", "version", "uptime_s"],
-            "properties": {
-                "status": {"type": "string", "enum": ["up"]},
-                "version": {"type": "string"},
-                "uptime_s": {"type": "number"},
-            },
-        },
-    )
-    schemas_section.setdefault(
-        "HealthResponse",
-        {
-            "type": "object",
-            "required": ["ok", "data", "error"],
-            "properties": {
-                "ok": {"type": "boolean", "const": True},
-                "data": {"$ref": "#/components/schemas/HealthData"},
-                "error": {"type": "null"},
-            },
-        },
-    )
-    schemas_section.setdefault(
-        "ReadyData",
-        {
-            "type": "object",
-            "required": ["db", "deps"],
-            "properties": {
-                "db": {"type": "string"},
-                "deps": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                },
-            },
-        },
-    )
-    schemas_section.setdefault(
-        "ReadySuccessResponse",
-        {
-            "type": "object",
-            "required": ["ok", "data", "error"],
-            "properties": {
-                "ok": {"type": "boolean", "const": True},
-                "data": {"$ref": "#/components/schemas/ReadyData"},
-                "error": {"type": "null"},
-            },
-        },
-    )
-
-    security_config = config.security
-
-    if security_config.require_auth and security_config.api_keys:
-        openapi_schema["security"] = [{security_scheme_name: []}]
-
-        for path, methods in openapi_schema.get("paths", {}).items():
-            if _is_allowlisted_path(path):
-                for operation in methods.values():
-                    if isinstance(operation, dict):
-                        operation.pop("security", None)
-    else:
-        openapi_schema["security"] = []
-
-    cache_header_spec = {
-        "ETag": {
-            "description": "Entity tag identifying the cached representation.",
-            "schema": {"type": "string"},
-        },
-        "Last-Modified": {
-            "description": "Timestamp of the last modification in RFC 1123 format.",
-            "schema": {"type": "string", "format": "date-time"},
-        },
-        "Cache-Control": {
-            "description": "Cache directives for clients and proxies.",
-            "schema": {"type": "string"},
-        },
-        "Vary": {
-            "description": "Headers that affect the cached representation.",
-            "schema": {"type": "string"},
-        },
-    }
-
-    paths = openapi_schema.get("paths", {})
-    error_ref = {"$ref": "#/components/schemas/ErrorResponse"}
-    error_mappings = {
-        "400": "Validation error",
-        "404": "Resource not found",
-        "429": "Too many requests",
-        "424": "Failed dependency",
-        "500": "Internal server error",
-        "502": "Bad gateway",
-        "503": "Service unavailable",
-        "504": "Gateway timeout",
-    }
-    for methods in paths.values():
-        for method, operation in list(methods.items()):
-            if method.lower() != "get" or not isinstance(operation, dict):
-                continue
-            responses = operation.setdefault("responses", {})
-            success = responses.get("200")
-            if isinstance(success, dict):
-                header_section = success.setdefault("headers", {})
-                for header_name, header_spec in cache_header_spec.items():
-                    header_section.setdefault(header_name, dict(header_spec))
-            not_modified = responses.setdefault(
-                "304",
-                {
-                    "description": "Not Modified",
-                    "headers": {},
-                },
-            )
-            header_section = not_modified.setdefault("headers", {})
-            for header_name in ("ETag", "Last-Modified", "Cache-Control", "Vary"):
-                header_section.setdefault(header_name, dict(cache_header_spec[header_name]))
-
-    for methods in paths.values():
-        for operation in methods.values():
-            if not isinstance(operation, dict):
-                continue
-            responses = operation.setdefault("responses", {})
-            for status_code, description in error_mappings.items():
-                existing = responses.get(status_code)
-                if existing is None:
-                    responses[status_code] = {
-                        "description": description,
-                        "content": {"application/json": {"schema": error_ref}},
-                    }
-                    continue
-                if not isinstance(existing, dict):
-                    continue
-                existing.setdefault("description", description)
-                content = existing.setdefault("content", {})
-                content.setdefault("application/json", {"schema": error_ref})
-
-    artist_collection_path = router_registry.compose_prefix(config.api_base_path, "/artists")
-    artist_watchlist_path = router_registry.compose_prefix(
-        config.api_base_path, "/artists/watchlist"
-    )
-    artist_detail_path = router_registry.compose_prefix(
-        config.api_base_path, "/artists/{artist_key}"
-    )
-    artist_enqueue_path = router_registry.compose_prefix(
-        config.api_base_path, "/artists/{artist_key}/enqueue-sync"
-    )
-    apply_artist_examples(
-        openapi_schema,
-        collection_path=artist_collection_path,
-        watchlist_path=artist_watchlist_path,
-        detail_path=artist_detail_path,
-        enqueue_path=artist_enqueue_path,
-    )
-
-    health_path = router_registry.compose_prefix(config.api_base_path, "/health")
-    ready_path = router_registry.compose_prefix(config.api_base_path, "/ready")
-    health_item = paths.get(health_path)
-    if isinstance(health_item, dict):
-        health_operation = health_item.get("get")
-        if isinstance(health_operation, dict):
-            health_operation.setdefault("summary", "Liveness probe")
-            health_operation.setdefault(
-                "description",
-                "Returns the service status, version and uptime.",
-            )
-            responses = health_operation.setdefault("responses", {})
-            responses["200"] = {
-                "description": "Liveness status",
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/HealthResponse"},
-                        "example": {
-                            "ok": True,
-                            "data": {
-                                "status": "up",
-                                "version": app.version,
-                                "uptime_s": 1.23,
-                            },
-                            "error": None,
-                        },
-                    }
-                },
-            }
-
-    ready_item = paths.get(ready_path)
-    if isinstance(ready_item, dict):
-        ready_operation = ready_item.get("get")
-        if isinstance(ready_operation, dict):
-            ready_operation.setdefault("summary", "Readiness probe")
-            ready_operation.setdefault(
-                "description",
-                "Checks database connectivity and downstream dependencies.",
-            )
-            responses = ready_operation.setdefault("responses", {})
-            responses["200"] = {
-                "description": "All dependencies ready",
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/ReadySuccessResponse"},
-                        "example": {
-                            "ok": True,
-                            "data": {"db": "up", "deps": {}},
-                            "error": None,
-                        },
-                    }
-                },
-            }
-            responses["503"] = {
-                "description": "Dependencies unavailable",
-                "content": {
-                    "application/json": {
-                        "schema": error_ref,
-                        "example": {
-                            "ok": False,
-                            "error": {
-                                "code": "DEPENDENCY_ERROR",
-                                "message": "not ready",
-                                "meta": {
-                                    "db": "down",
-                                    "deps": {"spotify": "down"},
-                                },
-                            },
-                        },
-                    }
-                },
-            }
-
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+    config_snapshot = getattr(app.state, "openapi_config", None) or get_app_config()
+    schema = build_openapi_schema(app, config=config_snapshot)
+    app.openapi_schema = schema
+    return schema
 
 
 app.openapi = custom_openapi
