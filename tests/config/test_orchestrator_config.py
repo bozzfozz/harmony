@@ -92,7 +92,7 @@ def test_load_sync_retry_policy_uses_settings(monkeypatch) -> None:
 
 
 def test_load_config_exposes_environment(monkeypatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "postgres://test:test@localhost:5432/harmony")
     monkeypatch.setenv("APP_ENV", "prod")
     monkeypatch.setenv("HARMONY_DISABLE_WORKERS", "true")
     monkeypatch.setenv("WORKER_VISIBILITY_TIMEOUT_S", "75")

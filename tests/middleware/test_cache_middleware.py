@@ -63,7 +63,7 @@ def _create_app(
 
 def test_cache_control_uses_path_specific_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     env = {
-        "DATABASE_URL": "sqlite:///:memory:",
+        "DATABASE_URL": "postgres://test:test@localhost:5432/harmony",
         "CACHE_DEFAULT_TTL_S": "45",
         "CACHE_STALE_WHILE_REVALIDATE_S": "90",
         "CACHEABLE_PATHS": "^/cache/me$|120|30, ^/cache/default$||",
@@ -103,7 +103,7 @@ def test_cache_control_uses_path_specific_rules(monkeypatch: pytest.MonkeyPatch)
 
 def test_cache_fail_closed_propagates_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     env = {
-        "DATABASE_URL": "sqlite:///:memory:",
+        "DATABASE_URL": "postgres://test:test@localhost:5432/harmony",
         "CACHE_FAIL_OPEN": "false",
         "CACHEABLE_PATHS": "^/boom$|10|",
     }
@@ -124,7 +124,7 @@ def test_cache_fail_open_streaming_body_preserved_on_store_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env = {
-        "DATABASE_URL": "sqlite:///:memory:",
+        "DATABASE_URL": "postgres://test:test@localhost:5432/harmony",
         "CACHE_FAIL_OPEN": "true",
         "CACHEABLE_PATHS": "^/stream$|10|",
     }
@@ -166,7 +166,7 @@ def test_playlist_tracks_cache_key_preserves_query_and_auth(
     for key in relevant_keys:
         monkeypatch.delenv(key, raising=False)
 
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "postgres://test:test@localhost:5432/harmony")
     monkeypatch.setenv("CACHE_ENABLED", "true")
     monkeypatch.setenv("CACHE_DEFAULT_TTL_S", "120")
     monkeypatch.setenv("CACHE_MAX_ITEMS", "50")

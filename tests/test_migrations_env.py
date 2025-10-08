@@ -5,6 +5,7 @@ pytest.importorskip("alembic", reason="alembic is required for migration environ
 from alembic.config import Config
 
 from app.migrations import env
+from app.errors import ValidationAppError
 
 
 def test_get_database_url_prefers_config_override() -> None:
@@ -14,12 +15,10 @@ def test_get_database_url_prefers_config_override() -> None:
     assert env.get_database_url(config) == "sqlite:///override.db"
 
 
-def test_get_database_url_falls_back_to_app_config(monkeypatch) -> None:
+def test_get_database_url_requires_postgres(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test-env.db")
     config = Config()
     config.set_main_option("sqlalchemy.url", "")
 
-    resolved = env.get_database_url(config)
-
-    assert resolved.endswith("test-env.db")
-    assert resolved.startswith("sqlite")
+    with pytest.raises(ValidationAppError):
+        env.get_database_url(config)
