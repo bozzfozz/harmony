@@ -105,12 +105,23 @@ router = APIRouter(tags=["Search"])
 
 
 def _emit_api_event(*args: Any, **kwargs: Any) -> None:
-    """Dispatch the API event, respecting compatibility shims."""
+    """Dispatch the API event, preferring the current module hook."""
 
-    shim = sys.modules.get("app.routers.search_router")
-    candidate = getattr(shim, "log_event", None) if shim is not None else None
-    target = candidate if callable(candidate) else _log_event
-    target(*args, **kwargs)
+    module = sys.modules.get(__name__)
+    candidate = getattr(module, "log_event", None) if module is not None else None
+    if callable(candidate):
+        candidate(*args, **kwargs)
+        return
+
+    # Fall back to legacy shims for backwards compatibility.
+    for shim_name in ("app.api.routers.search", "app.routers.search_router"):
+        shim = sys.modules.get(shim_name)
+        candidate = getattr(shim, "log_event", None) if shim is not None else None
+        if callable(candidate):
+            candidate(*args, **kwargs)
+            return
+
+    _log_event(*args, **kwargs)
 
 
 # Expose ``log_event`` for compatibility imports (e.g. tests).
