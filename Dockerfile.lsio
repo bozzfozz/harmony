@@ -1,0 +1,53 @@
+FROM lscr.io/linuxserver/baseimage-alpine:3.20
+
+ARG APP_VERSION="dev"
+ARG BUILD_DATE
+ARG VCS_REF
+ARG IMAGE_TITLE="Harmony"
+ARG IMAGE_DESCRIPTION="Harmony backend service packaged for linuxserver.io environments"
+ARG IMAGE_SOURCE="https://github.com/example/harmony"
+
+LABEL org.opencontainers.image.title="${IMAGE_TITLE}" \
+      org.opencontainers.image.description="${IMAGE_DESCRIPTION}" \
+      org.opencontainers.image.source="${IMAGE_SOURCE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
+ENV PUID=1000 \
+    PGID=1000 \
+    TZ=UTC \
+    UMASK=022 \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    APP_PORT=8000 \
+    HARMONY_PROFILE=prod \
+    DATABASE_URL="sqlite:////config/harmony.db"
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel wget && \
+    python3 -m ensurepip && \
+    pip3 install --no-cache-dir --upgrade pip
+
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+COPY . .
+COPY docker/lsio/root/ /
+
+RUN mkdir -p /config \
+    && chmod +x /etc/cont-init.d/10-config \
+                 /etc/services.d/harmony/run \
+                 /etc/services.d/harmony/finish \
+                 /app/scripts/docker-entrypoint.sh \
+    && chown -R abc:abc /app /config
+
+EXPOSE 8000
+VOLUME ["/config"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 CMD wget -qO- "http://127.0.0.1:${APP_PORT}/ready" || exit 1
+
+ENV LSIO_FIRST_PARTY=true
+

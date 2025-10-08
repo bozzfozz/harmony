@@ -445,32 +445,69 @@ Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet di
 
 ### Docker
 
+Für den Betrieb steht ein linuxserver.io-kompatibles Image auf Basis von `lscr.io/linuxserver/baseimage-alpine` zur Verfügung. Es
+wird automatisch als Multi-Arch-Build (`linux/amd64`, `linux/arm64`) nach [GitHub Container Registry](https://ghcr.io) veröf
+fentlicht:
+
+- `ghcr.io/<org>/harmony:latest` – jeweils der letzte `v*`-Tag
+- `ghcr.io/<org>/harmony:vX.Y.Z` – Release-Builds pro SemVer-Tag
+- `ghcr.io/<org>/harmony:sha-<commit>` – Nightly-Builds pro Commit auf `main`
+
+Die Images folgen dem linuxserver.io-Konzept mit nicht privilegiertem Benutzer (`abc`) und `/config` als Persistenzpfad. Wichtige
+Umgebungsvariablen:
+
+| Variable | Default | Beschreibung |
+| --- | --- | --- |
+| `PUID` | `1000` | UID des Service-Users (Mapping auf Host-UID). |
+| `PGID` | `1000` | GID des Service-Users (Mapping auf Host-GID). |
+| `TZ` | `UTC` | Zeitzone für Logs und Cronjobs. |
+| `UMASK` | `022` | Standard-Dateiberechtigungen. |
+| `DATABASE_URL` | `sqlite:////config/harmony.db` | Persistente SQLite-Datenbank unter `/config`; kann auf PostgreSQL zeigen. |
+| `HARMONY_PROFILE` | `prod` | Aktiviert produktive Defaults (z. B. ohne Debug-Reload). |
+| `FEATURE_RUN_MIGRATIONS` | `on` | Führt beim Start automatisch Alembic-Migrationen aus (`off` für manuelle Kontrolle). |
+
+Minimaler Run-Beispiel:
+
 ```bash
-docker build -t harmony-backend .
-docker run --env-file .env -p 8000:8000 harmony-backend
+docker run -d \
+  --name harmony \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=Europe/Berlin \
+  -e UMASK=022 \
+  -e HARMONY_PROFILE=prod \
+  -p 8000:8000 \
+  -v $(pwd)/config:/config \
+  ghcr.io/<org>/harmony:latest
 ```
+
+Der Container veröffentlicht HTTP-Port `8000` (FastAPI/Uvicorn) und liefert den Readiness-Check unter `http://127.0.0.1:8000/ready`
+oder via Docker-Healthcheck. Persistente Daten (Konfiguration, SQLite-DB, Cache) liegen unter `/config` und sollten auf ein Host-
+Volume gemountet werden. Für Upgrades genügt es, das bestehende Volume beizubehalten, das neue Tag zu pullen und den Container neu
+zu starten (`docker pull … && docker compose up -d`).
 
 ### Docker Compose
 
-```bash
-docker compose up --build
-```
-
-Das Dev-Override (`docker-compose.override.yml`) aktiviert Hot-Reloading und Debug-Logging.
-
-Beispielauszug aus `docker-compose.yml` mit gebundenem `.env`:
-
 ```yaml
 services:
-  harmony-api:
-    build: .
-    env_file:
-      - ./.env
+  harmony:
+    image: ghcr.io/<org>/harmony:latest
+    container_name: harmony
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+      - UMASK=022
+      - HARMONY_PROFILE=prod
+    volumes:
+      - ./config:/config
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/app/data
+    restart: unless-stopped
 ```
+
+Optional können zusätzliche Variablen aus `.env` mittels `env_file` eingebunden werden (z. B. Secrets, externe API-Keys). Das Dev-
+Override (`docker-compose.override.yml`) aktiviert weiterhin Hot-Reloading und Debug-Logging für lokale Entwicklungszwecke.
 
 ### GitHub Actions
 

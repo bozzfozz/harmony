@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv sh
+set -e
+
+APP_PORT="${APP_PORT:-8000}"
+CMD="uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT}"
+
+exec s6-setuidgid abc /bin/sh /app/scripts/docker-entrypoint.sh ${CMD}
