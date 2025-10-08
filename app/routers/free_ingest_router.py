@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.api._deprecation import warn_legacy_import
+from app._legacy import warn_legacy_import
 from app.api.routers.spotify import free_ingest_router as router
 
 warn_legacy_import(
