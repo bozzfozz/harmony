@@ -7,6 +7,7 @@ import contextlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from time import perf_counter
 from types import MappingProxyType
 from typing import Any
 
@@ -161,11 +162,13 @@ class Scheduler:
                 priority=int(job.priority),
                 available_at=orchestrator_events.format_datetime(job.available_at),
             )
+            start = perf_counter()
             leased = self._persistence.lease(
                 job.id,
                 job_type=job.type,
                 lease_seconds=self._visibility_timeout,
             )
+            duration_ms = max(0, int((perf_counter() - start) * 1000))
             status = "leased" if leased is not None else "skipped"
             orchestrator_events.emit_lease_event(
                 self._logger,
@@ -174,6 +177,7 @@ class Scheduler:
                 status=status,
                 priority=int(job.priority),
                 lease_timeout=self._visibility_timeout,
+                duration_ms=duration_ms,
             )
             if leased is not None:
                 leased_jobs.append(leased)
