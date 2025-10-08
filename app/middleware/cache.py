@@ -21,6 +21,7 @@ from app.services.cache import (
     CacheEntry,
     ResponseCache,
     build_cache_key,
+    build_query_hash,
     playlist_detail_cache_key,
     playlist_filters_hash,
     playlist_list_cache_key,
@@ -225,7 +226,14 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 filters_hash = playlist_filters_hash(request.url.query)
                 return playlist_list_cache_key(filters_hash=filters_hash)
             if _PLAYLIST_DETAIL_PATTERN.fullmatch(normalized) and playlist_id:
-                return playlist_detail_cache_key(str(playlist_id))
+                auth_header = request.headers.get("authorization") or request.headers.get(
+                    "x-api-key"
+                )
+                auth_variant = resolve_auth_variant(auth_header)
+                query_hash = build_query_hash(request.url.query)
+                method = "GET" if request.method.upper() == "HEAD" else request.method.upper()
+                detail_prefix = playlist_detail_cache_key(str(playlist_id))
+                return f"{detail_prefix}:{method}:{query_hash}:{auth_variant}"
         return None
 
     async def _store_and_return(
