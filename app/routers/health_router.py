@@ -33,13 +33,3 @@ def soulseek_health(session: Session = Depends(get_db)) -> ServiceHealthResponse
         optional_missing=list(result.optional_missing),
     )
 
-
-@router.get("/plex", response_model=ServiceHealthResponse)
-def plex_health(session: Session = Depends(get_db)) -> ServiceHealthResponse:
-    result = evaluate_service_health(session, "plex")
-    return ServiceHealthResponse(
-        service=result.service,
-        status=result.status,
-        missing=list(result.missing),
-        optional_missing=list(result.optional_missing),
-    )

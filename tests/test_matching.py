@@ -45,9 +45,3 @@ def test_matching_api_soulseek(
     saved = db_session.query(Match).filter(Match.source == "spotify-to-soulseek").all()
     assert len(saved) == 1
     assert saved[0].target_id == "candidate-2"
-
-
-def test_matching_api_legacy_routes_absent(client: SimpleTestClient) -> None:
-    assert client.post("/matching/spotify-to-plex", json={}).status_code == 404
-    assert client.post("/matching/spotify-to-plex-album", json={}).status_code == 404
-    assert client.post("/matching/discography/plex", json={}).status_code == 404

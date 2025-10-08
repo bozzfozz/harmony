@@ -53,9 +53,11 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `POST` | `/matching/spotify-to-soulseek` | Bewertet Spotify-Track vs. Soulseek-Kandidaten, persistiert das Ergebnis. |
 | `POST` | `/matching/spotify-to-soulseek/preview` | Liefert nur berechneten Score ohne Persistenz. |
 | `GET` | `/matching/jobs` | Queue-Status des Matching-Workers. |
-| `POST` | `/matching/spotify-to-plex` | **Legacy** – antwortet mit `404`. |
-| `POST` | `/matching/spotify-to-plex-album` | **Legacy** – antwortet mit `404`. |
-| `POST` | `/matching/discography/plex` | **Legacy** – antwortet mit `404`. |
+| `POST` | `/matching/spotify-to-plex` | **Entfernt** – Route existiert nicht mehr. |
+| `POST` | `/matching/spotify-to-plex-album` | **Entfernt** – Route existiert nicht mehr. |
+| `POST` | `/matching/discography/plex` | **Entfernt** – Route existiert nicht mehr. |
+
+> **Hinweis:** Die frühere Plex-Integration wird nicht mehr unterstützt. Alle entsprechenden Endpunkte liefern dauerhaft `404`.
 
 ## Metadata & Watchlist
 
