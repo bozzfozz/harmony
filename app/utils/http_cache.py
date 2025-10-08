@@ -14,6 +14,7 @@ from app.models import Playlist
 
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_PLAYLIST_CACHE_VERSION = "v1"
 
 
 @dataclass(frozen=True)
@@ -30,28 +31,36 @@ class CacheMetadata:
         }
 
 
-def compute_playlist_collection_metadata(playlists: Sequence[Playlist]) -> CacheMetadata:
+def compute_playlist_collection_metadata(
+    playlists: Sequence[Playlist],
+    *,
+    filters_hash: str | None = None,
+) -> CacheMetadata:
     """Return deterministic cache metadata for a playlist collection response."""
 
     normalized = list(playlists)
+    resolved_filters = filters_hash or "0"
     if not normalized:
-        digest = hashlib.sha1(b"playlist-collection::empty").hexdigest()
-        return CacheMetadata(etag=f'"pl-{digest}:0"', last_modified=_EPOCH)
+        latest = _EPOCH
+        payload = f"playlists|{_PLAYLIST_CACHE_VERSION}|{resolved_filters}|0|{latest.isoformat()}"
+        digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+        return CacheMetadata(
+            etag=f'"pl-{_PLAYLIST_CACHE_VERSION}-{digest}:0"',
+            last_modified=latest,
+        )
 
-    segments: list[str] = []
     latest = _EPOCH
-    for index, playlist in enumerate(normalized):
-        playlist_id = getattr(playlist, "id", "")
-        name = getattr(playlist, "name", "")
-        track_count = getattr(playlist, "track_count", 0)
+    for playlist in normalized:
         updated_at = _ensure_utc(getattr(playlist, "updated_at", None))
         if updated_at > latest:
             latest = updated_at
-        segments.append(f"{index}:{playlist_id}:{name}:{track_count}:{updated_at.isoformat()}")
 
-    payload = "|".join(segments).encode("utf-8")
-    digest = hashlib.sha1(payload).hexdigest()
-    etag = f'"pl-{digest}:{len(normalized)}"'
+    total_count = len(normalized)
+    payload = (
+        f"playlists|{_PLAYLIST_CACHE_VERSION}|{resolved_filters}|{total_count}|{latest.isoformat()}"
+    )
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+    etag = f'"pl-{_PLAYLIST_CACHE_VERSION}-{digest}:{total_count}"'
     return CacheMetadata(etag=etag, last_modified=latest)
 
 
@@ -92,7 +101,7 @@ def _ensure_utc(value: datetime | None) -> datetime:
         return _EPOCH
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).replace(microsecond=0)
+    return value.astimezone(timezone.utc)
 
 
 def _parse_http_datetime(value: str) -> datetime | None:

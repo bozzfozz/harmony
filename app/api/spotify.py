@@ -48,6 +48,7 @@ from app.schemas import (
     TrackDetailResponse,
     UserProfileResponse,
 )
+from app.services.cache import playlist_filters_hash
 from app.services.free_ingest_service import IngestSubmission, PlaylistValidationError
 from app.services.backfill_service import BackfillJobStatus
 from app.services.spotify_domain_service import (
@@ -176,7 +177,8 @@ def list_playlists(
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> PlaylistResponse | Response:
     playlists = list(service.list_playlists(db))
-    metadata = compute_playlist_collection_metadata(playlists)
+    filters_hash = playlist_filters_hash(request.url.query)
+    metadata = compute_playlist_collection_metadata(playlists, filters_hash=filters_hash)
 
     if is_request_not_modified(
         request,

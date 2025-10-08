@@ -21,6 +21,9 @@ from app.services.cache import (
     CacheEntry,
     ResponseCache,
     build_cache_key,
+    playlist_detail_cache_key,
+    playlist_filters_hash,
+    playlist_list_cache_key,
     resolve_auth_variant,
 )
 
@@ -40,6 +43,12 @@ def _compile_rules(rules: Iterable[CacheRule]) -> tuple[tuple[re.Pattern[str], C
             escaped = re.escape(pattern)
             compiled.append((re.compile(escaped), rule))
     return tuple(compiled)
+
+
+_PLAYLIST_LIST_PATTERN = re.compile(r"^/(?:[^/]+/)*spotify/playlists$")
+_PLAYLIST_DETAIL_PATTERN = re.compile(
+    r"^/(?:[^/]+/)*spotify/playlists/(?:\{[^/]+\}|[^/]+)(?:/tracks)?$"
+)
 
 
 class CacheMiddleware(BaseHTTPMiddleware):
@@ -84,7 +93,12 @@ class CacheMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return self._ensure_head_semantics(self._ensure_headers(response), method)
 
-        cache_key = self._build_cache_key(request, path_template)
+        cache_key = self._build_cache_key(
+            request,
+            path_template,
+            raw_path=raw_path,
+            trimmed_path=trimmed_path,
+        )
         try:
             cached = await self._cache.get(cache_key)
         except Exception:  # pragma: no cover - defensive guard
@@ -164,7 +178,23 @@ class CacheMiddleware(BaseHTTPMiddleware):
             return remainder or "/"
         return path
 
-    def _build_cache_key(self, request: Request, path_template: str) -> str:
+    def _build_cache_key(
+        self,
+        request: Request,
+        path_template: str,
+        *,
+        raw_path: str,
+        trimmed_path: str,
+    ) -> str:
+        special = self._build_playlist_cache_key(
+            request,
+            path_template=path_template,
+            raw_path=raw_path,
+            trimmed_path=trimmed_path,
+        )
+        if special is not None:
+            return special
+
         path_params = {key: str(value) for key, value in request.path_params.items()}
         auth_header = request.headers.get("authorization") or request.headers.get("x-api-key")
         auth_variant = resolve_auth_variant(auth_header)
@@ -176,6 +206,27 @@ class CacheMiddleware(BaseHTTPMiddleware):
             path_params=path_params,
             auth_variant=auth_variant,
         )
+
+    def _build_playlist_cache_key(
+        self,
+        request: Request,
+        *,
+        path_template: str,
+        raw_path: str,
+        trimmed_path: str,
+    ) -> str | None:
+        candidates = {path_template, raw_path, trimmed_path}
+        playlist_id = request.path_params.get("playlist_id")
+        for candidate in candidates:
+            if not candidate:
+                continue
+            normalized = candidate.rstrip("/") or "/"
+            if _PLAYLIST_LIST_PATTERN.fullmatch(normalized):
+                filters_hash = playlist_filters_hash(request.url.query)
+                return playlist_list_cache_key(filters_hash=filters_hash)
+            if _PLAYLIST_DETAIL_PATTERN.fullmatch(normalized) and playlist_id:
+                return playlist_detail_cache_key(str(playlist_id))
+        return None
 
     async def _store_and_return(
         self,
