@@ -3475,7 +3475,8 @@
   },
   "info": {
     "title": "Harmony Backend",
-    "version": "1.4.0"
+    "version": "1.4.0",
+    "x-schema-hash": "1c8cc8b5ba9e799f7121d329347dfc0c81de2b849e5a9369be71b5dc26f0d441"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3671,22 +3672,6 @@
           },
           {
             "in": "query",
-            "name": "type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Type"
-            }
-          },
-          {
-            "in": "query",
             "name": "status",
             "required": false,
             "schema": {
@@ -3699,6 +3684,22 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
             }
           }
         ],
@@ -3898,18 +3899,36 @@
           },
           {
             "in": "query",
-            "name": "type",
+            "name": "from",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "format": "date-time",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Type"
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
             }
           },
           {
@@ -3926,23 +3945,6 @@
                 }
               ],
               "title": "Status"
-            }
-          },
-          {
-            "in": "query",
-            "name": "from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "From"
             }
           },
           {
@@ -3964,19 +3966,18 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "type",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "minimum": 1,
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Limit"
+              "title": "Type"
             }
           }
         ],
@@ -4970,25 +4971,19 @@
         "parameters": [
           {
             "in": "query",
-            "name": "page",
+            "name": "from",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 25,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
             }
           },
           {
@@ -5021,6 +5016,29 @@
           },
           {
             "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "reason",
             "required": false,
             "schema": {
@@ -5033,23 +5051,6 @@
                 }
               ],
               "title": "Reason"
-            }
-          },
-          {
-            "in": "query",
-            "name": "from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "From"
             }
           },
           {
@@ -6336,6 +6337,16 @@
         "parameters": [
           {
             "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "All",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -6355,16 +6366,6 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "all",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "All",
-              "type": "boolean"
             }
           },
           {
@@ -6567,22 +6568,6 @@
           },
           {
             "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "in": "query",
             "name": "from",
             "required": false,
             "schema": {
@@ -6595,6 +6580,22 @@
                 }
               ],
               "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           },
           {
@@ -12980,15 +12981,6 @@
         "operationId": "soulseek_user_directory_api_v1_soulseek_user__username__directory_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "username",
-            "required": true,
-            "schema": {
-              "title": "Username",
-              "type": "string"
-            }
-          },
-          {
             "description": "Directory path to browse",
             "in": "query",
             "name": "path",
@@ -12996,6 +12988,15 @@
             "schema": {
               "description": "Directory path to browse",
               "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "title": "Username",
               "type": "string"
             }
           }
@@ -17161,15 +17162,6 @@
         "operationId": "get_playlist_items_api_v1_spotify_playlists__playlist_id__tracks_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "playlist_id",
-            "required": true,
-            "schema": {
-              "title": "Playlist Id",
-              "type": "string"
-            }
-          },
-          {
             "in": "query",
             "name": "limit",
             "required": false,
@@ -17179,6 +17171,15 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "string"
             }
           }
         ],
@@ -17554,18 +17555,14 @@
         "parameters": [
           {
             "in": "query",
-            "name": "seed_tracks",
+            "name": "limit",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Seed Tracks"
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           },
           {
@@ -17602,14 +17599,18 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "seed_tracks",
             "required": false,
             "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed Tracks"
             }
           }
         ],
