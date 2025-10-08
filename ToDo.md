@@ -75,12 +75,12 @@
   - [ ] CODX-P1-CONF-314 — Rework `_resolve_psutil` to honor overrides and add targeted unit tests.
 
 ## TD-20251008-005 Decache Spotify status responses on credential changes
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T07:45:00Z
 - **Tags:** cache, spotify, api
 - **Description:** Cache middleware caches all `/spotify/**` routes, so `/spotify/status` reports stale `pro_available` after credentials are cleared and search endpoints still execute. 【F:reports/analysis/backend_deep_scan.md†L48-L52】【5742eb†L610-L615】
 - **Acceptance Criteria:**
@@ -91,7 +91,7 @@
 - **Dependencies:** TD-20251008-004 (shared config review) for coordinated middleware changes.
 - **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; spotify gate test failure. 【F:reports/analysis/backend_deep_scan.md†L48-L52】【b45c06†L149-L167】
 - **Subtasks:**
-  - [ ] CODX-P1-SPOT-315 — Adjust cache rules or add busting hook for `/spotify/status` and add regression tests.
+  - [x] CODX-P1-SPOT-315 — Adjust cache rules or add busting hook for `/spotify/status` and add regression tests.
 
 ## TD-20251008-006 Repair playlist cache invalidation
 - **Status:** todo
