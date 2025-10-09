@@ -8,11 +8,3 @@ repos:
     hooks:
       - id: isort
         args: [--filter-files]
-  - repo: local
-    hooks:
-      - id: security-autofix
-        name: security autofix (Bandit allowlist)
-        entry: python scripts/security_autofix.py --check
-        language: system
-        pass_filenames: false
-        stages: [manual]

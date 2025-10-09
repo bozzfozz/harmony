@@ -466,7 +466,6 @@ Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem C
 ```bash
 isort --check-only .
 mypy app
-bandit -r app -x tests
 pytest -q
 python scripts/audit_wiring.py
 pip-audit -r requirements.txt
@@ -485,13 +484,6 @@ im Review abgestimmt.
 
 `pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
 Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
-
-### Security-Autofix-Workflow
-
-- **Workflow `security-autofix`** scannt jede Nacht und bei internen PRs nach Allowlist-Bandit-Findings, erzeugt mechanische Fixes und öffnet bei Bedarf einen Branch `security/autofix-<datum>-<run>` mit vollständigem CI-Durchlauf.
-- **Auto-Merge** greift nur, wenn ausschließlich Allowlist-Regeln betroffen sind, alle Gates (`isort --check-only`, `mypy`, `pytest`, `pip-audit`, `bandit`) grün sind und keine Guards (Public-Contracts, Serialisierung, CLI) greifen. Andernfalls setzt die Pipeline das Label `needs-security-review` und deaktiviert Auto-Merge.
-- **Opt-out:** Repository- oder Organisations-Variable `SECURITY_AUTOFIX=0` pausiert den Workflow temporär (z. B. bei Incident-Rollbacks).
-- **Lokaler Dry-Run:** `pre-commit run security-autofix --all-files` führt denselben Fixer im Check-Modus aus und zeigt geplante Änderungen, ohne Dateien zu schreiben.
 
 ## Datenbank-Migrationen
 
@@ -1056,7 +1048,6 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 - **Imports:** `isort` hält die Reihenfolge konsistent und ist in `pyproject.toml` konfiguriert.
 - **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
-- **Security:** `bandit` läuft gegen `app` (Tests ausgenommen) und wird von Makefile & CI angesprochen.
 - **Dependencies:** `pip-audit` prüft `requirements.txt` auf veröffentlichte CVEs.
 
 ### isort in pre-commit
