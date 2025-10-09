@@ -17,6 +17,8 @@ except ImportError:  # pragma: no cover - compatibility
 
 from app.db import Base
 
+UTC_NOW = text("timezone('utc', now())")
+
 
 class User(Base):
     __tablename__ = "users"
@@ -453,18 +455,26 @@ class QueueJob(Base):
     payload = Column("payload_json", JSON, nullable=False, default=dict)
     priority = Column(Integer, nullable=False, default=0)
     attempts = Column(Integer, nullable=False, default=0)
-    available_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    available_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=UTC_NOW,
+    )
     lease_expires_at = Column(DateTime, nullable=True)
     idempotency_key = Column(String(128), nullable=True)
     last_error = Column(Text, nullable=True)
     stop_reason = Column(String(64), nullable=True)
     result_payload = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=UTC_NOW,
+    )
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
         nullable=False,
+        server_default=UTC_NOW,
+        server_onupdate=UTC_NOW,
     )
 
 
