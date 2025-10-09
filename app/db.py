@@ -30,7 +30,6 @@ metadata = Base.metadata
 
 _engine: Optional[Engine] = None
 SessionLocal: Optional[sessionmaker[Session]] = None
-_configured_database_url: Optional[str] = None
 _initializing_db: bool = False
 
 _logger = logging.getLogger(__name__)
@@ -48,11 +47,11 @@ def _build_engine(database_url: str) -> Engine:
 
 
 def _ensure_engine(*, auto_init: bool = True) -> None:
-    global _engine, SessionLocal, _configured_database_url, _initializing_db
+    global _engine, SessionLocal, _initializing_db
 
     config = load_config()
     database_url = config.database.url
-    if _engine is not None and database_url == _configured_database_url:
+    if _engine is not None and str(_engine.url) == database_url:
         return
 
     if _engine is not None:
@@ -65,8 +64,6 @@ def _ensure_engine(*, auto_init: bool = True) -> None:
         autocommit=False,
         expire_on_commit=False,
     )
-    _configured_database_url = database_url
-
     if auto_init and not _initializing_db:
         init_db()
 
@@ -110,7 +107,7 @@ def init_db() -> None:
 
             Base.metadata.create_all(bind=_engine, checkfirst=True)
         else:
-            config = _configure_alembic(_configured_database_url or str(_engine.url))
+            config = _configure_alembic(str(_engine.url))
             command.upgrade(config, "head")
     finally:
         _initializing_db = False
@@ -119,14 +116,13 @@ def init_db() -> None:
 def reset_engine_for_tests() -> None:
     """Reset the cached engine/session so tests get a clean database handle."""
 
-    global _engine, SessionLocal, _configured_database_url, _initializing_db
+    global _engine, SessionLocal, _initializing_db
 
     if _engine is not None:
         _engine.dispose()
 
     _engine = None
     SessionLocal = None
-    _configured_database_url = None
     _initializing_db = False
 
 

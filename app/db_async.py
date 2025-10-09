@@ -16,12 +16,9 @@ _configured_async_url: str | None = None
 def _to_async_url(database_url: str) -> str:
     url = make_url(database_url)
     driver = url.drivername
-    if "psycopg" in driver:
-        async_url = url.set(drivername="postgresql+asyncpg")
-    elif driver.startswith("postgresql"):
-        async_url = url.set(drivername="postgresql+asyncpg")
-    else:
-        return database_url
+    if not driver.startswith("postgresql"):
+        raise ValueError(f"Unsupported database driver for async engine: {driver}")
+    async_url = url.set(drivername="postgresql+asyncpg")
     return async_url.render_as_string(hide_password=False)
 
 
