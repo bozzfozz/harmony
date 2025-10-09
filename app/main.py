@@ -38,6 +38,9 @@ from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
 
+DependencyProbe = Callable[[], DependencyStatus]
+DependencyProbeMap = Mapping[str, DependencyProbe]
+
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
 
@@ -78,7 +81,7 @@ def _ensure_orchestrator_status(app: FastAPI) -> dict[str, Any]:
     return status
 
 
-def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStatus]:
+def _orchestrator_component_probe(component: str) -> DependencyProbe:
     def _probe() -> DependencyStatus:
         status = getattr(app.state, "orchestrator_status", None)
         if status is None:
@@ -112,9 +115,7 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
     return _probe
 
 
-def _build_orchestrator_dependency_probes() -> (
-    Mapping[str, Callable[[], DependencyStatus]]
-):
+def _build_orchestrator_dependency_probes() -> DependencyProbeMap:
     jobs = (
         "sync",
         "matching",
@@ -126,7 +127,7 @@ def _build_orchestrator_dependency_probes() -> (
         "artwork",
         "lyrics",
     )
-    probes: dict[str, Callable[[], DependencyStatus]] = {
+    probes: dict[str, DependencyProbe] = {
         "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
         "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),
         "orchestrator:timer:watchlist": _orchestrator_component_probe(
