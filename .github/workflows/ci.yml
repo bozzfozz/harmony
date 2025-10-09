@@ -33,8 +33,8 @@ jobs:
             echo "has_frontend=false" >>"$GITHUB_OUTPUT"
           fi
 
-  ci-backend:
-    name: ci-backend
+  tests:
+    name: tests
     runs-on: ubuntu-latest
     env:
       RUN_POSTGRES_TESTS: "0"
@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -71,31 +73,25 @@ jobs:
 
       - name: Pytest (unit + coverage)
         env:
-          PYTEST_ADDOPTS: "-m 'not postgres'"
+          PYTEST_ADDOPTS: "-m 'not postgres' -r s"
         run: |
           mkdir -p reports
           pytest \
+            -q \
             --junitxml=reports/junit.xml \
             --cov=app \
             --cov-report=xml:reports/coverage.xml \
-            --cov-report=term \
-            --cov-fail-under=85
+            --cov-report=term
 
       - name: pip-audit (dependencies)
         run: pip-audit -r requirements.txt
 
-      - name: Upload coverage artifact
+      - name: Upload test reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage
-          path: reports/coverage.xml
-          retention-days: 7
-
-      - name: Upload junit artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-tests
-          path: reports/junit.xml
+          name: test-reports
+          path: reports/
           retention-days: 7
 
   ci-frontend:
@@ -103,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - detect-frontend
-      - ci-backend
+      - tests
     if: ${{ needs.detect-frontend.outputs.has_frontend == 'true' }}
     defaults:
       run:
@@ -130,3 +126,54 @@ jobs:
 
       - name: Test
         run: npm test -- --runInBand
+
+  diff-coverage:
+    name: diff-coverage
+    runs-on: ubuntu-latest
+    needs:
+      - tests
+    env:
+      PYTHON_VERSION: "3.11"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install diff coverage tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install diff-cover==9.2.0
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: .
+
+      - name: Fetch base branch
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+          else
+            git fetch origin main --depth=1 || true
+          fi
+
+      - name: Diff coverage gate
+        env:
+          DIFF_COVER_COMPARE_BRANCH: ${{ github.base_ref != '' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+        run: |
+          python scripts/run_diff_coverage_gate.py
+
+      - name: Upload diff coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-coverage-report
+          path: reports/diff_coverage.txt
+          retention-days: 7
