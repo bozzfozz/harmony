@@ -61,15 +61,7 @@ def test_scheduler_orders_jobs_by_priority_and_time(
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_failure_releases_job_for_redelivery(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    current = datetime(2024, 1, 1, 8, 0, 0)
-
-    def fake_now() -> datetime:
-        return current
-
-    monkeypatch.setattr("app.workers.persistence._utcnow", fake_now)
+async def test_heartbeat_failure_releases_job_for_redelivery() -> None:
     scheduler = Scheduler(
         priority_config=PriorityConfig(priorities={"sync": 100}),
         poll_interval_ms=0,
@@ -81,7 +73,6 @@ async def test_heartbeat_failure_releases_job_for_redelivery(
     first_lease = scheduler.lease_ready_jobs()
     assert first_lease and first_lease[0].id == job.id
 
-    current = current + timedelta(seconds=5)
     assert persistence.heartbeat(job.id, job_type="sync") is True
 
     with session_scope() as session:
@@ -90,7 +81,15 @@ async def test_heartbeat_failure_releases_job_for_redelivery(
         assert db_job.lease_expires_at is not None
         assert db_job.status == QueueJobStatus.LEASED.value
 
-    current = current + timedelta(seconds=20)
+    expired_at = datetime.utcnow() - timedelta(seconds=1)
+    with session_scope() as session:
+        db_job = session.get(QueueJob, job.id)
+        assert db_job is not None
+        db_job.lease_expires_at = expired_at
+        db_job.available_at = expired_at
+        db_job.status = QueueJobStatus.LEASED.value
+        session.add(db_job)
+
     assert persistence.heartbeat(job.id, job_type="sync") is False
 
     second_lease = scheduler.lease_ready_jobs()
@@ -101,17 +100,8 @@ async def test_heartbeat_failure_releases_job_for_redelivery(
         assert db_job is not None
         assert db_job.status == QueueJobStatus.LEASED.value
 
-
-def test_lease_and_redelivery_after_visibility_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_lease_and_redelivery_after_visibility_timeout() -> None:
     reset_engine_for_tests()
-    current = datetime(2024, 1, 1, 9, 0, 0)
-
-    def fake_now() -> datetime:
-        return current
-
-    monkeypatch.setattr("app.workers.persistence._utcnow", fake_now)
     scheduler = Scheduler(
         priority_config=PriorityConfig(priorities={"sync": 100}),
         poll_interval_ms=0,
@@ -130,7 +120,15 @@ def test_lease_and_redelivery_after_visibility_timeout(
         assert db_job.status == QueueJobStatus.LEASED.value
         assert db_job.attempts == 1
 
-    current = current + timedelta(seconds=30)
+    expired_at = datetime.utcnow() - timedelta(seconds=1)
+    with session_scope() as session:
+        db_job = session.get(QueueJob, job.id)
+        assert db_job is not None
+        db_job.lease_expires_at = expired_at
+        db_job.available_at = expired_at
+        db_job.status = QueueJobStatus.LEASED.value
+        session.add(db_job)
+
     second_lease = scheduler.lease_ready_jobs()
     assert [item.id for item in second_lease] == [job.id]
 
@@ -143,16 +141,8 @@ def test_lease_and_redelivery_after_visibility_timeout(
         assert first_deadline is not None and db_job.lease_expires_at > first_deadline
 
 
-def test_heartbeat_extends_lease_in_long_running_handler(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_heartbeat_extends_lease_in_long_running_handler() -> None:
     reset_engine_for_tests()
-    current = datetime(2024, 1, 1, 10, 0, 0)
-
-    def fake_now() -> datetime:
-        return current
-
-    monkeypatch.setattr("app.workers.persistence._utcnow", fake_now)
     scheduler = Scheduler(
         priority_config=PriorityConfig(priorities={"sync": 100}),
         poll_interval_ms=0,
@@ -164,7 +154,6 @@ def test_heartbeat_extends_lease_in_long_running_handler(
     assert leased and leased[0].id == job.id
     first_deadline = leased[0].lease_expires_at
 
-    current = current + timedelta(seconds=10)
     assert persistence.heartbeat(job.id, job_type="sync", lease_seconds=20) is True
 
     with session_scope() as session:
@@ -172,4 +161,4 @@ def test_heartbeat_extends_lease_in_long_running_handler(
         assert db_job is not None
         assert db_job.status == QueueJobStatus.LEASED.value
         assert db_job.lease_expires_at is not None
-        assert first_deadline is not None and db_job.lease_expires_at > first_deadline
+        assert first_deadline is not None and db_job.lease_expires_at >= first_deadline

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Iterable, List, Mapping, Sequence
 
-from sqlalchemy import Select, bindparam, case, func, or_, select, text, update
+from sqlalchemy import Select, bindparam, case, func, insert, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -368,23 +368,31 @@ def enqueue(
                 scheduled_for=scheduled_for,
             )
         else:
-            now = _utcnow()
-            record = QueueJob(
-                type=job_type,
-                payload=payload_dict,
-                priority=resolved_priority,
-                available_at=scheduled_for or now,
-                idempotency_key=None,
-                status=QueueJobStatus.PENDING.value,
-                stop_reason=None,
-                lease_expires_at=None,
-                last_error=None,
-                result_payload=None,
-                attempts=0,
-                created_at=now,
-                updated_at=now,
+            now_expr = func.now()
+            insert_stmt = (
+                insert(QueueJob)
+                .values(
+                    type=job_type,
+                    payload=payload_dict,
+                    priority=resolved_priority,
+                    available_at=scheduled_for or now_expr,
+                    idempotency_key=None,
+                    status=QueueJobStatus.PENDING.value,
+                    stop_reason=None,
+                    lease_expires_at=None,
+                    last_error=None,
+                    result_payload=None,
+                    attempts=0,
+                    created_at=now_expr,
+                    updated_at=now_expr,
+                )
+                .returning(QueueJob.id)
             )
-            session.add(record)
+            result = session.execute(insert_stmt)
+            inserted_id = result.scalar_one()
+            record = session.get(QueueJob, inserted_id)
+            if record is None:
+                raise RuntimeError("Queue job record missing after insert")
             deduped = False
 
         dto = _refresh_instance(session, record)
@@ -572,21 +580,29 @@ def complete(
 ) -> bool:
     """Mark a leased job as completed."""
 
-    now = _utcnow()
     dto: QueueJobDTO | None = None
     with session_scope() as session:
-        record = session.get(QueueJob, job_id)
-        if record is None or record.type != job_type:
+        payload_value = dict(result_payload or {}) or None
+        update_stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+            )
+            .values(
+                status=QueueJobStatus.COMPLETED.value,
+                lease_expires_at=None,
+                last_error=None,
+                result_payload=payload_value,
+                stop_reason=None,
+                updated_at=func.now(),
+            )
+            .returning(QueueJob)
+        )
+        record = session.execute(update_stmt).scalars().first()
+        if record is None:
             return False
-
-        record.status = QueueJobStatus.COMPLETED.value
-        record.lease_expires_at = None
-        record.last_error = None
-        record.result_payload = dict(result_payload or {}) or None
-        record.stop_reason = None
-        record.updated_at = now
-        session.add(record)
-        dto = _refresh_instance(session, record)
+        dto = _to_dto(record)
     if dto is None:
         raise RuntimeError("Queue job refresh failed after completion.")
     _emit_worker_job_event(dto, "completed", has_result=dto.result_payload is not None)
@@ -604,27 +620,43 @@ def fail(
 ) -> bool:
     """Mark a job as failed or requeue it for another attempt."""
 
-    now = _utcnow()
     with session_scope() as session:
-        record = session.get(QueueJob, job_id)
-        if record is None or record.type != job_type:
-            return False
-
-        record.last_error = error
-        record.updated_at = now
-        record.lease_expires_at = None
+        now_expr = func.now()
+        params: dict[str, Any] = {}
+        values: dict[str, Any] = {
+            "last_error": error,
+            "updated_at": now_expr,
+            "lease_expires_at": None,
+        }
 
         if retry_in is not None or available_at is not None:
-            delay = max(0, int(retry_in or 0))
-            next_available = available_at or (now + timedelta(seconds=delay))
-            record.available_at = next_available
-            record.status = QueueJobStatus.PENDING.value
-            record.stop_reason = None
+            values["status"] = QueueJobStatus.PENDING.value
+            values["stop_reason"] = None
+            if available_at is not None:
+                values["available_at"] = available_at
+            else:
+                values["available_at"] = now_expr + func.make_interval(
+                    secs=bindparam("retry_delay")
+                )
+                params["retry_delay"] = max(0, int(retry_in or 0))
         else:
-            record.status = QueueJobStatus.FAILED.value
-            record.stop_reason = stop_reason
-        session.add(record)
-        return True
+            values["status"] = QueueJobStatus.FAILED.value
+            values["stop_reason"] = stop_reason
+
+        update_stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+            )
+            .values(**values)
+        )
+        execution_params = params if params else None
+        if execution_params is None:
+            result = session.execute(update_stmt)
+        else:
+            result = session.execute(update_stmt, execution_params)
+        return bool(result.rowcount)
 
 
 def to_dlq(
@@ -636,21 +668,29 @@ def to_dlq(
 ) -> bool:
     """Move a job to the dead-letter queue state."""
 
-    now = _utcnow()
     dto: QueueJobDTO | None = None
     with session_scope() as session:
-        record = session.get(QueueJob, job_id)
-        if record is None or record.type != job_type:
+        payload_value = dict(payload or {}) or None
+        update_stmt = (
+            update(QueueJob)
+            .where(
+                QueueJob.id == job_id,
+                QueueJob.type == job_type,
+            )
+            .values(
+                status=QueueJobStatus.CANCELLED.value,
+                lease_expires_at=None,
+                last_error=reason,
+                result_payload=payload_value,
+                stop_reason=reason,
+                updated_at=func.now(),
+            )
+            .returning(QueueJob)
+        )
+        record = session.execute(update_stmt).scalars().first()
+        if record is None:
             return False
-
-        record.status = QueueJobStatus.CANCELLED.value
-        record.lease_expires_at = None
-        record.last_error = reason
-        record.result_payload = dict(payload or {}) or None
-        record.stop_reason = reason
-        record.updated_at = now
-        session.add(record)
-        dto = _refresh_instance(session, record)
+        dto = _to_dto(record)
     if dto is None:
         raise RuntimeError("Queue job refresh failed after moving to dead-letter queue.")
     _emit_worker_job_event(dto, "dead_letter", stop_reason=reason)
