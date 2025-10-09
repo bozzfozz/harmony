@@ -16,9 +16,13 @@ def test_cooldown_field_exists_and_index_present() -> None:
     with session_scope() as session:
         engine = session.get_bind()
         inspector = inspect(engine)
-        columns = {column["name"] for column in inspector.get_columns("watchlist_artists")}
+        columns = {
+            column["name"] for column in inspector.get_columns("watchlist_artists")
+        }
         assert "retry_block_until" in columns
-        indexes = {index["name"] for index in inspector.get_indexes("watchlist_artists")}
+        indexes = {
+            index["name"] for index in inspector.get_indexes("watchlist_artists")
+        }
         assert "ix_watchlist_retry_block_until" in indexes
 
 

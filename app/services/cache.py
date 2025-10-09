@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections import OrderedDict
-from dataclasses import dataclass
 import hashlib
 import json
 import re
 import time
+from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Callable, Iterable, Mapping
 from urllib.parse import parse_qsl
 
@@ -111,7 +111,9 @@ class ResponseCache:
                 return None
             raise
 
-    async def set(self, key: str, entry: CacheEntry, *, ttl: float | None = None) -> None:
+    async def set(
+        self, key: str, entry: CacheEntry, *, ttl: float | None = None
+    ) -> None:
         ttl_value = self._resolve_ttl(ttl)
         try:
             async with self._lock:
@@ -170,7 +172,9 @@ class ResponseCache:
                 removed = [self._cache.pop(key, None) for key in keys]
                 removed = [entry for entry in removed if entry is not None]
                 count = len(removed)
-            operation = "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
+            operation = (
+                "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
+            )
             status = "evicted" if count else "noop"
             fields: dict[str, object] = {
                 "key_hash": prefix,
@@ -234,7 +238,9 @@ class ResponseCache:
             async with self._lock:
                 matching_keys = [key for key in self._cache if compiled.search(key)]
                 removed_entries = [self._cache.pop(key, None) for key in matching_keys]
-                removed_entries = [entry for entry in removed_entries if entry is not None]
+                removed_entries = [
+                    entry for entry in removed_entries if entry is not None
+                ]
                 count = len(removed_entries)
             operation = "evict" if reason or entity_id else "invalidate"
             status = "evicted" if count else "noop"
@@ -346,7 +352,13 @@ def build_cache_key(
 
     query_hash = build_query_hash(query_string)
     path_hash = build_path_param_hash(path_params)
-    segments = [method.upper(), path_template, path_hash, query_hash, auth_variant or "anon"]
+    segments = [
+        method.upper(),
+        path_template,
+        path_hash,
+        query_hash,
+        auth_variant or "anon",
+    ]
     return ":".join(segments)
 
 
@@ -367,11 +379,15 @@ def playlist_filters_hash(query_string: str) -> str:
     return build_query_hash(query_string)
 
 
-def playlist_list_cache_key(*, query_string: str = "", filters_hash: str | None = None) -> str:
+def playlist_list_cache_key(
+    *, query_string: str = "", filters_hash: str | None = None
+) -> str:
     """Construct the canonical cache key for playlist collection responses."""
 
     resolved_hash = (
-        filters_hash if filters_hash is not None else playlist_filters_hash(query_string)
+        filters_hash
+        if filters_hash is not None
+        else playlist_filters_hash(query_string)
     )
     return f"{PLAYLIST_LIST_CACHE_PREFIX}:{resolved_hash}"
 

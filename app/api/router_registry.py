@@ -159,7 +159,8 @@ def register_all(
     if emit_log:
         duration_ms = (perf_counter() - start) * 1_000
         preview = [
-            compose_prefix(effective_base, entry.prefix) or "/" for entry in _registry.values()
+            compose_prefix(effective_base, entry.prefix) or "/"
+            for entry in _registry.values()
         ][:5]
         if len(_registry) > 5:
             preview.append("…")
@@ -180,7 +181,14 @@ def register_all(
 # Built-in router registrations
 # ---------------------------------------------------------------------------
 
-from app.api import artists, search, spotify, spotify_free_links, system, watchlist  # noqa: E402
+from app.api import (  # noqa: E402
+    artists,
+    search,
+    spotify,
+    spotify_free_links,
+    system,
+    watchlist,
+)
 from app.routers import (  # noqa: E402
     activity_router,
     dlq_router,

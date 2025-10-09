@@ -150,7 +150,9 @@ def test_from_slskd_album_details_derives_metadata_from_tracks() -> None:
         }
     )
 
-    details = from_slskd_album_details({"id": "rel-1", "title": "Live Bootleg"}, tracks=[track])
+    details = from_slskd_album_details(
+        {"id": "rel-1", "title": "Live Bootleg"}, tracks=[track]
+    )
 
     assert details.source == "slskd"
     assert details.album.name == "Live Bootleg"

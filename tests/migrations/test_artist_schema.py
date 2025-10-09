@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from alembic import command
 import pytest
 import sqlalchemy as sa
+from alembic import command
 
 from tests.support.postgres import postgres_schema
 
@@ -23,17 +23,21 @@ def test_migration_adds_inactive_columns_and_audit_table() -> None:
             inspector = sa.inspect(engine)
 
             release_columns = {
-                column["name"]: column for column in inspector.get_columns("artist_releases")
+                column["name"]: column
+                for column in inspector.get_columns("artist_releases")
             }
             assert {"inactive_at", "inactive_reason"} <= release_columns.keys()
             assert isinstance(release_columns["inactive_at"]["type"], sa.DateTime)
             assert isinstance(release_columns["inactive_reason"]["type"], sa.Text)
 
-            release_indexes = {index["name"] for index in inspector.get_indexes("artist_releases")}
+            release_indexes = {
+                index["name"] for index in inspector.get_indexes("artist_releases")
+            }
             assert "ix_artist_releases_inactive_at" in release_indexes
 
             audit_columns = {
-                column["name"]: column for column in inspector.get_columns("artist_audit")
+                column["name"]: column
+                for column in inspector.get_columns("artist_audit")
             }
             expected = {
                 "created_at",
@@ -49,7 +53,9 @@ def test_migration_adds_inactive_columns_and_audit_table() -> None:
             assert isinstance(job_id_type, sa.String)
             assert job_id_type.length == 64
 
-            audit_indexes = {index["name"] for index in inspector.get_indexes("artist_audit")}
+            audit_indexes = {
+                index["name"] for index in inspector.get_indexes("artist_audit")
+            }
             assert {
                 "ix_artist_audit_artist_key",
                 "ix_artist_audit_event",

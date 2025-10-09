@@ -81,7 +81,10 @@ def test_e2e_download_dispatcher_executes(client) -> None:
     activity_response = client.get("/activity")
     assert activity_response.status_code == 200
     activity_items = activity_response.json()["items"]
-    assert any(item["type"] == "download" and item["status"] == "queued" for item in activity_items)
+    assert any(
+        item["type"] == "download" and item["status"] == "queued"
+        for item in activity_items
+    )
 
 
 @pytest.mark.lifespan_workers

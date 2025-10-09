@@ -3,8 +3,8 @@ from typing import Callable, Sequence
 
 import pytest
 
-from app import dependencies as deps
 import app.api.admin_artists as admin_api
+from app import dependencies as deps
 from app.api.admin_artists import (
     AdminContext,
     _unregister_admin_routes,
@@ -38,10 +38,15 @@ class StubGateway:
 
 
 def _make_gateway_response(
-    releases: Sequence[ProviderRelease], *, provider: str = "spotify", artist_id: str = "alpha"
+    releases: Sequence[ProviderRelease],
+    *,
+    provider: str = "spotify",
+    artist_id: str = "alpha",
 ) -> ArtistGatewayResponse:
     artist = ProviderArtist(source=provider, name="Alpha", source_id=artist_id)
-    result = ArtistGatewayResult(provider=provider, artist=artist, releases=tuple(releases))
+    result = ArtistGatewayResult(
+        provider=provider, artist=artist, releases=tuple(releases)
+    )
     return ArtistGatewayResponse(artist_id=artist_id, results=(result,))
 
 
@@ -61,7 +66,9 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     original_cache_write_through = getattr(app.state, "cache_write_through", None)
     original_cache_log_evictions = getattr(app.state, "cache_log_evictions", None)
     original_openapi_config = getattr(app.state, "openapi_config", None)
-    original_admin_registered = bool(getattr(app.state, "admin_artists_registered", False))
+    original_admin_registered = bool(
+        getattr(app.state, "admin_artists_registered", False)
+    )
 
     for key, value in overrides.items():
         monkeypatch.setenv(key, value)
@@ -104,13 +111,17 @@ def install_context(
     ) -> tuple[AdminContext, ArtistDao]:
         config = deps.get_app_config()
         dao = ArtistDao()
-        deps_instance = ArtistSyncHandlerDeps(gateway=gateway, dao=dao, response_cache=cache)
+        deps_instance = ArtistSyncHandlerDeps(
+            gateway=gateway, dao=dao, response_cache=cache
+        )
         context = AdminContext(config=config, deps=deps_instance, cache=cache)
 
         def _override(_ctx=context):  # type: ignore[no-untyped-def]
             return _ctx
 
-        monkeypatch.setitem(app.dependency_overrides, admin_api._build_context, _override)
+        monkeypatch.setitem(
+            app.dependency_overrides, admin_api._build_context, _override
+        )
         return context, dao
 
     return _installer
@@ -131,7 +142,9 @@ def _make_release(source_id: str = "rel-1", title: str = "First") -> ProviderRel
 
 
 def test_admin_dry_run_shows_delta_no_side_effects(
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     response = _make_gateway_response([_make_release()])
     gateway = StubGateway(response)
@@ -153,7 +166,9 @@ def test_admin_dry_run_shows_delta_no_side_effects(
 
 
 def test_admin_apply_reconcile_updates_and_audits(
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     response = _make_gateway_response([_make_release()])
     gateway = StubGateway(response)
@@ -184,7 +199,9 @@ def test_admin_apply_reconcile_updates_and_audits(
 
 
 def test_admin_resync_enqueues_with_priority_and_lock_guard(
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     response = _make_gateway_response([])
     gateway = StubGateway(response)
@@ -222,7 +239,9 @@ def test_admin_resync_enqueues_with_priority_and_lock_guard(
 
 
 def test_admin_audit_lists_recent_events_paginated(
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     response = _make_gateway_response(
         [_make_release(), _make_release(source_id="rel-2", title="Second")]
@@ -255,11 +274,15 @@ def test_admin_audit_lists_recent_events_paginated(
 
 
 def test_admin_invalidate_busts_cache_etag(
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     response = _make_gateway_response([])
     gateway = StubGateway(response)
-    cache = ResponseCache(max_items=8, default_ttl=60, write_through=True, log_evictions=False)
+    cache = ResponseCache(
+        max_items=8, default_ttl=60, write_through=True, log_evictions=False
+    )
     app.state.response_cache = cache
     install_context(gateway, cache=cache)
 
@@ -300,7 +323,9 @@ def test_admin_invalidate_busts_cache_etag(
 
 def test_admin_safety_checks_retry_budget_and_staleness(
     monkeypatch: pytest.MonkeyPatch,
-    install_context: Callable[[StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]],
+    install_context: Callable[
+        [StubGateway, ResponseCache | None], tuple[AdminContext, ArtistDao]
+    ],
 ) -> None:
     monkeypatch.setenv("ARTIST_STALENESS_MAX_MIN", "1")
     monkeypatch.setenv("ARTIST_RETRY_BUDGET_MAX", "1")
@@ -329,7 +354,9 @@ def test_admin_safety_checks_retry_budget_and_staleness(
         ]
     )
     with session_scope() as session:
-        artist = session.query(ArtistRecord).filter_by(artist_key="spotify:alpha").first()
+        artist = (
+            session.query(ArtistRecord).filter_by(artist_key="spotify:alpha").first()
+        )
         assert artist is not None
         artist.updated_at = datetime.utcnow() - timedelta(minutes=10)
         session.add(artist)

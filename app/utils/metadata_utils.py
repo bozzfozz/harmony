@@ -52,7 +52,9 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
 
     client = SPOTIFY_CLIENT
     if client is None:
-        logger.debug("Spotify metadata requested for %s but no client configured", track_id)
+        logger.debug(
+            "Spotify metadata requested for %s but no client configured", track_id
+        )
         return {}
 
     metadata: Dict[str, str] = {}
@@ -101,7 +103,9 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
     try:
         supplemental = client.get_track_metadata(track_id)
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.debug("Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc)
+        logger.debug(
+            "Supplemental Spotify metadata lookup failed for %s: %s", track_id, exc
+        )
     else:
         for key, value in supplemental.items():
             if key not in TAG_FIELDS and key != "artwork_url":
@@ -151,7 +155,9 @@ def write_metadata_tags(audio_file: Path, metadata: Dict[str, Any]) -> None:
         raise
 
 
-def _merge_metadata_value(metadata: Dict[str, str], key: str, value: Optional[str]) -> None:
+def _merge_metadata_value(
+    metadata: Dict[str, str], key: str, value: Optional[str]
+) -> None:
     if value and key not in metadata:
         metadata[key] = value
 

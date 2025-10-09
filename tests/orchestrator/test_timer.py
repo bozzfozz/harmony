@@ -80,7 +80,9 @@ async def test_trigger_enqueues_due_artists(monkeypatch):
         logged.append((event, meta))
 
     monkeypatch.setattr("app.orchestrator.events.log_event", fake_log)
-    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(
+        "app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0
+    )
 
     artists = [
         ArtistWorkflowArtistRow(
@@ -187,7 +189,9 @@ async def test_trigger_disabled_logs(monkeypatch):
         events.append(meta)
 
     monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
-    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(
+        "app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0
+    )
 
     timer = WatchlistTimer(config=_build_config(), enabled=False, dao=RecordingDAO([]))
 
@@ -210,7 +214,9 @@ async def test_trigger_skips_when_busy(monkeypatch):
         captured.append(meta)
 
     monkeypatch.setattr("app.orchestrator.events.log_event", capture_log)
-    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(
+        "app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0
+    )
 
     timer = WatchlistTimer(config=_build_config(), dao=RecordingDAO([]))
 

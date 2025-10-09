@@ -41,7 +41,9 @@ CACHEABLE_RESPONSES: Final[Mapping[int, Mapping[str, object]]] = {
             "include an Age header. The `/spotify/status` endpoint bypasses the "
             "response cache so credential changes are reflected immediately."
         ),
-        "headers": {key: value for key, value in _CACHE_POLICY_HEADERS.items() if key != "Age"},
+        "headers": {
+            key: value for key, value in _CACHE_POLICY_HEADERS.items() if key != "Age"
+        },
     },
     304: {
         "description": _CACHE_HEADERS_DESCRIPTION,

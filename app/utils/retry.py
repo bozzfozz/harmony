@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import random
+from dataclasses import dataclass
 from typing import Awaitable, Callable, TypeVar
 
 T = TypeVar("T")
@@ -45,7 +45,9 @@ def exp_backoff_delays(base_ms: int, max_attempts: int, jitter_pct: int) -> list
     return delays
 
 
-def _resolve_directive(result: RetryDirective | bool, error: Exception) -> RetryDirective:
+def _resolve_directive(
+    result: RetryDirective | bool, error: Exception
+) -> RetryDirective:
     if isinstance(result, RetryDirective):
         resolved_error = result.error if result.error is not None else error
         return RetryDirective(

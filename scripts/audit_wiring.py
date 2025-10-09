@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -102,7 +102,9 @@ def main() -> int:
                     continue
                 if line_is_allowed(relative_path, line):
                     continue
-                violations.append(f"{relative_path}:{index}: forbidden reference '{label}'")
+                violations.append(
+                    f"{relative_path}:{index}: forbidden reference '{label}'"
+                )
                 break
 
     violations.extend(_check_alembic_reset_guard())

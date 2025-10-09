@@ -37,7 +37,9 @@ async def test_dispatcher_sends_job_to_dlq_after_max_retries(
         backoff_base_ms=250,
         jitter_pct=0.2,
     )
-    job = queue_job_factory(job_id=11, job_type="sync", attempts=2, lease_timeout_seconds=30)
+    job = queue_job_factory(
+        job_id=11, job_type="sync", attempts=2, lease_timeout_seconds=30
+    )
     scheduler = _StubScheduler([job])
 
     async def failing_handler(job):  # type: ignore[no-untyped-def]

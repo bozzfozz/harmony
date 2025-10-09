@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
 import contextlib
-from dataclasses import dataclass
 import random
 import time
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.config import ExternalCallPolicy, OrchestratorConfig, settings
@@ -72,7 +72,9 @@ def default_handlers(
     if watchlist_deps is not None:
         handlers["watchlist"] = build_watchlist_handler(watchlist_deps)
     if artist_refresh_deps is not None:
-        handlers[ARTIST_REFRESH_JOB_TYPE] = build_artist_refresh_handler(artist_refresh_deps)
+        handlers[ARTIST_REFRESH_JOB_TYPE] = build_artist_refresh_handler(
+            artist_refresh_deps
+        )
     if artist_delta_deps is not None:
         scan_handler = build_artist_scan_handler(artist_delta_deps)
         handlers[ARTIST_SCAN_JOB_TYPE] = scan_handler
@@ -143,7 +145,9 @@ class Dispatcher:
             ),
         )
         jitter_value = (
-            policy.jitter_pct if policy.jitter_pct is not None else _DEFAULT_JITTER_PCT / 100
+            policy.jitter_pct
+            if policy.jitter_pct is not None
+            else _DEFAULT_JITTER_PCT / 100
         )
         if jitter_value < 0:
             jitter_value = 0
@@ -278,7 +282,9 @@ class Dispatcher:
                 stop_heartbeat.set()
                 lease_lost_event = lease_lost_signal
                 lease_lost = (
-                    bool(lease_lost_event.is_set()) if lease_lost_event is not None else False
+                    bool(lease_lost_event.is_set())
+                    if lease_lost_event is not None
+                    else False
                 )
                 await self._handle_failure(job, exc, start, lease_lost=lease_lost)
             else:
@@ -323,7 +329,9 @@ class Dispatcher:
         duration_ms = int((time.perf_counter() - start) * 1000)
         attempts = int(job.attempts)
         if not exc.retry and exc.stop_reason:
-            payload = exc.result_payload if isinstance(exc.result_payload, Mapping) else None
+            payload = (
+                exc.result_payload if isinstance(exc.result_payload, Mapping) else None
+            )
             self._persistence.to_dlq(
                 job.id,
                 job_type=job.type,
@@ -475,7 +483,9 @@ class Dispatcher:
         )
 
     def _heartbeat_interval(self, job: persistence.QueueJobDTO) -> float:
-        timeout = max(1, int(job.lease_timeout_seconds or self._config.visibility_timeout_s))
+        timeout = max(
+            1, int(job.lease_timeout_seconds or self._config.visibility_timeout_s)
+        )
         interval = min(self._heartbeat_seconds, timeout * 0.5)
         return max(1.0, interval)
 
@@ -528,7 +538,8 @@ class Dispatcher:
             policy = self._retry_provider.get_retry_policy(job_type)
         except Exception:  # pragma: no cover - defensive logging
             self._logger.exception(
-                "failed to resolve retry policy for dispatch log", extra={"job_type": job_type}
+                "failed to resolve retry policy for dispatch log",
+                extra={"job_type": job_type},
             )
             return None
 

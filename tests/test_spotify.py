@@ -180,7 +180,9 @@ def test_playlist_items_endpoint(client: SimpleTestClient) -> None:
 def test_save_and_remove_tracks(client: SimpleTestClient) -> None:
     stub = client.app.state.spotify_stub
 
-    save_response = client.put("/spotify/me/tracks", json={"ids": ["track-1", "track-2"]})
+    save_response = client.put(
+        "/spotify/me/tracks", json={"ids": ["track-1", "track-2"]}
+    )
     assert save_response.status_code == 200
     assert stub.saved_track_ids == {"track-1", "track-2"}
 

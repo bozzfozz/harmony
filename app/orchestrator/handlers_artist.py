@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-import json
 from time import perf_counter
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -206,7 +206,9 @@ def _split_artist_key(artist_key: str) -> tuple[str, str | None]:
     return resolved_prefix or "unknown", resolved_identifier or None
 
 
-def _select_artist(response: ArtistGatewayResponse, preferred_source: str) -> ProviderArtist | None:
+def _select_artist(
+    response: ArtistGatewayResponse, preferred_source: str
+) -> ProviderArtist | None:
     chosen: ProviderArtist | None = None
     for result in response.results:
         artist = result.artist
@@ -401,7 +403,9 @@ def _release_identity_for_dto(dto: ArtistReleaseUpsertDTO) -> tuple[str, ...]:
     )
 
 
-def _release_audit_payload_from_row(row: ArtistReleaseRow | None) -> Mapping[str, object] | None:
+def _release_audit_payload_from_row(
+    row: ArtistReleaseRow | None,
+) -> Mapping[str, object] | None:
     if row is None:
         return None
     return {
@@ -416,15 +420,21 @@ def _release_audit_payload_from_row(row: ArtistReleaseRow | None) -> Mapping[str
     }
 
 
-def _release_audit_payload_from_snapshot(snapshot: ReleaseSnapshot) -> Mapping[str, object]:
+def _release_audit_payload_from_snapshot(
+    snapshot: ReleaseSnapshot,
+) -> Mapping[str, object]:
     return {
         "source": snapshot.source,
         "source_id": snapshot.source_id,
         "title": snapshot.title,
-        "release_date": snapshot.release_date.isoformat() if snapshot.release_date else None,
+        "release_date": (
+            snapshot.release_date.isoformat() if snapshot.release_date else None
+        ),
         "release_type": snapshot.release_type,
         "total_tracks": snapshot.total_tracks,
-        "inactive_at": snapshot.inactive_at.isoformat() if snapshot.inactive_at else None,
+        "inactive_at": (
+            snapshot.inactive_at.isoformat() if snapshot.inactive_at else None
+        ),
         "inactive_reason": snapshot.inactive_reason,
     }
 
@@ -463,7 +473,9 @@ async def handle_artist_sync(
 
     now = deps.now_factory().replace(tzinfo=None)
     source, source_id = _split_artist_key(artist_key)
-    providers = _resolve_providers(payload, default=deps.providers, fallback_source=source)
+    providers = _resolve_providers(
+        payload, default=deps.providers, fallback_source=source
+    )
     release_limit = _resolve_release_limit(payload, deps.release_limit)
     lookup_identifier = (
         source_id
@@ -576,7 +588,9 @@ async def handle_artist_sync(
     )
     local_state = ArtistLocalState(
         releases=tuple(ReleaseSnapshot.from_row(row) for row in existing_release_rows),
-        aliases=_extract_aliases(existing_artist_row.metadata if existing_artist_row else None),
+        aliases=_extract_aliases(
+            existing_artist_row.metadata if existing_artist_row else None
+        ),
     )
     remote_state = ArtistRemoteState(
         releases=tuple(releases),
@@ -591,7 +605,9 @@ async def handle_artist_sync(
     ]
     persisted_rows: list[ArtistReleaseRow] = []
     if upsert_targets:
-        persisted_rows = await asyncio.to_thread(deps.dao.upsert_releases, upsert_targets)
+        persisted_rows = await asyncio.to_thread(
+            deps.dao.upsert_releases, upsert_targets
+        )
 
     inactive_rows: list[ArtistReleaseRow] = []
     if deps.prune_removed and delta.releases.removed:
@@ -609,13 +625,17 @@ async def handle_artist_sync(
     alias_removed = len(delta.aliases.removed)
     removed_count = len(delta.releases.removed)
     if deps.prune_removed:
-        inactivated_count = removed_count if deps.hard_delete_removed else len(inactive_rows)
+        inactivated_count = (
+            removed_count if deps.hard_delete_removed else len(inactive_rows)
+        )
     else:
         inactivated_count = 0
 
     release_mutations = added_count + updated_count + inactivated_count
     if release_mutations > 0:
-        refreshed_row = await asyncio.to_thread(deps.dao.refresh_artist_version, artist_key)
+        refreshed_row = await asyncio.to_thread(
+            deps.dao.refresh_artist_version, artist_key
+        )
         if refreshed_row is not None:
             artist_row = refreshed_row
 
@@ -715,7 +735,9 @@ async def handle_artist_sync(
         await asyncio.gather(*audit_tasks)
 
     artist_created = existing_artist_row is None
-    total_changes = added_count + updated_count + (inactivated_count if deps.prune_removed else 0)
+    total_changes = (
+        added_count + updated_count + (inactivated_count if deps.prune_removed else 0)
+    )
     if alias_added or alias_removed:
         total_changes += 1
     if artist_created:

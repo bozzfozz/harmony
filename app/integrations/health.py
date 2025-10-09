@@ -48,7 +48,9 @@ async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
     check = getattr(provider, "check_health", None)
     if check is None:
         details: MutableMapping[str, Any] = {"reason": "unsupported"}
-        return ProviderHealth(provider=provider.name, status="degraded", details=details)
+        return ProviderHealth(
+            provider=provider.name, status="degraded", details=details
+        )
 
     try:
         result = check()
@@ -56,7 +58,9 @@ async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
             result = await result  # type: ignore[assignment]
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.warning(
-            "Provider health check failed", exc_info=exc, extra={"provider": provider.name}
+            "Provider health check failed",
+            exc_info=exc,
+            extra={"provider": provider.name},
         )
         return ProviderHealth(
             provider=provider.name,
@@ -71,7 +75,9 @@ async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
         details = result.details
     elif isinstance(result, Mapping):
         status = _normalise_status(str(result.get("status", "unknown")))
-        details = result.get("details") if isinstance(result.get("details"), Mapping) else {}
+        details = (
+            result.get("details") if isinstance(result.get("details"), Mapping) else {}
+        )
     elif isinstance(result, bool):
         status = "ok" if result else "down"
         details = {}
@@ -103,7 +109,9 @@ class ProviderHealthMonitor:
         try:
             provider = self._registry.get_track_provider(name)
         except KeyError:
-            return ProviderHealth(provider=name, status="down", details={"reason": "disabled"})
+            return ProviderHealth(
+                provider=name, status="down", details={"reason": "disabled"}
+            )
         report = await _invoke_health(provider)
         log_event(
             logger,
@@ -116,7 +124,9 @@ class ProviderHealthMonitor:
 
     async def check_all(self) -> IntegrationHealth:
         providers = list(self._registry.track_providers().values())
-        reports = await asyncio.gather(*(_invoke_health(provider) for provider in providers))
+        reports = await asyncio.gather(
+            *(_invoke_health(provider) for provider in providers)
+        )
         overall = _overall_status(reports)
         log_event(
             logger,

@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.engine import Connection, Inspector
 
 
@@ -69,13 +69,17 @@ def unique_constraint_names(inspector: Inspector, table_name: str) -> set[str]:
     }
 
 
-def has_unique_constraint(inspector: Inspector, table_name: str, constraint_name: str) -> bool:
+def has_unique_constraint(
+    inspector: Inspector, table_name: str, constraint_name: str
+) -> bool:
     """Return ``True`` when *constraint_name* exists on *table_name*."""
 
     return constraint_name in unique_constraint_names(inspector, table_name)
 
 
-def drop_index_if_exists(inspector: Inspector, table_name: str, index_name: str) -> None:
+def drop_index_if_exists(
+    inspector: Inspector, table_name: str, index_name: str
+) -> None:
     """Drop *index_name* if it exists on *table_name*."""
 
     if has_index(inspector, table_name, index_name):

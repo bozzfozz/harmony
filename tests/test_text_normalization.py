@@ -20,7 +20,9 @@ def test_generate_track_variants_conservative_noise_removal() -> None:
     assert title in variants
     assert cleaned in variants
     assert any("remix" in variant.lower() for variant in variants)
-    assert all("explicit" not in variant.lower() for variant in variants if variant == cleaned)
+    assert all(
+        "explicit" not in variant.lower() for variant in variants if variant == cleaned
+    )
 
 
 def test_generate_album_variants_editions() -> None:

@@ -31,7 +31,9 @@ class IntegrationsResponse(BaseModel):
 router = APIRouter(tags=["Integrations"])
 
 
-@router.get("/integrations", response_model=IntegrationsResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/integrations", response_model=IntegrationsResponse, status_code=status.HTTP_200_OK
+)
 async def get_integrations(
     service: IntegrationService = Depends(get_integration_service),
 ) -> IntegrationsResponse:

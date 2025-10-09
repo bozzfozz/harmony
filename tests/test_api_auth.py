@@ -35,7 +35,9 @@ def test_request_without_key_returns_401() -> None:
             "message": "An API key is required to access this resource.",
         },
     }
-    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get(
+        "x-debug-id"
+    )
     assert debug_header is not None
 
 
@@ -56,7 +58,9 @@ def test_invalid_key_returns_403() -> None:
             "message": "The provided API key is not valid.",
         },
     }
-    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get(
+        "x-debug-id"
+    )
     assert debug_header is not None
 
 

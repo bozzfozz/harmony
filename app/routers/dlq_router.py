@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
+from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -13,12 +13,19 @@ from sqlalchemy.orm import Session
 from app.config import get_env
 from app.dependencies import get_db
 from app.errors import InternalServerError, ValidationAppError
-from app.services.dlq_service import DLQListResult, DLQRequeueResult, DLQService, DLQStats
+from app.services.dlq_service import (
+    DLQListResult,
+    DLQRequeueResult,
+    DLQService,
+    DLQStats,
+)
 
 router = APIRouter(tags=["DLQ"])
 
 
-def _env_int(name: str, default: int, *, minimum: int, maximum: int | None = None) -> int:
+def _env_int(
+    name: str, default: int, *, minimum: int, maximum: int | None = None
+) -> int:
     raw = get_env(name)
     if raw is None:
         value = default
@@ -241,7 +248,9 @@ def dlq_stats(
 ) -> DLQStatsEnvelope:
     service = _build_service(request)
     result: DLQStats = service.stats(session)
-    data = DLQStatsData(total=result.total, by_reason=result.by_reason, last_24h=result.last_24h)
+    data = DLQStatsData(
+        total=result.total, by_reason=result.by_reason, last_24h=result.last_24h
+    )
     return DLQStatsEnvelope(ok=True, data=data, error=None)
 
 

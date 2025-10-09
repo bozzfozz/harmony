@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from app.logging_events import log_event

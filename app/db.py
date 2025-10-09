@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import AbstractContextManager, contextmanager
 import logging
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import Callable, Iterator, Optional, TypeVar
 
@@ -101,8 +101,12 @@ def init_db() -> None:
         if _engine is None:
             raise RuntimeError("Database engine was not initialised before migrations.")
         if command is None or Config is None:
-            _logger.warning("Alembic is not available; falling back to Base.metadata.create_all().")
-            from app import models  # noqa: F401  # Import models for metadata side-effects
+            _logger.warning(
+                "Alembic is not available; falling back to Base.metadata.create_all()."
+            )
+            from app import (  # noqa: F401  # Import models for metadata side-effects
+                models,
+            )
 
             Base.metadata.create_all(bind=_engine, checkfirst=True)
         else:
@@ -127,7 +131,9 @@ def reset_engine_for_tests() -> None:
 
 def _configure_alembic(database_url: str) -> Config:
     if Config is None:
-        raise RuntimeError("Alembic configuration is unavailable; ensure alembic is installed.")
+        raise RuntimeError(
+            "Alembic configuration is unavailable; ensure alembic is installed."
+        )
     config = Config(str(_ALEMBIC_INI_PATH))
     config.set_main_option("script_location", str(_ALEMBIC_SCRIPT_LOCATION))
     config.set_main_option("sqlalchemy.url", database_url)
@@ -148,13 +154,17 @@ __all__ = [
 ]
 
 
-def _call_with_session(func: SessionCallable[T], *, factory: SessionFactory | None = None) -> T:
+def _call_with_session(
+    func: SessionCallable[T], *, factory: SessionFactory | None = None
+) -> T:
     context = factory() if factory is not None else session_scope()
     with context as session:
         return func(session)
 
 
-async def run_session(func: SessionCallable[T], *, factory: SessionFactory | None = None) -> T:
+async def run_session(
+    func: SessionCallable[T], *, factory: SessionFactory | None = None
+) -> T:
     """Execute ``func`` with a database session in a worker thread."""
 
     return await asyncio.to_thread(_call_with_session, func, factory=factory)

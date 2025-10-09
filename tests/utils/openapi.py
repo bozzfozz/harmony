@@ -12,7 +12,9 @@ from app.main import app
 
 
 @contextmanager
-def openapi_flag_context(*, enable_admin_api: bool | None = None) -> Iterator[AppConfig]:
+def openapi_flag_context(
+    *, enable_admin_api: bool | None = None
+) -> Iterator[AppConfig]:
     """Temporarily override the OpenAPI configuration flags for tests."""
 
     original_config = getattr(app.state, "openapi_config", None)
@@ -22,7 +24,9 @@ def openapi_flag_context(*, enable_admin_api: bool | None = None) -> Iterator[Ap
         base_config = deepcopy(get_app_config())
 
     if enable_admin_api is not None:
-        base_config.features = replace(base_config.features, enable_admin_api=enable_admin_api)
+        base_config.features = replace(
+            base_config.features, enable_admin_api=enable_admin_api
+        )
         base_config.admin = replace(base_config.admin, api_enabled=enable_admin_api)
 
     app.state.openapi_config = deepcopy(base_config)

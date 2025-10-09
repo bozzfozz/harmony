@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from alembic import command
 import pytest
 import sqlalchemy as sa
+from alembic import command
 from sqlalchemy.exc import IntegrityError
 
 from tests.support.postgres import postgres_schema
@@ -69,7 +69,9 @@ def test_queue_job_idempotency_enforces_uniqueness() -> None:
             queue_jobs = sa.Table("queue_jobs", metadata, autoload_with=engine)
 
             with engine.begin() as connection:
-                _insert_job(connection, queue_jobs, job_type="sync", idempotency_key="dupe")
+                _insert_job(
+                    connection, queue_jobs, job_type="sync", idempotency_key="dupe"
+                )
 
                 with pytest.raises(IntegrityError):
                     _insert_job(
@@ -79,8 +81,12 @@ def test_queue_job_idempotency_enforces_uniqueness() -> None:
                         idempotency_key="dupe",
                     )
 
-                _insert_job(connection, queue_jobs, job_type="sync", idempotency_key=None)
-                _insert_job(connection, queue_jobs, job_type="sync", idempotency_key=None)
+                _insert_job(
+                    connection, queue_jobs, job_type="sync", idempotency_key=None
+                )
+                _insert_job(
+                    connection, queue_jobs, job_type="sync", idempotency_key=None
+                )
 
                 with pytest.raises(IntegrityError):
                     _insert_job(
@@ -91,7 +97,9 @@ def test_queue_job_idempotency_enforces_uniqueness() -> None:
                     )
 
             inspector = sa.inspect(engine)
-            indexes = {index["name"]: index for index in inspector.get_indexes("queue_jobs")}
+            indexes = {
+                index["name"]: index for index in inspector.get_indexes("queue_jobs")
+            }
             assert indexes["ix_queue_jobs_idempotency_key_not_null"]["unique"]
 
             with engine.connect() as connection:

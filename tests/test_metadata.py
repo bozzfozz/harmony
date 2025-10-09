@@ -75,7 +75,9 @@ async def test_metadata_worker_enriches_download(monkeypatch, tmp_path) -> None:
         }
 
     monkeypatch.setattr(metadata_utils, "write_metadata_tags", fake_write_metadata)
-    monkeypatch.setattr(metadata_utils, "extract_metadata_from_spotify", fake_extract_metadata)
+    monkeypatch.setattr(
+        metadata_utils, "extract_metadata_from_spotify", fake_extract_metadata
+    )
 
     worker = MetadataWorker()
 
@@ -348,7 +350,9 @@ async def test_metadata_update_worker_stop(tmp_path) -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        async def enqueue(self, download_id: int, audio_path: Path, **_: Any) -> Dict[str, Any]:
+        async def enqueue(
+            self, download_id: int, audio_path: Path, **_: Any
+        ) -> Dict[str, Any]:
             self.calls += 1
             await asyncio.sleep(0)
             return {}
@@ -396,7 +400,9 @@ def test_metadata_update_router_flow(monkeypatch, tmp_path) -> None:
         def __init__(self) -> None:
             self.calls: list[int] = []
 
-        async def enqueue(self, download_id: int, audio_path: Path, **_: Any) -> Dict[str, Any]:
+        async def enqueue(
+            self, download_id: int, audio_path: Path, **_: Any
+        ) -> Dict[str, Any]:
             self.calls.append(download_id)
             await asyncio.sleep(0)
             return {}

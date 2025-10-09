@@ -15,7 +15,9 @@ from app.core.types import (
 
 
 def test_provider_artist_alias_deduplication() -> None:
-    artist = ProviderArtistDTO(name="Aurora", source="spotify", aliases=("Rora", "rora", "Aura"))
+    artist = ProviderArtistDTO(
+        name="Aurora", source="spotify", aliases=("Rora", "rora", "Aura")
+    )
     assert artist.aliases == ("Rora", "Aura")
 
 

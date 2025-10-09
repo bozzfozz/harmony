@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import base64
-from pathlib import Path
 import re
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import zlib
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import httpx
 
@@ -31,7 +31,9 @@ def fetch_spotify_lyrics(track_id: str) -> Optional[Dict[str, Any]]:
 
     client = SPOTIFY_CLIENT
     if client is None:
-        logger.debug("Spotify lyrics requested for %s but no client configured", track_id)
+        logger.debug(
+            "Spotify lyrics requested for %s but no client configured", track_id
+        )
         return None
 
     try:
@@ -70,7 +72,9 @@ def convert_to_lrc(lyrics_data: Dict[str, Any]) -> str:
 
     info = dict(lyrics_data)
     title = _resolve_field(info, ("title", "name", "track"), default="Unknown Title")
-    artist = _resolve_field(info, ("artist", "artist_name", "artists"), default="Unknown Artist")
+    artist = _resolve_field(
+        info, ("artist", "artist_name", "artists"), default="Unknown Artist"
+    )
     album = _resolve_field(info, ("album", "album_name", "release"), default="")
     duration = _resolve_duration(info)
 
@@ -112,14 +116,18 @@ def save_lrc_file(path: Path, lrc: str) -> None:
     target.write_text(lrc, encoding="utf-8")
 
 
-async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+async def fetch_musixmatch_subtitles(
+    track_info: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
     """Attempt to retrieve synchronised lyrics from the Musixmatch API."""
 
     api_key = get_env("MUSIXMATCH_API_KEY")
     if not api_key:
         return None
 
-    artist = _coerce_text(_resolve_field(track_info, ("artist", "artist_name", "artists")))
+    artist = _coerce_text(
+        _resolve_field(track_info, ("artist", "artist_name", "artists"))
+    )
     title = _coerce_text(_resolve_field(track_info, ("title", "name", "track")))
     if not artist or not title:
         return None
@@ -128,7 +136,9 @@ async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             response = await client.get(MUSIXMATCH_ENDPOINT, params=params)
-        except httpx.HTTPError as exc:  # pragma: no cover - network errors in tests are mocked
+        except (
+            httpx.HTTPError
+        ) as exc:  # pragma: no cover - network errors in tests are mocked
             logger.debug("Musixmatch lookup failed for %s - %s: %s", artist, title, exc)
             return None
 
@@ -144,7 +154,9 @@ async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[
     try:
         payload = response.json()
     except ValueError:  # pragma: no cover - invalid payload
-        logger.debug("Musixmatch response was not valid JSON for %s - %s", artist, title)
+        logger.debug(
+            "Musixmatch response was not valid JSON for %s - %s", artist, title
+        )
         return None
 
     subtitle = payload.get("message", {}).get("body", {}).get("subtitle")
@@ -209,7 +221,12 @@ def _extract_plain_lyrics(payload: Mapping[str, Any]) -> str:
 
 
 def _extract_sync_lyrics(payload: Mapping[str, Any]) -> List[Tuple[float, str]]:
-    for key in ("sync_lyrics", "syncLyrics", "synchronised_lyrics", "synchronizedLyrics"):
+    for key in (
+        "sync_lyrics",
+        "syncLyrics",
+        "synchronised_lyrics",
+        "synchronizedLyrics",
+    ):
         value = payload.get(key)
         lines = _normalise_sync_lines(value)
         if lines:
@@ -272,7 +289,9 @@ def _normalise_sync_lines(data: Any) -> List[Tuple[float, str]]:
             timestamp: Optional[float] = None
             text = ""
             if isinstance(item, Mapping):
-                text = _coerce_text(item.get("text") or item.get("line") or item.get("lyrics"))
+                text = _coerce_text(
+                    item.get("text") or item.get("line") or item.get("lyrics")
+                )
                 timestamp = _coerce_timestamp(
                     item.get("time")
                     or item.get("timestamp")

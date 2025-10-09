@@ -83,12 +83,18 @@ async def test_gateway_returns_uniform_dtos_for_all_providers() -> None:
     )
     spotify = DummyProvider("spotify")
     slskd = DummyProvider("slskd")
-    gateway = ProviderGateway(providers={"spotify": spotify, "slskd": slskd}, config=config)
+    gateway = ProviderGateway(
+        providers={"spotify": spotify, "slskd": slskd}, config=config
+    )
 
     spotify_artist = await gateway.fetch_artist("spotify", artist_id="artist-1")
-    spotify_releases = await gateway.fetch_artist_releases("spotify", "artist-1", limit=5)
+    spotify_releases = await gateway.fetch_artist_releases(
+        "spotify", "artist-1", limit=5
+    )
     spotify_album = await gateway.fetch_album("spotify", "album-1")
-    spotify_top_tracks = await gateway.fetch_artist_top_tracks("spotify", "artist-1", limit=3)
+    spotify_top_tracks = await gateway.fetch_artist_top_tracks(
+        "spotify", "artist-1", limit=3
+    )
     slskd_artist = await gateway.fetch_artist("slskd", artist_id="artist-1")
     slskd_releases = await gateway.fetch_artist_releases("slskd", "artist-1")
     slskd_album = await gateway.fetch_album("slskd", "album-2")

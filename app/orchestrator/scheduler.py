@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
 import contextlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from time import perf_counter
@@ -71,7 +71,9 @@ class Scheduler:
         self._config = config or settings.orchestrator
         self._priority = priority_config or PriorityConfig.from_config(self._config)
         poll_ms = (
-            poll_interval_ms if poll_interval_ms is not None else self._config.poll_interval_ms
+            poll_interval_ms
+            if poll_interval_ms is not None
+            else self._config.poll_interval_ms
         )
         max_poll_ms = (
             poll_interval_max_ms
@@ -87,7 +89,9 @@ class Scheduler:
         self._poll_interval = max(0.0, poll_ms / 1000.0)
         self._max_poll_interval = max(0.0, max_poll_ms / 1000.0)
         self._current_poll_interval = self._poll_interval
-        multiplier = idle_backoff_multiplier if idle_backoff_multiplier is not None else 2.0
+        multiplier = (
+            idle_backoff_multiplier if idle_backoff_multiplier is not None else 2.0
+        )
         self._backoff_multiplier = multiplier if multiplier > 1 else 2.0
         self._visibility_timeout = max(1, timeout_s)
         self._persistence = persistence_module

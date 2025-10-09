@@ -8,7 +8,11 @@ from sqlalchemy import select
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Match, QueueJobStatus
-from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
+from app.orchestrator.handlers import (
+    MatchingHandlerDeps,
+    MatchingJobError,
+    handle_matching,
+)
 from app.utils.settings_store import read_setting
 from app.workers.persistence import QueueJobDTO
 
@@ -49,8 +53,18 @@ async def test_handle_matching_persists_matches() -> None:
             "artists": [{"name": "Sample Artist"}],
         },
         "candidates": [
-            {"id": "cand-1", "filename": "Sample Song.mp3", "username": "dj", "bitrate": 320},
-            {"id": "cand-2", "filename": "Other.mp3", "username": "other", "bitrate": 128},
+            {
+                "id": "cand-1",
+                "filename": "Sample Song.mp3",
+                "username": "dj",
+                "bitrate": 320,
+            },
+            {
+                "id": "cand-2",
+                "filename": "Other.mp3",
+                "username": "other",
+                "bitrate": 128,
+            },
         ],
     }
 
@@ -73,7 +87,9 @@ async def test_handle_matching_persists_matches() -> None:
 async def test_handle_matching_invalid_payload() -> None:
     reset_engine_for_tests()
     init_db()
-    deps = MatchingHandlerDeps(engine=MusicMatchingEngine(), session_factory=session_scope)
+    deps = MatchingHandlerDeps(
+        engine=MusicMatchingEngine(), session_factory=session_scope
+    )
 
     job = _make_job({"type": "spotify-to-soulseek"})
     with pytest.raises(MatchingJobError) as exc:
@@ -101,7 +117,12 @@ async def test_handle_matching_no_candidates_above_threshold() -> None:
             "artists": [{"name": "Sample Artist"}],
         },
         "candidates": [
-            {"id": "cand-1", "filename": "Sample Song.mp3", "username": "dj", "bitrate": 192},
+            {
+                "id": "cand-1",
+                "filename": "Sample Song.mp3",
+                "username": "dj",
+                "bitrate": 192,
+            },
         ],
     }
 

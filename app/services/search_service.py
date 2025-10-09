@@ -6,10 +6,8 @@ from collections.abc import Mapping
 from time import perf_counter
 from typing import Iterable
 
-from app.integrations.contracts import (
-    ProviderTrack as GatewayProviderTrack,
-    SearchQuery as GatewaySearchQuery,
-)
+from app.integrations.contracts import ProviderTrack as GatewayProviderTrack
+from app.integrations.contracts import SearchQuery as GatewaySearchQuery
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.schemas.common import Paging, SourceEnum
@@ -54,7 +52,9 @@ class SearchService:
 
         started = perf_counter()
         try:
-            response = await self._integration.search_providers(providers, gateway_query)
+            response = await self._integration.search_providers(
+                providers, gateway_query
+            )
         except ServiceError as exc:
             duration_ms = int((perf_counter() - started) * 1000)
             sources_value = ",".join(source.value for source in resolved_sources)
@@ -70,7 +70,9 @@ class SearchService:
             )
             raise
 
-        candidates, failures = _collect_candidates(response, query.query, self._matching_engine)
+        candidates, failures = _collect_candidates(
+            response, query.query, self._matching_engine
+        )
 
         candidates.sort(key=lambda item: item.score or 0.0, reverse=True)
         capped = candidates[: self._max_results]

@@ -59,7 +59,9 @@ class ReadinessResult:
     migrations: MigrationProbeResult
 
 
-Probe = Callable[[], bool | str | DependencyStatus | Awaitable[bool | str | DependencyStatus]]
+Probe = Callable[
+    [], bool | str | DependencyStatus | Awaitable[bool | str | DependencyStatus]
+]
 
 
 class HealthService:
@@ -87,14 +89,18 @@ class HealthService:
             if normalized not in dependency_names:
                 dependency_names.append(normalized)
         self._dependency_names = tuple(dict.fromkeys(dependency_names))
-        self._dependency_probes = {name.lower(): probe for name, probe in resolved_probes.items()}
+        self._dependency_probes = {
+            name.lower(): probe for name, probe in resolved_probes.items()
+        }
 
     def liveness(self) -> HealthSummary:
         """Return process information for the liveness probe."""
 
         now = datetime.now(timezone.utc)
         uptime = (now - self._start_time).total_seconds()
-        return HealthSummary(status="up", version=self._version, uptime_s=max(uptime, 0.0))
+        return HealthSummary(
+            status="up", version=self._version, uptime_s=max(uptime, 0.0)
+        )
 
     async def readiness(self) -> ReadinessResult:
         """Execute readiness probes for the database and configured dependencies."""
@@ -122,8 +128,12 @@ class HealthService:
 
         deps_ok = all(state.ok for state in dependency_states.values())
         db_ok = database_status == "up"
-        migrations_ok = migrations_status.up_to_date or not self._config.require_database
-        ready = deps_ok and (db_ok or not self._config.require_database) and migrations_ok
+        migrations_ok = (
+            migrations_status.up_to_date or not self._config.require_database
+        )
+        ready = (
+            deps_ok and (db_ok or not self._config.require_database) and migrations_ok
+        )
         return ReadinessResult(
             ok=ready,
             database=database_status,
@@ -138,7 +148,9 @@ class HealthService:
                 asyncio.to_thread(self._ping_database), timeout=timeout
             )
         except asyncio.TimeoutError:
-            logger.warning("Database readiness probe timed out after %.2f ms", timeout * 1000)
+            logger.warning(
+                "Database readiness probe timed out after %.2f ms", timeout * 1000
+            )
             return "down"
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception("Database readiness probe failed", exc_info=exc)
@@ -176,7 +188,9 @@ class HealthService:
             logger.warning("Dependency probe timed out", extra={"dependency": name})
             return DependencyStatus(ok=False, status="down")
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning("Dependency probe failed", exc_info=exc, extra={"dependency": name})
+            logger.warning(
+                "Dependency probe failed", exc_info=exc, extra={"dependency": name}
+            )
             return DependencyStatus(ok=False, status="down")
         normalized_status = self._normalise_dependency_status(raw_status)
         return normalized_status
@@ -193,7 +207,9 @@ class HealthService:
         return health.status == "ok"
 
     @staticmethod
-    def _normalise_dependency_status(value: bool | str | DependencyStatus) -> DependencyStatus:
+    def _normalise_dependency_status(
+        value: bool | str | DependencyStatus,
+    ) -> DependencyStatus:
         if isinstance(value, DependencyStatus):
             status = value.status.strip().lower() or ("up" if value.ok else "down")
             return DependencyStatus(ok=value.ok, status=status)
@@ -226,7 +242,9 @@ class HealthService:
                 asyncio.to_thread(self._collect_migration_status), timeout=timeout
             )
         except asyncio.TimeoutError:
-            logger.warning("Migration status probe timed out after %.2f ms", timeout * 1000)
+            logger.warning(
+                "Migration status probe timed out after %.2f ms", timeout * 1000
+            )
             return MigrationProbeResult(
                 up_to_date=False,
                 current=None,
@@ -250,7 +268,9 @@ class HealthService:
             context = MigrationContext.configure(connection)
             current = context.get_current_revision()
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.warning("Failed to determine current migration revision", exc_info=exc)
+            logger.warning(
+                "Failed to determine current migration revision", exc_info=exc
+            )
             return MigrationProbeResult(
                 up_to_date=False,
                 current=None,

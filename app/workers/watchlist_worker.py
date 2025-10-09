@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from dataclasses import dataclass
 from datetime import datetime
-import time
 
 from app.config import WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
@@ -48,13 +48,17 @@ class WatchlistWorker:
         mode = (config.db_io_mode or "thread").strip().lower()
         if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
             if not resolved_dao.supports_async:
-                resolved_dao = resolved_dao.with_async_session_factory(get_async_sessionmaker())
+                resolved_dao = resolved_dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
         self._dao = resolved_dao
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._tick_budget_seconds = max(self._config.tick_budget_ms, 0) / 1000.0
-        self._priority = int(settings.orchestrator.priority_map.get("artist_refresh", 0))
+        self._priority = int(
+            settings.orchestrator.priority_map.get("artist_refresh", 0)
+        )
 
         log_event(
             logger,
@@ -84,7 +88,8 @@ class WatchlistWorker:
         if task is not None:
             try:
                 await asyncio.wait_for(
-                    asyncio.shield(task), timeout=self._config.shutdown_grace_ms / 1000.0
+                    asyncio.shield(task),
+                    timeout=self._config.shutdown_grace_ms / 1000.0,
                 )
             except asyncio.TimeoutError:
                 task.cancel()
@@ -116,7 +121,9 @@ class WatchlistWorker:
                 if self._stop_event.is_set():
                     break
                 try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
+                    await asyncio.wait_for(
+                        self._stop_event.wait(), timeout=self._interval
+                    )
                 except asyncio.TimeoutError:
                     continue
         except asyncio.CancelledError:  # pragma: no cover - lifecycle management
@@ -137,7 +144,9 @@ class WatchlistWorker:
     async def _enqueue_due_artists(self) -> list[WatchlistEnqueueResult]:
         record_worker_heartbeat("watchlist")
         start = time.monotonic()
-        deadline = start + self._tick_budget_seconds if self._tick_budget_seconds else None
+        deadline = (
+            start + self._tick_budget_seconds if self._tick_budget_seconds else None
+        )
         now = datetime.utcnow()
         artists = await asyncio.to_thread(
             self._dao.load_batch,

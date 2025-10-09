@@ -17,9 +17,13 @@ from app.routers import (
 
 
 def test_compose_prefix_normalises_slashes() -> None:
-    assert router_registry.compose_prefix("/api/v1", "spotify", "/free") == "/api/v1/spotify/free"
     assert (
-        router_registry.compose_prefix("/api/v1/", "/spotify//", "free/") == "/api/v1/spotify/free"
+        router_registry.compose_prefix("/api/v1", "spotify", "/free")
+        == "/api/v1/spotify/free"
+    )
+    assert (
+        router_registry.compose_prefix("/api/v1/", "/spotify//", "free/")
+        == "/api/v1/spotify/free"
     )
 
 

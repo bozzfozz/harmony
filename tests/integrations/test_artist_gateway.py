@@ -6,7 +6,10 @@ import pytest
 
 from app.integrations.artist_gateway import ArtistGateway
 from app.integrations.contracts import ProviderArtist, ProviderRelease
-from app.integrations.provider_gateway import ProviderGateway, ProviderGatewayTimeoutError
+from app.integrations.provider_gateway import (
+    ProviderGateway,
+    ProviderGatewayTimeoutError,
+)
 
 
 @pytest.mark.asyncio
@@ -34,7 +37,9 @@ async def test_fetch_artist_collects_provider_dtos() -> None:
     provider_gateway.fetch_artist.assert_awaited_once_with(
         "spotify", artist_id="artist-1", name="artist-1"
     )
-    provider_gateway.fetch_artist_releases.assert_awaited_once_with("spotify", "artist-1", limit=20)
+    provider_gateway.fetch_artist_releases.assert_awaited_once_with(
+        "spotify", "artist-1", limit=20
+    )
 
     assert response.artist_id == "artist-1"
     assert len(response.results) == 1
@@ -110,7 +115,9 @@ async def test_fetch_artist_deduplicates_releases_by_identifier() -> None:
     ]
 
     gateway = ArtistGateway(provider_gateway=provider_gateway)
-    response = await gateway.fetch_artist("artist-1", providers=("spotify", "slskd"), limit=10)
+    response = await gateway.fetch_artist(
+        "artist-1", providers=("spotify", "slskd"), limit=10
+    )
 
     assert len(response.results) == 2
     aggregated = response.releases

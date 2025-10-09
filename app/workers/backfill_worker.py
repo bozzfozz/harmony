@@ -83,7 +83,9 @@ class BackfillWorker:
             while self._running:
                 try:
                     job = await queue.get()
-                except asyncio.CancelledError:  # pragma: no cover - cancellation lifecycle
+                except (
+                    asyncio.CancelledError
+                ):  # pragma: no cover - cancellation lifecycle
                     raise
 
                 try:

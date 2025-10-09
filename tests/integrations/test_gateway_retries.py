@@ -6,7 +6,11 @@ from typing import Any
 
 import pytest
 
-from app.integrations.contracts import ProviderDependencyError, ProviderTrack, SearchQuery
+from app.integrations.contracts import (
+    ProviderDependencyError,
+    ProviderTrack,
+    SearchQuery,
+)
 from app.integrations.provider_gateway import (
     ProviderGateway,
     ProviderGatewayConfig,
@@ -50,7 +54,9 @@ def _query() -> SearchQuery:
 
 
 @pytest.mark.asyncio
-async def test_gateway_retries_with_exponential_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_gateway_retries_with_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     provider = _StubProvider(
         name="stub",
         responses=[

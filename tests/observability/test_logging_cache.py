@@ -19,7 +19,9 @@ async def test_cache_logs_use_contract(monkeypatch) -> None:
 
     monkeypatch.setattr("app.services.cache.log_event", _capture)
 
-    cache = ResponseCache(max_items=10, default_ttl=1.0, fail_open=True, time_func=_time)
+    cache = ResponseCache(
+        max_items=10, default_ttl=1.0, fail_open=True, time_func=_time
+    )
 
     entry = CacheEntry(
         key="",  # populated by cache

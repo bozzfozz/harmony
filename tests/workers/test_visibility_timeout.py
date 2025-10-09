@@ -10,7 +10,9 @@ from app.workers.persistence import enqueue, fetch_ready, lease
 
 
 def test_visibility_timeout_redelivery() -> None:
-    job = enqueue("sync", {"idempotency_key": "job-1", "priority": 2, "visibility_timeout": 5})
+    job = enqueue(
+        "sync", {"idempotency_key": "job-1", "priority": 2, "visibility_timeout": 5}
+    )
 
     leased = lease(job.id, job_type="sync", lease_seconds=5)
     assert leased is not None

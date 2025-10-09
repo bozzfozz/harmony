@@ -13,7 +13,10 @@ import pytest
     ("legacy_module", "target"),
     [
         ("app.routers.backfill_router", "app.api.routers.spotify.backfill_router"),
-        ("app.routers.free_ingest_router", "app.api.routers.spotify.free_ingest_router"),
+        (
+            "app.routers.free_ingest_router",
+            "app.api.routers.spotify.free_ingest_router",
+        ),
         ("app.routers.search_router", "app.api.routers.search.router"),
         ("app.routers.spotify_free_router", "app.api.routers.spotify.free_router"),
         ("app.routers.spotify_router", "app.api.routers.spotify.core_router"),
@@ -21,7 +24,9 @@ import pytest
         ("app.routers.watchlist_router", "app.api.routers.watchlist.router"),
     ],
 )
-def test_legacy_router_shim_emits_warning_and_reexports(legacy_module: str, target: str) -> None:
+def test_legacy_router_shim_emits_warning_and_reexports(
+    legacy_module: str, target: str
+) -> None:
     """Importing a legacy router triggers a warning and re-exports the new router."""
 
     sys.modules.pop(legacy_module, None)

@@ -22,7 +22,9 @@ class RecordingSoulseekClient:
     async def get_download_status(self) -> List[Dict[str, Any]]:
         return []
 
-    async def cancel_download(self, identifier: str) -> None:  # pragma: no cover - unused
+    async def cancel_download(
+        self, identifier: str
+    ) -> None:  # pragma: no cover - unused
         return None
 
 
@@ -40,7 +42,10 @@ class BlockingRecordingSoulseekClient(RecordingSoulseekClient):
         files = payload.get("files", [])
         for file_info in files:
             identifier = int(file_info.get("download_id", 0))
-            if self.high_priority_id is not None and identifier == self.high_priority_id:
+            if (
+                self.high_priority_id is not None
+                and identifier == self.high_priority_id
+            ):
                 self.high_started.set()
             if self.block_on_id is not None and identifier == self.block_on_id:
                 self.low_started.set()
@@ -139,7 +144,9 @@ async def test_high_priority_job_preempts_recent_low_priority_lease() -> None:
     async def tracking_lease(
         job_id: int, job_type: str, lease_seconds: int | None
     ) -> QueueJobDTO | None:
-        leased_job = await lease_async(job_id, job_type=job_type, lease_seconds=lease_seconds)
+        leased_job = await lease_async(
+            job_id, job_type=job_type, lease_seconds=lease_seconds
+        )
         if leased_job and any(
             isinstance(item, dict) and int(item.get("download_id", 0)) == low_id
             for item in leased_job.payload.get("files", [])

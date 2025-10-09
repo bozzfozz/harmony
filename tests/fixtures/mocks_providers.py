@@ -75,7 +75,9 @@ class ArtistGatewayMock:
         error = self.errors.get(artist_id)
         if error is not None:
             raise error
-        return self.responses.get(artist_id, ArtistGatewayResponse(artist_id=artist_id, results=()))
+        return self.responses.get(
+            artist_id, ArtistGatewayResponse(artist_id=artist_id, results=())
+        )
 
 
 @pytest.fixture

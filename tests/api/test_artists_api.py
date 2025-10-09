@@ -151,5 +151,8 @@ def test_error_mapping_not_found_and_validation() -> None:
     body = invalid.json()
     assert body == {
         "ok": False,
-        "error": {"code": "VALIDATION_ERROR", "message": "artist_key must not be empty."},
+        "error": {
+            "code": "VALIDATION_ERROR",
+            "message": "artist_key must not be empty.",
+        },
     }

@@ -90,7 +90,13 @@ def test_activity_total_matches_inserted_rows(client) -> None:
 
     payload = response.json()
     assert payload["total_count"] == 23
-    assert [entry["details"]["index"] for entry in payload["items"]] == [12, 11, 10, 9, 8]
+    assert [entry["details"]["index"] for entry in payload["items"]] == [
+        12,
+        11,
+        10,
+        9,
+        8,
+    ]
 
 
 def test_activity_order_is_desc_by_created_at_then_id(client) -> None:

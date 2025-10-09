@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
-import inspect
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -42,7 +42,9 @@ logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(timezone.utc)
 
 
-def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
+def _initial_orchestrator_status(
+    *, artwork_enabled: bool, lyrics_enabled: bool
+) -> dict[str, Any]:
     return {
         "enabled_jobs": {
             "sync": True,
@@ -110,7 +112,9 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
     return _probe
 
 
-def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
+def _build_orchestrator_dependency_probes() -> (
+    Mapping[str, Callable[[], DependencyStatus]]
+):
     jobs = (
         "sync",
         "matching",
@@ -125,7 +129,9 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
     probes: dict[str, Callable[[], DependencyStatus]] = {
         "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
         "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),
-        "orchestrator:timer:watchlist": _orchestrator_component_probe("watchlist_timer"),
+        "orchestrator:timer:watchlist": _orchestrator_component_probe(
+            "watchlist_timer"
+        ),
     }
     for job in jobs:
         probes[f"orchestrator:job:{job}"] = _orchestrator_component_probe(job)
@@ -185,7 +191,9 @@ def _resolve_watchlist_interval(override: float | None) -> float:
 
 
 def _resolve_visibility_timeout(override: int | None) -> int:
-    resolved = override if override is not None else settings.orchestrator.visibility_timeout_s
+    resolved = (
+        override if override is not None else settings.orchestrator.visibility_timeout_s
+    )
     return max(5, resolved)
 
 
@@ -432,7 +440,9 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
             enabled_jobs[job] = False
 
 
-async def _stop_background_workers(app: FastAPI) -> None:  # pragma: no cover - compatibility shim
+async def _stop_background_workers(
+    app: FastAPI,
+) -> None:  # pragma: no cover - compatibility shim
     """Compatibility wrapper forwarding to orchestrator shutdown."""
 
     await _stop_orchestrator_workers(app)
@@ -481,10 +491,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     worker_env = config.environment.workers
     timer_override = worker_env.watchlist_timer_enabled
     timer_env_enabled = (
-        timer_override if timer_override is not None else settings.watchlist_timer.enabled
+        timer_override
+        if timer_override is not None
+        else settings.watchlist_timer.enabled
     )
     orchestrator_status["watchlist_timer_running"] = False
-    orchestrator_status["watchlist_timer_expected"] = workers_enabled and timer_env_enabled
+    orchestrator_status["watchlist_timer_expected"] = (
+        workers_enabled and timer_env_enabled
+    )
 
     worker_status: dict[str, bool] = {}
 
@@ -603,7 +617,9 @@ if _FRONTEND_INDEX_PATH.is_file():
     logger.info("Serving frontend assets from %s", FRONTEND_DIST)
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
-    async def _frontend_fallback(request: Request, exc: StarletteHTTPException) -> Response:
+    async def _frontend_fallback(
+        request: Request, exc: StarletteHTTPException
+    ) -> Response:
         path = request.url.path
         if (
             exc.status_code == 404

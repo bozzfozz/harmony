@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 import pytest
 from sqlalchemy import select
@@ -50,7 +50,9 @@ def _run_watchlist_cycle(client) -> None:
     jobs: list[persistence.QueueJobDTO] = []
     with session_scope() as session:
         records = (
-            session.execute(select(WatchlistArtist).order_by(WatchlistArtist.id)).scalars().all()
+            session.execute(select(WatchlistArtist).order_by(WatchlistArtist.id))
+            .scalars()
+            .all()
         )
     for record in records:
         row = ArtistWorkflowArtistRow(
@@ -64,7 +66,9 @@ def _run_watchlist_cycle(client) -> None:
         job = client._loop.run_until_complete(timer._enqueue_artist(row))
         if job is not None:
             jobs.append(job)
-    assert any(job.type == "artist_refresh" for job in jobs), "expected artist_refresh job"
+    assert any(
+        job.type == "artist_refresh" for job in jobs
+    ), "expected artist_refresh job"
     _drain_jobs(client, dispatcher)
 
 

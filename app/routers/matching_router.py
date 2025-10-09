@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_db, get_matching_engine
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
+from app.integrations.normalizers import (
+    normalize_slskd_candidate,
+    normalize_spotify_track,
+)
 from app.logging import get_logger
 from app.models import Download, Match
 from app.schemas import MatchingRequest, MatchingResponse
@@ -80,7 +83,9 @@ def _persist_matches(session: Session, matches: Iterable[Match]) -> None:
     except Exception as exc:  # pragma: no cover - database failure is exceptional
         session.rollback()
         logger.error("Failed to persist match result: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to store match result") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to store match result"
+        ) from exc
 
 
 @router.post("/spotify-to-soulseek", response_model=MatchingResponse)
@@ -96,7 +101,9 @@ def spotify_to_soulseek(
     spotify_track_dto = normalize_spotify_track(payload.spotify_track)
     for candidate in payload.candidates:
         candidate_dto = normalize_slskd_candidate(candidate)
-        score = engine.calculate_slskd_match_confidence(spotify_track_dto, candidate_dto)
+        score = engine.calculate_slskd_match_confidence(
+            spotify_track_dto, candidate_dto
+        )
         if score > best_score:
             best_score = score
             best_candidate = candidate

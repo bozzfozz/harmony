@@ -38,7 +38,10 @@ async def test_sync_worker_persists_jobs() -> None:
         download_id = download.id
 
     await worker.enqueue(
-        {"username": "tester", "files": [{"id": download_id, "download_id": download_id}]}
+        {
+            "username": "tester",
+            "files": [{"id": download_id, "download_id": download_id}],
+        }
     )
 
     assert client.downloads, "Download should be triggered even when worker is stopped"

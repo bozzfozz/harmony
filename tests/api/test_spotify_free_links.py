@@ -4,8 +4,8 @@ from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any, Callable
 
-from fastapi import FastAPI, Request
 import pytest
+from fastapi import FastAPI, Request
 
 from app.api import spotify_free_links as free_links_module
 from app.api.spotify_free_links import get_free_ingest_service
@@ -88,7 +88,9 @@ def test_accepts_single_and_multiple_urls(
     stub.set_result(accepted_ids=["BBB", "CCC"])
     response = test_client.post(
         "/api/v1/spotify/free/links",
-        json={"urls": ["https://open.spotify.com/playlist/BBB", "spotify:playlist:CCC"]},
+        json={
+            "urls": ["https://open.spotify.com/playlist/BBB", "spotify:playlist:CCC"]
+        },
     )
     assert response.status_code == 200
     body = response.json()

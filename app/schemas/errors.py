@@ -31,7 +31,9 @@ class ApiError(BaseModel):
         message: str,
         details: Optional[Dict[str, Any]] = None,
     ) -> "ApiError":
-        return cls(error=ProblemDetail(code=code.value, message=message, details=details))
+        return cls(
+            error=ProblemDetail(code=code.value, message=message, details=details)
+        )
 
 
 __all__ = ["ApiError", "ErrorCode"]

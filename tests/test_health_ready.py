@@ -95,7 +95,9 @@ async def test_health_service_readiness_handles_disabled_dependency() -> None:
         config=config,
         session_factory=_session_factory(),
         dependency_probes={
-            "orchestrator:job:artwork": lambda: DependencyStatus(ok=True, status="disabled")
+            "orchestrator:job:artwork": lambda: DependencyStatus(
+                ok=True, status="disabled"
+            )
         },
     )
 

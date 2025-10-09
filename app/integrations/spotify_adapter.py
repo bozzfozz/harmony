@@ -56,7 +56,9 @@ class SpotifyAdapter(TrackProvider):
         def _search() -> list[ProviderTrack]:
             try:
                 payload = self._client.search_tracks(query.text, limit=effective_limit)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify search failed", cause=exc
                 ) from exc
@@ -112,18 +114,24 @@ class SpotifyAdapter(TrackProvider):
                     payload = self._client.get_artist(identifier)
                 else:
                     payload = _select_by_name(query_name)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify artist lookup failed", cause=exc
                 ) from exc
 
             if not payload:
-                raise ProviderNotFoundError(self.name, "artist not found", status_code=404)
+                raise ProviderNotFoundError(
+                    self.name, "artist not found", status_code=404
+                )
 
             try:
                 return from_spotify_artist(payload)
             except ValueError as exc:
-                raise ProviderInternalError(self.name, "invalid artist payload") from exc
+                raise ProviderInternalError(
+                    self.name, "invalid artist payload"
+                ) from exc
 
         try:
             return await asyncio.to_thread(_load)
@@ -132,7 +140,9 @@ class SpotifyAdapter(TrackProvider):
         except ProviderNotFoundError:
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
-            raise ProviderInternalError(self.name, "spotify artist lookup failed") from exc
+            raise ProviderInternalError(
+                self.name, "spotify artist lookup failed"
+            ) from exc
 
     async def fetch_artist_releases(
         self, artist_source_id: str, *, limit: int | None = None
@@ -155,7 +165,9 @@ class SpotifyAdapter(TrackProvider):
         def _load() -> list[ProviderRelease]:
             try:
                 payload = self._client.get_artist_releases(identifier)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify artist releases failed", cause=exc
                 ) from exc
@@ -196,7 +208,9 @@ class SpotifyAdapter(TrackProvider):
         except ProviderDependencyError:
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
-            raise ProviderInternalError(self.name, "spotify artist releases failed") from exc
+            raise ProviderInternalError(
+                self.name, "spotify artist releases failed"
+            ) from exc
 
     async def fetch_album(self, album_source_id: str) -> ProviderAlbumDetails | None:
         identifier = (album_source_id or "").strip()
@@ -210,17 +224,23 @@ class SpotifyAdapter(TrackProvider):
         def _load() -> ProviderAlbumDetails:
             try:
                 album_payload: Any = self._client.get_album_details(identifier)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify album lookup failed", cause=exc
                 ) from exc
 
             if not isinstance(album_payload, Mapping):
-                raise ProviderNotFoundError(self.name, "album not found", status_code=404)
+                raise ProviderNotFoundError(
+                    self.name, "album not found", status_code=404
+                )
 
             try:
                 tracks_payload: Any = self._client.get_album_tracks(identifier)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify album tracks failed", cause=exc
                 ) from exc
@@ -250,7 +270,9 @@ class SpotifyAdapter(TrackProvider):
         except ProviderNotFoundError:
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
-            raise ProviderInternalError(self.name, "spotify album lookup failed") from exc
+            raise ProviderInternalError(
+                self.name, "spotify album lookup failed"
+            ) from exc
 
     async def fetch_artist_top_tracks(
         self, artist_source_id: str, *, limit: int | None = None
@@ -271,7 +293,9 @@ class SpotifyAdapter(TrackProvider):
         def _load() -> list[ProviderTrack]:
             try:
                 payload: Any = self._client.get_artist_top_tracks(identifier)
-            except Exception as exc:  # pragma: no cover - network errors mocked in tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network errors mocked in tests
                 raise ProviderDependencyError(
                     self.name, "spotify artist top tracks failed", cause=exc
                 ) from exc
@@ -284,14 +308,18 @@ class SpotifyAdapter(TrackProvider):
                         entry for entry in candidates if isinstance(entry, Mapping)
                     )
             elif isinstance(payload, list):
-                track_entries.extend(entry for entry in payload if isinstance(entry, Mapping))
+                track_entries.extend(
+                    entry for entry in payload if isinstance(entry, Mapping)
+                )
 
             results: list[ProviderTrack] = []
             for entry in track_entries:
                 try:
                     results.append(normalize_spotify_track(entry, provider=self.name))
                 except Exception as exc:  # pragma: no cover - defensive guard
-                    logger.warning("Failed to normalise Spotify top track", exc_info=exc)
+                    logger.warning(
+                        "Failed to normalise Spotify top track", exc_info=exc
+                    )
                 if max_items is not None and len(results) >= max_items:
                     break
             return results
@@ -301,7 +329,9 @@ class SpotifyAdapter(TrackProvider):
         except ProviderDependencyError:
             raise
         except Exception as exc:  # pragma: no cover - defensive guard
-            raise ProviderInternalError(self.name, "spotify artist top tracks failed") from exc
+            raise ProviderInternalError(
+                self.name, "spotify artist top tracks failed"
+            ) from exc
 
 
 __all__ = ["SpotifyAdapter"]

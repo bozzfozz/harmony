@@ -18,7 +18,9 @@ def test_idempotent_processing_prevents_duplicates() -> None:
     assert first.id == second.id
 
     with session_scope() as session:
-        stmt = select(QueueJob).where(QueueJob.type == "matching", QueueJob.id == first.id)
+        stmt = select(QueueJob).where(
+            QueueJob.type == "matching", QueueJob.id == first.id
+        )
         jobs = session.execute(stmt).scalars().all()
         assert len(jobs) == 1
         assert jobs[0].payload["payload"]["value"] == 42

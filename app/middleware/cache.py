@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from email.utils import format_datetime, parsedate_to_datetime
 import hashlib
 import re
+from datetime import datetime, timezone
+from email.utils import format_datetime, parsedate_to_datetime
 from typing import Iterable
 
 from fastapi import Request
@@ -31,7 +31,9 @@ from app.services.cache import (
 _logger = get_logger(__name__)
 
 
-def _compile_rules(rules: Iterable[CacheRule]) -> tuple[tuple[re.Pattern[str], CacheRule], ...]:
+def _compile_rules(
+    rules: Iterable[CacheRule],
+) -> tuple[tuple[re.Pattern[str], CacheRule], ...]:
     compiled: list[tuple[re.Pattern[str], CacheRule]] = []
     for rule in rules:
         pattern = rule.pattern
@@ -197,7 +199,9 @@ class CacheMiddleware(BaseHTTPMiddleware):
             return special
 
         path_params = {key: str(value) for key, value in request.path_params.items()}
-        auth_header = request.headers.get("authorization") or request.headers.get("x-api-key")
+        auth_header = request.headers.get("authorization") or request.headers.get(
+            "x-api-key"
+        )
         auth_variant = resolve_auth_variant(auth_header)
         method = "GET" if request.method.upper() == "HEAD" else request.method
         return build_cache_key(
@@ -226,12 +230,16 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 filters_hash = playlist_filters_hash(request.url.query)
                 return playlist_list_cache_key(filters_hash=filters_hash)
             if _PLAYLIST_DETAIL_PATTERN.fullmatch(normalized) and playlist_id:
-                auth_header = request.headers.get("authorization") or request.headers.get(
-                    "x-api-key"
-                )
+                auth_header = request.headers.get(
+                    "authorization"
+                ) or request.headers.get("x-api-key")
                 auth_variant = resolve_auth_variant(auth_header)
                 query_hash = build_query_hash(request.url.query)
-                method = "GET" if request.method.upper() == "HEAD" else request.method.upper()
+                method = (
+                    "GET"
+                    if request.method.upper() == "HEAD"
+                    else request.method.upper()
+                )
                 detail_prefix = playlist_detail_cache_key(str(playlist_id))
                 return f"{detail_prefix}:{method}:{query_hash}:{auth_variant}"
         return None
@@ -310,7 +318,9 @@ class CacheMiddleware(BaseHTTPMiddleware):
 
         existing_etag = response.headers.get("ETag")
         if existing_etag:
-            candidates = [value.strip() for value in existing_etag.split(",") if value.strip()]
+            candidates = [
+                value.strip() for value in existing_etag.split(",") if value.strip()
+            ]
             etag = candidates[0] if candidates else self._generate_etag(body)
         else:
             etag = self._generate_etag(body)
@@ -348,7 +358,9 @@ class CacheMiddleware(BaseHTTPMiddleware):
             if iterator is not None:
                 chunks = []
                 async for chunk in iterator:
-                    chunk_bytes = chunk if isinstance(chunk, (bytes, bytearray)) else bytes(chunk)
+                    chunk_bytes = (
+                        chunk if isinstance(chunk, (bytes, bytearray)) else bytes(chunk)
+                    )
                     chunks.append(bytes(chunk_bytes))
                 if not chunks:
                     chunks.append(b"")
@@ -367,11 +379,15 @@ class CacheMiddleware(BaseHTTPMiddleware):
             return f'W/"{digest}"'
         return f'"{digest}"'
 
-    def _ensure_headers(self, response: Response, rule: CacheRule | None = None) -> Response:
+    def _ensure_headers(
+        self, response: Response, rule: CacheRule | None = None
+    ) -> Response:
         if self._vary_headers:
             response.headers.setdefault("Vary", ", ".join(self._vary_headers))
         ttl, stale = self._resolve_durations(rule)
-        response.headers.setdefault("Cache-Control", self._build_cache_control(ttl, stale))
+        response.headers.setdefault(
+            "Cache-Control", self._build_cache_control(ttl, stale)
+        )
         return response
 
     def _ensure_head_semantics(self, response: Response, method: str) -> Response:
@@ -426,7 +442,9 @@ class CacheMiddleware(BaseHTTPMiddleware):
     def _is_not_modified(self, request: Request, entry: CacheEntry) -> bool:
         if_none_match = request.headers.get("if-none-match")
         if if_none_match and entry.etag in {
-            candidate.strip() for candidate in if_none_match.split(",") if candidate.strip()
+            candidate.strip()
+            for candidate in if_none_match.split(",")
+            if candidate.strip()
         }:
             return True
 

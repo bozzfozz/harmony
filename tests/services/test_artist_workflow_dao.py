@@ -32,10 +32,14 @@ def _create_artist(
 
 
 def test_mark_success_updates_state_and_known_releases() -> None:
-    artist_id = _create_artist(retry_block_until=datetime.utcnow() + timedelta(minutes=10))
+    artist_id = _create_artist(
+        retry_block_until=datetime.utcnow() + timedelta(minutes=10)
+    )
     dao = ArtistWorkflowDAO()
     checked_at = datetime(2024, 1, 1, 12, 0, 0)
-    release = ArtistKnownRelease(track_id="track-1", etag="etag-1", fetched_at=checked_at)
+    release = ArtistKnownRelease(
+        track_id="track-1", etag="etag-1", fetched_at=checked_at
+    )
 
     dao.mark_success(
         artist_id,
@@ -86,7 +90,9 @@ def test_mark_success_normalizes_blank_hash() -> None:
 def test_load_batch_respects_cutoff_and_cooldown() -> None:
     now = datetime(2024, 1, 1, 10, 0, 0)
     due_id = _create_artist(last_checked=now - timedelta(days=1))
-    _create_artist(last_checked=now - timedelta(days=2), retry_block_until=now + timedelta(hours=1))
+    _create_artist(
+        last_checked=now - timedelta(days=2), retry_block_until=now + timedelta(hours=1)
+    )
     _create_artist(last_checked=now + timedelta(hours=2))
     dao = ArtistWorkflowDAO()
 
@@ -163,7 +169,9 @@ def test_create_download_record_persists_known_release_transactionally() -> None
             spotify_album_id="album-9",
             payload={"filename": "explode.flac"},
             artist_id=artist_id,
-            known_release=ArtistKnownRelease(track_id="track-99", etag="etag-99", fetched_at=None),
+            known_release=ArtistKnownRelease(
+                track_id="track-99", etag="etag-99", fetched_at=None
+            ),
         )
 
     with session_scope() as session:

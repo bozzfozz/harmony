@@ -71,7 +71,9 @@ class Download(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(1024), nullable=False)
-    state = Column(String(50), nullable=False, default=DownloadState.QUEUED.value, index=True)
+    state = Column(
+        String(50), nullable=False, default=DownloadState.QUEUED.value, index=True
+    )
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
@@ -155,7 +157,9 @@ class Setting(Base):
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
 
 class SettingHistory(Base):
@@ -303,7 +307,9 @@ class ArtistRecord(Base):
 class ArtistReleaseRecord(Base):
     __tablename__ = "artist_releases"
     __table_args__ = (
-        Index("uq_artist_releases_source_source_id", "source", "source_id", unique=True),
+        Index(
+            "uq_artist_releases_source_source_id", "source", "source_id", unique=True
+        ),
         Index("ix_artist_releases_artist_id", "artist_id"),
         Index("ix_artist_releases_artist_key", "artist_key"),
         Index("ix_artist_releases_release_date", "release_date"),
@@ -312,7 +318,9 @@ class ArtistReleaseRecord(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    artist_id = Column(Integer, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
+    artist_id = Column(
+        Integer, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
+    )
     artist_key = Column(String(255), nullable=False)
     source = Column(String(50), nullable=False)
     source_id = Column(String(255), nullable=True)
@@ -355,7 +363,9 @@ class ArtistAuditRecord(Base):
 
 class ArtistWatchlistEntry(Base):
     __tablename__ = "artist_watchlist"
-    __table_args__ = (Index("ix_artist_watchlist_priority", "priority", "last_enqueued_at"),)
+    __table_args__ = (
+        Index("ix_artist_watchlist_priority", "priority", "last_enqueued_at"),
+    )
 
     artist_key = Column(String(255), primary_key=True)
     priority = Column(Integer, nullable=False, default=0)
@@ -373,7 +383,9 @@ class ArtistWatchlistEntry(Base):
 
 class ImportSession(Base):
     __tablename__ = "import_sessions"
-    __table_args__ = (CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),)
+    __table_args__ = (
+        CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),
+    )
 
     id = Column(String(64), primary_key=True)
     mode = Column(String(10), nullable=False)
@@ -385,11 +397,18 @@ class ImportSession(Base):
 class ImportBatch(Base):
     __tablename__ = "import_batches"
     __table_args__ = (
-        Index("ix_import_batches_session_playlist", "session_id", "playlist_id", unique=True),
+        Index(
+            "ix_import_batches_session_playlist",
+            "session_id",
+            "playlist_id",
+            unique=True,
+        ),
     )
 
     id = Column(String(64), primary_key=True)
-    session_id = Column(String(64), ForeignKey("import_sessions.id"), nullable=False, index=True)
+    session_id = Column(
+        String(64), ForeignKey("import_sessions.id"), nullable=False, index=True
+    )
     playlist_id = Column(String(128), nullable=False, index=True)
     offset = Column(Integer, nullable=False, default=0)
     limit = Column(Integer, nullable=True)
@@ -553,7 +572,9 @@ class IngestItem(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String(64), ForeignKey("ingest_jobs.id"), nullable=False, index=True)
+    job_id = Column(
+        String(64), ForeignKey("ingest_jobs.id"), nullable=False, index=True
+    )
     source_type = Column(String(32), nullable=False)
     playlist_url = Column(String(2048), nullable=True)
     raw_line = Column(Text, nullable=True)

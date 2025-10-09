@@ -277,7 +277,9 @@ def test_retry_download_creates_new_entry(client) -> None:
 
     transfers_stub = client.app.state.transfers_stub
     assert original_id in transfers_stub.cancelled
-    assert any(job["files"][0]["download_id"] == retry_id for job in transfers_stub.enqueued)
+    assert any(
+        job["files"][0]["download_id"] == retry_id for job in transfers_stub.enqueued
+    )
 
     soulseek_stub = client.app.state.soulseek_stub
     assert soulseek_stub.downloads[original_id]["state"] == "failed"

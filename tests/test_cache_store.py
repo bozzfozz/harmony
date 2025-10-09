@@ -18,7 +18,9 @@ class TimeStub:
         return self._value
 
 
-def _make_entry(path: str, body: bytes, *, last_modified: datetime | None = None) -> CacheEntry:
+def _make_entry(
+    path: str, body: bytes, *, last_modified: datetime | None = None
+) -> CacheEntry:
     last_mod = last_modified or datetime.now(timezone.utc)
     last_mod_ts = last_mod.timestamp()
     return CacheEntry(

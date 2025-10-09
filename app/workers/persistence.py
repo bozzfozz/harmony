@@ -64,7 +64,9 @@ def register_lease_telemetry_hook(
     _lease_telemetry_hook = hook
 
 
-def _emit_lease_telemetry(job: "QueueJobDTO", status: str, *, lease_timeout: int) -> None:
+def _emit_lease_telemetry(
+    job: "QueueJobDTO", status: str, *, lease_timeout: int
+) -> None:
     if _lease_telemetry_hook is None:
         return
 
@@ -79,7 +81,8 @@ def _emit_lease_telemetry(job: "QueueJobDTO", status: str, *, lease_timeout: int
         )
     except Exception:  # pragma: no cover - defensive hook guard
         logger.exception(
-            "Lease telemetry hook raised", extra={"event": "queue.lease.telemetry_error"}
+            "Lease telemetry hook raised",
+            extra={"event": "queue.lease.telemetry_error"},
         )
 
 
@@ -130,7 +133,9 @@ def _resolve_priority(payload: Mapping[str, Any]) -> int:
     return max(0, parsed)
 
 
-def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None = None) -> int:
+def _resolve_visibility_timeout(
+    payload: Mapping[str, Any], override: int | None = None
+) -> int:
     if override is not None:
         try:
             resolved_override = int(override)
@@ -139,16 +144,22 @@ def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None
         return max(5, resolved_override)
 
     payload_value = payload.get("visibility_timeout")
-    from app.dependencies import get_app_config  # lazy import to avoid circular dependency
+    from app.dependencies import (
+        get_app_config,  # lazy import to avoid circular dependency
+    )
 
     config = get_app_config()
     worker_env = config.environment.workers
     env_override = worker_env.visibility_timeout_s
     resolved_default = (
-        env_override if env_override is not None else settings.orchestrator.visibility_timeout_s
+        env_override
+        if env_override is not None
+        else settings.orchestrator.visibility_timeout_s
     )
     try:
-        payload_resolved = int(payload_value) if payload_value is not None else resolved_default
+        payload_resolved = (
+            int(payload_value) if payload_value is not None else resolved_default
+        )
     except (TypeError, ValueError):
         payload_resolved = resolved_default
     return max(5, payload_resolved)
@@ -202,7 +213,9 @@ def _to_dto(record: QueueJob) -> QueueJobDTO:
         status=QueueJobStatus(record.status),
         idempotency_key=record.idempotency_key,
         last_error=record.last_error,
-        result_payload=dict(record.result_payload or {}) if record.result_payload else None,
+        result_payload=(
+            dict(record.result_payload or {}) if record.result_payload else None
+        ),
         stop_reason=record.stop_reason,
         lease_timeout_seconds=_resolve_visibility_timeout(payload),
     )
@@ -228,7 +241,9 @@ def _upsert_queue_job(
     bind = session.get_bind()
     dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
 
-    stmt_base: Select[QueueJob] = select(QueueJob).where(QueueJob.idempotency_key == dedupe_key)
+    stmt_base: Select[QueueJob] = select(QueueJob).where(
+        QueueJob.idempotency_key == dedupe_key
+    )
 
     def _log_dedupe() -> None:
         logger.debug(
@@ -354,7 +369,9 @@ def enqueue(
     scheduled_for = available_at
     payload_dict = dict(payload)
     dedupe_key = idempotency_key or _derive_idempotency_key(job_type, payload_dict)
-    resolved_priority = priority if priority is not None else _resolve_priority(payload_dict)
+    resolved_priority = (
+        priority if priority is not None else _resolve_priority(payload_dict)
+    )
 
     with session_scope() as session:
         if dedupe_key:
@@ -557,7 +574,8 @@ def heartbeat(
                 QueueJob.lease_expires_at > func.now(),
             )
             .values(
-                lease_expires_at=func.now() + func.make_interval(secs=bindparam("lease_timeout")),
+                lease_expires_at=func.now()
+                + func.make_interval(secs=bindparam("lease_timeout")),
                 updated_at=func.now(),
             )
         )
@@ -691,7 +709,9 @@ def to_dlq(
             return False
         dto = _to_dto(record)
     if dto is None:
-        raise RuntimeError("Queue job refresh failed after moving to dead-letter queue.")
+        raise RuntimeError(
+            "Queue job refresh failed after moving to dead-letter queue."
+        )
     _emit_worker_job_event(dto, "dead_letter", stop_reason=reason)
     if reason == "max_retries_exhausted":
         _emit_retry_exhausted(dto, stop_reason=reason)
@@ -863,7 +883,9 @@ async def lease_async(
 ) -> QueueJobDTO | None:
     """Async wrapper around :func:`lease`."""
 
-    return await asyncio.to_thread(lease, job_id, job_type=job_type, lease_seconds=lease_seconds)
+    return await asyncio.to_thread(
+        lease, job_id, job_type=job_type, lease_seconds=lease_seconds
+    )
 
 
 async def complete_async(

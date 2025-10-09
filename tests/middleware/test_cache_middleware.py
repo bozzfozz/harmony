@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-import pytest
 from starlette.responses import StreamingResponse
 
 from app.config import load_config
@@ -61,7 +61,9 @@ def _create_app(
     return TestClient(app), call_counts, response_cache
 
 
-def test_cache_control_uses_path_specific_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cache_control_uses_path_specific_rules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     env = {
         "DATABASE_URL": "postgresql+psycopg://test:test@localhost:5432/harmony",
         "CACHE_DEFAULT_TTL_S": "45",
@@ -78,25 +80,33 @@ def test_cache_control_uses_path_specific_rules(monkeypatch: pytest.MonkeyPatch)
 
     me_response = client.get("/cache/me")
     assert me_response.status_code == 200
-    assert me_response.headers["Cache-Control"] == "public, max-age=120, stale-while-revalidate=30"
+    assert (
+        me_response.headers["Cache-Control"]
+        == "public, max-age=120, stale-while-revalidate=30"
+    )
     assert calls["/cache/me"] == 1
 
     cached_me = client.get("/cache/me")
     assert cached_me.status_code == 200
-    assert cached_me.headers["Cache-Control"] == "public, max-age=120, stale-while-revalidate=30"
+    assert (
+        cached_me.headers["Cache-Control"]
+        == "public, max-age=120, stale-while-revalidate=30"
+    )
     assert calls["/cache/me"] == 1
 
     default_response = client.get("/cache/default")
     assert default_response.status_code == 200
     assert (
-        default_response.headers["Cache-Control"] == "public, max-age=45, stale-while-revalidate=90"
+        default_response.headers["Cache-Control"]
+        == "public, max-age=45, stale-while-revalidate=90"
     )
     assert calls["/cache/default"] == 1
 
     cached_default = client.get("/cache/default")
     assert cached_default.status_code == 200
     assert (
-        cached_default.headers["Cache-Control"] == "public, max-age=45, stale-while-revalidate=90"
+        cached_default.headers["Cache-Control"]
+        == "public, max-age=45, stale-while-revalidate=90"
     )
     assert calls["/cache/default"] == 1
 
@@ -166,7 +176,9 @@ def test_playlist_tracks_cache_key_preserves_query_and_auth(
     for key in relevant_keys:
         monkeypatch.delenv(key, raising=False)
 
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony")
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony"
+    )
     monkeypatch.setenv("CACHE_ENABLED", "true")
     monkeypatch.setenv("CACHE_DEFAULT_TTL_S", "120")
     monkeypatch.setenv("CACHE_MAX_ITEMS", "50")

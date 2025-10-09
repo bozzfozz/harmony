@@ -11,7 +11,9 @@ from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 class ProviderGatewayProtocol(Protocol):
     """Protocol implemented by the provider gateway facade."""
 
-    async def search_tracks(self, provider: str, query: SearchQuery) -> list[ProviderTrack]:
+    async def search_tracks(
+        self, provider: str, query: SearchQuery
+    ) -> list[ProviderTrack]:
         """Execute a search against a single provider and return raw tracks."""
 
     async def search_many(

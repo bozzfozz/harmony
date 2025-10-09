@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import re
 import secrets
 import time
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -29,7 +29,10 @@ from app.dependencies import (
 from app.errors import DependencyError, NotFoundError, ValidationAppError
 from app.logging import get_logger
 from app.models import Download
-from app.orchestrator.handlers import enqueue_spotify_backfill, get_spotify_backfill_status
+from app.orchestrator.handlers import (
+    enqueue_spotify_backfill,
+    get_spotify_backfill_status,
+)
 from app.schemas import (
     ArtistReleasesResponse,
     AudioFeaturesResponse,
@@ -47,13 +50,21 @@ from app.schemas import (
 from app.services.backfill_service import BackfillJobStatus
 from app.services.cache import playlist_filters_hash
 from app.services.free_ingest_service import IngestSubmission, PlaylistValidationError
-from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
-from app.utils.http_cache import compute_playlist_collection_metadata, is_request_not_modified
+from app.services.spotify_domain_service import (
+    PlaylistItemsResult,
+    SpotifyDomainService,
+)
+from app.utils.http_cache import (
+    compute_playlist_collection_metadata,
+    is_request_not_modified,
+)
 from app.utils.settings_store import write_setting
 from app.workers.sync_worker import SyncWorker
 
 router = APIRouter()
-core_router = APIRouter(prefix="/spotify", tags=["Spotify"], responses=CACHEABLE_RESPONSES)
+core_router = APIRouter(
+    prefix="/spotify", tags=["Spotify"], responses=CACHEABLE_RESPONSES
+)
 backfill_router = APIRouter(prefix="/spotify/backfill", tags=["Spotify Backfill"])
 free_router = APIRouter(prefix="/spotify/free", tags=["Spotify FREE"])
 free_ingest_router = APIRouter(prefix="/spotify/import", tags=["Spotify FREE Ingest"])
@@ -76,10 +87,15 @@ class TrackIdsPayload(BaseModel):
 
 class SpotifyStatusResponse(BaseModel):
     status: Literal["connected", "unauthenticated", "unconfigured"]
-    free_available: bool = Field(..., description="Whether FREE ingest features are available.")
-    pro_available: bool = Field(..., description="Whether Spotify API integrations are configured.")
+    free_available: bool = Field(
+        ..., description="Whether FREE ingest features are available."
+    )
+    pro_available: bool = Field(
+        ..., description="Whether Spotify API integrations are configured."
+    )
     authenticated: bool = Field(
-        ..., description="Indicates if the Spotify client currently holds a valid session."
+        ...,
+        description="Indicates if the Spotify client currently holds a valid session.",
     )
 
 
@@ -168,7 +184,9 @@ def list_playlists(
 ) -> PlaylistResponse | Response:
     playlists = list(service.list_playlists(db))
     filters_hash = playlist_filters_hash(request.url.query)
-    metadata = compute_playlist_collection_metadata(playlists, filters_hash=filters_hash)
+    metadata = compute_playlist_collection_metadata(
+        playlists, filters_hash=filters_hash
+    )
 
     if is_request_not_modified(
         request,
@@ -417,7 +435,9 @@ async def run_backfill(
         ) from None
 
     response = BackfillRunResponse(ok=True, job_id=job_id)
-    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=response.model_dump())
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED, content=response.model_dump()
+    )
 
 
 def _build_counts(status: BackfillJobStatus) -> BackfillJobCounts:
@@ -439,7 +459,9 @@ async def get_backfill_job(
 ) -> BackfillJobResponse:
     status_payload = get_spotify_backfill_status(service, job_id)
     if status_payload is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
 
     counts = _build_counts(status_payload)
     return BackfillJobResponse(
@@ -549,7 +571,12 @@ def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
 
 
 def _submission_status_code(result: IngestSubmission) -> int:
-    if result.error or result.skipped.reason or result.skipped.playlists or result.skipped.tracks:
+    if (
+        result.error
+        or result.skipped.reason
+        or result.skipped.playlists
+        or result.skipped.tracks
+    ):
         return status.HTTP_207_MULTI_STATUS
     return status.HTTP_202_ACCEPTED
 
@@ -569,7 +596,9 @@ async def submit_free_ingest(
             batch_hint=payload.batch_hint,
         )
     except PlaylistValidationError as exc:
-        details = [{"url": item.url, "reason": item.reason} for item in exc.invalid_links]
+        details = [
+            {"url": item.url, "reason": item.reason} for item in exc.invalid_links
+        ]
         raise ValidationAppError(
             "invalid playlist links",
             meta={"details": details},
@@ -678,9 +707,9 @@ def _parse_multipart_file(content_type: str, body: bytes) -> Tuple[str, bytes]:
             if b":" not in line:
                 continue
             name, value = line.split(b":", 1)
-            headers[name.decode("utf-8", errors="ignore").strip().lower()] = value.decode(
-                "utf-8", errors="ignore"
-            ).strip()
+            headers[name.decode("utf-8", errors="ignore").strip().lower()] = (
+                value.decode("utf-8", errors="ignore").strip()
+            )
         disposition = headers.get("content-disposition", "")
         if 'name="file"' not in disposition:
             continue
@@ -801,7 +830,11 @@ class _FreeImportFileStore:
 
     def _cleanup(self) -> None:
         threshold = time.monotonic() - self._ttl
-        expired = [key for key, (created_at, _) in self._entries.items() if created_at < threshold]
+        expired = [
+            key
+            for key, (created_at, _) in self._entries.items()
+            if created_at < threshold
+        ]
         for key in expired:
             self._entries.pop(key, None)
 
@@ -875,7 +908,10 @@ def _parse_metadata(text: str) -> Tuple[_ParsedLine, Optional[str]]:
     remainder = segments[1:]
     parts = re.split(r"\s*[-–—]\s*", main, maxsplit=1)
     if len(parts) < 2:
-        return _ParsedLine("", "", None, None, None, None), "Expected format 'Artist - Title'"
+        return (
+            _ParsedLine("", "", None, None, None, None),
+            "Expected format 'Artist - Title'",
+        )
     artist, title = parts[0].strip(), parts[1].strip()
     album = remainder[0].strip() if remainder else None
     year: Optional[int] = None
@@ -892,9 +928,15 @@ def _parse_metadata(text: str) -> Tuple[_ParsedLine, Optional[str]]:
         except ValueError:
             year = None
     if not artist:
-        return _ParsedLine("", title, album, year, None, None), "Artist must not be empty"
+        return (
+            _ParsedLine("", title, album, year, None, None),
+            "Artist must not be empty",
+        )
     if not title:
-        return _ParsedLine(artist, "", album, year, None, None), "Title must not be empty"
+        return (
+            _ParsedLine(artist, "", album, year, None, None),
+            "Title must not be empty",
+        )
     return _ParsedLine(artist, title, album or None, year, None, None), None
 
 
@@ -908,7 +950,9 @@ def _parse_metadata_year_candidate(value: str) -> Optional[int]:
         raise ValueError(str(exc))
 
 
-def _build_query(artist: str, title: str, album: Optional[str], year: Optional[int]) -> str:
+def _build_query(
+    artist: str, title: str, album: Optional[str], year: Optional[int]
+) -> str:
     parts = [title, artist]
     if album:
         parts.append(album)
@@ -963,7 +1007,9 @@ def _select_candidate(payload: Any) -> tuple[Optional[str], Optional[Dict[str, A
             )
             if filename:
                 candidate["filename"] = str(filename)
-            format_name = str(candidate.get("format") or candidate.get("extension") or "").lower()
+            format_name = str(
+                candidate.get("format") or candidate.get("extension") or ""
+            ).lower()
             if not format_name and isinstance(candidate.get("filename"), str):
                 filename = str(candidate["filename"])
                 if "." in filename:
@@ -996,7 +1042,9 @@ def _create_download_record(
 ) -> int:
     with session_scope() as session:
         download = Download(
-            filename=file_info.get("filename") or file_info.get("name") or f"{track.title}.flac",
+            filename=file_info.get("filename")
+            or file_info.get("name")
+            or f"{track.title}.flac",
             state="queued",
             progress=0.0,
             username=username,
@@ -1179,7 +1227,9 @@ async def enqueue_tracks(
         if not username or not candidate or not query_used:
             skipped += 1
             continue
-        priority = 10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
+        priority = (
+            10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
+        )
         try:
             download_id = _create_download_record(
                 track=track,

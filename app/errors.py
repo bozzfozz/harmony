@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from enum import Enum
-import logging
 from typing import Any, Mapping, MutableMapping
 from uuid import uuid4
 
@@ -86,7 +86,10 @@ class ValidationAppError(AppError):
         meta: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(
-            message=message, code=ErrorCode.VALIDATION_ERROR, http_status=status_code, meta=meta
+            message=message,
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=status_code,
+            meta=meta,
         )
 
 
@@ -226,7 +229,9 @@ def _build_response(
             if safe_meta is None:
                 safe_meta = {}
             safe_meta.setdefault("debug_id", debug_id)
-            safe_meta.setdefault("hint", "Provide the debug_id when contacting support.")
+            safe_meta.setdefault(
+                "hint", "Provide the debug_id when contacting support."
+            )
 
         payload: MutableMapping[str, Any] = {
             "ok": False,

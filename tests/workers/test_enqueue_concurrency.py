@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import anyio
@@ -39,7 +39,11 @@ async def test_enqueue_idempotent_concurrency_creates_single_row() -> None:
     assert len(set(results)) == 1
 
     with session_scope() as session:
-        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == "matching")
+        stmt = (
+            select(func.count())
+            .select_from(QueueJob)
+            .where(QueueJob.type == "matching")
+        )
         count = session.execute(stmt).scalar_one()
         assert count == 1
 
@@ -90,7 +94,11 @@ async def test_enqueue_duplicate_returns_existing_job(
     assert False in dedup_flags
 
     with session_scope() as session:
-        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == "metadata")
+        stmt = (
+            select(func.count())
+            .select_from(QueueJob)
+            .where(QueueJob.type == "metadata")
+        )
         count = session.execute(stmt).scalar_one()
         assert count == 1
 
@@ -130,13 +138,17 @@ async def test_enqueue_parallel_requests_return_existing_job() -> None:
     assert len(set(results)) == 1
 
     with session_scope() as session:
-        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        stmt = (
+            select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        )
         count = session.execute(stmt).scalar_one()
         assert count == 1
 
         record_stmt = select(QueueJob).where(QueueJob.type == job_type)
         record = session.execute(record_stmt).scalars().one()
-        payload_data = record.payload.get("payload") if isinstance(record.payload, dict) else None
+        payload_data = (
+            record.payload.get("payload") if isinstance(record.payload, dict) else None
+        )
         assert isinstance(payload_data, dict)
         assert payload_data.get("attempt") in range(concurrency)
 
@@ -145,7 +157,9 @@ def test_enqueue_redelivery_does_not_duplicate_on_retry() -> None:
     job_type = "retryable"
     dedupe_key = "retryable-job"
 
-    original = enqueue(job_type, {"idempotency_key": dedupe_key, "payload": {"stage": "initial"}})
+    original = enqueue(
+        job_type, {"idempotency_key": dedupe_key, "payload": {"stage": "initial"}}
+    )
     assert original.idempotency_key == dedupe_key
 
     leased = persistence.lease(original.id, job_type=job_type)
@@ -163,11 +177,17 @@ def test_enqueue_redelivery_does_not_duplicate_on_retry() -> None:
     assert updated.payload["payload"]["stage"] == "retry"
 
     with session_scope() as session:
-        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        stmt = (
+            select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        )
         count = session.execute(stmt).scalar_one()
         assert count == 1
 
-        record = session.execute(select(QueueJob).where(QueueJob.id == original.id)).scalars().one()
+        record = (
+            session.execute(select(QueueJob).where(QueueJob.id == original.id))
+            .scalars()
+            .one()
+        )
         assert record.payload["payload"]["stage"] == "retry"
 
 
@@ -204,7 +224,9 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
                 dedupe_events.append({"message": message, "extra": extra})
         original_debug(message, *args, **kwargs)
 
-    def capture_emit(job: QueueJobDTO, status: str, *, deduped=None, **kwargs: Any) -> None:
+    def capture_emit(
+        job: QueueJobDTO, status: str, *, deduped=None, **kwargs: Any
+    ) -> None:
         with lock:
             emitted_events.append(
                 {
@@ -248,19 +270,28 @@ async def test_enqueue_conflict_returns_existing_job_on_integrity_error(
 
     assert dedupe_events, "Expected a dedupe log entry for concurrent enqueue conflict"
     assert any(event["extra"].get("job_type") == job_type for event in dedupe_events)
-    assert any(event["extra"].get("dialect") == queue_database_backend for event in dedupe_events)
+    assert any(
+        event["extra"].get("dialect") == queue_database_backend
+        for event in dedupe_events
+    )
 
-    deduped_event_job_ids = {event["job_id"] for event in emitted_events if event["deduped"]}
+    deduped_event_job_ids = {
+        event["job_id"] for event in emitted_events if event["deduped"]
+    }
     assert deduped_event_job_ids == {existing_id}
 
     with session_scope() as session:
-        stmt = select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        stmt = (
+            select(func.count()).select_from(QueueJob).where(QueueJob.type == job_type)
+        )
         count = session.execute(stmt).scalar_one()
         assert count == 1
 
         record_stmt = select(QueueJob).where(QueueJob.type == job_type)
         record = session.execute(record_stmt).scalars().one()
-        payload_data = record.payload.get("payload") if isinstance(record.payload, dict) else None
+        payload_data = (
+            record.payload.get("payload") if isinstance(record.payload, dict) else None
+        )
         assert isinstance(payload_data, dict)
         assert payload_data.get("attempt") in range(concurrency + 1)
 

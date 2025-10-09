@@ -21,7 +21,9 @@ class _DummyClient:
     def __enter__(self) -> "_DummyClient":  # pragma: no cover - context manager helper
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - context manager helper
+    def __exit__(
+        self, exc_type, exc, tb
+    ) -> None:  # pragma: no cover - context manager helper
         return None
 
     def get(self, url: str, params: dict[str, Any]) -> _DummyResponse:
@@ -33,8 +35,12 @@ def test_fetch_caa_artwork_skips_disallowed_hosts(monkeypatch) -> None:
     release_groups = [{"id": "first"}, {"id": "second"}]
 
     monkeypatch.setattr(artwork_utils.httpx, "Client", lambda **_: _DummyClient())
-    monkeypatch.setattr(artwork_utils, "_extract_release_groups", lambda payload: release_groups)
-    monkeypatch.setattr(artwork_utils, "_extract_release_group_id", lambda entry: entry.get("id"))
+    monkeypatch.setattr(
+        artwork_utils, "_extract_release_groups", lambda payload: release_groups
+    )
+    monkeypatch.setattr(
+        artwork_utils, "_extract_release_group_id", lambda entry: entry.get("id")
+    )
 
     checked_urls: list[str] = []
 

@@ -49,7 +49,9 @@ def test_list_downloads_filters_active_states(db_session) -> None:
 
     service = _service(db_session)
 
-    downloads = service.list_downloads(include_all=False, status_filter=None, limit=10, offset=0)
+    downloads = service.list_downloads(
+        include_all=False, status_filter=None, limit=10, offset=0
+    )
     assert [item.id for item in downloads] == [active.id]
 
 
@@ -114,7 +116,9 @@ async def test_queue_downloads_persists_and_enqueues(db_session) -> None:
 async def test_queue_downloads_without_worker_raises(db_session) -> None:
     service = _service(db_session)
 
-    payload = SoulseekDownloadRequest(username="tester", files=[{"filename": "track.mp3"}])
+    payload = SoulseekDownloadRequest(
+        username="tester", files=[{"filename": "track.mp3"}]
+    )
 
     with pytest.raises(DependencyError):
         await service.queue_downloads(payload, worker=None)

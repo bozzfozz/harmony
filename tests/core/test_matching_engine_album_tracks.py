@@ -33,13 +33,26 @@ def test_match_confidence_rewards_album_track_alignment() -> None:
         "metadata": {"bitrate": 128},
     }
 
-    aligned_entry = {**base_candidate, "album": {"name": "Aligned Album", "total_tracks": 10}}
-    off_by_one_entry = {**base_candidate, "album": {"name": "Aligned Album", "total_tracks": 9}}
-    diverging_entry = {**base_candidate, "album": {"name": "Aligned Album", "total_tracks": 3}}
+    aligned_entry = {
+        **base_candidate,
+        "album": {"name": "Aligned Album", "total_tracks": 10},
+    }
+    off_by_one_entry = {
+        **base_candidate,
+        "album": {"name": "Aligned Album", "total_tracks": 9},
+    }
+    diverging_entry = {
+        **base_candidate,
+        "album": {"name": "Aligned Album", "total_tracks": 3},
+    }
 
     aligned_confidence = calculate_slskd_match_confidence(spotify_track, aligned_entry)
-    off_by_one_confidence = calculate_slskd_match_confidence(spotify_track, off_by_one_entry)
-    diverging_confidence = calculate_slskd_match_confidence(spotify_track, diverging_entry)
+    off_by_one_confidence = calculate_slskd_match_confidence(
+        spotify_track, off_by_one_entry
+    )
+    diverging_confidence = calculate_slskd_match_confidence(
+        spotify_track, diverging_entry
+    )
 
     assert aligned_confidence >= off_by_one_confidence
     assert aligned_confidence - diverging_confidence >= 0.1

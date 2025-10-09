@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-import re
 from typing import Any, Iterable, Mapping, Sequence
-import unicodedata
 
 from app.config import MatchingConfig, load_matching_config
 
@@ -37,7 +37,9 @@ class _QueryParts:
 
 def _strip_accents(value: str) -> str:
     return "".join(
-        ch for ch in unicodedata.normalize("NFKD", value) if not unicodedata.combining(ch)
+        ch
+        for ch in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(ch)
     )
 
 
@@ -71,7 +73,9 @@ def _parse_query(query: str) -> _QueryParts:
             artists.append(prefix.strip())
             title = suffix.strip()
     edition_tags = _extract_edition_tags(title)
-    return _QueryParts(raw=raw, title=title, artists=tuple(artists), edition_tags=edition_tags)
+    return _QueryParts(
+        raw=raw, title=title, artists=tuple(artists), edition_tags=edition_tags
+    )
 
 
 _EDITION_PATTERN = re.compile(
@@ -83,7 +87,9 @@ _EDITION_PATTERN = re.compile(
 def _extract_edition_tags(text: str) -> tuple[str, ...]:
     if not text:
         return ()
-    return tuple(sorted({match.group(0).lower() for match in _EDITION_PATTERN.finditer(text)}))
+    return tuple(
+        sorted({match.group(0).lower() for match in _EDITION_PATTERN.finditer(text)})
+    )
 
 
 def _candidate_artist_names(track: ProviderTrackDTO) -> tuple[str, ...]:
@@ -165,7 +171,9 @@ def _score_candidate(
         penalty = min(0.4, (min_artist_sim - artist_score) * 0.75)
     bonus = 0.0
     if edition_aware:
-        bonus += _edition_bonus(set(query.edition_tags), set(track.combined_edition_tags))
+        bonus += _edition_bonus(
+            set(query.edition_tags), set(track.combined_edition_tags)
+        )
     query_year = _extract_year_from_text(query.raw)
     track_year = track.year
     if query_year is not None and track_year is not None:
@@ -177,7 +185,11 @@ def _score_candidate(
         elif delta > 5:
             penalty += 0.05
     return MatchScore(
-        title=title_score, artist=artist_score, album=album_score, bonus=bonus, penalty=penalty
+        title=title_score,
+        artist=artist_score,
+        album=album_score,
+        bonus=bonus,
+        penalty=penalty,
     )
 
 
@@ -216,11 +228,16 @@ def rank_candidates(
     enriched: list[tuple[MatchResult, float]] = []
     for track in track_candidates:
         score = _score_candidate(
-            parsed_query, track, min_artist_sim=min_artist_sim, edition_aware=edition_aware
+            parsed_query,
+            track,
+            min_artist_sim=min_artist_sim,
+            edition_aware=edition_aware,
         )
         total = score.total
         confidence = _confidence_label(total, complete=complete_thr, nearly=nearly_thr)
-        enriched.append((MatchResult(track=track, score=score, confidence=confidence), total))
+        enriched.append(
+            (MatchResult(track=track, score=score, confidence=confidence), total)
+        )
     enriched.sort(key=lambda item: _sort_key(item[0], item[1]))
     limit = len(enriched)
     if fuzzy_max >= 0:
@@ -345,8 +362,12 @@ def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) ->
     artist_score = 0.0
     primary_artist = track.primary_artist
     if primary_artist:
-        for name in _candidate_artist_names(candidate) or (_normalize_text(primary_artist),):
-            artist_score = max(artist_score, _ratio(_normalize_text(primary_artist), name))
+        for name in _candidate_artist_names(candidate) or (
+            _normalize_text(primary_artist),
+        ):
+            artist_score = max(
+                artist_score, _ratio(_normalize_text(primary_artist), name)
+            )
     else:
         artist_score = 0.5
     bitrate_value = _as_int(
@@ -392,11 +413,15 @@ def compute_relevance_score(query: str, candidate: Mapping[str, Any]) -> float:
     album = _normalize_text(str(candidate.get("album", "")))
     artist_entries = _ensure_iterable(candidate.get("artists"))
     artists = [
-        _normalize_text(str(entry)) for entry in artist_entries if _normalize_text(str(entry))
+        _normalize_text(str(entry))
+        for entry in artist_entries
+        if _normalize_text(str(entry))
     ]
     title_score = _ratio(normalised_query, title)
     album_score = _ratio(normalised_query, album)
-    artist_score = max((_ratio(normalised_query, artist) for artist in artists), default=0.0)
+    artist_score = max(
+        (_ratio(normalised_query, artist) for artist in artists), default=0.0
+    )
     composite_terms = " ".join(filter(None, [title, album, " ".join(artists)]))
     composite_score = _ratio(normalised_query, composite_terms)
     type_hint = str(candidate.get("type") or "").lower()
@@ -431,7 +456,9 @@ class MusicMatchingEngine:
     def config(self) -> MatchingConfig:
         return self._config
 
-    def rank_candidates(self, query: str, candidates: Sequence[Any]) -> list[MatchResult]:
+    def rank_candidates(
+        self, query: str, candidates: Sequence[Any]
+    ) -> list[MatchResult]:
         return rank_candidates(
             query,
             candidates,
@@ -460,7 +487,9 @@ class MusicMatchingEngine:
         return compute_relevance_score(query, candidate)
 
     @staticmethod
-    def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) -> float:
+    def calculate_slskd_match_confidence(
+        spotify_track: Any, soulseek_entry: Any
+    ) -> float:
         return calculate_slskd_match_confidence(spotify_track, soulseek_entry)
 
 

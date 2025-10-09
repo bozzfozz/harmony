@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
-from datetime import datetime
 import hashlib
-from io import StringIO
 import json
 import math
 import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from io import StringIO
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,7 +24,6 @@ from typing import (
     Tuple,
 )
 from urllib.parse import urlparse
-import uuid
 
 from sqlalchemy import func, select
 
@@ -41,7 +41,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 logger = get_logger(__name__)
 
 LOSSLESS_FORMATS: set[str] = {"flac", "alac", "ape", "wav"}
-_DURATION_PATTERN = re.compile(r"(?:(?P<hours>\d+):)?(?P<minutes>\d{1,2}):(?P<seconds>\d{2})")
+_DURATION_PATTERN = re.compile(
+    r"(?:(?P<hours>\d+):)?(?P<minutes>\d{1,2}):(?P<seconds>\d{2})"
+)
 _DASH_PATTERN = re.compile(r"\s*[-–—]\s*")
 
 
@@ -155,10 +157,12 @@ class FreeIngestService:
         playlist_links = playlist_links or []
         tracks = tracks or []
 
-        normalised_links, skipped_playlists, playlist_skip_reason = self._normalise_playlists(
-            playlist_links
+        normalised_links, skipped_playlists, playlist_skip_reason = (
+            self._normalise_playlists(playlist_links)
         )
-        normalised_tracks, skipped_tracks, track_skip_reason = self._normalise_tracks(tracks)
+        normalised_tracks, skipped_tracks, track_skip_reason = self._normalise_tracks(
+            tracks
+        )
 
         skip_reason = playlist_skip_reason or track_skip_reason
         job_id = f"job_{uuid.uuid4().hex}"
@@ -221,8 +225,12 @@ class FreeIngestService:
                     batch_size=batch_size,
                 )
             except Exception as exc:  # pragma: no cover - defensive guard
-                logger.error("event=ingest_enqueue_failed job_id=%s error=%s", job_id, exc)
-                await self._update_job_state(job_id, IngestJobState.FAILED, error=str(exc))
+                logger.error(
+                    "event=ingest_enqueue_failed job_id=%s error=%s", job_id, exc
+                )
+                await self._update_job_state(
+                    job_id, IngestJobState.FAILED, error=str(exc)
+                )
                 raise
         else:
             await self._update_job_state(
@@ -264,7 +272,9 @@ class FreeIngestService:
             error=submission_error,
         )
 
-    async def enqueue_playlists(self, playlist_ids: Sequence[str]) -> PlaylistEnqueueResult:
+    async def enqueue_playlists(
+        self, playlist_ids: Sequence[str]
+    ) -> PlaylistEnqueueResult:
         """Enqueue playlist identifiers via the FREE ingest pipeline."""
 
         unique_ids: list[str] = []
@@ -309,17 +319,22 @@ class FreeIngestService:
         existing_hashes = await self._run_session(_load_existing)
 
         duplicate_ids = [
-            playlist_id for playlist_id, digest in hashed_ids if digest in existing_hashes
+            playlist_id
+            for playlist_id, digest in hashed_ids
+            if digest in existing_hashes
         ]
         pending_ids = [
-            playlist_id for playlist_id, digest in hashed_ids if digest not in existing_hashes
+            playlist_id
+            for playlist_id, digest in hashed_ids
+            if digest not in existing_hashes
         ]
 
         if not pending_ids:
             return PlaylistEnqueueResult(accepted_ids=[], duplicate_ids=duplicate_ids)
 
         canonical_links = [
-            f"https://open.spotify.com/playlist/{playlist_id}" for playlist_id in pending_ids
+            f"https://open.spotify.com/playlist/{playlist_id}"
+            for playlist_id in pending_ids
         ]
         submission = await self.submit(playlist_links=canonical_links)
 
@@ -397,7 +412,9 @@ class FreeIngestService:
                 )
             ).scalar_one()
 
-            batches = self._calculate_batches(int(track_total), self._resolve_batch_size(None))
+            batches = self._calculate_batches(
+                int(track_total), self._resolve_batch_size(None)
+            )
             accepted = IngestAccepted(
                 playlists=int(playlist_total),
                 tracks=int(track_total),
@@ -406,7 +423,9 @@ class FreeIngestService:
             skipped_tracks_total = int(job.skipped_tracks or 0)
             skip_reason = None
             stored_error = job.error
-            error_message, skip_reason = self._split_error_and_skip_reason(job.state, stored_error)
+            error_message, skip_reason = self._split_error_and_skip_reason(
+                job.state, stored_error
+            )
             skipped = IngestSkipped(
                 playlists=int(job.skipped_playlists or 0),
                 tracks=skipped_tracks_total,
@@ -522,7 +541,9 @@ class FreeIngestService:
                 continue
 
             artist, title, album, duration_sec = parsed
-            dedupe_hash = self._hash_parts(artist, title, album or "", duration_sec or "")
+            dedupe_hash = self._hash_parts(
+                artist, title, album or "", duration_sec or ""
+            )
             if dedupe_hash in seen_hashes:
                 skipped += 1
                 skip_reason = skip_reason or "duplicate"
@@ -541,7 +562,9 @@ class FreeIngestService:
 
         return accepted, skipped, skip_reason
 
-    def _parse_track_line(self, line: str) -> Tuple[str, str, Optional[str], Optional[int]] | None:
+    def _parse_track_line(
+        self, line: str
+    ) -> Tuple[str, str, Optional[str], Optional[int]] | None:
         duration = self._extract_duration(line)
         cleaned = line
         if duration is not None:
@@ -766,7 +789,9 @@ class FreeIngestService:
             skip = skip.strip()
             skip_reason = skip or None
         else:
-            if job_state != IngestJobState.FAILED.value and not text.startswith("partial "):
+            if job_state != IngestJobState.FAILED.value and not text.startswith(
+                "partial "
+            ):
                 skip_reason = text
 
         return message, skip_reason
@@ -841,10 +866,14 @@ class FreeIngestService:
                 break
 
         if not username or not candidate or not query_used:
-            await self._set_item_state(track.item_id, IngestItemState.FAILED, error="no_match")
+            await self._set_item_state(
+                track.item_id, IngestItemState.FAILED, error="no_match"
+            )
             return False
 
-        priority = 10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
+        priority = (
+            10 if str(candidate.get("format", "")).lower() in LOSSLESS_FORMATS else 0
+        )
         download_id = await self._create_download_record(
             job_id=job_id,
             track=track,
@@ -866,7 +895,9 @@ class FreeIngestService:
             else:
                 await self._soulseek.download(job_payload)
         except Exception:
-            await self._set_item_state(track.item_id, IngestItemState.FAILED, error="queue_error")
+            await self._set_item_state(
+                track.item_id, IngestItemState.FAILED, error="queue_error"
+            )
             raise
 
         await self._set_item_state(track.item_id, IngestItemState.QUEUED, error=None)
@@ -938,7 +969,9 @@ class FreeIngestService:
         return queries
 
     @staticmethod
-    def _select_candidate(payload: Any) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    def _select_candidate(
+        payload: Any,
+    ) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
         if not isinstance(payload, dict):
             return None, None
         candidates = payload.get("results")
@@ -999,14 +1032,18 @@ class FreeIngestService:
             item = session.get(IngestItem, item_id)
             if item is None:
                 return
-            item.state = state.value if isinstance(state, IngestItemState) else str(state)
+            item.state = (
+                state.value if isinstance(state, IngestItemState) else str(state)
+            )
             item.error = error
             session.add(item)
 
         await self._run_session(_update)
 
     @staticmethod
-    def _chunk(items: Sequence[NormalizedTrack], size: int) -> Iterable[Sequence[NormalizedTrack]]:
+    def _chunk(
+        items: Sequence[NormalizedTrack], size: int
+    ) -> Iterable[Sequence[NormalizedTrack]]:
         if size <= 0:
             size = 1
         for start in range(0, len(items), size):
@@ -1051,4 +1088,6 @@ class FreeIngestService:
             reader = csv.reader(StringIO(text))
             return [cell.strip() for row in reader for cell in row if str(cell).strip()]
 
-        return [line.strip() for line in text.replace("\r", "").split("\n") if line.strip()]
+        return [
+            line.strip() for line in text.replace("\r", "").split("\n") if line.strip()
+        ]

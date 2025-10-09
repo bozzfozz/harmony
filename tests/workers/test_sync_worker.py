@@ -33,7 +33,9 @@ class RecordingSoulseekClient:
         self.status_calls += 1
         return []
 
-    async def cancel_download(self, identifier: str) -> None:  # pragma: no cover - unused
+    async def cancel_download(
+        self, identifier: str
+    ) -> None:  # pragma: no cover - unused
         return None
 
 
@@ -115,9 +117,13 @@ async def test_sync_worker_persistence_calls_leave_event_loop_responsive(
         await asyncio.sleep(0)
         return await lease_async(job_id, job_type=job_type, lease_seconds=lease_seconds)
 
-    async def delayed_complete(job_id: int, job_type: str, result_payload: Dict[str, Any] | None):
+    async def delayed_complete(
+        job_id: int, job_type: str, result_payload: Dict[str, Any] | None
+    ):
         await asyncio.sleep(0)
-        return await complete_async(job_id, job_type=job_type, result_payload=result_payload)
+        return await complete_async(
+            job_id, job_type=job_type, result_payload=result_payload
+        )
 
     async def delayed_fail(
         job_id: int,
@@ -182,6 +188,8 @@ async def test_sync_worker_persistence_calls_leave_event_loop_responsive(
             await ticker_task
         await worker.stop()
 
-    assert ticks_during_enqueue > 0, "Event loop should make progress during persistence calls"
+    assert (
+        ticks_during_enqueue > 0
+    ), "Event loop should make progress during persistence calls"
     assert client.status_calls > 0, "Poll loop should continue to run"
     assert len(processed) == len(jobs)

@@ -72,7 +72,9 @@ def _install_slow_run_session(
 
 
 @pytest.mark.asyncio
-async def test_sync_worker_enqueue_yields_with_slow_db(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sync_worker_enqueue_yields_with_slow_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("app.workers.sync_worker.read_setting", lambda _key: None)
 
     worker = SyncWorker(SimpleNamespace())
@@ -115,7 +117,9 @@ async def test_sync_worker_enqueue_yields_with_slow_db(monkeypatch: pytest.Monke
 
     monitor_task = asyncio.create_task(monitor())
     worker_task = asyncio.create_task(
-        worker.enqueue({"files": [{"download_id": 1, "priority": 1}], "username": "alice"})
+        worker.enqueue(
+            {"files": [{"download_id": 1, "priority": 1}], "username": "alice"}
+        )
     )
 
     await _wait_for_event(resume)
@@ -128,7 +132,9 @@ async def test_sync_worker_refresh_downloads_yields_with_slow_db(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("app.workers.sync_worker.read_setting", lambda _key: None)
-    monkeypatch.setattr("app.workers.sync_worker.write_setting", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "app.workers.sync_worker.write_setting", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(SyncWorker, "_record_heartbeat", lambda self: None)
 
     class _Client:
@@ -158,10 +164,14 @@ async def test_sync_worker_refresh_downloads_yields_with_slow_db(
         session_factory=lambda: _FakeSessionContext(session),
     )
 
-    async def fake_handle_completion(self: SyncWorker, *_args: Any, **_kwargs: Any) -> None:
+    async def fake_handle_completion(
+        self: SyncWorker, *_args: Any, **_kwargs: Any
+    ) -> None:
         return None
 
-    monkeypatch.setattr(SyncWorker, "_handle_download_completion", fake_handle_completion)
+    monkeypatch.setattr(
+        SyncWorker, "_handle_download_completion", fake_handle_completion
+    )
 
     resume = asyncio.Event()
 
@@ -217,13 +227,23 @@ async def test_lyrics_worker_update_download_yields_with_slow_db(
 
 
 @pytest.mark.asyncio
-async def test_handle_matching_yields_with_slow_db(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.utils.settings_store.increment_counter", lambda *args, **kwargs: 0)
-    monkeypatch.setattr("app.utils.settings_store.write_setting", lambda *args, **kwargs: None)
-    monkeypatch.setattr("app.orchestrator.handlers.record_activity", lambda *args, **kwargs: None)
+async def test_handle_matching_yields_with_slow_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.utils.settings_store.increment_counter", lambda *args, **kwargs: 0
+    )
+    monkeypatch.setattr(
+        "app.utils.settings_store.write_setting", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        "app.orchestrator.handlers.record_activity", lambda *args, **kwargs: None
+    )
 
     class _Engine:
-        def calculate_slskd_match_confidence(self, *_args: Any, **_kwargs: Any) -> float:
+        def calculate_slskd_match_confidence(
+            self, *_args: Any, **_kwargs: Any
+        ) -> float:
             return 0.9
 
     session = _FakeSession()

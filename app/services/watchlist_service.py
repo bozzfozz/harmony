@@ -38,7 +38,9 @@ class WatchlistService:
     """Manage watchlist entries and expose CRUD operations to the API layer."""
 
     session_factory: SessionFactory = field(default=session_scope, repr=False)
-    _logger: any = field(default_factory=lambda: get_logger(__name__), init=False, repr=False)
+    _logger: any = field(
+        default_factory=lambda: get_logger(__name__), init=False, repr=False
+    )
 
     def reset(self) -> None:
         """Reset persisted watchlist entries (primarily used in tests)."""
@@ -176,7 +178,9 @@ class WatchlistService:
             payload["reason"] = pause_reason
         if resume_at_value:
             payload["resume_at"] = (
-                resume_at_value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+                resume_at_value.replace(tzinfo=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
             )
         log_event(self._logger, "service.call", **payload)
         return entry
@@ -288,8 +292,12 @@ class WatchlistService:
         session.refresh(record)
         return record
 
-    def _find_by_identifier(self, session: Session, identifier: str) -> WatchlistArtist | None:
-        statement = select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == identifier)
+    def _find_by_identifier(
+        self, session: Session, identifier: str
+    ) -> WatchlistArtist | None:
+        statement = select(WatchlistArtist).where(
+            WatchlistArtist.spotify_artist_id == identifier
+        )
         return session.execute(statement).scalars().first()
 
     def _lookup_artist(self, session: Session, artist_key: str) -> ArtistRecord | None:

@@ -10,8 +10,16 @@ from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
 from app.logging import get_logger
-from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
-from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.orchestrator.handlers import (
+    MatchingHandlerDeps,
+    MatchingJobError,
+    handle_matching,
+)
+from app.utils.activity import (
+    record_activity,
+    record_worker_started,
+    record_worker_stopped,
+)
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
@@ -147,7 +155,9 @@ class MatchingWorker:
             batch = [first_job]
             while len(batch) < self._batch_size:
                 try:
-                    job = await asyncio.wait_for(self._queue.get(), timeout=self._batch_wait)
+                    job = await asyncio.wait_for(
+                        self._queue.get(), timeout=self._batch_wait
+                    )
                 except asyncio.TimeoutError:
                     break
                 if job is None:
@@ -162,9 +172,13 @@ class MatchingWorker:
 
     async def _process_batch(self, jobs: List[QueueJobDTO]) -> None:
         for job in jobs:
-            leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
+            leased = lease(
+                job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds
+            )
             if leased is None:
-                logger.debug("Matching job %s skipped because it could not be leased", job.id)
+                logger.debug(
+                    "Matching job %s skipped because it could not be leased", job.id
+                )
                 continue
 
             try:

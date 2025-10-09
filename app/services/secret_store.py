@@ -44,12 +44,20 @@ class SecretRecord:
 class SecretStore:
     """Load and expose sensitive configuration values for validation flows."""
 
-    def __init__(self, session: Session, *, preload: Iterable[str] | None = None) -> None:
+    def __init__(
+        self, session: Session, *, preload: Iterable[str] | None = None
+    ) -> None:
         keys = set(preload or ()) | {
-            setting_key for values in _PROVIDER_SETTINGS.values() for setting_key in values
+            setting_key
+            for values in _PROVIDER_SETTINGS.values()
+            for setting_key in values
         }
-        rows = session.execute(select(Setting.key, Setting.value).where(Setting.key.in_(keys)))
-        self._values: MutableMapping[str, Optional[str]] = {key: value for key, value in rows}
+        rows = session.execute(
+            select(Setting.key, Setting.value).where(Setting.key.in_(keys))
+        )
+        self._values: MutableMapping[str, Optional[str]] = {
+            key: value for key, value in rows
+        }
 
     @classmethod
     def from_values(cls, values: Mapping[str, Optional[str]]) -> "SecretStore":

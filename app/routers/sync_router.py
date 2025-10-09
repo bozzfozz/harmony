@@ -53,7 +53,9 @@ async def trigger_manual_sync(
 
     playlist_worker = _get_playlist_worker(request)
     sources = ["spotify", "soulseek"]
-    record_activity("sync", "sync_started", details={"mode": "manual", "sources": sources})
+    record_activity(
+        "sync", "sync_started", details={"mode": "manual", "sources": sources}
+    )
 
     results: Dict[str, str] = {}
     errors: Dict[str, str] = {}
@@ -81,7 +83,9 @@ async def trigger_manual_sync(
         "errors": len(errors),
     }
     if errors:
-        error_list = [{"source": key, "message": value} for key, value in sorted(errors.items())]
+        error_list = [
+            {"source": key, "message": value} for key, value in sorted(errors.items())
+        ]
         record_activity(
             "sync",
             "sync_partial",

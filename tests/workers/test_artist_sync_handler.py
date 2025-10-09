@@ -9,7 +9,12 @@ from app.db import init_db, reset_engine_for_tests, session_scope
 from app.integrations.artist_gateway import ArtistGatewayResponse, ArtistGatewayResult
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.integrations.provider_gateway import ProviderGatewayTimeoutError
-from app.models import ArtistRecord, ArtistReleaseRecord, ArtistWatchlistEntry, QueueJobStatus
+from app.models import (
+    ArtistRecord,
+    ArtistReleaseRecord,
+    ArtistWatchlistEntry,
+    QueueJobStatus,
+)
 from app.orchestrator.artist_sync import (
     ArtistSyncHandlerDeps,
     enqueue_artist_sync,
@@ -23,7 +28,9 @@ from app.workers.persistence import QueueJobDTO
 
 class _StubGateway:
     def __init__(
-        self, response: ArtistGatewayResponse | None = None, error: Exception | None = None
+        self,
+        response: ArtistGatewayResponse | None = None,
+        error: Exception | None = None,
     ) -> None:
         self._response = response
         self._error = error
@@ -36,7 +43,9 @@ class _StubGateway:
         providers: Sequence[str],
         limit: int,
     ) -> ArtistGatewayResponse:
-        self.calls.append({"artist_id": artist_id, "providers": tuple(providers), "limit": limit})
+        self.calls.append(
+            {"artist_id": artist_id, "providers": tuple(providers), "limit": limit}
+        )
         if self._error is not None:
             raise self._error
         assert self._response is not None
@@ -127,7 +136,9 @@ async def test_artist_sync_upserts_artist_and_releases() -> None:
 
     with session_scope() as session:
         artist_record = (
-            session.query(ArtistRecord).filter(ArtistRecord.artist_key == "spotify:artist-1").one()
+            session.query(ArtistRecord)
+            .filter(ArtistRecord.artist_key == "spotify:artist-1")
+            .one()
         )
         assert artist_record.name == "Gateway Artist"
         releases = (
@@ -234,10 +245,12 @@ async def test_artist_sync_evicts_artist_cache() -> None:
     path_hash = build_path_param_hash({"artist_key": "spotify:artist-1"})
     prefixes = [call[0] for call in cache.calls]
     assert any(
-        prefix.startswith(f"GET:/artists/{{artist_key}}:{path_hash}:") for prefix in prefixes
+        prefix.startswith(f"GET:/artists/{{artist_key}}:{path_hash}:")
+        for prefix in prefixes
     )
     assert any(
-        prefix.startswith(f"GET:/api/v1/artists/{{artist_key}}:{path_hash}:") for prefix in prefixes
+        prefix.startswith(f"GET:/api/v1/artists/{{artist_key}}:{path_hash}:")
+        for prefix in prefixes
     )
 
 

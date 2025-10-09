@@ -101,7 +101,9 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
                 method=request.method,
             )
 
-        if not any(hmac.compare_digest(presented_key, key) for key in security_state.api_keys):
+        if not any(
+            hmac.compare_digest(presented_key, key) for key in security_state.api_keys
+        ):
             log_event(
                 _logger,
                 "auth.invalid",

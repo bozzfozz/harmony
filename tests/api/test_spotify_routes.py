@@ -7,8 +7,8 @@ from app.api.spotify import (
     core_router,
     free_ingest_router,
     free_router,
-    router as spotify_router,
 )
+from app.api.spotify import router as spotify_router
 
 
 def _collect_paths(app_router) -> set[tuple[str, frozenset[str]]]:

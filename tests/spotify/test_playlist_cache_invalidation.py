@@ -84,7 +84,9 @@ async def test_playlist_list_busts_cache_on_update() -> None:
     list_key = playlist_list_cache_key(filters_hash="0")
     await cache.set(
         list_key,
-        _build_entry(path_template="/spotify/playlists", etag='"list"', last_modified=now),
+        _build_entry(
+            path_template="/spotify/playlists", etag='"list"', last_modified=now
+        ),
     )
 
     detail_key = playlist_detail_cache_key("playlist-1")
@@ -189,7 +191,9 @@ def test_playlist_list_busts_cache_on_update_response(
     ]
     client._loop.run_until_complete(worker.sync_once())
 
-    refreshed = client.get("/spotify/playlists", headers={"If-None-Match": initial_etag})
+    refreshed = client.get(
+        "/spotify/playlists", headers={"If-None-Match": initial_etag}
+    )
     assert refreshed.status_code == 200
     payload = refreshed.json()
     assert payload["playlists"][0]["name"] == "Focus Updated"

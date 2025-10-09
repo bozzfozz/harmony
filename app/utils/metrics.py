@@ -79,7 +79,9 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
         def _collect(self) -> list[Sample]:
             samples: list[Sample] = []
             for labels, value in self._values.items():
-                mapping = {name: str(label) for name, label in zip(self._labelnames, labels)}
+                mapping = {
+                    name: str(label) for name, label in zip(self._labelnames, labels)
+                }
                 samples.append(Sample(self._name, mapping, float(value)))
             return samples
 
@@ -91,7 +93,9 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
             self._labels = labels
 
         def observe(self, value: float) -> None:
-            store = self._parent._values.setdefault(self._labels, {"count": 0.0, "sum": 0.0})
+            store = self._parent._values.setdefault(
+                self._labels, {"count": 0.0, "sum": 0.0}
+            )
             store["count"] += 1.0
             store["sum"] += float(value)
 
@@ -126,9 +130,15 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
         def _collect(self) -> list[Sample]:
             samples: list[Sample] = []
             for labels, data in self._values.items():
-                mapping = {name: str(label) for name, label in zip(self._labelnames, labels)}
-                samples.append(Sample(f"{self._name}_count", mapping, data.get("count", 0.0)))
-                samples.append(Sample(f"{self._name}_sum", mapping, data.get("sum", 0.0)))
+                mapping = {
+                    name: str(label) for name, label in zip(self._labelnames, labels)
+                }
+                samples.append(
+                    Sample(f"{self._name}_count", mapping, data.get("count", 0.0))
+                )
+                samples.append(
+                    Sample(f"{self._name}_sum", mapping, data.get("sum", 0.0))
+                )
                 samples.append(
                     Sample(
                         f"{self._name}_bucket",

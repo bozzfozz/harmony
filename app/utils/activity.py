@@ -25,7 +25,12 @@ from sqlalchemy import func
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import ActivityEvent
-from app.utils.events import WORKER_RESTARTED, WORKER_STALE, WORKER_STARTED, WORKER_STOPPED
+from app.utils.events import (
+    WORKER_RESTARTED,
+    WORKER_STALE,
+    WORKER_STARTED,
+    WORKER_STOPPED,
+)
 from app.utils.worker_health import read_worker_status
 
 if TYPE_CHECKING:
@@ -82,9 +87,7 @@ class ActivityManager:
         self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
         self._cache_initialized = False
-        self._page_cache: (
-            "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]"
-        ) = OrderedDict()
+        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = (OrderedDict())
         self._page_cache_limit = max(1, page_cache_limit)
         self._response_cache: "ResponseCache | None" = None
         self._response_cache_paths: tuple[str, ...] = ()
@@ -214,7 +217,9 @@ class ActivityManager:
             total = (count_query.scalar()) or 0
 
             events = (
-                events_query.order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
+                events_query.order_by(
+                    ActivityEvent.timestamp.desc(), ActivityEvent.id.desc()
+                )
                 .offset(offset)
                 .limit(limit)
                 .all()
@@ -400,7 +405,9 @@ def record_worker_started(
     _, stored_status = read_worker_status(worker)
     previous = (stored_status or "").lower()
     status: WorkerActivityStatus = (
-        WORKER_RESTARTED if previous in {WORKER_STOPPED, WORKER_STALE} else WORKER_STARTED
+        WORKER_RESTARTED
+        if previous in {WORKER_STOPPED, WORKER_STALE}
+        else WORKER_STARTED
     )
     extra: Dict[str, object] = {}
     if status == WORKER_RESTARTED and previous:
@@ -419,7 +426,9 @@ def record_worker_restarted(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(worker, WORKER_RESTARTED, timestamp=timestamp, details=extra)
+    return record_worker_event(
+        worker, WORKER_RESTARTED, timestamp=timestamp, details=extra
+    )
 
 
 def record_worker_stopped(
@@ -433,7 +442,9 @@ def record_worker_stopped(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(worker, WORKER_STOPPED, timestamp=timestamp, details=extra)
+    return record_worker_event(
+        worker, WORKER_STOPPED, timestamp=timestamp, details=extra
+    )
 
 
 def record_worker_stale(

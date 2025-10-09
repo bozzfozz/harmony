@@ -23,10 +23,18 @@ async def test_backfill_worker_processes_jobs_enqueued_before_start(
     service = StubBackfillService()
     worker = BackfillWorker(service)
 
-    monkeypatch.setattr(worker_module, "record_worker_started", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "mark_worker_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "record_worker_heartbeat", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "record_worker_stopped", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        worker_module, "record_worker_started", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "mark_worker_status", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "record_worker_heartbeat", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "record_worker_stopped", lambda *args, **kwargs: None
+    )
 
     job = BackfillJobSpec(id="job-1", limit=1, expand_playlists=False)
 
@@ -49,15 +57,25 @@ async def test_backfill_worker_preserves_queue_across_restart(
     service = StubBackfillService()
     worker = BackfillWorker(service)
 
-    monkeypatch.setattr(worker_module, "record_worker_started", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "mark_worker_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "record_worker_heartbeat", lambda *args, **kwargs: None)
-    monkeypatch.setattr(worker_module, "record_worker_stopped", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        worker_module, "record_worker_started", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "mark_worker_status", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "record_worker_heartbeat", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        worker_module, "record_worker_stopped", lambda *args, **kwargs: None
+    )
 
     original_run = worker_module.BackfillWorker._run
     start_gate = asyncio.Event()
 
-    async def gated_run(self: BackfillWorker, queue: asyncio.Queue[BackfillJobSpec]) -> None:
+    async def gated_run(
+        self: BackfillWorker, queue: asyncio.Queue[BackfillJobSpec]
+    ) -> None:
         await start_gate.wait()
         await original_run(self, queue)
 

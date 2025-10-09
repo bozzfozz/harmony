@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from datetime import datetime, timedelta
 import logging
-from pathlib import Path
 import random
 import time
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 import pytest
@@ -17,7 +17,11 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, Match, QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
-from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
+from app.orchestrator.handlers import (
+    MatchingHandlerDeps,
+    SyncHandlerDeps,
+    SyncRetryPolicy,
+)
 from app.utils.activity import activity_manager
 from app.workers import persistence
 
@@ -113,14 +117,20 @@ class LeaseLosingStubPersistence(StubPersistence):
 
 
 @pytest.fixture
-def captured_events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Mapping[str, Any]]]:
+def captured_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, Mapping[str, Any]]]:
     events: list[tuple[str, Mapping[str, Any]]] = []
 
-    def recorder(logger: Any, event: str, /, **fields: Any) -> None:  # noqa: ANN401 - test helper
+    def recorder(
+        logger: Any, event: str, /, **fields: Any
+    ) -> None:  # noqa: ANN401 - test helper
         events.append((event, dict(fields)))
 
     monkeypatch.setattr("app.orchestrator.events.log_event", recorder)
-    monkeypatch.setattr("app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(
+        "app.orchestrator.events.increment_counter", lambda *args, **kwargs: 0
+    )
     return events
 
 
@@ -156,7 +166,8 @@ def make_job(
 
 @pytest.mark.asyncio
 async def test_dispatcher_executes_job_and_marks_complete(
-    caplog: pytest.LogCaptureFixture, captured_events: list[tuple[str, Mapping[str, Any]]]
+    caplog: pytest.LogCaptureFixture,
+    captured_events: list[tuple[str, Mapping[str, Any]]],
 ) -> None:
     caplog.set_level("INFO", logger="app.orchestrator.dispatcher")
     job = make_job(1, "sync", attempts=1, payload={"foo": "bar"})
@@ -180,7 +191,9 @@ async def test_dispatcher_executes_job_and_marks_complete(
     assert storage.dlq_calls == []
 
     commit_events = [
-        payload for event_name, payload in captured_events if event_name == "orchestrator.commit"
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.commit"
     ]
     assert commit_events
     payload = commit_events[-1]
@@ -190,7 +203,9 @@ async def test_dispatcher_executes_job_and_marks_complete(
     assert payload["attempts"] == 1
 
     heartbeat_events = [
-        payload for event_name, payload in captured_events if event_name == "orchestrator.heartbeat"
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.heartbeat"
     ]
     assert heartbeat_events
     assert heartbeat_events[-1]["status"] == "stopped"
@@ -313,7 +328,9 @@ async def test_dispatcher_retries_with_backoff(
     assert storage.complete_calls == []
 
     commit_events = [
-        payload for event_name, payload in captured_events if event_name == "orchestrator.commit"
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.commit"
     ]
     assert commit_events
     payload = commit_events[-1]
@@ -373,7 +390,9 @@ async def test_dispatcher_moves_job_to_dlq_when_retries_exhausted(
     assert storage.complete_calls == []
 
     dlq_events = [
-        payload for event_name, payload in captured_events if event_name == "orchestrator.dlq"
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.dlq"
     ]
     assert dlq_events
     payload = dlq_events[-1]
@@ -424,7 +443,9 @@ async def test_dispatcher_stops_job_when_lease_lost(
     assert storage.dlq_calls == []
 
     heartbeat_records = [
-        record for record in caplog.records if record.getMessage() == "orchestrator.heartbeat"
+        record
+        for record in caplog.records
+        if record.getMessage() == "orchestrator.heartbeat"
     ]
     assert heartbeat_records, "Expected lease loss heartbeat log"
     heartbeat_statuses = [record.status for record in heartbeat_records]
@@ -432,7 +453,9 @@ async def test_dispatcher_stops_job_when_lease_lost(
     assert "lost" in heartbeat_statuses
     assert heartbeat_records[-1].job_type == "sync"
 
-    assert not any(record.getMessage() == "orchestrator.commit" for record in caplog.records)
+    assert not any(
+        record.getMessage() == "orchestrator.commit" for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
@@ -462,7 +485,9 @@ async def test_handle_failure_skips_when_lease_lost(
     assert storage.dlq_calls == []
 
     heartbeat_events = [
-        payload for event_name, payload in captured_events if event_name == "orchestrator.heartbeat"
+        payload
+        for event_name, payload in captured_events
+        if event_name == "orchestrator.heartbeat"
     ]
     assert heartbeat_events
     assert heartbeat_events[-1]["status"] == "skip_failure"
@@ -484,7 +509,9 @@ async def test_default_handlers_bind_sync_job(tmp_path: Path) -> None:
     soulseek = InlineSoulseekClient()
     deps = SyncHandlerDeps(
         soulseek_client=soulseek,
-        retry_policy_override=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -509,7 +536,9 @@ async def test_default_handlers_bind_sync_job(tmp_path: Path) -> None:
         attempts=1,
         payload={
             "username": "tester",
-            "files": [{"download_id": download_id, "priority": 1, "filename": "handler.mp3"}],
+            "files": [
+                {"download_id": download_id, "priority": 1, "filename": "handler.mp3"}
+            ],
         },
     )
 
@@ -530,13 +559,17 @@ async def test_default_handlers_bind_matching_job(tmp_path: Path) -> None:
     activity_manager.clear()
 
     class InlineSoulseekClient:
-        async def download(self, payload: Mapping[str, Any]) -> None:  # pragma: no cover - unused
+        async def download(
+            self, payload: Mapping[str, Any]
+        ) -> None:  # pragma: no cover - unused
             return None
 
     soulseek = InlineSoulseekClient()
     deps = SyncHandlerDeps(
         soulseek_client=soulseek,  # type: ignore[arg-type]
-        retry_policy_override=SyncRetryPolicy(max_attempts=3, base_seconds=1.0, jitter_pct=0.0),
+        retry_policy_override=SyncRetryPolicy(
+            max_attempts=3, base_seconds=1.0, jitter_pct=0.0
+        ),
         rng=random.Random(0),
         music_dir=tmp_path,
     )
@@ -557,8 +590,18 @@ async def test_default_handlers_bind_matching_job(tmp_path: Path) -> None:
             "artists": [{"name": "Sample Artist"}],
         },
         "candidates": [
-            {"id": "cand-1", "filename": "Sample Song.mp3", "username": "dj", "bitrate": 320},
-            {"id": "cand-2", "filename": "Other.mp3", "username": "other", "bitrate": 128},
+            {
+                "id": "cand-1",
+                "filename": "Sample Song.mp3",
+                "username": "dj",
+                "bitrate": 320,
+            },
+            {
+                "id": "cand-2",
+                "filename": "Other.mp3",
+                "username": "other",
+                "bitrate": 128,
+            },
         ],
     }
 
