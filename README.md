@@ -93,6 +93,13 @@ docker run -d \
    docker compose exec harmony alembic upgrade head
    ```
 
+   Der Container ruft beim Start automatisch `./scripts/db/migrate.sh` auf. Das
+   Skript wartet optional (via `pg_isready`) auf PostgreSQL und führt anschließend
+   `alembic upgrade head` aus. Der Vorgang ist idempotent und überspringt bereits
+   vorhandene Tabellen oder Indizes. Für historisch manuell angelegte Schemas
+   genügt ein einmaliger `alembic upgrade head`; alternativ kann ein bekannter
+   Stand mit `alembic stamp head` markiert werden.
+
 ### `compose.yaml`
 
 Im Repository liegt ein vorkonfiguriertes [`compose.yaml`](compose.yaml), das genau einen Service (`harmony`) startet. Die Healthcheck-Definition prüft `GET http://localhost:8080/api/health/ready`; `docker compose up -d` genügt für lokale Tests.
@@ -106,21 +113,24 @@ Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) b
 
 ### Relevante Umgebungsvariablen
 
-| Variable                 | Beschreibung                                                                  | Default (`compose.yaml`) |
-| ------------------------ | ------------------------------------------------------------------------------ | ------------------------ |
+| Variable                 | Beschreibung                                                                 | Default (`compose.yaml`) |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------ |
 | `DATABASE_URL`           | Persistente PostgreSQL-Datenbank (z. B. `postgresql+psycopg://user:pass@host:5432/db?sslmode=prefer`). | `postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable` |
-| `POSTGRES_HOST`          | Hostname des PostgreSQL-Servers (fällt auf `postgres`).                             | `postgres`             |
-| `POSTGRES_PORT`          | TCP-Port für PostgreSQL.                                                            | `5432`                 |
-| `POSTGRES_DB`            | Datenbankname für Harmony.                                                          | `harmony`              |
-| `POSTGRES_USER`          | Benutzername für die Datenbankverbindung.                                           | `harmony`              |
-| `POSTGRES_PASSWORD`      | Passwort für die Datenbankverbindung.                                               | `harmony`              |
-| `DATABASE_SSLMODE`       | Optionaler `sslmode`-Parameter für PostgreSQL (`disable`, `prefer`, `require`, …).  | `disable`              |
-| `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                           | `change-me`              |
-| `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`  |
-| `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`  |
-| `PUBLIC_SENTRY_DSN`      | Optionaler Sentry-DSN für das Frontend.                                        | leer                     |
-| `PUBLIC_FEATURE_FLAGS`   | Optionales JSON für Feature-Flags (z. B. `{ "beta": true }`).                 | `{}`                     |
-| `FEATURE_RUN_MIGRATIONS` | Steuert, ob der Container beim Start Alembic-Migrationen ausführt.             | `on`                     |
+| `POSTGRES_HOST`          | Hostname des PostgreSQL-Servers (fällt auf `postgres`).                        | `postgres`                 |
+| `POSTGRES_PORT`          | TCP-Port für PostgreSQL.                                                       | `5432`                    |
+| `POSTGRES_DB`            | Datenbankname für Harmony.                                                     | `harmony`                 |
+| `POSTGRES_USER`          | Benutzername für die Datenbankverbindung.                                      | `harmony`                 |
+| `POSTGRES_PASSWORD`      | Passwort für die Datenbankverbindung.                                          | `harmony`                 |
+| `DATABASE_SSLMODE`       | Optionaler `sslmode`-Parameter für PostgreSQL (`disable`, `prefer`, `require`, …). | `disable`                 |
+| `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                            | `change-me`               |
+| `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`   |
+| `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`   |
+| `PUBLIC_SENTRY_DSN`      | Optionaler Sentry-DSN für das Frontend.                                        | _(leer)_                  |
+| `PUBLIC_FEATURE_FLAGS`   | Optionales JSON für Feature-Flags (z. B. `{ "beta": true }`).                 | `{}`                      |
+| `FEATURE_RUN_MIGRATIONS` | Steuert, ob der Container beim Start Alembic-Migrationen ausführt.             | `on`                      |
+| `WAIT_FOR_POSTGRES`      | Deaktiviert bei Bedarf das Warten auf PostgreSQL vor den Migrationen.          | `on`                      |
+| `POSTGRES_WAIT_ATTEMPTS` | Anzahl der `pg_isready`-Versuche vor dem Abbruch.                              | `60`                      |
+| `POSTGRES_WAIT_INTERVAL` | Wartezeit (Sekunden) zwischen den Versuchen.                                   | `1`                       |
 
 Weitere Konfigurationsvariablen findest du in [`app/config.py`](app/config.py) und der Tabelle in [`.env.example`](.env.example).
 
@@ -875,10 +885,19 @@ VITE_AUTH_HEADER_MODE=x-api-key
   { "ok": true, "data": { "status": "up", "version": "1.4.0", "uptime_s": 123.4 }, "error": null }
   ```
 
-- `GET /api/v1/ready` prüft Datenbank und deklarierte Dependencies. Erfolgsantwort:
+- `GET /api/v1/ready` prüft Datenbank, deklarierte Dependencies und den
+  Migrationsstatus. Erfolgsantwort:
 
   ```json
-  { "ok": true, "data": { "db": "up", "deps": { "spotify": "up" } }, "error": null }
+  {
+    "ok": true,
+    "data": {
+      "db": "up",
+      "deps": { "spotify": "up" },
+      "migrations": { "up_to_date": true, "current": "<rev>", "head": ["<rev>"] }
+    },
+    "error": null
+  }
   ```
 
   Bei Störungen antwortet der Endpoint mit `503` und einem `DEPENDENCY_ERROR`, z. B.:
@@ -889,7 +908,11 @@ VITE_AUTH_HEADER_MODE=x-api-key
     "error": {
       "code": "DEPENDENCY_ERROR",
       "message": "not ready",
-      "meta": { "db": "down", "deps": { "spotify": "down" } }
+      "meta": {
+        "db": "down",
+        "deps": { "spotify": "down" },
+        "migrations": { "up_to_date": false, "current": null, "head": ["<rev>"] }
+      }
     }
   }
   ```
