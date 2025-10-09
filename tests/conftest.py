@@ -1493,7 +1493,10 @@ def configure_environment(
     schema_name = f"test_suite_{uuid.uuid4().hex}"
     try:
         base_engine = sa.create_engine(resolved_url)
-    except (NoSuchModuleError, ImportError) as exc:  # pragma: no cover - environment guard
+    except (
+        NoSuchModuleError,
+        ImportError,
+    ) as exc:  # pragma: no cover - environment guard
         pytest.skip(f"PostgreSQL driver unavailable: {exc}")
     try:
         with base_engine.connect() as connection:
