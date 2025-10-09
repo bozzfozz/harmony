@@ -527,7 +527,7 @@ Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architectur
 ### Voraussetzungen
 
 - Python 3.11
-- SQLite (im Lieferumfang enthalten)
+- Eine erreichbare PostgreSQL-Instanz (z. B. `postgres:16` via Docker)
 - Optional: Docker und Docker Compose
 
 ### Lokales Setup
@@ -964,7 +964,7 @@ Die Logs eignen sich für ELK-/Loki-Pipelines und bilden die alleinige Quelle f�
 
 ### Performance & Zuverlässigkeit
 
-- Worker-Last wird über `WATCHLIST_*`, `SYNC_WORKER_CONCURRENCY`, `RETRY_*` und `MATCHING_WORKER_*` feinjustiert. Konservative Defaults verhindern SQLite-Locks; bei höherer Parallelität sollten Sie den Wechsel auf eine serverbasierte Datenbank evaluieren.
+- Worker-Last wird über `WATCHLIST_*`, `SYNC_WORKER_CONCURRENCY`, `RETRY_*` und `MATCHING_WORKER_*` feinjustiert. Die Defaults sind auf PostgreSQL-Pools abgestimmt; erhöhe Parallelität nur, wenn `max_connections`, I/O und Query-Pläne des Datenbankservers ausreichend Reserven bieten.
 - Der Response-Cache (`CACHE_*`) reduziert Lesezugriffe und generiert korrekte `ETag`-/`Cache-Control`-Header. Bei Fehlern fällt er dank `CACHE_FAIL_OPEN` auf Live-Responses zurück.
 - Backfill- und Ingest-Limits (`BACKFILL_MAX_ITEMS`, `FREE_*`, `INGEST_*`) verhindern Thundering-Herds und sichern deterministische Laufzeiten.
 - Die Watchlist respektiert Timeouts (`WATCHLIST_SPOTIFY_TIMEOUT_MS`, `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS`) sowie ein Retry-Budget pro Artist, damit Spotify/slskd nicht dauerhaft blockiert werden.
@@ -1007,7 +1007,7 @@ Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht gel
 
 Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
 
-- **SQLite-Guard beachten:** Die CI besitzt einen dedizierten Guard-Job, der bei jedem Lauf nach verbotenen `sqlite`-Referenzen in `app/`, `tests/` und `docs/` sucht. Führt lokal `rg --pcre2 -n -i '\bsqlite' app tests docs` aus, bevor ihr neue Datenbank-Pfade pusht. Wird ein Treffer gefunden, muss der Code auf PostgreSQL abstrahiert oder (falls unvermeidlich) klar hinter Feature-Gates versteckt werden.
+- **Datenbank-Checks beachten:** Führt vor neuen Schemaänderungen `alembic upgrade head` gegen eure PostgreSQL-Testinstanz sowie `pytest tests/migrations -q` aus. So bleibt sichergestellt, dass sämtliche Migrationen und Guards die PostgreSQL-Referenzimplementierung abdecken.
 
 ## Tests & CI
 

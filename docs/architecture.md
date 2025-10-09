@@ -33,7 +33,7 @@ Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Ehema
               v
 +-------------+--------------+
 |          Datenbank         |
-| SQLAlchemy + SQLite        |
+| SQLAlchemy + PostgreSQL    |
 +----------------------------+
 ```
 
@@ -105,7 +105,7 @@ Fehlgeschlagene Downloads werden ausschließlich über den orchestrierten `retry
 
 ### Datenbank & Persistenz
 
-- **`app/db.py`** initialisiert SQLite und liefert `session_scope()` / `get_session()`.
+- **`app/db.py`** initialisiert die PostgreSQL-Engine (synchron und asynchron) und liefert `session_scope()` / `get_session()`.
 - **`app/models.py`** definiert Tabellen wie `Playlist`, `Download`, `Match`, `Setting`, `SettingHistory`, `WatchlistArtist`.
 - **`app/schemas.py` & `app/schemas_search.py`** beschreiben Pydantic-Modelle für Requests/Responses und Suchresultate.
 
