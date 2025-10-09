@@ -57,7 +57,7 @@ describe('SpotifyPage OAuth Flow', () => {
     openSpy.mockRestore();
   });
 
-  it('startet den OAuth-Flow und zeigt den Erfolgsdialog', async () => {
+  it('startet den OAuth-Flow, zeigt den Erfolgsdialog und hebt die Watchlist hervor', async () => {
     mockedStartSpotifyProOAuth.mockResolvedValue({
       authorization_url: 'https://accounts.spotify.com/authorize',
       state: 'oauth-state',
@@ -90,9 +90,54 @@ describe('SpotifyPage OAuth Flow', () => {
     const dialog = await screen.findByRole('dialog', { name: /Spotify PRO verbunden/i });
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Watchlist öffnen' })).toBeInTheDocument();
+    const watchlistLink = screen.getByRole('link', { name: 'Watchlist öffnen' });
+    const artistLibraryLink = screen.getByRole('link', { name: 'Künstlerbibliothek' });
+    expect(watchlistLink).toHaveAttribute('href', '/artists');
+    expect(artistLibraryLink).toHaveAttribute('href', '/library?tab=artists');
+    expect(watchlistLink).toHaveClass('bg-primary', { exact: false });
+    expect(artistLibraryLink).toHaveClass('bg-secondary', { exact: false });
     expect(screen.getByText('Aktive Session vorhanden.')).toBeInTheDocument();
     expect(mockedRefreshSpotifyProSession).toHaveBeenCalled();
     expect(popupMock.close).toHaveBeenCalled();
+  });
+
+  it('markiert die Künstlerbibliothek als Ziel und verwendet den Artists-Tab', async () => {
+    mockedStartSpotifyProOAuth.mockResolvedValue({
+      authorization_url: 'https://accounts.spotify.com/authorize',
+      state: 'oauth-state',
+      expires_at: null
+    });
+    mockedGetSpotifyProOAuthStatus.mockResolvedValue({
+      status: 'authorized',
+      state: 'oauth-state',
+      authenticated: true,
+      error: undefined,
+      completed_at: null,
+      profile: { display_name: 'Harmony Ops' }
+    });
+    mockedRefreshSpotifyProSession.mockResolvedValue({
+      status: 'connected',
+      free_available: true,
+      pro_available: true,
+      authenticated: true
+    });
+
+    renderWithProviders(<SpotifyPage />, { route: '/spotify', toastFn: toastMock });
+
+    await screen.findByText('Spotify Status');
+
+    await userEvent.click(screen.getByRole('button', { name: /Künstlerbibliothek/i }));
+
+    await waitFor(() => expect(mockedStartSpotifyProOAuth).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedGetSpotifyProOAuthStatus).toHaveBeenCalledWith('oauth-state'));
+
+    await screen.findByRole('dialog', { name: /Spotify PRO verbunden/i });
+    const watchlistLink = screen.getByRole('link', { name: 'Watchlist öffnen' });
+    const artistLibraryLink = screen.getByRole('link', { name: 'Künstlerbibliothek' });
+    expect(watchlistLink).toHaveAttribute('href', '/artists');
+    expect(artistLibraryLink).toHaveAttribute('href', '/library?tab=artists');
+    expect(artistLibraryLink).toHaveClass('bg-primary', { exact: false });
+    expect(watchlistLink).toHaveClass('bg-secondary', { exact: false });
   });
 
   it('meldet Fehler während des OAuth-Flows', async () => {
