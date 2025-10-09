@@ -633,7 +633,8 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `DATABASE_URL` | string | `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` | SQLAlchemy-Verbindungsstring zu einer PostgreSQL-Instanz. | 🔒 enthält ggf. Zugangsdaten
+| `DATABASE_URL` | string | `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` | SQLAlchemy-Verbindungsstring zu einer PostgreSQL-Instanz. | 🔒 enthält ggf. Zugangsdaten |
+| `ALEMBIC_DATABASE_URL` | string | _(leer)_ | Optionales Override ausschließlich für Alembic (`alembic upgrade`, `alembic revision`); muss auf PostgreSQL verweisen. | 🔒 enthält ggf. Zugangsdaten |
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
 | `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
 | `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
