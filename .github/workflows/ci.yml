@@ -145,7 +145,10 @@ jobs:
           done
           exit 1
       - name: Validate OpenAPI snapshot
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
+          export DATABASE_URL="${DATABASE_URL}"
           python - <<'PY'
           import json
           from pathlib import Path
