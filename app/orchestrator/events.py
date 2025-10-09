@@ -9,7 +9,8 @@ from typing import Any, Mapping
 from app.logging_events import log_event
 from app.utils.settings_store import increment_counter
 
-logger = logging.getLogger("app.orchestrator.metrics")
+METRICS_LOGGER_NAME = "app.orchestrator.metrics"
+logger = logging.getLogger(METRICS_LOGGER_NAME)
 
 
 def format_datetime(value: datetime | None) -> str | None:

@@ -19,12 +19,12 @@ _INDEX = "ix_activity_events_type_status_timestamp"
 def upgrade() -> None:
     op.create_table(
         _TABLE,
-        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("id", sa.Integer(), nullable=False, primary_key=True),
         sa.Column(
             "timestamp",
             postgresql.TIMESTAMP(timezone=True),
             nullable=False,
-            server_default=sa.func.now(),
+            server_default=sa.text("timezone('utc', now())"),
         ),
         sa.Column("type", sa.String(length=128), nullable=False),
         sa.Column("status", sa.String(length=128), nullable=False),

@@ -8,6 +8,10 @@ Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene
 
 Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain → Integrationen) mit einem zentralen Orchestrator für Hintergrundjobs. Verantwortlichkeiten, Flows, Fehler- und Logging-Verträge sowie Erweiterungspunkte sind in der [Architecture Overview](docs/architecture/overview.md) festgehalten und gelten als verbindliche Referenz für jede Änderung. Ergänzende Diagramme, Contracts und ADRs befinden sich im Ordner `docs/architecture/`.
 
+## Projektstatus
+
+Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest du im [Projektstatus-Dashboard](docs/project_status.md).
+
 ## Features
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.

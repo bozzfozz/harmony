@@ -7,7 +7,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Literal, Optional, cast
+from typing import Any, Callable, Dict, Literal, Mapping, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -391,22 +391,29 @@ def _call_dependency_override(
 
 
 def _resolve_psutil(request: Request | None = None):
-    candidate = None
+    resolved = None
     if request is not None:
         overrides = getattr(request.app, "dependency_overrides", None)
-        if overrides:
+        if isinstance(overrides, Mapping):
             override = overrides.get(_resolve_psutil)
             if override is not None:
-                candidate = _call_dependency_override(override, request)
-        if candidate is not None:
-            return candidate
+                resolved = _call_dependency_override(override, request)
+        if resolved is not None:
+            return resolved
 
         state_psutil = getattr(request.app.state, "psutil", None)
         if state_psutil is not None:
             return state_psutil
 
-    shim = sys.modules.get("app.routers.system_router")
-    if shim is not None:
+    for shim_name in (
+        "app.routers.system_router",
+        "app.api.routers.system_router",
+        "app.api.routers.system",
+        "app.routers.system",
+    ):
+        shim = sys.modules.get(shim_name)
+        if shim is None:
+            continue
         candidate = getattr(shim, "psutil", None)
         if candidate is not None:
             return candidate

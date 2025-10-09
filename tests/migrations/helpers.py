@@ -94,6 +94,36 @@ def assert_queue_jobs_schema(engine: sa.Engine) -> None:
         ), f"queue_jobs.{column_name} must be timezone aware"
 
 
+def assert_activity_events_schema(engine: sa.Engine) -> None:
+    """Validate the presence and shape of the activity_events table."""
+
+    inspector = sa.inspect(engine)
+    columns = inspector.get_columns("activity_events")
+    column_names = {column["name"] for column in columns}
+    expected = {"id", "timestamp", "type", "status", "details"}
+    missing = expected - column_names
+    assert not missing, f"activity_events missing columns: {sorted(missing)}"
+
+    timestamp_column = _get_column(columns, "timestamp")
+    timestamp_type = timestamp_column["type"]
+    assert isinstance(
+        timestamp_type, postgresql.TIMESTAMP
+    ), "activity_events.timestamp should use TIMESTAMPTZ"
+    assert getattr(timestamp_type, "timezone", False) is True, (
+        "activity_events.timestamp must be timezone aware"
+    )
+
+    details_column = _get_column(columns, "details")
+    assert isinstance(
+        details_column["type"], postgresql.JSONB
+    ), "activity_events.details should be JSONB"
+
+    indexes = {index["name"] for index in inspector.get_indexes("activity_events")}
+    assert (
+        "ix_activity_events_type_status_timestamp" in indexes
+    ), "Missing activity_events composite index"
+
+
 def assert_postgresql_types(engine: sa.Engine) -> None:
     """Validate that reflected column types use PostgreSQL-native variants."""
 

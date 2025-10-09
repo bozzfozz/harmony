@@ -17,7 +17,7 @@ from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
-from app.logging_events import log_event as _log_event
+import app.logging_events as logging_events
 from app.schemas_search import (ItemTypeLiteral, SearchItem, SearchRequest,
                                 SearchResponse, SourceLiteral)
 from app.services.integration_service import IntegrationService
@@ -94,28 +94,30 @@ class Candidate:
 router = APIRouter(tags=["Search"])
 
 
-def _emit_api_event(*args: Any, **kwargs: Any) -> None:
-    """Dispatch the API event, preferring the current module hook."""
+def _emit_api_event(logger: Any, event: str, /, **fields: Any) -> None:
+    """Dispatch the API event, preferring local hooks over the shared logger."""
 
     module = sys.modules.get(__name__)
-    candidate = getattr(module, "log_event", None) if module is not None else None
-    if callable(candidate):
-        candidate(*args, **kwargs)
-        return
+    if module is not None:
+        override = getattr(module, "log_event", None)
+        if callable(override):
+            override(logger, event, **fields)
+            return
 
     # Fall back to legacy shims for backwards compatibility.
     for shim_name in ("app.api.routers.search", "app.routers.search_router"):
         shim = sys.modules.get(shim_name)
-        candidate = getattr(shim, "log_event", None) if shim is not None else None
-        if callable(candidate):
-            candidate(*args, **kwargs)
+        override = getattr(shim, "log_event", None) if shim is not None else None
+        if callable(override):
+            override(logger, event, **fields)
             return
 
-    _log_event(*args, **kwargs)
+    logging_events.log_event(logger, event, **fields)
 
 
 # Expose ``log_event`` for compatibility imports (e.g. tests).
-log_event = _log_event
+_log_event = logging_events.log_event
+log_event = logging_events.log_event
 
 
 @router.post("/search", response_model=SearchResponse, status_code=status.HTTP_200_OK)
