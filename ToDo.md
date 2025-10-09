@@ -131,6 +131,26 @@
 - **Subtasks:**
   - [x] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
 
+## TD-20251009-001 Enforce required CI checks post-reset
+- **Status:** todo
+- **Priority:** P1
+- **Scope:** all
+- **Owner:** platform
+- **Created_at (UTC):** 2025-10-09T16:20:19Z
+- **Updated_at (UTC):** 2025-10-09T16:20:19Z
+- **Tags:** ci, github-actions, branch-protection
+- **Description:** After merging the CI reset, branch protection must mandate the `ci-backend` (required) and `ci-frontend` (conditional) checks so regressions cannot merge without passing the new gates. Settings changes also need documentation in the rule description per governance policy.
+- **Acceptance Criteria:**
+  - Branch protection on `main` lists `ci-backend` as a required status check.
+  - `ci-frontend` is required when the frontend pipeline is active (package manifest present) and documented accordingly.
+  - Rule description references `CODX-CI-RESET-001` and links to `REPO_MAINTENANCE.md` for marker guidance.
+  - Change log of repository settings stored for audit (screenshot or admin note).
+- **Risks/Impact:** Missing required checks would allow non-compliant merges, reintroducing flaky or slow workflows.
+- **Dependencies:** CODX-CI-RESET-001 must be merged so the new workflow names exist.
+- **References:** CODX-CI-RESET-001; `REPO_MAINTENANCE.md` guidance.
+- **Subtasks:**
+  - [ ] CODX-CI-RESET-001A — Update branch protection required checks and attach configuration evidence in the operations runbook (`docs/operations/ci.md`).
+
 ## TD-20251008-008 Enforce isort formatting
 - **Status:** done
 - **Priority:** P2
