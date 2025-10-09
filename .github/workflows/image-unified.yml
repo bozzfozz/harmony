@@ -104,6 +104,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/api/health/ready | jq -e '.status == "ok"' >/dev/null
           curl -fsS http://127.0.0.1:8080/ | grep -qi '<!doctype html'
+          docker run --rm --entrypoint python harmony:ci-test -c "import app; print('ok')"
+          docker run --rm --entrypoint sh harmony:ci-test -c 'set -eu; ls -1 /app/frontend_dist | head -n1 | grep -q .'
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))

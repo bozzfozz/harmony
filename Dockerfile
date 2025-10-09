@@ -1,8 +1,11 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
-COPY --chown=node:node frontend/package*.json ./
+RUN mkdir -p /app/frontend \
+    && chown -R node:node /app
 USER node
+
+COPY --chown=node:node frontend/package*.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY --chown=node:node frontend/ ./
@@ -13,14 +16,7 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_CREATE=false \
-    PIP_NO_CACHE_DIR=1 \
-    DATABASE_URL="postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=prefer" \
-    POSTGRES_HOST=postgres \
-    POSTGRES_PORT=5432 \
-    POSTGRES_DB=harmony \
-    POSTGRES_USER=harmony \
-    POSTGRES_PASSWORD=harmony \
-    DATABASE_SSLMODE=prefer
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
