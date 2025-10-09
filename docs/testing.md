@@ -33,6 +33,10 @@ FastAPI lifespan startup.
   Orchestrator-Leases/Heartbeats, Activity-Historie, Async-DAO und der Alembic
   Roundtrip). Die Marker werden von `pytest.ini` registriert und können per
   `pytest -m postgres -q` selektiv ausgeführt werden.
+- Ohne lokale Datenbank lässt sich die Suite mit `pytest --skip-postgres` oder
+  `PYTEST_SKIP_POSTGRES=1 pytest` starten. Alle Tests mit dem Marker werden
+  frühzeitig übersprungen, sodass keine Verbindungsversuche zur Datenbank
+  stattfinden.
 - Im CI übernimmt [`backend-postgres.yml`](../.github/workflows/backend-postgres.yml)
   die Ausführung: `alembic downgrade base || true` → `alembic upgrade head` →
   `pytest -m postgres -q` → `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit

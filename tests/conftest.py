@@ -71,12 +71,51 @@ from app.workers.playlist_sync_worker import PlaylistSyncWorker
 from app.workers.sync_worker import SyncWorker
 from tests.simple_client import SimpleTestClient
 
+SKIP_POSTGRES_ENV_VAR = "PYTEST_SKIP_POSTGRES"
+_POSTGRES_SKIP_REASON = (
+    "PostgreSQL tests disabled via --skip-postgres or PYTEST_SKIP_POSTGRES"
+)
+
+
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _should_skip_postgres(config: pytest.Config | None = None) -> bool:
+    option_enabled = False
+    if config is not None:
+        option_enabled = bool(config.getoption("--skip-postgres"))
+    env_enabled = _is_truthy(os.getenv(SKIP_POSTGRES_ENV_VAR))
+    return option_enabled or env_enabled
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--skip-postgres",
+        action="store_true",
+        help="Skip tests that require PostgreSQL (marked with @pytest.mark.postgres).",
+    )
+
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
         "lifespan_workers: enable worker lifecycle tests that re-enable background workers with test stubs.",
     )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    if not _should_skip_postgres(config):
+        return
+
+    skip_marker = pytest.mark.skip(reason=_POSTGRES_SKIP_REASON)
+    for item in items:
+        if item.get_closest_marker("postgres") is not None:
+            item.add_marker(skip_marker)
 
 
 class RecordingScheduler:
@@ -1451,6 +1490,11 @@ def configure_environment(
     request: pytest.FixtureRequest,
 ) -> None:
     from app import dependencies as deps
+
+    if _should_skip_postgres(request.config) and request.node.get_closest_marker(
+        "postgres"
+    ) is not None:
+        pytest.skip(_POSTGRES_SKIP_REASON)
 
     deps.get_app_config.cache_clear()
     if hasattr(deps.get_spotify_client, "cache_clear"):
