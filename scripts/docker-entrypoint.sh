@@ -16,7 +16,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 case "${DATABASE_URL:-}" in
-  postgres://*|postgresql://*|postgresql+psycopg://*|postgresql+asyncpg://*)
+  postgresql+psycopg://*|postgresql+asyncpg://*)
     ;;
   *)
     echo "Error: DATABASE_URL must be a PostgreSQL connection string (postgresql+psycopg:// or postgresql+asyncpg://)." >&2

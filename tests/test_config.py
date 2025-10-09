@@ -101,3 +101,12 @@ def test_load_config_rejects_non_postgres(monkeypatch: pytest.MonkeyPatch) -> No
 
     with pytest.raises(ValidationAppError):
         load_config()
+
+
+def test_load_config_rejects_legacy_postgresql_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db/test")
+
+    with pytest.raises(ValidationAppError):
+        load_config()
