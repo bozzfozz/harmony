@@ -137,11 +137,41 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - **Kein Changelog-Ersatz.** ToDo ist **kein** Commit-/PR-Protokoll.  
 - **Pflicht nur, wenn §25.0 „Erforderlichkeit“** erfüllt ist. Andernfalls im PR-Body „No ToDo changes required“ bestätigen.
 
-## 14. Completion Gates (Pflicht, Merge-Gate)
-- **Backend**: `pytest -q`, `mypy app`, `ruff check .`, `black --check .`.
-- **Frontend**: `npm test`, `tsc --noEmit`.
-- **OpenAPI-Gate**: Schema/Verträge (Statuscodes/Strukturen) geprüft.
-- **Coverage-Ziel**: ≥ 85 % in geänderten Modulen oder begründete Ausnahme.
+## §14a Code-Style & Auto-Fixes (verbindlich)
+
+**Ziel:** Einheitlicher Stil & saubere Imports ohne manuelle Nacharbeit.
+
+**Pflichten (Agent & Humans):**
+- Vor jedem Commit **Auto-Fix** ausführen:
+  - `ruff check . --fix` (inkl. Import-Sortierung `I`)
+  - `ruff format` **oder** `black .`
+- Pre-commit Hooks aktiv: `pre-commit install` und lokal automatisch ausführen.
+- Keine Commits, die Format/Lint brechen.
+
+**PR-Checkliste (Ergänzung):**
+- [ ] `ruff check .` **grün**
+- [ ] `ruff format`/`black --check .` **grün**
+- [ ] Hooks liefen (pre-commit-Output im letzten Commit sichtbar oder `pre-commit run -a` gelaufen)
+
+**CI-Gates (müssen existieren, sonst PR blockieren):**
+- `ruff check .` (ohne `--fix`)
+- `black --check .` (oder `ruff format`-Äquivalent)
+- Optional: `pytest -q` vor Merge
+
+**Codex MUSS:**
+- Vor jedem Push `ruff check . --fix && ruff format` (oder `black .`) ausführen.
+- Bei Auto-Fixes **separate** Commits mit Message `chore(style): apply ruff/black`.
+- Falls Format-Konflikt mit bestehendem Code: minimal-invasive Änderungen, keine Funktionslogik anfassen.
+
+**Konfiguration (Referenz, im Repo vorhanden):**
+- `.pre-commit-config.yaml` mit Hooks `ruff` (lint+fix) und `ruff-format` (oder `black`).
+- `pyproject.toml`:
+  - `[tool.ruff] select = ["E","F","I"]`, `line-length = 88`, `target-version = "py311"`.
+  - `[tool.black] line-length = 88`, `target-version = ["py311"]`.
+
+**Hinweise:**
+- isort wird durch `ruff`-Regelgruppe **I** abgedeckt.
+- Bei Massen-Fixes: eigener PR `chore(style): repo-wide auto-format` um Feature-PRs schlank zu halten.
 
 ## 15. Prohibited
 - Keine `BACKUP`-Dateien anlegen oder verändern.
