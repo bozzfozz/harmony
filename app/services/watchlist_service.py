@@ -341,7 +341,8 @@ class WatchlistService:
     def _parse_artist_key(artist_key: str) -> tuple[str, str]:
         prefix, _, identifier = artist_key.partition(":")
         source = prefix.strip().lower()
-        if not identifier:
+        identifier_value = identifier.strip()
+        if not identifier_value:
             raise AppError(
                 "artist_key must include a provider and identifier.",
                 code=ErrorCode.VALIDATION_ERROR,
@@ -354,7 +355,7 @@ class WatchlistService:
                 http_status=422,
                 meta={"artist_key": artist_key},
             )
-        return source, identifier
+        return source, identifier_value
 
 
 __all__ = ["WatchlistEntry", "WatchlistService"]
