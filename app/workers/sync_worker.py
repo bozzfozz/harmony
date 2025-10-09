@@ -3,49 +3,52 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import random
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import (Any, Awaitable, Callable, Dict, Iterable, List, Mapping,
-                    Optional, Set, Tuple)
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.config import get_env
 from app.core.soulseek_client import SoulseekClient
 from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
-from app.orchestrator.handlers import SyncHandlerDeps
-from app.orchestrator.handlers import \
-    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds
-from app.orchestrator.handlers import (extract_basic_metadata,
-                                       extract_ingest_item_id,
-                                       extract_spotify_album_id,
-                                       extract_spotify_id,
-                                       fanout_download_completion,
-                                       handle_sync_download_failure,
-                                       handle_sync_retry_success,
-                                       process_sync_payload,
-                                       resolve_download_path, resolve_text,
-                                       truncate_error,
-                                       update_ingest_item_state)
-from app.services.retry_policy_provider import (RetryPolicy,
-                                                get_retry_policy_provider)
-from app.utils.activity import (record_activity, record_worker_started,
-                                record_worker_stopped)
+from app.orchestrator.handlers import (
+    SyncHandlerDeps,
+    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
+    extract_basic_metadata,
+    extract_ingest_item_id,
+    extract_spotify_album_id,
+    extract_spotify_id,
+    fanout_download_completion,
+    handle_sync_download_failure,
+    handle_sync_retry_success,
+    process_sync_payload,
+    resolve_download_path,
+    resolve_text,
+    truncate_error,
+    update_ingest_item_state,
+)
+from app.services.retry_policy_provider import RetryPolicy, get_retry_policy_provider
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
-from app.utils.settings_store import (increment_counter, read_setting,
-                                      write_setting)
+from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
-from app.workers.persistence import (QueueJobDTO, complete_async,
-                                     enqueue_async, fail_async,
-                                     fetch_ready_async, lease_async,
-                                     release_active_leases_async)
+from app.workers.persistence import (
+    QueueJobDTO,
+    complete_async,
+    enqueue_async,
+    fail_async,
+    fetch_ready_async,
+    lease_async,
+    release_active_leases_async,
+)
 
 # Backwards compatible alias used by existing tests and callers relying on the
 # original synchronous API facade.
@@ -191,7 +194,7 @@ class SyncWorker:
         self._concurrency = max(1, concurrency or self._resolve_concurrency())
         self._cancelled_downloads: Set[int] = set()
         self._cancel_lock = asyncio.Lock()
-        self._music_dir = Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+        self._music_dir = Path(get_env("MUSIC_DIR") or "./music").expanduser()
         self._retry_provider = get_retry_policy_provider()
         self._retry_config = self._retry_provider.get_retry_policy("sync")
         self._retry_rng = random.Random()
@@ -206,7 +209,7 @@ class SyncWorker:
 
     def _resolve_concurrency(self) -> int:
         setting_value = read_setting("sync_worker_concurrency")
-        env_value = os.getenv("SYNC_WORKER_CONCURRENCY")
+        env_value = get_env("SYNC_WORKER_CONCURRENCY")
         for value in (setting_value, env_value):
             if not value:
                 continue

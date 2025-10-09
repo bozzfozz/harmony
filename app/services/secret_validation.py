@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import re
 import time
 from collections import deque
@@ -15,6 +14,7 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 from fastapi import status
 
+from app.config import get_env
 from app.errors import DependencyError, RateLimitedError, ValidationAppError
 from app.logging import get_logger
 from app.services.secret_store import SecretRecord, SecretStore
@@ -34,9 +34,9 @@ class SecretValidationSettings:
 
     @classmethod
     def from_env(cls) -> "SecretValidationSettings":
-        timeout_ms = _as_int(os.getenv("SECRET_VALIDATE_TIMEOUT_MS"), default=800)
-        max_per_min = _as_int(os.getenv("SECRET_VALIDATE_MAX_PER_MIN"), default=3)
-        base_url = (os.getenv("SLSKD_BASE_URL") or "").strip() or "http://localhost:5030"
+        timeout_ms = _as_int(get_env("SECRET_VALIDATE_TIMEOUT_MS"), default=800)
+        max_per_min = _as_int(get_env("SECRET_VALIDATE_MAX_PER_MIN"), default=3)
+        base_url = (get_env("SLSKD_BASE_URL") or "").strip() or "http://localhost:5030"
         return cls(
             timeout_ms=max(timeout_ms, 100),
             max_requests_per_minute=max(1, max_per_min),

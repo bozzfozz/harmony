@@ -5,17 +5,15 @@ from __future__ import annotations
 import asyncio
 import importlib
 import inspect
-import os
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import (Any, Awaitable, Callable, Dict, Iterable, Mapping,
-                    Optional, Sequence, cast)
+from typing import Any, Awaitable, Callable, Dict, Iterable, Mapping, Optional, Sequence, cast
 from urllib.parse import urlparse
 
-from app.config import ArtworkConfig, ArtworkPostProcessingConfig, load_config
+from app.config import ArtworkConfig, ArtworkPostProcessingConfig, get_env, load_config
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -84,7 +82,7 @@ class ArtworkWorker:
         if storage_directory is not None:
             base_dir = Path(storage_directory)
         else:
-            base_dir = Path(config.directory or (os.getenv("ARTWORK_DIR") or "./artwork"))
+            base_dir = Path(config.directory or (get_env("ARTWORK_DIR") or "./artwork"))
 
         self._storage_dir = base_dir.expanduser().resolve()
         self._timeout = float(config.timeout_seconds)

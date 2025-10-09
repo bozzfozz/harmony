@@ -13,8 +13,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.engine import Connection
-from sqlalchemy.inspection import Inspector
+from sqlalchemy.engine import Connection, Inspector
 
 
 def get_inspector(connection: Connection | None = None) -> Inspector:
@@ -70,17 +69,13 @@ def unique_constraint_names(inspector: Inspector, table_name: str) -> set[str]:
     }
 
 
-def has_unique_constraint(
-    inspector: Inspector, table_name: str, constraint_name: str
-) -> bool:
+def has_unique_constraint(inspector: Inspector, table_name: str, constraint_name: str) -> bool:
     """Return ``True`` when *constraint_name* exists on *table_name*."""
 
     return constraint_name in unique_constraint_names(inspector, table_name)
 
 
-def drop_index_if_exists(
-    inspector: Inspector, table_name: str, index_name: str
-) -> None:
+def drop_index_if_exists(inspector: Inspector, table_name: str, index_name: str) -> None:
     """Drop *index_name* if it exists on *table_name*."""
 
     if has_index(inspector, table_name, index_name):

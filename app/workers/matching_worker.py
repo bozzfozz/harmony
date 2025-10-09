@@ -3,23 +3,28 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime
 from typing import Any, Dict, List
 
+from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import session_scope
 from app.logging import get_logger
-from app.orchestrator.handlers import (MatchingHandlerDeps, MatchingJobError,
-                                       handle_matching)
-from app.utils.activity import (record_activity, record_worker_started,
-                                record_worker_stopped)
+from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
+from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
-from app.workers.persistence import (QueueJobDTO, complete, enqueue, fail,
-                                     fetch_ready, lease, release_active_leases,
-                                     to_dlq)
+from app.workers.persistence import (
+    QueueJobDTO,
+    complete,
+    enqueue,
+    fail,
+    fetch_ready,
+    lease,
+    release_active_leases,
+    to_dlq,
+)
 
 logger = get_logger(__name__)
 
@@ -58,7 +63,7 @@ class MatchingWorker:
 
     def _resolve_batch_size(self) -> int:
         setting_value = read_setting("matching_worker_batch_size")
-        env_value = os.getenv("MATCHING_WORKER_BATCH_SIZE")
+        env_value = get_env("MATCHING_WORKER_BATCH_SIZE")
         for value in (setting_value, env_value):
             if not value:
                 continue
@@ -72,7 +77,7 @@ class MatchingWorker:
 
     def _resolve_threshold(self) -> float:
         setting_value = read_setting("matching_confidence_threshold")
-        env_value = os.getenv("MATCHING_CONFIDENCE_THRESHOLD")
+        env_value = get_env("MATCHING_CONFIDENCE_THRESHOLD")
         for value in (setting_value, env_value):
             if not value:
                 continue

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import os
 import random
 import statistics
 import time
@@ -12,14 +11,24 @@ from contextlib import AbstractContextManager
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import (TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Mapping,
-                    MutableMapping, Optional, Protocol, Sequence)
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Protocol,
+    Sequence,
+)
 
 from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import WatchlistWorkerConfig, settings
+from app.config import WatchlistWorkerConfig, get_env, settings
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -27,30 +36,38 @@ from app.core.types import ProviderArtistDTO
 from app.db import run_session, session_scope
 from app.db_async import get_async_sessionmaker
 from app.dependencies import get_app_config
-from app.integrations.normalizers import (normalize_slskd_candidate,
-                                          normalize_spotify_track)
+from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Download, IngestItem, IngestItemState, Match
-from app.services.artist_delta import (AlbumRelease, ArtistCacheHint,
-                                       ArtistDelta, ArtistKnownRelease,
-                                       ArtistTrackCandidate,
-                                       build_artist_delta, filter_new_releases)
-from app.services.artist_workflow_dao import (ArtistWorkflowArtistRow,
-                                              ArtistWorkflowDAO)
+from app.services.artist_delta import (
+    AlbumRelease,
+    ArtistCacheHint,
+    ArtistDelta,
+    ArtistKnownRelease,
+    ArtistTrackCandidate,
+    build_artist_delta,
+    filter_new_releases,
+)
+from app.services.artist_workflow_dao import ArtistWorkflowArtistRow, ArtistWorkflowDAO
 from app.services.backfill_service import BackfillJobStatus
 from app.services.library_service import LibraryService
-from app.services.retry_policy_provider import (RetryPolicy,
-                                                RetryPolicyProvider,
-                                                get_retry_policy_provider)
+from app.services.retry_policy_provider import (
+    RetryPolicy,
+    RetryPolicyProvider,
+    get_retry_policy_provider,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing imports only
     from app.services.free_ingest_service import IngestSubmission, JobStatus
 
 from app.services.spotify_domain_service import SpotifyDomainService
 from app.utils.activity import record_activity
-from app.utils.events import (DOWNLOAD_RETRY_COMPLETED, DOWNLOAD_RETRY_FAILED,
-                              DOWNLOAD_RETRY_SCHEDULED)
+from app.utils.events import (
+    DOWNLOAD_RETRY_COMPLETED,
+    DOWNLOAD_RETRY_FAILED,
+    DOWNLOAD_RETRY_SCHEDULED,
+)
 from app.utils.file_utils import organize_file
 from app.utils.metrics import counter, histogram
 from app.workers import persistence
@@ -396,7 +413,7 @@ class MatchingHandlerDeps:
         default_factory=lambda: load_matching_confidence_threshold()
     )
     external_timeout_ms: int = field(
-        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+        default_factory=lambda: _resolve_timeout_ms(get_env("EXTERNAL_TIMEOUT_MS"))
     )
 
 
@@ -430,7 +447,7 @@ def load_matching_confidence_threshold(
     from app.utils.settings_store import read_setting
 
     setting_value = read_setting(setting_key)
-    env_value = os.getenv(env_key)
+    env_value = get_env(env_key)
     for raw in (setting_value, env_value):
         if not raw:
             continue
@@ -580,10 +597,10 @@ class SyncHandlerDeps:
     artwork_service: ArtworkService | None = None
     lyrics_service: LyricsService | None = None
     music_dir: Path = field(
-        default_factory=lambda: Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+        default_factory=lambda: Path(get_env("MUSIC_DIR") or "./music").expanduser()
     )
     external_timeout_ms: int = field(
-        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+        default_factory=lambda: _resolve_timeout_ms(get_env("EXTERNAL_TIMEOUT_MS"))
     )
     retry_job_type: str = "sync"
     retry_policy_override: InitVar[SyncRetryPolicy | None] = None
@@ -627,16 +644,16 @@ class RetryHandlerDeps:
     rng: random.Random = field(default_factory=random.Random)
     batch_limit: int = field(
         default_factory=lambda: _safe_int(
-            os.getenv("RETRY_SCAN_BATCH_LIMIT"), _RETRY_DEFAULT_BATCH_LIMIT
+            get_env("RETRY_SCAN_BATCH_LIMIT"), _RETRY_DEFAULT_BATCH_LIMIT
         )
     )
     scan_interval: float = field(
         default_factory=lambda: _safe_float(
-            os.getenv("RETRY_SCAN_INTERVAL_SEC"), _RETRY_DEFAULT_SCAN_INTERVAL
+            get_env("RETRY_SCAN_INTERVAL_SEC"), _RETRY_DEFAULT_SCAN_INTERVAL
         )
     )
     external_timeout_ms: int = field(
-        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+        default_factory=lambda: _resolve_timeout_ms(get_env("EXTERNAL_TIMEOUT_MS"))
     )
     now_factory: Callable[[], datetime] = datetime.utcnow
     retry_job_type: str = "retry"
@@ -699,7 +716,7 @@ class ArtistDeltaHandlerDeps:
     now_factory: Callable[[], datetime] = datetime.utcnow
     cache_service: ArtistCacheService | None = None
     external_timeout_ms: int = field(
-        default_factory=lambda: _resolve_timeout_ms(os.getenv("EXTERNAL_TIMEOUT_MS"))
+        default_factory=lambda: _resolve_timeout_ms(get_env("EXTERNAL_TIMEOUT_MS"))
     )
     db_mode: str = field(init=False)
     spotify_timeout_ms: int = field(init=False)
@@ -2692,7 +2709,7 @@ async def fanout_download_completion(
                         try:
                             target_dir = (
                                 deps.music_dir
-                                or Path(os.getenv("MUSIC_DIR", "./music")).expanduser()
+                                or Path(get_env("MUSIC_DIR") or "./music").expanduser()
                             )
                             organized_path = organize_file(record, target_dir)
                         except FileNotFoundError:

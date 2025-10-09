@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import re
 import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-from app.config import (DEFAULT_RETRY_BASE_SECONDS, DEFAULT_RETRY_JITTER_PCT,
-                        DEFAULT_RETRY_MAX_ATTEMPTS,
-                        DEFAULT_RETRY_POLICY_RELOAD_S)
+from app.config import (
+    DEFAULT_RETRY_BASE_SECONDS,
+    DEFAULT_RETRY_JITTER_PCT,
+    DEFAULT_RETRY_MAX_ATTEMPTS,
+    DEFAULT_RETRY_POLICY_RELOAD_S,
+    get_runtime_env,
+)
 from app.logging import get_logger
 
 logger = get_logger(__name__)
@@ -100,7 +103,7 @@ class RetryPolicyProvider:
         env_source: Callable[[], Mapping[str, Any]] | None = None,
         time_source: Callable[[], float] | None = None,
     ) -> None:
-        self._env_source = env_source or (lambda: os.environ)
+        self._env_source = env_source or (lambda: get_runtime_env())
         self._time_source = time_source or time.monotonic
         self._lock = threading.RLock()
         self._reload_override = reload_interval

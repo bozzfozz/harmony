@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 from typing import Optional
 
@@ -12,7 +11,7 @@ from sqlalchemy import engine_from_config, pool
 
 # Import models for metadata registration
 from app import models  # noqa: F401
-from app.config import _require_postgres_database_url, load_config
+from app.config import _require_postgres_database_url, get_env, load_config
 from app.db import metadata
 
 _context_config = getattr(context, "config", None)
@@ -25,7 +24,7 @@ target_metadata = metadata
 
 
 def _resolve_database_url(alembic_config: Optional[Config]) -> str:
-    env_override = os.getenv("ALEMBIC_DATABASE_URL")
+    env_override = get_env("ALEMBIC_DATABASE_URL")
     if env_override:
         return _require_postgres_database_url(env_override)
 

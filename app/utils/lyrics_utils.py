@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import base64
-import os
 import re
 import zlib
 from pathlib import Path
-from typing import (Any, Dict, Iterable, List, Mapping, Optional, Sequence,
-                    Tuple)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import httpx
 
+from app.config import get_env
 from app.logging import get_logger
 
 logger = get_logger(__name__)
@@ -116,7 +115,7 @@ def save_lrc_file(path: Path, lrc: str) -> None:
 async def fetch_musixmatch_subtitles(track_info: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     """Attempt to retrieve synchronised lyrics from the Musixmatch API."""
 
-    api_key = os.getenv("MUSIXMATCH_API_KEY")
+    api_key = get_env("MUSIXMATCH_API_KEY")
     if not api_key:
         return None
 
