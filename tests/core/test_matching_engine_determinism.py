@@ -25,14 +25,16 @@ def test_rank_candidates_is_deterministic() -> None:
     ]
 
     baseline = [
-        result.track.source_id for result in rank_candidates(query, candidates, fuzzy_max=10)
+        result.track.source_id
+        for result in rank_candidates(query, candidates, fuzzy_max=10)
     ]
 
     for _ in range(5):
         shuffled = list(candidates)
         shuffle(shuffled)
         order = [
-            result.track.source_id for result in rank_candidates(query, shuffled, fuzzy_max=10)
+            result.track.source_id
+            for result in rank_candidates(query, shuffled, fuzzy_max=10)
         ]
         assert order == baseline
 

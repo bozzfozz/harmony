@@ -177,7 +177,9 @@ class ImportWorker:
             .first()
         )
 
-    def _update_session_state(self, session: Session, session_id: str, state: str) -> None:
+    def _update_session_state(
+        self, session: Session, session_id: str, state: str
+    ) -> None:
         record = session.get(ImportSession, session_id)
         if record is None:
             return

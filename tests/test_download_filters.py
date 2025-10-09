@@ -25,7 +25,9 @@ def create_download(
 def test_status_filter_returns_expected_entries(client) -> None:
     queued_id = create_download("queued.mp3", "queued", priority=1)
     running_id = create_download("running.mp3", "running", priority=5)
-    downloading_id = create_download("downloading.mp3", "downloading", priority=4, progress=30.0)
+    downloading_id = create_download(
+        "downloading.mp3", "downloading", priority=4, progress=30.0
+    )
     failed_id = create_download("failed.mp3", "failed")
     create_download("completed.mp3", "completed")
 

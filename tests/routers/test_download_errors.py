@@ -61,7 +61,9 @@ def test_start_download_invalid_file_entry_returns_422(
     assert response.status_code == 422
 
 
-def test_get_download_not_found_returns_standard_error(client: SimpleTestClient) -> None:
+def test_get_download_not_found_returns_standard_error(
+    client: SimpleTestClient,
+) -> None:
     response = client.get(api_path("/download/999999"))
 
     assert response.status_code == 404
@@ -100,7 +102,9 @@ def test_cancel_download_dependency_failure_maps_to_error_envelope(
 def test_retry_download_invalid_state_returns_validation_error(
     client: SimpleTestClient,
 ) -> None:
-    download_id = _create_download(state="queued", request_payload={"filename": "song.mp3"})
+    download_id = _create_download(
+        state="queued", request_payload={"filename": "song.mp3"}
+    )
 
     response = client.post(api_path(f"/download/{download_id}/retry"))
 

@@ -38,7 +38,9 @@ def test_activity_endpoint_limits_to_fifty_entries(client) -> None:
 
 
 def test_record_activity_serialises_timezone_aware_timestamp() -> None:
-    aware_timestamp = datetime(2024, 5, 4, 12, 30, 45, tzinfo=timezone(timedelta(hours=2)))
+    aware_timestamp = datetime(
+        2024, 5, 4, 12, 30, 45, tzinfo=timezone(timedelta(hours=2))
+    )
 
     payload = record_activity("test", "completed", timestamp=aware_timestamp)
 
@@ -49,9 +51,13 @@ def test_record_activity_serialises_timezone_aware_timestamp() -> None:
 
 
 def test_record_activity_details_datetime_serialises_to_utc() -> None:
-    aware_detail = datetime(2024, 1, 15, 9, 45, 30, tzinfo=timezone(timedelta(hours=-5)))
+    aware_detail = datetime(
+        2024, 1, 15, 9, 45, 30, tzinfo=timezone(timedelta(hours=-5))
+    )
 
-    payload = record_activity("sync", "completed", details={"finished_at": aware_detail})
+    payload = record_activity(
+        "sync", "completed", details={"finished_at": aware_detail}
+    )
 
     finished_at = payload["details"]["finished_at"]
     expected = aware_detail.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

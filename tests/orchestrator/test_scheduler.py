@@ -44,7 +44,9 @@ class StubPersistence:
         return self._jobs.get(job_id)
 
 
-def make_job(job_id: int, job_type: str, priority: int, available_delta: int) -> QueueJobDTO:
+def make_job(
+    job_id: int, job_type: str, priority: int, available_delta: int
+) -> QueueJobDTO:
     available_at = datetime.utcnow() + timedelta(seconds=available_delta)
     return QueueJobDTO(
         id=job_id,
@@ -82,7 +84,9 @@ def test_priority_config_falls_back_to_csv(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCaptureFixture) -> None:
+async def test_scheduler_leases_jobs_in_priority_order(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     caplog.set_level("INFO", logger="app.orchestrator.scheduler")
     caplog.set_level("INFO", logger="app.orchestrator.metrics")
 
@@ -117,16 +121,21 @@ async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCapture
     assert all(call[2] == 42 for call in stub.lease_calls)
 
     lease_records = [
-        record for record in caplog.records if getattr(record, "event", "") == "orchestrator.lease"
+        record
+        for record in caplog.records
+        if getattr(record, "event", "") == "orchestrator.lease"
     ]
-    lease_events = [(record.job_type, record.entity_id, record.status) for record in lease_records]
+    lease_events = [
+        (record.job_type, record.entity_id, record.status) for record in lease_records
+    ]
     assert lease_events == [
         ("matching", "3", "leased"),
         ("sync", "1", "leased"),
         ("sync", "2", "leased"),
     ]
     assert all(
-        isinstance(record.duration_ms, int) and record.duration_ms >= 0 for record in lease_records
+        isinstance(record.duration_ms, int) and record.duration_ms >= 0
+        for record in lease_records
     )
     assert {record.name for record in lease_records} == {"app.orchestrator.metrics"}
 
@@ -135,7 +144,9 @@ async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCapture
 async def test_scheduler_stops_when_lifespan_signal_set() -> None:
     config = PriorityConfig(priorities={"sync": 1})
     stub = StubPersistence({"sync": []})
-    scheduler = Scheduler(priority_config=config, poll_interval_ms=10, persistence_module=stub)
+    scheduler = Scheduler(
+        priority_config=config, poll_interval_ms=10, persistence_module=stub
+    )
 
     lifespan = asyncio.Event()
     task = asyncio.create_task(scheduler.run(lifespan))

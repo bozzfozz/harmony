@@ -30,7 +30,9 @@ class ProviderRegistry:
         base_config = ProviderGatewayConfig.from_settings(
             max_concurrency=self._config.integrations.max_concurrency,
         )
-        provider_policies: dict[str, ProviderRetryPolicy] = dict(base_config.provider_policies)
+        provider_policies: dict[str, ProviderRetryPolicy] = dict(
+            base_config.provider_policies
+        )
         provider_policies.update(self._policies)
         return ProviderGatewayConfig(
             max_concurrency=base_config.max_concurrency,

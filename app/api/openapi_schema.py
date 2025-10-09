@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable, Mapping, MutableMapping
 from copy import deepcopy
 from dataclasses import replace
-import hashlib
-import json
 from typing import Any, NamedTuple
 
 from fastapi import FastAPI
@@ -52,7 +52,9 @@ def _sort_parameters(parameters: list[Any]) -> list[Any]:
             sortable.append((_SortKey("", ""), _sort_value(item)))
     return [
         value
-        for _, value in sorted(sortable, key=lambda entry: (entry[0].primary, entry[0].secondary))
+        for _, value in sorted(
+            sortable, key=lambda entry: (entry[0].primary, entry[0].secondary)
+        )
     ]
 
 
@@ -67,7 +69,10 @@ def _sort_security(security: list[Any]) -> list[Any]:
             sortable.append((serialised, normalised))
         else:
             sortable.append(
-                (json.dumps(item, sort_keys=True, ensure_ascii=False), _sort_value(item))
+                (
+                    json.dumps(item, sort_keys=True, ensure_ascii=False),
+                    _sort_value(item),
+                )
             )
     return [value for _, value in sorted(sortable, key=lambda entry: entry[0])]
 
@@ -84,7 +89,9 @@ def _sort_tags(tags: Iterable[Any]) -> list[Any]:
             sortable.append((_SortKey(str(raw), ""), _sort_value(raw)))
     return [
         value
-        for _, value in sorted(sortable, key=lambda entry: (entry[0].primary, entry[0].secondary))
+        for _, value in sorted(
+            sortable, key=lambda entry: (entry[0].primary, entry[0].secondary)
+        )
     ]
 
 
@@ -185,7 +192,9 @@ def _ensure_deterministic_structure(schema: MutableMapping[str, Any]) -> None:
 
 
 def _hash_schema(schema: Mapping[str, Any]) -> str:
-    payload = json.dumps(schema, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    payload = json.dumps(
+        schema, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -245,7 +254,9 @@ def _apply_error_contract(paths: MutableMapping[str, Any]) -> None:
                         existing.setdefault("description", description)
                         content = existing.setdefault("content", {})
                         if isinstance(content, MutableMapping):
-                            content.setdefault("application/json", {"schema": error_ref})
+                            content.setdefault(
+                                "application/json", {"schema": error_ref}
+                            )
 
 
 def _apply_cache_headers(paths: MutableMapping[str, Any]) -> None:
@@ -273,8 +284,15 @@ def _apply_cache_headers(paths: MutableMapping[str, Any]) -> None:
             if isinstance(not_modified, MutableMapping):
                 headers = not_modified.setdefault("headers", {})
                 if isinstance(headers, MutableMapping):
-                    for header_name in ("ETag", "Last-Modified", "Cache-Control", "Vary"):
-                        headers.setdefault(header_name, deepcopy(cache_headers[header_name]))
+                    for header_name in (
+                        "ETag",
+                        "Last-Modified",
+                        "Cache-Control",
+                        "Vary",
+                    ):
+                        headers.setdefault(
+                            header_name, deepcopy(cache_headers[header_name])
+                        )
 
 
 def _apply_health_examples(app: FastAPI, paths: MutableMapping[str, Any]) -> None:
@@ -300,7 +318,11 @@ def _apply_health_examples(app: FastAPI, paths: MutableMapping[str, Any]) -> Non
                         "schema": {"$ref": "#/components/schemas/HealthResponse"},
                         "example": {
                             "ok": True,
-                            "data": {"status": "up", "version": app.version, "uptime_s": 1.23},
+                            "data": {
+                                "status": "up",
+                                "version": app.version,
+                                "uptime_s": 1.23,
+                            },
                             "error": None,
                         },
                     }

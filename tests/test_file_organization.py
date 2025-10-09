@@ -11,7 +11,9 @@ from app.workers.sync_worker import SyncWorker
 
 
 class FileOrganizeStubSoulseekClient:
-    async def cancel_download(self, download_id: str) -> None:  # pragma: no cover - stub
+    async def cancel_download(
+        self, download_id: str
+    ) -> None:  # pragma: no cover - stub
         return None
 
 
@@ -21,7 +23,10 @@ def test_sanitize_name() -> None:
 
 
 def test_guess_album_from_filename() -> None:
-    assert guess_album_from_filename("Artist - Album Name - 01 - Track.flac") == "Album Name"
+    assert (
+        guess_album_from_filename("Artist - Album Name - 01 - Track.flac")
+        == "Album Name"
+    )
     assert guess_album_from_filename("Artist -  - 02 - Track.flac") == "<Unknown Album>"
     assert guess_album_from_filename("TrackOnly.flac") is None
 
@@ -45,7 +50,9 @@ def test_organize_file_with_album(tmp_path: Path) -> None:
 
     destination = organize_file(download, tmp_path / "music")
 
-    expected = tmp_path / "music" / "Test Artist" / "Greatest Hits" / "01 - Song One.flac"
+    expected = (
+        tmp_path / "music" / "Test Artist" / "Greatest Hits" / "01 - Song One.flac"
+    )
     assert destination == expected
     assert destination.exists()
     assert download.organized_path == str(expected)
@@ -111,7 +118,9 @@ def test_duplicate_files(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_completed_album_tracks_are_organized(tmp_path: Path, monkeypatch) -> None:
+async def test_completed_album_tracks_are_organized(
+    tmp_path: Path, monkeypatch
+) -> None:
     reset_engine_for_tests()
     init_db()
 

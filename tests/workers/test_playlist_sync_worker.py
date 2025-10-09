@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
 import threading
 import time
+from contextlib import contextmanager
 
 import pytest
 
@@ -49,7 +49,9 @@ async def test_playlist_sync_worker_yields_control_during_fetch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_playlist_sync_worker_offloads_db_work(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_playlist_sync_worker_offloads_db_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     main_thread = threading.current_thread()
     session_threads: list[threading.Thread] = []
 
@@ -95,7 +97,8 @@ async def test_playlist_sync_worker_offloads_db_work(monkeypatch: pytest.MonkeyP
     await worker.sync_once()
 
     assert any(
-        getattr(call[0], "__name__", "") == "_persist_playlists" for call in to_thread_calls
+        getattr(call[0], "__name__", "") == "_persist_playlists"
+        for call in to_thread_calls
     ), "Database persistence should run via asyncio.to_thread"
     assert session_threads, "session_scope should be invoked"
     assert all(thread is not main_thread for thread in session_threads)

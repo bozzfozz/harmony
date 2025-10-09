@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 import re
-from typing import Iterable
 import unicodedata
+from functools import lru_cache
+from typing import Iterable
 
 try:  # pragma: no cover - optional dependency
     from unidecode import unidecode
@@ -113,7 +113,9 @@ def clean_track_title(title: str) -> str:
     working = normalize_quotes(title)
     working = _FEAT_PATTERN.sub("", working)
     working = _EXPLICIT_PATTERN.sub("", working)
-    working = re.sub(r"\s*[-–—]\s*(?:explicit|clean)\b", "", working, flags=re.IGNORECASE)
+    working = re.sub(
+        r"\s*[-–—]\s*(?:explicit|clean)\b", "", working, flags=re.IGNORECASE
+    )
     working = re.sub(r"\s*\(explicit\)|\s*\(clean\)", "", working, flags=re.IGNORECASE)
     working = re.sub(r"\s{2,}", " ", working)
     return working.strip(" -")
@@ -150,9 +152,13 @@ def _swap_parentheses_and_dash(value: str) -> list[str]:
     if "(" in value and ")" in value:
         variants.append(_PAREN_TO_DASH.sub(lambda match: f" - {match.group(1)}", value))
     if " - " in value:
-        variants.append(_DASH_TO_PAREN.sub(lambda match: f" ({match.group(1).strip()})", value))
+        variants.append(
+            _DASH_TO_PAREN.sub(lambda match: f" ({match.group(1).strip()})", value)
+        )
     return [
-        _compact_whitespace(candidate) for candidate in variants if candidate and candidate != value
+        _compact_whitespace(candidate)
+        for candidate in variants
+        if candidate and candidate != value
     ]
 
 

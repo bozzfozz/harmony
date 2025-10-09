@@ -217,7 +217,9 @@ async def submit_playlist_links(
         else:
             skipped.append(
                 SkippedPlaylist(
-                    url=origin_map.get(playlist_id, _canonical_playlist_url(playlist_id)),
+                    url=origin_map.get(
+                        playlist_id, _canonical_playlist_url(playlist_id)
+                    ),
                     reason="duplicate",
                 )
             )

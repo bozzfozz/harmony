@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import csv
+import json
 from datetime import datetime, timezone
 from io import StringIO
-import json
 from typing import Any, Dict, Literal
 
 from fastapi import APIRouter, Query

@@ -201,9 +201,13 @@ class TransfersApi:
         status_code = getattr(exc, "status_code", None)
         details = exc.payload if isinstance(exc.payload, Mapping) else None
         if status_code == 404:
-            raise TransfersNotFoundError(message, status_code=status_code, details=details) from exc
+            raise TransfersNotFoundError(
+                message, status_code=status_code, details=details
+            ) from exc
         if status_code in {400, 422}:
             raise TransfersValidationError(
                 message, status_code=status_code, details=details
             ) from exc
-        raise TransfersDependencyError(message, status_code=status_code, details=details) from exc
+        raise TransfersDependencyError(
+            message, status_code=status_code, details=details
+        ) from exc

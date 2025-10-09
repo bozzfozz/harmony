@@ -14,7 +14,9 @@ def test_spotify_status_reports_capabilities(client: SimpleTestClient) -> None:
     assert payload["status"] in {"connected", "unauthenticated"}
 
 
-def test_spotify_pro_features_require_credentials(client: SimpleTestClient, monkeypatch) -> None:
+def test_spotify_pro_features_require_credentials(
+    client: SimpleTestClient, monkeypatch
+) -> None:
     from app.dependencies import get_spotify_client as dependency_spotify_client
 
     # Prime the cache to ensure the status endpoint does not serve stale data after credential changes.
@@ -47,4 +49,6 @@ def test_spotify_pro_features_require_credentials(client: SimpleTestClient, monk
         assert error_payload["error"]["code"] == "DEPENDENCY_ERROR"
         assert "Spotify credentials" in error_payload["error"]["message"]
     finally:
-        client.app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
+        client.app.dependency_overrides[dependency_spotify_client] = (
+            lambda: stub_spotify
+        )

@@ -65,7 +65,9 @@ def test_system_stats_endpoint_uses_psutil(monkeypatch, client) -> None:
     assert stats["network"]["bytes_recv"] == 2
 
 
-def test_system_stats_endpoint_uses_app_state_psutil_override(monkeypatch, client) -> None:
+def test_system_stats_endpoint_uses_app_state_psutil_override(
+    monkeypatch, client
+) -> None:
     module_dummy = DummyPsutil(20.0)
     state_dummy = DummyPsutil(45.0)
 
@@ -79,7 +81,9 @@ def test_system_stats_endpoint_uses_app_state_psutil_override(monkeypatch, clien
     assert stats["cpu"]["percent"] == 45.0
 
 
-def test_system_stats_endpoint_uses_dependency_override_psutil(monkeypatch, client) -> None:
+def test_system_stats_endpoint_uses_dependency_override_psutil(
+    monkeypatch, client
+) -> None:
     module_dummy = DummyPsutil(10.0)
     override_dummy = DummyPsutil(55.0)
 

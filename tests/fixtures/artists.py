@@ -83,7 +83,9 @@ class ArtistFactory:
         with session_scope() as session:
             existing = (
                 session.execute(
-                    select(WatchlistArtist).where(WatchlistArtist.spotify_artist_id == spotify_id)
+                    select(WatchlistArtist).where(
+                        WatchlistArtist.spotify_artist_id == spotify_id
+                    )
                 )
                 .scalars()
                 .first()

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime
 import inspect
 import time
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Sequence
 
 from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
@@ -74,7 +74,9 @@ class WatchlistTimer:
         mode = (config.db_io_mode or "thread").strip().lower()
         if mode == "async" and isinstance(resolved_dao, ArtistWorkflowDAO):
             if not resolved_dao.supports_async:
-                resolved_dao = resolved_dao.with_async_session_factory(get_async_sessionmaker())
+                resolved_dao = resolved_dao.with_async_session_factory(
+                    get_async_sessionmaker()
+                )
         self._dao = resolved_dao
         self._persistence = persistence_module
         self._now_factory = now_factory
@@ -93,7 +95,9 @@ class WatchlistTimer:
             self._sleep_jitter_pct = int(round(jitter_value * 100))
         else:
             self._sleep_jitter_pct = int(round(jitter_value))
-        self._priority = int(settings.orchestrator.priority_map.get(ARTIST_REFRESH_JOB_TYPE, 0))
+        self._priority = int(
+            settings.orchestrator.priority_map.get(ARTIST_REFRESH_JOB_TYPE, 0)
+        )
 
     @property
     def interval(self) -> float:
@@ -208,7 +212,8 @@ class WatchlistTimer:
                 except Exception:  # pragma: no cover - defensive logging
                     failures += 1
                     self._logger.exception(
-                        "Failed to enqueue watchlist job", extra={"artist_id": artist.id}
+                        "Failed to enqueue watchlist job",
+                        extra={"artist_id": artist.id},
                     )
                     continue
                 if job is not None:

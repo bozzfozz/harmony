@@ -42,7 +42,11 @@ class ServiceHealth:
 _SERVICE_DEFINITIONS: tuple[ServiceDefinition, ...] = (
     ServiceDefinition(
         name="spotify",
-        required_keys=("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"),
+        required_keys=(
+            "SPOTIFY_CLIENT_ID",
+            "SPOTIFY_CLIENT_SECRET",
+            "SPOTIFY_REDIRECT_URI",
+        ),
     ),
     ServiceDefinition(
         name="soulseek",
@@ -63,7 +67,9 @@ def _definition_for(service: str) -> ServiceDefinition:
 def _fetch_settings(session: Session, keys: Sequence[str]) -> Mapping[str, str | None]:
     if not keys:
         return {}
-    records = session.execute(select(Setting).where(Setting.key.in_(keys))).scalars().all()
+    records = (
+        session.execute(select(Setting).where(Setting.key.in_(keys))).scalars().all()
+    )
     return {record.key: record.value for record in records}
 
 
@@ -83,8 +89,12 @@ def evaluate_service_health(session: Session, service: str) -> ServiceHealth:
     def _resolve(key: str) -> str | None:
         return settings.get(key)
 
-    missing_required = tuple(key for key in definition.required_keys if _is_missing(_resolve(key)))
-    missing_optional = tuple(key for key in definition.optional_keys if _is_missing(_resolve(key)))
+    missing_required = tuple(
+        key for key in definition.required_keys if _is_missing(_resolve(key))
+    )
+    missing_optional = tuple(
+        key for key in definition.optional_keys if _is_missing(_resolve(key))
+    )
 
     status = "ok" if not missing_required else "fail"
     return ServiceHealth(

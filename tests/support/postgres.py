@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass
 import os
 import uuid
+from contextlib import contextmanager
+from dataclasses import dataclass
 
 import pytest
 import sqlalchemy as sa
@@ -64,7 +64,9 @@ def postgres_schema(prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = Non
             engine.dispose()
             pytest.skip(f"PostgreSQL is unavailable: {exc}")
 
-        scoped_url = url.set(query={**url.query, "options": f"-csearch_path={schema_name}"})
+        scoped_url = url.set(
+            query={**url.query, "options": f"-csearch_path={schema_name}"}
+        )
         rendered = scoped_url.render_as_string(hide_password=False)
         if monkeypatch is not None:
             monkeypatch.setenv("DATABASE_URL", rendered)

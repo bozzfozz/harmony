@@ -22,7 +22,9 @@ class _StubSoulseekClient:
         self.cancelled.append(transfer_id)
         return {"status": "cancelled", "cancelled": transfer_id}
 
-    async def enqueue(self, username: str, files: list[dict[str, object]]) -> dict[str, object]:
+    async def enqueue(
+        self, username: str, files: list[dict[str, object]]
+    ) -> dict[str, object]:
         self.enqueued.append((username, files))
         return {"job": {"id": files[0].get("download_id", "job-1")}}
 

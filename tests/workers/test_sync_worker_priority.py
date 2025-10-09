@@ -12,7 +12,9 @@ from tests.workers.test_sync_worker import RecordingSoulseekClient
 
 
 @pytest.mark.asyncio
-async def test_sync_worker_prefers_new_high_priority_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_sync_worker_prefers_new_high_priority_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A later higher-priority job should preempt lower priority work waiting to start."""
 
     reset_engine_for_tests()
@@ -104,7 +106,9 @@ async def test_maybe_take_preempting_job_returns_when_candidate_missing(
     job = _make_queue_job(job_id=1, priority=10)
     candidate = _PriorityQueueEntry(queue_priority=-10, sequence=0, job=job)
 
-    def fake_peek(self: SyncWorker, current_priority: int) -> _PriorityQueueEntry | None:
+    def fake_peek(
+        self: SyncWorker, current_priority: int
+    ) -> _PriorityQueueEntry | None:
         return candidate
 
     monkeypatch.setattr(SyncWorker, "_peek_higher_priority_entry", fake_peek)
@@ -124,7 +128,9 @@ async def test_maybe_take_preempting_job_requeues_lower_priority(
     await worker._put_job(job)
     candidate = _PriorityQueueEntry(queue_priority=-10, sequence=0, job=job)
 
-    def fake_peek(self: SyncWorker, current_priority: int) -> _PriorityQueueEntry | None:
+    def fake_peek(
+        self: SyncWorker, current_priority: int
+    ) -> _PriorityQueueEntry | None:
         return candidate
 
     monkeypatch.setattr(SyncWorker, "_peek_higher_priority_entry", fake_peek)

@@ -18,7 +18,9 @@ def test_free_ingest_accepts_tracks_and_links(client: SimpleTestClient) -> None:
     response = client.post(
         "/spotify/import/free",
         json={
-            "playlist_links": ["https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk"],
+            "playlist_links": [
+                "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk"
+            ],
             "tracks": [_build_track("Test Song"), _build_track("Other Track")],
         },
     )
@@ -103,7 +105,9 @@ def test_free_ingest_enforces_track_limit(
 
 def test_free_ingest_file_upload(client: SimpleTestClient) -> None:
     boundary = "----freeingest"
-    lines = "\r\n".join(["Soulseek Artist - Test Song", "Soulseek Artist - Other Track"])
+    lines = "\r\n".join(
+        ["Soulseek Artist - Test Song", "Soulseek Artist - Other Track"]
+    )
     body = (
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="file"; filename="tracks.csv"\r\n'

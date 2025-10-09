@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from alembic import command
 import pytest
 import sqlalchemy as sa
+from alembic import command
 
 from tests.support.postgres import postgres_schema
 

@@ -177,7 +177,9 @@ class WatchlistDAO:
                 statement = (
                     select(Download.spotify_track_id)
                     .where(Download.spotify_track_id.in_(track_ids))
-                    .where(Download.state.notin_(["failed", "cancelled", "dead_letter"]))
+                    .where(
+                        Download.state.notin_(["failed", "cancelled", "dead_letter"])
+                    )
                 )
                 values = session.execute(statement).scalars().all()
                 return {str(value) for value in values if value}

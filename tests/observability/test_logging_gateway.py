@@ -27,11 +27,15 @@ class _StubProvider:
 
 @pytest.fixture()
 def gateway_policy() -> ProviderRetryPolicy:
-    base = ExternalCallPolicy(timeout_ms=100, retry_max=0, backoff_base_ms=1, jitter_pct=0.0)
+    base = ExternalCallPolicy(
+        timeout_ms=100, retry_max=0, backoff_base_ms=1, jitter_pct=0.0
+    )
     return ProviderRetryPolicy.from_external(base)
 
 
-def _build_gateway(provider: TrackProvider, policy: ProviderRetryPolicy) -> ProviderGateway:
+def _build_gateway(
+    provider: TrackProvider, policy: ProviderRetryPolicy
+) -> ProviderGateway:
     config = ProviderGatewayConfig(
         max_concurrency=2,
         default_policy=policy,
@@ -53,7 +57,9 @@ async def test_logging_dependency_wraps_provider_calls_and_sets_status(
         captured.append((event_name, fields))
 
     monkeypatch.setattr("app.integrations.provider_gateway.log_event", _capture)
-    result = await gateway.search_tracks("Dummy", SearchQuery(text="demo", artist=None, limit=1))
+    result = await gateway.search_tracks(
+        "Dummy", SearchQuery(text="demo", artist=None, limit=1)
+    )
     assert result == []
 
     assert captured, "expected api.dependency event"
@@ -72,7 +78,9 @@ async def test_logging_dependency_wraps_provider_calls_and_sets_status(
 
 @pytest.mark.asyncio()
 async def test_logging_dependency_records_errors(monkeypatch, gateway_policy) -> None:
-    provider = _StubProvider("Dummy", error=ProviderTimeoutError("Dummy", timeout_ms=42))
+    provider = _StubProvider(
+        "Dummy", error=ProviderTimeoutError("Dummy", timeout_ms=42)
+    )
     gateway = _build_gateway(provider, gateway_policy)
 
     captured: list[tuple[str, dict]] = []
@@ -81,7 +89,9 @@ async def test_logging_dependency_records_errors(monkeypatch, gateway_policy) ->
         captured.append((event_name, fields))
 
     monkeypatch.setattr("app.integrations.provider_gateway.log_event", _capture)
-    response = await gateway.search_many(["Dummy"], SearchQuery(text="demo", artist=None, limit=1))
+    response = await gateway.search_many(
+        ["Dummy"], SearchQuery(text="demo", artist=None, limit=1)
+    )
     assert response.status == "failed"
 
     assert captured, "expected api.dependency event"

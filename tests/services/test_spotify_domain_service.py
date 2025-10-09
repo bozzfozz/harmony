@@ -8,8 +8,15 @@ import pytest
 
 from app.config import load_config
 from app.integrations.contracts import ProviderTrack
-from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
-from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
+from app.services.free_ingest_service import (
+    IngestAccepted,
+    IngestSkipped,
+    IngestSubmission,
+)
+from app.services.spotify_domain_service import (
+    PlaylistItemsResult,
+    SpotifyDomainService,
+)
 
 
 def _make_service(**overrides: Any) -> SpotifyDomainService:
@@ -146,7 +153,9 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
         def __init__(self) -> None:
             self.submit = submit_mock
 
-        def get_job_status(self, job_id: str) -> None:  # pragma: no cover - not used here
+        def get_job_status(
+            self, job_id: str
+        ) -> None:  # pragma: no cover - not used here
             return None
 
     created: dict[str, Any] = {}
@@ -170,7 +179,9 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
 
 
 @pytest.mark.asyncio
-async def test_free_import_uses_orchestrator_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_free_import_uses_orchestrator_and_logs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     submission = IngestSubmission(
         ok=True,
         job_id="job-123",
@@ -180,7 +191,9 @@ async def test_free_import_uses_orchestrator_and_logs(monkeypatch: pytest.Monkey
     )
     captured: dict[str, Any] = {}
 
-    async def fake_enqueue(service: SpotifyDomainService, **kwargs: Any) -> IngestSubmission:
+    async def fake_enqueue(
+        service: SpotifyDomainService, **kwargs: Any
+    ) -> IngestSubmission:
         captured.update(kwargs)
         return submission
 
@@ -209,7 +222,9 @@ async def test_free_import_uses_orchestrator_and_logs(monkeypatch: pytest.Monkey
         "tracks": ["Artist - Title"],
         "batch_hint": 10,
     }
-    matching_events = [entry for entry in events if entry.get("event") == "spotify.free_import"]
+    matching_events = [
+        entry for entry in events if entry.get("event") == "spotify.free_import"
+    ]
     assert matching_events, "expected spotify.free_import log event"
     logged = matching_events[0]
     assert logged["component"] == "service.spotify"
@@ -227,7 +242,9 @@ async def test_enqueue_backfill_initialises_worker_once() -> None:
             self.created_jobs: list[Any] = []
 
         def create_job(self, *, max_items, expand_playlists):  # type: ignore[override]
-            job = SimpleNamespace(id="job-1", limit=max_items, expand_playlists=expand_playlists)
+            job = SimpleNamespace(
+                id="job-1", limit=max_items, expand_playlists=expand_playlists
+            )
             self.created_jobs.append(job)
             return job
 

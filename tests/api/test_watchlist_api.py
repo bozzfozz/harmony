@@ -74,7 +74,9 @@ def test_watchlist_pause_and_resume() -> None:
         pause_body = paused.json()
         assert pause_body["paused"] is True
         assert pause_body["pause_reason"] == "manual"
-        resumed_at = datetime.fromisoformat(pause_body["resume_at"].replace("Z", "+00:00"))
+        resumed_at = datetime.fromisoformat(
+            pause_body["resume_at"].replace("Z", "+00:00")
+        )
         assert resumed_at == resume_time
 
         resumed = client.post(api_path("/watchlist/spotify:beta/resume"))

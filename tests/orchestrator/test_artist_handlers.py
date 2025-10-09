@@ -426,7 +426,9 @@ async def test_artist_delta_skips_when_content_hash_matches() -> None:
         submit_sync_job=submitter,
         cache_service=cache,
     )
-    job = _queue_job(job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": base_artist.id})
+    job = _queue_job(
+        job_type=ARTIST_SCAN_JOB_TYPE, payload={"artist_id": base_artist.id}
+    )
     await handle_artist_delta(job, deps)
     previous_hash = dao.last_hash
     assert previous_hash

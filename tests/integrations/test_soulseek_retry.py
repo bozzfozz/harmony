@@ -71,7 +71,9 @@ def _make_config(**overrides: Any) -> SoulseekConfig:
 
 
 @pytest.mark.asyncio
-async def test_soulseek_client_retries_with_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_soulseek_client_retries_with_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = _FakeSession(
         [
             aiohttp.ClientConnectionError("boom"),

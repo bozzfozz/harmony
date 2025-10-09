@@ -32,7 +32,9 @@ class _StubGateway:
         providers: Sequence[str],
         limit: int,
     ) -> ArtistGatewayResponse:
-        self.calls.append({"artist_id": artist_id, "providers": tuple(providers), "limit": limit})
+        self.calls.append(
+            {"artist_id": artist_id, "providers": tuple(providers), "limit": limit}
+        )
         return self._response
 
 
@@ -100,7 +102,9 @@ async def test_orchestrator_handler_persists_artist_and_releases() -> None:
 
     gateway = _StubGateway(response)
     dao = ArtistDao(now_factory=lambda: datetime(2024, 5, 1, 10, 0, 0))
-    deps = ArtistSyncHandlerDeps(gateway=gateway, dao=dao, providers=("spotify",), release_limit=10)
+    deps = ArtistSyncHandlerDeps(
+        gateway=gateway, dao=dao, providers=("spotify",), release_limit=10
+    )
 
     job = QueueJobDTO(
         id=1,
@@ -129,7 +133,9 @@ async def test_orchestrator_handler_persists_artist_and_releases() -> None:
     with session_scope() as session:
         artist_record = (
             session.execute(
-                select(ArtistRecord).where(ArtistRecord.artist_key == "spotify:artist-1")
+                select(ArtistRecord).where(
+                    ArtistRecord.artist_key == "spotify:artist-1"
+                )
             )
             .scalars()
             .one()
@@ -180,7 +186,9 @@ async def test_idempotent_second_run_noops() -> None:
 
     gateway = _StubGateway(response)
     dao = ArtistDao(now_factory=lambda: datetime(2024, 5, 2, 9, 0, 0))
-    deps = ArtistSyncHandlerDeps(gateway=gateway, dao=dao, providers=("spotify",), release_limit=5)
+    deps = ArtistSyncHandlerDeps(
+        gateway=gateway, dao=dao, providers=("spotify",), release_limit=5
+    )
 
     job = QueueJobDTO(
         id=2,

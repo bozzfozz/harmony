@@ -59,12 +59,18 @@ def test_get_responses_emit_cache_headers_and_etag_roundtrip() -> None:
         assert second_headers.get("cache-control") == first_headers.get("cache-control")
         assert int(second_headers.get("age", "0")) <= ttl
 
-        conditional = client.get(path, headers={"If-None-Match": etag}, use_raw_path=True)
+        conditional = client.get(
+            path, headers={"If-None-Match": etag}, use_raw_path=True
+        )
         conditional_headers = _lower_headers(conditional.headers)
         assert conditional.status_code == 304
         assert conditional_headers.get("etag") == etag
-        assert conditional_headers.get("last-modified") == first_headers.get("last-modified")
-        assert conditional_headers.get("cache-control") == first_headers.get("cache-control")
+        assert conditional_headers.get("last-modified") == first_headers.get(
+            "last-modified"
+        )
+        assert conditional_headers.get("cache-control") == first_headers.get(
+            "cache-control"
+        )
         assert int(conditional_headers.get("age", "0")) <= ttl
 
 
@@ -83,7 +89,9 @@ def test_if_modified_since_returns_304_when_fresh() -> None:
         assert conditional.status_code == 304
 
         # Invalid timestamps should be ignored and treated as a normal request
-        invalid = client.get(path, headers={"If-Modified-Since": "not-a-date"}, use_raw_path=True)
+        invalid = client.get(
+            path, headers={"If-Modified-Since": "not-a-date"}, use_raw_path=True
+        )
         assert invalid.status_code == 200
         invalid_headers = _lower_headers(invalid.headers)
         assert "etag" in invalid_headers
@@ -92,7 +100,9 @@ def test_if_modified_since_returns_304_when_fresh() -> None:
         old_date = (datetime.now(timezone.utc) - timedelta(days=2)).strftime(
             "%a, %d %b %Y %H:%M:%S GMT"
         )
-        stale = client.get(path, headers={"If-Modified-Since": old_date}, use_raw_path=True)
+        stale = client.get(
+            path, headers={"If-Modified-Since": old_date}, use_raw_path=True
+        )
         assert stale.status_code == 200
 
 
@@ -142,5 +152,7 @@ def test_activity_cache_policy_matches_configuration() -> None:
         revalidation_headers = _lower_headers(revalidation.headers)
         assert revalidation.status_code == 304
         assert revalidation_headers.get("etag") == first_headers.get("etag")
-        assert revalidation_headers.get("cache-control") == first_headers.get("cache-control")
+        assert revalidation_headers.get("cache-control") == first_headers.get(
+            "cache-control"
+        )
         assert int(revalidation_headers.get("age", "0")) <= ttl

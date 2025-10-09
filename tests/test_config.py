@@ -70,12 +70,16 @@ def test_soulseek_configuration_from_database(monkeypatch: pytest.MonkeyPatch) -
     assert config.soulseek.api_key == "db-api-key"
 
 
-def test_configuration_falls_back_to_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_falls_back_to_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "env-client")
     monkeypatch.setenv("SLSKD_URL", "http://env-slskd")
 
     with session_scope() as session:
-        session.execute(delete(Setting).where(Setting.key.in_(["SPOTIFY_CLIENT_ID", "SLSKD_URL"])))
+        session.execute(
+            delete(Setting).where(Setting.key.in_(["SPOTIFY_CLIENT_ID", "SLSKD_URL"]))
+        )
         session.commit()
 
     config = load_config()

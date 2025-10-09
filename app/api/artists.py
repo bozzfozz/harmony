@@ -54,13 +54,17 @@ def _emit_api_event(
 
 def _to_artist_response(details: ArtistDetails) -> ArtistOut:
     artist = ArtistOut.model_validate(details.artist)
-    artist.releases = [ReleaseOut.model_validate(release) for release in details.releases]
+    artist.releases = [
+        ReleaseOut.model_validate(release) for release in details.releases
+    ]
     return artist
 
 
 def _to_watchlist_page(page: WatchlistPage) -> WatchlistPageOut:
     items = [WatchlistItemOut.model_validate(entry) for entry in page.items]
-    return WatchlistPageOut(items=items, total=page.total, limit=page.limit, offset=page.offset)
+    return WatchlistPageOut(
+        items=items, total=page.total, limit=page.limit, offset=page.offset
+    )
 
 
 @router.get("/watchlist", response_model=WatchlistPageOut)

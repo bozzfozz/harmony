@@ -56,7 +56,9 @@ def test_list_entries_supports_filters(service: DLQService) -> None:
     first_id = _seed_download(
         created_at=datetime.utcnow() - timedelta(days=2), last_error="network timeout"
     )
-    _seed_download(created_at=datetime.utcnow() - timedelta(hours=1), last_error="auth failure")
+    _seed_download(
+        created_at=datetime.utcnow() - timedelta(hours=1), last_error="auth failure"
+    )
     _seed_download(state="queued", last_error="should not appear")
 
     with session_scope() as session:
@@ -117,7 +119,9 @@ def test_purge_by_older_than_and_reason(service: DLQService) -> None:
     old_id = _seed_download(
         created_at=datetime.utcnow() - timedelta(days=5), last_error="network timeout"
     )
-    _seed_download(created_at=datetime.utcnow() - timedelta(hours=12), last_error="auth failure")
+    _seed_download(
+        created_at=datetime.utcnow() - timedelta(hours=12), last_error="auth failure"
+    )
 
     with session_scope() as session:
         result = service.purge_bulk(
@@ -136,7 +140,9 @@ def test_purge_by_older_than_and_reason(service: DLQService) -> None:
 def test_stats_returns_expected_counts(service: DLQService) -> None:
     _seed_download(last_error="network timeout")
     _seed_download(last_error="network unreachable")
-    _seed_download(last_error="auth failure", created_at=datetime.utcnow() - timedelta(hours=23))
+    _seed_download(
+        last_error="auth failure", created_at=datetime.utcnow() - timedelta(hours=23)
+    )
 
     with session_scope() as session:
         stats = service.stats(session)

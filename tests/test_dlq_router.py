@@ -32,8 +32,12 @@ def _seed_dlq_entry(**overrides: Any) -> int:
         "username": "tester",
         "retry_count": 1,
         "last_error": overrides.get("last_error", "network timeout"),
-        "created_at": overrides.get("created_at", datetime.utcnow() - timedelta(hours=3)),
-        "updated_at": overrides.get("updated_at", datetime.utcnow() - timedelta(hours=2)),
+        "created_at": overrides.get(
+            "created_at", datetime.utcnow() - timedelta(hours=3)
+        ),
+        "updated_at": overrides.get(
+            "updated_at", datetime.utcnow() - timedelta(hours=2)
+        ),
         "request_payload": overrides.get(
             "request_payload",
             {
@@ -62,7 +66,9 @@ def test_list_endpoint_returns_items(client: SimpleTestClient) -> None:
     )
     _seed_dlq_entry(last_error="auth failure")
 
-    response = client.get("/api/v1/dlq", params={"order_by": "created_at", "order_dir": "asc"})
+    response = client.get(
+        "/api/v1/dlq", params={"order_by": "created_at", "order_dir": "asc"}
+    )
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
@@ -115,7 +121,9 @@ def test_purge_validates_payload(client: SimpleTestClient) -> None:
 
 def test_stats_endpoint_returns_counts(client: SimpleTestClient) -> None:
     _seed_dlq_entry(last_error="network timeout")
-    _seed_dlq_entry(last_error="auth failure", created_at=datetime.utcnow() - timedelta(hours=1))
+    _seed_dlq_entry(
+        last_error="auth failure", created_at=datetime.utcnow() - timedelta(hours=1)
+    )
 
     response = client.get("/api/v1/dlq/stats")
     assert response.status_code == 200

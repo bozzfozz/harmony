@@ -14,7 +14,9 @@ def test_settings_history_tracking(client) -> None:
     response = client.post("/settings", json={"key": "theme", "value": "dark"})
     assert response.status_code == 200
 
-    response = client.post("/settings", json={"key": "notifications", "value": "enabled"})
+    response = client.post(
+        "/settings", json={"key": "notifications", "value": "enabled"}
+    )
     assert response.status_code == 200
 
     history_response = client.get("/settings/history")

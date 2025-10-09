@@ -1,6 +1,6 @@
 import asyncio
-from datetime import datetime
 import time
+from datetime import datetime
 
 from app import dependencies as deps
 from app.db import session_scope

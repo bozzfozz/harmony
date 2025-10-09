@@ -2,7 +2,11 @@ from typing import Any
 
 import pytest
 
-from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
+from app.services.free_ingest_service import (
+    IngestAccepted,
+    IngestSkipped,
+    IngestSubmission,
+)
 from tests.simple_client import SimpleTestClient
 
 
@@ -57,7 +61,9 @@ def test_free_import_invokes_orchestrator_and_logs(
     }
     assert "service" in captured
 
-    matching_events = [event for event in events if event.get("event") == "spotify.free_import"]
+    matching_events = [
+        event for event in events if event.get("event") == "spotify.free_import"
+    ]
     assert matching_events, "expected spotify.free_import log event"
     logged = matching_events[0]
     assert logged["status"] == "ok"

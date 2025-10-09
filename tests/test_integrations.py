@@ -44,7 +44,9 @@ class _StubRegistry:
     def get_track_provider(self, name: str) -> TrackProvider:
         return self._providers[name]
 
-    def track_providers(self) -> dict[str, TrackProvider]:  # pragma: no cover - unused helper
+    def track_providers(
+        self,
+    ) -> dict[str, TrackProvider]:  # pragma: no cover - unused helper
         return dict(self._providers)
 
     @property
@@ -53,7 +55,9 @@ class _StubRegistry:
 
 
 class _NullGateway:
-    async def search_tracks(self, provider: str, query):  # pragma: no cover - unused helper
+    async def search_tracks(
+        self, provider: str, query
+    ):  # pragma: no cover - unused helper
         raise NotImplementedError
 
 

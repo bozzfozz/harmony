@@ -7,8 +7,8 @@ import sys
 from types import SimpleNamespace
 from typing import Any
 
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
 from app import logging_events
 from app.middleware import request_logging
@@ -115,7 +115,9 @@ class _FailingSoulseekClient:
 async def test_soulseek_status_failure_logs_error_event(caplog, monkeypatch) -> None:
     monkeypatch.setattr(soulseek_router_module.logger, "disabled", False)
     with caplog.at_level("INFO", logger="app.routers.soulseek_router"):
-        response = await soulseek_router_module.soulseek_status(client=_FailingSoulseekClient())
+        response = await soulseek_router_module.soulseek_status(
+            client=_FailingSoulseekClient()
+        )
 
     assert response.status == "disconnected"
 
@@ -126,18 +128,28 @@ async def test_soulseek_status_failure_logs_error_event(caplog, monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_sync_router_missing_credentials_logs_blocked_event(caplog, monkeypatch) -> None:
+async def test_sync_router_missing_credentials_logs_blocked_event(
+    caplog, monkeypatch
+) -> None:
     monkeypatch.setattr(sync_router_module.logger, "disabled", False)
 
-    async def fake_missing_credentials(session_runner):  # pragma: no cover - simple stub
+    async def fake_missing_credentials(
+        session_runner,
+    ):  # pragma: no cover - simple stub
         return {"spotify": ("token",)}
 
-    monkeypatch.setattr(sync_router_module, "_missing_credentials", fake_missing_credentials)
-    monkeypatch.setattr(sync_router_module, "record_activity", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        sync_router_module, "_missing_credentials", fake_missing_credentials
+    )
+    monkeypatch.setattr(
+        sync_router_module, "record_activity", lambda *args, **kwargs: None
+    )
 
     with caplog.at_level("INFO", logger="app.routers.sync_router"):
         with pytest.raises(HTTPException):
-            await sync_router_module.trigger_manual_sync(request=object(), session_runner=None)
+            await sync_router_module.trigger_manual_sync(
+                request=object(), session_runner=None
+            )
 
     record = _first_record(caplog, "api.sync.trigger")
     assert record.component == "router.sync"

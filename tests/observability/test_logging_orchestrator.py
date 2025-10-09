@@ -30,7 +30,9 @@ def test_logging_orchestrator_events_on_dispatch_and_dlq(monkeypatch) -> None:
         error="timeout",
     )
 
-    dispatch_logs = [payload for name, payload in captured if name == "orchestrator.dispatch"]
+    dispatch_logs = [
+        payload for name, payload in captured if name == "orchestrator.dispatch"
+    ]
     assert dispatch_logs and dispatch_logs[-1]["status"] == "started"
     assert dispatch_logs[-1]["entity_id"] == "42"
     assert dispatch_logs[-1]["job_type"] == "sync"

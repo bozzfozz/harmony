@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import time
 from typing import AsyncIterator, Callable, Iterator
 
 import anyio
-from httpx import ASGITransport, AsyncClient
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from tests.simple_client import SimpleTestClient
 
@@ -33,7 +33,9 @@ class DeadlineHelper:
         return self._default
 
     @asynccontextmanager
-    async def limit(self, seconds: float | None = None) -> Iterator[Callable[[], float]]:
+    async def limit(
+        self, seconds: float | None = None
+    ) -> Iterator[Callable[[], float]]:
         """Enforce that async operations finish within ``seconds``."""
 
         budget = self._default if seconds is None else seconds

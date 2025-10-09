@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import math
 import re
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, MutableMapping
 
@@ -23,7 +23,9 @@ _EDITION_KEYWORDS = {
     "super",
     "ultimate",
 }
-_EDITION_REGEX = re.compile(r"\b(" + "|".join(sorted(_EDITION_KEYWORDS)) + r")\b", re.IGNORECASE)
+_EDITION_REGEX = re.compile(
+    r"\b(" + "|".join(sorted(_EDITION_KEYWORDS)) + r")\b", re.IGNORECASE
+)
 
 
 _TRACK_COUNT_META_KEYS = (
@@ -185,7 +187,9 @@ class ProviderAlbumDTO:
         if total_tracks is not None and total_tracks <= 0:
             total_tracks = None
         artists = tuple(self.artists)
-        edition_tags = _collect_edition_tags(self.edition_tags, extract_edition_tags(title))
+        edition_tags = _collect_edition_tags(
+            self.edition_tags, extract_edition_tags(title)
+        )
         object.__setattr__(self, "title", title)
         object.__setattr__(self, "source", source)
         object.__setattr__(self, "source_id", source_id)
@@ -297,10 +301,14 @@ class MatchResult:
         return self.confidence in {"complete", "nearly"}
 
 
-def ensure_artist_dto(payload: Any, *, default_source: str | None = None) -> ProviderArtistDTO:
+def ensure_artist_dto(
+    payload: Any, *, default_source: str | None = None
+) -> ProviderArtistDTO:
     if isinstance(payload, ProviderArtistDTO):
         return payload
-    mapping: Mapping[str, Any] | None = payload if isinstance(payload, Mapping) else None
+    mapping: Mapping[str, Any] | None = (
+        payload if isinstance(payload, Mapping) else None
+    )
     metadata: Mapping[str, Any] | None = None
     if mapping is not None:
         name = mapping.get("name") or mapping.get("title")
@@ -308,7 +316,11 @@ def ensure_artist_dto(payload: Any, *, default_source: str | None = None) -> Pro
         source_id = mapping.get("source_id") or mapping.get("id")
         aliases = mapping.get("aliases") or mapping.get("aka")
         popularity = mapping.get("popularity")
-        metadata = mapping.get("metadata") if isinstance(mapping.get("metadata"), Mapping) else None
+        metadata = (
+            mapping.get("metadata")
+            if isinstance(mapping.get("metadata"), Mapping)
+            else None
+        )
     else:
         name = getattr(payload, "name", None)
         source = getattr(payload, "source", None) or default_source
@@ -331,7 +343,9 @@ def ensure_artist_dto(payload: Any, *, default_source: str | None = None) -> Pro
     )
 
 
-def _extract_total_tracks_from_metadata(metadata: Mapping[str, Any] | None) -> int | None:
+def _extract_total_tracks_from_metadata(
+    metadata: Mapping[str, Any] | None,
+) -> int | None:
     if not metadata:
         return None
     for key in _TRACK_COUNT_META_KEYS:
@@ -342,10 +356,14 @@ def _extract_total_tracks_from_metadata(metadata: Mapping[str, Any] | None) -> i
     return None
 
 
-def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> ProviderAlbumDTO:
+def ensure_album_dto(
+    payload: Any, *, default_source: str | None = None
+) -> ProviderAlbumDTO:
     if isinstance(payload, ProviderAlbumDTO):
         return payload
-    mapping: Mapping[str, Any] | None = payload if isinstance(payload, Mapping) else None
+    mapping: Mapping[str, Any] | None = (
+        payload if isinstance(payload, Mapping) else None
+    )
     if mapping is not None:
         title = mapping.get("title") or mapping.get("name")
         source = mapping.get("source") or mapping.get("provider") or default_source
@@ -354,17 +372,25 @@ def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> Prov
         year = mapping.get("year") or mapping.get("release_year")
         total_tracks = mapping.get("total_tracks")
         edition_tags = mapping.get("edition_tags") or mapping.get("editions")
-        metadata = mapping.get("metadata") if isinstance(mapping.get("metadata"), Mapping) else None
+        metadata = (
+            mapping.get("metadata")
+            if isinstance(mapping.get("metadata"), Mapping)
+            else None
+        )
     else:
         title = getattr(payload, "title", None) or getattr(payload, "name", None)
         source = (
-            getattr(payload, "source", None) or getattr(payload, "provider", None) or default_source
+            getattr(payload, "source", None)
+            or getattr(payload, "provider", None)
+            or default_source
         )
         source_id = getattr(payload, "source_id", None) or getattr(payload, "id", None)
         artists = getattr(payload, "artists", None)
         year = getattr(payload, "year", None) or getattr(payload, "release_year", None)
         total_tracks = getattr(payload, "total_tracks", None)
-        edition_tags = getattr(payload, "edition_tags", None) or getattr(payload, "editions", None)
+        edition_tags = getattr(payload, "edition_tags", None) or getattr(
+            payload, "editions", None
+        )
         metadata = (
             getattr(payload, "metadata", None)
             if isinstance(getattr(payload, "metadata", None), Mapping)
@@ -373,7 +399,9 @@ def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> Prov
     if total_tracks is None:
         total_tracks = _extract_total_tracks_from_metadata(metadata)
     artist_entries = tuple(
-        ensure_artist_dto(entry, default_source=_coerce_str(source) or default_source or "unknown")
+        ensure_artist_dto(
+            entry, default_source=_coerce_str(source) or default_source or "unknown"
+        )
         for entry in _iter_sequence(artists)
     )
     edition_iterable = _iter_sequence(edition_tags)
@@ -391,15 +419,21 @@ def ensure_album_dto(payload: Any, *, default_source: str | None = None) -> Prov
     )
 
 
-def ensure_track_dto(payload: Any, *, default_source: str | None = None) -> ProviderTrackDTO:
+def ensure_track_dto(
+    payload: Any, *, default_source: str | None = None
+) -> ProviderTrackDTO:
     if isinstance(payload, ProviderTrackDTO):
         return payload
-    mapping: Mapping[str, Any] | None = payload if isinstance(payload, Mapping) else None
+    mapping: Mapping[str, Any] | None = (
+        payload if isinstance(payload, Mapping) else None
+    )
     metadata_source: Mapping[str, Any] | None = None
     if mapping is not None:
         title = mapping.get("title") or mapping.get("name")
         source = mapping.get("source") or mapping.get("provider") or default_source
-        source_id = mapping.get("source_id") or mapping.get("id") or mapping.get("track_id")
+        source_id = (
+            mapping.get("source_id") or mapping.get("id") or mapping.get("track_id")
+        )
         artists = mapping.get("artists")
         album = mapping.get("album")
         duration = mapping.get("duration_ms") or mapping.get("duration")
@@ -407,12 +441,16 @@ def ensure_track_dto(payload: Any, *, default_source: str | None = None) -> Prov
         year = mapping.get("year") or mapping.get("release_year")
         edition_tags = mapping.get("edition_tags") or mapping.get("editions")
         metadata_source = (
-            mapping.get("metadata") if isinstance(mapping.get("metadata"), Mapping) else None
+            mapping.get("metadata")
+            if isinstance(mapping.get("metadata"), Mapping)
+            else None
         )
     else:
         title = getattr(payload, "title", None) or getattr(payload, "name", None)
         source = (
-            getattr(payload, "source", None) or getattr(payload, "provider", None) or default_source
+            getattr(payload, "source", None)
+            or getattr(payload, "provider", None)
+            or default_source
         )
         source_id = (
             getattr(payload, "source_id", None)
@@ -421,10 +459,14 @@ def ensure_track_dto(payload: Any, *, default_source: str | None = None) -> Prov
         )
         artists = getattr(payload, "artists", None)
         album = getattr(payload, "album", None)
-        duration = getattr(payload, "duration_ms", None) or getattr(payload, "duration", None)
+        duration = getattr(payload, "duration_ms", None) or getattr(
+            payload, "duration", None
+        )
         popularity = getattr(payload, "popularity", None)
         year = getattr(payload, "year", None) or getattr(payload, "release_year", None)
-        edition_tags = getattr(payload, "edition_tags", None) or getattr(payload, "editions", None)
+        edition_tags = getattr(payload, "edition_tags", None) or getattr(
+            payload, "editions", None
+        )
         metadata_source = (
             getattr(payload, "metadata", None)
             if isinstance(getattr(payload, "metadata", None), Mapping)
@@ -432,8 +474,12 @@ def ensure_track_dto(payload: Any, *, default_source: str | None = None) -> Prov
         )
     # Fallback artist fields commonly present on candidates
     if not artists:
-        artist_name = mapping.get("artist") if mapping else getattr(payload, "artist", None)
-        username = mapping.get("username") if mapping else getattr(payload, "username", None)
+        artist_name = (
+            mapping.get("artist") if mapping else getattr(payload, "artist", None)
+        )
+        username = (
+            mapping.get("username") if mapping else getattr(payload, "username", None)
+        )
         artists = (
             [
                 ProviderArtistDTO(
@@ -453,11 +499,15 @@ def ensure_track_dto(payload: Any, *, default_source: str | None = None) -> Prov
                 )
             )
     artist_entries: tuple[ProviderArtistDTO, ...] = tuple(
-        ensure_artist_dto(entry, default_source=_coerce_str(source) or default_source or "unknown")
+        ensure_artist_dto(
+            entry, default_source=_coerce_str(source) or default_source or "unknown"
+        )
         for entry in _iter_sequence(artists)
     )
     album_entry = (
-        ensure_album_dto(album, default_source=_coerce_str(source) or default_source or "unknown")
+        ensure_album_dto(
+            album, default_source=_coerce_str(source) or default_source or "unknown"
+        )
         if album
         else None
     )

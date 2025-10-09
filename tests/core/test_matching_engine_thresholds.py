@@ -64,7 +64,13 @@ def test_rank_candidates_respects_thresholds() -> None:
             album_title="Runaway (Deluxe Edition)",
             year=2015,
         ),
-        _track(title="Runaway", artist="Aurora", source_id="b", album_title="Runaway", year=2015),
+        _track(
+            title="Runaway",
+            artist="Aurora",
+            source_id="b",
+            album_title="Runaway",
+            year=2015,
+        ),
         _track(
             title="Runaway (Live)",
             artist="Aurora",
@@ -73,7 +79,13 @@ def test_rank_candidates_respects_thresholds() -> None:
             album_title="Runaway (Live)",
             year=2015,
         ),
-        _track(title="Runaway", artist="Random", source_id="d", album_title="Runaway", year=2015),
+        _track(
+            title="Runaway",
+            artist="Random",
+            source_id="d",
+            album_title="Runaway",
+            year=2015,
+        ),
     ]
 
     results = rank_candidates(
@@ -96,7 +108,12 @@ def test_rank_candidates_respects_thresholds() -> None:
 
     base_score = compute_relevance_score(
         "Runaway",
-        {"title": "Runaway", "artists": ["Aurora"], "album": "Runaway", "type": "track"},
+        {
+            "title": "Runaway",
+            "artists": ["Aurora"],
+            "album": "Runaway",
+            "type": "track",
+        },
     )
     assert base_score > 0.6
 

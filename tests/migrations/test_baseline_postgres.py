@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from alembic import command
 import pytest
 import sqlalchemy as sa
+from alembic import command
 
 from tests.migrations.helpers import (
     assert_activity_events_schema,

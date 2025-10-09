@@ -115,7 +115,9 @@ async def test_get_due_orders_by_priority(async_session) -> None:
     due = await dao.get_due(3)
 
     assert [row.spotify_artist_id for row in due] == ["artist-high", "artist-low"]
-    assert all(row.retry_budget_left is None or row.retry_budget_left > 0 for row in due)
+    assert all(
+        row.retry_budget_left is None or row.retry_budget_left > 0 for row in due
+    )
 
 
 @pytest.mark.asyncio

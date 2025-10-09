@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
-import logging
 from time import perf_counter
 from typing import Any, Dict, Iterable
 
@@ -110,7 +110,9 @@ class RecordingWorker:
             if self.background_task is not None and not self.background_task.done():
                 self._stop_signal.set()
                 try:
-                    await asyncio.wait_for(self.background_task, timeout=self.scenario.stop_timeout)
+                    await asyncio.wait_for(
+                        self.background_task, timeout=self.scenario.stop_timeout
+                    )
                 except asyncio.TimeoutError:
                     await cancel_and_await(self.background_task)
             self.stopped = True
@@ -164,17 +166,23 @@ class WorkerRegistry:
         for logical_name, attribute in self.WORKER_ATTRIBUTES.items():
             scenario = self.scenarios[logical_name]
 
-            def _make_worker(name: str, behaviour: WorkerScenario) -> type[RecordingWorker]:
+            def _make_worker(
+                name: str, behaviour: WorkerScenario
+            ) -> type[RecordingWorker]:
                 registry = self
 
                 class _Worker(RecordingWorker):
                     def __init__(self, *args, **kwargs) -> None:
-                        super().__init__(name=name, scenario=behaviour, registry=registry)
+                        super().__init__(
+                            name=name, scenario=behaviour, registry=registry
+                        )
 
                 _Worker.__name__ = f"{name.title()}WorkerStub"
                 return _Worker
 
-            monkeypatch.setattr(app_main, attribute, _make_worker(logical_name, scenario))
+            monkeypatch.setattr(
+                app_main, attribute, _make_worker(logical_name, scenario)
+            )
 
         monkeypatch.setattr("app.main.get_spotify_client", lambda: object())
         monkeypatch.setattr("app.main.get_soulseek_client", lambda: object())

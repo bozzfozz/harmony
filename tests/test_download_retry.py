@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 import random
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
@@ -41,12 +41,16 @@ class FlakySoulseekClient:
     async def get_download_status(self) -> List[Dict[str, Any]]:
         return []
 
-    async def cancel_download(self, identifier: str) -> None:  # pragma: no cover - unused
+    async def cancel_download(
+        self, identifier: str
+    ) -> None:  # pragma: no cover - unused
         return None
 
 
 @pytest.mark.asyncio
-async def test_retry_schedule_sets_next_retry_at(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_retry_schedule_sets_next_retry_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     reset_engine_for_tests()
     init_db()
     activity_manager.clear()
@@ -72,7 +76,13 @@ async def test_retry_schedule_sets_next_retry_at(monkeypatch: pytest.MonkeyPatch
 
     job = {
         "username": "tester",
-        "files": [{"download_id": download_id, "priority": 5, "filename": "priority-track.mp3"}],
+        "files": [
+            {
+                "download_id": download_id,
+                "priority": 5,
+                "filename": "priority-track.mp3",
+            }
+        ],
         "priority": 5,
     }
 
@@ -188,7 +198,9 @@ async def test_retry_enqueues_when_due(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_worker_refreshes_retry_policy_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     provider = get_retry_policy_provider()
     provider.invalidate()
     monkeypatch.setenv("RETRY_POLICY_RELOAD_S", "0")
@@ -212,7 +224,9 @@ async def test_worker_refreshes_retry_policy_runtime(monkeypatch: pytest.MonkeyP
     assert worker.retry_policy.jitter_pct == 0.1
 
 
-def test_load_sync_retry_policy_uses_live_values(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_sync_retry_policy_uses_live_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     provider = get_retry_policy_provider()
     provider.invalidate()
     monkeypatch.setenv("RETRY_POLICY_RELOAD_S", "0")
@@ -239,7 +253,9 @@ def test_load_sync_retry_policy_uses_live_values(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_handle_retry_failure_sets_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_handle_retry_failure_sets_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     reset_engine_for_tests()
     init_db()
     activity_manager.clear()
@@ -317,7 +333,9 @@ async def test_handle_retry_failure_sets_backoff(monkeypatch: pytest.MonkeyPatch
         assert refreshed.next_retry_at is not None
         assert refreshed.next_retry_at > before
         delay = (refreshed.next_retry_at - before).total_seconds()
-        expected_delay = calculate_retry_backoff_seconds(2, retry_policy, random.Random(rng_seed))
+        expected_delay = calculate_retry_backoff_seconds(
+            2, retry_policy, random.Random(rng_seed)
+        )
         assert pytest.approx(delay, rel=0.2) == expected_delay
 
     events = [entry["status"] for entry in activity_manager.list()]
@@ -354,7 +372,13 @@ async def test_dlq_after_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
 
     job = {
         "username": "tester",
-        "files": [{"download_id": download_id, "priority": 1, "filename": "stubborn-track.mp3"}],
+        "files": [
+            {
+                "download_id": download_id,
+                "priority": 1,
+                "filename": "stubborn-track.mp3",
+            }
+        ],
         "priority": 1,
     }
 

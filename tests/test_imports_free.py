@@ -14,7 +14,9 @@ def _make_playlist_id(index: int) -> str:
     return f"A{index:021d}"[:22]
 
 
-def test_accepts_valid_playlist_urls_with_query_stripped(client: SimpleTestClient) -> None:
+def test_accepts_valid_playlist_urls_with_query_stripped(
+    client: SimpleTestClient,
+) -> None:
     response = client.post(
         "/imports/free",
         json={
@@ -39,7 +41,9 @@ def test_accepts_valid_playlist_urls_with_query_stripped(client: SimpleTestClien
         ).scalar_one()
         assert session_record.mode == "FREE"
         batches = (
-            db_session.execute(select(ImportBatch).where(ImportBatch.session_id == session_id))
+            db_session.execute(
+                select(ImportBatch).where(ImportBatch.session_id == session_id)
+            )
             .scalars()
             .all()
         )
@@ -119,7 +123,8 @@ def test_handles_json_csv_txt_payloads(client: SimpleTestClient) -> None:
 def test_soft_overlimit_returns_partial_success(client: SimpleTestClient) -> None:
     limit = 1_000
     links = [
-        f"https://open.spotify.com/playlist/{_make_playlist_id(i)}" for i in range(limit + 200)
+        f"https://open.spotify.com/playlist/{_make_playlist_id(i)}"
+        for i in range(limit + 200)
     ]
     response = client.post(
         "/imports/free",
@@ -133,7 +138,9 @@ def test_soft_overlimit_returns_partial_success(client: SimpleTestClient) -> Non
     session_id = payload["data"]["import_session_id"]
     with session_scope() as db_session:
         accepted_batches = (
-            db_session.execute(select(ImportBatch).where(ImportBatch.session_id == session_id))
+            db_session.execute(
+                select(ImportBatch).where(ImportBatch.session_id == session_id)
+            )
             .scalars()
             .all()
         )
@@ -142,7 +149,10 @@ def test_soft_overlimit_returns_partial_success(client: SimpleTestClient) -> Non
 
 def test_hard_overlimit_returns_413(client: SimpleTestClient) -> None:
     hard_limit = 10_000 + 1
-    links = [f"https://open.spotify.com/playlist/{_make_playlist_id(i)}" for i in range(hard_limit)]
+    links = [
+        f"https://open.spotify.com/playlist/{_make_playlist_id(i)}"
+        for i in range(hard_limit)
+    ]
     response = client.post(
         "/imports/free",
         json={"links": links},

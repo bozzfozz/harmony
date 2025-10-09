@@ -153,10 +153,14 @@ def test_search_respects_min_bitrate_and_format_priority(client) -> None:
     assert all(item.get("bitrate", 0) >= 320 for item in body["items"])
 
 
-def test_search_ranking_boosts_format_and_type(monkeypatch: pytest.MonkeyPatch, client) -> None:
+def test_search_ranking_boosts_format_and_type(
+    monkeypatch: pytest.MonkeyPatch, client
+) -> None:
     _prepare_soulseek_results(client)
 
-    def _constant_score(self, query: str, candidate: Dict[str, Any]) -> float:  # noqa: D401
+    def _constant_score(
+        self, query: str, candidate: Dict[str, Any]
+    ) -> float:  # noqa: D401
         return 0.4
 
     monkeypatch.setattr(MusicMatchingEngine, "compute_relevance_score", _constant_score)
@@ -226,9 +230,13 @@ def test_search_dependency_failure_maps_to_503(client) -> None:
                 )
             )
 
-    client.app.dependency_overrides[dependency_integration_service] = lambda: FailingService()
+    client.app.dependency_overrides[dependency_integration_service] = (
+        lambda: FailingService()
+    )
     try:
-        response = client.post("/search", json={"query": "Track", "sources": ["soulseek"]})
+        response = client.post(
+            "/search", json={"query": "Track", "sources": ["soulseek"]}
+        )
     finally:
         client.app.dependency_overrides.pop(dependency_integration_service, None)
 

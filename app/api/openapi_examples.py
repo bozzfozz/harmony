@@ -106,8 +106,12 @@ def apply_artist_examples(
         return
 
     if collection_path:
-        _set_json_example(paths, collection_path, "get", "200", ARTIST_COLLECTION_EXAMPLE)
+        _set_json_example(
+            paths, collection_path, "get", "200", ARTIST_COLLECTION_EXAMPLE
+        )
     if watchlist_path:
-        _set_json_example(paths, watchlist_path, "get", "200", ARTIST_COLLECTION_EXAMPLE)
+        _set_json_example(
+            paths, watchlist_path, "get", "200", ARTIST_COLLECTION_EXAMPLE
+        )
     _set_json_example(paths, detail_path, "get", "200", ARTIST_DETAIL_EXAMPLE)
     _set_json_example(paths, enqueue_path, "post", "202", ARTIST_ENQUEUE_EXAMPLE)

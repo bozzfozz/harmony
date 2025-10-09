@@ -25,7 +25,9 @@ class _StubWatchlistDAO:
 
 
 class _BlockingWatchlistDAO:
-    def __init__(self, artists: list[ArtistWorkflowArtistRow], gate: asyncio.Event) -> None:
+    def __init__(
+        self, artists: list[ArtistWorkflowArtistRow], gate: asyncio.Event
+    ) -> None:
         self._artists = artists
         self._gate = gate
         self.started = asyncio.Event()
@@ -54,7 +56,9 @@ def _timer_config() -> WatchlistWorkerConfig:
 
 
 @pytest.mark.asyncio
-async def test_watchlist_timer_enqueues_idempotently(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_watchlist_timer_enqueues_idempotently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     artist = ArtistWorkflowArtistRow(
         id=101,
         spotify_artist_id="artist-101",
@@ -90,7 +94,9 @@ async def test_watchlist_timer_enqueues_idempotently(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_watchlist_timer_skips_reentrant_trigger(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_watchlist_timer_skips_reentrant_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     artist = ArtistWorkflowArtistRow(
         id=202,
         spotify_artist_id="artist-202",

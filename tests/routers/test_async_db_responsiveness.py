@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import time
+from contextlib import asynccontextmanager
 
 import anyio
-from httpx import ASGITransport, AsyncClient
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.db import SessionCallable
 from app.dependencies import SessionRunner, get_session_runner
@@ -199,7 +199,9 @@ async def test_download_retry_uses_async_session(
 
     try:
         async with time_budget.limit(0.75) as elapsed:
-            response = await async_client.post(api_path(f"/download/{download_id}/retry"))
+            response = await async_client.post(
+                api_path(f"/download/{download_id}/retry")
+            )
         assert response.status_code == 202
         assert elapsed() >= delay
     finally:

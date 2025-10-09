@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import sys
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Request, status
 
+import app.logging_events as logging_events
 from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_integration_service, get_matching_engine
@@ -17,7 +18,6 @@ from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
-import app.logging_events as logging_events
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -149,7 +149,9 @@ async def smart_search(
         if provider and provider not in provider_names:
             provider_names.append(provider)
 
-    search_query = SearchQuery(text=request.query, artist=None, limit=PER_SOURCE_FETCH_LIMIT)
+    search_query = SearchQuery(
+        text=request.query, artist=None, limit=PER_SOURCE_FETCH_LIMIT
+    )
 
     started = time.perf_counter()
     try:
@@ -162,7 +164,8 @@ async def smart_search(
 
     if gateway_response.status == "failed":
         logger.error(
-            "Search failed for all sources", extra={"event": "search", "sources": resolved_sources}
+            "Search failed for all sources",
+            extra={"event": "search", "sources": resolved_sources},
         )
         raise DependencyError(
             "All search sources failed",
@@ -222,7 +225,9 @@ def _collect_candidates(
     return aggregated, failures
 
 
-def _build_candidates_from_track(track: ProviderTrack, source: SourceLiteral) -> list[Candidate]:
+def _build_candidates_from_track(
+    track: ProviderTrack, source: SourceLiteral
+) -> list[Candidate]:
     track_artists = [artist.name for artist in track.artists if artist.name]
     album_name = track.album.name if track.album else None
     track_metadata = _mapping_to_dict(track.metadata)
@@ -239,7 +244,9 @@ def _build_candidates_from_track(track: ProviderTrack, source: SourceLiteral) ->
             bitrate = candidate.bitrate_kbps
             audio_format = _normalise_format(candidate.format)
             title = candidate.title or track.name
-            artists = list(track_artists) or ([candidate.artist] if candidate.artist else [])
+            artists = list(track_artists) or (
+                [candidate.artist] if candidate.artist else []
+            )
             identifier = _candidate_identifier(
                 source,
                 track_metadata,
@@ -268,7 +275,9 @@ def _build_candidates_from_track(track: ProviderTrack, source: SourceLiteral) ->
                 )
             )
     else:
-        identifier = _candidate_identifier(source, track_metadata, None, None, track.name)
+        identifier = _candidate_identifier(
+            source, track_metadata, None, None, track.name
+        )
         results.append(
             Candidate(
                 type="track",
@@ -390,7 +399,9 @@ def _extract_genres(*sources: Mapping[str, Any] | None) -> list[str]:
     return normalize_genres(genres)
 
 
-def _apply_filters(candidates: Iterable[Candidate], request: SearchRequest) -> list[Candidate]:
+def _apply_filters(
+    candidates: Iterable[Candidate], request: SearchRequest
+) -> list[Candidate]:
     filtered: list[Candidate] = []
     genre_filter = normalize_text(request.genre) if request.genre else None
     for candidate in candidates:
@@ -440,13 +451,19 @@ def _score_and_sort(
             "artists": candidate.artists,
             "type": candidate.type,
         }
-        base_score = matching_engine.compute_relevance_score(request.query, base_payload)
+        base_score = matching_engine.compute_relevance_score(
+            request.query, base_payload
+        )
         score = clamp_score(
             base_score
             + boost_for_format(candidate.audio_format)
             + boost_for_bitrate(candidate.bitrate)
             + year_distance_bonus(candidate.year, request.year_from, request.year_to)
-            + (0.1 if request.type != "mixed" and candidate.type == request.type else 0.0)
+            + (
+                0.1
+                if request.type != "mixed" and candidate.type == request.type
+                else 0.0
+            )
         )
         metadata = _candidate_metadata(candidate)
         if candidate.artists:

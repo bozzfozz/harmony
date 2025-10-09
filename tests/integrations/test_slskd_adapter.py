@@ -62,7 +62,9 @@ async def test_search_tracks_returns_provider_tracks() -> None:
     adapter, client = _build_adapter(transport)
 
     try:
-        tracks = await adapter.search_tracks(SearchQuery(text="Song A", artist="Artist", limit=5))
+        tracks = await adapter.search_tracks(
+            SearchQuery(text="Song A", artist="Artist", limit=5)
+        )
     finally:
         await client.aclose()
 
@@ -140,7 +142,9 @@ async def test_adapter_maps_server_errors_to_dependency_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_artist_top_tracks_limits_results(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_artist_top_tracks_limits_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter, client = _build_adapter(
         httpx.MockTransport(lambda request: httpx.Response(200, json={}))
     )
@@ -164,7 +168,9 @@ async def test_fetch_artist_top_tracks_limits_results(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_fetch_album_builds_details_from_tracks(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_album_builds_details_from_tracks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     adapter, client = _build_adapter(
         httpx.MockTransport(lambda request: httpx.Response(200, json={}))
     )

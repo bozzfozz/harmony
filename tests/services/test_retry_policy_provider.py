@@ -20,7 +20,9 @@ def _env_source_factory(env: Mapping[str, Any]) -> Callable[[], Mapping[str, Any
     return lambda env_map=env: env_map
 
 
-def test_retry_provider_reload_after_ttl_applies_new_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retry_provider_reload_after_ttl_applies_new_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     env: dict[str, Any] = {
         "RETRY_MAX_ATTEMPTS": "2",
         "RETRY_BASE_SECONDS": "1",
@@ -57,7 +59,9 @@ def test_retry_provider_typ_specific_overrides_fallbacks() -> None:
         "RETRY_SYNC_MAX_ATTEMPTS": "7",
         "RETRY_MATCHING_BASE_SECONDS": "3.0",
     }
-    provider = RetryPolicyProvider(env_source=_env_source_factory(env), reload_interval=0)
+    provider = RetryPolicyProvider(
+        env_source=_env_source_factory(env), reload_interval=0
+    )
 
     default_policy = provider.get_retry_policy()
     assert default_policy.max_attempts == 5
@@ -72,7 +76,9 @@ def test_retry_provider_typ_specific_overrides_fallbacks() -> None:
     assert pytest.approx(matching_policy.base_seconds) == 3.0
 
 
-def test_handler_uses_updated_policy_without_restart(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handler_uses_updated_policy_without_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.orchestrator.handlers import load_sync_retry_policy
     from app.services import retry_policy_provider as provider_module
 

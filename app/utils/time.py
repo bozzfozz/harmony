@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import random
 import time as _time
+from datetime import datetime, timezone
 
 __all__ = ["now_utc", "monotonic_ms", "sleep_jitter_ms"]
 

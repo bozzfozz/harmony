@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
 import uuid
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
@@ -16,7 +16,11 @@ from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import ImportBatch, ImportSession
-from app.utils.spotify_free import InvalidPayloadError, TooManyItemsError, parse_and_validate_links
+from app.utils.spotify_free import (
+    InvalidPayloadError,
+    TooManyItemsError,
+    parse_and_validate_links,
+)
 
 logger = get_logger(__name__)
 
@@ -42,7 +46,8 @@ async def create_free_import(
         * config.spotify.free_import_hard_cap_multiplier
     )
     hard_cap_bytes = (
-        config.spotify.free_import_max_file_bytes * config.spotify.free_import_hard_cap_multiplier
+        config.spotify.free_import_max_file_bytes
+        * config.spotify.free_import_hard_cap_multiplier
     )
 
     body = await request.body()
@@ -126,7 +131,8 @@ async def create_free_import(
             "accepted_count": len(parse_result.accepted),
             "skipped": list(parse_result.skipped),
             "rejected": [
-                {"url": item.url, "reason": item.reason} for item in parse_result.rejected
+                {"url": item.url, "reason": item.reason}
+                for item in parse_result.rejected
             ],
             "limits": limits,
         },

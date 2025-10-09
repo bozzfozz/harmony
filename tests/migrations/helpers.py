@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from alembic.config import Config
 import sqlalchemy as sa
+from alembic.config import Config
 from sqlalchemy.dialects import postgresql
 
 _REQUIRED_QUEUE_COLUMNS = {
@@ -131,7 +131,9 @@ def assert_postgresql_types(engine: sa.Engine) -> None:
 
     for table, column in _JSONB_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)
-        assert isinstance(info["type"], postgresql.JSONB), f"{table}.{column} should be JSONB"
+        assert isinstance(
+            info["type"], postgresql.JSONB
+        ), f"{table}.{column} should be JSONB"
 
     for table, column in _TIMESTAMPTZ_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)

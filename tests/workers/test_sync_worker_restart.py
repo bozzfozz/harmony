@@ -25,7 +25,9 @@ class RecordingSoulseekClient:
     async def get_download_status(self) -> List[Dict[str, Any]]:
         return []
 
-    async def cancel_download(self, identifier: str) -> None:  # pragma: no cover - unused
+    async def cancel_download(
+        self, identifier: str
+    ) -> None:  # pragma: no cover - unused
         return None
 
 

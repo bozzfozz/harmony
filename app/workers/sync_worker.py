@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import random
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+)
 
 from sqlalchemy.orm import Session
 
@@ -18,7 +29,11 @@ from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
+)
+from app.orchestrator.handlers import (
     calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
+)
+from app.orchestrator.handlers import (
     extract_basic_metadata,
     extract_ingest_item_id,
     extract_spotify_album_id,
@@ -33,7 +48,11 @@ from app.orchestrator.handlers import (
     update_ingest_item_state,
 )
 from app.services.retry_policy_provider import RetryPolicy, get_retry_policy_provider
-from app.utils.activity import record_activity, record_worker_started, record_worker_stopped
+from app.utils.activity import (
+    record_activity,
+    record_worker_started,
+    record_worker_stopped,
+)
 from app.utils.events import WORKER_STOPPED
 from app.utils.settings_store import increment_counter, read_setting, write_setting
 from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
@@ -89,7 +108,9 @@ async def _default_lease_job(
 async def _default_complete_job(
     job_id: int, job_type: str, result_payload: Mapping[str, Any] | None = None
 ) -> bool:
-    return await complete_async(job_id, job_type=job_type, result_payload=result_payload)
+    return await complete_async(
+        job_id, job_type=job_type, result_payload=result_payload
+    )
 
 
 async def _default_fail_job(
@@ -116,7 +137,14 @@ async def _default_release_active_leases(job_type: str) -> None:
 
 logger = get_logger(__name__)
 
-ALLOWED_STATES = {"queued", "downloading", "completed", "failed", "cancelled", "dead_letter"}
+ALLOWED_STATES = {
+    "queued",
+    "downloading",
+    "completed",
+    "failed",
+    "cancelled",
+    "dead_letter",
+}
 
 DEFAULT_CONCURRENCY = 2
 DEFAULT_IDLE_POLL = 15.0
@@ -144,7 +172,9 @@ def _safe_float(value: str | None, default: float) -> float:
     return parsed if parsed >= 0 else default
 
 
-def _calculate_backoff_seconds(attempt: int, config: RetryConfig, rng: random.Random) -> float:
+def _calculate_backoff_seconds(
+    attempt: int, config: RetryConfig, rng: random.Random
+) -> float:
     return orchestrator_calculate_backoff_seconds(attempt, config, rng)
 
 
@@ -203,7 +233,9 @@ class SyncWorker:
         self._lease_job = lease_fn or _default_lease_job
         self._complete_job = complete_fn or _default_complete_job
         self._fail_job = fail_fn or _default_fail_job
-        self._release_active_leases = release_active_leases_fn or _default_release_active_leases
+        self._release_active_leases = (
+            release_active_leases_fn or _default_release_active_leases
+        )
         self._priority_event = asyncio.Event()
         self._priority_reorder_window = 0.02
 
@@ -350,7 +382,8 @@ class SyncWorker:
             await self._put_job(job)
 
         self._worker_tasks = [
-            asyncio.create_task(self._worker_loop(index)) for index in range(self._concurrency)
+            asyncio.create_task(self._worker_loop(index))
+            for index in range(self._concurrency)
         ]
         self._poll_task = asyncio.create_task(self._poll_loop())
 
@@ -495,7 +528,9 @@ class SyncWorker:
                 available_at=None,
                 stop_reason=None,
             )
-            logger.debug("Download job %s marked as failed after scheduling retry", job.id)
+            logger.debug(
+                "Download job %s marked as failed after scheduling retry", job.id
+            )
             return True
         except Exception as exc:
             await self._fail_job(
@@ -517,7 +552,9 @@ class SyncWorker:
             self._record_heartbeat()
             return True
 
-    async def _maybe_defer_before_lease(self, current_priority: int, job: QueueJobDTO) -> bool:
+    async def _maybe_defer_before_lease(
+        self, current_priority: int, job: QueueJobDTO
+    ) -> bool:
         candidate = await self._wait_for_higher_priority(current_priority)
         if candidate is None:
             return False
@@ -532,7 +569,9 @@ class SyncWorker:
         )
         return True
 
-    async def _maybe_preempt_after_lease(self, current_priority: int, leased: QueueJobDTO) -> bool:
+    async def _maybe_preempt_after_lease(
+        self, current_priority: int, leased: QueueJobDTO
+    ) -> bool:
         candidate = await self._wait_for_higher_priority(current_priority)
         if candidate is None:
             return False
@@ -625,7 +664,9 @@ class SyncWorker:
             return None
         return _PriorityQueueEntry(queue_priority, sequence, job)
 
-    def _peek_higher_priority_entry(self, current_priority: int) -> Optional[_PriorityQueueEntry]:
+    def _peek_higher_priority_entry(
+        self, current_priority: int
+    ) -> Optional[_PriorityQueueEntry]:
         candidate = self._peek_queue_entry()
         if candidate is None:
             return None
@@ -805,7 +846,9 @@ class SyncWorker:
                 try:
                     await self._client.cancel_download(str(identifier))
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Failed to cancel download %s via client: %s", identifier, exc)
+                    logger.warning(
+                        "Failed to cancel download %s via client: %s", identifier, exc
+                    )
             async with self._cancel_lock:
                 for identifier in to_cancel:
                     self._cancelled_downloads.discard(identifier)
@@ -814,14 +857,18 @@ class SyncWorker:
             try:
                 await self._handle_download_completion(identifier, payload)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Failed to enrich metadata for download %s: %s", identifier, exc)
+                logger.warning(
+                    "Failed to enrich metadata for download %s: %s", identifier, exc
+                )
 
         return active
 
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("sync")
 
-    async def _handle_download_completion(self, download_id: int, payload: Dict[str, Any]) -> None:
+    async def _handle_download_completion(
+        self, download_id: int, payload: Dict[str, Any]
+    ) -> None:
         deps = self._build_handler_deps()
         await fanout_download_completion(download_id, payload, deps)
 

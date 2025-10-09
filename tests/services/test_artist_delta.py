@@ -40,12 +40,16 @@ def _make_track_payload(**overrides: object) -> dict[str, object]:
 
 
 def _build_release(**overrides: object) -> AlbumRelease:
-    release = AlbumRelease.from_mapping(_make_album_payload(**overrides), source="spotify")
+    release = AlbumRelease.from_mapping(
+        _make_album_payload(**overrides), source="spotify"
+    )
     assert release is not None
     return release
 
 
-def _build_candidate(release: AlbumRelease, **overrides: object) -> ArtistTrackCandidate:
+def _build_candidate(
+    release: AlbumRelease, **overrides: object
+) -> ArtistTrackCandidate:
     payload = _make_track_payload(**overrides)
     candidate = ArtistTrackCandidate.from_mapping(payload, release, source="spotify")
     assert candidate is not None
@@ -157,7 +161,9 @@ def test_build_artist_delta_skips_known_tracks() -> None:
     candidate = _build_candidate(release)
     track_id = candidate.track_id
     assert track_id is not None
-    delta = build_artist_delta([candidate], {track_id}, last_checked=datetime(2023, 1, 1))
+    delta = build_artist_delta(
+        [candidate], {track_id}, last_checked=datetime(2023, 1, 1)
+    )
     assert delta.new == ()
     assert delta.updated == ()
 

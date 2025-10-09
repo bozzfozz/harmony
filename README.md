@@ -1048,6 +1048,13 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 - **Datenbank-Checks beachten:** Führt vor neuen Schemaänderungen `alembic upgrade head` gegen eure PostgreSQL-Testinstanz sowie `pytest tests/migrations -q` aus. So bleibt sichergestellt, dass sämtliche Migrationen und Schutzprüfungen die PostgreSQL-Referenzimplementierung abdecken.
 
+## Code Style & Tooling
+
+- **Black** formatiert sämtlichen Python-Code mit einer Zeilenlänge von 88 Zeichen (`black .` bzw. `black --check .`).
+- **isort** verwaltet die Import-Reihenfolge (`isort .` / `isort --check-only .`) und nutzt das Black-Profil mit denselben Sections wie Ruff (`known_first_party = ["app", "tests"]`).
+- **Ruff** kümmert sich um die verbleibenden Lint-Regeln (`ruff check .`); Import-Sortierung ist deaktiviert, damit keine Konflikte mit isort entstehen.
+- **Pre-Commit**: Installiert über `pre-commit install`, um `isort`, `ruff` (mit `--fix`) und `black` automatisch vor jedem Commit auszuführen.
+
 ## Tests & CI
 
 ```bash

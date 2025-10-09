@@ -25,7 +25,9 @@ def test_logging_worker_job_lifecycle_events(monkeypatch) -> None:
     leased = persistence.lease(job.id, job_type="observability")
     assert leased is not None
 
-    assert persistence.complete(job.id, job_type="observability", result_payload={"ok": True})
+    assert persistence.complete(
+        job.id, job_type="observability", result_payload={"ok": True}
+    )
     assert persistence.to_dlq(
         job.id,
         job_type="observability",
@@ -38,7 +40,9 @@ def test_logging_worker_job_lifecycle_events(monkeypatch) -> None:
     def _find(event: str, status: str | None = None):
         matches = [payload for name, payload in captured if name == event]
         if status is not None:
-            matches = [payload for payload in matches if payload.get("status") == status]
+            matches = [
+                payload for payload in matches if payload.get("status") == status
+            ]
         return matches
 
     enqueued = _find("worker.job", "enqueued")
@@ -54,7 +58,10 @@ def test_logging_worker_job_lifecycle_events(monkeypatch) -> None:
     assert completed_event[-1]["has_result"] is True
 
     dead_letter_event = _find("worker.job", "dead_letter")
-    assert dead_letter_event and dead_letter_event[-1]["stop_reason"] == "max_retries_exhausted"
+    assert (
+        dead_letter_event
+        and dead_letter_event[-1]["stop_reason"] == "max_retries_exhausted"
+    )
 
     retry_events = _find("worker.retry_exhausted")
     assert retry_events and retry_events[-1]["entity_id"] == str(job.id)

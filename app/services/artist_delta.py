@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, datetime
 import hashlib
 import json
+from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
-from app.core import ProviderAlbumDTO, ProviderTrackDTO, ensure_album_dto, ensure_track_dto
+from app.core import (
+    ProviderAlbumDTO,
+    ProviderTrackDTO,
+    ensure_album_dto,
+    ensure_track_dto,
+)
 from app.services.artist_dao import ArtistReleaseRow, ArtistReleaseUpsertDTO
 
 
@@ -158,7 +163,10 @@ def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> Delta
         bucket.append(snapshot)
     for bucket in release_index.values():
         bucket.sort(
-            key=lambda item: (item.inactive_at is not None, item.updated_at or datetime.min)
+            key=lambda item: (
+                item.inactive_at is not None,
+                item.updated_at or datetime.min,
+            )
         )
 
     added: list[ArtistReleaseUpsertDTO] = []
@@ -273,10 +281,14 @@ def _alias_map(values: Sequence[str]) -> dict[str, str]:
     return mapping
 
 
-def _requires_release_update(snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsertDTO) -> bool:
+def _requires_release_update(
+    snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsertDTO
+) -> bool:
     if snapshot.inactive_at is not None:
         return True
-    return _release_fingerprint_from_snapshot(snapshot) != _release_fingerprint_from_dto(dto)
+    return _release_fingerprint_from_snapshot(
+        snapshot
+    ) != _release_fingerprint_from_dto(dto)
 
 
 def _release_identity_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...]:
@@ -364,9 +376,13 @@ def _hash_mapping(mapping: Mapping[str, object] | None) -> str:
     if not mapping:
         return ""
     try:
-        payload = json.dumps(mapping, sort_keys=True, default=str, separators=(",", ":"))
+        payload = json.dumps(
+            mapping, sort_keys=True, default=str, separators=(",", ":")
+        )
     except TypeError:
-        payload = json.dumps({key: str(value) for key, value in mapping.items()}, sort_keys=True)
+        payload = json.dumps(
+            {key: str(value) for key, value in mapping.items()}, sort_keys=True
+        )
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
@@ -433,7 +449,10 @@ class AlbumRelease:
         album = ensure_album_dto(album_payload, default_source=source)
         etag = _optional_str(payload.get("etag"))
         return cls(
-            album=album, release_date=release_date, etag=etag, raw=cls._coerce_mapping(payload)
+            album=album,
+            release_date=release_date,
+            etag=etag,
+            raw=cls._coerce_mapping(payload),
         )
 
 
@@ -542,7 +561,9 @@ class ArtistDelta:
 
 
 KnownReleasesInput = (
-    Mapping[str, ArtistKnownRelease | str | None] | Iterable[str] | Iterable[ArtistKnownRelease]
+    Mapping[str, ArtistKnownRelease | str | None]
+    | Iterable[str]
+    | Iterable[ArtistKnownRelease]
 )
 
 
@@ -572,7 +593,9 @@ def filter_new_releases(
 ) -> tuple[AlbumRelease, ...]:
     """Return releases that are newer than the provided timestamp."""
 
-    return tuple(release for release in releases if _is_release_new(release, last_checked))
+    return tuple(
+        release for release in releases if _is_release_new(release, last_checked)
+    )
 
 
 def build_artist_delta(
@@ -627,7 +650,9 @@ def _is_release_new(
     release: AlbumRelease | ArtistTrackCandidate, last_checked: datetime | None
 ) -> bool:
     release_date = (
-        release.release_date if isinstance(release, ArtistTrackCandidate) else release.release_date
+        release.release_date
+        if isinstance(release, ArtistTrackCandidate)
+        else release.release_date
     )
     if last_checked is None:
         return True
@@ -648,7 +673,9 @@ def _normalise_known_releases(
             if isinstance(value, ArtistKnownRelease):
                 mapping[track_id] = value
             elif isinstance(value, str):
-                mapping[track_id] = ArtistKnownRelease(track_id=track_id, etag=_optional_str(value))
+                mapping[track_id] = ArtistKnownRelease(
+                    track_id=track_id, etag=_optional_str(value)
+                )
             else:
                 mapping[track_id] = ArtistKnownRelease(track_id=track_id, etag=None)
         return mapping
@@ -682,7 +709,9 @@ def _build_cache_hint(
         return None
     digest = hashlib.sha1("|".join(sorted(parts)).encode("utf-8")).hexdigest()
     etag = f'"artist-delta:{digest}:{len(parts)}"'
-    return ArtistCacheHint(etag=etag, latest_release_at=latest, release_count=len(parts))
+    return ArtistCacheHint(
+        etag=etag, latest_release_at=latest, release_count=len(parts)
+    )
 
 
 __all__ = [

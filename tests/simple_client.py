@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections import OrderedDict
 import json
 import os
+from collections import OrderedDict
 from types import TracebackType
 from typing import Any, AsyncContextManager, Dict, Mapping, Optional, Type
 
@@ -71,7 +71,9 @@ class SimpleTestClient:
         tb: Optional[TracebackType],
     ) -> None:
         if self._lifespan_context is not None:
-            self._loop.run_until_complete(self._lifespan_context.__aexit__(exc_type, exc, tb))
+            self._loop.run_until_complete(
+                self._lifespan_context.__aexit__(exc_type, exc, tb)
+            )
             self._lifespan_context = None
         else:
             self._loop.run_until_complete(self.app.router.shutdown())
@@ -239,7 +241,10 @@ class SimpleTestClient:
         }
 
         header_items: OrderedDict[bytes, bytes] = OrderedDict()
-        for source in (self._default_headers, {k.lower(): v for k, v in (headers or {}).items()}):
+        for source in (
+            self._default_headers,
+            {k.lower(): v for k, v in (headers or {}).items()},
+        ):
             for key, value in source.items():
                 header_items[key.encode("latin-1")] = value.encode("utf-8")
 
@@ -274,7 +279,8 @@ class SimpleTestClient:
             if message["type"] == "http.response.start":
                 status_code = message["status"]
                 response_headers = {
-                    key.decode(): value.decode() for key, value in message.get("headers", [])
+                    key.decode(): value.decode()
+                    for key, value in message.get("headers", [])
                 }
             elif message["type"] == "http.response.body":
                 response_body.extend(message.get("body", b""))

@@ -124,7 +124,8 @@ async def test_slskd_rate_limit_raises() -> None:
         timeout_ms=200, max_requests_per_minute=1, slskd_base_url="http://slskd"
     )
     service = SecretValidationService(
-        settings=settings, client_factory=lambda: httpx.AsyncClient(transport=handler, timeout=0.2)
+        settings=settings,
+        client_factory=lambda: httpx.AsyncClient(transport=handler, timeout=0.2),
     )
     store = SecretStore.from_values(
         {"SLSKD_API_KEY": "abcdef123456", "SLSKD_URL": "http://localhost:5030"}
@@ -156,7 +157,9 @@ async def test_spotify_missing_client_id_returns_format_error() -> None:
             timeout_ms=300, max_requests_per_minute=5, slskd_base_url="http://slskd"
         )
     )
-    store = SecretStore.from_values({"SPOTIFY_CLIENT_SECRET": "secret", "SPOTIFY_CLIENT_ID": ""})
+    store = SecretStore.from_values(
+        {"SPOTIFY_CLIENT_SECRET": "secret", "SPOTIFY_CLIENT_ID": ""}
+    )
 
     result = await service.validate("spotify_client_secret", store=store)
 
@@ -185,7 +188,9 @@ async def test_spotify_live_valid() -> None:
 
 @pytest.mark.asyncio
 async def test_spotify_invalid_credentials() -> None:
-    service = _service_with_transport(httpx.MockTransport(lambda request: httpx.Response(401)))
+    service = _service_with_transport(
+        httpx.MockTransport(lambda request: httpx.Response(401))
+    )
     store = SecretStore.from_values(
         {"SPOTIFY_CLIENT_SECRET": "secret", "SPOTIFY_CLIENT_ID": "client"}
     )
@@ -199,7 +204,9 @@ async def test_spotify_invalid_credentials() -> None:
 
 @pytest.mark.asyncio
 async def test_spotify_dependency_error_for_429() -> None:
-    service = _service_with_transport(httpx.MockTransport(lambda request: httpx.Response(429)))
+    service = _service_with_transport(
+        httpx.MockTransport(lambda request: httpx.Response(429))
+    )
     store = SecretStore.from_values(
         {"SPOTIFY_CLIENT_SECRET": "secret", "SPOTIFY_CLIENT_ID": "client"}
     )
@@ -227,7 +234,9 @@ class _StubValidationService:
 
 
 def test_validate_secret_endpoint_success() -> None:
-    details = SecretValidationDetails(mode="live", valid=True, at=datetime.now(timezone.utc))
+    details = SecretValidationDetails(
+        mode="live", valid=True, at=datetime.now(timezone.utc)
+    )
     result = SecretValidationResult(provider="slskd_api_key", validated=details)
     stub = _StubValidationService(result=result)
 
@@ -247,7 +256,9 @@ def test_validate_secret_endpoint_success() -> None:
 
 
 def test_validate_secret_endpoint_validation_error() -> None:
-    stub = _StubValidationService(error=ValidationAppError("Override value must not be empty."))
+    stub = _StubValidationService(
+        error=ValidationAppError("Override value must not be empty.")
+    )
 
     with SimpleTestClient(app) as client:
         original = getattr(client.app.state, "secret_validation_service", None)
@@ -267,7 +278,9 @@ def test_validate_secret_endpoint_validation_error() -> None:
 
 def test_validate_secret_endpoint_dependency_error() -> None:
     stub = _StubValidationService(
-        error=DependencyError("validation failed: upstream", status_code=503, meta={"status": 503})
+        error=DependencyError(
+            "validation failed: upstream", status_code=503, meta={"status": 503}
+        )
     )
 
     with SimpleTestClient(app) as client:

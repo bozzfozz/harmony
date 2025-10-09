@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from fastapi.testclient import TestClient
-import pytest
 
 from app.config import load_config
 from app.middleware import install_middleware
 
 
-def _build_app(monkeypatch: pytest.MonkeyPatch, env: dict[str, str] | None = None) -> FastAPI:
+def _build_app(
+    monkeypatch: pytest.MonkeyPatch, env: dict[str, str] | None = None
+) -> FastAPI:
     if env:
         for key, value in env.items():
             monkeypatch.setenv(key, value)
@@ -113,7 +115,9 @@ def test_rate_limit_disabled_by_default_and_enforced_when_enabled(
     assert "Retry-After" in denied.headers
 
 
-def test_cache_etag_304_on_match_and_200_on_change(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cache_etag_304_on_match_and_200_on_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("CACHE_ENABLED", "true")
     monkeypatch.setenv("CACHEABLE_PATHS", "/cache/me")
     monkeypatch.setenv("FEATURE_REQUIRE_AUTH", "false")
@@ -198,8 +202,12 @@ def test_cors_and_gzip_applied(monkeypatch: pytest.MonkeyPatch) -> None:
             "Access-Control-Request-Headers": "X-Test-Header",
         },
     )
-    assert cors_response.headers.get("access-control-allow-origin") == "http://example.com"
-    assert "X-Test-Header" in cors_response.headers.get("access-control-allow-headers", "")
+    assert (
+        cors_response.headers.get("access-control-allow-origin") == "http://example.com"
+    )
+    assert "X-Test-Header" in cors_response.headers.get(
+        "access-control-allow-headers", ""
+    )
 
     gzip_response = client.get(
         "/cors-gzip",

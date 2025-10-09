@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
-import hashlib
-import json
 from typing import Iterable, Mapping, Sequence
 
 from app.schemas.errors import ApiError, ErrorCode
@@ -99,7 +99,9 @@ class LibraryService:
             "name": album.name,
             "artists": [
                 self._canonical_artist(artist)
-                for artist in sorted(album.artists, key=lambda item: (item.name, item.id or ""))
+                for artist in sorted(
+                    album.artists, key=lambda item: (item.name, item.id or "")
+                )
             ],
         }
         if album.release_date:
@@ -118,7 +120,9 @@ class LibraryService:
             "provider": track.provider,
             "artists": [
                 self._canonical_artist(artist)
-                for artist in sorted(track.artists, key=lambda item: (item.name, item.id or ""))
+                for artist in sorted(
+                    track.artists, key=lambda item: (item.name, item.id or "")
+                )
             ],
         }
         if track.duration_ms is not None:
@@ -133,7 +137,8 @@ class LibraryService:
                     "artists": [
                         self._canonical_artist(artist)
                         for artist in sorted(
-                            track.album.artists, key=lambda item: (item.name, item.id or "")
+                            track.album.artists,
+                            key=lambda item: (item.name, item.id or ""),
                         )
                     ],
                     "release_date": (
@@ -154,7 +159,8 @@ class LibraryService:
             return value.isoformat()
         if isinstance(value, Mapping):
             return {
-                str(key): self._normalize_value(subvalue) for key, subvalue in sorted(value.items())
+                str(key): self._normalize_value(subvalue)
+                for key, subvalue in sorted(value.items())
             }
         if isinstance(value, (list, tuple)):
             return [self._normalize_value(item) for item in value]
@@ -182,7 +188,9 @@ class LibraryService:
 
     def compute_content_hash(self) -> str:
         snapshot = self.build_snapshot()
-        payload = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        payload = json.dumps(
+            snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         return digest
 
@@ -200,7 +208,11 @@ class LibraryService:
         return any(needle and needle.lower() in haystack_lower for needle in needles)
 
     def search_tracks_like(
-        self, title_variants: Sequence[str], artist_variants: Sequence[str], *, limit: int = 20
+        self,
+        title_variants: Sequence[str],
+        artist_variants: Sequence[str],
+        *,
+        limit: int = 20,
     ) -> list[ProviderTrack]:
         _ensure_positive_limit(limit, message="limit must be greater than zero.")
         matches: list[ProviderTrack] = []
@@ -208,7 +220,8 @@ class LibraryService:
             if not self._like_match(entry.track.name, title_variants):
                 continue
             if artist_variants and not any(
-                self._like_match(name, artist_variants) for name in _artist_names(entry.track)
+                self._like_match(name, artist_variants)
+                for name in _artist_names(entry.track)
             ):
                 continue
             matches.append(entry.track)
@@ -217,11 +230,19 @@ class LibraryService:
         return matches
 
     def search_tracks_like_normalized(
-        self, title_variants: Sequence[str], artist_variants: Sequence[str], *, limit: int = 20
+        self,
+        title_variants: Sequence[str],
+        artist_variants: Sequence[str],
+        *,
+        limit: int = 20,
     ) -> list[ProviderTrack]:
         _ensure_positive_limit(limit, message="limit must be greater than zero.")
-        normalized_titles = [normalize_unicode(title) for title in title_variants if title]
-        normalized_artists = [normalize_unicode(artist) for artist in artist_variants if artist]
+        normalized_titles = [
+            normalize_unicode(title) for title in title_variants if title
+        ]
+        normalized_artists = [
+            normalize_unicode(artist) for artist in artist_variants if artist
+        ]
         matches: list[ProviderTrack] = []
         for entry in self._tracks:
             if normalized_titles and not self._like_match(
@@ -229,7 +250,8 @@ class LibraryService:
             ):
                 continue
             if normalized_artists and not any(
-                self._like_match(name, normalized_artists) for name in entry.normalized_artists
+                self._like_match(name, normalized_artists)
+                for name in entry.normalized_artists
             ):
                 continue
             matches.append(entry.track)
@@ -250,7 +272,9 @@ class LibraryService:
         target_artist = normalize_unicode(artist)
         scored: list[tuple[float, ProviderTrack]] = []
         for entry in self._tracks:
-            title_score = SequenceMatcher(None, target_title, entry.normalized_title).ratio()
+            title_score = SequenceMatcher(
+                None, target_title, entry.normalized_title
+            ).ratio()
             artist_score = 0.0
             if entry.normalized_artists:
                 artist_score = max(
@@ -264,7 +288,11 @@ class LibraryService:
         return [track for _, track in scored[:limit]]
 
     def search_albums_like(
-        self, title_variants: Sequence[str], artist_variants: Sequence[str], *, limit: int = 20
+        self,
+        title_variants: Sequence[str],
+        artist_variants: Sequence[str],
+        *,
+        limit: int = 20,
     ) -> list[ProviderAlbum]:
         _ensure_positive_limit(limit, message="limit must be greater than zero.")
         matches: list[ProviderAlbum] = []
@@ -272,7 +300,8 @@ class LibraryService:
             if not self._like_match(entry.album.name, title_variants):
                 continue
             if artist_variants and not any(
-                self._like_match(name, artist_variants) for name in _album_artist_names(entry.album)
+                self._like_match(name, artist_variants)
+                for name in _album_artist_names(entry.album)
             ):
                 continue
             matches.append(entry.album)
@@ -281,11 +310,19 @@ class LibraryService:
         return matches
 
     def search_albums_like_normalized(
-        self, title_variants: Sequence[str], artist_variants: Sequence[str], *, limit: int = 20
+        self,
+        title_variants: Sequence[str],
+        artist_variants: Sequence[str],
+        *,
+        limit: int = 20,
     ) -> list[ProviderAlbum]:
         _ensure_positive_limit(limit, message="limit must be greater than zero.")
-        normalized_titles = [normalize_unicode(title) for title in title_variants if title]
-        normalized_artists = [normalize_unicode(artist) for artist in artist_variants if artist]
+        normalized_titles = [
+            normalize_unicode(title) for title in title_variants if title
+        ]
+        normalized_artists = [
+            normalize_unicode(artist) for artist in artist_variants if artist
+        ]
         matches: list[ProviderAlbum] = []
         for entry in self._albums:
             if normalized_titles and not self._like_match(
@@ -293,7 +330,8 @@ class LibraryService:
             ):
                 continue
             if normalized_artists and not any(
-                self._like_match(name, normalized_artists) for name in entry.normalized_artists
+                self._like_match(name, normalized_artists)
+                for name in entry.normalized_artists
             ):
                 continue
             matches.append(entry.album)
@@ -314,7 +352,9 @@ class LibraryService:
         target_artist = normalize_unicode(artist)
         scored: list[tuple[float, ProviderAlbum]] = []
         for entry in self._albums:
-            title_score = SequenceMatcher(None, target_title, entry.normalized_title).ratio()
+            title_score = SequenceMatcher(
+                None, target_title, entry.normalized_title
+            ).ratio()
             artist_score = 0.0
             if entry.normalized_artists:
                 artist_score = max(

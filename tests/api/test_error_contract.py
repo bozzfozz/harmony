@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import HTTPException, status
 import pytest
+from fastapi import HTTPException, status
 
 from app.main import app
 from tests.simple_client import SimpleTestClient
@@ -27,7 +27,9 @@ def add_temp_route() -> Callable[[str, Callable[..., Any]], None]:
     yield register
 
     app.router.routes = [
-        route for route in app.router.routes if getattr(route, "path", None) not in registered_paths
+        route
+        for route in app.router.routes
+        if getattr(route, "path", None) not in registered_paths
     ]
     if registered_paths:
         app.openapi_schema = None
@@ -77,7 +79,9 @@ def test_rate_limit_includes_retry_after_header(
     assert body["error"]["code"] == "RATE_LIMITED"
     assert body["error"]["message"] == "Too many requests"
     assert body["error"]["meta"]["retry_after_ms"] >= 2000
-    retry_after = response.headers.get("Retry-After") or response.headers.get("retry-after")
+    retry_after = response.headers.get("Retry-After") or response.headers.get(
+        "retry-after"
+    )
     assert retry_after == "2"
 
 
@@ -113,6 +117,8 @@ def test_debug_header_present_when_envelope_disabled(
     response = client.get("/__test__/legacy-error", use_raw_path=True)
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    debug_header = response.headers.get("X-Debug-Id") or response.headers.get("x-debug-id")
+    debug_header = response.headers.get("X-Debug-Id") or response.headers.get(
+        "x-debug-id"
+    )
     assert debug_header is not None
     assert response.json() == {"detail": "An unexpected error occurred."}

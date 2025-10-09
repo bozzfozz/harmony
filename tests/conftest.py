@@ -9,13 +9,13 @@ pytest_plugins = [
 ]
 
 import asyncio
-from datetime import datetime
 import logging
 import os
-from pathlib import Path
 import sys
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
 import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -38,15 +38,18 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.dependencies import (
-    get_integration_service as dependency_integration_service,
-    get_matching_engine as dependency_matching_engine,
-    get_soulseek_client as dependency_soulseek_client,
-    get_spotify_client as dependency_spotify_client,
-    get_transfers_api as dependency_transfers_api,
-)
+from app.dependencies import get_integration_service as dependency_integration_service
+from app.dependencies import get_matching_engine as dependency_matching_engine
+from app.dependencies import get_soulseek_client as dependency_soulseek_client
+from app.dependencies import get_spotify_client as dependency_spotify_client
+from app.dependencies import get_transfers_api as dependency_transfers_api
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack, SearchQuery
+from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderArtist,
+    ProviderTrack,
+    SearchQuery,
+)
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.integrations.provider_gateway import (
     ProviderGatewayInternalError,
@@ -125,7 +128,9 @@ class RecordingScheduler:
         ready: list[persistence.QueueJobDTO] = []
         for job_type in self._job_types:
             ready.extend(self._persistence.fetch_ready(job_type))
-        ready.sort(key=lambda job: (-int(job.priority or 0), job.available_at, int(job.id)))
+        ready.sort(
+            key=lambda job: (-int(job.priority or 0), job.available_at, int(job.id))
+        )
         leased: list[persistence.QueueJobDTO] = []
         for job in ready:
             record = self._persistence.lease(
@@ -143,7 +148,9 @@ class RecordingScheduler:
 class RecordingDispatcher:
     """Thin wrapper around the real dispatcher with manual draining helpers."""
 
-    def __init__(self, scheduler: RecordingScheduler, handlers: Mapping[str, Any]) -> None:
+    def __init__(
+        self, scheduler: RecordingScheduler, handlers: Mapping[str, Any]
+    ) -> None:
         from app.orchestrator.dispatcher import Dispatcher as _Dispatcher
 
         self._impl = _Dispatcher(scheduler, handlers, persistence_module=persistence)
@@ -247,7 +254,9 @@ def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
         "bootstrap_orchestrator",
         build_test_orchestrator,
     )
-    monkeypatch.setattr("app.main.bootstrap_orchestrator", build_test_orchestrator, raising=False)
+    monkeypatch.setattr(
+        "app.main.bootstrap_orchestrator", build_test_orchestrator, raising=False
+    )
 
 
 class StubQueuePersistence:
@@ -419,9 +428,13 @@ class StubSpotifyClient:
         }
         self.saved_track_ids: set[str] = set()
         self.recommendation_payload: Dict[str, Any] = {"tracks": [], "seeds": []}
-        self.followed_artists: List[Dict[str, Any]] = [{"id": "artist-1", "name": "Tester"}]
+        self.followed_artists: List[Dict[str, Any]] = [
+            {"id": "artist-1", "name": "Tester"}
+        ]
         self.artist_releases: Dict[str, List[Dict[str, Any]]] = {
-            "artist-1": [{"id": "release-1", "name": "Test Release", "album_group": "album"}]
+            "artist-1": [
+                {"id": "release-1", "name": "Test Release", "album_group": "album"}
+            ]
         }
         self.artist_albums: Dict[str, List[Dict[str, Any]]] = {
             "artist-1": [
@@ -492,7 +505,11 @@ class StubSpotifyClient:
             "year_from": year_from,
             "year_to": year_to,
         }
-        return {"artists": {"items": [{"id": "artist-1", "name": "Tester", "genres": ["rock"]}]}}
+        return {
+            "artists": {
+                "items": [{"id": "artist-1", "name": "Tester", "genres": ["rock"]}]
+            }
+        }
 
     def search_albums(
         self,
@@ -540,10 +557,14 @@ class StubSpotifyClient:
         return [dict(item) for item in tracks[start:end]]
 
     def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
-        return {"artists": {"items": [dict(item) for item in self.followed_artists[:limit]]}}
+        return {
+            "artists": {"items": [dict(item) for item in self.followed_artists[:limit]]}
+        }
 
     def get_artist_releases(self, artist_id: str) -> Dict[str, Any]:
-        return {"items": [dict(item) for item in self.artist_releases.get(artist_id, [])]}
+        return {
+            "items": [dict(item) for item in self.artist_releases.get(artist_id, [])]
+        }
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         return self.tracks.get(track_id, {"id": track_id, "name": "Unknown"})
@@ -554,7 +575,8 @@ class StubSpotifyClient:
     def get_multiple_audio_features(self, track_ids: list[str]) -> Dict[str, Any]:
         return {
             "audio_features": [
-                self.audio_features.get(track_id, {"id": track_id}) for track_id in track_ids
+                self.audio_features.get(track_id, {"id": track_id})
+                for track_id in track_ids
             ]
         }
 
@@ -567,8 +589,12 @@ class StubSpotifyClient:
         end = start + max(1, limit)
         return {"items": items[start:end], "total": payload.get("total", len(items))}
 
-    def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+    def add_tracks_to_playlist(
+        self, playlist_id: str, track_uris: list[str]
+    ) -> Dict[str, Any]:
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         for uri in track_uris:
             playlist["items"].append({"track": {"uri": uri}})
         playlist["total"] = len(playlist["items"])
@@ -577,7 +603,9 @@ class StubSpotifyClient:
     def remove_tracks_from_playlist(
         self, playlist_id: str, track_uris: list[str]
     ) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         playlist["items"] = [
             item
             for item in playlist["items"]
@@ -589,7 +617,9 @@ class StubSpotifyClient:
     def reorder_playlist_items(
         self, playlist_id: str, range_start: int, insert_before: int
     ) -> Dict[str, Any]:
-        playlist = self.playlist_items.setdefault(playlist_id, {"items": [], "total": 0})
+        playlist = self.playlist_items.setdefault(
+            playlist_id, {"items": [], "total": 0}
+        )
         items = playlist["items"]
         if 0 <= range_start < len(items):
             track = items.pop(range_start)
@@ -717,7 +747,9 @@ class StubSoulseekClient:
         for result in self.search_results:
             files = []
             for file_info in result.get("files", []):
-                title = str(file_info.get("title") or file_info.get("filename") or "").lower()
+                title = str(
+                    file_info.get("title") or file_info.get("filename") or ""
+                ).lower()
                 if query_lower in title:
                     files.append(dict(file_info))
             if files:
@@ -745,13 +777,17 @@ class StubSoulseekClient:
                     {
                         "id": file_info.get("id"),
                         "title": file_info.get("title") or file_info.get("filename"),
-                        "artists": ([file_info.get("artist")] if file_info.get("artist") else []),
+                        "artists": (
+                            [file_info.get("artist")] if file_info.get("artist") else []
+                        ),
                         "album": file_info.get("album"),
                         "year": file_info.get("year"),
                         "duration_ms": file_info.get("duration_ms"),
                         "bitrate": file_info.get("bitrate"),
                         "format": file_info.get("format"),
-                        "genres": ([file_info.get("genre")] if file_info.get("genre") else []),
+                        "genres": (
+                            [file_info.get("genre")] if file_info.get("genre") else []
+                        ),
                         "extra": {
                             "username": username,
                             "path": file_info.get("filename"),
@@ -782,7 +818,9 @@ class StubSoulseekClient:
         return {"cancelled": download_id}
 
 
-async def _soulseek_get_download(self: StubSoulseekClient, download_id: str) -> Dict[str, Any]:
+async def _soulseek_get_download(
+    self: StubSoulseekClient, download_id: str
+) -> Dict[str, Any]:
     identifier = int(download_id)
     return self.downloads.get(identifier, {"id": identifier, "state": "unknown"})
 
@@ -797,7 +835,9 @@ async def _soulseek_remove_completed_downloads(
     self: StubSoulseekClient,
 ) -> Dict[str, Any]:
     before = len(self.downloads)
-    self.downloads = {k: v for k, v in self.downloads.items() if v.get("state") != "completed"}
+    self.downloads = {
+        k: v for k, v in self.downloads.items() if v.get("state") != "completed"
+    }
     removed = before - len(self.downloads)
     return {"removed": removed}
 
@@ -838,19 +878,25 @@ async def _soulseek_enqueue(
     return {"status": "enqueued", "job": job}
 
 
-async def _soulseek_cancel_upload(self: StubSoulseekClient, upload_id: str) -> Dict[str, Any]:
+async def _soulseek_cancel_upload(
+    self: StubSoulseekClient, upload_id: str
+) -> Dict[str, Any]:
     upload = self.uploads.get(upload_id)
     if upload:
         upload["state"] = "cancelled"
     return {"cancelled": upload_id}
 
 
-async def _soulseek_get_upload(self: StubSoulseekClient, upload_id: str) -> Dict[str, Any]:
+async def _soulseek_get_upload(
+    self: StubSoulseekClient, upload_id: str
+) -> Dict[str, Any]:
     return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
 
 
 async def _soulseek_get_uploads(self: StubSoulseekClient) -> list[Dict[str, Any]]:
-    return [upload for upload in self.uploads.values() if upload.get("state") != "completed"]
+    return [
+        upload for upload in self.uploads.values() if upload.get("state") != "completed"
+    ]
 
 
 async def _soulseek_get_all_uploads(self: StubSoulseekClient) -> list[Dict[str, Any]]:
@@ -861,22 +907,30 @@ async def _soulseek_remove_completed_uploads(
     self: StubSoulseekClient,
 ) -> Dict[str, Any]:
     before = len(self.uploads)
-    self.uploads = {k: v for k, v in self.uploads.items() if v.get("state") != "completed"}
+    self.uploads = {
+        k: v for k, v in self.uploads.items() if v.get("state") != "completed"
+    }
     removed = before - len(self.uploads)
     return {"removed": removed}
 
 
-async def _soulseek_user_address(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
+async def _soulseek_user_address(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("address", {"host": None, "port": None})
 
 
-async def _soulseek_user_browse(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
+async def _soulseek_user_browse(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("browse", {"files": []})
 
 
-async def _soulseek_user_browsing_status(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
+async def _soulseek_user_browsing_status(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("browsing-status", {"state": "unknown"})
 
@@ -891,12 +945,16 @@ async def _soulseek_user_directory(
     return directory
 
 
-async def _soulseek_user_info(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
+async def _soulseek_user_info(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("info", {"username": username})
 
 
-async def _soulseek_user_status(self: StubSoulseekClient, username: str) -> Dict[str, Any]:
+async def _soulseek_user_status(
+    self: StubSoulseekClient, username: str
+) -> Dict[str, Any]:
     record = self.user_records.get(username, {})
     return record.get("status", {"online": False})
 
@@ -943,7 +1001,9 @@ StubSoulseekClient.set_status = _soulseek_set_status
 
 
 class StubSearchGateway:
-    def __init__(self, spotify: StubSpotifyClient, soulseek: StubSoulseekClient) -> None:
+    def __init__(
+        self, spotify: StubSpotifyClient, soulseek: StubSoulseekClient
+    ) -> None:
         self._spotify = spotify
         self._soulseek = soulseek
         self.calls: list[tuple[tuple[str, ...], SearchQuery]] = []
@@ -960,7 +1020,9 @@ class StubSearchGateway:
             if normalized == "spotify":
                 tracks = self._spotify_tracks(query)
                 results.append(
-                    ProviderGatewaySearchResult(provider="spotify", tracks=tuple(tracks))
+                    ProviderGatewaySearchResult(
+                        provider="spotify", tracks=tuple(tracks)
+                    )
                 )
                 event_payload = {
                     "event": "api.dependency",
@@ -975,7 +1037,9 @@ class StubSearchGateway:
                 self.log_events.append(event_payload)
             elif normalized in {"slskd", "soulseek"}:
                 tracks = self._soulseek_tracks(query)
-                results.append(ProviderGatewaySearchResult(provider="slskd", tracks=tuple(tracks)))
+                results.append(
+                    ProviderGatewaySearchResult(provider="slskd", tracks=tuple(tracks))
+                )
                 event_payload = {
                     "event": "api.dependency",
                     "provider": "slskd",
@@ -990,7 +1054,9 @@ class StubSearchGateway:
             else:
                 error = ProviderGatewayInternalError(normalized, "provider not stubbed")
                 results.append(
-                    ProviderGatewaySearchResult(provider=normalized, tracks=tuple(), error=error)
+                    ProviderGatewaySearchResult(
+                        provider=normalized, tracks=tuple(), error=error
+                    )
                 )
                 event_payload = {
                     "event": "api.dependency",
@@ -1024,7 +1090,9 @@ class StubSearchGateway:
                             name=str(artist_payload.get("name") or ""),
                         )
                     )
-            album_payload = raw.get("album") if isinstance(raw.get("album"), dict) else None
+            album_payload = (
+                raw.get("album") if isinstance(raw.get("album"), dict) else None
+            )
             album = None
             if isinstance(album_payload, dict):
                 album_artists: list[ProviderArtist] = []
@@ -1056,7 +1124,9 @@ class StubSearchGateway:
                 track_metadata["genre"] = genre
             duration_ms = raw.get("duration_ms")
             external_ids = (
-                raw.get("external_ids") if isinstance(raw.get("external_ids"), dict) else {}
+                raw.get("external_ids")
+                if isinstance(raw.get("external_ids"), dict)
+                else {}
             )
             isrc = external_ids.get("isrc") if isinstance(external_ids, dict) else None
             results.append(
@@ -1107,7 +1177,9 @@ class StubSearchGateway:
                 )
                 seeders = self._coerce_int(file_info.get("seeders"))
                 candidate = TrackCandidate(
-                    title=str(file_info.get("title") or file_info.get("filename") or ""),
+                    title=str(
+                        file_info.get("title") or file_info.get("filename") or ""
+                    ),
                     artist=str(artist_name) if artist_name else None,
                     format=str(file_info.get("format") or "").upper() or None,
                     bitrate_kbps=bitrate_value,
@@ -1132,7 +1204,9 @@ class StubSearchGateway:
                 )
                 album = None
                 if file_info.get("album"):
-                    album = ProviderAlbum(name=str(file_info.get("album")), id=None, artists=())
+                    album = ProviderAlbum(
+                        name=str(file_info.get("album")), id=None, artists=()
+                    )
                 tracks.append(
                     ProviderTrack(
                         name=candidate.title,
@@ -1185,7 +1259,9 @@ class StubSearchGateway:
 
     async def remove_completed_downloads(self) -> Dict[str, Any]:
         before = len(self.downloads)
-        self.downloads = {k: v for k, v in self.downloads.items() if v.get("state") != "completed"}
+        self.downloads = {
+            k: v for k, v in self.downloads.items() if v.get("state") != "completed"
+        }
         removed = before - len(self.downloads)
         return {"removed": removed}
 
@@ -1193,7 +1269,9 @@ class StubSearchGateway:
         identifier = int(download_id)
         return self.queue_positions.get(identifier, {"position": None})
 
-    async def enqueue(self, username: str, files: list[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(
+        self, username: str, files: list[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         job = {"username": username, "files": files}
         self.enqueued.append(job)
         return {"status": "enqueued", "job": job}
@@ -1208,14 +1286,20 @@ class StubSearchGateway:
         return self.uploads.get(upload_id, {"id": upload_id, "state": "unknown"})
 
     async def get_uploads(self) -> list[Dict[str, Any]]:
-        return [upload for upload in self.uploads.values() if upload.get("state") != "completed"]
+        return [
+            upload
+            for upload in self.uploads.values()
+            if upload.get("state") != "completed"
+        ]
 
     async def get_all_uploads(self) -> list[Dict[str, Any]]:
         return list(self.uploads.values())
 
     async def remove_completed_uploads(self) -> Dict[str, Any]:
         before = len(self.uploads)
-        self.uploads = {k: v for k, v in self.uploads.items() if v.get("state") != "completed"}
+        self.uploads = {
+            k: v for k, v in self.uploads.items() if v.get("state") != "completed"
+        }
         removed = before - len(self.uploads)
         return {"removed": removed}
 
@@ -1301,7 +1385,8 @@ class StubIntegrationService:
 
     async def health(self) -> IntegrationHealth:  # pragma: no cover - simple stub
         providers = tuple(
-            ProviderHealth(provider=name, status="ok", details={}) for name in self._providers
+            ProviderHealth(provider=name, status="ok", details={})
+            for name in self._providers
         )
         return IntegrationHealth(overall="ok", providers=providers)
 
@@ -1391,7 +1476,9 @@ def configure_environment(
         write_setting("SLSKD_API_KEY", "test-key")
 
     if not configured_url:
-        pytest.skip("DATABASE_URL must point to a PostgreSQL database for test execution")
+        pytest.skip(
+            "DATABASE_URL must point to a PostgreSQL database for test execution"
+        )
 
     try:
         resolved_url = make_url(configured_url)
@@ -1399,7 +1486,9 @@ def configure_environment(
         pytest.skip(f"DATABASE_URL is not a valid SQLAlchemy URL: {exc}")
 
     if resolved_url.get_backend_name() != "postgresql":
-        pytest.skip("DATABASE_URL must reference a PostgreSQL backend for this test suite")
+        pytest.skip(
+            "DATABASE_URL must reference a PostgreSQL backend for this test suite"
+        )
 
     schema_name = f"test_suite_{uuid.uuid4().hex}"
     base_engine = sa.create_engine(resolved_url)
@@ -1487,17 +1576,29 @@ def client(
     deps.set_integration_service_override(stub_service)
 
     with SimpleTestClient(app) as test_client:
-        test_client.app.dependency_overrides[dependency_spotify_client] = lambda: stub_spotify
-        test_client.app.dependency_overrides[dependency_soulseek_client] = lambda: stub_soulseek
-        test_client.app.dependency_overrides[dependency_transfers_api] = lambda: stub_transfers
-        test_client.app.dependency_overrides[dependency_matching_engine] = lambda: engine
-        test_client.app.dependency_overrides[dependency_integration_service] = lambda: stub_service
+        test_client.app.dependency_overrides[dependency_spotify_client] = (
+            lambda: stub_spotify
+        )
+        test_client.app.dependency_overrides[dependency_soulseek_client] = (
+            lambda: stub_soulseek
+        )
+        test_client.app.dependency_overrides[dependency_transfers_api] = (
+            lambda: stub_transfers
+        )
+        test_client.app.dependency_overrides[dependency_matching_engine] = (
+            lambda: engine
+        )
+        test_client.app.dependency_overrides[dependency_integration_service] = (
+            lambda: stub_service
+        )
 
         test_client.app.state.soulseek_stub = stub_soulseek
         test_client.app.state.transfers_stub = stub_transfers
         test_client.app.state.spotify_stub = stub_spotify
         test_client.app.state.lyrics_worker = stub_lyrics
-        test_client.app.state.sync_worker = SyncWorker(stub_soulseek, lyrics_worker=stub_lyrics)
+        test_client.app.state.sync_worker = SyncWorker(
+            stub_soulseek, lyrics_worker=stub_lyrics
+        )
         test_client.app.state.playlist_worker = PlaylistSyncWorker(
             stub_spotify,
             interval_seconds=0.1,

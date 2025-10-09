@@ -50,6 +50,8 @@ def test_artist_preferences_persist(client) -> None:
     with session_scope() as session:
         records = session.query(ArtistPreference).all()
         assert len(records) == 2
-        mapping = {(record.artist_id, record.release_id): record.selected for record in records}
+        mapping = {
+            (record.artist_id, record.release_id): record.selected for record in records
+        }
     assert mapping[("artist-a", "release-1")] is True
     assert mapping[("artist-a", "release-2")] is False

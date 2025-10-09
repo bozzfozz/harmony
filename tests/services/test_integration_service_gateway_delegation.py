@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack, SearchQuery
+from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderArtist,
+    ProviderTrack,
+    SearchQuery,
+)
 from app.integrations.provider_gateway import (
     ProviderGatewaySearchResponse,
     ProviderGatewaySearchResult,
@@ -44,7 +49,9 @@ class _StubGateway:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[str, ...]]] = []
 
-    async def search_tracks(self, provider: str, query: SearchQuery) -> list[ProviderTrack]:
+    async def search_tracks(
+        self, provider: str, query: SearchQuery
+    ) -> list[ProviderTrack]:
         self.calls.append(("tracks", (provider,)))
         return [
             ProviderTrack(
@@ -84,7 +91,9 @@ class _StubGateway:
 
 
 class _FailingGateway(_StubGateway):
-    async def search_tracks(self, provider: str, query: SearchQuery) -> list[ProviderTrack]:
+    async def search_tracks(
+        self, provider: str, query: SearchQuery
+    ) -> list[ProviderTrack]:
         raise ProviderGatewayTimeoutError(provider, timeout_ms=5000)
 
 

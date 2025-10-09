@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
 
+import app.workers.artwork_worker as artwork_worker
 from app.config import ArtworkConfig, ArtworkFallbackConfig, ArtworkPostProcessingConfig
 from app.db import session_scope
 from app.models import Download
 from app.utils import artwork_utils
-import app.workers.artwork_worker as artwork_worker
-from app.workers.artwork_worker import ArtworkJob, ArtworkProcessingResult, ArtworkWorker
+from app.workers.artwork_worker import (
+    ArtworkJob,
+    ArtworkProcessingResult,
+    ArtworkWorker,
+)
 from app.workers.sync_worker import SyncWorker
 from tests.conftest import StubSoulseekClient
 
@@ -49,7 +53,9 @@ def _make_artwork_config(
 
 
 @pytest.mark.asyncio
-async def test_spotify_artwork_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_spotify_artwork_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     audio_path = tmp_path / "track.mp3"
     audio_path.write_bytes(b"audio-bytes")
 
@@ -161,7 +167,9 @@ async def test_post_processing_hook_invoked_once(
         assert audio_file == audio_path
         assert artwork_file.exists()
 
-    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(
+        ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False
+    )
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", fake_embed)
     monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
@@ -209,7 +217,9 @@ async def test_post_processing_hook_failure_logs_and_continues(
         destination.write_bytes(b"img")
         return destination
 
-    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(
+        ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False
+    )
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
     monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
@@ -230,7 +240,9 @@ async def test_post_processing_hook_failure_logs_and_continues(
         calls.append("first")
         raise RuntimeError("boom")
 
-    async def succeeding_hook(job: "ArtworkJob", result: "ArtworkProcessingResult") -> None:
+    async def succeeding_hook(
+        job: "ArtworkJob", result: "ArtworkProcessingResult"
+    ) -> None:
         calls.append("second")
         assert result.artwork_path is not None
 
@@ -271,7 +283,9 @@ async def test_post_processing_hooks_respect_disable_flag(
         destination.write_bytes(b"img")
         return destination
 
-    monkeypatch.setattr(ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False)
+    monkeypatch.setattr(
+        ArtworkWorker, "_collect_candidate_urls", fake_collect, raising=False
+    )
     monkeypatch.setattr(artwork_utils, "download_artwork", fake_download)
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
     monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
@@ -300,7 +314,9 @@ async def test_post_processing_hooks_respect_disable_flag(
     assert calls == []
 
 
-def _install_mutagen_stubs(monkeypatch: pytest.MonkeyPatch, tracker: Dict[str, Any]) -> None:
+def _install_mutagen_stubs(
+    monkeypatch: pytest.MonkeyPatch, tracker: Dict[str, Any]
+) -> None:
     module_mutagen = types.ModuleType("mutagen")
 
     class DummyID3NoHeaderError(Exception):
@@ -440,8 +456,14 @@ def test_artwork_utils_lowres_detection() -> None:
 
     assert artwork_utils.is_low_res(small, min_edge=1000, min_bytes=150_000) is True
     assert artwork_utils.is_low_res(large, min_edge=1000, min_bytes=150_000) is False
-    assert artwork_utils.is_low_res(unknown_small, min_edge=1000, min_bytes=150_000) is True
-    assert artwork_utils.is_low_res(unknown_large, min_edge=1000, min_bytes=150_000) is False
+    assert (
+        artwork_utils.is_low_res(unknown_small, min_edge=1000, min_bytes=150_000)
+        is True
+    )
+    assert (
+        artwork_utils.is_low_res(unknown_large, min_edge=1000, min_bytes=150_000)
+        is False
+    )
 
 
 @pytest.mark.asyncio
@@ -475,7 +497,9 @@ async def test_embed_replace_when_lowres_present(
         "extract_embed_info",
         lambda *_: {"width": 300, "height": 300, "bytes": 50_000},
     )
-    monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: "http://img/cover.jpg")
+    monkeypatch.setattr(
+        artwork_utils, "fetch_spotify_artwork", lambda *_: "http://img/cover.jpg"
+    )
 
     def fake_download(url: str, target: Path, **_: Any) -> Path:
         destination = target.with_suffix(".jpg")
@@ -554,7 +578,9 @@ async def test_no_replace_when_hires_and_no_refresh(
 
     def unexpected_download(*_a: Any, **_k: Any) -> Path:
         download_calls.append("download")
-        raise AssertionError("download_artwork should not run for high-resolution embeds")
+        raise AssertionError(
+            "download_artwork should not run for high-resolution embeds"
+        )
 
     def unexpected_embed(*_a: Any, **_k: Any) -> None:
         download_calls.append("embed")
@@ -637,7 +663,9 @@ def test_no_artwork_found(
     assert response.status_code == 404
 
 
-def test_refresh_endpoint_enqueues(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client) -> None:
+def test_refresh_endpoint_enqueues(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client
+) -> None:
     audio_path = tmp_path / "refresh.mp3"
     audio_path.write_bytes(b"audio")
 
@@ -816,7 +844,9 @@ def test_artwork_endpoint_returns_image(client, tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fallback_disabled_no_call(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_fallback_disabled_no_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     audio_path = tmp_path / "no-fallback.mp3"
     audio_path.write_bytes(b"audio")
 
@@ -889,7 +919,9 @@ async def test_musicbrainz_fallback_success(
     stored: Dict[str, Any] = {}
 
     monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
-    monkeypatch.setattr(artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url)
+    monkeypatch.setattr(
+        artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url
+    )
 
     def fake_download(url: str, target: Path, **_: Any) -> Path:
         stored["download_url"] = url
@@ -955,7 +987,9 @@ async def test_musicbrainz_fallback_fail(
     fallback_url = "https://coverartarchive.org/release-group/5678/front"
 
     monkeypatch.setattr(artwork_utils, "fetch_spotify_artwork", lambda *_: None)
-    monkeypatch.setattr(artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url)
+    monkeypatch.setattr(
+        artwork_utils, "fetch_caa_artwork", lambda *_, **__: fallback_url
+    )
     monkeypatch.setattr(artwork_utils, "embed_artwork", lambda *_: None)
     monkeypatch.setattr(artwork_utils, "extract_embed_info", lambda *_: None)
 

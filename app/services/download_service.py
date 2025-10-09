@@ -145,11 +145,15 @@ class DownloadService:
         offset: int,
     ) -> List[Download]:
         try:
-            query = self._build_download_query(include_all=include_all, status_filter=status_filter)
+            query = self._build_download_query(
+                include_all=include_all, status_filter=status_filter
+            )
             return query.offset(offset).limit(limit).all()
         except AppError:
             raise
-        except Exception as exc:  # pragma: no cover - defensive database failure handling
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to list downloads: %s", exc)
             raise InternalServerError("Failed to fetch downloads") from exc
 
@@ -158,7 +162,9 @@ class DownloadService:
             download = self._session.get(Download, download_id)
         except AppError:
             raise
-        except Exception as exc:  # pragma: no cover - defensive database failure handling
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to load download %s: %s", download_id, exc)
             raise InternalServerError("Failed to fetch download") from exc
 
@@ -167,7 +173,9 @@ class DownloadService:
             raise NotFoundError("Download not found")
         return download
 
-    def update_priority(self, download_id: int, payload: DownloadPriorityUpdate) -> Download:
+    def update_priority(
+        self, download_id: int, payload: DownloadPriorityUpdate
+    ) -> Download:
         download = self.get_download(download_id)
 
         new_priority = int(payload.priority)
@@ -209,7 +217,9 @@ class DownloadService:
             missing_payload = {
                 service: list(values) for service, values in missing_credentials.items()
             }
-            logger.warning("Download blocked due to missing credentials: %s", missing_payload)
+            logger.warning(
+                "Download blocked due to missing credentials: %s", missing_payload
+            )
             record_activity(
                 "download",
                 DOWNLOAD_BLOCKED,
@@ -219,8 +229,12 @@ class DownloadService:
 
         enqueue = getattr(worker, "enqueue", None) if worker else None
         if enqueue is None:
-            logger.error("Download worker unavailable for request from %s", payload.username)
-            record_activity("download", "failed", details={"reason": "worker_unavailable"})
+            logger.error(
+                "Download worker unavailable for request from %s", payload.username
+            )
+            record_activity(
+                "download", "failed", details={"reason": "worker_unavailable"}
+            )
             raise DependencyError("Download worker unavailable")
 
         try:
@@ -229,7 +243,9 @@ class DownloadService:
             )
         except Exception as exc:  # pragma: no cover - defensive persistence handling
             logger.exception("Failed to persist download request: %s", exc)
-            record_activity("download", "failed", details={"reason": "persistence_error"})
+            record_activity(
+                "download", "failed", details={"reason": "persistence_error"}
+            )
             raise InternalServerError("Failed to queue download") from exc
 
         job = {
@@ -242,7 +258,9 @@ class DownloadService:
         except Exception as exc:  # pragma: no cover - defensive worker error
             logger.exception("Failed to enqueue download job: %s", exc)
             await self._run_session(
-                lambda session: _mark_downloads_failed(session, [d.id for d in result.downloads])
+                lambda session: _mark_downloads_failed(
+                    session, [d.id for d in result.downloads]
+                )
             )
             record_activity("download", "failed", details={"reason": "enqueue_error"})
             raise DependencyError("Failed to enqueue download") from exc
@@ -256,7 +274,9 @@ class DownloadService:
             },
         )
 
-        logger.info("Queued %d download(s) for %s", len(result.downloads), payload.username)
+        logger.info(
+            "Queued %d download(s) for %s", len(result.downloads), payload.username
+        )
 
         download_payload = [
             {
@@ -300,9 +320,13 @@ class DownloadService:
             raise _app_error_from_api_error(api_error) from exc
 
         try:
-            await self._run_session(lambda session: _mark_download_cancelled(session, download_id))
+            await self._run_session(
+                lambda session: _mark_download_cancelled(session, download_id)
+            )
         except Exception as exc:  # pragma: no cover - defensive persistence handling
-            logger.exception("Failed to persist cancellation for download %s: %s", download_id, exc)
+            logger.exception(
+                "Failed to persist cancellation for download %s: %s", download_id, exc
+            )
             raise InternalServerError("Failed to cancel download") from exc
 
         record_activity(
@@ -331,7 +355,9 @@ class DownloadService:
             downloads = query.all()
         except AppError:
             raise
-        except Exception as exc:  # pragma: no cover - defensive database failure handling
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to export downloads: %s", exc)
             raise InternalServerError("Failed to export downloads") from exc
 
@@ -344,12 +370,16 @@ class DownloadService:
         }
 
     async def retry_download(self, download_id: int) -> Dict[str, Any]:
-        original = await self._run_session(lambda session: _prepare_retry(session, download_id))
+        original = await self._run_session(
+            lambda session: _prepare_retry(session, download_id)
+        )
 
         try:
             await self._transfers.cancel_download(download_id)
         except TransfersApiError as exc:
-            logger.error("slskd cancellation before retry failed for %s: %s", download_id, exc)
+            logger.error(
+                "slskd cancellation before retry failed for %s: %s", download_id, exc
+            )
             api_error = to_api_error(exc, provider="slskd")
             raise _app_error_from_api_error(api_error) from exc
 
@@ -358,7 +388,9 @@ class DownloadService:
                 lambda session: _create_retry_download(session, original)
             )
         except Exception as exc:  # pragma: no cover - defensive persistence handling
-            logger.exception("Failed to persist retry download for %s: %s", download_id, exc)
+            logger.exception(
+                "Failed to persist retry download for %s: %s", download_id, exc
+            )
             raise InternalServerError("Failed to retry download") from exc
 
         try:
@@ -376,7 +408,9 @@ class DownloadService:
                     persistence.download.id,
                     cleanup_exc,
                 )
-            logger.error("Failed to enqueue retry for download %s: %s", download_id, exc)
+            logger.error(
+                "Failed to enqueue retry for download %s: %s", download_id, exc
+            )
             api_error = to_api_error(exc, provider="slskd")
             raise _app_error_from_api_error(api_error) from exc
         except Exception as exc:  # pragma: no cover - defensive unexpected failure
@@ -390,7 +424,9 @@ class DownloadService:
                     persistence.download.id,
                     cleanup_exc,
                 )
-            logger.exception("Unexpected error while retrying download %s: %s", download_id, exc)
+            logger.exception(
+                "Unexpected error while retrying download %s: %s", download_id, exc
+            )
             raise InternalServerError("Failed to retry download") from exc
 
         record_activity(
@@ -467,7 +503,9 @@ def _mark_downloads_failed(session: Session, download_ids: Sequence[int]) -> Non
         return
 
     try:
-        downloads = session.query(Download).filter(Download.id.in_(tuple(download_ids))).all()
+        downloads = (
+            session.query(Download).filter(Download.id.in_(tuple(download_ids))).all()
+        )
         now = datetime.utcnow()
         for download in downloads:
             download.state = "failed"
@@ -484,7 +522,9 @@ def _get_download_summary(session: Session, download_id: int) -> DownloadSummary
         logger.warning("Download %s not found", download_id)
         raise NotFoundError("Download not found")
 
-    request_payload = dict(download.request_payload or {}) if download.request_payload else None
+    request_payload = (
+        dict(download.request_payload or {}) if download.request_payload else None
+    )
     return DownloadSummary(
         id=download.id,
         filename=download.filename,
@@ -527,7 +567,9 @@ def _prepare_retry(session: Session, download_id: int) -> RetryPreparation:
         )
 
     if not download.username or not download.request_payload:
-        logger.error("Retry rejected for download %s due to missing payload", download_id)
+        logger.error(
+            "Retry rejected for download %s due to missing payload", download_id
+        )
         raise ValidationAppError(
             "Download cannot be retried because original request data is missing"
         )
@@ -535,11 +577,17 @@ def _prepare_retry(session: Session, download_id: int) -> RetryPreparation:
     payload_copy = dict(download.request_payload)
     filename = payload_copy.get("filename") or download.filename
     if not filename:
-        logger.error("Retry rejected for download %s due to missing filename", download_id)
-        raise ValidationAppError("Download cannot be retried because filename is unknown")
+        logger.error(
+            "Retry rejected for download %s due to missing filename", download_id
+        )
+        raise ValidationAppError(
+            "Download cannot be retried because filename is unknown"
+        )
 
     filesize = (
-        payload_copy.get("filesize") or payload_copy.get("size") or payload_copy.get("file_size")
+        payload_copy.get("filesize")
+        or payload_copy.get("size")
+        or payload_copy.get("file_size")
     )
     if filesize is not None:
         payload_copy.setdefault("filesize", filesize)

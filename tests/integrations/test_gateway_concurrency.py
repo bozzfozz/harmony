@@ -50,7 +50,9 @@ async def test_gateway_respects_concurrency_limit() -> None:
         "a": _RecordingProvider(name="a", tracker=tracker),
         "b": _RecordingProvider(name="b", tracker=tracker),
     }
-    policy = ProviderRetryPolicy(timeout_ms=100, retry_max=0, backoff_base_ms=10, jitter_pct=0.0)
+    policy = ProviderRetryPolicy(
+        timeout_ms=100, retry_max=0, backoff_base_ms=10, jitter_pct=0.0
+    )
     config = ProviderGatewayConfig(
         max_concurrency=1,
         default_policy=policy,
@@ -58,6 +60,8 @@ async def test_gateway_respects_concurrency_limit() -> None:
     )
     gateway = ProviderGateway(providers=providers, config=config)
 
-    await gateway.search_many(["a", "b"], SearchQuery(text="hello", artist=None, limit=5))
+    await gateway.search_many(
+        ["a", "b"], SearchQuery(text="hello", artist=None, limit=5)
+    )
 
     assert tracker.max_active == 1

@@ -1,7 +1,10 @@
 import pytest
 
 from app.core.matching_engine import MusicMatchingEngine
-from app.integrations.normalizers import normalize_slskd_candidate, normalize_spotify_track
+from app.integrations.normalizers import (
+    normalize_slskd_candidate,
+    normalize_spotify_track,
+)
 from app.models import Match
 from tests.simple_client import SimpleTestClient
 
@@ -30,8 +33,18 @@ def test_matching_api_soulseek(
     payload = {
         "spotify_track": {"id": "track-1", "name": "Example Song"},
         "candidates": [
-            {"id": "candidate-1", "filename": "Other.mp3", "username": "other", "bitrate": 128},
-            {"id": "candidate-2", "filename": "Example Song.mp3", "username": "dj", "bitrate": 320},
+            {
+                "id": "candidate-1",
+                "filename": "Other.mp3",
+                "username": "other",
+                "bitrate": 128,
+            },
+            {
+                "id": "candidate-2",
+                "filename": "Example Song.mp3",
+                "username": "dj",
+                "bitrate": 320,
+            },
         ],
     }
 
