@@ -7,8 +7,8 @@ from alembic import command
 
 from tests.support.postgres import postgres_schema
 
-from .helpers import (assert_postgresql_types, assert_queue_jobs_schema,
-                      make_config)
+from .helpers import (assert_activity_events_schema, assert_postgresql_types,
+                      assert_queue_jobs_schema, make_config)
 
 pytestmark = pytest.mark.postgres
 
@@ -21,6 +21,7 @@ def test_upgrade_downgrade_postgres() -> None:
         engine = sa.create_engine(schema.sync_url())
         try:
             assert_queue_jobs_schema(engine)
+            assert_activity_events_schema(engine)
             assert_postgresql_types(engine)
         finally:
             engine.dispose()
@@ -31,6 +32,7 @@ def test_upgrade_downgrade_postgres() -> None:
         engine = sa.create_engine(schema.sync_url())
         try:
             assert_queue_jobs_schema(engine)
+            assert_activity_events_schema(engine)
             assert_postgresql_types(engine)
         finally:
             engine.dispose()
