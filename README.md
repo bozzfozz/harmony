@@ -412,7 +412,7 @@ Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](f
 
 ```bash
 cd frontend
-npm install
+npm ci --no-audit --no-fund
 npm run dev
 ```
 
@@ -436,6 +436,7 @@ Für lokale Entwicklung stellt die Einstellungsseite ein Panel bereit, das den K
 ### Tests & Builds
 
 ```bash
+npm run lint      # ESLint über das komplette Frontend
 npm test          # Jest-Suite im jsdom-Environment
 npm run typecheck # TypeScript Strict-Checks (`tsc --noEmit`)
 npm run build     # TypeScript + Vite Build
@@ -458,8 +459,9 @@ python scripts/audit_wiring.py
 pip-audit -r requirements.txt
 
 cd frontend
-npm ci
-npm test
+npm ci --no-audit --no-fund
+npm run lint
+npm test -- --runInBand
 npm run typecheck
 npm run build
 ```
