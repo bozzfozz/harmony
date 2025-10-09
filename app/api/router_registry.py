@@ -181,10 +181,19 @@ def register_all(
 # ---------------------------------------------------------------------------
 
 from app.api import artists, search, spotify, spotify_free_links, system, watchlist  # noqa: E402
-from app.routers import (activity_router, dlq_router,  # noqa: E402
-                         download_router, health_router, imports_router,
-                         integrations_router, matching_router, metadata_router,
-                         settings_router, soulseek_router, sync_router)
+from app.routers import (  # noqa: E402
+    activity_router,
+    dlq_router,
+    download_router,
+    health_router,
+    imports_router,
+    integrations_router,
+    matching_router,
+    metadata_router,
+    settings_router,
+    soulseek_router,
+    sync_router,
+)
 
 register_domain("spotify", spotify.router, tags=())
 register_domain("artists", artists.router, prefix="")

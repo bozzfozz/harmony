@@ -11,17 +11,27 @@ from app.config import WatchlistWorkerConfig
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
-from app.dependencies import (get_app_config, get_matching_engine,
-                              get_provider_gateway, get_soulseek_client,
-                              get_spotify_client)
+from app.dependencies import (
+    get_app_config,
+    get_matching_engine,
+    get_provider_gateway,
+    get_soulseek_client,
+    get_spotify_client,
+)
 from app.integrations.artist_gateway import ArtistGateway
 from app.orchestrator.artist_sync import ArtistSyncHandlerDeps
-from app.orchestrator.handlers import (ArtistDeltaHandlerDeps,
-                                       ArtistRefreshHandlerDeps,
-                                       ArtworkService, LyricsService,
-                                       MatchingHandlerDeps, MetadataService,
-                                       RetryHandlerDeps, SyncHandlerDeps,
-                                       SyncJobSubmitter, WatchlistHandlerDeps)
+from app.orchestrator.handlers import (
+    ArtistDeltaHandlerDeps,
+    ArtistRefreshHandlerDeps,
+    ArtworkService,
+    LyricsService,
+    MatchingHandlerDeps,
+    MetadataService,
+    RetryHandlerDeps,
+    SyncHandlerDeps,
+    SyncJobSubmitter,
+    WatchlistHandlerDeps,
+)
 from app.services.artist_dao import ArtistDao
 from app.services.cache import ResponseCache
 

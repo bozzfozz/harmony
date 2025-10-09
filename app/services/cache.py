@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
+from dataclasses import dataclass
 import hashlib
 import json
 import re
 import time
-from collections import OrderedDict
-from dataclasses import dataclass
 from typing import Callable, Iterable, Mapping
 from urllib.parse import parse_qsl
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
+import hashlib
+import json
 from typing import Iterable, Mapping, Sequence
 
 from app.schemas.errors import ApiError, ErrorCode

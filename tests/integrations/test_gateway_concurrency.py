@@ -6,9 +6,11 @@ from dataclasses import dataclass, field
 import pytest
 
 from app.integrations.contracts import ProviderTrack, SearchQuery
-from app.integrations.provider_gateway import (ProviderGateway,
-                                               ProviderGatewayConfig,
-                                               ProviderRetryPolicy)
+from app.integrations.provider_gateway import (
+    ProviderGateway,
+    ProviderGatewayConfig,
+    ProviderRetryPolicy,
+)
 
 
 @dataclass

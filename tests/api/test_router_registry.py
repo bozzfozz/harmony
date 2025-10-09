@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from app.api import (artists, router_registry, search, spotify, system,
-                     watchlist)
-from app.routers import (activity_router, dlq_router, download_router,
-                         health_router, imports_router, integrations_router,
-                         matching_router, metadata_router, settings_router,
-                         soulseek_router, sync_router)
+from app.api import artists, router_registry, search, spotify, system, watchlist
+from app.routers import (
+    activity_router,
+    dlq_router,
+    download_router,
+    health_router,
+    imports_router,
+    integrations_router,
+    matching_router,
+    metadata_router,
+    settings_router,
+    soulseek_router,
+    sync_router,
+)
 
 
 def test_compose_prefix_normalises_slashes() -> None:

@@ -6,16 +6,24 @@ import asyncio
 from typing import Any, Iterable, Mapping
 
 from app.core.spotify_client import SpotifyClient
-from app.integrations.contracts import (ProviderAlbumDetails, ProviderArtist,
-                                        ProviderDependencyError,
-                                        ProviderInternalError,
-                                        ProviderNotFoundError, ProviderRelease,
-                                        ProviderTrack, ProviderValidationError,
-                                        SearchQuery, TrackProvider)
-from app.integrations.normalizers import (from_spotify_album_details,
-                                          from_spotify_artist,
-                                          from_spotify_release,
-                                          normalize_spotify_track)
+from app.integrations.contracts import (
+    ProviderAlbumDetails,
+    ProviderArtist,
+    ProviderDependencyError,
+    ProviderInternalError,
+    ProviderNotFoundError,
+    ProviderRelease,
+    ProviderTrack,
+    ProviderValidationError,
+    SearchQuery,
+    TrackProvider,
+)
+from app.integrations.normalizers import (
+    from_spotify_album_details,
+    from_spotify_artist,
+    from_spotify_release,
+    normalize_spotify_track,
+)
 from app.logging import get_logger
 
 logger = get_logger(__name__)

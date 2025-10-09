@@ -13,6 +13,7 @@ from app.workers import persistence
 
 pytestmark = pytest.mark.postgres
 
+
 def test_scheduler_orders_jobs_by_priority_and_time(
     queue_job_factory,
     stub_queue_persistence,
@@ -99,6 +100,7 @@ async def test_heartbeat_failure_releases_job_for_redelivery() -> None:
         db_job = session.get(QueueJob, job.id)
         assert db_job is not None
         assert db_job.status == QueueJobStatus.LEASED.value
+
 
 def test_lease_and_redelivery_after_visibility_timeout() -> None:
     reset_engine_for_tests()

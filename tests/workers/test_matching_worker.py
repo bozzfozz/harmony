@@ -8,8 +8,7 @@ from sqlalchemy import select
 from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Match, QueueJobStatus
-from app.orchestrator.handlers import (MatchingHandlerDeps, MatchingJobError,
-                                       handle_matching)
+from app.orchestrator.handlers import MatchingHandlerDeps, MatchingJobError, handle_matching
 from app.utils.settings_store import read_setting
 from app.workers.persistence import QueueJobDTO
 

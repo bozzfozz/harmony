@@ -10,10 +10,12 @@ import pytest
 from app.errors import DependencyError, RateLimitedError, ValidationAppError
 from app.main import app
 from app.services.secret_store import SecretStore
-from app.services.secret_validation import (SecretValidationDetails,
-                                            SecretValidationResult,
-                                            SecretValidationService,
-                                            SecretValidationSettings)
+from app.services.secret_validation import (
+    SecretValidationDetails,
+    SecretValidationResult,
+    SecretValidationService,
+    SecretValidationSettings,
+)
 from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
 

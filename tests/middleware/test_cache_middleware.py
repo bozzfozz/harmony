@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+import pytest
 from starlette.responses import StreamingResponse
 
 from app.config import load_config

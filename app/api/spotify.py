@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import re
 import secrets
 import time
-from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-from fastapi import (APIRouter, Depends, HTTPException, Query, Request,
-                     Response, status)
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
@@ -19,28 +18,37 @@ from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
-from app.dependencies import (SessionRunner, get_app_config, get_db,
-                              get_session_runner, get_soulseek_client,
-                              get_spotify_client)
+from app.dependencies import (
+    SessionRunner,
+    get_app_config,
+    get_db,
+    get_session_runner,
+    get_soulseek_client,
+    get_spotify_client,
+)
 from app.errors import DependencyError, NotFoundError, ValidationAppError
 from app.logging import get_logger
 from app.models import Download
-from app.orchestrator.handlers import (enqueue_spotify_backfill,
-                                       get_spotify_backfill_status)
-from app.schemas import (ArtistReleasesResponse, AudioFeaturesResponse,
-                         DiscographyResponse, FollowedArtistsResponse,
-                         PlaylistItemsResponse, PlaylistResponse,
-                         RecommendationsResponse, SavedTracksResponse,
-                         SpotifySearchResponse, StatusResponse,
-                         TrackDetailResponse, UserProfileResponse)
+from app.orchestrator.handlers import enqueue_spotify_backfill, get_spotify_backfill_status
+from app.schemas import (
+    ArtistReleasesResponse,
+    AudioFeaturesResponse,
+    DiscographyResponse,
+    FollowedArtistsResponse,
+    PlaylistItemsResponse,
+    PlaylistResponse,
+    RecommendationsResponse,
+    SavedTracksResponse,
+    SpotifySearchResponse,
+    StatusResponse,
+    TrackDetailResponse,
+    UserProfileResponse,
+)
 from app.services.backfill_service import BackfillJobStatus
 from app.services.cache import playlist_filters_hash
-from app.services.free_ingest_service import (IngestSubmission,
-                                              PlaylistValidationError)
-from app.services.spotify_domain_service import (PlaylistItemsResult,
-                                                 SpotifyDomainService)
-from app.utils.http_cache import (compute_playlist_collection_metadata,
-                                  is_request_not_modified)
+from app.services.free_ingest_service import IngestSubmission, PlaylistValidationError
+from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
+from app.utils.http_cache import compute_playlist_collection_metadata, is_request_not_modified
 from app.utils.settings_store import write_setting
 from app.workers.sync_worker import SyncWorker
 

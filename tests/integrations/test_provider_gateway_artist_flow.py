@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.contracts import (ProviderAlbum, ProviderAlbumDetails,
-                                        ProviderArtist, ProviderRelease,
-                                        ProviderTrack, SearchQuery)
-from app.integrations.provider_gateway import (ProviderGateway,
-                                               ProviderGatewayConfig,
-                                               ProviderRetryPolicy)
+from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderAlbumDetails,
+    ProviderArtist,
+    ProviderRelease,
+    ProviderTrack,
+    SearchQuery,
+)
+from app.integrations.provider_gateway import (
+    ProviderGateway,
+    ProviderGatewayConfig,
+    ProviderRetryPolicy,
+)
 
 
 class DummyProvider:

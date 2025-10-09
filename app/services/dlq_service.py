@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import re
-import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import re
+import time
 from typing import Any, Mapping, Protocol, Sequence
 
 from sqlalchemy import Select, func, select

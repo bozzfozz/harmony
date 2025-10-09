@@ -1,7 +1,7 @@
 """Enforce queue job idempotency uniqueness."""
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 from app.migrations import helpers
 

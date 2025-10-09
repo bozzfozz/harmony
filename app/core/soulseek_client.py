@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 from collections import deque
+import json
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional, Sequence
 
 import aiohttp

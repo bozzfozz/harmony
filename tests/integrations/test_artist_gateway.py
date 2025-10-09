@@ -6,8 +6,7 @@ import pytest
 
 from app.integrations.artist_gateway import ArtistGateway
 from app.integrations.contracts import ProviderArtist, ProviderRelease
-from app.integrations.provider_gateway import (ProviderGateway,
-                                               ProviderGatewayTimeoutError)
+from app.integrations.provider_gateway import ProviderGateway, ProviderGatewayTimeoutError
 
 
 @pytest.mark.asyncio

@@ -7,16 +7,25 @@ from collections import OrderedDict, deque
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from threading import Lock
-from typing import (TYPE_CHECKING, Any, Deque, Dict, Iterable, List, Literal,
-                    MutableMapping, Optional, Tuple)
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Deque,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    MutableMapping,
+    Optional,
+    Tuple,
+)
 
 from sqlalchemy import func
 
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import ActivityEvent
-from app.utils.events import (WORKER_RESTARTED, WORKER_STALE, WORKER_STARTED,
-                              WORKER_STOPPED)
+from app.utils.events import WORKER_RESTARTED, WORKER_STALE, WORKER_STARTED, WORKER_STOPPED
 from app.utils.worker_health import read_worker_status
 
 if TYPE_CHECKING:

@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
+import re
+import sys
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

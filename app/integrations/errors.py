@@ -5,15 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Mapping, MutableMapping, Type
 
-from app.errors import (DependencyError, InternalServerError, NotFoundError,
-                        RateLimitedError, ValidationAppError)
-from app.integrations.provider_gateway import (ProviderGatewayDependencyError,
-                                               ProviderGatewayError,
-                                               ProviderGatewayInternalError,
-                                               ProviderGatewayNotFoundError,
-                                               ProviderGatewayRateLimitedError,
-                                               ProviderGatewayTimeoutError,
-                                               ProviderGatewayValidationError)
+from app.errors import (
+    DependencyError,
+    InternalServerError,
+    NotFoundError,
+    RateLimitedError,
+    ValidationAppError,
+)
+from app.integrations.provider_gateway import (
+    ProviderGatewayDependencyError,
+    ProviderGatewayError,
+    ProviderGatewayInternalError,
+    ProviderGatewayNotFoundError,
+    ProviderGatewayRateLimitedError,
+    ProviderGatewayTimeoutError,
+    ProviderGatewayValidationError,
+)
 
 
 @dataclass(slots=True, frozen=True)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 import importlib
 import random
-from datetime import datetime
 
 import pytest
 

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
-import random
-import statistics
-import time
 from contextlib import AbstractContextManager
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta
+import inspect
 from pathlib import Path
+import random
+import statistics
+import time
 from typing import (
     TYPE_CHECKING,
     Any,

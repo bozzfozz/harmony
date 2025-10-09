@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections import defaultdict
 from dataclasses import dataclass
+import logging
 from time import perf_counter
 from typing import Any, Dict, Iterable
 

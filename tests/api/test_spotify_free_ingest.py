@@ -6,8 +6,8 @@ import time
 from typing import Any
 
 import anyio
-import pytest
 from httpx import ASGITransport, AsyncClient, Response
+import pytest
 
 from app.db import SessionCallable, session_scope
 from app.dependencies import SessionRunner, get_session_runner

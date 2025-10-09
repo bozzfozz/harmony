@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import dataclass
 import io
 import json
-from dataclasses import dataclass
 from typing import Iterable, List, Sequence
 from urllib.parse import urlparse
 

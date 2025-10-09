@@ -1,14 +1,19 @@
 """Migration smoke tests against PostgreSQL when available."""
+
 from __future__ import annotations
 
+from alembic import command
 import pytest
 import sqlalchemy as sa
-from alembic import command
 
 from tests.support.postgres import postgres_schema
 
-from .helpers import (assert_activity_events_schema, assert_postgresql_types,
-                      assert_queue_jobs_schema, make_config)
+from .helpers import (
+    assert_activity_events_schema,
+    assert_postgresql_types,
+    assert_queue_jobs_schema,
+    make_config,
+)
 
 pytestmark = pytest.mark.postgres
 

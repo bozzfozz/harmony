@@ -7,8 +7,8 @@ import sys
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
 from fastapi import HTTPException
+import pytest
 
 from app import logging_events
 from app.middleware import request_logging

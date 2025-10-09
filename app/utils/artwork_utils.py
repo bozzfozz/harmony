@@ -5,9 +5,9 @@ from __future__ import annotations
 import importlib.util
 import mimetypes
 import os
+from pathlib import Path
 import re
 import tempfile
-from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 

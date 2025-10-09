@@ -139,8 +139,7 @@ def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None
         return max(5, resolved_override)
 
     payload_value = payload.get("visibility_timeout")
-    from app.dependencies import \
-        get_app_config  # lazy import to avoid circular dependency
+    from app.dependencies import get_app_config  # lazy import to avoid circular dependency
 
     config = get_app_config()
     worker_env = config.environment.workers

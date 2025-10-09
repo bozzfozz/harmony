@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+import re
 from typing import Any, Iterable, Mapping, Sequence
+import unicodedata
 
 from app.config import MatchingConfig, load_matching_config
 

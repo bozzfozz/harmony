@@ -7,8 +7,14 @@ from enum import Enum
 from typing import Any, ClassVar, Dict, Optional, Self
 from urllib.parse import urlparse
 
-from pydantic import (BaseModel, ConfigDict, Field, GetCoreSchemaHandler,
-                      GetJsonSchemaHandler, field_validator)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
+    field_validator,
+)
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
 

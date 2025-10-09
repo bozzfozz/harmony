@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
+import json
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -13,8 +13,12 @@ from app.dependencies import get_download_service
 from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.schemas import (DownloadEntryResponse, DownloadListResponse,
-                         DownloadPriorityUpdate, SoulseekDownloadRequest)
+from app.schemas import (
+    DownloadEntryResponse,
+    DownloadListResponse,
+    DownloadPriorityUpdate,
+    SoulseekDownloadRequest,
+)
 from app.services.download_service import DownloadService
 
 router = APIRouter(tags=["Download"])

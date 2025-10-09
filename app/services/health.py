@@ -226,9 +226,7 @@ class HealthService:
                 asyncio.to_thread(self._collect_migration_status), timeout=timeout
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "Migration status probe timed out after %.2f ms", timeout * 1000
-            )
+            logger.warning("Migration status probe timed out after %.2f ms", timeout * 1000)
             return MigrationProbeResult(
                 up_to_date=False,
                 current=None,

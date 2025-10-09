@@ -2,26 +2,31 @@
 
 from __future__ import annotations
 
-import hashlib
-import re
 from datetime import datetime, timezone
 from email.utils import format_datetime, parsedate_to_datetime
+import hashlib
+import re
 from typing import Iterable
 
 from fastapi import Request
 from starlette.concurrency import iterate_in_threadpool
-from starlette.middleware.base import (BaseHTTPMiddleware,
-                                       RequestResponseEndpoint)
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from app.config import CacheMiddlewareConfig, CacheRule
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.cache import (CacheEntry, ResponseCache, build_cache_key,
-                                build_query_hash, playlist_detail_cache_key,
-                                playlist_filters_hash, playlist_list_cache_key,
-                                resolve_auth_variant)
+from app.services.cache import (
+    CacheEntry,
+    ResponseCache,
+    build_cache_key,
+    build_query_hash,
+    playlist_detail_cache_key,
+    playlist_filters_hash,
+    playlist_list_cache_key,
+    resolve_auth_variant,
+)
 
 _logger = get_logger(__name__)
 

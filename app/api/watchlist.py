@@ -11,11 +11,13 @@ from app.dependencies import get_watchlist_service
 from app.errors import AppError, InternalServerError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.schemas.watchlist import (WatchlistEntryCreate,
-                                   WatchlistEntryResponse,
-                                   WatchlistListResponse,
-                                   WatchlistPauseRequest,
-                                   WatchlistPriorityUpdate)
+from app.schemas.watchlist import (
+    WatchlistEntryCreate,
+    WatchlistEntryResponse,
+    WatchlistListResponse,
+    WatchlistPauseRequest,
+    WatchlistPriorityUpdate,
+)
 from app.services.watchlist_service import WatchlistService
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])

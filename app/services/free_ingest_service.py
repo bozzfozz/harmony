@@ -3,17 +3,27 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import dataclass
+from datetime import datetime
 import hashlib
+from io import StringIO
 import json
 import math
 import re
-import uuid
-from dataclasses import dataclass
-from datetime import datetime
-from io import StringIO
-from typing import (TYPE_CHECKING, Any, Awaitable, Callable, Dict, Iterable,
-                    List, Optional, Sequence, Tuple)
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 from urllib.parse import urlparse
+import uuid
 
 from sqlalchemy import func, select
 
@@ -22,8 +32,7 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import SessionCallable, run_session, session_scope
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.models import (Download, IngestItem, IngestItemState, IngestJob,
-                        IngestJobState)
+from app.models import Download, IngestItem, IngestItemState, IngestJob, IngestJobState
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.workers.sync_worker import SyncWorker
@@ -255,9 +264,7 @@ class FreeIngestService:
             error=submission_error,
         )
 
-    async def enqueue_playlists(
-        self, playlist_ids: Sequence[str]
-    ) -> PlaylistEnqueueResult:
+    async def enqueue_playlists(self, playlist_ids: Sequence[str]) -> PlaylistEnqueueResult:
         """Enqueue playlist identifiers via the FREE ingest pipeline."""
 
         unique_ids: list[str] = []

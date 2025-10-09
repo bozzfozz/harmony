@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from app.migrations import helpers
@@ -34,9 +34,7 @@ def upgrade() -> None:
             sa.Column("status", sa.String(length=128), nullable=False),
             sa.Column("details", postgresql.JSONB(), nullable=True),
         )
-    helpers.create_index_if_missing(
-        inspector, _TABLE, _INDEX, ["type", "status", "timestamp"]
-    )
+    helpers.create_index_if_missing(inspector, _TABLE, _INDEX, ["type", "status", "timestamp"])
 
 
 def downgrade() -> None:

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import math
 import time
-from dataclasses import dataclass
 
 from fastapi import Request
-from starlette.middleware.base import (BaseHTTPMiddleware,
-                                       RequestResponseEndpoint)
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 

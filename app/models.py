@@ -6,8 +6,20 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import (Boolean, CheckConstraint, Column, Date, DateTime,
-                        Float, ForeignKey, Index, Integer, String, Text, text)
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from app.db import Base

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import sys
 import time
-from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Request, status
 
-import app.logging_events as logging_events
 from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_integration_service, get_matching_engine
@@ -18,6 +17,7 @@ from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
+import app.logging_events as logging_events
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,

@@ -3,11 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import (ProviderAlbum, ProviderArtist,
-                                        ProviderTrack, SearchQuery)
-from app.integrations.provider_gateway import (ProviderGatewaySearchResponse,
-                                               ProviderGatewaySearchResult,
-                                               ProviderGatewayTimeoutError)
+from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack, SearchQuery
+from app.integrations.provider_gateway import (
+    ProviderGatewaySearchResponse,
+    ProviderGatewaySearchResult,
+    ProviderGatewayTimeoutError,
+)
 from app.services.errors import ServiceError
 from app.services.integration_service import IntegrationService
 

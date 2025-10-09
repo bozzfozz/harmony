@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from collections import deque
+import time
 from typing import Deque
 
 from app.middleware import install_middleware

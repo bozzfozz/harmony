@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import delete, select
 
 from app.config import load_config
-from app.errors import ValidationAppError
 from app.db import session_scope
+from app.errors import ValidationAppError
 from app.models import Setting
 
 

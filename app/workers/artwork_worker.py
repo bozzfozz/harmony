@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-import inspect
-import re
-import time
 from dataclasses import dataclass
 from datetime import datetime
+import importlib
+import inspect
 from pathlib import Path
+import re
+import time
 from typing import Any, Awaitable, Callable, Dict, Iterable, Mapping, Optional, Sequence, cast
 from urllib.parse import urlparse
 

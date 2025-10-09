@@ -7,8 +7,12 @@ from sqlalchemy import select
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import ArtistRecord, ArtistReleaseRecord, ArtistWatchlistEntry
-from app.services.artist_dao import (ArtistDao, ArtistReleaseUpsertDTO,
-                                     ArtistUpsertDTO, build_artist_key)
+from app.services.artist_dao import (
+    ArtistDao,
+    ArtistReleaseUpsertDTO,
+    ArtistUpsertDTO,
+    build_artist_key,
+)
 
 
 def _setup_database() -> None:

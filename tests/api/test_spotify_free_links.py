@@ -4,13 +4,13 @@ from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any, Callable
 
-import pytest
 from fastapi import FastAPI, Request
+import pytest
 
 from app.api import spotify_free_links as free_links_module
 from app.api.spotify_free_links import get_free_ingest_service
-from app.errors import AppError
 from app.dependencies import get_app_config
+from app.errors import AppError
 from tests.simple_client import SimpleTestClient
 
 
@@ -47,7 +47,7 @@ def client() -> Callable[[StubFreeIngestService], SimpleTestClient]:
 
     def _factory(stub: StubFreeIngestService) -> SimpleTestClient:
         test_app = FastAPI()
-        
+
         @test_app.exception_handler(AppError)
         async def _handle_app_error(request: Request, exc: AppError):
             return exc.as_response(request_path=request.url.path, method=request.method)
@@ -67,7 +67,7 @@ def client() -> Callable[[StubFreeIngestService], SimpleTestClient]:
 
 
 def test_accepts_single_and_multiple_urls(
-    client: Callable[[StubFreeIngestService], SimpleTestClient]
+    client: Callable[[StubFreeIngestService], SimpleTestClient],
 ) -> None:
     stub = StubFreeIngestService()
     stub.set_result(accepted_ids=["AAA"])
@@ -92,9 +92,7 @@ def test_accepts_single_and_multiple_urls(
     )
     assert response.status_code == 200
     body = response.json()
-    assert {
-        (entry["playlist_id"], entry["url"]) for entry in body["accepted"]
-    } == {
+    assert {(entry["playlist_id"], entry["url"]) for entry in body["accepted"]} == {
         ("BBB", "https://open.spotify.com/playlist/BBB"),
         ("CCC", "https://open.spotify.com/playlist/CCC"),
     }
@@ -102,7 +100,7 @@ def test_accepts_single_and_multiple_urls(
 
 
 def test_rejects_non_playlist_urls_and_malformed_inputs(
-    client: Callable[[StubFreeIngestService], SimpleTestClient]
+    client: Callable[[StubFreeIngestService], SimpleTestClient],
 ) -> None:
     stub = StubFreeIngestService()
     test_client = client(stub)
@@ -137,7 +135,7 @@ def test_rejects_non_playlist_urls_and_malformed_inputs(
 
 
 def test_deduplicates_by_playlist_id(
-    client: Callable[[StubFreeIngestService], SimpleTestClient]
+    client: Callable[[StubFreeIngestService], SimpleTestClient],
 ) -> None:
     stub = StubFreeIngestService()
     stub.set_result(accepted_ids=["AAA"])
@@ -157,14 +155,12 @@ def test_deduplicates_by_playlist_id(
     assert body["accepted"] == [
         {"playlist_id": "AAA", "url": "https://open.spotify.com/playlist/AAA"}
     ]
-    assert body["skipped"] == [
-        {"url": "spotify:playlist:AAA", "reason": "duplicate"}
-    ]
+    assert body["skipped"] == [{"url": "spotify:playlist:AAA", "reason": "duplicate"}]
     assert stub.calls[0] == ["AAA"]
 
 
 def test_accepts_user_playlist_urls_when_enabled(
-    client: Callable[[StubFreeIngestService], SimpleTestClient]
+    client: Callable[[StubFreeIngestService], SimpleTestClient],
 ) -> None:
     from app import dependencies as deps
 
@@ -206,7 +202,7 @@ def test_accepts_user_playlist_urls_when_enabled(
 
 
 def test_enqueues_via_free_ingest_service(
-    client: Callable[[StubFreeIngestService], SimpleTestClient]
+    client: Callable[[StubFreeIngestService], SimpleTestClient],
 ) -> None:
     stub = StubFreeIngestService()
     stub.set_result(accepted_ids=["AAA"], duplicate_ids=["BBB"])

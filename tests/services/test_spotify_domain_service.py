@@ -8,10 +8,8 @@ import pytest
 
 from app.config import load_config
 from app.integrations.contracts import ProviderTrack
-from app.services.free_ingest_service import (IngestAccepted, IngestSkipped,
-                                              IngestSubmission)
-from app.services.spotify_domain_service import (PlaylistItemsResult,
-                                                 SpotifyDomainService)
+from app.services.free_ingest_service import IngestAccepted, IngestSkipped, IngestSubmission
+from app.services.spotify_domain_service import PlaylistItemsResult, SpotifyDomainService
 
 
 def _make_service(**overrides: Any) -> SpotifyDomainService:

@@ -3,25 +3,24 @@ from typing import Callable, Sequence
 
 import pytest
 
-import app.api.admin_artists as admin_api
 from app import dependencies as deps
-from app.api.admin_artists import (AdminContext, maybe_register_admin_routes,
-                                   _unregister_admin_routes)
+import app.api.admin_artists as admin_api
+from app.api.admin_artists import (
+    AdminContext,
+    _unregister_admin_routes,
+    maybe_register_admin_routes,
+)
 from app.config import settings as app_settings
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.integrations.artist_gateway import (ArtistGatewayResponse,
-                                             ArtistGatewayResult)
+from app.integrations.artist_gateway import ArtistGatewayResponse, ArtistGatewayResult
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.main import app
-from app.models import (ArtistRecord, ArtistReleaseRecord, QueueJob,
-                        QueueJobStatus)
+from app.models import ArtistRecord, ArtistReleaseRecord, QueueJob, QueueJobStatus
 from app.orchestrator.handlers_artist import ArtistSyncHandlerDeps
-from app.services.artist_dao import (ArtistDao, ArtistReleaseUpsertDTO,
-                                     ArtistUpsertDTO)
+from app.services.artist_dao import ArtistDao, ArtistReleaseUpsertDTO, ArtistUpsertDTO
 from app.services.cache import CacheEntry, ResponseCache, build_cache_key
-from tests.support.postgres import postgres_schema
 from tests.simple_client import SimpleTestClient
-
+from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 

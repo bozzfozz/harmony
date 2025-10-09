@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.api.spotify import (backfill_router, core_router, free_ingest_router,
-                             free_router)
-from app.api.spotify import router as spotify_router
+from app.api.spotify import (
+    backfill_router,
+    core_router,
+    free_ingest_router,
+    free_router,
+    router as spotify_router,
+)
 
 
 def _collect_paths(app_router) -> set[tuple[str, frozenset[str]]]:
