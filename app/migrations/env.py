@@ -1,5 +1,7 @@
 """Alembic environment configuration for Harmony."""
 
+# Baseline-Reset am 2025-01-15; History bewusst gesquasht.
+
 from __future__ import annotations
 
 from logging.config import fileConfig

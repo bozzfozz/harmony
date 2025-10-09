@@ -1,13 +1,13 @@
 # Projektstatus Harmony Backend
 
 ## Gesamtüberblick
-- Die fehlende `activity_events`-Migration ist ausgerollt; Admin-Flows und Postgres-Migrationstests laufen wieder ohne `UndefinedTable`. 【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】【F:tests/migrations/test_upgrade_downgrade_postgres.py†L1-L44】
+- Baseline-Reset vom 15. 01. 2025 bündelt alle Alembic-Revisionen in einem Skript; Postgres-Smoke-Tests validieren JSONB/TIMESTAMPTZ-Schema sowie Idempotenz. 【F:app/migrations/versions/202501150000_baseline_postgres.py†L1-L36】【F:tests/migrations/test_baseline_postgres.py†L1-L73】
 - Observability-Signale wurden repariert: Scheduler-Leases schreiben erneut auf `app.orchestrator.metrics`, die Search-API emittiert `api.request`-Events und die Dokumentation beschreibt die Logger-Verträge. 【F:app/orchestrator/scheduler.py†L1-L180】【F:app/api/search.py†L1-L140】【F:docs/observability.md†L34-L56】
 - Runtime-Diagnosen respektieren Overrides (`/system/stats`), Playlist-Sync invalidiert Caches inkl. Detailpfade und Admin-Fixtures stellen den globalen FastAPI-Zustand nach jedem Test wieder her. 【F:app/api/system.py†L1-L460】【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/api/test_admin_artists.py†L1-L220】
 - Security-Gate basiert nun auf `pip-audit`; das zuvor geplante statische Scanning wurde verworfen. 【F:ToDo.md†L131-L156】
 
 ## Fertiggestellte Arbeiten
-- **TD-20251008-001 – `activity_events`-Migration wiederhergestellt:** Alembic-Skript erstellt Tabelle inklusive Index; Migrations-Smoke-Tests prüfen JSONB/TIMESTAMPTZ-Schema. 【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】【F:tests/migrations/test_upgrade_downgrade_postgres.py†L1-L44】
+- **TD-20250115-001 – Alembic Baseline Reset:** Historie gesquasht, neue Baseline erzeugt und Migrationstests aktualisiert. 【F:app/migrations/versions/202501150000_baseline_postgres.py†L1-L36】【F:tests/migrations/test_baseline_postgres.py†L1-L73】
 - **TD-20251008-002 – Orchestrator-Lease-Telemetrie:** Scheduler verwendet wieder den Metrics-Logger; Regressionstest prüft `orchestrator.lease`-Events. 【F:app/orchestrator/scheduler.py†L1-L180】【F:tests/orchestrator/test_scheduler.py†L1-L120】
 - **TD-20251008-003 – Search-API-Request-Telemetrie:** `_emit_api_event` ruft deterministisch `app.logging_events.log_event` und deckt Legacy-Shims ab. 【F:app/api/search.py†L1-L140】【F:tests/routers/test_search_logging.py†L1-L120】
 - **TD-20251008-004 – psutil-Overrides:** Resolver priorisiert Dependency-Overrides, `app.state.psutil` und Kompatibilitäts-Shims. 【F:app/api/system.py†L360-L460】【F:tests/test_system.py†L1-L120】

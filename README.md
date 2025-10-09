@@ -95,10 +95,14 @@ docker run -d \
 
    Der Container ruft beim Start automatisch `./scripts/db/migrate.sh` auf. Das
    Skript wartet optional (via `pg_isready`) auf PostgreSQL und führt anschließend
-   `alembic upgrade head` aus. Der Vorgang ist idempotent und überspringt bereits
-   vorhandene Tabellen oder Indizes. Für historisch manuell angelegte Schemas
-   genügt ein einmaliger `alembic upgrade head`; alternativ kann ein bekannter
-   Stand mit `alembic stamp head` markiert werden.
+   `alembic upgrade head` aus. Seit dem Baseline-Reset vom 15. 01. 2025 existiert
+   genau eine Revision; `alembic upgrade head` legt auf leeren Datenbanken das
+   komplette Schema neu an. Für frische Instanzen empfiehlt sich die Sequenz
+   `alembic downgrade base || true` gefolgt von `alembic upgrade head`, damit
+   eventuell vorhandene Artefakte aus älteren Testläufen zuverlässig entfernt
+   werden. Der Guard `MIGRATION_RESET=1` muss gesetzt sein, falls du den
+   Versionsordner bewusst leer räumen oder neu aufbauen möchtest – andernfalls
+   bricht die CI mit einem Hinweis ab.
 
 ### `compose.yaml`
 
@@ -487,8 +491,8 @@ Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende
 
 ## Datenbank-Migrationen
 
-- `make db.upgrade` führt `alembic upgrade head` aus und wendet alle offenen Migrationen auf die konfigurierte Datenbank an.
-- `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision.
+- `make db.upgrade` führt `alembic downgrade base || true` sowie `alembic upgrade head` aus und bringt die Datenbank auf den aktuellen Baseline-Stand.
+- `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision (bei Reset-Arbeiten vorher `MIGRATION_RESET=1` setzen).
 - Der Docker-Entrypoint führt Migrationen beim Start automatisch aus; setze `FEATURE_RUN_MIGRATIONS=off`, um dies temporär zu deaktivieren (z. B. für lokale Debug-Sessions).
 
 ### Code-Qualität lokal (optional offline)

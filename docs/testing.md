@@ -34,8 +34,8 @@ FastAPI lifespan startup.
   Roundtrip). Die Marker werden von `pytest.ini` registriert und können per
   `pytest -m postgres -q` selektiv ausgeführt werden.
 - Im CI übernimmt [`backend-postgres.yml`](../.github/workflows/backend-postgres.yml)
-  die Ausführung: `alembic upgrade head` → `pytest -m postgres -q` →
-  `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit
+  die Ausführung: `alembic downgrade base || true` → `alembic upgrade head` →
+  `pytest -m postgres -q` → `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit
   temporären Schemas je Testlauf (`search_path`-Isolation).
 - Lokal können dieselben Schritte mit einer Docker-Instanz reproduziert werden.
   Setzt man `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony`,

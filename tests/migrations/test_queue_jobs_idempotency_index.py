@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from importlib import import_module
 
 from alembic import command
 import pytest
@@ -13,8 +12,6 @@ from sqlalchemy.exc import IntegrityError
 from tests.support.postgres import postgres_schema
 
 from .helpers import make_config
-
-_MIGRATION = import_module("app.migrations.versions.202409201200_queue_job_idempotency_key_unique")
 
 pytestmark = pytest.mark.postgres
 
@@ -43,14 +40,13 @@ def _insert_job(
     )
 
 
-def test_queue_job_idempotency_migration_is_reentrant() -> None:
+def test_queue_job_idempotency_index_survives_reset_cycle() -> None:
     with postgres_schema("queue_idempotency") as schema:
         config = make_config(schema.sync_url())
 
-        command.upgrade(config, _MIGRATION.down_revision)
-        command.upgrade(config, _MIGRATION.revision)
-        command.downgrade(config, _MIGRATION.down_revision)
-        command.upgrade(config, _MIGRATION.revision)
+        command.upgrade(config, "head")
+        command.downgrade(config, "base")
+        command.upgrade(config, "head")
 
         engine = sa.create_engine(schema.sync_url())
         try:

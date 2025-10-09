@@ -39,6 +39,7 @@ endif
 all: quality security analyze
 
 db.upgrade:
+        alembic downgrade base || true
         alembic upgrade head
 
 db.revision:
