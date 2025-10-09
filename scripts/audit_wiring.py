@@ -121,7 +121,11 @@ def _check_alembic_reset_guard() -> list[str]:
     for revision_file in revision_files:
         try:
             revision, down_revision = _extract_revision_metadata(revision_file)
-        except (OSError, SyntaxError, ValueError) as exc:  # pragma: no cover - defensive guard
+        except (
+            OSError,
+            SyntaxError,
+            ValueError,
+        ) as exc:  # pragma: no cover - defensive guard
             errors.append(
                 (
                     "Alembic guard: unable to parse revision metadata from {path}: {error}."
