@@ -754,8 +754,6 @@ def _bounded_float(
 _POSTGRES_ALLOWED_PREFIXES = (
     "postgresql+psycopg://",
     "postgresql+asyncpg://",
-    "postgresql://",
-    "postgres://",
 )
 
 
