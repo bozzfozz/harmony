@@ -1,181 +1,4 @@
 #!/usr/bin/env python3
- codex/reformat-security_autofix.py
-"""Run `pip-audit` with optional autofix for Harmony dependency manifests."""
-
-from __future__ import annotations
-
-import argparse
-import json
-import logging
-import subprocess
-import sys
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, Sequence
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_REQUIREMENTS = (
-    REPO_ROOT / "requirements.txt",
-    REPO_ROOT / "requirements-dev.txt",
-)
-
-
-@dataclass(frozen=True)
-class AuditTask:
-    """Describe a `pip-audit` invocation."""
-
-    requirement_file: Path
-    extra_args: tuple[str, ...] = ()
-
-    def build_command(self, pip_audit_executable: str) -> list[str]:
-        command = [pip_audit_executable, "--requirement", str(self.requirement_file)]
-        command.extend(self.extra_args)
-        return command
-
-
-@dataclass(frozen=True)
-class AuditResult:
-    task: AuditTask
-    returncode: int
-
-
-class SecurityAutofixError(RuntimeError):
-    """Raised when the security autofix routine encounters a fatal error."""
-
-
-def log_event(event: str, **fields: object) -> None:
-    """Emit structured JSON logs to stdout."""
-
-    payload = {"event": event, **fields}
-    logging.info(json.dumps(payload, sort_keys=True))
-
-
-def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "requirements",
-        metavar="FILE",
-        nargs="*",
-        help="Requirement files to audit (defaults to project manifests).",
-    )
-    parser.add_argument(
-        "--pip-audit",
-        default="pip-audit",
-        help="Executable used to invoke pip-audit (default: %(default)s).",
-    )
-    parser.add_argument(
-        "--no-fix",
-        action="store_true",
-        help="Run audits without applying fixes (equivalent to omitting --fix).",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help=(
-            "Run pip-audit with --dry-run; implies autofix behaviour without modifying files."
-        ),
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging for debugging the autofix routine.",
-    )
-    return parser.parse_args(argv)
-
-
-def resolve_requirement_files(raw_paths: Iterable[str]) -> tuple[Path, ...]:
-    if not raw_paths:
-        return DEFAULT_REQUIREMENTS
-
-    resolved: list[Path] = []
-    for raw_path in raw_paths:
-        path = Path(raw_path)
-        if not path.is_absolute():
-            path = REPO_ROOT / raw_path
-        resolved.append(path)
-
-    return tuple(resolved)
-
-
-def build_tasks(
-    requirement_files: Iterable[Path], *, apply_fix: bool, dry_run: bool
-) -> tuple[AuditTask, ...]:
-    tasks: list[AuditTask] = []
-    base_args: list[str] = []
-    if dry_run:
-        base_args.append("--dry-run")
-    elif apply_fix:
-        base_args.append("--fix")
-
-    for requirement_file in requirement_files:
-        tasks.append(
-            AuditTask(requirement_file=requirement_file, extra_args=tuple(base_args))
-        )
-    return tuple(tasks)
-
-
-def run_task(task: AuditTask, *, pip_audit_executable: str) -> AuditResult:
-    if not task.requirement_file.exists():
-        raise SecurityAutofixError(
-            f"Requirement file missing: {task.requirement_file}"  # pragma: no cover - guard rail
-        )
-
-    command = task.build_command(pip_audit_executable)
-    log_event("pip_audit.start", command=command)
-    try:
-        completed = subprocess.run(command, check=False)
-    except FileNotFoundError as exc:  # pragma: no cover - depends on environment
-        raise SecurityAutofixError(
-            f"Unable to execute {pip_audit_executable!r}: {exc}"  # pragma: no cover - guard rail
-        ) from exc
-
-    log_event("pip_audit.finish", command=command, returncode=completed.returncode)
-    return AuditResult(task=task, returncode=completed.returncode)
-
-
-def configure_logging(verbose: bool) -> None:
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(message)s")
-
-
-def main(argv: Sequence[str]) -> int:
-    args = parse_args(argv)
-    configure_logging(args.verbose)
-
-    requirement_files = resolve_requirement_files(args.requirements)
-    for requirement_file in requirement_files:
-        if not requirement_file.exists():
-            raise SecurityAutofixError(
-                f"Requirement file not found: {requirement_file}"
-            )
-
-    tasks = build_tasks(
-        requirement_files,
-        apply_fix=not args.no_fix,
-        dry_run=args.dry_run,
-    )
-
-    results: list[AuditResult] = []
-    for task in tasks:
-        result = run_task(task, pip_audit_executable=args.pip_audit)
-        results.append(result)
-
-    failing = [result for result in results if result.returncode != 0]
-    if failing:
-        failing_paths = [str(result.task.requirement_file) for result in failing]
-        log_event("pip_audit.error", failing_files=failing_paths)
-        return 1
-
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        sys.exit(main(sys.argv[1:]))
-    except SecurityAutofixError as error:
-        log_event("security_autofix.error", message=str(error))
-        sys.exit(2)
-=======
 """Rule-based Bandit autofixer for Harmony.
 
 This script reads a Bandit JSON report, applies allowlisted mechanical fixes
@@ -184,6 +7,7 @@ implementation deliberately keeps the set of automated transformations narrow
 and guarded; when heuristics cannot guarantee a safe rewrite the issue is
 flagged for manual security review instead of applying a speculative patch.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -195,7 +19,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Sequence
 
 import libcst as cst
 from libcst import metadata
@@ -217,13 +41,13 @@ class FixReport:
     rule_id: str
     changed: bool = False
     requires_manual_review: bool = False
-    messages: List[str] = field(default_factory=list)
+    messages: list[str] = field(default_factory=list)
 
 
 @dataclass
 class FileReport:
     path: Path
-    reports: List[FixReport] = field(default_factory=list)
+    reports: list[FixReport] = field(default_factory=list)
 
     @property
     def changed(self) -> bool:
@@ -234,16 +58,16 @@ class FileReport:
         return any(report.requires_manual_review for report in self.reports)
 
     @property
-    def rule_ids(self) -> List[str]:
-        seen: List[str] = []
+    def rule_ids(self) -> list[str]:
+        seen: list[str] = []
         for report in self.reports:
             if report.rule_id not in seen:
                 seen.append(report.rule_id)
         return seen
 
     @property
-    def messages(self) -> List[str]:
-        notes: List[str] = []
+    def messages(self) -> list[str]:
+        notes: list[str] = []
         for report in self.reports:
             notes.extend(report.messages)
         return notes
@@ -264,13 +88,13 @@ class FileContext:
 
 @dataclass
 class Summary:
-    changed_files: List[str]
-    rule_ids: List[str]
+    changed_files: list[str]
+    rule_ids: list[str]
     auto_merge_recommended: bool
     requires_manual_review: bool
-    messages: List[str]
+    messages: list[str]
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "changed_files": self.changed_files,
             "rule_ids": self.rule_ids,
@@ -294,7 +118,7 @@ class BaseFixer:
         raise NotImplementedError
 
 
-def run_bandit(paths: Sequence[str], exclude: Sequence[str]) -> Dict[str, object]:
+def run_bandit(paths: Sequence[str], exclude: Sequence[str]) -> dict[str, object]:
     args = [
         "bandit",
         "-r",
@@ -307,7 +131,12 @@ def run_bandit(paths: Sequence[str], exclude: Sequence[str]) -> Dict[str, object
     LOGGER.debug("Running bandit: %s", " ".join(args))
     completed = subprocess.run(args, check=False, capture_output=True, text=True)
     if completed.returncode not in {0, 1}:  # 0 = clean, 1 = findings
-        LOGGER.error("bandit exited with %s\nstdout: %s\nstderr: %s", completed.returncode, completed.stdout, completed.stderr)
+        LOGGER.error(
+            "bandit exited with %s\nstdout: %s\nstderr: %s",
+            completed.returncode,
+            completed.stdout,
+            completed.stderr,
+        )
         raise RuntimeError("bandit execution failed")
     if completed.stdout:
         data = completed.stdout
@@ -316,9 +145,9 @@ def run_bandit(paths: Sequence[str], exclude: Sequence[str]) -> Dict[str, object
     return json.loads(data)
 
 
-def parse_issues(report: Dict[str, object], project_root: Path) -> List[BanditIssue]:
+def parse_issues(report: dict[str, object], project_root: Path) -> list[BanditIssue]:
     raw_results = report.get("results", [])
-    issues: List[BanditIssue] = []
+    issues: list[BanditIssue] = []
     for entry in raw_results:
         try:
             issue = BanditIssue(
@@ -347,6 +176,7 @@ def load_source(path: Path) -> str:
 
 def ensure_import(module: cst.Module, module_name: str) -> tuple[cst.Module, bool]:
     """Ensure ``import <module_name>`` exists; return updated module and flag."""
+
     for statement in module.body:
         if not isinstance(statement, cst.SimpleStatementLine):
             continue
@@ -357,7 +187,11 @@ def ensure_import(module: cst.Module, module_name: str) -> tuple[cst.Module, boo
                         return module, False
             if isinstance(element, cst.ImportFrom):
                 module_attr = element.module
-                if module_attr and isinstance(module_attr, cst.Name) and module_attr.value == module_name:
+                if (
+                    module_attr
+                    and isinstance(module_attr, cst.Name)
+                    and module_attr.value == module_name
+                ):
                     return module, False
     import_stmt = cst.SimpleStatementLine(
         body=[cst.Import(names=[cst.ImportAlias(name=cst.Name(module_name))])]
@@ -368,7 +202,9 @@ def ensure_import(module: cst.Module, module_name: str) -> tuple[cst.Module, boo
         first = body[0]
         if isinstance(first, cst.SimpleStatementLine) and first.body:
             first_expr = first.body[0]
-            if isinstance(first_expr, cst.Expr) and isinstance(first_expr.value, cst.SimpleString):
+            if isinstance(first_expr, cst.Expr) and isinstance(
+                first_expr.value, cst.SimpleString
+            ):
                 insert_at = 1
     body.insert(insert_at, import_stmt)
     return module.with_changes(body=body), True
@@ -383,9 +219,11 @@ class YamlSafeLoaderFixer(BaseFixer):
         def __init__(self, target_lines: Sequence[int]):
             self.target_lines = set(target_lines)
             self.changed = False
-            self.messages: List[str] = []
+            self.messages: list[str] = []
 
-        def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        def leave_Call(
+            self, original_node: cst.Call, updated_node: cst.Call
+        ) -> cst.BaseExpression:
             position = self.get_metadata(metadata.PositionProvider, original_node)
             if position.start.line not in self.target_lines:
                 return updated_node
@@ -395,7 +233,11 @@ class YamlSafeLoaderFixer(BaseFixer):
                     "B506: Unsupported call shape for yaml.load; manual review required."
                 )
                 return updated_node
-            if not (isinstance(func.value, cst.Name) and func.value.value == "yaml" and func.attr.value == "load"):
+            if not (
+                isinstance(func.value, cst.Name)
+                and func.value.value == "yaml"
+                and func.attr.value == "load"
+            ):
                 return updated_node
             for arg in updated_node.args:
                 if arg.keyword and arg.keyword.value == "Loader":
@@ -433,10 +275,12 @@ class SubprocessShellFixer(BaseFixer):
         def __init__(self, target_lines: Sequence[int]):
             self.target_lines = set(target_lines)
             self.changed = False
-            self.messages: List[str] = []
+            self.messages: list[str] = []
             self.manual_review = False
 
-        def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        def leave_Call(
+            self, original_node: cst.Call, updated_node: cst.Call
+        ) -> cst.BaseExpression:
             position = self.get_metadata(metadata.PositionProvider, original_node)
             if position.start.line not in self.target_lines:
                 return updated_node
@@ -447,7 +291,10 @@ class SubprocessShellFixer(BaseFixer):
                     "B603/B602: Unsupported subprocess call (not an attribute access)."
                 )
                 return updated_node
-            if not (isinstance(func.value, cst.Name) and func.value.value == "subprocess"):
+            if not (
+                isinstance(func.value, cst.Name)
+                and func.value.value == "subprocess"
+            ):
                 return updated_node
             shell_arg = None
             for arg in updated_node.args:
@@ -497,7 +344,9 @@ class SubprocessShellFixer(BaseFixer):
             parts = shlex.split(literal)
             if not parts:
                 self.manual_review = True
-                self.messages.append("B603/B602: Empty command after splitting; manual review required.")
+                self.messages.append(
+                    "B603/B602: Empty command after splitting; manual review required."
+                )
                 return updated_node
             list_elements = [
                 cst.Element(value=cst.SimpleString(repr(part))) for part in parts
@@ -505,7 +354,9 @@ class SubprocessShellFixer(BaseFixer):
             new_args = []
             for arg in updated_node.args:
                 if arg is command_arg:
-                    new_args.append(arg.with_changes(value=cst.List(elements=list_elements)))
+                    new_args.append(
+                        arg.with_changes(value=cst.List(elements=list_elements))
+                    )
                 elif arg is shell_arg:
                     new_args.append(arg.with_changes(value=cst.Name("False")))
                 else:
@@ -539,10 +390,12 @@ class TempfileMktempFixer(BaseFixer):
         def __init__(self, target_lines: Sequence[int]):
             self.target_lines = set(target_lines)
             self.changed = False
-            self.messages: List[str] = []
+            self.messages: list[str] = []
             self.manual_review = False
 
-        def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        def leave_Call(
+            self, original_node: cst.Call, updated_node: cst.Call
+        ) -> cst.BaseExpression:
             position = self.get_metadata(metadata.PositionProvider, original_node)
             if position.start.line not in self.target_lines:
                 return updated_node
@@ -551,17 +404,27 @@ class TempfileMktempFixer(BaseFixer):
                 self.manual_review = True
                 self.messages.append("B306: Unsupported call shape (no attribute access).")
                 return updated_node
-            if not (isinstance(func.value, cst.Name) and func.value.value == "tempfile" and func.attr.value == "mktemp"):
+            if not (
+                isinstance(func.value, cst.Name)
+                and func.value.value == "tempfile"
+                and func.attr.value == "mktemp"
+            ):
                 return updated_node
             if updated_node.args:
                 self.manual_review = True
-                self.messages.append("B306: mktemp call has arguments; manual review required.")
+                self.messages.append(
+                    "B306: mktemp call has arguments; manual review required."
+                )
                 return updated_node
             named_tempfile_call = cst.Call(
-                func=cst.Attribute(value=cst.Name("tempfile"), attr=cst.Name("NamedTemporaryFile")),
+                func=cst.Attribute(
+                    value=cst.Name("tempfile"), attr=cst.Name("NamedTemporaryFile")
+                ),
                 args=[cst.Arg(keyword=cst.Name("delete"), value=cst.Name("False"))],
             )
-            replacement = cst.Attribute(value=named_tempfile_call, attr=cst.Name("name"))
+            replacement = cst.Attribute(
+                value=named_tempfile_call, attr=cst.Name("name")
+            )
             self.changed = True
             return replacement
 
@@ -591,19 +454,27 @@ class HashlibMd5Fixer(BaseFixer):
         def __init__(self, target_lines: Sequence[int]):
             self.target_lines = set(target_lines)
             self.changed = False
-            self.messages: List[str] = []
+            self.messages: list[str] = []
             self.manual_review = False
 
-        def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        def leave_Call(
+            self, original_node: cst.Call, updated_node: cst.Call
+        ) -> cst.BaseExpression:
             position = self.get_metadata(metadata.PositionProvider, original_node)
             if position.start.line not in self.target_lines:
                 return updated_node
             func = updated_node.func
             if not isinstance(func, cst.Attribute):
                 self.manual_review = True
-                self.messages.append("B324: Unsupported call shape (not hashlib.new).")
+                self.messages.append(
+                    "B324: Unsupported call shape (not hashlib.new)."
+                )
                 return updated_node
-            if not (isinstance(func.value, cst.Name) and func.value.value == "hashlib" and func.attr.value == "new"):
+            if not (
+                isinstance(func.value, cst.Name)
+                and func.value.value == "hashlib"
+                and func.attr.value == "new"
+            ):
                 return updated_node
             target_arg = None
             for arg in updated_node.args:
@@ -616,22 +487,30 @@ class HashlibMd5Fixer(BaseFixer):
                     target_arg = candidate
             if target_arg is None:
                 self.manual_review = True
-                self.messages.append("B324: Unable to locate md5 argument; manual review required.")
+                self.messages.append(
+                    "B324: Unable to locate md5 argument; manual review required."
+                )
                 return updated_node
             if not isinstance(target_arg.value, cst.SimpleString):
                 self.manual_review = True
-                self.messages.append("B324: Hash name is not a simple string literal; manual review required.")
+                self.messages.append(
+                    "B324: Hash name is not a simple string literal; manual review required."
+                )
                 return updated_node
             try:
                 literal = ast.literal_eval(target_arg.value.value)
             except Exception:  # pragma: no cover - defensive
                 self.manual_review = True
-                self.messages.append("B324: Unable to evaluate hash literal; manual review required.")
+                self.messages.append(
+                    "B324: Unable to evaluate hash literal; manual review required."
+                )
                 return updated_node
             if literal.lower() != "md5":
                 return updated_node
             new_arg = target_arg.with_changes(value=cst.SimpleString("'sha256'"))
-            new_args = [new_arg if arg is target_arg else arg for arg in updated_node.args]
+            new_args = [
+                new_arg if arg is target_arg else arg for arg in updated_node.args
+            ]
             self.changed = True
             return updated_node.with_changes(args=new_args)
 
@@ -641,11 +520,21 @@ class HashlibMd5Fixer(BaseFixer):
         issues: Sequence[BanditIssue],
         context: FileContext,
     ) -> tuple[cst.Module, FixReport]:
-        if "tests" not in context.relative_path.parts and not context.relative_path.name.startswith("test_"):
+        if "tests" not in context.relative_path.parts and not context.relative_path.name.startswith(
+            "test_"
+        ):
             message = (
                 "B324: hashlib.new('md5') detected outside the tests/ tree; manual review required."
             )
-            return module, FixReport("B324", changed=False, requires_manual_review=True, messages=[message])
+            return (
+                module,
+                FixReport(
+                    "B324",
+                    changed=False,
+                    requires_manual_review=True,
+                    messages=[message],
+                ),
+            )
         transformer = self._Transformer(issue.line_number for issue in issues)
         wrapper = metadata.MetadataWrapper(module)
         new_module = wrapper.visit(transformer)
@@ -668,18 +557,25 @@ class RandomForSecurityFixer(BaseFixer):
             self.target_lines = set(target_lines)
             self.changed = False
             self.manual_review = False
-            self.messages: List[str] = []
+            self.messages: list[str] = []
 
-        def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
+        def leave_Call(
+            self, original_node: cst.Call, updated_node: cst.Call
+        ) -> cst.BaseExpression:
             position = self.get_metadata(metadata.PositionProvider, original_node)
             if position.start.line not in self.target_lines:
                 return updated_node
             func = updated_node.func
             if not isinstance(func, cst.Attribute):
                 self.manual_review = True
-                self.messages.append("B311: Unsupported call shape (expected random.<method>).")
+                self.messages.append(
+                    "B311: Unsupported call shape (expected random.<method>)."
+                )
                 return updated_node
-            if not (isinstance(func.value, cst.Name) and func.value.value == "random"):
+            if not (
+                isinstance(func.value, cst.Name)
+                and func.value.value == "random"
+            ):
                 return updated_node
             method = func.attr.value
             if method not in self.SUPPORTED_METHODS:
@@ -690,7 +586,9 @@ class RandomForSecurityFixer(BaseFixer):
                 return updated_node
             new_func = cst.Attribute(
                 value=cst.Call(
-                    func=cst.Attribute(value=cst.Name("secrets"), attr=cst.Name("SystemRandom")),
+                    func=cst.Attribute(
+                        value=cst.Name("secrets"), attr=cst.Name("SystemRandom")
+                    ),
                     args=[],
                 ),
                 attr=cst.Name(method),
@@ -731,10 +629,18 @@ class TmpPathFixer(BaseFixer):
         message = (
             "B108: Automatic rewrite for hard-coded /tmp paths is not implemented; manual review required."
         )
-        return module, FixReport("B108", changed=False, requires_manual_review=True, messages=[message])
+        return (
+            module,
+            FixReport(
+                "B108",
+                changed=False,
+                requires_manual_review=True,
+                messages=[message],
+            ),
+        )
 
 
-FIXERS: List[BaseFixer] = [
+FIXERS: list[BaseFixer] = [
     YamlSafeLoaderFixer(),
     SubprocessShellFixer(),
     TempfileMktempFixer(),
@@ -746,8 +652,8 @@ FIXERS: List[BaseFixer] = [
 
 def build_summary(file_reports: Sequence[FileReport]) -> Summary:
     changed_files = [str(report.path) for report in file_reports if report.changed]
-    rule_ids: List[str] = []
-    messages: List[str] = []
+    rule_ids: list[str] = []
+    messages: list[str] = []
     requires_manual_review = False
     for report in file_reports:
         messages.extend(report.messages)
@@ -771,10 +677,10 @@ def process(
     project_root: Path,
     apply_changes: bool,
 ) -> Summary:
-    grouped: Dict[Path, List[BanditIssue]] = {}
+    grouped: dict[Path, list[BanditIssue]] = {}
     for issue in issues:
         grouped.setdefault(issue.filename, []).append(issue)
-    file_reports: List[FileReport] = []
+    file_reports: list[FileReport] = []
     for path, file_issues in grouped.items():
         source = load_source(path)
         if not source:
@@ -798,7 +704,7 @@ def process(
             )
             continue
         context = FileContext(path=path, project_root=project_root)
-        reports: List[FixReport] = []
+        reports: list[FixReport] = []
         for fixer in FIXERS:
             relevant = [issue for issue in file_issues if issue.test_id in fixer.RULE_IDS]
             if not relevant:
@@ -813,7 +719,9 @@ def process(
 
 def format_markdown(summary: Summary) -> str:
     if not summary.changed_files:
-        return "## Security autofix\n\nKeine Änderungen erforderlich."  # pragma: no cover - formatting only
+        return (
+            "## Security autofix\n\nKeine Änderungen erforderlich."
+        )  # pragma: no cover - formatting only
     lines = ["## Security autofix", ""]
     lines.append("### Betroffene Regeln")
     lines.append("")
@@ -855,14 +763,48 @@ def build_commit_message(summary: Summary) -> str:
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Apply allowlisted Bandit autofixes.")
-    parser.add_argument("--bandit-report", type=Path, help="Optional pre-generated Bandit JSON report.")
-    parser.add_argument("--paths", nargs="*", default=["app"], help="Target paths for Bandit (default: app).")
-    parser.add_argument("--exclude", nargs="*", default=["tests"], help="Excluded paths for Bandit.")
-    parser.add_argument("--summary", type=Path, help="Write machine-readable summary JSON to this path.")
-    parser.add_argument("--report-markdown", type=Path, help="Write Markdown summary to this path.")
-    parser.add_argument("--check", action="store_true", help="Dry-run mode (no file writes, exit 1 if changes required).")
-    parser.add_argument("--apply", action="store_true", help="Apply changes in place.")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging output.")
+    parser.add_argument(
+        "--bandit-report",
+        type=Path,
+        help="Optional pre-generated Bandit JSON report.",
+    )
+    parser.add_argument(
+        "--paths",
+        nargs="*",
+        default=["app"],
+        help="Target paths for Bandit (default: app).",
+    )
+    parser.add_argument(
+        "--exclude",
+        nargs="*",
+        default=["tests"],
+        help="Excluded paths for Bandit.",
+    )
+    parser.add_argument(
+        "--summary",
+        type=Path,
+        help="Write machine-readable summary JSON to this path.",
+    )
+    parser.add_argument(
+        "--report-markdown",
+        type=Path,
+        help="Write Markdown summary to this path.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Dry-run mode (no file writes, exit 1 if changes required).",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply changes in place.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging output.",
+    )
     return parser.parse_args(argv)
 
 
@@ -882,9 +824,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     apply_changes = args.apply and not args.check
     summary = process(issues, project_root, apply_changes=apply_changes)
     if args.summary:
-        args.summary.write_text(json.dumps(summary.to_dict(), indent=2), encoding="utf-8")
+        args.summary.write_text(
+            json.dumps(summary.to_dict(), indent=2), encoding="utf-8"
+        )
     if args.report_markdown:
-        args.report_markdown.write_text(format_markdown(summary), encoding="utf-8")
+        args.report_markdown.write_text(
+            format_markdown(summary), encoding="utf-8"
+        )
     LOGGER.info("Changed files: %s", summary.changed_files)
     LOGGER.info("Rules: %s", summary.rule_ids)
     LOGGER.info("Auto-merge recommended: %s", summary.auto_merge_recommended)
@@ -899,4 +845,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
     sys.exit(main())
- main
