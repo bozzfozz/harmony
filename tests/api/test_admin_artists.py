@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta
 from typing import Callable, Sequence
 
@@ -48,7 +47,6 @@ def _make_gateway_response(
 
 @pytest.fixture(autouse=True)
 def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    _ = monkeypatch  # ensure fixture is requested for compatibility
     overrides = {
         "HARMONY_DISABLE_WORKERS": "1",
         "FEATURE_REQUIRE_AUTH": "0",
@@ -57,55 +55,40 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "ARTIST_RETRY_BUDGET_MAX": "3",
     }
 
-    original_env = {key: os.environ.get(key) for key in overrides}
-    original_database_url = os.environ.get("DATABASE_URL")
+    original_config = deps.get_app_config()
     original_response_cache = getattr(app.state, "response_cache", None)
     original_cache_write_through = getattr(app.state, "cache_write_through", None)
     original_cache_log_evictions = getattr(app.state, "cache_log_evictions", None)
     original_openapi_config = getattr(app.state, "openapi_config", None)
 
     for key, value in overrides.items():
-        os.environ[key] = value
+        monkeypatch.setenv(key, value)
 
-    with postgres_schema("admin") as schema:
-        os.environ["DATABASE_URL"] = schema.sync_url()
-
+    with postgres_schema("admin", monkeypatch=monkeypatch):
         reset_engine_for_tests()
         init_db()
 
         deps.get_app_config.cache_clear()
-        maybe_register_admin_routes(app, config=deps.get_app_config())
+        config = deps.get_app_config()
+        maybe_register_admin_routes(app, config=config)
         app.state.response_cache = None
         app.state.cache_write_through = None
         app.state.cache_log_evictions = None
-        app.state.openapi_config = deps.get_app_config()
+        app.state.openapi_config = config
         app.openapi_schema = None
 
         try:
             yield
         finally:
-            deps.get_app_config.cache_clear()
-
-            for key, original in original_env.items():
-                if original is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = original
-
-            if original_database_url is None:
-                os.environ.pop("DATABASE_URL", None)
-            else:
-                os.environ["DATABASE_URL"] = original_database_url
-
-            deps.get_app_config.cache_clear()
-            restored_config = deps.get_app_config()
-            maybe_register_admin_routes(app, config=restored_config)
-            app.state.response_cache = original_response_cache
-            app.state.cache_write_through = original_cache_write_through
-            app.state.cache_log_evictions = original_cache_log_evictions
-            app.state.openapi_config = original_openapi_config
-            app.openapi_schema = None
             reset_engine_for_tests()
+
+    deps.get_app_config.cache_clear()
+    maybe_register_admin_routes(app, config=original_config)
+    app.state.response_cache = original_response_cache
+    app.state.cache_write_through = original_cache_write_through
+    app.state.cache_log_evictions = original_cache_log_evictions
+    app.state.openapi_config = original_openapi_config
+    app.openapi_schema = None
 
 
 @pytest.fixture

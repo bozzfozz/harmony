@@ -11,7 +11,7 @@ from sqlalchemy import engine_from_config, pool
 
 # Import models for metadata registration
 from app import models  # noqa: F401
-from app.config import load_config
+from app.config import _require_postgres_database_url, load_config
 from app.db import metadata
 
 _context_config = getattr(context, "config", None)
@@ -27,7 +27,7 @@ def _resolve_database_url(alembic_config: Optional[Config]) -> str:
     if alembic_config is not None:
         candidate = alembic_config.get_main_option("sqlalchemy.url")
         if candidate:
-            return candidate
+            return _require_postgres_database_url(candidate)
     return load_config().database.url
 
 
