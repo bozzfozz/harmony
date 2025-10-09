@@ -30,6 +30,22 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+## Testing & Coverage Policy
+
+- **Schnelle Feedback-Schleife:** `pytest -q -m "not postgres" -r s --cov=app --cov-report=term` erzeugt lokal denselben
+  Testlauf wie der CI-Check `tests`. Skip-Gründe werden über `-r s` ausgegeben, damit Reviewer nachvollziehen, warum ein Modul
+  nicht ausgeführt wurde.
+- **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter
+  `[tool.coverage.*]`. Sie dient als informative Kennzahl (`fail_under = 0`) und erzeugt `reports/coverage.xml` +
+  `reports/junit.xml`.
+- **Diff-Gate ≥ 85 %:** Jede PR muss mindestens 85 % Diff-Coverage erreichen. CI ruft dafür
+  `python scripts/run_diff_coverage_gate.py`, das die Schwellenwerte aus `[tool.harmony.coverage]` liest und `diff-cover`
+  gegen `origin/<base>` bzw. als Fallback `HEAD~1` ausführt. Das Ergebnis landet in `reports/diff_coverage.txt`.
+- **Lokaler Check:** Nach dem Testlauf kann derselbe Gate mit `diff-cover reports/coverage.xml --compare-branch=origin/main`
+  verifiziert werden. Für Forks ohne `origin/main` empfiehlt sich `git fetch upstream main && DIFF_COVER_COMPARE_BRANCH=upstream/main python scripts/run_diff_coverage_gate.py`.
+- **Artefakte:** CI lädt alle Report-Dateien (`reports/junit.xml`, `reports/coverage.xml`, `reports/diff_coverage.txt`) als
+  Artefakte hoch, sodass Reviewer das Ergebnis ohne lokalen Re-Run nachvollziehen können.
+
 ## Unified Docker Image
 
 Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört standardmäßig auf Port `8080` – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.

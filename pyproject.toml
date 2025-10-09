@@ -10,3 +10,17 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "TESTS", "FIRSTPARTY", "LOCALFOLDE
 known_tests = ["tests"]
 known_first_party = ["app"]
 no_lines_before = ["TESTS"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+skip_covered = false
+
+[tool.harmony.coverage]
+compare_branch = "origin/main"
+diff_fail_under = 85
+report_fail_under = 0
