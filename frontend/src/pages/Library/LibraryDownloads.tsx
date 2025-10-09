@@ -482,7 +482,7 @@ const LibraryDownloads = ({ isActive = true }: LibraryDownloadsProps = {}) => {
             <label className="flex flex-col gap-2 text-sm font-medium">
               Status
               <Select value={statusFilter} onValueChange={handleStatusChange}>
-                <SelectTrigger aria-label="Status filtern">
+                <SelectTrigger>
                   <SelectValue placeholder="Alle Status" />
                 </SelectTrigger>
                 <SelectContent>
