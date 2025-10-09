@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import base64
-import re
-import zlib
 from pathlib import Path
+import re
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+import zlib
 
 import httpx
 

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from collections.abc import Mapping
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 from time import perf_counter

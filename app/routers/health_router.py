@@ -32,4 +32,3 @@ def soulseek_health(session: Session = Depends(get_db)) -> ServiceHealthResponse
         missing=list(result.missing),
         optional_missing=list(result.optional_missing),
     )
-

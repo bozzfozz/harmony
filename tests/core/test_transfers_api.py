@@ -5,9 +5,12 @@ from __future__ import annotations
 import pytest
 
 from app.core.soulseek_client import SoulseekClientError
-from app.core.transfers_api import (TransfersApi, TransfersDependencyError,
-                                    TransfersNotFoundError,
-                                    TransfersValidationError)
+from app.core.transfers_api import (
+    TransfersApi,
+    TransfersDependencyError,
+    TransfersNotFoundError,
+    TransfersValidationError,
+)
 
 
 class _StubSoulseekClient:

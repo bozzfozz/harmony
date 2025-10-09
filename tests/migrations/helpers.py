@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic.config import Config
+import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 _REQUIRED_QUEUE_COLUMNS = {
@@ -109,9 +109,9 @@ def assert_activity_events_schema(engine: sa.Engine) -> None:
     assert isinstance(
         timestamp_type, postgresql.TIMESTAMP
     ), "activity_events.timestamp should use TIMESTAMPTZ"
-    assert getattr(timestamp_type, "timezone", False) is True, (
-        "activity_events.timestamp must be timezone aware"
-    )
+    assert (
+        getattr(timestamp_type, "timezone", False) is True
+    ), "activity_events.timestamp must be timezone aware"
 
     details_column = _get_column(columns, "details")
     assert isinstance(
@@ -131,9 +131,7 @@ def assert_postgresql_types(engine: sa.Engine) -> None:
 
     for table, column in _JSONB_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)
-        assert isinstance(
-            info["type"], postgresql.JSONB
-        ), f"{table}.{column} should be JSONB"
+        assert isinstance(info["type"], postgresql.JSONB), f"{table}.{column} should be JSONB"
 
     for table, column in _TIMESTAMPTZ_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)
@@ -141,9 +139,9 @@ def assert_postgresql_types(engine: sa.Engine) -> None:
         assert isinstance(
             column_type, postgresql.TIMESTAMP
         ), f"{table}.{column} should use TIMESTAMPTZ"
-        assert getattr(column_type, "timezone", False) is True, (
-            f"{table}.{column} must be timezone aware"
-        )
+        assert (
+            getattr(column_type, "timezone", False) is True
+        ), f"{table}.{column} must be timezone aware"
 
 
 def _get_column(columns: list[dict[str, object]], name: str) -> dict[str, object]:

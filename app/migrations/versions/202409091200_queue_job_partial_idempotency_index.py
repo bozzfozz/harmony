@@ -1,7 +1,6 @@
 """Create partial unique index for queue job idempotency."""
 
 import sqlalchemy as sa
-from alembic import op
 
 from app.migrations import helpers
 
@@ -22,9 +21,7 @@ def upgrade() -> None:
     if not helpers.has_table(inspector, _TABLE_NAME):
         return
 
-    helpers.drop_unique_constraint_if_exists(
-        inspector, _TABLE_NAME, _CONSTRAINT_NAME
-    )
+    helpers.drop_unique_constraint_if_exists(inspector, _TABLE_NAME, _CONSTRAINT_NAME)
     helpers.create_index_if_missing(
         inspector,
         _TABLE_NAME,

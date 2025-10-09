@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from alembic import command
 import pytest
 import sqlalchemy as sa
-from alembic import command
 
-from tests.migrations.helpers import (assert_activity_events_schema,
-                                      assert_queue_jobs_schema, make_config)
+from tests.migrations.helpers import (
+    assert_activity_events_schema,
+    assert_queue_jobs_schema,
+    make_config,
+)
 from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres

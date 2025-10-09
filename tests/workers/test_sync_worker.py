@@ -8,9 +8,14 @@ from typing import Any, Dict, List
 import pytest
 
 from app.db import init_db, reset_engine_for_tests
-from app.workers.persistence import (complete_async, enqueue_async, fail_async,
-                                     fetch_ready_async, lease_async,
-                                     release_active_leases_async)
+from app.workers.persistence import (
+    complete_async,
+    enqueue_async,
+    fail_async,
+    fetch_ready_async,
+    lease_async,
+    release_active_leases_async,
+)
 from app.workers.sync_worker import SyncWorker
 
 

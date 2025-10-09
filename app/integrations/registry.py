@@ -8,8 +8,7 @@ from typing import Dict, Mapping
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
 from app.integrations.contracts import TrackProvider
-from app.integrations.provider_gateway import (ProviderGatewayConfig,
-                                               ProviderRetryPolicy)
+from app.integrations.provider_gateway import ProviderGatewayConfig, ProviderRetryPolicy
 from app.integrations.slskd_adapter import SlskdAdapter
 from app.integrations.spotify_adapter import SpotifyAdapter
 from app.logging import get_logger

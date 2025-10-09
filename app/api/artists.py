@@ -11,12 +11,16 @@ from app.dependencies import get_artist_service
 from app.errors import AppError, InternalServerError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.schemas.artists import (ArtistOut, EnqueueResponse,
-                                 EnqueueSyncRequest, ReleaseOut,
-                                 WatchlistItemIn, WatchlistItemOut,
-                                 WatchlistPageOut)
-from app.services.artist_service import (ArtistDetails, ArtistService,
-                                         WatchlistPage)
+from app.schemas.artists import (
+    ArtistOut,
+    EnqueueResponse,
+    EnqueueSyncRequest,
+    ReleaseOut,
+    WatchlistItemIn,
+    WatchlistItemOut,
+    WatchlistPageOut,
+)
+from app.services.artist_service import ArtistDetails, ArtistService, WatchlistPage
 
 router = APIRouter(prefix="/artists", tags=["Artists"])
 _logger = get_logger(__name__)

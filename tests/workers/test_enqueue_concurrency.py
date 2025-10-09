@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import threading
 from concurrent.futures import ThreadPoolExecutor
+import threading
 from typing import Any
 
 import anyio

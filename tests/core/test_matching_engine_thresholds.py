@@ -6,11 +6,13 @@ import pytest
 
 from app.config import MatchingConfig
 from app.core.errors import InvalidInputError
-from app.core.matching_engine import (MusicMatchingEngine,
-                                      calculate_slskd_match_confidence,
-                                      compute_relevance_score, rank_candidates)
-from app.core.types import (ProviderAlbumDTO, ProviderArtistDTO,
-                            ProviderTrackDTO)
+from app.core.matching_engine import (
+    MusicMatchingEngine,
+    calculate_slskd_match_confidence,
+    compute_relevance_score,
+    rank_candidates,
+)
+from app.core.types import ProviderAlbumDTO, ProviderArtistDTO, ProviderTrackDTO
 
 
 def _artist(name: str, source: str = "spotify") -> ProviderArtistDTO:

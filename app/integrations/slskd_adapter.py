@@ -2,28 +2,36 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from dataclasses import dataclass
+import re
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
+import unicodedata
 from urllib.parse import urlparse
 
 import httpx
 
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import (ProviderAlbumDetails, ProviderArtist,
-                                        ProviderDependencyError,
-                                        ProviderInternalError,
-                                        ProviderNotFoundError,
-                                        ProviderRateLimitedError,
-                                        ProviderRelease, ProviderTimeoutError,
-                                        ProviderTrack, ProviderValidationError,
-                                        SearchQuery, TrackProvider)
-from app.integrations.normalizers import (from_slskd_album_details,
-                                          from_slskd_artist,
-                                          from_slskd_release,
-                                          normalize_slskd_track)
+from app.integrations.contracts import (
+    ProviderAlbumDetails,
+    ProviderArtist,
+    ProviderDependencyError,
+    ProviderInternalError,
+    ProviderNotFoundError,
+    ProviderRateLimitedError,
+    ProviderRelease,
+    ProviderTimeoutError,
+    ProviderTrack,
+    ProviderValidationError,
+    SearchQuery,
+    TrackProvider,
+)
+from app.integrations.normalizers import (
+    from_slskd_album_details,
+    from_slskd_artist,
+    from_slskd_release,
+    normalize_slskd_track,
+)
 from app.logging import get_logger
 from app.utils.text_normalization import clean_track_title, normalize_quotes
 

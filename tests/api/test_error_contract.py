@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import pytest
 from fastapi import HTTPException, status
+import pytest
 
 from app.main import app
 from tests.simple_client import SimpleTestClient

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
+import hashlib
+import json
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
-from app.core import (ProviderAlbumDTO, ProviderTrackDTO, ensure_album_dto,
-                      ensure_track_dto)
+from app.core import ProviderAlbumDTO, ProviderTrackDTO, ensure_album_dto, ensure_track_dto
 from app.services.artist_dao import ArtistReleaseRow, ArtistReleaseUpsertDTO
 
 

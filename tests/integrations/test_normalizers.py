@@ -1,11 +1,13 @@
-from app.integrations.normalizers import (from_slskd_album_details,
-                                          from_slskd_artist,
-                                          from_slskd_release,
-                                          from_spotify_album_details,
-                                          from_spotify_artist,
-                                          from_spotify_release,
-                                          normalize_slskd_track,
-                                          normalize_spotify_track)
+from app.integrations.normalizers import (
+    from_slskd_album_details,
+    from_slskd_artist,
+    from_slskd_release,
+    from_spotify_album_details,
+    from_spotify_artist,
+    from_spotify_release,
+    normalize_slskd_track,
+    normalize_spotify_track,
+)
 
 
 def test_normalize_spotify_track_handles_missing_fields() -> None:

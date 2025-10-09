@@ -7,13 +7,14 @@ import pytest
 from sqlalchemy import select
 
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.integrations.artist_gateway import (ArtistGatewayResponse,
-                                             ArtistGatewayResult)
+from app.integrations.artist_gateway import ArtistGatewayResponse, ArtistGatewayResult
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.models import ArtistRecord, ArtistReleaseRecord, QueueJobStatus
-from app.orchestrator.artist_sync import (ArtistSyncHandlerDeps,
-                                          enqueue_artist_sync,
-                                          handle_artist_sync)
+from app.orchestrator.artist_sync import (
+    ArtistSyncHandlerDeps,
+    enqueue_artist_sync,
+    handle_artist_sync,
+)
 from app.services.artist_dao import ArtistDao
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO

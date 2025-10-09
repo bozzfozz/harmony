@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "202411011200"

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Mapping
+import time
 from typing import Any
 
 _JSON_PRIMITIVES = (str, int, float, bool, type(None))

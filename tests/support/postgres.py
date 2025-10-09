@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import os
-import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
+import os
+import uuid
 
 import pytest
 import sqlalchemy as sa
@@ -34,9 +34,7 @@ class ScopedPostgresSchema:
 
 
 @contextmanager
-def postgres_schema(
-    prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = None
-):
+def postgres_schema(prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = None):
     """Yield a temporary PostgreSQL schema for the duration of a test.
 
     The helper skips the caller when no ``DATABASE_URL`` is configured or when the

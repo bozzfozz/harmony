@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 from dataclasses import dataclass
 from datetime import datetime
+import inspect
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
 from urllib.parse import quote
@@ -18,8 +18,7 @@ from app.db import run_session
 from app.logging import get_logger
 from app.models import Download
 from app.utils import lyrics_utils
-from app.utils.lyrics_utils import (convert_to_lrc, fetch_spotify_lyrics,
-                                    save_lrc_file)
+from app.utils.lyrics_utils import convert_to_lrc, fetch_spotify_lyrics, save_lrc_file
 
 logger = get_logger(__name__)
 

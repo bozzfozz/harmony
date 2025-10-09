@@ -3,11 +3,12 @@ from __future__ import annotations
 import pytest
 
 from app.config import ExternalCallPolicy
-from app.integrations.contracts import (ProviderTimeoutError, SearchQuery,
-                                        TrackProvider)
-from app.integrations.provider_gateway import (ProviderGateway,
-                                               ProviderGatewayConfig,
-                                               ProviderRetryPolicy)
+from app.integrations.contracts import ProviderTimeoutError, SearchQuery, TrackProvider
+from app.integrations.provider_gateway import (
+    ProviderGateway,
+    ProviderGatewayConfig,
+    ProviderRetryPolicy,
+)
 
 
 class _StubProvider:

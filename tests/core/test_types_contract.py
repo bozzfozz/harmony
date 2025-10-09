@@ -5,8 +5,13 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.errors import InvalidInputError
-from app.core.types import (MatchScore, ProviderArtistDTO, ProviderTrackDTO,
-                            ensure_track_dto, extract_edition_tags)
+from app.core.types import (
+    MatchScore,
+    ProviderArtistDTO,
+    ProviderTrackDTO,
+    ensure_track_dto,
+    extract_edition_tags,
+)
 
 
 def test_provider_artist_alias_deduplication() -> None:

@@ -1,14 +1,17 @@
-import random
 from pathlib import Path
+import random
 from typing import Any, List, Mapping, Optional
 
 import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download
-from app.orchestrator.handlers import (SyncHandlerDeps, SyncRetryPolicy,
-                                       fanout_download_completion,
-                                       process_sync_payload)
+from app.orchestrator.handlers import (
+    SyncHandlerDeps,
+    SyncRetryPolicy,
+    fanout_download_completion,
+    process_sync_payload,
+)
 from app.utils.activity import activity_manager
 from app.utils.events import DOWNLOAD_RETRY_FAILED, DOWNLOAD_RETRY_SCHEDULED
 

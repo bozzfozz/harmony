@@ -5,12 +5,17 @@ from typing import Any
 import httpx
 import pytest
 
-from app.integrations.contracts import (ProviderAlbum, ProviderAlbumDetails,
-                                        ProviderDependencyError,
-                                        ProviderNotFoundError,
-                                        ProviderRateLimitedError,
-                                        ProviderTimeoutError, ProviderTrack,
-                                        ProviderValidationError, SearchQuery)
+from app.integrations.contracts import (
+    ProviderAlbum,
+    ProviderAlbumDetails,
+    ProviderDependencyError,
+    ProviderNotFoundError,
+    ProviderRateLimitedError,
+    ProviderTimeoutError,
+    ProviderTrack,
+    ProviderValidationError,
+    SearchQuery,
+)
 from app.integrations.slskd_adapter import SlskdAdapter
 
 

@@ -4,9 +4,12 @@ from datetime import datetime, timezone
 import pytest
 
 from app.models import Playlist
-from app.services.cache import (CacheEntry, ResponseCache,
-                                playlist_detail_cache_key,
-                                playlist_list_cache_key)
+from app.services.cache import (
+    CacheEntry,
+    ResponseCache,
+    playlist_detail_cache_key,
+    playlist_list_cache_key,
+)
 from app.utils.http_cache import compute_playlist_collection_metadata
 from app.workers.playlist_sync_worker import PlaylistCacheInvalidator
 from tests.simple_client import SimpleTestClient

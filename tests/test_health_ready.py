@@ -8,8 +8,12 @@ import pytest
 
 from app.config import HealthConfig
 from app.errors import ErrorCode
-from app.services.health import (DependencyStatus, HealthService,
-                                 MigrationProbeResult, ReadinessResult)
+from app.services.health import (
+    DependencyStatus,
+    HealthService,
+    MigrationProbeResult,
+    ReadinessResult,
+)
 from tests.helpers import api_path
 
 
@@ -112,6 +116,7 @@ async def test_health_service_readiness_handles_db_failure(
         dependencies=(),
         require_database=True,
     )
+
     async def _error(_: HealthService) -> MigrationProbeResult:
         return MigrationProbeResult(up_to_date=False, current=None, head=tuple())
 

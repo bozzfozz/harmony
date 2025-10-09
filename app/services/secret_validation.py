@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import re
-import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import re
+import time
 from typing import Awaitable, Callable, Deque, Dict, Literal, Optional
 from urllib.parse import urlparse, urlunparse
 
-import httpx
 from fastapi import status
+import httpx
 
 from app.config import get_env
 from app.errors import DependencyError, RateLimitedError, ValidationAppError

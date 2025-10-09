@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import time
 from contextlib import asynccontextmanager
+import time
 
 import anyio
-import pytest
 from httpx import ASGITransport, AsyncClient
+import pytest
 
 from app.db import SessionCallable
 from app.dependencies import SessionRunner, get_session_runner

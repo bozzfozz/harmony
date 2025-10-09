@@ -44,9 +44,7 @@ def test_defaults_loaded_and_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_watchlist_cooldown_and_retry_budget_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony"
-    )
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony")
     monkeypatch.setenv("ARTIST_COOLDOWN_S", "59")
     monkeypatch.setenv("ARTIST_MAX_RETRY_PER_ARTIST", "25")
     monkeypatch.setenv("WATCHLIST_COOLDOWN_MINUTES", "5")

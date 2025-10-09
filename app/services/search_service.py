@@ -6,8 +6,10 @@ from collections.abc import Mapping
 from time import perf_counter
 from typing import Iterable
 
-from app.integrations.contracts import ProviderTrack as GatewayProviderTrack
-from app.integrations.contracts import SearchQuery as GatewaySearchQuery
+from app.integrations.contracts import (
+    ProviderTrack as GatewayProviderTrack,
+    SearchQuery as GatewaySearchQuery,
+)
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.schemas.common import Paging, SourceEnum

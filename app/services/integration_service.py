@@ -6,12 +6,13 @@ from time import perf_counter
 from typing import Iterable, Sequence
 
 from app.integrations.base import TrackCandidate
-from app.integrations.contracts import (ProviderTrack, SearchQuery,
-                                        TrackProvider)
+from app.integrations.contracts import ProviderTrack, SearchQuery, TrackProvider
 from app.integrations.health import IntegrationHealth, ProviderHealthMonitor
-from app.integrations.provider_gateway import (ProviderGateway,
-                                               ProviderGatewayConfig,
-                                               ProviderGatewaySearchResponse)
+from app.integrations.provider_gateway import (
+    ProviderGateway,
+    ProviderGatewayConfig,
+    ProviderGatewaySearchResponse,
+)
 from app.integrations.registry import ProviderRegistry
 from app.logging import get_logger
 from app.logging_events import log_event

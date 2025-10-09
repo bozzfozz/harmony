@@ -8,8 +8,7 @@ import pytest
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download
-from app.orchestrator.handlers import (SyncHandlerDeps,
-                                       handle_sync_download_failure)
+from app.orchestrator.handlers import SyncHandlerDeps, handle_sync_download_failure
 from app.services.retry_policy_provider import RetryPolicyProvider
 
 

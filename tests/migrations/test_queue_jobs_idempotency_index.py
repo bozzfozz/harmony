@@ -5,18 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from importlib import import_module
 
+from alembic import command
 import pytest
 import sqlalchemy as sa
-from alembic import command
 from sqlalchemy.exc import IntegrityError
 
 from tests.support.postgres import postgres_schema
 
 from .helpers import make_config
 
-_MIGRATION = import_module(
-    "app.migrations.versions.202409201200_queue_job_idempotency_key_unique"
-)
+_MIGRATION = import_module("app.migrations.versions.202409201200_queue_job_idempotency_key_unique")
 
 pytestmark = pytest.mark.postgres
 
@@ -97,9 +95,7 @@ def test_queue_job_idempotency_enforces_uniqueness() -> None:
                     )
 
             inspector = sa.inspect(engine)
-            indexes = {
-                index["name"]: index for index in inspector.get_indexes("queue_jobs")
-            }
+            indexes = {index["name"]: index for index in inspector.get_indexes("queue_jobs")}
             assert indexes["ix_queue_jobs_idempotency_key_not_null"]["unique"]
 
             with engine.connect() as connection:

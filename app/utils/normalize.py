@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import unicodedata
 from typing import Iterable, Optional, Sequence
+import unicodedata
 
 
 def normalize_text(value: str | None) -> str:

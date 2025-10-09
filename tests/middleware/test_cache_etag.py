@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
-import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
+import pytest
 
 from app.config import load_config
 from app.middleware.cache import CacheMiddleware
@@ -33,9 +33,7 @@ def _cache_env(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     for key in relevant_keys:
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setenv(
-        "DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony"
-    )
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://test:test@localhost:5432/harmony")
     monkeypatch.setenv("CACHEABLE_PATHS", "^/etag$|60|")
 
 

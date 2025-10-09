@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import inspect
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Literal, Mapping, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -21,16 +21,23 @@ from app.logging import get_logger
 from app.models import Download, QueueJob, QueueJobStatus
 from app.services.health import HealthService
 from app.services.secret_store import SecretStore
-from app.services.secret_validation import (SecretValidationResult,
-                                            SecretValidationService,
-                                            SecretValidationSettings)
+from app.services.secret_validation import (
+    SecretValidationResult,
+    SecretValidationService,
+    SecretValidationSettings,
+)
 from app.utils.activity import record_worker_stale
 from app.utils.events import WORKER_STALE
 from app.utils.service_health import evaluate_all_service_health
-from app.utils.worker_health import (STALE_TIMEOUT_SECONDS, mark_worker_status,
-                                     orchestrator_component_status,
-                                     orchestrator_job_status, parse_timestamp,
-                                     read_worker_status, resolve_status)
+from app.utils.worker_health import (
+    STALE_TIMEOUT_SECONDS,
+    mark_worker_status,
+    orchestrator_component_status,
+    orchestrator_job_status,
+    parse_timestamp,
+    read_worker_status,
+    resolve_status,
+)
 
 try:  # pragma: no cover - import guarded for environments without psutil
     import psutil as _psutil  # type: ignore
@@ -364,9 +371,7 @@ async def get_status(request: Request) -> Dict[str, Any]:
     }
 
 
-def _call_dependency_override(
-    override: Callable[..., Any], request: Request | None
-) -> Any:
+def _call_dependency_override(override: Callable[..., Any], request: Request | None) -> Any:
     if request is None:
         return override()
 

@@ -8,12 +8,15 @@ from app import dependencies as deps
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.main import app
 from app.models import QueueJob
-from app.services.artist_dao import (ArtistDao, ArtistReleaseUpsertDTO,
-                                     ArtistUpsertDTO, build_artist_key)
+from app.services.artist_dao import (
+    ArtistDao,
+    ArtistReleaseUpsertDTO,
+    ArtistUpsertDTO,
+    build_artist_key,
+)
 from tests.helpers import api_path
-from tests.support.postgres import postgres_schema
 from tests.simple_client import SimpleTestClient
-
+from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 

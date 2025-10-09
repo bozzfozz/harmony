@@ -8,8 +8,7 @@ import pytest
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, QueueJob, QueueJobStatus
 from app.utils.activity import activity_manager
-from app.workers.persistence import (QueueJobDTO, enqueue, lease_async,
-                                     update_priority)
+from app.workers.persistence import QueueJobDTO, enqueue, lease_async, update_priority
 from app.workers.sync_worker import SyncWorker
 
 

@@ -5,8 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi import Request
-from starlette.middleware.base import (BaseHTTPMiddleware,
-                                       RequestResponseEndpoint)
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "202412181230_jsonb_utc_defaults"

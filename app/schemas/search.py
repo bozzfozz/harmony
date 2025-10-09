@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from pydantic import (BaseModel, ConfigDict, Field, ValidationInfo,
-                      field_validator)
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.schemas.common import Paging, SourceEnum
 

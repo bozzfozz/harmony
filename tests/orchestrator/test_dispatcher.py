@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from datetime import datetime, timedelta
 import logging
+from pathlib import Path
 import random
 import time
-from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 import pytest
@@ -17,8 +17,7 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import Download, Match, QueueJobStatus
 from app.orchestrator.dispatcher import Dispatcher, default_handlers
-from app.orchestrator.handlers import (MatchingHandlerDeps, SyncHandlerDeps,
-                                       SyncRetryPolicy)
+from app.orchestrator.handlers import MatchingHandlerDeps, SyncHandlerDeps, SyncRetryPolicy
 from app.utils.activity import activity_manager
 from app.workers import persistence
 

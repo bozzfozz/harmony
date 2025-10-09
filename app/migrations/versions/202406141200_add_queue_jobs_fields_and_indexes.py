@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # Shared guards for idempotent operations.
@@ -39,8 +39,7 @@ def upgrade() -> None:
         if "payload" in columns:
             op.execute(
                 sa.text(
-                    "UPDATE queue_jobs SET payload_json = payload "
-                    "WHERE payload_json IS NULL"
+                    "UPDATE queue_jobs SET payload_json = payload " "WHERE payload_json IS NULL"
                 )
             )
 

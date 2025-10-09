@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import importlib
-import pkgutil
 from pathlib import Path
+import pkgutil
 
 import pytest
 

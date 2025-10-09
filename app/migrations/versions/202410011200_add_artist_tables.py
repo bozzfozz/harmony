@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
 # revision identifiers, used by Alembic.

@@ -1,12 +1,19 @@
-from app.errors import (DependencyError, InternalServerError, NotFoundError,
-                        RateLimitedError, ValidationAppError)
+from app.errors import (
+    DependencyError,
+    InternalServerError,
+    NotFoundError,
+    RateLimitedError,
+    ValidationAppError,
+)
 from app.integrations.errors import to_application_error
-from app.integrations.provider_gateway import (ProviderGatewayDependencyError,
-                                               ProviderGatewayInternalError,
-                                               ProviderGatewayNotFoundError,
-                                               ProviderGatewayRateLimitedError,
-                                               ProviderGatewayTimeoutError,
-                                               ProviderGatewayValidationError)
+from app.integrations.provider_gateway import (
+    ProviderGatewayDependencyError,
+    ProviderGatewayInternalError,
+    ProviderGatewayNotFoundError,
+    ProviderGatewayRateLimitedError,
+    ProviderGatewayTimeoutError,
+    ProviderGatewayValidationError,
+)
 
 
 def test_validation_error_mapping() -> None:

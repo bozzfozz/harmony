@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 
 from app.migrations import helpers
 
@@ -26,9 +25,7 @@ def upgrade() -> None:
     if not helpers.has_table(inspector, _TABLE_NAME):
         return
 
-    helpers.drop_unique_constraint_if_exists(
-        inspector, _TABLE_NAME, _LEGACY_CONSTRAINT
-    )
+    helpers.drop_unique_constraint_if_exists(inspector, _TABLE_NAME, _LEGACY_CONSTRAINT)
     helpers.drop_index_if_exists(inspector, _TABLE_NAME, _LEGACY_PARTIAL_INDEX)
     helpers.drop_index_if_exists(inspector, _TABLE_NAME, _LEGACY_INDEX)
     helpers.create_index_if_missing(

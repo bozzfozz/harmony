@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
+import inspect
 from pathlib import Path
 from typing import Any, Mapping
 

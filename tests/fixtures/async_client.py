@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+import time
 from typing import AsyncIterator, Callable, Iterator
 
 import anyio
-import pytest
 from httpx import ASGITransport, AsyncClient
+import pytest
 
 from tests.simple_client import SimpleTestClient
 

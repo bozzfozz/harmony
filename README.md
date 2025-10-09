@@ -460,9 +460,10 @@ npm run build     # TypeScript + Vite Build
 Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
 
 ```bash
-isort --check-only .
+ruff check . --select I --fix  # Import-Blöcke automatisch sortieren
 ruff check .
 black --check .
+isort --check-only .
 mypy app
 pytest -q
 python scripts/audit_wiring.py
@@ -476,8 +477,10 @@ npm run typecheck
 npm run build
 ```
 
-`isort --check-only .` stellt sicher, dass die konfigurierte Import-Reihenfolge eingehalten wird. Verwende `isort .` oder
-alternativ `ruff check . --select I --fix`, um Imports automatisch zu sortieren. `black` bleibt der einzige Formatter.
+`ruff check . --select I --fix` sortiert sämtliche Imports gemäß den CI-Vorgaben (Stdlib → Third-Party → First-Party,
+Gruppierung nach `known-first-party = ["app", "tests"]`). Die zusätzliche `isort --check-only .`-Stufe dient als Guard,
+nutzt aber dieselbe Konfiguration. Für bewusst ungenutzte Importe (z. B. Test-Fixtures mit Seiteneffekten) bitte
+`# noqa: F401` mit Begründung ergänzen.
 
 `pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
 Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
