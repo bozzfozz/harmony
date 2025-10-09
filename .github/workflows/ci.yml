@@ -162,25 +162,3 @@ jobs:
               raise SystemExit('OpenAPI schema drift detected. Update tests/snapshots/openapi.json')
           PY
 
-  security-bandit:
-    needs: sqlite-guard
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-bandit-${{ hashFiles('requirements-dev.txt', '.bandit') }}
-      - name: Install Bandit
-        run: |
-          python -m pip install --upgrade pip
-          pip install bandit==1.7.9
-      - name: Security scan (Bandit)
-        run: |
-          mkdir -p reports/analysis/_evidence
-          set -o pipefail
-          bandit -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt

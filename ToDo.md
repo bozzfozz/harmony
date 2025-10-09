@@ -150,22 +150,21 @@
 - **Subtasks:**
   - [x] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
 
-## TD-20251008-009 Reinstate bandit security scanning
-- **Status:** in-progress
+## TD-20251008-009 Security scanner consolidation
+- **Status:** wontdo
 - **Priority:** P2
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
 - **Updated_at (UTC):** 2025-10-08T09:45:00Z
 - **Tags:** security, tooling
-- **Description:** `bandit` is not installed in the tooling environment, so security scans silently skip the backend. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【2a7069†L1-L1】
+- **Description:** Die geplante Wiederaufnahme des statischen Sicherheitsscans wird durch `CODX-TOOL-702` abgelöst. Das Projekt setzt künftig auf Abhängigkeits-Audits (`pip-audit`) als verpflichtendes Gate und dokumentiert diese Änderung hiermit. 【F:README.md†L453-L461】
 - **Acceptance Criteria:**
-  - `bandit -r app` runs cleanly in CI and local dev environments.
-  - Security scanning documented alongside other quality gates.
-  - CI fails when bandit reports high-severity issues.
-- **Risks/Impact:** Introducing bandit may surface numerous findings; plan remediation bandwidth.
+  - Dokumentation und Policies spiegeln die Entscheidung wider (erledigt durch `CODX-TOOL-702`).
+  - CI-Pipeline setzt `pip-audit` als Security-Gate ein.
+  - Keine offenen Tasks mehr zur Wiederaufnahme des ursprünglichen Scans.
+- **Risks/Impact:** Statisches Code-Scanning entfällt; mögliche Schwachstellen werden ausschließlich über Dependency-Audits entdeckt.
 - **Dependencies:** TD-20251008-008 (align tooling updates).
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/bandit_app.txt`. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【F:reports/analysis/_evidence/bandit_app.txt†L1-L1】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; TASK `CODX-TOOL-702`.
 - **Subtasks:**
-  - [x] CODX-P2-SEC-319 — Add bandit dependency, configure baseline, and integrate with CI (Makefile + CI tee output to `reports/analysis/_evidence/bandit_app.txt`).
-  - [ ] CODX-P1-SEC-401 — Provide offline Bandit wheel and capture first-run findings so high-severity issues can be triaged.
+  - [ ] CODX-P1-SEC-401 — Überarbeiten oder ersetzen: statisches Sicherheitsscanning wird aktuell nicht weiterverfolgt.

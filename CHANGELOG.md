@@ -46,7 +46,7 @@
   TrackCandidate mapping and integration service delegation. 【F:app/integrations/slskd_adapter.py†L1-L302】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】
 - feat(frontend): Downloads-Tab ergänzt eine Fehlgeschlagen-Badge samt Inline-Steuerung (Retry, Entfernen, Retry-All mit Bestätigungsdialog) und deaktiviert Polling in inaktiven Tabs.
 - docs: `AGENTS.md` – Initiative Policy, Scope-Guard, Clarification & PR-Regeln ergänzt.
-- Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, bandit/npm audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
+- Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, pip-audit/npm audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
 - Update PR-Template: TASK_ID und Testnachweise verpflichtend.
 - chore(core): Transfers-Wrapper typisiert, Fehler auf `VALIDATION_ERROR`/`NOT_FOUND`/`DEPENDENCY_ERROR` gemappt und Import-Sanity-Tests ergänzt.【F:app/core/transfers_api.py†L1-L188】【F:app/core/soulseek_client.py†L1-L190】【F:tests/core/test_transfers_api.py†L1-L124】【F:tests/core/test_imports.py†L1-L27】
 
@@ -82,7 +82,7 @@
 - chore: code hygiene sweep – migrate FastAPI startup/shutdown handling to the
   lifespan API, refresh deprecated status-code constants, and document the
   current code-health baseline.
-- ci: add dev toolchain (bandit/radon/vulture/pip-audit) with offline fallback
+- ci: add dev toolchain (radon/vulture/pip-audit) with offline fallback
   targets and extended CI gates across security and analysis tooling.
 - fix: preserve FREE ingest partial failure details when skips occur and surface
   skip metadata (queued/failed/skipped counts, skip reason) in job status

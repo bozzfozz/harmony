@@ -41,7 +41,7 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
   - Features/Fixes ⇒ neue Unit- & Integrationstests.
   - Coverage nicht senken ohne Plan.
 - **Quality Tools**
-  - Python: `ruff`, `black`, `isort`, `mypy`, `bandit`.
+  - Python: `ruff`, `black`, `isort`, `mypy`, `pip-audit`.
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
 - Lint-Warnungen beheben, toten Code entfernen.
 
@@ -75,7 +75,7 @@ Ohne explizites Flag gilt **Write Mode**.
 
 ## 6. Daten, Geheimnisse, Compliance
 - **Secrets**: Niemals im Code/Commit; Secret-Manager nutzen; Rotation dokumentieren.
-- **Security-Scanner**: Python `bandit`; JS/TS `npm audit` o. Ä.; Findings adressieren.
+- **Security-Scanner**: Python `pip-audit`; JS/TS `npm audit` o. Ä.; Findings adressieren.
 - **Datenschutz**: Datenminimierung, Zweckbindung, Löschkonzepte.
 - **Lizenzen**: Drittcode nur mit kompatibler Lizenz; bis zur Wahl: Datei-Header „Copyright <year> Contributors“.
 
