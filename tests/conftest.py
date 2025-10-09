@@ -33,7 +33,7 @@ os.environ.setdefault(
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.core.transfers_api import TransfersApiError
@@ -1491,7 +1491,10 @@ def configure_environment(
         )
 
     schema_name = f"test_suite_{uuid.uuid4().hex}"
-    base_engine = sa.create_engine(resolved_url)
+    try:
+        base_engine = sa.create_engine(resolved_url)
+    except (NoSuchModuleError, ImportError) as exc:  # pragma: no cover - environment guard
+        pytest.skip(f"PostgreSQL driver unavailable: {exc}")
     try:
         with base_engine.connect() as connection:
             connection.execute(CreateSchema(schema_name))

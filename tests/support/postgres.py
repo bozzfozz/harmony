@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import NoSuchModuleError, OperationalError, ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 
@@ -51,7 +51,10 @@ def postgres_schema(prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = Non
         pytest.skip("PostgreSQL URL required for this test")
 
     schema_name = f"{prefix}_{uuid.uuid4().hex}"
-    engine = sa.create_engine(url)
+    try:
+        engine = sa.create_engine(url)
+    except (NoSuchModuleError, ImportError) as exc:  # pragma: no cover - environment guard
+        pytest.skip(f"PostgreSQL driver unavailable: {exc}")
 
     created_schema = False
     try:
