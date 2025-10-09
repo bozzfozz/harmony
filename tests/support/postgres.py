@@ -68,7 +68,11 @@ def postgres_schema(prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = Non
             created_schema = True
         except OperationalError as exc:  # pragma: no cover - environment guard
             engine.dispose()
-            pytest.skip(f"PostgreSQL is unavailable: {exc}")
+            pytest.skip(
+                "PostgreSQL is unavailable: start a local instance (for example "
+                "with `docker compose up -d postgres`) or update DATABASE_URL to "
+                f"reference an accessible server. (Original error: {exc})"
+            )
 
         scoped_url = url.set(
             query={**url.query, "options": f"-csearch_path={schema_name}"}

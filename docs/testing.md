@@ -38,6 +38,7 @@ FastAPI lifespan startup.
   `pytest -m postgres -q` → `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit
   temporären Schemas je Testlauf (`search_path`-Isolation).
 - Lokal können dieselben Schritte mit einer Docker-Instanz reproduziert werden.
-  Setzt man `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony`,
-  führen die Tests automatisch Schema-Cleanup (`DropSchema(cascade=True)`) durch
-  und hinterlassen keine Datenbankartefakte.
+  Startet zunächst eine Datenbank per `docker compose up -d postgres` und setzt
+  anschließend `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony`.
+  Die Tests kümmern sich automatisch um Schema-Cleanup
+  (`DropSchema(cascade=True)`) und hinterlassen keine Datenbankartefakte.

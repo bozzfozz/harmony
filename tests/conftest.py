@@ -33,7 +33,7 @@ os.environ.setdefault(
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import NoSuchModuleError, ProgrammingError
+from sqlalchemy.exc import NoSuchModuleError, OperationalError, ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.core.transfers_api import TransfersApiError
@@ -1502,6 +1502,13 @@ def configure_environment(
         with base_engine.connect() as connection:
             connection.execute(CreateSchema(schema_name))
             connection.commit()
+    except OperationalError as exc:  # pragma: no cover - environment guard
+        base_engine.dispose()
+        pytest.skip(
+            "PostgreSQL database unavailable: start a local instance (for example "
+            "with `docker compose up -d postgres`) or point DATABASE_URL to an "
+            f"accessible server. (Original error: {exc})"
+        )
     except Exception as exc:  # pragma: no cover - environment guard
         base_engine.dispose()
         pytest.skip(f"PostgreSQL database unavailable: {exc}")
