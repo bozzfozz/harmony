@@ -69,10 +69,23 @@ jobs:
             fi
             sleep 2
           done
+          DATABASE_URL="postgresql+psycopg://harmony:harmony@harmony-postgres:5432/harmony?sslmode=disable"
+          case "${DATABASE_URL}" in
+            sqlite:*|sqlite+*)
+              echo "SQLite DSNs are not supported in smoke tests." >&2
+              exit 1
+              ;;
+          esac
           docker run -d \
             --name harmony-smoke \
             --network harmony-smoke \
-            -e DATABASE_URL=postgresql+psycopg://harmony:harmony@harmony-postgres:5432/harmony \
+            -e DATABASE_URL="${DATABASE_URL}" \
+            -e POSTGRES_HOST=harmony-postgres \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_DB=harmony \
+            -e POSTGRES_USER=harmony \
+            -e POSTGRES_PASSWORD=harmony \
+            -e DATABASE_SSLMODE=disable \
             -e HARMONY_API_KEYS=dev-key \
             -e PUBLIC_BACKEND_URL=http://127.0.0.1:8080 \
             -p 8080:8080 \

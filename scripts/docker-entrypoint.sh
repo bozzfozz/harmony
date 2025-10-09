@@ -1,6 +1,29 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
+if [ -z "${DATABASE_URL:-}" ]; then
+  POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT=${POSTGRES_PORT:-5432}
+  POSTGRES_DB=${POSTGRES_DB:-harmony}
+  POSTGRES_USER=${POSTGRES_USER:-harmony}
+  POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-harmony}
+  if [ -n "${DATABASE_SSLMODE:-}" ]; then
+    export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${DATABASE_SSLMODE}"
+  else
+    export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+  fi
+  echo "DATABASE_URL not provided; derived from POSTGRES_* variables."
+fi
+
+case "${DATABASE_URL:-}" in
+  postgres://*|postgresql://*|postgresql+psycopg://*|postgresql+asyncpg://*)
+    ;;
+  *)
+    echo "Error: DATABASE_URL must be a PostgreSQL connection string (postgresql+psycopg:// or postgresql+asyncpg://)." >&2
+    exit 1
+    ;;
+esac
+
 if [ "${FEATURE_RUN_MIGRATIONS:-on}" != "off" ]; then
   echo "Applying database migrations..."
   alembic upgrade head

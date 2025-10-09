@@ -1,7 +1,7 @@
 # Backend Deep Scan Report — CODX-P0-ANLY-500
 
 ## Executive Summary
-- Critical admin artist APIs fail at runtime because the `activity_events` table referenced by models and services has no corresponding migration, blocking every admin endpoint and multiple test suites. 【F:app/models.py†L168-L183】【b45c06†L137-L176】【f53942†L1-L1】
+- Critical admin artist APIs fail at runtime because the `activity_events` table referenced by models and services has no corresponding migration, leading PostgreSQL to raise `UndefinedTable` errors and blocking every admin endpoint plus multiple test suites. 【F:app/models.py†L168-L183】【b45c06†L137-L176】【f53942†L1-L1】
 - Observability coverage is regressing: orchestrator lease events are not emitted to logs and the search router fails to publish `api.request` telemetry, breaking alerting and two instrumentation tests. 【001fdf†L1-L44】【001fdf†L79-L117】
 - Runtime configuration paths drifted—`/system/stats` always uses the real `psutil` module despite overrides, `/spotify/status` responses are cached by the middleware so credential changes are never reflected, and playlist cache invalidation does not refresh stale payloads—causing eight downstream test failures. 【1e2e16†L363-L410】【5742eb†L610-L615】【b45c06†L122-L171】【c08376†L152-L230】
 - Quality and security gates are stale: `isort` fails on most backend modules and the required `bandit` scanner is missing from the toolchain, leaving style and security coverage unmonitored. 【8bf225†L1-L20】【2a7069†L1-L1】
@@ -22,7 +22,7 @@
 
 ## Finding Details
 ### F1. Missing `activity_events` migration (P0)
-- **Evidence:** Admin tests and API routes hit `sqlite3.OperationalError: no such table: activity_events`. 【b45c06†L137-L176】 The ORM model exists but `rg` finds no migration touching `activity_events`. 【F:app/models.py†L168-L183】【f53942†L1-L1】
+- **Evidence:** Admin tests und API-Routen schlagen mit `psycopg2.errors.UndefinedTable: relation "activity_events" does not exist` fehl. 【b45c06†L137-L176】 Das ORM-Modell existiert, aber `rg` findet keine Migration, die `activity_events` anlegt. 【F:app/models.py†L168-L183】【f53942†L1-L1】
 - **Impact:** All admin artist endpoints crash, blocking audit/reconcile flows and invalidating six API tests.
 - **Recommendation:** Ship an Alembic migration creating `activity_events` plus audit indexes; add smoke test ensuring admin bootstrap seeds the table.
 - **Suggested Tests:** `pytest tests/api/test_admin_artists.py -q`, migration downgrade/upgrade, targeted admin smoke.

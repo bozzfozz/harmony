@@ -37,7 +37,13 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
-  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony \
+  -e POSTGRES_HOST=postgres \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_DB=harmony \
+  -e POSTGRES_USER=harmony \
+  -e POSTGRES_PASSWORD=harmony \
+  -e DATABASE_SSLMODE=disable \
+  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable \
   -e PUBLIC_BACKEND_URL=http://localhost:8080 \
   -e ALLOWED_ORIGINS=http://localhost:8080 \
   -v $(pwd)/data:/data \
@@ -48,7 +54,40 @@ docker run -d \
 > Docker-Netzwerk unter dem Hostnamen `postgres` erreichbar ist. Für lokale
 > Tests genügt `docker network create harmony && docker run --rm -d --network
 > harmony --name postgres -e POSTGRES_DB=harmony -e POSTGRES_USER=harmony -e
-> POSTGRES_PASSWORD=harmony postgres:16`.
+> POSTGRES_PASSWORD=harmony postgres:16`. Der Container liest `DATABASE_URL`
+> oder baut bei Bedarf automatisch eine Verbindung aus den `POSTGRES_*`-
+> Variablen.
+
+### PostgreSQL Setup & Migrationen
+
+1. **Service-Container starten:**
+
+   ```bash
+   docker compose up -d postgres
+   # oder manuell:
+   docker run --rm -d \
+     --name harmony-postgres \
+     -e POSTGRES_DB=harmony \
+     -e POSTGRES_USER=harmony \
+     -e POSTGRES_PASSWORD=harmony \
+     -p 5432:5432 \
+     postgres:16
+   ```
+
+2. **Verbindungs-DSN prüfen:** Die Anwendung akzeptiert ausschließlich
+   PostgreSQL-Verbindungszeichenketten (`postgresql+psycopg://` oder
+   `postgresql+asyncpg://`). Ein vollständiges Beispiel inklusive SSL-Mode
+   lautet `postgresql+psycopg://harmony:harmony@localhost:5432/harmony?sslmode=disable`.
+
+3. **Migrationen ausführen:**
+
+   ```bash
+   # Lokal (Poetry oder virtualenv aktivieren)
+   alembic upgrade head
+
+   # Oder im laufenden Container
+   docker compose exec harmony alembic upgrade head
+   ```
 
 ### `compose.yaml`
 
@@ -65,7 +104,13 @@ Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) b
 
 | Variable                 | Beschreibung                                                                  | Default (`compose.yaml`) |
 | ------------------------ | ------------------------------------------------------------------------------ | ------------------------ |
-| `DATABASE_URL`           | Persistente PostgreSQL-Datenbank (z. B. `postgresql+psycopg://user:pass@host:5432/db`). | `postgresql+psycopg://harmony:harmony@postgres:5432/harmony` |
+| `DATABASE_URL`           | Persistente PostgreSQL-Datenbank (z. B. `postgresql+psycopg://user:pass@host:5432/db?sslmode=prefer`). | `postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable` |
+| `POSTGRES_HOST`          | Hostname des PostgreSQL-Servers (fällt auf `postgres`).                             | `postgres`             |
+| `POSTGRES_PORT`          | TCP-Port für PostgreSQL.                                                            | `5432`                 |
+| `POSTGRES_DB`            | Datenbankname für Harmony.                                                          | `harmony`              |
+| `POSTGRES_USER`          | Benutzername für die Datenbankverbindung.                                           | `harmony`              |
+| `POSTGRES_PASSWORD`      | Passwort für die Datenbankverbindung.                                               | `harmony`              |
+| `DATABASE_SSLMODE`       | Optionaler `sslmode`-Parameter für PostgreSQL (`disable`, `prefer`, `require`, …).  | `disable`              |
 | `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                           | `change-me`              |
 | `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`  |
 | `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`  |
