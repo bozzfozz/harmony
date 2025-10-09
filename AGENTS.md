@@ -137,41 +137,81 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - **Kein Changelog-Ersatz.** ToDo ist **kein** Commit-/PR-Protokoll.  
 - **Pflicht nur, wenn §25.0 „Erforderlichkeit“** erfüllt ist. Andernfalls im PR-Body „No ToDo changes required“ bestätigen.
 
-## §14a Code-Style & Auto-Fixes (verbindlich)
+## §14 Code-Style, Lint & Tests — Auto-Fixes (verbindlich)
+
+### §14a Code-Style & Auto-Fixes
 
 **Ziel:** Einheitlicher Stil & saubere Imports ohne manuelle Nacharbeit.
 
-**Pflichten (Agent & Humans):**
+**Pflichten (Agent & Humans)**
 - Vor jedem Commit **Auto-Fix** ausführen:
   - `ruff check . --fix` (inkl. Import-Sortierung `I`)
   - `ruff format` **oder** `black .`
-- Pre-commit Hooks aktiv: `pre-commit install` und lokal automatisch ausführen.
+- Pre-commit Hooks aktiv und genutzt: `pre-commit install` · `pre-commit run -a`
 - Keine Commits, die Format/Lint brechen.
 
-**PR-Checkliste (Ergänzung):**
+**PR-Checkliste (Ergänzung)**
 - [ ] `ruff check .` **grün**
-- [ ] `ruff format`/`black --check .` **grün**
-- [ ] Hooks liefen (pre-commit-Output im letzten Commit sichtbar oder `pre-commit run -a` gelaufen)
+- [ ] `ruff format` **oder** `black --check .` **grün**
+- [ ] Hooks liefen (Output im letzten Commit oder `pre-commit run -a` verlinkt)
 
-**CI-Gates (müssen existieren, sonst PR blockieren):**
+**CI-Gates (blockierend)**
 - `ruff check .` (ohne `--fix`)
 - `black --check .` (oder `ruff format`-Äquivalent)
 - Optional: `pytest -q` vor Merge
 
-**Codex MUSS:**
-- Vor jedem Push `ruff check . --fix && ruff format` (oder `black .`) ausführen.
-- Bei Auto-Fixes **separate** Commits mit Message `chore(style): apply ruff/black`.
-- Falls Format-Konflikt mit bestehendem Code: minimal-invasive Änderungen, keine Funktionslogik anfassen.
+**Codex MUSS**
+- Vor jedem Push: `ruff check . --fix && (ruff format || black .)`
+- Auto-Fixes als separaten Commit: `chore(style): apply ruff/black`
+- Minimal-invasiv fixen; keine Funktionslogik verändern.
 
-**Konfiguration (Referenz, im Repo vorhanden):**
-- `.pre-commit-config.yaml` mit Hooks `ruff` (lint+fix) und `ruff-format` (oder `black`).
+**Konfiguration (Referenz)**
+- `.pre-commit-config.yaml`: Hooks `ruff` (lint+fix) & `ruff-format` (oder `black`)
 - `pyproject.toml`:
-  - `[tool.ruff] select = ["E","F","I"]`, `line-length = 88`, `target-version = "py311"`.
-  - `[tool.black] line-length = 88`, `target-version = ["py311"]`.
+  - `[tool.ruff] select = ["E","F","I"]; line-length = 88; target-version = "py311"`
+  - `[tool.black] line-length = 88; target-version = ["py311"]`
 
-**Hinweise:**
-- isort wird durch `ruff`-Regelgruppe **I** abgedeckt.
-- Bei Massen-Fixes: eigener PR `chore(style): repo-wide auto-format` um Feature-PRs schlank zu halten.
+**Hinweise**
+- `isort` wird durch `ruff`-Regelgruppe **I** ersetzt.
+- Repo-weite Massen-Fixes in eigenem PR: `chore(style): repo-wide auto-format`.
+
+---
+
+### §14b Pytest Auto-Repair
+
+**Ziel:** Failing Tests automatisch erkennen & beheben, ohne Public-Contracts zu verletzen.
+
+**Pflichten (Agent & Humans)**
+- Dev-Loop: `pytest --maxfail=1 --lf` → grün ⇒ vollständige Suite `pytest -q` (in CI).
+- Fix-Loop (automatisiert):
+  1) Fehler klassifizieren: `ImportError`, `FixtureError`, `TypeError`, `AssertionError`, Snapshot/OpenAPI-Drift, Flakes.
+  2) **Erlaubte Auto-Fixes**:
+     - Fehlende/kaputte Imports, falsche Modul-/Pfad-Namen.
+     - Fixture-Reparatur (Scope, Defaults, Testdaten), deterministische Seeds/Clock-Freeze.
+     - Offensichtliche Flakes (Race/Timing/Tempfiles) stabilisieren.
+     - OpenAPI/Snapshots **nur**, wenn `INTENTIONAL_SCHEMA_CHANGE=true`; sonst **nicht** anfassen.
+  3) **Nicht erlaubt ohne Task-Freigabe**:
+     - Public API/DB-Schema/Fehlercodes ändern.
+     - Asserts lockern/entfernen, um „grün“ zu erzwingen.
+- Neue/änderte Features ⇒ Tests ergänzen/aktualisieren gemäß Akzeptanzkriterien; Coverage ≥ **85 %** der geänderten Module.
+
+**Selektives Testing im Dev-Loop**
+- Nur geänderte Tests:  
+  `pytest $(git diff --name-only origin/main...HEAD | rg '^tests/' -n || true) -q || true`
+- Nachbesserung: `pytest --ff --maxfail=1`
+
+**PR-Pflichtfeld _Tests_**
+- Kurzbericht: *Was war kaputt? Ursache? Warum ist der Fix korrekt?* + Links zu Fail-Logs.
+
+**Commits**
+- Auto-Fix: `test: repair <area> (<reason>)`
+- Unklare/fundamentale Brüche → Draft-PR **Clarification**: „Clarification: <TASK_ID>“ mit Minimalvorschlag.
+
+**Reihenfolge**
+1. Style-Auto-Fix (`ruff/black`)
+2. Schnelllauf (`--lf`)
+3. Volle Suite/CI
+```0
 
 ## 15. Prohibited
 - Keine `BACKUP`-Dateien anlegen oder verändern.
