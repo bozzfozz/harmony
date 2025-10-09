@@ -161,7 +161,12 @@ const SoulseekPage = () => {
     ? connectionStatus
     : 'unknown') as keyof typeof connectionLabelMap;
   const connectionLabel = connectionLabelMap[connectionStatusKey];
-  const connectionTone = connectionStatusKey === 'connected' ? 'positive' : connectionStatusKey === 'disconnected' ? 'danger' : 'info';
+  const connectionTone =
+    connectionStatusKey === 'connected' || connectionStatusKey === 'ok'
+      ? 'positive'
+      : connectionStatusKey === 'disconnected'
+        ? 'danger'
+        : 'info';
 
   const integrationOverview = integrationsQuery.data;
 
