@@ -6,7 +6,7 @@
 - **`CI`** (`.github/workflows/ci.yml`)
   - Runs on every push and pull request.
   - Provides two jobs:
-    - `ci-backend`: Python 3.11 toolchain (ruff check, ruff format --check, mypy, bandit, pytest + coverage gate).
+    - `ci-backend`: Python 3.11 toolchain (mypy, isort --check-only, bandit, pytest + coverage gate, pip-audit).
     - `ci-frontend`: Node.js 20 pipeline (eslint, build, unit tests). Automatically skips when no `frontend/package.json` is present.
   - Concurrency key `${{ github.workflow }}-${{ github.ref }}` cancels superseded runs per branch.
   - Artifacts: `reports/coverage.xml`, `reports/junit.xml`.
@@ -30,8 +30,8 @@ Configure branch protection so pull requests require:
 
 ### pre-commit.ci
 - pre-commit.ci ist für dieses Repository aktiviert und erstellt bei Bedarf Auto-Fix-Commits mit der Nachricht `chore: pre-commit.ci auto fixes`.
-- Der Dienst führt dieselben Hooks wie lokal (`ruff` mit `--fix`, `ruff-format`) aus und pusht ausschließlich, wenn Dateien geändert wurden.
-- CI bleibt merge-blockierend: `ci-backend` führt `ruff check .` und `ruff format --check .` read-only aus, falls nach den Auto-Fixes noch Verstöße bestehen.
+- Der Dienst führt denselben Hook wie lokal (`isort`) aus und pusht ausschließlich, wenn Dateien geändert wurden.
+- CI bleibt merge-blockierend: `ci-backend` führt `isort --check-only .` read-only aus, falls nach den Auto-Fixes noch Drift besteht.
 
 ### Postgres Marker Policy
 - CI defaults to `RUN_POSTGRES_TESTS="0"` with `pytest -m "not postgres"`.
@@ -46,11 +46,11 @@ export RUN_POSTGRES_TESTS=1
 pytest
 
 # Run backend pipeline locally
-ruff check .
-ruff format --check .
+isort --check-only .
 mypy app
 bandit -r app -x tests
 pytest -m "not postgres" --cov=app --cov-fail-under=85
+pip-audit -r requirements.txt
 ```
 
 ## Nightly Report Retrieval

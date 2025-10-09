@@ -464,11 +464,9 @@ npm run build     # TypeScript + Vite Build
 Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
 
 ```bash
-ruff check . --fix             # Import-Blöcke & Lint-Regeln automatisch korrigieren
-ruff format                    # Optional: Formatierung lokal angleichen
-ruff check .
-ruff format --check .
+isort --check-only .
 mypy app
+bandit -r app -x tests
 pytest -q
 python scripts/audit_wiring.py
 pip-audit -r requirements.txt
@@ -481,10 +479,9 @@ npm run typecheck
 npm run build
 ```
 
-`ruff check . --fix` deckt die Lint-Regeln `E`, `F` und `I` ab – inklusive Import-Sortierung (Stdlib → Third-Party → First-
-Party). Das Kommando korrigiert Verstöße unmittelbar; `ruff check .` läuft anschließend read-only als Guard analog zur CI.
-`ruff format` spiegelt die Black-Formatierung und stellt sicher, dass Auto-Fixes lokal identisch zu pre-commit.ci ausfallen.
-Für bewusst ungenutzte Importe (z. B. Test-Fixtures mit Seiteneffekten) bitte `# noqa: F401` mit Begründung ergänzen.
+Nutze `isort .`, um Import-Reihenfolgen automatisch zu korrigieren. Für bewusst ungenutzte Importe (z. B. Test-Fixtures mit
+Seiteneffekten) bitte `# noqa` mit Begründung ergänzen. Formatierung jenseits der Import-Sortierung erfolgt nach PEP 8 und wird
+im Review abgestimmt.
 
 `pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
 Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
@@ -492,7 +489,7 @@ Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende
 ### Security-Autofix-Workflow
 
 - **Workflow `security-autofix`** scannt jede Nacht und bei internen PRs nach Allowlist-Bandit-Findings, erzeugt mechanische Fixes und öffnet bei Bedarf einen Branch `security/autofix-<datum>-<run>` mit vollständigem CI-Durchlauf.
-- **Auto-Merge** greift nur, wenn ausschließlich Allowlist-Regeln betroffen sind, alle Gates (`ruff check`, `ruff format --check`, `mypy`, `pytest`, `bandit`) grün sind und keine Guards (Public-Contracts, Serialisierung, CLI) greifen. Andernfalls setzt die Pipeline das Label `needs-security-review` und deaktiviert Auto-Merge.
+- **Auto-Merge** greift nur, wenn ausschließlich Allowlist-Regeln betroffen sind, alle Gates (`isort --check-only`, `mypy`, `pytest`, `pip-audit`, `bandit`) grün sind und keine Guards (Public-Contracts, Serialisierung, CLI) greifen. Andernfalls setzt die Pipeline das Label `needs-security-review` und deaktiviert Auto-Merge.
 - **Opt-out:** Repository- oder Organisations-Variable `SECURITY_AUTOFIX=0` pausiert den Workflow temporär (z. B. bei Incident-Rollbacks).
 - **Lokaler Dry-Run:** `pre-commit run security-autofix --all-files` führt denselben Fixer im Check-Modus aus und zeigt geplante Änderungen, ohne Dateien zu schreiben.
 
@@ -1057,20 +1054,21 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 ## Code Style & Tooling
 
-- **Ruff (Lint & Imports)** prüft `E`, `F` und `I` – inklusive automatischer Import-Sortierung via `ruff check . --fix`.
-- **Ruff Format** ist der verbindliche Formatter (`ruff format`, `ruff format --check .`) und läuft in pre-commit sowie der CI als Guard.
-- **Pre-Commit**: Installiert über `pre-commit install`, um `ruff` (mit `--fix`) und `ruff-format` automatisch vor jedem Commit auszuführen.
+- **Imports:** `isort` hält die Reihenfolge konsistent und ist in `pyproject.toml` konfiguriert.
+- **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
+- **Security:** `bandit` läuft gegen `app` (Tests ausgenommen) und wird von Makefile & CI angesprochen.
+- **Dependencies:** `pip-audit` prüft `requirements.txt` auf veröffentlichte CVEs.
 
-### Automatische Ruff-Fixes
+### isort in pre-commit
 
 1. **Setup einmalig:**
    ```bash
    pip install pre-commit
    pre-commit install
    ```
-2. **Commit-Flow:** Beim `git commit` laufen `ruff check --fix` und `ruff format` automatisch. Verstöße werden korrigiert, bevor der Commit geschrieben wird.
-3. **Pull-Requests:** pre-commit.ci ist für dieses Repository aktiviert. Sobald ein Push Lint-/Format-Verstöße enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
-4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `ruff check .` (ohne `--fix`) sowie `ruff format --check .` read-only aus. Bleiben nach den Auto-Fixes noch Findings übrig, bleibt die Pipeline rot.
+2. **Commit-Flow:** Beim `git commit` läuft `isort` automatisch und korrigiert Import-Reihenfolgen, bevor der Commit geschrieben wird.
+3. **Pull-Requests:** pre-commit.ci ist aktiviert. Sobald ein Push unsortierte Imports enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
+4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `isort --check-only .` aus und blockt den Merge bei Drift.
 
 Für manuelle Komplettläufe empfiehlt sich `pre-commit run --all-files`, um denselben Satz an Hooks on-demand auszuführen.
 

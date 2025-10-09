@@ -81,8 +81,8 @@ DUE: <YYYY-MM-DD>
 ## 12) CI-Gates (Merge-Blocking, Schreiben nicht blockiert)
 - `pytest -q`
 - `mypy app`
-- `ruff check .`
-- `black --check .`
+- `isort --check-only .`
+- `pip-audit -r requirements.txt`
 - OpenAPI-Snapshot aktualisiert (falls API betroffen)
 
 ## 13) PR-Checkliste (muss im PR abgehakt sein)

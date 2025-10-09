@@ -59,8 +59,8 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - Changelog nach [Keep a Changelog](https://keepachangelog.com/).
 
 ## 9. Linting & Formatting
-- Vor jedem Commit sind die Python-Linting- und Format-Gates lokal auszuführen.
-- Verwende `ruff check --fix app tests`, um alle automatisierbaren Verstöße direkt zu beheben.
-- Ergänzend stellt `black app tests` sicher, dass der Code konsistent formatiert ist; `black --check app tests` verifiziert den Status für die CI.
-- Läuft `ruff check app tests` ohne Findings, müssen verbliebene Hinweise (z. B. ungenutzte Importe) manuell adressiert werden.
+- Vor jedem Commit sind die Python-Gates (`isort`, `mypy`, `bandit`, `pytest`, `pip-audit`) lokal auszuführen.
+- Verwende `isort app tests`, um Import-Reihenfolgen automatisch zu korrigieren; `isort --check-only app tests` spiegelt den CI-Guard.
+- Formatierung, die `isort` nicht abdeckt, erfolgt nach PEP 8 und wird im Review abgestimmt.
+- Verbleibende Hinweise (z. B. bewusst ungenutzte Importe) müssen manuell adressiert und dokumentiert werden (`# noqa`).
 

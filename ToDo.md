@@ -162,7 +162,7 @@
 - **Description:** `isort --check-only` fails on numerous backend modules, signaling drift from the repo import style baseline. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【8bf225†L1-L20】
 - **Acceptance Criteria:**
   - All backend files sort imports per repo configuration (`pyproject.toml`).
-  - CI includes an isort check step aligned with ruff/black pipelines.
+  - CI includes an isort check step alongside mypy, bandit, pytest and pip-audit gates.
   - Developer documentation updated with isort usage instructions.
 - **Risks/Impact:** Large import reordering may cause merge conflicts; coordinate rollout across branches.
 - **Dependencies:** None.

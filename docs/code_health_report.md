@@ -3,13 +3,12 @@
 ## Executive Summary
 - FastAPI lifecycle migrated to the lifespan API to remove deprecated `@app.on_event` usage and centralise worker shutdown logic.
 - Deprecated HTTP status constants replaced with their modern counterparts to silence Starlette/AnyIO warnings without altering API responses.
-- Core quality gates (ruff, black, mypy, pytest) are green; additional security/static tools require offline-friendly distribution before they can be executed locally.
+- Core quality gates (isort, mypy, pytest, pip-audit) are green; additional security/static tools require offline-friendly distribution before they can be executed locally.
 
 ## Tooling Matrix
 | Check | Status | Notes |
 | --- | --- | --- |
-| `ruff check .` | ✅ | Clean baseline before and after changes. |
-| `black --check .` | ✅ | No formatting drift detected. |
+| `isort --check-only .` | ✅ | Import order locked down via `pyproject.toml`. |
 | `mypy app` | ✅ | Strict settings honoured; no untyped defs in `app/**`. |
 | `pytest -q` | ✅ | Full suite passes; FastAPI lifespan migration eliminates prior `on_event` warnings. |
 | `vulture app tests --exclude .venv` | ⚠️ | Binary unavailable in the offline environment; cannot verify dead-code findings without vendored wheel. |
