@@ -12,3 +12,11 @@ repos:
     rev: 24.8.0
     hooks:
       - id: black
+  - repo: local
+    hooks:
+      - id: security-autofix
+        name: security autofix (Bandit allowlist)
+        entry: python scripts/security_autofix.py --check
+        language: system
+        pass_filenames: false
+        stages: [manual]
