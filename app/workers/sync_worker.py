@@ -27,13 +27,11 @@ from app.core.soulseek_client import SoulseekClient
 from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
+
+# isort: off
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
-)
-from app.orchestrator.handlers import (
     calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
-)
-from app.orchestrator.handlers import (
     extract_basic_metadata,
     extract_ingest_item_id,
     extract_spotify_album_id,
@@ -47,6 +45,8 @@ from app.orchestrator.handlers import (
     truncate_error,
     update_ingest_item_state,
 )
+
+# isort: on
 from app.services.retry_policy_provider import RetryPolicy, get_retry_policy_provider
 from app.utils.activity import (
     record_activity,
