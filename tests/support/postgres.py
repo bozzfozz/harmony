@@ -53,7 +53,10 @@ def postgres_schema(prefix: str, *, monkeypatch: pytest.MonkeyPatch | None = Non
     schema_name = f"{prefix}_{uuid.uuid4().hex}"
     try:
         engine = sa.create_engine(url)
-    except (NoSuchModuleError, ImportError) as exc:  # pragma: no cover - environment guard
+    except (
+        NoSuchModuleError,
+        ImportError,
+    ) as exc:  # pragma: no cover - environment guard
         pytest.skip(f"PostgreSQL driver unavailable: {exc}")
 
     created_schema = False
