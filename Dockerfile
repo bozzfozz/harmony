@@ -3,9 +3,10 @@ WORKDIR /app/frontend
 
 COPY --chown=node:node frontend/package*.json ./
 USER node
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 COPY --chown=node:node frontend/ ./
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM python:3.11-slim
