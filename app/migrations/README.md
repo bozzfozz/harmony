@@ -10,6 +10,10 @@ Migrations are expected to run exactly once per environment; PostgreSQL-native
 types (`JSONB`, `TIMESTAMPTZ`, partial indexes, etc.) should be used directly
 without guard clauses for alternative backends.
 
+File-based or embedded databases are intentionally unsupported. Running Alembic
+against such engines can silently lose features and must be avoided in pull
+requests.
+
 ## Running migrations
 
 ```bash
