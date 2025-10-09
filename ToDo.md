@@ -13,7 +13,7 @@
   - Full admin API suite runs without `no such table` errors.
 - **Risks/Impact:** Schema changes in production environments require coordination and rollback planning.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/api/test_admin_artists.py` failure logs; Alembic migration `202411181200`. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/api/test_admin_artists.py` failure logs; Alembic Baseline `202501150000`. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】【F:app/migrations/versions/202501150000_baseline_postgres.py†L1-L36】
 - **Subtasks:**
   - [x] CODX-P0-DB-311 — Author and apply `activity_events` migration with verification harness.
 

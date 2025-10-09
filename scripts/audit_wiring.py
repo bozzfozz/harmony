@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
 import sys
@@ -17,6 +18,8 @@ FORBIDDEN_PATTERNS = {
     "beet ": re.compile(r"\bbeet\s", re.IGNORECASE),
     "scan_worker": re.compile(r"scan_worker"),
 }
+
+ALEMBIC_VERSIONS_DIR = REPO_ROOT / "app" / "migrations" / "versions"
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,34 @@ def line_is_allowed(path: Path, line: str) -> bool:
     return any(allowance.matches(path, line) for allowance in ALLOWANCES)
 
 
+def _check_alembic_reset_guard() -> list[str]:
+    guard = os.getenv("MIGRATION_RESET")
+    if guard == "1":
+        return []
+
+    if not ALEMBIC_VERSIONS_DIR.exists():
+        return [
+            "Alembic guard: versions directory missing; set MIGRATION_RESET=1 to bypass during resets.",
+        ]
+
+    revision_files = sorted(
+        path
+        for path in ALEMBIC_VERSIONS_DIR.iterdir()
+        if path.is_file() and path.suffix == ".py" and path.name != "__init__.py"
+    )
+
+    if len(revision_files) != 1:
+        details = ", ".join(path.name for path in revision_files) or "no revision files"
+        return [
+            (
+                "Alembic guard: expected exactly one baseline revision under app/migrations/versions. "
+                "Found {count} files ({details}). Set MIGRATION_RESET=1 to bypass during migration resets."
+            ).format(count=len(revision_files), details=details)
+        ]
+
+    return []
+
+
 def main() -> int:
     violations: list[str] = []
 
@@ -73,6 +104,8 @@ def main() -> int:
                     continue
                 violations.append(f"{relative_path}:{index}: forbidden reference '{label}'")
                 break
+
+    violations.extend(_check_alembic_reset_guard())
 
     if violations:
         for violation in violations:

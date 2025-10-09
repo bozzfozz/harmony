@@ -75,8 +75,10 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Alembic upgrade
-        run: alembic upgrade head
+      - name: Alembic fresh upgrade
+        run: |
+          alembic downgrade base || true
+          alembic upgrade head
       - name: Pytest
         run: pytest -q
       - name: Alembic downgrade

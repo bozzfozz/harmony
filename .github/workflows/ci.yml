@@ -59,8 +59,10 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Alembic upgrade
-        run: alembic upgrade head
+      - name: Alembic fresh upgrade
+        run: |
+          alembic downgrade base || true
+          alembic upgrade head
       - name: Wiring audit
         run: python scripts/audit_wiring.py
       - name: Ruff (lint + import order)

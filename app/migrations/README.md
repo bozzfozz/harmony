@@ -10,6 +10,12 @@ Migrations are expected to run exactly once per environment; PostgreSQL-native
 types (`JSONB`, `TIMESTAMPTZ`, partial indexes, etc.) should be used directly
 without guard clauses for alternative backends.
 
+> **Hinweis:** Am 15. 01. 2025 wurde die gesamte Historie zu einer Baseline
+> zusammengeführt. Das Verzeichnis `app/migrations/versions/` enthält bewusst
+> genau eine Revision (`baseline@postgres`). Setze `MIGRATION_RESET=1`, falls du
+> den Ordner temporär leeren oder eine neue Baseline erzeugen musst; CI und
+> `scripts/audit_wiring.py` brechen andernfalls ab.
+
 File-based or embedded databases are intentionally unsupported. Running Alembic
 against such engines can silently lose features and must be avoided in pull
 requests; the legacy file-backed smoke harness exists solely for archival
