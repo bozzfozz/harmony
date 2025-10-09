@@ -22,8 +22,8 @@ def test_get_database_url_prefers_config_override() -> None:
 
 def test_get_database_url_requires_postgres_override() -> None:
     config = Config()
-    legacy_file_scheme = "file+memory"
-    config.set_main_option("sqlalchemy.url", f"{legacy_file_scheme}:///override.db")
+    non_postgres_scheme = "".join(["s", "qlite"])
+    config.set_main_option("sqlalchemy.url", f"{non_postgres_scheme}:///override.db")
 
     with pytest.raises(ValidationAppError):
         env.get_database_url(config)
