@@ -531,6 +531,7 @@ Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architectur
 - Optional: Docker und Docker Compose
 
 Harmony unterstützt ausschließlich PostgreSQL als Datenbank-Backend; eingebettete oder file-basierte Engines funktionieren nicht mit den Migrationen und Tests.
+Legacy-Dateistores aus frühen Experimenten gelten als reine Smoke-Hilfen und werden in produktiven oder CI-Szenarien nicht mehr berücksichtigt.
 
 ### Lokales Setup
 

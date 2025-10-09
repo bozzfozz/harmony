@@ -4,7 +4,7 @@
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| Backend CI (SQLite) | ✅ | [`backend` job in `.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
+| Backend CI (embedded smoke harness) | ✅ | [`backend` job in `.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
 | Backend CI (PostgreSQL) | ✅ | [`backend-postgres` job in `.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
 | Lint & Static Analysis | ✅ | Ruff, Black, Mypy, Bandit steps in [`backend` job](../../.github/workflows/ci.yml) |
 | Coverage ≥ 85 % (changed modules) | ✅ | `pytest --cov=app/schemas/common.py --cov-report=term-missing` |

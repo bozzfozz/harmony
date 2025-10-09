@@ -41,6 +41,8 @@ Harmony betreibt sämtliche Persistenz ausschließlich auf PostgreSQL. Die
 Konfiguration erzwingt `postgresql+psycopg://` oder `postgresql+asyncpg://`
 Verbindungszeichenketten; ein eingebetteter oder file-basierter Fallback wird
 nicht initialisiert.
+Das frühere file-basierte Smoke-Setup bleibt lediglich als Diagnosewerkzeug im
+Archiv und besitzt keine Parität zu den produktiven Pfaden.
 
 ## Komponenten im Detail
 

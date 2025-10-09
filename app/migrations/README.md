@@ -12,7 +12,8 @@ without guard clauses for alternative backends.
 
 File-based or embedded databases are intentionally unsupported. Running Alembic
 against such engines can silently lose features and must be avoided in pull
-requests.
+requests; the legacy file-backed smoke harness exists solely for archival
+regression checks.
 
 ## Running migrations
 
