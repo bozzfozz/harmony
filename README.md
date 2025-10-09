@@ -1007,6 +1007,8 @@ Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht gel
 
 Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
 
+- **SQLite-Guard beachten:** Die CI besitzt einen dedizierten Guard-Job, der bei jedem Lauf nach verbotenen `sqlite`-Referenzen in `app/`, `tests/` und `docs/` sucht. Führt lokal `rg --pcre2 -n -i '\bsqlite' app tests docs` aus, bevor ihr neue Datenbank-Pfade pusht. Wird ein Treffer gefunden, muss der Code auf PostgreSQL abstrahiert oder (falls unvermeidlich) klar hinter Feature-Gates versteckt werden.
+
 ## Tests & CI
 
 ```bash
@@ -1018,10 +1020,7 @@ Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
 
 ### PostgreSQL parity suite
 
-- Das Workflow-File [`backend-postgres.yml`](.github/workflows/backend-postgres.yml) betreibt einen separaten CI-Lauf mit
-  PostgreSQL 16. Der Job führt `alembic upgrade head`, startet `pytest -m postgres -q` für alle mit dem Marker versehenen
-  Datenbanktests (Queue-Idempotenz, Orchestrator-Leases, Activity-Historie, Async-DAO) und validiert anschließend mit
-  `alembic downgrade base`, dass die Migrationen auch rückwärts ausführbar bleiben.
+- Alle Backend-Jobs in der CI – inkl. [`ci.yml`](.github/workflows/ci.yml) und [`backend-postgres.yml`](.github/workflows/backend-postgres.yml) – betreiben einen separaten PostgreSQL 16 Service, führen `alembic upgrade head` aus und lassen **die komplette** Test- und Lint-Matrix gegen die Datenbank laufen. Anschließend sorgt `alembic downgrade base` für den „downward compatibility“-Check.
 - Lokal lässt sich der Lauf mit einem Docker-Container spiegeln:
 
   ```bash
@@ -1037,7 +1036,7 @@ Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
   ```bash
   export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
   alembic upgrade head
-  pytest -m postgres -q
+  pytest -q
   alembic downgrade base
   ```
 

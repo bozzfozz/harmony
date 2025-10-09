@@ -11,8 +11,29 @@ on:
   pull_request:
 
 jobs:
+  sqlite-guard:
+    uses: ./.github/workflows/sqlite-guard.yml
+
   backend:
+    needs: sqlite-guard
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: harmony
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/harmony
+      PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,6 +50,17 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           pip install black==24.8.0 ruff==0.12.11 isort==5.13.2 mypy
+      - name: Wait for database
+        run: |
+          for attempt in {1..30}; do
+            if pg_isready --host=localhost --port=5432 --username=postgres; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Alembic upgrade
+        run: alembic upgrade head
       - name: Wiring audit
         run: python scripts/audit_wiring.py
       - name: Ruff (lint + import order)
@@ -41,6 +73,8 @@ jobs:
         run: mypy app
       - name: Pytest
         run: pytest -q
+      - name: Alembic downgrade
+        run: alembic downgrade base
       - name: pip-audit (advisories only)
         run: pip-audit -r requirements.txt || true
       - name: Radon
@@ -49,6 +83,7 @@ jobs:
         run: vulture app tests --exclude .venv
 
   frontend:
+    needs: sqlite-guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +106,7 @@ jobs:
         run: npm run build
 
   openapi:
+    needs: sqlite-guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -97,6 +133,7 @@ jobs:
           PY
 
   security-bandit:
+    needs: sqlite-guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

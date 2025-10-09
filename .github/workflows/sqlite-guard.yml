@@ -1,0 +1,23 @@
+name: SQLite Guard
+
+on:
+  workflow_call:
+
+jobs:
+  guard:
+    name: Enforce PostgreSQL-only code paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on SQLite references
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+
+          if rg --pcre2 -n -i '\bsqlite' app tests docs; then
+            echo "::error::Forbidden SQLite references detected. Please remove or gate them behind PostgreSQL-compatible logic."
+            exit 1
+          else
+            echo "No forbidden SQLite keywords detected."
+          fi
