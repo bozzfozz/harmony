@@ -22,7 +22,7 @@
 ## Minimal-Set für funktionierenden Start
 1. `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` (App-Auth)【F:app/config.py†L493-L508】  
 2. `SLSKD_BASE_URL` oder `SLSKD_URL` + `SLSKD_API_KEY` für Soulseek.【F:app/config.py†L565-L625】  
-3. `DATABASE_URL` falls keine SQLite-Default-DB genutzt werden soll.【F:app/config.py†L395-L410】  
+3. `DATABASE_URL` muss auf den Postgres-Dienst zeigen; der frühere eingebettete Default dient nur noch als Notfall-Smoke-Test.【F:app/config.py†L395-L410】
 4. (Prod) `FEATURE_REQUIRE_AUTH=true` + `HARMONY_API_KEYS` / `HARMONY_API_KEYS_FILE`.【F:app/config.py†L895-L918】
 
 ## Profilempfehlung
