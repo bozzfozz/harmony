@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 from typing import Optional
 
@@ -24,10 +25,15 @@ target_metadata = metadata
 
 
 def _resolve_database_url(alembic_config: Optional[Config]) -> str:
+    env_override = os.getenv("ALEMBIC_DATABASE_URL")
+    if env_override:
+        return _require_postgres_database_url(env_override)
+
     if alembic_config is not None:
         candidate = alembic_config.get_main_option("sqlalchemy.url")
         if candidate:
             return _require_postgres_database_url(candidate)
+
     return load_config().database.url
 
 
