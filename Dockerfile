@@ -6,6 +6,7 @@ RUN mkdir -p /app/frontend \
 USER node
 
 COPY --chown=node:node frontend/package*.json ./
+COPY --chown=node:node frontend/.npmrc ./.npmrc
 RUN npm ci --no-audit --no-fund
 
 COPY --chown=node:node frontend/ ./
