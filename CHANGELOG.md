@@ -1,4 +1,5 @@
 ## v2.0.0 — unreleased
+- chore(tooling): enforce Ruff auto-fix policy with pre-commit hooks, pre-commit.ci integration and maintainer guidance. [CODX-RUFF-AUTOFIX-002]
 - sec(ci): introduce Bandit security-autofix workflow, allowlist policy updates in AGENTS.md, documentation for reviewers and developers, plus local pre-commit support. [CODX-SEC-AUTOFIX-001]
 - infra(docker): konsolidierte Build-Pipeline, Compose & Doku für das einheitliche Harmony-Image (`ghcr.io/bozzfozz/harmony`) mit Health-Check `/api/health/ready` und Port 8080. [CODX-P0-IMG-600]
 - feat(middleware): request-id, structured logging, optional auth/rate limiting, ETag cache, CORS/GZip and unified error mapping [CODX-P0-MW-104]

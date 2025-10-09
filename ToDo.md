@@ -131,6 +131,25 @@
 - **Subtasks:**
   - [x] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
 
+## TD-20251009-002 Automate Ruff auto-fix policy rollout
+- **Status:** done
+- **Priority:** P1
+- **Scope:** all
+- **Owner:** platform
+- **Created_at (UTC):** 2025-10-09T10:00:00Z
+- **Updated_at (UTC):** 2025-10-09T12:30:00Z
+- **Tags:** lint, tooling, ci
+- **Description:** pre-commit hooks sollen Ruff-Verstöße automatisch korrigieren, pre-commit.ci ergänzt fehlende Fixes mit einem separaten Commit und die Richtlinie ist in AGENTS/README/Maintenance dokumentiert.
+- **Acceptance Criteria:**
+  - `.pre-commit-config.yaml` führt `ruff check --fix` und `ruff format` verpflichtend aus.
+  - `pre-commit.ci` erstellt Auto-Fix-Commits mit dem definierten Template.
+  - README, AGENTS und REPO_MAINTENANCE beschreiben Policy, Ausnahmen und CI-Gates.
+- **Risks/Impact:** Auto-Fixes könnten generierten Code überschreiben; Ausnahmeregeln begrenzen dies.
+- **Dependencies:** None.
+- **References:** CODX-RUFF-AUTOFIX-002; `.pre-commit-config.yaml`; `AGENTS.md`; `README.md`; `REPO_MAINTENANCE.md`; `CHANGELOG.md`. 【F:.pre-commit-config.yaml†L1-L27】【F:AGENTS.md†L43-L62】【F:README.md†L1060-L1071】【F:REPO_MAINTENANCE.md†L52-L57】【F:CHANGELOG.md†L1-L3】
+- **Subtasks:**
+  - [x] CODX-RUFF-AUTOFIX-002A — Update Hooks, Policy und Dokumentation für Ruff Auto-Fixes.
+
 ## TD-20251009-001 Enforce required CI checks post-reset
 - **Status:** todo
 - **Priority:** P1

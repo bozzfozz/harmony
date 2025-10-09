@@ -7,7 +7,8 @@ repos:
     rev: v0.6.4
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
   - repo: https://github.com/psf/black
     rev: 24.8.0
     hooks:
@@ -20,3 +21,7 @@ repos:
         language: system
         pass_filenames: false
         stages: [manual]
+
+ci:
+  autofix_prs: true
+  autofix_commit_msg: "chore(pre-commit.ci): apply automated ruff fixes"

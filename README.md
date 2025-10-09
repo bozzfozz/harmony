@@ -1059,8 +1059,16 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 - **Black** formatiert sämtlichen Python-Code mit einer Zeilenlänge von 88 Zeichen (`black .` bzw. `black --check .`).
 - **isort** verwaltet die Import-Reihenfolge (`isort .` / `isort --check-only .`) und nutzt das Black-Profil mit denselben Sections wie Ruff (`known_first_party = ["app", "tests"]`).
-- **Ruff** kümmert sich um die verbleibenden Lint-Regeln (`ruff check .`); Import-Sortierung ist deaktiviert, damit keine Konflikte mit isort entstehen.
-- **Pre-Commit**: Installiert über `pre-commit install`, um `isort`, `ruff` (mit `--fix`) und `black` automatisch vor jedem Commit auszuführen.
+- **Ruff** prüft alle verbleibenden Lint-Regeln (`ruff check .`). Auto-Fixes laufen lokal über `pre-commit` (siehe unten) sowie im PR über `pre-commit.ci`.
+- **Pre-Commit**: `pre-commit install` sorgt dafür, dass `isort`, `ruff check --fix`, `ruff format` und `black` automatisch vor jedem Commit laufen.
+
+### Automatische Ruff-Fixes
+
+1. **Lokal (verpflichtend):** Installiert `pre-commit` einmalig (`pip install pre-commit && pre-commit install`). Beim Commit führen die Hooks `ruff check --fix`, `ruff format`, `isort` und `black` aus. Alternativ könnt ihr die Kette manuell starten: `pre-commit run --all-files`.
+2. **Pull Requests:** `pre-commit.ci` ist aktiviert und ergänzt fehlende Fixes mit einem separaten Commit `chore(pre-commit.ci): apply automated ruff fixes`. Bitte nicht rebasen oder Force-Pushen, um diesen Commit zu entfernen.
+3. **CI-Gate:** `.github/workflows/ci.yml` läuft mit `ruff check .` (ohne `--fix`). Bleiben nach den Auto-Fixes Verstöße übrig, blockiert die Pipeline den Merge.
+4. **Ausnahmen:** Für deterministisch generierte Dateien (z. B. `app/migrations/versions/*`) kann der Auto-Fix übersprungen werden. Dokumentiert den Grund im PR (`Skip Ruff auto-fix: <Grund>`) und nutzt nur für diesen Commit `SKIP=ruff`.
+5. **Troubleshooting:** Falls `pre-commit` Dateien verändert, wiederholt den Commit-Versuch, nachdem die Änderungen gestaged wurden. Nutzt `pre-commit run --show-diff-on-failure` für mehr Kontext.
 
 ## Tests & CI
 

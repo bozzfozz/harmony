@@ -49,6 +49,13 @@ bandit -r app -x tests
 pytest -m "not postgres" --cov=app --cov-fail-under=85
 ```
 
+### pre-commit.ci Auto-Fixes
+
+- **Status:** Aktiviert für alle Pull Requests. Der Dienst führt dieselben Hooks wie lokal aus (`ruff check --fix`, `ruff format`, `isort`, `black`).
+- **Commit Message:** Automatische Fixes nutzen `chore(pre-commit.ci): apply automated ruff fixes`. Nicht squashen oder entfernen, damit Reviewer die Auto-Fixes nachvollziehen können.
+- **Merge-Gate:** Trotz Auto-Fixes bleibt `ci-backend` (mit `ruff check .`) merge-blockierend. Bei verbleibenden Ruff-Verstößen schlägt der Lauf fehl; Maintainer verlangen manuelle Nacharbeit.
+- **Write-Scopes:** GitHub Actions behalten read-only-Rechte; nur pre-commit.ci darf Fix-Commits schreiben. Änderungen an Branch-Protection oder Service-Konfiguration im Admin-Runbook dokumentieren.
+
 ## Nightly Report Retrieval
 Download the `nightly-security-reports` artifact from the latest scheduled run to review:
 - `pip-audit.json`

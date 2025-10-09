@@ -46,6 +46,21 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
+### 4.1 Ruff Auto-Fix Policy — **verbindlich** (`CODX-RUFF-AUTOFIX-002`)
+
+- **Hooks installieren:** Führt `pip install pre-commit && pre-commit install` aus, bevor ihr Python-Dateien committed. Die verpflichtenden Hooks laufen bei jedem Commit: `ruff check --fix`, `ruff format`, `isort`, `black`.
+- **Keine manuellen Fix-Commits:** Führt Ruff-Korrekturen ausschließlich über die Hooks oder `pre-commit run --all-files` aus. Manuelle Formatierungs- oder Lint-Commits gelten als Policy-Verstoß.
+- **Pre-commit.ci Auto-Fix:** Der Dienst ist aktiviert und darf fehlende Fixes mit separatem Commit (`chore(pre-commit.ci): apply automated ruff fixes`) ergänzen. Lasst diesen Commit unverändert bestehen; lokale Force-Pushes, die ihn verwerfen, sind zu vermeiden.
+- **Ausnahmen:** Rein generierter Code (z. B. `app/migrations/versions/*`, Artefakte aus Codegeneratoren) darf bei Bedarf vom Auto-Fix ausgenommen werden, sofern
+  1. der Generator deterministisch dieselbe Ausgabe produziert und
+  2. der PR eine kurze Begründung im Beschreibungstext enthält (`Skip Ruff auto-fix: <Grund>`).
+  Nutzt in solchen Fällen `SKIP=ruff` gezielt für den Commit und dokumentiert, welcher Generator verantwortlich ist. Reviewer prüfen, dass die Ausnahme eng begrenzt bleibt.
+- **Reviewer-Check:** Prüft in jedem PR, ob
+  - `pre-commit`-Hooks laufen (`pre-commit.ci` Status oder lokaler Output im PR) und
+  - verbleibende Ruff-Findings im CI behoben wurden.
+  Offene Ruff-Verstöße oder ausgelassene Hooks blockieren das Merge (`request changes`).
+- **CI-Gate:** `.github/workflows/ci.yml` führt `ruff check .` **ohne** `--fix` aus. Bleiben nach Auto-Fixes Verstöße bestehen, schlägt die Pipeline fehl und blockiert den Merge.
+
 ## 5. Prompt- & Agent-Spezifika
 - **Prompt-Design**: Ziel, Eingaben, Ausgaben, Constraints, Abbruchkriterien; Idempotenz; Trennung Instruktion/Daten.
 - **Konfiguration**: Prompts versionieren unter `prompts/<name>@vX.Y.Z.md`; Parameter & Limits (Timeout, Retries, Rate-Limits) deklarieren.
