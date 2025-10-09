@@ -339,7 +339,7 @@ Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Rel
 
 - `POST /watchlist` registriert einen Artist anhand der Spotify-ID. Beim Anlegen wird `last_checked` auf „jetzt“ gesetzt, sodass nur zukünftige Veröffentlichungen berücksichtigt werden.
 - `GET /watchlist` liefert alle eingetragenen Artists inklusive Zeitstempel des letzten Checks.
-- `DELETE /watchlist/{id}` entfernt einen Eintrag und beendet die Überwachung.
+- `DELETE /watchlist/{artist_key}` entfernt einen Eintrag anhand des vollständigen Keys (z. B. `spotify:artist-42`) und beendet die Überwachung.
 
 Mehrfachdownloads werden verhindert: Alle Tracks mit einem Download-Status ungleich `failed` oder `cancelled` werden übersprungen. Fehlerhafte Soulseek-Suchen werden protokolliert, blockieren den Worker aber nicht. Das Intervall kann über die Umgebungsvariable `WATCHLIST_INTERVAL` (Sekunden) angepasst werden.
 

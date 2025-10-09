@@ -38,3 +38,19 @@ def test_prevent_duplicate_artists(client) -> None:
 
     second = client.post("/watchlist", json=payload)
     assert second.status_code == 409
+
+
+def test_trimmed_identifiers_prevent_duplicates(client) -> None:
+    initial = client.post(
+        "/watchlist",
+        json={"artist_key": "spotify:artist-777"},
+    )
+    assert initial.status_code == 201
+    body = initial.json()
+    assert body["artist_key"] == "spotify:artist-777"
+
+    duplicate = client.post(
+        "/watchlist",
+        json={"artist_key": "spotify:  artist-777  "},
+    )
+    assert duplicate.status_code == 409
