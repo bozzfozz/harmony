@@ -38,6 +38,12 @@
 - chore(conf): konservative Watchlist-Defaults mit Retry-Budget und Cooldown
   festgeschrieben, Worker-Backoff gedeckelt, neue Tests und README-Tabelle
   dokumentieren die Limits.【F:app/config.py†L114-L200】【F:app/workers/watchlist_worker.py†L1-L420】【F:tests/workers/test_watchlist_defaults.py†L1-L260】【F:README.md†L87-L104】
+
+## v1.0.0 — 2025-09-15
+- chore(ci): reset GitHub Actions to a two-lane CI with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip Postgres markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
+- chore(ci): add nightly dependency and secret scans at 01:00 Europe/Berlin with CycloneDX SBOM exports and 7-day report retention.【F:.github/workflows/nightly.yml†L1-L103】
+- chore(ci): introduce tag-triggered release automation that publishes Python distributions and optional frontend bundles as GitHub release assets.【F:.github/workflows/release.yml†L1-L72】
+- docs: capture required checks, Postgres opt-in policy, and operational expectations in `REPO_MAINTENANCE.md`.【F:REPO_MAINTENANCE.md†L1-L74】
 - perf(worker): entblockt den Watchlist-Worker mit konfigurierbarem DB-I/O,
   strikten Spotify-/Soulseek-Timeouts, begrenzter Parallelität und
   exponentiellem Retry-Backoff; aktualisierte Tests und Dokumentation

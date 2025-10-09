@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: build-and-release
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.11"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build backend distribution
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+          python -m build
+
+      - name: Archive backend distribution
+        run: |
+          ls dist
+
+      - name: Set up Node.js
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend bundle
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          tar -C dist -czf ../frontend-dist.tar.gz .
+
+      - name: Collect release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          files=$(printf "%s\n" dist/*)
+          if [ -f frontend-dist.tar.gz ]; then
+            files="$files\nfrontend-dist.tar.gz"
+          fi
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          printf "%s\n" $files >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.assets.outputs.files }}
+          generate_release_notes: true
