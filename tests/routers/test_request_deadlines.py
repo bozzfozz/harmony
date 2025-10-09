@@ -5,12 +5,12 @@ from __future__ import annotations
 import time
 
 import pytest
+from tests.fixtures.async_client import AsyncDeadlineClient
+from tests.helpers import api_path
 
 from app import db
 from app import dependencies as deps
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
-from tests.fixtures.async_client import AsyncDeadlineClient
-from tests.helpers import api_path
 
 
 def _install_slow_session_runner(monkeypatch: pytest.MonkeyPatch, delay: float) -> None:

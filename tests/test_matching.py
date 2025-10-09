@@ -1,4 +1,5 @@
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app.core.matching_engine import MusicMatchingEngine
 from app.integrations.normalizers import (
@@ -6,7 +7,6 @@ from app.integrations.normalizers import (
     normalize_spotify_track,
 )
 from app.models import Match
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture
@@ -27,9 +27,7 @@ def test_slskd_confidence_scoring(matching_engine: MusicMatchingEngine) -> None:
     assert 0.65 < score <= 1.0
 
 
-def test_matching_api_soulseek(
-    client: SimpleTestClient, db_session
-) -> None:  # type: ignore[reportGeneralTypeIssues]
+def test_matching_api_soulseek(client: SimpleTestClient, db_session) -> None:  # type: ignore[reportGeneralTypeIssues]
     payload = {
         "spotify_track": {"id": "track-1", "name": "Example Song"},
         "candidates": [

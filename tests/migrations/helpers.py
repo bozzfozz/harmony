@@ -75,23 +75,23 @@ def assert_queue_jobs_schema(engine: sa.Engine) -> None:
     assert not missing_indexes, f"Missing indexes: {sorted(missing_indexes)}"
 
     payload_column = _get_column(queue_columns, "payload_json")
-    assert isinstance(
-        payload_column["type"], postgresql.JSONB
-    ), "queue_jobs.payload_json should be JSONB"
+    assert isinstance(payload_column["type"], postgresql.JSONB), (
+        "queue_jobs.payload_json should be JSONB"
+    )
     result_column = _get_column(queue_columns, "result_payload")
-    assert isinstance(
-        result_column["type"], postgresql.JSONB
-    ), "queue_jobs.result_payload should be JSONB"
+    assert isinstance(result_column["type"], postgresql.JSONB), (
+        "queue_jobs.result_payload should be JSONB"
+    )
 
     for column_name in ("available_at", "lease_expires_at", "created_at", "updated_at"):
         column = _get_column(queue_columns, column_name)
         column_type = column["type"]
-        assert isinstance(
-            column_type, postgresql.TIMESTAMP
-        ), f"queue_jobs.{column_name} should use TIMESTAMPTZ"
-        assert (
-            getattr(column_type, "timezone", False) is True
-        ), f"queue_jobs.{column_name} must be timezone aware"
+        assert isinstance(column_type, postgresql.TIMESTAMP), (
+            f"queue_jobs.{column_name} should use TIMESTAMPTZ"
+        )
+        assert getattr(column_type, "timezone", False) is True, (
+            f"queue_jobs.{column_name} must be timezone aware"
+        )
 
 
 def assert_activity_events_schema(engine: sa.Engine) -> None:
@@ -106,22 +106,22 @@ def assert_activity_events_schema(engine: sa.Engine) -> None:
 
     timestamp_column = _get_column(columns, "timestamp")
     timestamp_type = timestamp_column["type"]
-    assert isinstance(
-        timestamp_type, postgresql.TIMESTAMP
-    ), "activity_events.timestamp should use TIMESTAMPTZ"
-    assert (
-        getattr(timestamp_type, "timezone", False) is True
-    ), "activity_events.timestamp must be timezone aware"
+    assert isinstance(timestamp_type, postgresql.TIMESTAMP), (
+        "activity_events.timestamp should use TIMESTAMPTZ"
+    )
+    assert getattr(timestamp_type, "timezone", False) is True, (
+        "activity_events.timestamp must be timezone aware"
+    )
 
     details_column = _get_column(columns, "details")
-    assert isinstance(
-        details_column["type"], postgresql.JSONB
-    ), "activity_events.details should be JSONB"
+    assert isinstance(details_column["type"], postgresql.JSONB), (
+        "activity_events.details should be JSONB"
+    )
 
     indexes = {index["name"] for index in inspector.get_indexes("activity_events")}
-    assert (
-        "ix_activity_events_type_status_timestamp" in indexes
-    ), "Missing activity_events composite index"
+    assert "ix_activity_events_type_status_timestamp" in indexes, (
+        "Missing activity_events composite index"
+    )
 
 
 def assert_postgresql_types(engine: sa.Engine) -> None:
@@ -131,19 +131,19 @@ def assert_postgresql_types(engine: sa.Engine) -> None:
 
     for table, column in _JSONB_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)
-        assert isinstance(
-            info["type"], postgresql.JSONB
-        ), f"{table}.{column} should be JSONB"
+        assert isinstance(info["type"], postgresql.JSONB), (
+            f"{table}.{column} should be JSONB"
+        )
 
     for table, column in _TIMESTAMPTZ_COLUMNS:
         info = _get_column(inspector.get_columns(table), column)
         column_type = info["type"]
-        assert isinstance(
-            column_type, postgresql.TIMESTAMP
-        ), f"{table}.{column} should use TIMESTAMPTZ"
-        assert (
-            getattr(column_type, "timezone", False) is True
-        ), f"{table}.{column} must be timezone aware"
+        assert isinstance(column_type, postgresql.TIMESTAMP), (
+            f"{table}.{column} should use TIMESTAMPTZ"
+        )
+        assert getattr(column_type, "timezone", False) is True, (
+            f"{table}.{column} must be timezone aware"
+        )
 
 
 def _get_column(columns: list[dict[str, object]], name: str) -> dict[str, object]:

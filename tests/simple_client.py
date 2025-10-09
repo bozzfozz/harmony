@@ -11,7 +11,6 @@ os.environ.setdefault("HARMONY_API_KEYS", "test-key")
 from urllib.parse import urlencode
 
 from fastapi import FastAPI
-
 from tests.helpers import api_path
 
 

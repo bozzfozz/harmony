@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+from tests.conftest import StubSoulseekClient
 
 import app.workers.artwork_worker as artwork_worker
 from app.config import ArtworkConfig, ArtworkFallbackConfig, ArtworkPostProcessingConfig
@@ -18,7 +19,6 @@ from app.workers.artwork_worker import (
     ArtworkWorker,
 )
 from app.workers.sync_worker import SyncWorker
-from tests.conftest import StubSoulseekClient
 
 
 def _make_artwork_config(

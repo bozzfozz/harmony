@@ -8,7 +8,6 @@ import pytest
 import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.exc import IntegrityError
-
 from tests.support.postgres import postgres_schema
 
 from .helpers import make_config

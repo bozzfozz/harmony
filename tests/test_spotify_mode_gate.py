@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from tests.simple_client import SimpleTestClient
+
 from app import dependencies as deps
 from app.utils.settings_store import write_setting
-from tests.simple_client import SimpleTestClient
 
 
 def test_spotify_status_reports_capabilities(client: SimpleTestClient) -> None:

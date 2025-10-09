@@ -201,7 +201,6 @@ class LyricsWorker:
     async def _update_download(
         self, download_id: int, *, status: str, path: str | None
     ) -> None:
-
         def _apply(session: Session) -> None:
             download = session.get(Download, int(download_id))
             if download is None:

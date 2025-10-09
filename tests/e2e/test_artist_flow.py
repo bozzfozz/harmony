@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import select
+from tests.fixtures.artists import ArtistFactory
 
 from app.db import session_scope
 from app.integrations.contracts import ProviderRelease
@@ -14,7 +15,6 @@ from app.models import ArtistRecord, QueueJob, QueueJobStatus, WatchlistArtist
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 from app.services.retry_policy_provider import get_retry_policy_provider
 from app.workers import persistence
-from tests.fixtures.artists import ArtistFactory
 
 pytestmark = pytest.mark.lifespan_workers
 
@@ -66,9 +66,9 @@ def _run_watchlist_cycle(client) -> None:
         job = client._loop.run_until_complete(timer._enqueue_artist(row))
         if job is not None:
             jobs.append(job)
-    assert any(
-        job.type == "artist_refresh" for job in jobs
-    ), "expected artist_refresh job"
+    assert any(job.type == "artist_refresh" for job in jobs), (
+        "expected artist_refresh job"
+    )
     _drain_jobs(client, dispatcher)
 
 

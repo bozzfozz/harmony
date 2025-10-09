@@ -2,11 +2,11 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.main import app
 from app.models import Download
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture(autouse=True)

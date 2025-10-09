@@ -50,7 +50,7 @@ Harmony betreibt einen dedizierten GitHub-Workflow `security-autofix`, der Bandi
 - **Trigger:** läuft nächtlich und auf internen Pull-Requests. Repositories oder Organisationen können den Lauf per `SECURITY_AUTOFIX=0` pausieren.
 - **Allowlist:** `B506` (yaml.load ohne Loader), `B603/B602` (subprocess `shell=True`), `B324` (`hashlib.new("md5")` in Tests/Non-Crypto), `B306` (`tempfile.mktemp`), `B311` (`random` für Token/Secrets) und `B108` (harte `/tmp`-Pfade). Alle übrigen Bandit-Regeln landen in manuellen Tasks.
 - **Guards:** Kein Auto-Fix bei Public-Contracts (APIs, CLI-Flags, Serialisierung), variablen Shell-Strings oder nicht deterministischen Kontexten. In diesen Fällen erstellt der Workflow eine PR mit Label `needs-security-review` ohne Auto-Merge.
-- **Quality Gates:** Jeder Patch durchläuft `ruff`, `black`, `isort`, `mypy`, `pytest` und einen erneuten `bandit`-Scan. Auto-Merge wird nur aktiviert, wenn sämtliche Gates grün sind und der Bandit-Report clean ist.
+- **Quality Gates:** Jeder Patch durchläuft `ruff check`, `ruff format --check`, `mypy`, `pytest` und einen erneuten `bandit`-Scan. Auto-Merge wird nur aktiviert, wenn sämtliche Gates grün sind und der Bandit-Report clean ist.
 - **Commit-/PR-Regeln:** Commits folgen dem Schema `security(autofix): <rule-id|multi> remediation [skip-changelog]`, PRs werden unter `[CODX-SEC-AUTOFIX-001]` zusammengefasst und tragen das Label `security-autofix`.
 - **Artefakte:** Pre-/Post-Scan, Summary (JSON/Markdown) und Fix-Details werden als GitHub-Artefakte abgelegt und stehen für Audits zur Verfügung.
 

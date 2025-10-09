@@ -112,9 +112,9 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
     return _probe
 
 
-def _build_orchestrator_dependency_probes() -> (
-    Mapping[str, Callable[[], DependencyStatus]]
-):
+def _build_orchestrator_dependency_probes() -> Mapping[
+    str, Callable[[], DependencyStatus]
+]:
     jobs = (
         "sync",
         "matching",

@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app.db import session_scope
 from app.models import Download
-from tests.simple_client import SimpleTestClient
 
 
 def _make_track(

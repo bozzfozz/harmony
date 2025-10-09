@@ -160,9 +160,7 @@ async def test_submit_free_ingest_uses_custom_factory() -> None:
 
     created: dict[str, Any] = {}
 
-    def factory(
-        config, soulseek, worker, session_runner
-    ) -> StubFreeIngestService:  # type: ignore[override]
+    def factory(config, soulseek, worker, session_runner) -> StubFreeIngestService:  # type: ignore[override]
         created["worker"] = worker
         created["config"] = config
         created["session_runner"] = session_runner

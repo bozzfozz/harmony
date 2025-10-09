@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 import httpx
 import pytest
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
 
 from app.errors import DependencyError, RateLimitedError, ValidationAppError
 from app.main import app
@@ -16,8 +18,6 @@ from app.services.secret_validation import (
     SecretValidationService,
     SecretValidationSettings,
 )
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 def _service_with_transport(handler: httpx.MockTransport) -> SecretValidationService:

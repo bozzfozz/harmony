@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app.models import Playlist
 from app.services.cache import (
@@ -12,7 +13,6 @@ from app.services.cache import (
 )
 from app.utils.http_cache import compute_playlist_collection_metadata
 from app.workers.playlist_sync_worker import PlaylistCacheInvalidator
-from tests.simple_client import SimpleTestClient
 
 
 def _build_entry(

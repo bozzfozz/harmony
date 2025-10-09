@@ -60,20 +60,15 @@ jobs:
           pip install -r requirements-dev.txt
           pip install \
             bandit \
-            black \
-            isort \
             mypy \
             pytest-cov \
-            ruff
+            "ruff==0.6.4"
 
       - name: Ruff (lint)
         run: ruff check .
 
-      - name: Black (format check)
-        run: black --check .
-
-      - name: Isort (imports)
-        run: isort --check-only .
+      - name: Ruff (format check)
+        run: ruff format --check .
 
       - name: Mypy (static typing)
         run: mypy app

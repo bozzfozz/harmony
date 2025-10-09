@@ -122,9 +122,7 @@ def captured_events(
 ) -> list[tuple[str, Mapping[str, Any]]]:
     events: list[tuple[str, Mapping[str, Any]]] = []
 
-    def recorder(
-        logger: Any, event: str, /, **fields: Any
-    ) -> None:  # noqa: ANN401 - test helper
+    def recorder(logger: Any, event: str, /, **fields: Any) -> None:  # noqa: ANN401 - test helper
         events.append((event, dict(fields)))
 
     monkeypatch.setattr("app.orchestrator.events.log_event", recorder)

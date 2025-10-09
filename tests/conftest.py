@@ -35,6 +35,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import NoSuchModuleError, OperationalError, ProgrammingError
 from sqlalchemy.schema import CreateSchema, DropSchema
+from tests.simple_client import SimpleTestClient
 
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
@@ -69,7 +70,6 @@ from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataWorker
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
 from app.workers.sync_worker import SyncWorker
-from tests.simple_client import SimpleTestClient
 
 SKIP_POSTGRES_ENV_VAR = "PYTEST_SKIP_POSTGRES"
 _POSTGRES_SKIP_REASON = (

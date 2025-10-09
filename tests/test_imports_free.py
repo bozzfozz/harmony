@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
+from tests.simple_client import SimpleTestClient
 
 from app.db import session_scope
 from app.models import ImportBatch, ImportSession
-from tests.simple_client import SimpleTestClient
 
 
 def _make_playlist_id(index: int) -> str:

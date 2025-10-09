@@ -107,7 +107,9 @@ async def test_enqueue_validates_inputs() -> None:
 @pytest.mark.asyncio
 async def test_enqueue_maps_validation_errors() -> None:
     class _ErrorClient(_StubSoulseekClient):
-        async def enqueue(self, username: str, files: list[dict[str, object]]) -> dict[str, object]:  # type: ignore[override]
+        async def enqueue(
+            self, username: str, files: list[dict[str, object]]
+        ) -> dict[str, object]:  # type: ignore[override]
             raise SoulseekClientError("bad request", status_code=400)
 
     api = TransfersApi(_ErrorClient())
@@ -121,7 +123,9 @@ async def test_enqueue_maps_validation_errors() -> None:
 @pytest.mark.asyncio
 async def test_enqueue_maps_dependency_errors() -> None:
     class _ErrorClient(_StubSoulseekClient):
-        async def enqueue(self, username: str, files: list[dict[str, object]]) -> dict[str, object]:  # type: ignore[override]
+        async def enqueue(
+            self, username: str, files: list[dict[str, object]]
+        ) -> dict[str, object]:  # type: ignore[override]
             raise SoulseekClientError("timeout", status_code=503)
 
     api = TransfersApi(_ErrorClient())

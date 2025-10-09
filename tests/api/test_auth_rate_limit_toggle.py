@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Iterator
 
 import pytest
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
 
 from app.api import middleware as api_middleware
 from app.main import app
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture

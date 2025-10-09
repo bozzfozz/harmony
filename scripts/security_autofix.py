@@ -244,7 +244,9 @@ class YamlSafeLoaderFixer(BaseFixer):
                     return updated_node
             loader_arg = cst.Arg(
                 keyword=cst.Name("Loader"),
-                value=cst.Attribute(value=cst.Name("yaml"), attr=cst.Name("SafeLoader")),
+                value=cst.Attribute(
+                    value=cst.Name("yaml"), attr=cst.Name("SafeLoader")
+                ),
             )
             self.changed = True
             return updated_node.with_changes(args=[*updated_node.args, loader_arg])
@@ -292,8 +294,7 @@ class SubprocessShellFixer(BaseFixer):
                 )
                 return updated_node
             if not (
-                isinstance(func.value, cst.Name)
-                and func.value.value == "subprocess"
+                isinstance(func.value, cst.Name) and func.value.value == "subprocess"
             ):
                 return updated_node
             shell_arg = None
@@ -303,7 +304,10 @@ class SubprocessShellFixer(BaseFixer):
                     break
             if shell_arg is None:
                 return updated_node
-            if not isinstance(shell_arg.value, cst.Name) or shell_arg.value.value != "True":
+            if (
+                not isinstance(shell_arg.value, cst.Name)
+                or shell_arg.value.value != "True"
+            ):
                 self.manual_review = True
                 self.messages.append(
                     "B603/B602: shell keyword is not a literal True; manual review required."
@@ -402,7 +406,9 @@ class TempfileMktempFixer(BaseFixer):
             func = updated_node.func
             if not isinstance(func, cst.Attribute):
                 self.manual_review = True
-                self.messages.append("B306: Unsupported call shape (no attribute access).")
+                self.messages.append(
+                    "B306: Unsupported call shape (no attribute access)."
+                )
                 return updated_node
             if not (
                 isinstance(func.value, cst.Name)
@@ -466,9 +472,7 @@ class HashlibMd5Fixer(BaseFixer):
             func = updated_node.func
             if not isinstance(func, cst.Attribute):
                 self.manual_review = True
-                self.messages.append(
-                    "B324: Unsupported call shape (not hashlib.new)."
-                )
+                self.messages.append("B324: Unsupported call shape (not hashlib.new).")
                 return updated_node
             if not (
                 isinstance(func.value, cst.Name)
@@ -520,12 +524,11 @@ class HashlibMd5Fixer(BaseFixer):
         issues: Sequence[BanditIssue],
         context: FileContext,
     ) -> tuple[cst.Module, FixReport]:
-        if "tests" not in context.relative_path.parts and not context.relative_path.name.startswith(
-            "test_"
+        if (
+            "tests" not in context.relative_path.parts
+            and not context.relative_path.name.startswith("test_")
         ):
-            message = (
-                "B324: hashlib.new('md5') detected outside the tests/ tree; manual review required."
-            )
+            message = "B324: hashlib.new('md5') detected outside the tests/ tree; manual review required."
             return (
                 module,
                 FixReport(
@@ -572,10 +575,7 @@ class RandomForSecurityFixer(BaseFixer):
                     "B311: Unsupported call shape (expected random.<method>)."
                 )
                 return updated_node
-            if not (
-                isinstance(func.value, cst.Name)
-                and func.value.value == "random"
-            ):
+            if not (isinstance(func.value, cst.Name) and func.value.value == "random"):
                 return updated_node
             method = func.attr.value
             if method not in self.SUPPORTED_METHODS:
@@ -626,9 +626,7 @@ class TmpPathFixer(BaseFixer):
         issues: Sequence[BanditIssue],
         context: FileContext,
     ) -> tuple[cst.Module, FixReport]:
-        message = (
-            "B108: Automatic rewrite for hard-coded /tmp paths is not implemented; manual review required."
-        )
+        message = "B108: Automatic rewrite for hard-coded /tmp paths is not implemented; manual review required."
         return (
             module,
             FixReport(
@@ -706,7 +704,9 @@ def process(
         context = FileContext(path=path, project_root=project_root)
         reports: list[FixReport] = []
         for fixer in FIXERS:
-            relevant = [issue for issue in file_issues if issue.test_id in fixer.RULE_IDS]
+            relevant = [
+                issue for issue in file_issues if issue.test_id in fixer.RULE_IDS
+            ]
             if not relevant:
                 continue
             module, report = fixer.apply(module, relevant, context)
@@ -719,9 +719,7 @@ def process(
 
 def format_markdown(summary: Summary) -> str:
     if not summary.changed_files:
-        return (
-            "## Security autofix\n\nKeine Änderungen erforderlich."
-        )  # pragma: no cover - formatting only
+        return "## Security autofix\n\nKeine Änderungen erforderlich."  # pragma: no cover - formatting only
     lines = ["## Security autofix", ""]
     lines.append("### Betroffene Regeln")
     lines.append("")
@@ -828,9 +826,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.dumps(summary.to_dict(), indent=2), encoding="utf-8"
         )
     if args.report_markdown:
-        args.report_markdown.write_text(
-            format_markdown(summary), encoding="utf-8"
-        )
+        args.report_markdown.write_text(format_markdown(summary), encoding="utf-8")
     LOGGER.info("Changed files: %s", summary.changed_files)
     LOGGER.info("Rules: %s", summary.rule_ids)
     LOGGER.info("Auto-merge recommended: %s", summary.auto_merge_recommended)

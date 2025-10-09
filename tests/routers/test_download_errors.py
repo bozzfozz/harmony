@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
+
 from app.core.transfers_api import TransfersDependencyError
 from app.db import session_scope
 from app.models import Download
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 def _create_download(*, state: str = "queued", **overrides: Any) -> int:

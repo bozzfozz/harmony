@@ -1,13 +1,13 @@
 from typing import Any
 
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app.services.free_ingest_service import (
     IngestAccepted,
     IngestSkipped,
     IngestSubmission,
 )
-from tests.simple_client import SimpleTestClient
 
 
 def test_free_import_invokes_orchestrator_and_logs(

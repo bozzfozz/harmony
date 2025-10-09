@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 from alembic import command
-
 from tests.support.postgres import postgres_schema
 
 from .helpers import (

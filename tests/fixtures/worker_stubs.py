@@ -10,7 +10,6 @@ from time import perf_counter
 from typing import Any, Dict, Iterable
 
 import pytest
-
 from tests.support.async_utils import cancel_and_await
 
 LOGGER = logging.getLogger("tests.worker.stub")

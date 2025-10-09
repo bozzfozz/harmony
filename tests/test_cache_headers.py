@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.dependencies import get_app_config
-from app.main import app
 from tests.helpers import api_path
 from tests.simple_client import SimpleTestClient
+
+from app.dependencies import get_app_config
+from app.main import app
 
 
 def _lower_headers(headers: dict[str, str]) -> dict[str, str]:

@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Iterator
 
 import pytest
+from tests.simple_client import SimpleTestClient
 
 from app import dependencies as deps
 from app.main import app
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture(autouse=True)

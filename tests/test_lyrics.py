@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
+from tests.conftest import StubSoulseekClient
 
 from app.db import session_scope
 from app.models import Download
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.sync_worker import SyncWorker
-from tests.conftest import StubSoulseekClient
 
 
 class StubSpotifyClient:

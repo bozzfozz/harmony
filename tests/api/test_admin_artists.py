@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Sequence
 
 import pytest
+from tests.simple_client import SimpleTestClient
+from tests.support.postgres import postgres_schema
 
 import app.api.admin_artists as admin_api
 from app import dependencies as deps
@@ -19,8 +21,6 @@ from app.models import ArtistRecord, ArtistReleaseRecord, QueueJob, QueueJobStat
 from app.orchestrator.handlers_artist import ArtistSyncHandlerDeps
 from app.services.artist_dao import ArtistDao, ArtistReleaseUpsertDTO, ArtistUpsertDTO
 from app.services.cache import CacheEntry, ResponseCache, build_cache_key
-from tests.simple_client import SimpleTestClient
-from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 
