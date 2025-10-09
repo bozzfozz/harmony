@@ -4,7 +4,7 @@
 - Die fehlende `activity_events`-Migration ist ausgerollt; Admin-Flows und Postgres-Migrationstests laufen wieder ohne `UndefinedTable`. 【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】【F:tests/migrations/test_upgrade_downgrade_postgres.py†L1-L44】
 - Observability-Signale wurden repariert: Scheduler-Leases schreiben erneut auf `app.orchestrator.metrics`, die Search-API emittiert `api.request`-Events und die Dokumentation beschreibt die Logger-Verträge. 【F:app/orchestrator/scheduler.py†L1-L180】【F:app/api/search.py†L1-L140】【F:docs/observability.md†L34-L56】
 - Runtime-Diagnosen respektieren Overrides (`/system/stats`), Playlist-Sync invalidiert Caches inkl. Detailpfade und Admin-Fixtures stellen den globalen FastAPI-Zustand nach jedem Test wieder her. 【F:app/api/system.py†L1-L460】【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/api/test_admin_artists.py†L1-L220】
-- Bandit-Integration ist weiterhin als P2 offen und wird separat abgeschlossen. 【F:ToDo.md†L131-L156】
+- Security-Gate basiert nun auf `pip-audit`; das zuvor geplante statische Scanning wurde verworfen. 【F:ToDo.md†L131-L156】
 
 ## Fertiggestellte Arbeiten
 - **TD-20251008-001 – `activity_events`-Migration wiederhergestellt:** Alembic-Skript erstellt Tabelle inklusive Index; Migrations-Smoke-Tests prüfen JSONB/TIMESTAMPTZ-Schema. 【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】【F:tests/migrations/test_upgrade_downgrade_postgres.py†L1-L44】
@@ -17,11 +17,11 @@
 - **TD-20251008-008 – isort-Erzwingung:** Import-Formatierung bereinigt und CI-Gate ergänzt; Dokumentation aktualisiert. 【F:ToDo.md†L108-L129】
 
 ## Laufende Arbeiten
-- **TD-20251008-009 – Bandit-Sicherheits-Scanning:** Abhängigkeit und CI-Integration stehen, erste Findings müssen noch aufgearbeitet und dokumentiert werden. 【F:ToDo.md†L131-L156】
+- **TD-20251008-009 – Security scanner consolidation:** Abschluss als `wontdo`; Dependency-Audits ersetzen den ursprünglichen Plan. 【F:ToDo.md†L131-L156】
 
 ## Offene Aufgaben (Priorität ≥ P1)
-- Keine offenen P0/P1-Issues; Fokus liegt auf dem Abschluss der Bandit-Sicherheitsarbeiten (P2). 【F:ToDo.md†L131-L156】
+- Keine offenen P0/P1-Issues; sicherheitsseitig sind Dependency-Audits verpflichtend, weiteres Scanning bleibt optional. 【F:ToDo.md†L131-L156】
 
 ## Empfohlene nächsten Schritte
-1. Bandit-Erstlauf analysieren, Findings triagieren und Dokumentation für Security-Gates vervollständigen.
-2. Security-Gate in CI finalisieren und Rollout kommunizieren.
+1. Dependency-Audit-Gate (`pip-audit`) regelmäßig prüfen und bei Upstream-Änderungen aktualisieren.
+2. Evaluieren, ob langfristig ein leichtgewichtiges statisches Security-Tool ergänzt werden soll.

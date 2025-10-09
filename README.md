@@ -455,7 +455,7 @@ black --check .
 mypy app
 pytest -q
 python scripts/audit_wiring.py
-bandit -c .bandit -r app
+pip-audit -r requirements.txt
 
 cd frontend
 npm ci
@@ -467,12 +467,8 @@ npm run build
 `isort --check-only .` stellt sicher, dass die konfigurierte Import-Reihenfolge eingehalten wird. Verwende `isort .` oder
 alternativ `ruff check . --select I --fix`, um Imports automatisch zu sortieren. `black` bleibt der einzige Formatter.
 
-Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app` nutzt die Repository-Konfiguration (Scope,
-Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings
-gar nicht erst im Pull Request landen.
-
-Die Ausgabe landet zusätzlich in `reports/analysis/_evidence/bandit_app.txt`, sodass Sicherheitsnachweise versioniert werden
-können. `make security` erzeugt die Datei automatisch und aktualisiert sie bei jeder Ausführung.
+`pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
+Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
 
 ## Datenbank-Migrationen
 

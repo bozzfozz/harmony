@@ -1,1 +1,0 @@
-Bandit scan pending: install dependencies from requirements-dev.txt and rerun `make security` to refresh this evidence file.

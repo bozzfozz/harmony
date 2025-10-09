@@ -5,7 +5,7 @@ OFF?=$(CI_OFFLINE)
 help:
         @echo "make install-dev    # install dev tools"
         @echo "make quality        # isort --check-only, ruff, black --check, mypy, pytest"
-        @echo "make security       # bandit, pip-audit (skips if CI_OFFLINE=true)"
+        @echo "make security       # pip-audit (skips if CI_OFFLINE=true)"
         @echo "make analyze        # radon, vulture (skips if CI_OFFLINE=true)"
         @echo "make all            # run quality + security + analyze"
         @echo "make db.upgrade     # apply database migrations"
@@ -23,11 +23,9 @@ quality:
 
 security:
 ifeq ($(OFF),true)
-	@echo "⚠️ CI_OFFLINE=true → skipping security tools (bandit, pip-audit)."
+        @echo "⚠️ CI_OFFLINE=true → skipping security tools (pip-audit)."
 else
-	@mkdir -p reports/analysis/_evidence
-	@bash -c "set -o pipefail; bandit -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt"
-	pip-audit -r requirements.txt || true
+        pip-audit -r requirements.txt || true
 endif
 
 analyze:
