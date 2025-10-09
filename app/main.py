@@ -197,12 +197,40 @@ def _resolve_visibility_timeout(override: int | None) -> int:
     return max(5, resolved)
 
 
+def _parse_bool_env(name: str) -> bool | None:
+    raw_value = get_env(name)
+    if raw_value is None:
+        return None
+    text = raw_value.strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    logger.warning("Ignoring invalid boolean override for %s: %s", name, raw_value)
+    return None
+
+
+def _should_initialize_database(config: AppConfig) -> bool:
+    override = _parse_bool_env("HARMONY_INIT_DB")
+    if override is not None:
+        return override
+    return not config.environment.is_test
+
+
 def _configure_application(config: AppConfig) -> None:
     configure_logging(config.logging.level)
-    init_db()
-    ensure_default_settings(DEFAULT_SETTINGS)
-    logger.info("Database initialised")
-    activity_manager.refresh_cache()
+    if _should_initialize_database(config):
+        init_db()
+        ensure_default_settings(DEFAULT_SETTINGS)
+        logger.info("Database initialised")
+        activity_manager.refresh_cache()
+    else:
+        logger.info(
+            "Skipping database initialisation",
+            extra={"event": "database.init_skipped", "profile": config.environment.profile},
+        )
 
 
 def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> None:
