@@ -22,7 +22,7 @@ def test_get_database_url_prefers_config_override() -> None:
 
 def test_get_database_url_requires_postgres_override() -> None:
     config = Config()
-    config.set_main_option("sqlalchemy.url", "sqlite:///override.db")
+    config.set_main_option("sqlalchemy.url", "mysql+pymysql://override/db")
 
     with pytest.raises(ValidationAppError):
         env.get_database_url(config)

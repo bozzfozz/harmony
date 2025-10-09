@@ -8,7 +8,7 @@ equivalent setting).
 
 Migrations are expected to run exactly once per environment; PostgreSQL-native
 types (`JSONB`, `TIMESTAMPTZ`, partial indexes, etc.) should be used directly
-without SQLite fallbacks or guard clauses.
+without guard clauses for alternative backends.
 
 ## Running migrations
 
@@ -19,8 +19,8 @@ alembic downgrade -1  # or "base" to reset everything
 
 The Alembic configuration resolves the database URL from environment
 configuration. Override the target database with the `sqlalchemy.url` value or
-the `DATABASE_URL` environment variable when necessary. SQLite is not supported
-and no SQLite smoke tests are provided.
+the `DATABASE_URL` environment variable when necessary. Migration tooling and
+tests target PostgreSQL exclusively.
 
 ## Creating a new migration
 

@@ -37,7 +37,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ### Integrationen & Workers
 
 - Spotify/slskd-Zeitlimits (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`) greifen sowohl in REST-Endpunkten als auch in Workern (z. B. Watchlist).
-- `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn SQLite-Locks auftreten, oder schalte auf `WATCHLIST_DB_IO_MODE=async`, sobald eine asynchrone Datenbank verwendet wird.
+- `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn sich PostgreSQL-Connection-Pools füllen, und beobachte `pg_stat_activity` sowie Autovacuum-Latenzen, bevor du die Parallelität erhöhst.
 - Download-Retries (`RETRY_*`) konfigurieren die Sync-/Retry-Handler des Orchestrators; die historischen `RETRY_SCAN_*`-Werte werden nur noch für Legacy-Fallbacks gelesen.
 - Der zentrale `RetryPolicyProvider` liest `RETRY_*` zur Laufzeit (inkl. Job-spezifischer Overrides wie `RETRY_SYNC_MAX_ATTEMPTS`) und cached das Ergebnis für `RETRY_POLICY_RELOAD_S` Sekunden. Nach Ablauf der TTL greifen neue ENV-Werte automatisch ohne Neustart; `SyncWorker.refresh_retry_policy()` erzwingt bei Bedarf eine sofortige Aktualisierung.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
