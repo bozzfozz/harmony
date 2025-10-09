@@ -386,9 +386,9 @@ const SpotifyPage = () => {
                   <Button
                     type="button"
                     asChild
-                    variant={pendingDestination === '/artists' ? 'default' : 'secondary'}
+                    variant={pendingDestination === '/library?tab=artists' ? 'default' : 'secondary'}
                   >
-                    <Link to="/artists" onClick={handleCloseSuccessDialog}>
+                    <Link to="/library?tab=artists" onClick={handleCloseSuccessDialog}>
                       Künstlerbibliothek
                     </Link>
                   </Button>
@@ -535,7 +535,7 @@ const SpotifyPage = () => {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => handleProNavigate('/artists')}
+                onClick={() => handleProNavigate('/library?tab=artists')}
                 disabled={proDisabled}
               >
                 {renderProButtonLabel('Künstlerbibliothek')}
