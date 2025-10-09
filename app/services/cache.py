@@ -9,6 +9,7 @@ import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable, Iterable, Mapping
 from urllib.parse import parse_qsl
 
@@ -209,13 +210,47 @@ class ResponseCache:
         entity_id: str | None = None,
     ) -> int:
         normalized = self._normalize_path(path)
-        prefix = f"{method.upper()}:{normalized}"
-        return await self.invalidate_prefix(
-            prefix,
-            reason=reason,
-            entity_id=entity_id,
-            path=normalized,
-        )
+        method_key = method.upper()
+        prefix = f"{method_key}:{normalized}"
+        try:
+            async with self._lock:
+                keys_to_remove: list[str] = []
+                removed_entries: list[CacheEntry] = []
+                for key, entry in self._cache.items():
+                    if not key.startswith(method_key):
+                        continue
+                    if key.startswith(prefix) or self._path_matches_entry(
+                        normalized, entry
+                    ):
+                        keys_to_remove.append(key)
+                for key in keys_to_remove:
+                    removed = self._cache.pop(key, None)
+                    if removed is not None:
+                        removed_entries.append(removed)
+                count = len(removed_entries)
+        except Exception:
+            if self._fail_open:
+                self._log_operation("error", "error", key_hash=prefix)
+                return 0
+            raise
+
+        operation = "evict" if any((reason, entity_id)) else "invalidate"
+        status = "evicted" if count else "noop"
+        fields: dict[str, object] = {
+            "key_hash": prefix,
+            "count": count,
+            "path": normalized,
+        }
+        if reason:
+            fields["reason"] = reason
+        if entity_id:
+            fields["entity_id"] = entity_id
+        if removed_entries:
+            template = removed_entries[0].path_template
+            if template:
+                fields.setdefault("path_template", template)
+        self._log_operation(operation, status, **fields)
+        return count
 
     async def invalidate_pattern(
         self,
@@ -308,6 +343,15 @@ class ResponseCache:
         if not trimmed.startswith("/"):
             return f"/{trimmed}"
         return trimmed
+
+    def _path_matches_entry(self, path: str, entry: CacheEntry) -> bool:
+        template = self._normalize_path(entry.path_template)
+        if template == path:
+            return True
+        if "{" not in template or "}" not in template:
+            return False
+        pattern = _compile_path_template(template)
+        return pattern.fullmatch(path) is not None
 
     def _log_operation(self, operation: str, status: str, **fields: object) -> None:
         if operation == "evict" and not self._log_evictions:
@@ -464,3 +508,32 @@ def _log_cache_event(operation: str, status: str, **fields: object) -> None:
         status=status,
         **fields,
     )
+
+
+@lru_cache(maxsize=512)
+def _compile_path_template(template: str) -> re.Pattern[str]:
+    normalized = ResponseCache._normalize_path(template)
+    pattern_parts: list[str] = []
+    index = 0
+    length = len(normalized)
+    while index < length:
+        char = normalized[index]
+        if char == "{":
+            end = normalized.find("}", index + 1)
+            if end == -1:
+                pattern_parts.append(re.escape(normalized[index:]))
+                break
+            content = normalized[index + 1 : end]
+            converter: str | None = None
+            if ":" in content:
+                _, converter = content.split(":", 1)
+            if converter == "path":
+                pattern_parts.append(".+")
+            else:
+                pattern_parts.append("[^/]+")
+            index = end + 1
+            continue
+        pattern_parts.append(re.escape(char))
+        index += 1
+    pattern = "^" + "".join(pattern_parts) + "$"
+    return re.compile(pattern)
