@@ -45,7 +45,9 @@ def _make_test_environment(
     )
 
 
-def test_should_skip_database_initialisation_in_test_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_should_skip_database_initialisation_in_test_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("HARMONY_INIT_DB", raising=False)
     config = deps.get_app_config()
     test_env = _make_test_environment(True, config.environment.profile, config)
@@ -54,7 +56,9 @@ def test_should_skip_database_initialisation_in_test_profile(monkeypatch: pytest
     assert _should_initialize_database(test_config) is False
 
 
-def test_override_allows_database_initialisation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_override_allows_database_initialisation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("HARMONY_INIT_DB", "1")
     override_runtime_env(None)
     deps.get_app_config.cache_clear()
@@ -65,7 +69,9 @@ def test_override_allows_database_initialisation(monkeypatch: pytest.MonkeyPatch
     assert _should_initialize_database(test_config) is True
 
 
-def test_override_can_disable_database_initialisation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_override_can_disable_database_initialisation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("HARMONY_INIT_DB", "false")
     override_runtime_env(None)
     deps.get_app_config.cache_clear()

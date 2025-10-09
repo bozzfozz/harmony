@@ -1491,9 +1491,10 @@ def configure_environment(
 ) -> None:
     from app import dependencies as deps
 
-    if _should_skip_postgres(request.config) and request.node.get_closest_marker(
-        "postgres"
-    ) is not None:
+    if (
+        _should_skip_postgres(request.config)
+        and request.node.get_closest_marker("postgres") is not None
+    ):
         pytest.skip(_POSTGRES_SKIP_REASON)
 
     deps.get_app_config.cache_clear()

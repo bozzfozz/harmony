@@ -229,7 +229,10 @@ def _configure_application(config: AppConfig) -> None:
     else:
         logger.info(
             "Skipping database initialisation",
-            extra={"event": "database.init_skipped", "profile": config.environment.profile},
+            extra={
+                "event": "database.init_skipped",
+                "profile": config.environment.profile,
+            },
         )
 
 
