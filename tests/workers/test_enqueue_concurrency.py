@@ -9,12 +9,12 @@ from typing import Any
 import anyio
 import pytest
 from sqlalchemy import func, select
+from tests.support.postgres import postgres_schema
 
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.models import QueueJob, QueueJobStatus
 from app.workers import persistence
 from app.workers.persistence import QueueJobDTO, enqueue
-from tests.support.postgres import postgres_schema
 
 pytestmark = [pytest.mark.postgres, pytest.mark.usefixtures("queue_database_backend")]
 

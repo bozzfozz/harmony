@@ -3,12 +3,12 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import pytest
+from tests.workers.test_sync_worker import RecordingSoulseekClient
 
 from app.db import init_db, reset_engine_for_tests
 from app.models import QueueJobStatus
 from app.workers.persistence import QueueJobDTO
 from app.workers.sync_worker import SyncWorker, _PriorityQueueEntry
-from tests.workers.test_sync_worker import RecordingSoulseekClient
 
 
 @pytest.mark.asyncio

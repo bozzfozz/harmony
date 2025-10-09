@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import inspect
+from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
 from app.db import session_scope
 from app.models import WatchlistArtist
 from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers.watchlist_worker import WatchlistWorker
-from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
 
 def test_cooldown_field_exists_and_index_present() -> None:

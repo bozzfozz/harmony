@@ -188,8 +188,8 @@ async def test_sync_worker_persistence_calls_leave_event_loop_responsive(
             await ticker_task
         await worker.stop()
 
-    assert (
-        ticks_during_enqueue > 0
-    ), "Event loop should make progress during persistence calls"
+    assert ticks_during_enqueue > 0, (
+        "Event loop should make progress during persistence calls"
+    )
     assert client.status_calls > 0, "Poll loop should continue to run"
     assert len(processed) == len(jobs)

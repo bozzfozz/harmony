@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException, status
+from tests.simple_client import SimpleTestClient
 
 from app.main import app
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture

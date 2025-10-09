@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 from alembic import command
-
 from tests.migrations.helpers import (
     assert_activity_events_schema,
     assert_postgresql_types,

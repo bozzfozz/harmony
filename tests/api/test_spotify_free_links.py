@@ -6,12 +6,12 @@ from typing import Any, Callable
 
 import pytest
 from fastapi import FastAPI, Request
+from tests.simple_client import SimpleTestClient
 
 from app.api import spotify_free_links as free_links_module
 from app.api.spotify_free_links import get_free_ingest_service
 from app.dependencies import get_app_config
 from app.errors import AppError
-from tests.simple_client import SimpleTestClient
 
 
 class StubFreeIngestService:

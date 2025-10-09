@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
+from tests.support.postgres import postgres_schema
 
 from app import dependencies as deps
 from app.db import init_db, reset_engine_for_tests, session_scope
@@ -14,9 +17,6 @@ from app.services.artist_dao import (
     ArtistUpsertDTO,
     build_artist_key,
 )
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
-from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 

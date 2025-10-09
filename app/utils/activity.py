@@ -87,7 +87,7 @@ class ActivityManager:
         self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
         self._cache_initialized = False
-        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = (OrderedDict())
+        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = OrderedDict()
         self._page_cache_limit = max(1, page_cache_limit)
         self._response_cache: "ResponseCache | None" = None
         self._response_cache_paths: tuple[str, ...] = ()

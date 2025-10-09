@@ -10,7 +10,6 @@ from typing import AsyncIterator, Callable, Iterator
 import anyio
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from tests.simple_client import SimpleTestClient
 
 DEFAULT_ASYNC_DEADLINE_S = 0.75

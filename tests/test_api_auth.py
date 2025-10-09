@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
 
 from app import dependencies as deps
 from app.main import app
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 @pytest.fixture(autouse=True)

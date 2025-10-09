@@ -5,11 +5,11 @@ from datetime import datetime, timedelta
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from tests.support.postgres import postgres_schema
 
 from app.db import Base
 from app.models import WatchlistArtist
 from app.services.artist_dao_async import ArtistWatchlistAsyncDAO
-from tests.support.postgres import postgres_schema
 
 pytestmark = pytest.mark.postgres
 

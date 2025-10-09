@@ -5,6 +5,7 @@ from typing import Callable
 from unittest.mock import MagicMock
 
 import pytest
+from tests.helpers import api_path
 
 from app.config import HealthConfig
 from app.errors import ErrorCode
@@ -14,7 +15,6 @@ from app.services.health import (
     MigrationProbeResult,
     ReadinessResult,
 )
-from tests.helpers import api_path
 
 
 def _session_factory(success: bool = True) -> Callable[[], MagicMock]:

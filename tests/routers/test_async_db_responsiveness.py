@@ -8,12 +8,12 @@ from contextlib import asynccontextmanager
 import anyio
 import pytest
 from httpx import ASGITransport, AsyncClient
+from tests.helpers import api_path
+from tests.simple_client import SimpleTestClient
 
 from app.db import SessionCallable
 from app.dependencies import SessionRunner, get_session_runner
 from app.workers.playlist_sync_worker import PlaylistSyncWorker
-from tests.helpers import api_path
-from tests.simple_client import SimpleTestClient
 
 
 class TimeBudget:

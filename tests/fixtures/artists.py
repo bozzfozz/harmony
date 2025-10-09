@@ -8,11 +8,11 @@ from typing import Sequence
 
 import pytest
 from sqlalchemy import select
+from tests.fixtures.mocks_providers import ArtistGatewayMock
 
 from app.db import session_scope
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.models import WatchlistArtist
-from tests.fixtures.mocks_providers import ArtistGatewayMock
 
 
 @dataclass(slots=True)

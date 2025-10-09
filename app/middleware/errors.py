@@ -207,7 +207,9 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
     return error.as_response(request_path=request.url.path, method=request.method)
 
 
-async def _handle_exception_group(request: Request, exc: ExceptionGroup) -> JSONResponse:  # type: ignore[override]
+async def _handle_exception_group(
+    request: Request, exc: ExceptionGroup
+) -> JSONResponse:  # type: ignore[override]
     _logger.exception("Unhandled application error group", exc_info=exc)
     error = InternalServerError()
     return error.as_response(request_path=request.url.path, method=request.method)

@@ -158,9 +158,7 @@ def test_search_ranking_boosts_format_and_type(
 ) -> None:
     _prepare_soulseek_results(client)
 
-    def _constant_score(
-        self, query: str, candidate: Dict[str, Any]
-    ) -> float:  # noqa: D401
+    def _constant_score(self, query: str, candidate: Dict[str, Any]) -> float:  # noqa: D401
         return 0.4
 
     monkeypatch.setattr(MusicMatchingEngine, "compute_relevance_score", _constant_score)

@@ -4,13 +4,13 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select
+from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
 from app.config import load_config
 from app.db import session_scope
 from app.models import QueueJob, WatchlistArtist
 from app.services.artist_workflow_dao import ArtistWorkflowDAO
 from app.workers.watchlist_worker import WatchlistWorker
-from tests.workers.test_watchlist_worker import _insert_artist, _make_config
 
 
 def test_defaults_loaded_and_clamped(monkeypatch: pytest.MonkeyPatch) -> None:

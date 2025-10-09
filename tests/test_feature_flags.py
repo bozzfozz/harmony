@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import delete
+from tests.simple_client import SimpleTestClient
 
 from app import dependencies as deps
 from app.config import is_feature_enabled
@@ -11,7 +12,6 @@ from app.db import session_scope
 from app.main import app
 from app.models import Download, Setting
 from app.utils.settings_store import write_setting
-from tests.simple_client import SimpleTestClient
 
 
 def _reset_config_cache() -> None:

@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib
 
 import pytest
+from tests.utils.openapi import openapi_flag_context
 
 from app.main import app
-from tests.utils.openapi import openapi_flag_context
 
 
 def _collect_tags(schema: dict[str, object]) -> tuple[str, ...]:
