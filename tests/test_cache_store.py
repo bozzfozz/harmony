@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.cache import CacheEntry, ResponseCache
+from app.services.cache import (
+    CacheEntry,
+    ResponseCache,
+    build_path_param_hash,
+)
 
 
 class TimeStub:
@@ -98,3 +102,18 @@ async def test_invalidate_prefix_removes_related_entries() -> None:
     assert removed == 2
     assert await cache.get("GET:/alpha:0:0:anon") is None
     assert await cache.get("GET:/alpha:0:1:anon") is None
+
+
+@pytest.mark.asyncio
+async def test_invalidate_path_matches_parameterised_routes() -> None:
+    clock = TimeStub()
+    cache = ResponseCache(max_items=4, default_ttl=30, time_func=clock, fail_open=True)
+    entry = _make_entry("/items/{item_id}", b"payload")
+    path_hash = build_path_param_hash({"item_id": "abc"})
+    key = f"GET:/items/{{item_id}}:{path_hash}:0:anon"
+    await cache.set(key, entry)
+
+    removed = await cache.invalidate_path("/items/abc")
+
+    assert removed == 1
+    assert await cache.get(key) is None
