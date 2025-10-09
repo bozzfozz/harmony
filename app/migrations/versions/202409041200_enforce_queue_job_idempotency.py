@@ -3,6 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
+from app.migrations import helpers
+
 # revision identifiers, used by Alembic.
 revision = "202409041200"
 down_revision = "202406141200"
@@ -34,11 +36,14 @@ def upgrade() -> None:
         """
     )
     op.execute(dedupe_statement)
-    op.create_unique_constraint(
-        _CONSTRAINT_NAME,
-        _TABLE_NAME,
-        ["type", "idempotency_key"],
-    )
+    inspector = helpers.get_inspector()
+    if helpers.has_table(inspector, _TABLE_NAME):
+        helpers.create_unique_constraint_if_missing(
+            inspector,
+            _TABLE_NAME,
+            _CONSTRAINT_NAME,
+            ["type", "idempotency_key"],
+        )
 
 
 def downgrade() -> None:

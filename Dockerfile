@@ -26,7 +26,7 @@ WORKDIR /app
 
 COPY requirements.txt ./
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y curl \
+    && apt-get install --no-install-recommends -y curl postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --upgrade pip \
     && pip install -r requirements.txt
@@ -34,7 +34,7 @@ RUN apt-get update \
 COPY . .
 COPY --from=frontend-builder /app/frontend/dist ./frontend_dist
 
-RUN chmod +x scripts/docker-entrypoint.sh
+RUN chmod +x scripts/docker-entrypoint.sh scripts/db/*.sh
 
 EXPOSE 8080
 

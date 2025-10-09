@@ -156,12 +156,21 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
             "duration_ms": round(duration_ms, 2),
         },
     )
+    migrations = {
+        "up_to_date": result.migrations.up_to_date,
+        "current": result.migrations.current,
+        "head": list(result.migrations.head),
+    }
+    if result.migrations.error:
+        migrations["error"] = result.migrations.error
+
     if result.ok:
         return {
             "ok": True,
             "data": {
                 "db": result.database,
                 "deps": filtered_deps,
+                "migrations": migrations,
                 "orchestrator": {
                     "components": orchestrator_components,
                     "jobs": orchestrator_jobs,
@@ -176,6 +185,7 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
         meta={
             "db": result.database,
             "deps": deps,
+            "migrations": migrations,
             "orchestrator": {
                 "components": orchestrator_components,
                 "jobs": orchestrator_jobs,

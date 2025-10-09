@@ -6,8 +6,12 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Mapping
 
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -36,12 +40,23 @@ class DependencyStatus:
 
 
 @dataclass(frozen=True)
+class MigrationProbeResult:
+    """Outcome of the Alembic migration status probe."""
+
+    up_to_date: bool
+    current: str | None
+    head: tuple[str, ...]
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class ReadinessResult:
     """Outcome of readiness probes for dependencies."""
 
     ok: bool
     database: str
     dependencies: dict[str, str]
+    migrations: MigrationProbeResult
 
 
 Probe = Callable[[], bool | str | DependencyStatus | Awaitable[bool | str | DependencyStatus]]
@@ -85,11 +100,19 @@ class HealthService:
         """Execute readiness probes for the database and configured dependencies."""
 
         db_task = asyncio.create_task(self._probe_database())
+        migration_task: asyncio.Task[MigrationProbeResult] | None = None
+        if self._config.require_database:
+            migration_task = asyncio.create_task(self._probe_migrations())
         dependency_tasks: dict[str, asyncio.Task[DependencyStatus]] = {}
         for name in self._dependency_names:
             dependency_tasks[name] = asyncio.create_task(self._probe_dependency(name))
 
         database_status = await db_task
+        migrations_status = (
+            await migration_task
+            if migration_task is not None
+            else MigrationProbeResult(up_to_date=True, current=None, head=tuple())
+        )
         dependencies: dict[str, str] = {}
         dependency_states: dict[str, DependencyStatus] = {}
         for name, task in dependency_tasks.items():
@@ -99,8 +122,14 @@ class HealthService:
 
         deps_ok = all(state.ok for state in dependency_states.values())
         db_ok = database_status == "up"
-        ready = deps_ok and (db_ok or not self._config.require_database)
-        return ReadinessResult(ok=ready, database=database_status, dependencies=dependencies)
+        migrations_ok = migrations_status.up_to_date or not self._config.require_database
+        ready = deps_ok and (db_ok or not self._config.require_database) and migrations_ok
+        return ReadinessResult(
+            ok=ready,
+            database=database_status,
+            dependencies=dependencies,
+            migrations=migrations_status,
+        )
 
     async def _probe_database(self) -> str:
         timeout = max(0.1, self._config.db_timeout_ms / 1000.0)
@@ -189,3 +218,72 @@ class HealthService:
     @property
     def config(self) -> HealthConfig:
         return self._config
+
+    async def _probe_migrations(self) -> MigrationProbeResult:
+        timeout = max(0.1, self._config.db_timeout_ms / 1000.0)
+        try:
+            status = await asyncio.wait_for(
+                asyncio.to_thread(self._collect_migration_status), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Migration status probe timed out after %.2f ms", timeout * 1000
+            )
+            return MigrationProbeResult(
+                up_to_date=False,
+                current=None,
+                head=tuple(),
+                error="timeout",
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Migration status probe failed", exc_info=exc)
+            return MigrationProbeResult(
+                up_to_date=False,
+                current=None,
+                head=tuple(),
+                error=str(exc),
+            )
+        return status
+
+    def _collect_migration_status(self) -> MigrationProbeResult:
+        session = self._session_factory()
+        try:
+            connection = session.connection()
+            context = MigrationContext.configure(connection)
+            current = context.get_current_revision()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to determine current migration revision", exc_info=exc)
+            return MigrationProbeResult(
+                up_to_date=False,
+                current=None,
+                head=tuple(),
+                error=str(exc),
+            )
+        finally:
+            session.close()
+
+        try:
+            script_dir = _get_script_directory()
+            heads = tuple(sorted(script_dir.get_heads()))
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to resolve Alembic heads", exc_info=exc)
+            return MigrationProbeResult(
+                up_to_date=False,
+                current=current,
+                head=tuple(),
+                error=str(exc),
+            )
+
+        if not heads:
+            return MigrationProbeResult(up_to_date=True, current=current, head=tuple())
+
+        up_to_date = current is not None and current in heads
+        return MigrationProbeResult(up_to_date=up_to_date, current=current, head=heads)
+
+
+@lru_cache(maxsize=1)
+def _get_script_directory() -> ScriptDirectory:
+    import app.migrations as migrations  # Local import to avoid circulars
+
+    path = Path(migrations.__file__).resolve().parent
+    return ScriptDirectory(path.as_posix())
