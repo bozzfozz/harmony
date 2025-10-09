@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import sys
@@ -59,6 +60,39 @@ def line_is_allowed(path: Path, line: str) -> bool:
     return any(allowance.matches(path, line) for allowance in ALLOWANCES)
 
 
+def _parse_down_revision(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (tuple, list)):
+        result: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                result.append(item)
+        return result
+    return []
+
+
+def _extract_revision_metadata(path: Path) -> tuple[str | None, object | None]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    revision: str | None = None
+    down_revision: object | None = None
+
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        if target.id == "revision":
+            revision = ast.literal_eval(node.value)
+        elif target.id == "down_revision":
+            down_revision = ast.literal_eval(node.value)
+
+    return revision, down_revision
+
+
 def _check_alembic_reset_guard() -> list[str]:
     guard = os.getenv("MIGRATION_RESET")
     if guard == "1":
@@ -75,16 +109,71 @@ def _check_alembic_reset_guard() -> list[str]:
         if path.is_file() and path.suffix == ".py" and path.name != "__init__.py"
     )
 
-    if len(revision_files) != 1:
-        details = ", ".join(path.name for path in revision_files) or "no revision files"
+    if not revision_files:
         return [
-            (
-                "Alembic guard: expected exactly one baseline revision under app/migrations/versions. "
-                "Found {count} files ({details}). Set MIGRATION_RESET=1 to bypass during migration resets."
-            ).format(count=len(revision_files), details=details)
+            "Alembic guard: expected at least one revision file under app/migrations/versions.",
         ]
 
-    return []
+    revisions: dict[str, Path] = {}
+    down_revisions: dict[str, list[str]] = {}
+    errors: list[str] = []
+
+    for revision_file in revision_files:
+        try:
+            revision, down_revision = _extract_revision_metadata(revision_file)
+        except (OSError, SyntaxError, ValueError) as exc:  # pragma: no cover - defensive guard
+            errors.append(
+                (
+                    "Alembic guard: unable to parse revision metadata from {path}: {error}."
+                ).format(path=revision_file.name, error=exc)
+            )
+            continue
+
+        if not revision:
+            errors.append(
+                "Alembic guard: revision identifier missing in {path}.".format(
+                    path=revision_file.name
+                )
+            )
+            continue
+
+        revisions[revision] = revision_file
+        down_revisions[revision] = _parse_down_revision(down_revision)
+
+    if errors:
+        return errors
+
+    referenced: set[str] = set()
+    for revision, parents in down_revisions.items():
+        for parent in parents:
+            referenced.add(parent)
+            if parent not in revisions:
+                errors.append(
+                    "Alembic guard: {child} references missing down_revision {parent}.".format(
+                        child=revision, parent=parent
+                    )
+                )
+
+    if errors:
+        return errors
+
+    bases = [rev for rev, parents in down_revisions.items() if not parents]
+    if len(bases) != 1:
+        errors.append(
+            (
+                "Alembic guard: expected exactly one base revision (down_revision=None); found {count} ({details})."
+            ).format(count=len(bases), details=", ".join(sorted(bases)) or "none")
+        )
+
+    heads = sorted(set(revisions) - referenced)
+    if len(heads) != 1:
+        errors.append(
+            (
+                "Alembic guard: expected a single migration head but found {count} ({details})."
+            ).format(count=len(heads), details=", ".join(heads) or "none")
+        )
+
+    return errors
 
 
 def main() -> int:
