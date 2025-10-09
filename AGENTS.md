@@ -131,6 +131,7 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - Abweichungen nur mit Maintainer-Freigabe (im PR begründen).
 - PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) aus.
 - **TASK_ID** bleibt im Titel/Body und verweist auf Template.
+- **Ausnahme:** Security-Autofixes aus der Allowlist (§26) dürfen ohne separates Task-Template durchlaufen, wenn die CI-Auto-Merge-Kriterien (Lint/Typing/Tests/Bandit grün, diff mechanisch, keine Public-Contracts) erfüllt sind. Andernfalls gilt die reguläre Template-Pflicht.
 
 ## 13. ToDo-Pflege (verbindlich, **nicht** als Changelog)
 - **Ort:** `ToDo.md` (Repo-Root).  
@@ -174,6 +175,7 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 **Hinweise**
 - `isort` wird durch `ruff`-Regelgruppe **I** ersetzt.
 - Repo-weite Massen-Fixes in eigenem PR: `chore(style): repo-wide auto-format`.
+- Security-Autofixes (Bandit-Allowlist gemäß §26) sind zulässig, sofern alle Quality-Gates grün sind und keine Public-Contracts berührt werden.
 
 ---
 
@@ -218,6 +220,8 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - Keine Lizenzdateien ändern/hinzufügen ohne Maintainer-Freigabe.
 - Keine Secrets/Access-Tokens im Repo (nur ENV/Secret-Store).
 - Keine stillen Breaking Changes; nur mit Major-Bump + Migration.
+
+**Hinweis:** Mechanische Security-Autofixes aus der Allowlist (§26) gelten nicht als funktionale Änderung und verstoßen nicht gegen diese Verbote, sofern alle Guards eingehalten werden.
 
 ## 16. Frontend-Standards
 - `docs/ui-design-guidelines.md` verbindlich (Farben, Typografie, Spacing, Komponenten, Interaktionen).
@@ -378,6 +382,44 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 - „eslint --fix hat 120 Dateien formatiert“ (kosmetisch).
 - „Kommentarstil vereinheitlicht“ (kosmetisch).
 - „Paket minor-Bump ohne Code-Follow-ups“ (kein Handlungsbedarf).
+
+## 26. Security-Autofix-Policy
+
+**Ziel:** Bandit-Findings aus einer eng begrenzten Allowlist deterministisch, testgestützt und nachverfolgbar beheben.
+
+### 26.1 Allowlist (Python-only)
+
+- **B506 (`yaml.load`)** → automatischer Zusatz `Loader=yaml.SafeLoader`, wenn kein Loader-Argument gesetzt ist.
+- **B603/B602 (`subprocess.*` mit `shell=True`)** → Umschreiben auf `shell=False` inklusive argv-Splitting, sofern der Kommando-String deterministisch ohne Variableneinbettung ist.
+- **B324 (`hashlib.new(name="md5")`)** → Ersetzung durch `sha256` in Test- oder sonstigen Non-Crypto-Kontexten; Guard prüft Pfad/Verwendung.
+- **B306 (`tempfile.mktemp`)** → Wechsel auf `NamedTemporaryFile(delete=False).name` (oder äquivalent) ohne zusätzliche Argumente.
+- **B311 (`random` für sicherheitsrelevante Tokens/Secrets)** → Ersatz durch `secrets.SystemRandom()`/`secrets`-Utilities in klar identifizierbaren Token/Key-Kontexten.
+- **B108 (harte `/tmp`-Pfade)** → Umschreiben auf `tempfile.gettempdir()` plus Pfadaufbau, sofern kein externer Contract betroffen ist.
+
+### 26.2 Denylist (nur manuell)
+
+- **Nicht auto-fixbar:** `B101`, `B102`, `B105`–`B107`, `B307`, `B404` sowie alle Findings außerhalb der Allowlist. Für diese Fälle ist ein regulärer Task inkl. Review vorgeschrieben.
+
+### 26.3 Guards & Governance
+
+- **Public Contracts:** Kein Auto-Fix, wenn betroffene Symbole Teil einer exportierten API, eines CLI-Flags, eines serialisierten Formats oder persistenter Daten sind. Verdachtsfälle führen zu einem PR mit Label `needs-security-review` ohne Auto-Merge.
+- **Diff-Scope:** Änderungen bleiben mechanisch (keine Logik-/Verhaltensänderung). Sobald zusätzliche Refactors nötig wären, stoppt der Auto-Fix und verweist auf manuelle Bearbeitung.
+- **Tests:** Auto-Merge nur bei vollständig grünen Gates (`ruff`, `black`, `isort`, `mypy`, `pytest`, `bandit`).
+- **Bandit-Re-Scan:** Nach jedem Patch muss der Allowlist-Finding verschwinden; neue Findings brechen den Auto-Merge.
+
+### 26.4 Workflow & Commit-Regeln
+
+- **Workflow:** GitHub Action `security-autofix` (PR + nightly) erstellt bei Findings einen Branch `security/autofix-<datum>-<run>` inkl. Artefakten (Bandit vor/nach, Patch-Summary).
+- **Commit-Message:** `security(autofix): <rule-id|multi> <kurzbeschreibung> [skip-changelog]`.
+- **Labels:** Erfolgreiche Runs erhalten `security-autofix`; bei Guards oder fehlenden Gates zusätzlich `needs-security-review` (kein Auto-Merge).
+- **Opt-out:** Repository- oder Organisations-Variable `SECURITY_AUTOFIX=0` deaktiviert den Workflow temporär.
+- **Pre-Commit (optional):** `pre-commit run security-autofix --all-files` führt einen Dry-Run (`--check`) aus; `--apply` bleibt CI/Workflow vorbehalten.
+
+### 26.5 Rollback & Monitoring
+
+- **Rollback:** Workflow deaktivieren (`workflow run disable`), Branches löschen, Änderungen an `AGENTS.md` revertieren.
+- **Monitoring:** Erste fünf Auto-Fix-PRs manuell beobachten; bei False Positives Allowlist oder Guards nachschärfen.
+- **Metriken:** Anzahl automatisch behobener Findings, Verhältnis Auto-Merge vs. Review, Median-Zeit bis Remediation.
 
 ---
 ```0

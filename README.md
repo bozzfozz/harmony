@@ -489,6 +489,13 @@ nutzt aber dieselbe Konfiguration. Für bewusst ungenutzte Importe (z. B. Test
 `pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
 Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
 
+### Security-Autofix-Workflow
+
+- **Workflow `security-autofix`** scannt jede Nacht und bei internen PRs nach Allowlist-Bandit-Findings, erzeugt mechanische Fixes und öffnet bei Bedarf einen Branch `security/autofix-<datum>-<run>` mit vollständigem CI-Durchlauf.
+- **Auto-Merge** greift nur, wenn ausschließlich Allowlist-Regeln betroffen sind, alle Gates (`ruff`, `black`, `isort`, `mypy`, `pytest`, `bandit`) grün sind und keine Guards (Public-Contracts, Serialisierung, CLI) greifen. Andernfalls setzt die Pipeline das Label `needs-security-review` und deaktiviert Auto-Merge.
+- **Opt-out:** Repository- oder Organisations-Variable `SECURITY_AUTOFIX=0` pausiert den Workflow temporär (z. B. bei Incident-Rollbacks).
+- **Lokaler Dry-Run:** `pre-commit run security-autofix --all-files` führt denselben Fixer im Check-Modus aus und zeigt geplante Änderungen, ohne Dateien zu schreiben.
+
 ## Datenbank-Migrationen
 
 - `make db.upgrade` führt `alembic downgrade base || true` sowie `alembic upgrade head` aus und bringt die Datenbank auf den aktuellen Baseline-Stand.
