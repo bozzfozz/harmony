@@ -1,9 +1,14 @@
 # Database migrations
 
 This project uses [Alembic](https://alembic.sqlalchemy.org/) to manage schema
-changes. All migration scripts live under `app/migrations` and are executed via
-`alembic` commands. Migrations **must** remain additive and idempotent so that
-they can run repeatedly against PostgreSQL without manual clean-up.
+changes for **PostgreSQL**. All migration scripts live under `app/migrations`
+and assume a PostgreSQL engine configured with timezone-aware connections
+(`engine_args["connect_args"]["options"]` includes `-c timezone=UTC` or an
+equivalent setting).
+
+Migrations are expected to run exactly once per environment; PostgreSQL-native
+types (`JSONB`, `TIMESTAMPTZ`, partial indexes, etc.) should be used directly
+without SQLite fallbacks or guard clauses.
 
 ## Running migrations
 
@@ -14,7 +19,8 @@ alembic downgrade -1  # or "base" to reset everything
 
 The Alembic configuration resolves the database URL from environment
 configuration. Override the target database with the `sqlalchemy.url` value or
-`DATABASE_URL` environment variable when necessary.
+the `DATABASE_URL` environment variable when necessary. SQLite is not supported
+and no SQLite smoke tests are provided.
 
 ## Creating a new migration
 
@@ -26,23 +32,12 @@ configuration. Override the target database with the `sqlalchemy.url` value or
    alembic revision --autogenerate -m "describe change"
    ```
 
-3. Review the generated script. Ensure every operation is **additive** and uses
-   explicit guards (`has_table`, `get_columns`, `get_indexes`, …) so the script
-   can run more than once without failing.
-4. Provide downgrade steps. If a non-lossy downgrade is impossible, leave a
-   documented `no-op` explaining why.
-
-### Dialekt-Hinweise
-
-* Verwende native PostgreSQL-Typen (`sa.JSON`, `sa.JSONB`, `sa.UUID`, …) und
-  nutze `postgresql_using=`/`postgresql_where=` für partielle Indizes statt
-  SQLite-Fallbacks.
-* Vermeide datenbank-spezifische DDL ohne Guards; prüfe z. B. mit
-  `if connection.dialect.name == "postgresql"` bevor du Postgres-spezifische
-  Funktionen aufrufst.
-* Beim Hinzufügen von NOT NULL-Spalten zu bestehenden Tabellen: Fülle Alt-Daten
-  in denselben Migrationen und setze die Constraint anschließend via
-  `batch_alter_table`.
+3. Review the generated script. Ensure operations are additive, rely on
+   PostgreSQL primitives (e.g. `postgresql_where=` for partial indexes,
+   `postgresql_using=` when altering types), and avoid conditional guards that
+   skip DDL.
+4. Provide downgrade steps that faithfully restore the previous schema on
+   PostgreSQL. If a non-lossy downgrade is impossible, document the limitation.
 
 ### Naming conventions
 
@@ -59,5 +54,5 @@ Run the dedicated migration smoke tests to ensure PostgreSQL coverage:
 pytest tests/migrations -q
 ```
 
-The PostgreSQL test requires `DATABASE_URL` to point to a PostgreSQL instance.
-It automatically creates and drops an isolated schema for the test run.
+`DATABASE_URL` must point to a PostgreSQL instance. The test suite creates and
+drops an isolated schema for each run.
