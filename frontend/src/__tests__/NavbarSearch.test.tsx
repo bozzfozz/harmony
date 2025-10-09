@@ -74,7 +74,11 @@ describe('Navbar search', () => {
     expect(mockedSearchSpotify).toHaveBeenCalledWith('Muse');
     expect(await screen.findByRole('heading', { name: /tracks/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /hysteria/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /black holes & revelations/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', {
+        name: new RegExp('black holes & revelations', 'i')
+      })
+    ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /^muse/i })).toBeInTheDocument();
   });
 

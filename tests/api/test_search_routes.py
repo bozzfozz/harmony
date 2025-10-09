@@ -6,8 +6,10 @@ from typing import Any
 from tests.simple_client import SimpleTestClient
 
 from app.api import search as search_module
-from app.dependencies import get_integration_service as dependency_integration_service
-from app.dependencies import get_matching_engine as dependency_matching_engine
+from app.dependencies import (
+    get_integration_service as dependency_integration_service,
+    get_matching_engine as dependency_matching_engine,
+)
 from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
 from app.integrations.provider_gateway import (
     ProviderGatewaySearchResponse,

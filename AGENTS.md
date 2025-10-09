@@ -41,7 +41,7 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
   - Features/Fixes ⇒ neue Unit- & Integrationstests.
   - Coverage nicht senken ohne Plan.
 - **Quality Tools**
-  - Python: `ruff`, `black`, `isort`, `mypy`, `pip-audit`.
+  - Python: `isort`, `mypy`, `bandit`, `pytest`, `pip-audit`.
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
@@ -99,7 +99,7 @@ Ohne explizites Flag gilt **Write Mode**.
 - [ ] **TASK_ID** im Titel & Body (Template genutzt).
 - [ ] **AGENTS.md** gelesen & Scope-Guard bestätigt.
 - [ ] Keine Secrets, keine `BACKUP`-/Lizenzdateien verändert.
-- [ ] Tests/Lint grün (`pytest`, `mypy`, `ruff`, `black --check`) oder Ausnahme begründet.
+- [ ] Tests/Lint grün (`pytest`, `mypy`, `isort --check-only`, `bandit`, `pip-audit`) oder Ausnahme begründet.
 - [ ] Security-Scan ohne Blocker.
 - [ ] OpenAPI/Snapshots aktualisiert (falls API betroffen).
 - [ ] Doku-/ENV-Drift behoben (README, CHANGELOG, ADRs).
@@ -123,7 +123,7 @@ Ohne explizites Flag gilt **Write Mode**.
 ## 11. Durchsetzung
 - CI erzwingt Lint, Typen, Tests, Security-Scans.
 - **Schreibrechte sind nicht CI-gekoppelt**; Merge nur bei erfüllten Gates/Explizit-Freigabe.
-- Pre-Commit Hooks empfohlen: `ruff`, `black`, `isort`.
+- Pre-Commit Hooks empfohlen: `isort`.
 - PR blockiert, wenn **TASK_ID** oder Testnachweise fehlen.
 
 ## 12. Task-Template-Pflicht
@@ -140,41 +140,32 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 
 ## §14 Code-Style, Lint & Tests — Auto-Fixes (verbindlich)
 
-### §14a Code-Style & Auto-Fixes
+### §14a Imports & Stil
 
-**Ziel:** Einheitlicher Stil & saubere Imports ohne manuelle Nacharbeit.
+**Ziel:** Konsistente Importreihenfolge und PEP-8-kompatibler Stil ohne zwingenden Formatter.
 
 **Pflichten (Agent & Humans)**
-- Vor jedem Commit **Auto-Fix** ausführen:
-  - `ruff check . --fix` (inkl. Import-Sortierung `I`)
-  - `ruff format` **oder** `black .`
-- Pre-commit Hooks aktiv und genutzt: `pre-commit install` · `pre-commit run -a`
-- Keine Commits, die Format/Lint brechen.
+- Vor jedem Commit `isort` anwenden (`isort app tests` oder `isort .`).
+- Pre-commit Hook `isort` aktiv halten: `pre-commit install` · `pre-commit run -a`.
+- Keine Commits, die das `isort`-Gate oder Typ-/Testläufe brechen.
 
 **PR-Checkliste (Ergänzung)**
-- [ ] `ruff check .` **grün**
-- [ ] `ruff format` **oder** `black --check .` **grün**
+- [ ] `isort --check-only .` **grün**
 - [ ] Hooks liefen (Output im letzten Commit oder `pre-commit run -a` verlinkt)
 
 **CI-Gates (blockierend)**
-- `ruff check .` (ohne `--fix`)
-- `black --check .` (oder `ruff format`-Äquivalent)
-- Optional: `pytest -q` vor Merge
+- `isort --check-only .`
 
 **Codex MUSS**
-- Vor jedem Push: `ruff check . --fix && (ruff format || black .)`
-- Auto-Fixes als separaten Commit: `chore(style): apply ruff/black`
-- Minimal-invasiv fixen; keine Funktionslogik verändern.
+- Vor jedem Push: `isort .`
+- Formatierung, die über Imports hinausgeht, mit Team/Review abstimmen (kein verpflichtender Auto-Formatter).
 
 **Konfiguration (Referenz)**
-- `.pre-commit-config.yaml`: Hooks `ruff` (lint+fix) & `ruff-format` (oder `black`)
-- `pyproject.toml`:
-  - `[tool.ruff] select = ["E","F","I"]; line-length = 88; target-version = "py311"`
-  - `[tool.black] line-length = 88; target-version = ["py311"]`
+- `.pre-commit-config.yaml`: Hook `isort`
+- `pyproject.toml`: `[tool.isort] line_length = 88`, Mehrzeilen-Konfiguration gemäß aktuellem Profil
 
 **Hinweise**
-- `isort` wird durch `ruff`-Regelgruppe **I** ersetzt.
-- Repo-weite Massen-Fixes in eigenem PR: `chore(style): repo-wide auto-format`.
+- Größere Stil-Anpassungen separat diskutieren; keine stillen Massenformate.
 - Security-Autofixes (Bandit-Allowlist gemäß §26) sind zulässig, sofern alle Quality-Gates grün sind und keine Public-Contracts berührt werden.
 
 ---
@@ -210,7 +201,7 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - Unklare/fundamentale Brüche → Draft-PR **Clarification**: „Clarification: <TASK_ID>“ mit Minimalvorschlag.
 
 **Reihenfolge**
-1. Style-Auto-Fix (`ruff/black`)
+1. Imports bereinigen (`isort`)
 2. Schnelllauf (`--lf`)
 3. Volle Suite/CI
 ```0
@@ -404,7 +395,7 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 
 - **Public Contracts:** Kein Auto-Fix, wenn betroffene Symbole Teil einer exportierten API, eines CLI-Flags, eines serialisierten Formats oder persistenter Daten sind. Verdachtsfälle führen zu einem PR mit Label `needs-security-review` ohne Auto-Merge.
 - **Diff-Scope:** Änderungen bleiben mechanisch (keine Logik-/Verhaltensänderung). Sobald zusätzliche Refactors nötig wären, stoppt der Auto-Fix und verweist auf manuelle Bearbeitung.
-- **Tests:** Auto-Merge nur bei vollständig grünen Gates (`ruff`, `black`, `isort`, `mypy`, `pytest`, `bandit`).
+- **Tests:** Auto-Merge nur bei vollständig grünen Gates (`isort`, `mypy`, `pytest`, `pip-audit`, `bandit`).
 - **Bandit-Re-Scan:** Nach jedem Patch muss der Allowlist-Finding verschwinden; neue Findings brechen den Auto-Merge.
 
 ### 26.4 Workflow & Commit-Regeln

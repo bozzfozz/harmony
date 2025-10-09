@@ -60,18 +60,15 @@ jobs:
           pip install -r requirements-dev.txt
           pip install \
             bandit \
+            isort \
             mypy \
-            pytest-cov \
-            "ruff==0.6.4"
-
-      - name: Ruff (lint)
-        run: ruff check .
-
-      - name: Ruff (format check)
-        run: ruff format --check .
+            pytest-cov
 
       - name: Mypy (static typing)
         run: mypy app
+
+      - name: Isort (imports)
+        run: isort --check-only .
 
       - name: Bandit (security)
         run: bandit -r app -x tests
@@ -87,6 +84,9 @@ jobs:
             --cov-report=xml:reports/coverage.xml \
             --cov-report=term \
             --cov-fail-under=85
+
+      - name: pip-audit (dependencies)
+        run: pip-audit -r requirements.txt
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4

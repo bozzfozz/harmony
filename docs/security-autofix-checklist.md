@@ -15,7 +15,7 @@ Diese Checkliste unterstützt Maintainer:innen und Security-Reviewer:innen dabei
 ## 3. Quality Gates
 - [ ] Workflow-Artefakte (`bandit.before.json`, `bandit.after.json`, `autofix_summary.json`, `autofix_summary.md`) überprüft.
 - [ ] Bandit-Report nach dem Fix enthält keine offenen Findings.
-- [ ] CI-Checks (`ruff check`, `ruff format --check`, `mypy`, `pytest`) grün; bei Fehlschlag Begründung im PR.
+- [ ] CI-Checks (`isort --check-only`, `mypy`, `pytest`, `pip-audit`) grün; bei Fehlschlag Begründung im PR.
 
 ## 4. Guards
 - [ ] Bei markierten Guards (z. B. unsichere Shell-Strings, API-Exports) nachvollziehen, ob Auto-Fix korrekt abgebrochen wurde.

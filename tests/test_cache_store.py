@@ -4,11 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.services.cache import (
-    CacheEntry,
-    ResponseCache,
-    build_path_param_hash,
-)
+from app.services.cache import CacheEntry, ResponseCache, build_path_param_hash
 
 
 class TimeStub:

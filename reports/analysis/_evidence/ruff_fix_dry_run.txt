@@ -1,7 +1,0 @@
-error: unexpected argument '--fix-dry-run' found
-
-  tip: a similar argument exists: '--fix'
-
-Usage: ruff check --fix <FILES>...
-
-For more information, try '--help'.
