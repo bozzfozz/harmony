@@ -639,6 +639,8 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 ### Backend-Umgebungsvariablen
 
+Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environment-Variablen → `.env` → Code-Default** auf. Eine lokale `.env` ist optional – ohne sie startet die Anwendung mit sicheren Dev-Defaults (z. B. `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` als Datenbank-DSN). Für Produktionsumgebungen **müssen** die benötigten Variablen explizit per Environment gesetzt werden. Alle unterstützten Keys inklusive kommentierter Defaults sind in [`.env.example`](./.env.example) dokumentiert.
+
 #### Kern & Sicherheit
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |

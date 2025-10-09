@@ -11,12 +11,81 @@ from urllib.parse import urlparse
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.priority import parse_priority_map
 
 logger = get_logger(__name__)
+
+
+_RUNTIME_ENV_CACHE: dict[str, str] | None = None
+
+
+def _load_env_file(path: Path) -> dict[str, str]:
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    env_values: dict[str, str] = {}
+    for line in contents.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key, sep, value = stripped.partition("=")
+        if not sep:
+            continue
+        env_values[key.strip()] = value.strip().strip('"').strip("'")
+    return env_values
+
+
+def load_runtime_env(
+    *,
+    env_file: str | os.PathLike[str] | None = None,
+    base_env: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Load runtime environment values applying .env before explicit environment."""
+
+    env: dict[str, str] = {}
+    path = Path(env_file) if env_file is not None else Path(".env")
+    if path.exists() and path.is_file():
+        env.update(_load_env_file(path))
+
+    source = base_env or os.environ
+    env.update({key: str(value) for key, value in source.items() if value is not None})
+    return env
+
+
+def get_runtime_env() -> Mapping[str, str]:
+    """Return the cached runtime environment mapping."""
+
+    global _RUNTIME_ENV_CACHE
+    if _RUNTIME_ENV_CACHE is None:
+        _RUNTIME_ENV_CACHE = load_runtime_env()
+    return _RUNTIME_ENV_CACHE
+
+
+def override_runtime_env(runtime_env: Mapping[str, str] | None) -> None:
+    """Override the cached runtime environment (primarily for testing)."""
+
+    global _RUNTIME_ENV_CACHE
+    if runtime_env is None:
+        _RUNTIME_ENV_CACHE = None
+    else:
+        _RUNTIME_ENV_CACHE = dict(runtime_env)
+
+
+def get_env(name: str, default: str | None = None) -> str | None:
+    """Return an environment variable honoring ENV > .env > defaults."""
+
+    env = get_runtime_env()
+    return env.get(name, default)
+
+
+def _env_value(env: Mapping[str, Any], key: str) -> Optional[str]:
+    value = env.get(key)
+    if value is None:
+        return None
+    return str(value)
 
 
 @dataclass(slots=True)
@@ -566,10 +635,7 @@ class Settings:
 
     @classmethod
     def load(cls, env: Mapping[str, Any] | None = None) -> "Settings":
-        if env is None:
-            env_map: dict[str, Any] = dict(os.environ)
-        else:
-            env_map = dict(env)
+        env_map: dict[str, Any] = dict(env or get_runtime_env())
         orchestrator = OrchestratorConfig.from_env(env_map)
         external = ExternalCallPolicy.from_env(env_map)
         watchlist_timer = WatchlistTimerConfig.from_env(env_map)
@@ -758,6 +824,8 @@ _POSTGRES_ALLOWED_PREFIXES = (
 
 
 def _require_postgres_database_url(candidate: Optional[str]) -> str:
+    from app.errors import ValidationAppError
+
     value = (candidate or "").strip()
     if not value:
         raise ValidationAppError(
@@ -773,10 +841,13 @@ def _require_postgres_database_url(candidate: Optional[str]) -> str:
     return value
 
 
-def _resolve_database_url(explicit: Optional[str]) -> str:
+def _resolve_database_url(env: Mapping[str, Any], explicit: Optional[str]) -> str:
     if explicit is not None:
         return _require_postgres_database_url(explicit)
-    return _require_postgres_database_url(os.getenv("DATABASE_URL"))
+    candidate = env.get("DATABASE_URL")
+    if candidate:
+        return _require_postgres_database_url(str(candidate))
+    return _require_postgres_database_url(DEFAULT_DB_URL)
 
 
 def _parse_bool_override(value: Any) -> bool | None:
@@ -1041,11 +1112,7 @@ def _load_retry_policy(env: Mapping[str, Any]) -> RetryPolicyConfig:
 def resolve_retry_policy(env: Mapping[str, Any] | None = None) -> RetryPolicyConfig:
     """Load the retry policy configuration from the provided environment."""
 
-    env_map: Mapping[str, Any]
-    if env is None:
-        env_map = os.environ
-    else:
-        env_map = env
+    env_map: Mapping[str, Any] = env or get_runtime_env()
     return _load_retry_policy(env_map)
 
 
@@ -1170,17 +1237,18 @@ def _as_float(value: Optional[str], *, default: float) -> float:
         return default
 
 
-def load_matching_config() -> MatchingConfig:
+def load_matching_config(env: Mapping[str, Any] | None = None) -> MatchingConfig:
     """Return configuration values that control the matching engine."""
 
+    env = env or get_runtime_env()
     edition_aware = _as_bool(
-        os.getenv("FEATURE_MATCHING_EDITION_AWARE"),
+        _env_value(env, "FEATURE_MATCHING_EDITION_AWARE"),
         default=True,
     )
     fuzzy_max = max(
         5,
         _as_int(
-            os.getenv("MATCH_FUZZY_MAX_CANDIDATES"),
+            _env_value(env, "MATCH_FUZZY_MAX_CANDIDATES"),
             default=DEFAULT_MATCH_FUZZY_MAX_CANDIDATES,
         ),
     )
@@ -1189,7 +1257,7 @@ def load_matching_config() -> MatchingConfig:
         min(
             1.0,
             _as_float(
-                os.getenv("MATCH_MIN_ARTIST_SIM"),
+                _env_value(env, "MATCH_MIN_ARTIST_SIM"),
                 default=DEFAULT_MATCH_MIN_ARTIST_SIM,
             ),
         ),
@@ -1199,7 +1267,7 @@ def load_matching_config() -> MatchingConfig:
         min(
             1.0,
             _as_float(
-                os.getenv("MATCH_COMPLETE_THRESHOLD"),
+                _env_value(env, "MATCH_COMPLETE_THRESHOLD"),
                 default=DEFAULT_MATCH_COMPLETE_THRESHOLD,
             ),
         ),
@@ -1209,7 +1277,7 @@ def load_matching_config() -> MatchingConfig:
         min(
             complete,
             _as_float(
-                os.getenv("MATCH_NEARLY_THRESHOLD"),
+                _env_value(env, "MATCH_NEARLY_THRESHOLD"),
                 default=DEFAULT_MATCH_NEARLY_THRESHOLD,
             ),
         ),
@@ -1224,11 +1292,15 @@ def load_matching_config() -> MatchingConfig:
 
 
 def _load_settings_from_db(
-    keys: Iterable[str], *, database_url: Optional[str] = None
+    keys: Iterable[str],
+    *,
+    database_url: Optional[str] = None,
+    env: Mapping[str, Any] | None = None,
 ) -> dict[str, Optional[str]]:
     """Fetch selected settings from the database."""
 
-    database_url = _resolve_database_url(database_url)
+    runtime_env = env or get_runtime_env()
+    database_url = _resolve_database_url(runtime_env, database_url)
 
     try:
         engine = create_engine(database_url)
@@ -1258,10 +1330,15 @@ def _load_settings_from_db(
     return settings
 
 
-def get_setting(key: str, *, database_url: Optional[str] = None) -> Optional[str]:
+def get_setting(
+    key: str,
+    *,
+    database_url: Optional[str] = None,
+    env: Mapping[str, Any] | None = None,
+) -> Optional[str]:
     """Return a single setting value from the database if available."""
 
-    settings = _load_settings_from_db([key], database_url=database_url)
+    settings = _load_settings_from_db([key], database_url=database_url, env=env)
     return settings.get(key)
 
 
@@ -1277,9 +1354,9 @@ def _resolve_setting(
     return fallback
 
 
-def _legacy_slskd_url() -> Optional[str]:
-    host = (os.getenv("SLSKD_HOST") or "").strip()
-    port = (os.getenv("SLSKD_PORT") or "").strip()
+def _legacy_slskd_url(env: Mapping[str, Any]) -> Optional[str]:
+    host = (_env_value(env, "SLSKD_HOST") or "").strip()
+    port = (_env_value(env, "SLSKD_PORT") or "").strip()
 
     if not host:
         return None
@@ -1290,10 +1367,11 @@ def _legacy_slskd_url() -> Optional[str]:
     return f"http://{host}:{port}"
 
 
-def load_config() -> AppConfig:
+def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     """Load application configuration prioritising database backed settings."""
 
-    database_url = _resolve_database_url(None)
+    env = runtime_env or get_runtime_env()
+    database_url = _resolve_database_url(env, None)
 
     config_keys = [
         "SPOTIFY_CLIENT_ID",
@@ -1304,117 +1382,117 @@ def load_config() -> AppConfig:
         "ENABLE_ARTWORK",
         "ENABLE_LYRICS",
     ]
-    db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url))
-    legacy_slskd_url = _legacy_slskd_url()
+    db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url, env=env))
+    legacy_slskd_url = _legacy_slskd_url(env)
     if legacy_slskd_url is not None:
         db_settings.pop("SLSKD_URL", None)
 
-    environment_config = _load_environment_config(os.environ)
+    environment_config = _load_environment_config(env)
 
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
             "SPOTIFY_CLIENT_ID",
             db_settings=db_settings,
-            fallback=os.getenv("SPOTIFY_CLIENT_ID"),
+            fallback=_env_value(env, "SPOTIFY_CLIENT_ID"),
         ),
         client_secret=_resolve_setting(
             "SPOTIFY_CLIENT_SECRET",
             db_settings=db_settings,
-            fallback=os.getenv("SPOTIFY_CLIENT_SECRET"),
+            fallback=_env_value(env, "SPOTIFY_CLIENT_SECRET"),
         ),
         redirect_uri=_resolve_setting(
             "SPOTIFY_REDIRECT_URI",
             db_settings=db_settings,
-            fallback=os.getenv("SPOTIFY_REDIRECT_URI"),
+            fallback=_env_value(env, "SPOTIFY_REDIRECT_URI"),
         ),
-        scope=os.getenv("SPOTIFY_SCOPE", DEFAULT_SPOTIFY_SCOPE),
+        scope=_env_value(env, "SPOTIFY_SCOPE") or DEFAULT_SPOTIFY_SCOPE,
         free_import_max_lines=max(
             1,
             _as_int(
-                os.getenv("FREE_IMPORT_MAX_LINES"),
+                _env_value(env, "FREE_IMPORT_MAX_LINES"),
                 default=DEFAULT_FREE_IMPORT_MAX_LINES,
             ),
         ),
         free_import_max_file_bytes=max(
             1,
             _as_int(
-                os.getenv("FREE_IMPORT_MAX_FILE_BYTES"),
+                _env_value(env, "FREE_IMPORT_MAX_FILE_BYTES"),
                 default=DEFAULT_FREE_IMPORT_MAX_FILE_BYTES,
             ),
         ),
         free_import_max_playlist_links=max(
             1,
             _as_int(
-                os.getenv("FREE_IMPORT_MAX_PLAYLIST_LINKS"),
+                _env_value(env, "FREE_IMPORT_MAX_PLAYLIST_LINKS"),
                 default=DEFAULT_FREE_IMPORT_MAX_PLAYLIST_LINKS,
             ),
         ),
         free_import_hard_cap_multiplier=max(
             1,
             _as_int(
-                os.getenv("FREE_IMPORT_HARD_CAP_MULTIPLIER"),
+                _env_value(env, "FREE_IMPORT_HARD_CAP_MULTIPLIER"),
                 default=DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER,
             ),
         ),
         free_accept_user_urls=_as_bool(
-            os.getenv("FREE_ACCEPT_USER_URLS"),
+            _env_value(env, "FREE_ACCEPT_USER_URLS"),
             default=False,
         ),
         backfill_max_items=max(
             1,
             _as_int(
-                os.getenv("BACKFILL_MAX_ITEMS"),
+                _env_value(env, "BACKFILL_MAX_ITEMS"),
                 default=DEFAULT_BACKFILL_MAX_ITEMS,
             ),
         ),
         backfill_cache_ttl_seconds=max(
             60,
             _as_int(
-                os.getenv("BACKFILL_CACHE_TTL_SEC"),
+                _env_value(env, "BACKFILL_CACHE_TTL_SEC"),
                 default=DEFAULT_BACKFILL_CACHE_TTL,
             ),
         ),
     )
 
     soulseek_base_env = (
-        os.getenv("SLSKD_BASE_URL")
-        or os.getenv("SLSKD_URL")
+        _env_value(env, "SLSKD_BASE_URL")
+        or _env_value(env, "SLSKD_URL")
         or legacy_slskd_url
         or DEFAULT_SOULSEEK_URL
     )
     timeout_ms = max(
         200,
         _as_int(
-            os.getenv("SLSKD_TIMEOUT_MS"),
+            _env_value(env, "SLSKD_TIMEOUT_MS"),
             default=DEFAULT_SLSKD_TIMEOUT_MS,
         ),
     )
     retry_max = max(
         0,
         _as_int(
-            os.getenv("SLSKD_RETRY_MAX"),
+            _env_value(env, "SLSKD_RETRY_MAX"),
             default=DEFAULT_SLSKD_RETRY_MAX,
         ),
     )
     retry_backoff_base_ms = max(
         50,
         _as_int(
-            os.getenv("SLSKD_RETRY_BACKOFF_BASE_MS"),
+            _env_value(env, "SLSKD_RETRY_BACKOFF_BASE_MS"),
             default=DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS,
         ),
     )
     retry_jitter_pct_raw = _as_float(
-        os.getenv("SLSKD_JITTER_PCT"), default=DEFAULT_SLSKD_RETRY_JITTER_PCT
+        _env_value(env, "SLSKD_JITTER_PCT"), default=DEFAULT_SLSKD_RETRY_JITTER_PCT
     )
     retry_jitter_pct = min(100.0, max(0.0, retry_jitter_pct_raw))
-    preferred_formats_list = _parse_list(os.getenv("SLSKD_PREFERRED_FORMATS"))
+    preferred_formats_list = _parse_list(_env_value(env, "SLSKD_PREFERRED_FORMATS"))
     if not preferred_formats_list:
         preferred_formats_list = list(DEFAULT_SLSKD_PREFERRED_FORMATS)
     preferred_formats = tuple(preferred_formats_list)
     max_results = max(
         1,
         _as_int(
-            os.getenv("SLSKD_MAX_RESULTS"),
+            _env_value(env, "SLSKD_MAX_RESULTS"),
             default=DEFAULT_SLSKD_MAX_RESULTS,
         ),
     )
@@ -1428,7 +1506,7 @@ def load_config() -> AppConfig:
         api_key=_resolve_setting(
             "SLSKD_API_KEY",
             db_settings=db_settings,
-            fallback=os.getenv("SLSKD_API_KEY"),
+            fallback=_env_value(env, "SLSKD_API_KEY"),
         ),
         timeout_ms=timeout_ms,
         retry_max=retry_max,
@@ -1438,15 +1516,19 @@ def load_config() -> AppConfig:
         max_results=max_results,
     )
 
-    logging = LoggingConfig(level=os.getenv("HARMONY_LOG_LEVEL", "INFO"))
+    logging = LoggingConfig(level=_env_value(env, "HARMONY_LOG_LEVEL") or "INFO")
     database = DatabaseConfig(url=database_url)
 
-    artwork_dir = os.getenv("ARTWORK_DIR") or os.getenv("HARMONY_ARTWORK_DIR")
-    timeout_value = os.getenv("ARTWORK_HTTP_TIMEOUT") or os.getenv("ARTWORK_TIMEOUT_SEC")
-    concurrency_value = os.getenv("ARTWORK_WORKER_CONCURRENCY") or os.getenv("ARTWORK_CONCURRENCY")
-    min_edge_value = os.getenv("ARTWORK_MIN_EDGE")
-    min_bytes_value = os.getenv("ARTWORK_MIN_BYTES")
-    post_processors_raw = os.getenv("ARTWORK_POST_PROCESSORS")
+    artwork_dir = _env_value(env, "ARTWORK_DIR") or _env_value(env, "HARMONY_ARTWORK_DIR")
+    timeout_value = _env_value(env, "ARTWORK_HTTP_TIMEOUT") or _env_value(
+        env, "ARTWORK_TIMEOUT_SEC"
+    )
+    concurrency_value = _env_value(env, "ARTWORK_WORKER_CONCURRENCY") or _env_value(
+        env, "ARTWORK_CONCURRENCY"
+    )
+    min_edge_value = _env_value(env, "ARTWORK_MIN_EDGE")
+    min_bytes_value = _env_value(env, "ARTWORK_MIN_BYTES")
+    post_processors_raw = _env_value(env, "ARTWORK_POST_PROCESSORS")
     if post_processors_raw:
         processor_entries = post_processors_raw.replace("\n", ",").split(",")
         post_processors = tuple(entry.strip() for entry in processor_entries if entry.strip())
@@ -1456,7 +1538,7 @@ def load_config() -> AppConfig:
     artwork_config = ArtworkConfig(
         directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
         timeout_seconds=_as_float(timeout_value, default=DEFAULT_ARTWORK_TIMEOUT),
-        max_bytes=_as_int(os.getenv("ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES),
+        max_bytes=_as_int(_env_value(env, "ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES),
         concurrency=max(
             1,
             _as_int(
@@ -1467,20 +1549,20 @@ def load_config() -> AppConfig:
         min_edge=_as_int(min_edge_value, default=DEFAULT_ARTWORK_MIN_EDGE),
         min_bytes=_as_int(min_bytes_value, default=DEFAULT_ARTWORK_MIN_BYTES),
         fallback=ArtworkFallbackConfig(
-            enabled=_as_bool(os.getenv("ARTWORK_FALLBACK_ENABLED"), default=False),
-            provider=(os.getenv("ARTWORK_FALLBACK_PROVIDER") or "musicbrainz"),
+            enabled=_as_bool(_env_value(env, "ARTWORK_FALLBACK_ENABLED"), default=False),
+            provider=(_env_value(env, "ARTWORK_FALLBACK_PROVIDER") or "musicbrainz"),
             timeout_seconds=_as_float(
-                os.getenv("ARTWORK_FALLBACK_TIMEOUT_SEC"),
+                _env_value(env, "ARTWORK_FALLBACK_TIMEOUT_SEC"),
                 default=DEFAULT_ARTWORK_FALLBACK_TIMEOUT,
             ),
             max_bytes=_as_int(
-                os.getenv("ARTWORK_FALLBACK_MAX_BYTES"),
+                _env_value(env, "ARTWORK_FALLBACK_MAX_BYTES"),
                 default=DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
             ),
         ),
         post_processing=ArtworkPostProcessingConfig(
             enabled=_as_bool(
-                os.getenv("ARTWORK_POST_PROCESSING_ENABLED"),
+                _env_value(env, "ARTWORK_POST_PROCESSING_ENABLED"),
                 default=False,
             ),
             hooks=post_processors,
@@ -1491,14 +1573,14 @@ def load_config() -> AppConfig:
         batch_size=max(
             1,
             _as_int(
-                os.getenv("INGEST_BATCH_SIZE"),
+                _env_value(env, "INGEST_BATCH_SIZE"),
                 default=DEFAULT_INGEST_BATCH_SIZE,
             ),
         ),
         max_pending_jobs=max(
             1,
             _as_int(
-                os.getenv("INGEST_MAX_PENDING_JOBS"),
+                _env_value(env, "INGEST_MAX_PENDING_JOBS"),
                 default=DEFAULT_INGEST_MAX_PENDING_JOBS,
             ),
         ),
@@ -1508,34 +1590,34 @@ def load_config() -> AppConfig:
         max_playlists=max(
             1,
             _as_int(
-                os.getenv("FREE_MAX_PLAYLISTS"),
+                _env_value(env, "FREE_MAX_PLAYLISTS"),
                 default=DEFAULT_FREE_INGEST_MAX_PLAYLISTS,
             ),
         ),
         max_tracks=max(
             1,
             _as_int(
-                os.getenv("FREE_MAX_TRACKS_PER_REQUEST"),
+                _env_value(env, "FREE_MAX_TRACKS_PER_REQUEST"),
                 default=DEFAULT_FREE_INGEST_MAX_TRACKS,
             ),
         ),
         batch_size=max(
             1,
             _as_int(
-                os.getenv("FREE_BATCH_SIZE"),
+                _env_value(env, "FREE_BATCH_SIZE"),
                 default=DEFAULT_FREE_INGEST_BATCH_SIZE,
             ),
         ),
     )
 
-    api_base_path = _normalise_base_path(os.getenv("API_BASE_PATH"))
+    api_base_path = _normalise_base_path(_env_value(env, "API_BASE_PATH"))
 
     features = FeatureFlags(
         enable_artwork=_as_bool(
             _resolve_setting(
                 "ENABLE_ARTWORK",
                 db_settings=db_settings,
-                fallback=os.getenv("ENABLE_ARTWORK"),
+                fallback=_env_value(env, "ENABLE_ARTWORK"),
             ),
             default=False,
         ),
@@ -1543,36 +1625,36 @@ def load_config() -> AppConfig:
             _resolve_setting(
                 "ENABLE_LYRICS",
                 db_settings=db_settings,
-                fallback=os.getenv("ENABLE_LYRICS"),
+                fallback=_env_value(env, "ENABLE_LYRICS"),
             ),
             default=False,
         ),
         enable_legacy_routes=_as_bool(
-            os.getenv("FEATURE_ENABLE_LEGACY_ROUTES"),
+            _env_value(env, "FEATURE_ENABLE_LEGACY_ROUTES"),
             default=False,
         ),
         enable_artist_cache_invalidation=_as_bool(
-            os.getenv("ARTIST_CACHE_INVALIDATE"),
+            _env_value(env, "ARTIST_CACHE_INVALIDATE"),
             default=DEFAULT_ARTIST_CACHE_INVALIDATE,
         ),
         enable_admin_api=_as_bool(
-            os.getenv("FEATURE_ADMIN_API"),
+            _env_value(env, "FEATURE_ADMIN_API"),
             default=DEFAULT_ADMIN_API_ENABLED,
         ),
     )
 
     artist_sync_config = ArtistSyncConfig(
-        prune_removed=_as_bool(os.getenv("ARTIST_SYNC_PRUNE"), default=False),
-        hard_delete=_as_bool(os.getenv("ARTIST_SYNC_HARD_DELETE"), default=False),
+        prune_removed=_as_bool(_env_value(env, "ARTIST_SYNC_PRUNE"), default=False),
+        hard_delete=_as_bool(_env_value(env, "ARTIST_SYNC_HARD_DELETE"), default=False),
     )
 
     integrations = IntegrationsConfig(
-        enabled=_parse_enabled_providers(os.getenv("INTEGRATIONS_ENABLED")),
-        timeouts_ms=_parse_provider_timeouts(os.environ),
+        enabled=_parse_enabled_providers(_env_value(env, "INTEGRATIONS_ENABLED")),
+        timeouts_ms=_parse_provider_timeouts(env),
         max_concurrency=max(
             1,
             _as_int(
-                os.getenv("PROVIDER_MAX_CONCURRENCY"),
+                _env_value(env, "PROVIDER_MAX_CONCURRENCY"),
                 default=DEFAULT_PROVIDER_MAX_CONCURRENCY,
             ),
         ),
@@ -1582,24 +1664,24 @@ def load_config() -> AppConfig:
         db_timeout_ms=max(
             100,
             _as_int(
-                os.getenv("HEALTH_DB_TIMEOUT_MS"),
+                _env_value(env, "HEALTH_DB_TIMEOUT_MS"),
                 default=DEFAULT_HEALTH_DB_TIMEOUT_MS,
             ),
         ),
         dependency_timeout_ms=max(
             100,
             _as_int(
-                os.getenv("HEALTH_DEP_TIMEOUT_MS"),
+                _env_value(env, "HEALTH_DEP_TIMEOUT_MS"),
                 default=DEFAULT_HEALTH_DEP_TIMEOUT_MS,
             ),
         ),
-        dependencies=_parse_dependency_names(os.getenv("HEALTH_DEPS")),
-        require_database=_as_bool(os.getenv("HEALTH_READY_REQUIRE_DB"), default=True),
+        dependencies=_parse_dependency_names(_env_value(env, "HEALTH_DEPS")),
+        require_database=_as_bool(_env_value(env, "HEALTH_READY_REQUIRE_DB"), default=True),
     )
 
-    concurrency_env = os.getenv("WATCHLIST_MAX_CONCURRENCY")
+    concurrency_env = _env_value(env, "WATCHLIST_MAX_CONCURRENCY")
     if concurrency_env is None:
-        concurrency_env = os.getenv("WATCHLIST_CONCURRENCY")
+        concurrency_env = _env_value(env, "WATCHLIST_CONCURRENCY")
     max_concurrency = min(
         10,
         max(
@@ -1616,15 +1698,15 @@ def load_config() -> AppConfig:
         max(
             100,
             _as_int(
-                os.getenv("WATCHLIST_SPOTIFY_TIMEOUT_MS"),
+                _env_value(env, "WATCHLIST_SPOTIFY_TIMEOUT_MS"),
                 default=DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS,
             ),
         ),
     )
 
-    slskd_timeout_env = os.getenv("WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS")
+    slskd_timeout_env = _env_value(env, "WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS")
     if slskd_timeout_env is None:
-        slskd_timeout_env = os.getenv("WATCHLIST_SEARCH_TIMEOUT_MS")
+        slskd_timeout_env = _env_value(env, "WATCHLIST_SEARCH_TIMEOUT_MS")
     slskd_search_timeout_ms = min(
         60_000,
         max(
@@ -1636,9 +1718,9 @@ def load_config() -> AppConfig:
         ),
     )
 
-    retry_env = os.getenv("WATCHLIST_RETRY_MAX")
+    retry_env = _env_value(env, "WATCHLIST_RETRY_MAX")
     if retry_env is None:
-        retry_env = os.getenv("WATCHLIST_BACKOFF_MAX_TRIES")
+        retry_env = _env_value(env, "WATCHLIST_BACKOFF_MAX_TRIES")
     retry_max = min(
         5,
         max(
@@ -1650,9 +1732,9 @@ def load_config() -> AppConfig:
         ),
     )
 
-    retry_budget_env = os.getenv("ARTIST_MAX_RETRY_PER_ARTIST")
+    retry_budget_env = _env_value(env, "ARTIST_MAX_RETRY_PER_ARTIST")
     if retry_budget_env is None:
-        retry_budget_env = os.getenv("WATCHLIST_RETRY_BUDGET_PER_ARTIST")
+        retry_budget_env = _env_value(env, "WATCHLIST_RETRY_BUDGET_PER_ARTIST")
     retry_budget = min(
         20,
         max(
@@ -1664,7 +1746,7 @@ def load_config() -> AppConfig:
         ),
     )
 
-    cooldown_seconds_env = os.getenv("ARTIST_COOLDOWN_S")
+    cooldown_seconds_env = _env_value(env, "ARTIST_COOLDOWN_S")
     if cooldown_seconds_env is not None:
         cooldown_minutes = min(
             240,
@@ -1689,14 +1771,14 @@ def load_config() -> AppConfig:
             max(
                 0,
                 _as_int(
-                    os.getenv("WATCHLIST_COOLDOWN_MINUTES"),
+                    _env_value(env, "WATCHLIST_COOLDOWN_MINUTES"),
                     default=DEFAULT_WATCHLIST_COOLDOWN_MINUTES,
                 ),
             ),
         )
 
     db_io_mode_raw = (
-        (os.getenv("WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE).strip().lower()
+        (_env_value(env, "WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE).strip().lower()
     )
     db_io_mode = "async" if db_io_mode_raw == "async" else "thread"
 
@@ -1707,7 +1789,7 @@ def load_config() -> AppConfig:
             max(
                 1,
                 _as_int(
-                    os.getenv("WATCHLIST_MAX_PER_TICK"),
+                    _env_value(env, "WATCHLIST_MAX_PER_TICK"),
                     default=DEFAULT_WATCHLIST_MAX_PER_TICK,
                 ),
             ),
@@ -1717,7 +1799,7 @@ def load_config() -> AppConfig:
         tick_budget_ms=max(
             100,
             _as_int(
-                os.getenv("WATCHLIST_TICK_BUDGET_MS"),
+                _env_value(env, "WATCHLIST_TICK_BUDGET_MS"),
                 default=DEFAULT_WATCHLIST_TICK_BUDGET_MS,
             ),
         ),
@@ -1726,7 +1808,7 @@ def load_config() -> AppConfig:
             max(
                 0,
                 _as_int(
-                    os.getenv("WATCHLIST_BACKOFF_BASE_MS"),
+                    _env_value(env, "WATCHLIST_BACKOFF_BASE_MS"),
                     default=DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
                 ),
             ),
@@ -1737,7 +1819,7 @@ def load_config() -> AppConfig:
             max(
                 0.0,
                 _as_float(
-                    os.getenv("WATCHLIST_JITTER_PCT"),
+                    _env_value(env, "WATCHLIST_JITTER_PCT"),
                     default=DEFAULT_WATCHLIST_JITTER_PCT,
                 ),
             ),
@@ -1745,7 +1827,7 @@ def load_config() -> AppConfig:
         shutdown_grace_ms=max(
             0,
             _as_int(
-                os.getenv("WATCHLIST_SHUTDOWN_GRACE_MS"),
+                _env_value(env, "WATCHLIST_SHUTDOWN_GRACE_MS"),
                 default=DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS,
             ),
         ),
@@ -1761,21 +1843,21 @@ def load_config() -> AppConfig:
         staleness_max_minutes=max(
             1,
             _as_int(
-                os.getenv("ARTIST_STALENESS_MAX_MIN"),
+                _env_value(env, "ARTIST_STALENESS_MAX_MIN"),
                 default=DEFAULT_ADMIN_STALENESS_MAX_MINUTES,
             ),
         ),
         retry_budget_max=max(
             0,
             _as_int(
-                os.getenv("ARTIST_RETRY_BUDGET_MAX"),
+                _env_value(env, "ARTIST_RETRY_BUDGET_MAX"),
                 default=DEFAULT_ADMIN_RETRY_BUDGET_MAX,
             ),
         ),
     )
 
-    raw_env_keys = _parse_list(os.getenv("HARMONY_API_KEYS"))
-    file_keys = _read_api_keys_from_file(os.getenv("HARMONY_API_KEYS_FILE", ""))
+    raw_env_keys = _parse_list(_env_value(env, "HARMONY_API_KEYS"))
+    file_keys = _read_api_keys_from_file(_env_value(env, "HARMONY_API_KEYS_FILE") or "")
     api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
 
     default_allowlist = [
@@ -1783,60 +1865,62 @@ def load_config() -> AppConfig:
     ]
     default_allowlist.append("/api/health/ready")
     allowlist_override_entries = [
-        _normalise_prefix(entry) for entry in _parse_list(os.getenv("AUTH_ALLOWLIST"))
+        _normalise_prefix(entry) for entry in _parse_list(_env_value(env, "AUTH_ALLOWLIST"))
     ]
     allowlist_entries = _deduplicate_preserve_order(
         entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
     )
 
     request_id_config = RequestMiddlewareConfig(
-        header_name=(os.getenv("REQUEST_ID_HEADER") or "X-Request-ID").strip() or "X-Request-ID"
+        header_name=(_env_value(env, "REQUEST_ID_HEADER") or "X-Request-ID").strip()
+        or "X-Request-ID"
     )
 
-    security_profile, security_defaults = _resolve_security_profile(os.environ)
-    require_auth_override = _parse_bool_override(os.getenv("FEATURE_REQUIRE_AUTH"))
-    rate_limit_override = _parse_bool_override(os.getenv("FEATURE_RATE_LIMITING"))
+    security_profile, security_defaults = _resolve_security_profile(env)
+    require_auth_override = _parse_bool_override(_env_value(env, "FEATURE_REQUIRE_AUTH"))
+    rate_limit_override = _parse_bool_override(_env_value(env, "FEATURE_RATE_LIMITING"))
     rate_limit_enabled = (
         security_defaults.rate_limiting if rate_limit_override is None else rate_limit_override
     )
 
     rate_limit_config = RateLimitMiddlewareConfig(
         enabled=rate_limit_enabled,
-        bucket_capacity=max(1, _as_int(os.getenv("RATE_LIMIT_BUCKET_CAP"), default=60)),
+        bucket_capacity=max(1, _as_int(_env_value(env, "RATE_LIMIT_BUCKET_CAP"), default=60)),
         refill_per_second=_bounded_float(
-            os.getenv("RATE_LIMIT_REFILL_PER_SEC"),
+            _env_value(env, "RATE_LIMIT_REFILL_PER_SEC"),
             default=1.0,
             minimum=0.0,
         ),
     )
 
-    cacheable_paths_env = _parse_list(os.getenv("CACHEABLE_PATHS"))
+    cacheable_paths_env = _parse_list(_env_value(env, "CACHEABLE_PATHS"))
     merged_cacheable_paths = _deduplicate_preserve_order(
         [*cacheable_paths_env, *DEFAULT_CACHEABLE_PATH_PATTERNS]
     )
     cache_rules = _parse_cache_rules(merged_cacheable_paths)
     cache_config = CacheMiddlewareConfig(
-        enabled=_as_bool(os.getenv("CACHE_ENABLED"), default=True),
-        default_ttl=max(0, _as_int(os.getenv("CACHE_DEFAULT_TTL_S"), default=30)),
-        max_items=max(1, _as_int(os.getenv("CACHE_MAX_ITEMS"), default=5_000)),
-        etag_strategy=(os.getenv("CACHE_STRATEGY_ETAG") or "strong").strip().lower() or "strong",
-        fail_open=_as_bool(os.getenv("CACHE_FAIL_OPEN"), default=True),
+        enabled=_as_bool(_env_value(env, "CACHE_ENABLED"), default=True),
+        default_ttl=max(0, _as_int(_env_value(env, "CACHE_DEFAULT_TTL_S"), default=30)),
+        max_items=max(1, _as_int(_env_value(env, "CACHE_MAX_ITEMS"), default=5_000)),
+        etag_strategy=(_env_value(env, "CACHE_STRATEGY_ETAG") or "strong").strip().lower()
+        or "strong",
+        fail_open=_as_bool(_env_value(env, "CACHE_FAIL_OPEN"), default=True),
         stale_while_revalidate=_parse_optional_duration(
-            (os.getenv("CACHE_STALE_WHILE_REVALIDATE_S") or "").strip() or None
+            (_env_value(env, "CACHE_STALE_WHILE_REVALIDATE_S") or "").strip() or None
         ),
         cacheable_paths=cache_rules,
-        write_through=_as_bool(os.getenv("CACHE_WRITE_THROUGH"), default=True),
-        log_evictions=_as_bool(os.getenv("CACHE_LOG_EVICTIONS"), default=True),
+        write_through=_as_bool(_env_value(env, "CACHE_WRITE_THROUGH"), default=True),
+        log_evictions=_as_bool(_env_value(env, "CACHE_LOG_EVICTIONS"), default=True),
     )
 
-    cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
+    cors_origins_env = _env_value(env, "CORS_ALLOWED_ORIGINS")
     if cors_origins_env is None:
-        cors_origins_env = os.getenv("ALLOWED_ORIGINS")
+        cors_origins_env = _env_value(env, "ALLOWED_ORIGINS")
     cors_origins = _parse_list(cors_origins_env)
     if not cors_origins:
         cors_origins = ["*"]
-    cors_headers = _parse_list(os.getenv("CORS_ALLOWED_HEADERS")) or ["*"]
-    cors_methods = _parse_list(os.getenv("CORS_ALLOWED_METHODS")) or [
+    cors_headers = _parse_list(_env_value(env, "CORS_ALLOWED_HEADERS")) or ["*"]
+    cors_methods = _parse_list(_env_value(env, "CORS_ALLOWED_METHODS")) or [
         "GET",
         "POST",
         "PUT",
@@ -1851,7 +1935,7 @@ def load_config() -> AppConfig:
     )
 
     gzip_config = GZipMiddlewareConfig(
-        min_size=max(0, _as_int(os.getenv("GZIP_MIN_SIZE"), default=1_024)),
+        min_size=max(0, _as_int(_env_value(env, "GZIP_MIN_SIZE"), default=1_024)),
     )
 
     middleware_config = MiddlewareConfig(
@@ -1924,4 +2008,4 @@ def is_feature_enabled(
     if db_value is not None:
         return _as_bool(db_value, default=False)
 
-    return _as_bool(os.getenv(key), default=False)
+    return _as_bool(get_env(key), default=False)

@@ -10,18 +10,16 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
+from app.config import get_env
 from app.dependencies import get_db
 from app.errors import InternalServerError, ValidationAppError
-from app.services.dlq_service import (DLQListResult, DLQRequeueResult,
-                                      DLQService, DLQStats)
+from app.services.dlq_service import DLQListResult, DLQRequeueResult, DLQService, DLQStats
 
 router = APIRouter(tags=["DLQ"])
 
 
 def _env_int(name: str, default: int, *, minimum: int, maximum: int | None = None) -> int:
-    import os
-
-    raw = os.getenv(name)
+    raw = get_env(name)
     if raw is None:
         value = default
     else:

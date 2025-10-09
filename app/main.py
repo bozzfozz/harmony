@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -21,18 +20,15 @@ from starlette.responses import Response
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
-from app.config import AppConfig, SecurityConfig, settings
+from app.config import AppConfig, SecurityConfig, get_env, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
-from app.dependencies import (get_app_config, get_soulseek_client,
-                              get_spotify_client)
+from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
 from app.middleware import install_middleware
-from app.orchestrator.bootstrap import (OrchestratorRuntime,
-                                        bootstrap_orchestrator)
-from app.orchestrator.handlers import (ARTIST_REFRESH_JOB_TYPE,
-                                       ARTIST_SCAN_JOB_TYPE)
+from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
+from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
 from app.services.health import DependencyStatus, HealthService
 from app.services.secret_validation import SecretValidationService
@@ -141,7 +137,7 @@ _API_BASE_PATH = _config_snapshot.api_base_path
 
 _FRONTEND_DIST_ENV_VAR = "FRONTEND_DIST"
 _DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend_dist"
-_frontend_dist_override = os.environ.get(_FRONTEND_DIST_ENV_VAR)
+_frontend_dist_override = get_env(_FRONTEND_DIST_ENV_VAR)
 if _frontend_dist_override:
     FRONTEND_DIST = Path(_frontend_dist_override).expanduser().resolve()
 else:
@@ -607,9 +603,7 @@ if _FRONTEND_INDEX_PATH.is_file():
     logger.info("Serving frontend assets from %s", FRONTEND_DIST)
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
-    async def _frontend_fallback(
-        request: Request, exc: StarletteHTTPException
-    ) -> Response:
+    async def _frontend_fallback(request: Request, exc: StarletteHTTPException) -> Response:
         path = request.url.path
         if (
             exc.status_code == 404
@@ -625,9 +619,7 @@ if _FRONTEND_INDEX_PATH.is_file():
 
     app.add_exception_handler(StarletteHTTPException, _frontend_fallback)
 else:
-    logger.info(
-        "Frontend assets not found at %s; skipping static mount", FRONTEND_DIST
-    )
+    logger.info("Frontend assets not found at %s; skipping static mount", FRONTEND_DIST)
 
 _response_cache = getattr(app.state, "response_cache", None)
 _activity_paths = {

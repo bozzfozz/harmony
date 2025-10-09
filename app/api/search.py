@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -10,6 +9,8 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Request, status
 
+import app.logging_events as logging_events
+from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_integration_service, get_matching_engine
 from app.errors import DependencyError
@@ -17,14 +18,23 @@ from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
-import app.logging_events as logging_events
-from app.schemas_search import (ItemTypeLiteral, SearchItem, SearchRequest,
-                                SearchResponse, SourceLiteral)
+from app.schemas_search import (
+    ItemTypeLiteral,
+    SearchItem,
+    SearchRequest,
+    SearchResponse,
+    SourceLiteral,
+)
 from app.services.integration_service import IntegrationService
-from app.utils.normalize import (boost_for_bitrate, boost_for_format,
-                                 clamp_score, format_priority_index,
-                                 normalize_genres, normalize_text,
-                                 year_distance_bonus)
+from app.utils.normalize import (
+    boost_for_bitrate,
+    boost_for_format,
+    clamp_score,
+    format_priority_index,
+    normalize_genres,
+    normalize_text,
+    year_distance_bonus,
+)
 
 logger = get_logger(__name__)
 
@@ -34,7 +44,7 @@ DEFAULT_SOURCES: tuple[SourceLiteral, ...] = ("spotify", "soulseek")
 def _resolve_search_max_limit(default: int = 100) -> int:
     """Load the maximum page size for search requests with validation."""
 
-    raw_value = os.getenv("SEARCH_MAX_LIMIT")
+    raw_value = get_env("SEARCH_MAX_LIMIT")
     if raw_value is None:
         return default
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from enum import Enum
@@ -13,6 +12,7 @@ from uuid import uuid4
 from fastapi import status
 from fastapi.responses import JSONResponse
 
+from app.config import get_env
 from app.logging import get_logger
 
 
@@ -30,7 +30,7 @@ _logger = get_logger(__name__)
 
 
 def _env_flag(name: str, *, default: bool) -> bool:
-    raw = os.getenv(name)
+    raw = get_env(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}

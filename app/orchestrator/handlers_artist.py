@@ -4,26 +4,35 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from time import perf_counter
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
+from app.config import get_env
 from app.dependencies import get_app_config
-from app.integrations.artist_gateway import (ArtistGateway,
-                                             ArtistGatewayResponse)
+from app.integrations.artist_gateway import ArtistGateway, ArtistGatewayResponse
 from app.integrations.contracts import ProviderArtist, ProviderRelease
-from app.integrations.provider_gateway import (ProviderGatewayDependencyError,
-                                               ProviderGatewayError,
-                                               ProviderGatewayRateLimitedError,
-                                               ProviderGatewayTimeoutError)
+from app.integrations.provider_gateway import (
+    ProviderGatewayDependencyError,
+    ProviderGatewayError,
+    ProviderGatewayRateLimitedError,
+    ProviderGatewayTimeoutError,
+)
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.services.artist_dao import (ArtistDao, ArtistReleaseRow,
-                                     ArtistReleaseUpsertDTO, ArtistUpsertDTO)
-from app.services.artist_delta import (ArtistLocalState, ArtistRemoteState,
-                                       ReleaseSnapshot, determine_delta)
+from app.services.artist_dao import (
+    ArtistDao,
+    ArtistReleaseRow,
+    ArtistReleaseUpsertDTO,
+    ArtistUpsertDTO,
+)
+from app.services.artist_delta import (
+    ArtistLocalState,
+    ArtistRemoteState,
+    ReleaseSnapshot,
+    determine_delta,
+)
 from app.services.audit import write_audit
 from app.services.cache import ResponseCache, bust_artist_cache
 from app.utils.idempotency import make_idempotency_key
@@ -62,7 +71,7 @@ def _coerce_int(value: object, default: int) -> int:
 
 
 def _env_int(name: str, default: int = 0) -> int:
-    value = os.getenv(name)
+    value = get_env(name)
     if value is None:
         return default
     return _coerce_int(value, default)
@@ -83,10 +92,10 @@ class ArtistSyncHandlerDeps:
         default_factory=lambda: max(0, _env_int("ARTIST_SYNC_PRIORITY_DECAY", 0))
     )
     prune_removed: bool = field(
-        default_factory=lambda: _coerce_bool(os.getenv("ARTIST_SYNC_PRUNE"), False)
+        default_factory=lambda: _coerce_bool(get_env("ARTIST_SYNC_PRUNE"), False)
     )
     hard_delete_removed: bool = field(
-        default_factory=lambda: _coerce_bool(os.getenv("ARTIST_SYNC_HARD_DELETE"), False)
+        default_factory=lambda: _coerce_bool(get_env("ARTIST_SYNC_HARD_DELETE"), False)
     )
     api_base_path: str | None = None
 
