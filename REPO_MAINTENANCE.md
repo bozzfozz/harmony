@@ -6,7 +6,7 @@
 - **`CI`** (`.github/workflows/ci.yml`)
   - Runs on every push and pull request.
   - Provides two jobs:
-    - `ci-backend`: Python 3.11 toolchain (mypy, isort --check-only, bandit, pytest + coverage gate, pip-audit).
+    - `ci-backend`: Python 3.11 toolchain (mypy, isort --check-only, pytest + coverage gate, pip-audit).
     - `ci-frontend`: Node.js 20 pipeline (eslint, build, unit tests). Automatically skips when no `frontend/package.json` is present.
   - Concurrency key `${{ github.workflow }}-${{ github.ref }}` cancels superseded runs per branch.
   - Artifacts: `reports/coverage.xml`, `reports/junit.xml`.
@@ -48,7 +48,6 @@ pytest
 # Run backend pipeline locally
 isort --check-only .
 mypy app
-bandit -r app -x tests
 pytest -m "not postgres" --cov=app --cov-fail-under=85
 pip-audit -r requirements.txt
 ```
