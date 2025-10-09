@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
 from sqlalchemy import (Boolean, CheckConstraint, Column, Date, DateTime,
                         Float, ForeignKey, Index, Integer, String, Text, text)
-
-# JSON is optional depending on database backend; fall back to Text if unavailable
-try:  # pragma: no cover - fallback handling
-    from sqlalchemy import JSON
-except ImportError:  # pragma: no cover - compatibility
-    JSON = Text  # type: ignore
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from app.db import Base
 
 UTC_NOW = text("timezone('utc', now())")
+
+
+def _utcnow() -> datetime:
+    """Return a timezone-aware UTC timestamp for ORM defaults."""
+
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -77,7 +78,7 @@ class Download(Base):
     lyrics_path = Column(String(2048), nullable=True)
     lyrics_status = Column(String(32), nullable=False, default="pending")
     has_lyrics = Column(Boolean, nullable=False, default=False)
-    request_payload = Column(JSON, nullable=True)
+    request_payload = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(
         DateTime,
@@ -167,10 +168,16 @@ class ActivityEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(
+        TIMESTAMP(timezone=True),
+        default=_utcnow,
+        server_default=UTC_NOW,
+        nullable=False,
+        index=True,
+    )
     type = Column(String(128), nullable=False)
     status = Column(String(128), nullable=False)
-    details = Column(JSON, nullable=True)
+    details = Column(JSONB, nullable=True)
 
 
 class ArtistPreference(Base):
@@ -266,10 +273,10 @@ class ArtistRecord(Base):
     source = Column(String(50), nullable=False)
     source_id = Column(String(255), nullable=True)
     name = Column(String(512), nullable=False)
-    genres = Column(JSON, nullable=False, default=list)
-    images = Column(JSON, nullable=False, default=list)
+    genres = Column(JSONB, nullable=False, default=list)
+    images = Column(JSONB, nullable=False, default=list)
     popularity = Column(Integer, nullable=True)
-    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
+    metadata_json = Column("metadata", JSONB, nullable=False, default=dict)
     etag = Column(String(64), nullable=False)
     version = Column(String(64), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -303,7 +310,7 @@ class ArtistReleaseRecord(Base):
     total_tracks = Column(Integer, nullable=True)
     version = Column(String(64), nullable=True)
     etag = Column(String(64), nullable=False)
-    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
+    metadata_json = Column("metadata", JSONB, nullable=False, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
@@ -330,8 +337,8 @@ class ArtistAuditRecord(Base):
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(255), nullable=True)
     event = Column(String(32), nullable=False)
-    before_json = Column("before", JSON, nullable=True)
-    after_json = Column("after", JSON, nullable=True)
+    before_json = Column("before", JSONB, nullable=True)
+    after_json = Column("after", JSONB, nullable=True)
 
 
 class ArtistWatchlistEntry(Base):
@@ -392,7 +399,7 @@ class WorkerJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     worker = Column(String(64), index=True, nullable=False)
-    payload = Column(JSON, nullable=False)
+    payload = Column(JSONB, nullable=False)
     state = Column(String(32), nullable=False, default="queued")
     attempts = Column(Integer, nullable=False, default=0)
     last_error = Column(Text, nullable=True)
@@ -452,26 +459,26 @@ class QueueJob(Base):
         default=QueueJobStatus.PENDING.value,
         index=True,
     )
-    payload = Column("payload_json", JSON, nullable=False, default=dict)
+    payload = Column("payload_json", JSONB, nullable=False, default=dict)
     priority = Column(Integer, nullable=False, default=0)
     attempts = Column(Integer, nullable=False, default=0)
     available_at = Column(
-        DateTime,
+        TIMESTAMP(timezone=True),
         nullable=False,
         server_default=UTC_NOW,
     )
-    lease_expires_at = Column(DateTime, nullable=True)
+    lease_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     idempotency_key = Column(String(128), nullable=True)
     last_error = Column(Text, nullable=True)
     stop_reason = Column(String(64), nullable=True)
-    result_payload = Column(JSON, nullable=True)
+    result_payload = Column(JSONB, nullable=True)
     created_at = Column(
-        DateTime,
+        TIMESTAMP(timezone=True),
         nullable=False,
         server_default=UTC_NOW,
     )
     updated_at = Column(
-        DateTime,
+        TIMESTAMP(timezone=True),
         nullable=False,
         server_default=UTC_NOW,
         server_onupdate=UTC_NOW,
