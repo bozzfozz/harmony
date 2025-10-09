@@ -12,7 +12,7 @@ help:
         @echo "make db.revision msg=\"...\" # autogenerate new migration"
 
 install-dev:
-	pip install -r requirements-dev.txt
+        pip install -r requirements-dev.txt
 
 quality:
         isort --check-only .
@@ -25,9 +25,9 @@ security:
 ifeq ($(OFF),true)
 	@echo "⚠️ CI_OFFLINE=true → skipping security tools (bandit, pip-audit)."
 else
-	@mkdir -p reports/analysis/_evidence
-	@bash -c "set -o pipefail; bandit -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt"
-	pip-audit -r requirements.txt || true
+        @mkdir -p reports/analysis/_evidence
+        @bash -c "set -o pipefail; python scripts/bandit.py -c .bandit -r app | tee reports/analysis/_evidence/bandit_app.txt"
+        pip-audit -r requirements.txt || true
 endif
 
 analyze:

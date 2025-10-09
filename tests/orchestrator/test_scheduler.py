@@ -84,6 +84,7 @@ def test_priority_config_falls_back_to_csv(monkeypatch: pytest.MonkeyPatch) -> N
 @pytest.mark.asyncio
 async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level("INFO", logger="app.orchestrator.scheduler")
+    caplog.set_level("INFO", logger="app.orchestrator.metrics")
 
     jobs = {
         "sync": [make_job(1, "sync", 200, 5), make_job(2, "sync", 150, 3)],
@@ -133,6 +134,7 @@ async def test_scheduler_leases_jobs_in_priority_order(caplog: pytest.LogCapture
         isinstance(record.duration_ms, int) and record.duration_ms >= 0
         for record in lease_records
     )
+    assert {record.name for record in lease_records} == {"app.orchestrator.metrics"}
 
 
 @pytest.mark.asyncio

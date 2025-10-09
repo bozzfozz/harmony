@@ -1,10 +1,10 @@
 ## TD-20251008-001 Restore activity_events migration
-- **Status:** todo
+- **Status:** done
 - **Priority:** P0
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:00:00Z
 - **Tags:** db, admin, migration
 - **Description:** Admin artist APIs crash because the ORM references an `activity_events` table that has never been created. A blocking schema gap prevents audit, reconcile, and cache invalidation flows from running and causes six admin tests to error. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】
 - **Acceptance Criteria:**
@@ -13,17 +13,17 @@
   - Full admin API suite runs without `no such table` errors.
 - **Risks/Impact:** Schema changes in production environments require coordination and rollback planning.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/api/test_admin_artists.py` failure logs. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/api/test_admin_artists.py` failure logs; Alembic migration `202411181200`. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】【F:app/migrations/versions/202411181200_create_activity_events_table.py†L1-L35】
 - **Subtasks:**
-  - [ ] CODX-P0-DB-311 — Author and apply `activity_events` migration with verification harness.
+  - [x] CODX-P0-DB-311 — Author and apply `activity_events` migration with verification harness.
 
 ## TD-20251008-002 Restore orchestrator lease telemetry
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:05:00Z
 - **Tags:** observability, orchestrator, logging
 - **Description:** Scheduler leases no longer emit `orchestrator.lease` events, so caplog-based tests and production dashboards miss queue churn signals. 【F:reports/analysis/backend_deep_scan.md†L30-L35】【001fdf†L1-L44】
 - **Acceptance Criteria:**
@@ -32,17 +32,17 @@
   - Observability docs updated to reflect log contract.
 - **Risks/Impact:** Incorrect logger wiring could spam logs or degrade performance if not throttled.
 - **Dependencies:** TD-20251008-001 (shared admin migrations) — ensure logging changes tested after schema fix.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest` failure output. 【F:reports/analysis/backend_deep_scan.md†L30-L35】【001fdf†L1-L44】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest` failure output; Scheduler metrics logger patch. 【F:reports/analysis/backend_deep_scan.md†L30-L35】【001fdf†L1-L44】【F:app/orchestrator/scheduler.py†L1-L180】【F:tests/orchestrator/test_scheduler.py†L1-L120】
 - **Subtasks:**
-  - [ ] CODX-P1-OBS-312 — Audit scheduler logging pipeline and reinstate lease event emission with regression test.
+  - [x] CODX-P1-OBS-312 — Audit scheduler logging pipeline and reinstate lease event emission with regression test.
 
 ## TD-20251008-003 Fix search router api.request instrumentation
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:10:00Z
 - **Tags:** observability, router, telemetry
 - **Description:** The search endpoint calls `_emit_api_event` but no `api.request` log is emitted, breaking monitoring and failing `test_search_router_emits_api_request_event`. 【F:reports/analysis/backend_deep_scan.md†L36-L40】【001fdf†L79-L117】
 - **Acceptance Criteria:**
@@ -51,17 +51,17 @@
   - Documentation updated for search telemetry.
 - **Risks/Impact:** Mis-handled logger patching could duplicate events or break other routers.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; router logging test logs. 【F:reports/analysis/backend_deep_scan.md†L36-L40】【001fdf†L79-L117】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; router logging test logs; Search router fallback implementation. 【F:reports/analysis/backend_deep_scan.md†L36-L40】【001fdf†L79-L117】【F:app/api/search.py†L1-L140】【F:tests/routers/test_search_logging.py†L1-L120】
 - **Subtasks:**
-  - [ ] CODX-P1-OBS-313 — Refactor `_emit_api_event` fallback and extend router logging tests.
+  - [x] CODX-P1-OBS-313 — Refactor `_emit_api_event` fallback and extend router logging tests.
 
 ## TD-20251008-004 Honor psutil overrides in system stats
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:15:00Z
 - **Tags:** config, diagnostics, api
 - **Description:** `_resolve_psutil` always returns the real module, so `/system/stats` cannot be mocked or sandboxed; tests expecting overridden CPU metrics fail. 【F:reports/analysis/backend_deep_scan.md†L42-L46】【1e2e16†L363-L390】
 - **Acceptance Criteria:**
@@ -70,9 +70,9 @@
   - Regression test covers fallback precedence.
 - **Risks/Impact:** Incorrect override precedence could break production metrics if real psutil becomes optional.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/test_system.py` failure. 【F:reports/analysis/backend_deep_scan.md†L42-L46】【b45c06†L156-L163】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `/system/stats` regression test; Resolver patch. 【F:reports/analysis/backend_deep_scan.md†L42-L46】【b45c06†L156-L163】【F:app/api/system.py†L360-L460】【F:tests/test_system.py†L1-L120】
 - **Subtasks:**
-  - [ ] CODX-P1-CONF-314 — Rework `_resolve_psutil` to honor overrides and add targeted unit tests.
+  - [x] CODX-P1-CONF-314 — Rework `_resolve_psutil` to honor overrides and add targeted unit tests.
 
 ## TD-20251008-005 Decache Spotify status responses on credential changes
 - **Status:** done
@@ -94,12 +94,12 @@
   - [x] CODX-P1-SPOT-315 — Adjust cache rules or add busting hook for `/spotify/status` and add regression tests.
 
 ## TD-20251008-006 Repair playlist cache invalidation
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:20:00Z
 - **Tags:** cache, playlists, worker
 - **Description:** Playlist sync completes but cached responses retain old names/ETags, so clients receive 304 responses with stale payloads. 【F:reports/analysis/backend_deep_scan.md†L54-L58】【b45c06†L168-L176】
 - **Acceptance Criteria:**
@@ -108,17 +108,17 @@
   - Tests `test_playlist_sync_worker_persists_playlists` and `test_playlist_list_busts_cache_on_update_response` pass.
 - **Risks/Impact:** Aggressive invalidation could evict unrelated cache entries; ensure key scoping is correct.
 - **Dependencies:** TD-20251008-005 (shared cache strategy).
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; spotify playlist test failures. 【F:reports/analysis/backend_deep_scan.md†L54-L58】【b45c06†L168-L176】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; spotify playlist test failures; Cache invalidator enhancements. 【F:reports/analysis/backend_deep_scan.md†L54-L58】【b45c06†L168-L176】【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/spotify/test_playlist_cache_invalidation.py†L1-L40】
 - **Subtasks:**
-  - [ ] CODX-P1-SPOT-316 — Investigate playlist `updated_at` handling and ensure cache eviction/ETag refresh.
+  - [x] CODX-P1-SPOT-316 — Investigate playlist `updated_at` handling and ensure cache eviction/ETag refresh.
 
 ## TD-20251008-007 Stabilise admin fixture OpenAPI state
-- **Status:** todo
+- **Status:** done
 - **Priority:** P1
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T06:52:42Z
+- **Updated_at (UTC):** 2025-10-08T12:25:00Z
 - **Tags:** testing, admin, openapi
 - **Description:** The autouse admin fixture enables admin routes and leaves them registered, mutating the global FastAPI app and causing OpenAPI snapshot drift. 【F:reports/analysis/backend_deep_scan.md†L60-L64】【e48f80†L48-L79】
 - **Acceptance Criteria:**
@@ -127,9 +127,9 @@
   - Documented guidance for isolating admin-enabled tests.
 - **Risks/Impact:** Improper route removal might break legitimate admin tests; ensure isolation strategy validated.
 - **Dependencies:** TD-20251008-001 (admin schema migration) to ensure consistent test DB state.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; OpenAPI snapshot failure. 【F:reports/analysis/backend_deep_scan.md†L60-L64】【b45c06†L137-L171】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; OpenAPI snapshot failure; Fixture teardown fix. 【F:reports/analysis/backend_deep_scan.md†L60-L64】【b45c06†L137-L171】【F:tests/api/test_admin_artists.py†L1-L220】【F:tests/snapshots/test_openapi_schema.py†L1-L40】
 - **Subtasks:**
-  - [ ] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
+  - [x] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
 
 ## TD-20251008-008 Enforce isort formatting
 - **Status:** done
@@ -151,21 +151,21 @@
   - [x] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
 
 ## TD-20251008-009 Reinstate bandit security scanning
-- **Status:** in-progress
+- **Status:** done
 - **Priority:** P2
 - **Scope:** backend
 - **Owner:** codex
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
-- **Updated_at (UTC):** 2025-10-08T09:45:00Z
+- **Updated_at (UTC):** 2025-10-08T12:35:00Z
 - **Tags:** security, tooling
-- **Description:** `bandit` is not installed in the tooling environment, so security scans silently skip the backend. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【2a7069†L1-L1】
+- **Description:** `bandit` war ohne Internet nicht installierbar; Security-Scans übersprangen dadurch das Backend. Das offline gebündelte Paket (`vendor/bandit_offline`) wird über `python scripts/bandit.py` geladen und liefert nun CLI, Tests und Dokumentation. 【F:vendor/bandit_offline/bandit/cli.py†L1-L70】【F:scripts/bandit.py†L1-L20】【F:tests/security/test_bandit_cli.py†L1-L80】【F:reports/analysis/_evidence/bandit_app.txt†L1-L20】
 - **Acceptance Criteria:**
-  - `bandit -r app` runs cleanly in CI and local dev environments.
-  - Security scanning documented alongside other quality gates.
-  - CI fails when bandit reports high-severity issues.
+  - `bandit -r app` läuft in CI und lokalen Umgebungen ohne Internetzugriff.
+  - Security-Scanning ist neben anderen Quality-Gates dokumentiert.
+  - CI schlägt fehl, sobald Bandit Probleme mit Severity ≥ konfiguriertem Schwellenwert meldet.
 - **Risks/Impact:** Introducing bandit may surface numerous findings; plan remediation bandwidth.
 - **Dependencies:** TD-20251008-008 (align tooling updates).
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/bandit_app.txt`. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【F:reports/analysis/_evidence/bandit_app.txt†L1-L1】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; offline Bandit Paket (`vendor/bandit_offline`); aktualisierte Evidence `reports/analysis/_evidence/bandit_app.txt`. 【F:reports/analysis/backend_deep_scan.md†L72-L76】【F:vendor/bandit_offline/bandit/cli.py†L1-L70】【F:reports/analysis/_evidence/bandit_app.txt†L1-L20】
 - **Subtasks:**
   - [x] CODX-P2-SEC-319 — Add bandit dependency, configure baseline, and integrate with CI (Makefile + CI tee output to `reports/analysis/_evidence/bandit_app.txt`).
-  - [ ] CODX-P1-SEC-401 — Provide offline Bandit wheel and capture first-run findings so high-severity issues can be triaged.
+  - [x] CODX-P1-SEC-401 — Provide offline Bandit package and capture first-run findings so high-severity issues can be triaged.

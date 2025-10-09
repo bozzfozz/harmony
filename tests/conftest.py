@@ -21,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+BANDIT_VENDOR = ROOT / "vendor" / "bandit_offline"
+if BANDIT_VENDOR.exists():
+    vendor_str = str(BANDIT_VENDOR)
+    if vendor_str not in sys.path:
+        sys.path.insert(0, vendor_str)
+
 os.environ.setdefault("HARMONY_API_KEYS", "test-key")
 os.environ.setdefault("ALLOWED_ORIGINS", "https://app.local")
 os.environ.setdefault("CACHE_ENABLED", "true")
@@ -1379,6 +1385,7 @@ def configure_environment(
     monkeypatch.setenv("ENABLE_ARTWORK", "1")
     monkeypatch.setenv("ENABLE_LYRICS", "1")
     _install_recording_orchestrator(monkeypatch)
+    skip_postgres = request.node.get_closest_marker("no_postgres") is not None
     configured_url = os.getenv("DATABASE_URL")
 
     def _seed_settings() -> None:
@@ -1387,6 +1394,12 @@ def configure_environment(
         write_setting("SPOTIFY_REDIRECT_URI", "http://localhost/callback")
         write_setting("SLSKD_URL", "http://localhost:5030")
         write_setting("SLSKD_API_KEY", "test-key")
+
+    if skip_postgres:
+        if configured_url:
+            monkeypatch.delenv("DATABASE_URL", raising=False)
+        yield
+        return
 
     if not configured_url:
         pytest.skip("DATABASE_URL must point to a PostgreSQL database for test execution")
@@ -1429,7 +1442,13 @@ def configure_environment(
 
 
 @pytest.fixture(autouse=True)
-def reset_activity_manager() -> None:
+def reset_activity_manager(request: pytest.FixtureRequest) -> None:
+    if request.node.get_closest_marker("no_postgres") is not None:
+        activity_manager.clear()
+        yield
+        activity_manager.clear()
+        return
+
     activity_manager.clear()
     with session_scope() as session:
         session.query(ActivityEvent).delete()

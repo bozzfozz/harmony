@@ -62,6 +62,7 @@ class PlaylistCacheInvalidator:
                 component="worker.playlist_sync",
                 status="error",
                 error=str(exc),
+                meta={"playlist_ids": tuple(ordered_ids)} if ordered_ids else None,
             )
             return
 
@@ -74,6 +75,7 @@ class PlaylistCacheInvalidator:
             invalidated_entries=int(invalidated),
             playlist_count=len(ordered_ids),
             reason=self._reason,
+            meta={"playlist_ids": tuple(ordered_ids)} if ordered_ids else None,
         )
         if invalidated:
             logger.info(
@@ -89,14 +91,24 @@ class PlaylistCacheInvalidator:
             reason=self._reason,
             path="/spotify/playlists",
         )
+        total += await self._cache.invalidate_path(
+            "/spotify/playlists",
+            reason=self._reason,
+        )
 
         for playlist_id in playlist_ids:
             key_prefix = playlist_detail_cache_key(playlist_id)
+            detail_path = f"/spotify/playlists/{playlist_id}/tracks"
             total += await self._cache.invalidate_prefix(
                 key_prefix,
                 reason=self._reason,
                 entity_id=playlist_id,
-                path="/spotify/playlists/{playlist_id}/tracks",
+                path=detail_path,
+            )
+            total += await self._cache.invalidate_path(
+                detail_path,
+                reason=self._reason,
+                entity_id=playlist_id,
             )
 
         return total

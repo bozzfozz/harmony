@@ -92,6 +92,7 @@ class Scheduler:
         self._visibility_timeout = max(1, timeout_s)
         self._persistence = persistence_module
         self._logger = get_logger(__name__)
+        self._metrics_logger = orchestrator_events.logger
         self._stop_signal: asyncio.Event | None = None
         self._pending_stop = False
         self.started: asyncio.Event = asyncio.Event()
@@ -155,7 +156,7 @@ class Scheduler:
         leased_jobs: list[persistence.QueueJobDTO] = []
         for job in jobs:
             orchestrator_events.emit_schedule_event(
-                self._logger,
+                self._metrics_logger,
                 job_id=job.id,
                 job_type=job.type,
                 attempts=int(job.attempts),
@@ -171,7 +172,7 @@ class Scheduler:
             duration_ms = max(0, int((perf_counter() - start) * 1000))
             status = "leased" if leased is not None else "skipped"
             orchestrator_events.emit_lease_event(
-                self._logger,
+                self._metrics_logger,
                 job_id=job.id,
                 job_type=job.type,
                 status=status,

@@ -5,7 +5,8 @@ import pytest
 
 import app.api.admin_artists as admin_api
 from app import dependencies as deps
-from app.api.admin_artists import AdminContext, maybe_register_admin_routes
+from app.api.admin_artists import (AdminContext, maybe_register_admin_routes,
+                                   _unregister_admin_routes)
 from app.config import settings as app_settings
 from app.db import init_db, reset_engine_for_tests, session_scope
 from app.integrations.artist_gateway import (ArtistGatewayResponse,
@@ -56,10 +57,12 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
     original_config = deps.get_app_config()
+    original_openapi_schema = getattr(app, "openapi_schema", None)
     original_response_cache = getattr(app.state, "response_cache", None)
     original_cache_write_through = getattr(app.state, "cache_write_through", None)
     original_cache_log_evictions = getattr(app.state, "cache_log_evictions", None)
     original_openapi_config = getattr(app.state, "openapi_config", None)
+    original_admin_registered = bool(getattr(app.state, "admin_artists_registered", False))
 
     for key, value in overrides.items():
         monkeypatch.setenv(key, value)
@@ -83,12 +86,14 @@ def configure_admin_environment(monkeypatch: pytest.MonkeyPatch) -> None:
             reset_engine_for_tests()
 
     deps.get_app_config.cache_clear()
-    maybe_register_admin_routes(app, config=original_config)
     app.state.response_cache = original_response_cache
     app.state.cache_write_through = original_cache_write_through
     app.state.cache_log_evictions = original_cache_log_evictions
     app.state.openapi_config = original_openapi_config
-    app.openapi_schema = None
+    _unregister_admin_routes(app)
+    if original_admin_registered:
+        maybe_register_admin_routes(app, config=original_config)
+    app.openapi_schema = original_openapi_schema
 
 
 @pytest.fixture

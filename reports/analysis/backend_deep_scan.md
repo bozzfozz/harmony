@@ -70,10 +70,11 @@
 - **Suggested Tests:** `isort --check-only .` in CI.
 
 ### F9. Missing bandit scanner (P2)
-- **Evidence:** `bandit -r app` fails (`command not found`). 【2a7069†L1-L1】
+- **Evidence:** `bandit -r app` scheiterte mangels installierter Binary; Security-Gate blieb inaktiv. 【2a7069†L1-L1】
 - **Impact:** Security scan gate silently skipped; potential vulnerabilities unnoticed.
-- **Recommendation:** Add `bandit` to `requirements-dev.txt`, wire into CI, and document usage.
-- **Suggested Tests:** `bandit -r app` (post-install).
+- **Mitigation:** Offline-Paket `vendor/bandit_offline` stellt CLI, Tests und CI-Integration bereit (Okt 2025) und wird über `python scripts/bandit.py` geladen. 【F:vendor/bandit_offline/bandit/cli.py†L1-L70】【F:scripts/bandit.py†L1-L20】【F:tests/security/test_bandit_cli.py†L1-L80】
+- **Recommendation:** Rollout kommunizieren und remaining Tooling (radon/vulture/pip-audit) ebenfalls offline verfügbar machen.
+- **Suggested Tests:** `python scripts/bandit.py -c .bandit -r app`.
 
 ## Next Steps
 1. **Schema Fix:** Prioritise migration for `activity_events` (F1) before any admin/API work.

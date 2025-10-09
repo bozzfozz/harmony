@@ -3,3 +3,4 @@ __pycache__/
 harmony.db
 frontend/node_modules/
 frontend/dist/
+vendor/bandit_offline/dist/

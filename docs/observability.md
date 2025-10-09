@@ -67,13 +67,14 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 
 Structured logging is standardised via `app.logging_events.log_event` across the stack. Key event types:
 
-- `api.request` – emitted by the FastAPI middleware for every request. Fields include `component`, `method`, `path`, `status_code`, `status`, `duration_ms`, and the `entity_id`/request id.
+- `api.request` – emitted by the FastAPI middleware for every request. Fields include `component`, `method`, `path`, `status_code`, `status`, `duration_ms`, and the `entity_id`/request id. Router-specific emitters (z. B. `router.search`) forward to `app.logging_events.log_event`, sodass Monkeypatches und Telemetrie-Shims in Tests greifen.
 - `api.dependency` – wraps outbound provider calls with `dependency`, `operation`, `status`, retry counters, `duration_ms`, and optional error metadata (`timeout_ms`, `status_code`, `retry_after_ms`).
 - `cache.*` – `cache.store`, `cache.hit`, `cache.miss`, `cache.expired`, `cache.invalidate`, `cache.evict` capture cache lifecycle actions with hashes instead of payloads.
 - `worker.job` – queue persistence lifecycle for `enqueued`, `leased`, `completed`, `dead_letter`, and `priority_updated` states. Includes `entity_id`, `job_type`, `attempts`, and context such as `lease_timeout_s` or `stop_reason`.
 - `worker.retry_exhausted` – emitted when retries are exhausted and the job moves to the DLQ.
 - `worker.tick` – periodic queue polling output with `job_type` and `count` of ready jobs.
-- `orchestrator.schedule|lease|dispatch|commit|heartbeat|dlq|timer_tick` – high level orchestration flow and timing, including `duration_ms`, `status`, and job identifiers.
+- `orchestrator.schedule|lease|dispatch|commit|heartbeat|dlq|timer_tick` – high level orchestration flow and timing, including `duration_ms`, `status`, and job identifiers. Diese Ereignisse werden über den Logger `app.orchestrator.metrics` ausgegeben, damit Dashboards konsistent auf den Metrik-Stream subscriben können.
+- `worker.playlists.cache.invalidate` – dokumentiert Cache-Busts der Playlist-Synchronisation inklusive `invalidated_entries`, `playlist_count` sowie `meta.playlist_ids` für gezielte Analysen.
 
 A typical log record looks like:
 

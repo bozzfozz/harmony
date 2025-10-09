@@ -8,6 +8,10 @@ Harmony ist ein FastAPI-Backend, das Spotify, Soulseek (slskd) sowie eine eigene
 
 Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain → Integrationen) mit einem zentralen Orchestrator für Hintergrundjobs. Verantwortlichkeiten, Flows, Fehler- und Logging-Verträge sowie Erweiterungspunkte sind in der [Architecture Overview](docs/architecture/overview.md) festgehalten und gelten als verbindliche Referenz für jede Änderung. Ergänzende Diagramme, Contracts und ADRs befinden sich im Ordner `docs/architecture/`.
 
+## Projektstatus
+
+Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest du im [Projektstatus-Dashboard](docs/project_status.md).
+
 ## Features
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
@@ -451,7 +455,7 @@ black --check .
 mypy app
 pytest -q
 python scripts/audit_wiring.py
-bandit -c .bandit -r app
+python scripts/bandit.py -c .bandit -r app
 
 cd frontend
 npm ci
@@ -463,9 +467,10 @@ npm run build
 `isort --check-only .` stellt sicher, dass die konfigurierte Import-Reihenfolge eingehalten wird. Verwende `isort .` oder
 alternativ `ruff check . --select I --fix`, um Imports automatisch zu sortieren. `black` bleibt der einzige Formatter.
 
-Der Security-Scan blockt unsichere Muster frühzeitig. `bandit -c .bandit -r app` nutzt die Repository-Konfiguration (Scope,
-Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Führe den Scan vor jedem Commit lokal aus, damit Findings
-gar nicht erst im Pull Request landen.
+Der Security-Scan blockt unsichere Muster frühzeitig. `python scripts/bandit.py -c .bandit -r app` nutzt die Repository-
+Konfiguration (Scope, Severity/Confidence) und entspricht dem verpflichtenden CI-Gate. Das Skript lädt automatisch die
+vendorte Bandit-Implementierung aus `vendor/bandit_offline`, sodass kein separates Wheel installiert werden muss. Führe den
+Scan vor jedem Commit lokal aus, damit Findings gar nicht erst im Pull Request landen.
 
 Die Ausgabe landet zusätzlich in `reports/analysis/_evidence/bandit_app.txt`, sodass Sicherheitsnachweise versioniert werden
 können. `make security` erzeugt die Datei automatisch und aktualisiert sie bei jeder Ausführung.
