@@ -45,6 +45,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ### PostgreSQL-Betrieb
 
 - Verwende ausschließlich `postgresql+psycopg://`- oder `postgresql+asyncpg://`-DSNs. Harmony erzeugt keine Fallback-Engines; ein fehlkonfigurierter DSN führt zu Startfehlern noch vor dem Lifespan. Das frühere eingebettete Test-Backend existiert nur noch als Minimal-Smoke-Runner und ersetzt keinen echten Datenbankdienst.
+- Für isolierte Unit-Tests ohne PostgreSQL kann `HARMONY_INIT_DB=0` gesetzt werden. Der Wert überschreibt den Profil-Default (Tests deaktivieren die Initialisierung automatisch, produktive Profile bleiben unverändert). Setze `HARMONY_INIT_DB=1`, um in Testläufen bewusst die echte Datenbank zu initialisieren.
 - Überwache `pg_stat_activity`, `pg_locks` und `pg_stat_statements`, wenn du Worker-Parallelität erhöhst. Harmonys Standardwerte erwarten mindestens 40 verfügbare Verbindungen (`max_connections`), damit API und Worker nicht um Sessions konkurrieren.
 - Setze `statement_timeout` und `idle_in_transaction_session_timeout` auf betrieblich sinnvolle Werte (z. B. 30 s bzw. 60 s), damit blockierende Sessions frühzeitig abgebrochen werden. Alembic-Migrationen respektieren diese Einstellungen.
 - Aktiviere Autovacuum aggressiver für stark wachsende Tabellen (`downloads`, `ingest_items`, `activity_log`): reduziere `autovacuum_vacuum_scale_factor` (z. B. 0.05) und prüfe `pg_stat_all_tables`, um Bloat zu vermeiden.
