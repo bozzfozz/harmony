@@ -23,7 +23,13 @@ ENV PUID=1000 \
     PIP_NO_CACHE_DIR=1 \
     APP_PORT=8000 \
     HARMONY_PROFILE=prod \
-    DATABASE_URL="postgresql+psycopg://harmony:harmony@postgres:5432/harmony"
+    DATABASE_URL="postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=prefer" \
+    POSTGRES_HOST=postgres \
+    POSTGRES_PORT=5432 \
+    POSTGRES_DB=harmony \
+    POSTGRES_USER=harmony \
+    POSTGRES_PASSWORD=harmony \
+    DATABASE_SSLMODE=prefer
 
 WORKDIR /app
 

@@ -3,7 +3,13 @@ services:
     build: .
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
     environment:
-      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony
+      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: harmony
+      POSTGRES_USER: harmony
+      POSTGRES_PASSWORD: harmony
+      DATABASE_SSLMODE: disable
       HARMONY_LOG_LEVEL: DEBUG
       HARMONY_API_KEYS: dev-key
       ALLOWED_ORIGINS: http://localhost:8080
