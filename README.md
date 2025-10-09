@@ -530,6 +530,8 @@ Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architectur
 - Eine erreichbare PostgreSQL-Instanz (z. B. `postgres:16` via Docker)
 - Optional: Docker und Docker Compose
 
+Harmony unterstützt ausschließlich PostgreSQL als Datenbank-Backend; eingebettete oder file-basierte Engines funktionieren nicht mit den Migrationen und Tests.
+
 ### Lokales Setup
 
 ```bash
@@ -965,6 +967,7 @@ Die Logs eignen sich für ELK-/Loki-Pipelines und bilden die alleinige Quelle f�
 ### Performance & Zuverlässigkeit
 
 - Worker-Last wird über `WATCHLIST_*`, `SYNC_WORKER_CONCURRENCY`, `RETRY_*` und `MATCHING_WORKER_*` feinjustiert. Die Defaults sind auf PostgreSQL-Pools abgestimmt; erhöhe Parallelität nur, wenn `max_connections`, I/O und Query-Pläne des Datenbankservers ausreichend Reserven bieten.
+- Überwache bei Engpässen `pg_stat_activity`, `pg_locks` und `pg_stat_statements`, um Verbindungsengpässe und langsame SQL-Pfade frühzeitig zu erkennen. Harmonys Produktionsprofile rechnen mit mindestens 40 gleichzeitigen Sessions.
 - Der Response-Cache (`CACHE_*`) reduziert Lesezugriffe und generiert korrekte `ETag`-/`Cache-Control`-Header. Bei Fehlern fällt er dank `CACHE_FAIL_OPEN` auf Live-Responses zurück.
 - Backfill- und Ingest-Limits (`BACKFILL_MAX_ITEMS`, `FREE_*`, `INGEST_*`) verhindern Thundering-Herds und sichern deterministische Laufzeiten.
 - Die Watchlist respektiert Timeouts (`WATCHLIST_SPOTIFY_TIMEOUT_MS`, `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS`) sowie ein Retry-Budget pro Artist, damit Spotify/slskd nicht dauerhaft blockiert werden.
@@ -1007,7 +1010,7 @@ Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht gel
 
 Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
 
-- **Datenbank-Checks beachten:** Führt vor neuen Schemaänderungen `alembic upgrade head` gegen eure PostgreSQL-Testinstanz sowie `pytest tests/migrations -q` aus. So bleibt sichergestellt, dass sämtliche Migrationen und Guards die PostgreSQL-Referenzimplementierung abdecken.
+- **Datenbank-Checks beachten:** Führt vor neuen Schemaänderungen `alembic upgrade head` gegen eure PostgreSQL-Testinstanz sowie `pytest tests/migrations -q` aus. So bleibt sichergestellt, dass sämtliche Migrationen und Schutzprüfungen die PostgreSQL-Referenzimplementierung abdecken.
 
 ## Tests & CI
 

@@ -37,6 +37,11 @@ Die MVP-Slim-Version von Harmony fokussiert sich auf Spotify und Soulseek. Ehema
 +----------------------------+
 ```
 
+Harmony betreibt sämtliche Persistenz ausschließlich auf PostgreSQL. Die
+Konfiguration erzwingt `postgresql+psycopg://` oder `postgresql+asyncpg://`
+Verbindungszeichenketten; ein eingebetteter oder file-basierter Fallback wird
+nicht initialisiert.
+
 ## Komponenten im Detail
 
 ### Core
@@ -105,9 +110,10 @@ Fehlgeschlagene Downloads werden ausschließlich über den orchestrierten `retry
 
 ### Datenbank & Persistenz
 
-- **`app/db.py`** initialisiert die PostgreSQL-Engine (synchron und asynchron) und liefert `session_scope()` / `get_session()`.
+- **`app/db.py`** initialisiert die PostgreSQL-Engine (synchron und asynchron) und liefert `session_scope()` / `get_session()`. Die Initialisierung lehnt andere Backends ab; ohne gültigen PostgreSQL-DSN startet der Lifespan nicht.
 - **`app/models.py`** definiert Tabellen wie `Playlist`, `Download`, `Match`, `Setting`, `SettingHistory`, `WatchlistArtist`.
 - **`app/schemas.py` & `app/schemas_search.py`** beschreiben Pydantic-Modelle für Requests/Responses und Suchresultate.
+- Alembic-Migrationen laufen beim Start (`init_db()`) ausschließlich gegen PostgreSQL. Fällt Alembic als Abhängigkeit weg, ruft der Fallback `Base.metadata.create_all()` dieselbe Engine auf und setzt ebenfalls PostgreSQL voraus.
 
 ### Datenfluss (vereinfacht)
 

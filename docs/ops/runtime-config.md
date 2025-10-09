@@ -42,6 +42,14 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 - Der zentrale `RetryPolicyProvider` liest `RETRY_*` zur Laufzeit (inkl. Job-spezifischer Overrides wie `RETRY_SYNC_MAX_ATTEMPTS`) und cached das Ergebnis für `RETRY_POLICY_RELOAD_S` Sekunden. Nach Ablauf der TTL greifen neue ENV-Werte automatisch ohne Neustart; `SyncWorker.refresh_retry_policy()` erzwingt bei Bedarf eine sofortige Aktualisierung.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
 
+### PostgreSQL-Betrieb
+
+- Verwende ausschließlich `postgresql+psycopg://`- oder `postgresql+asyncpg://`-DSNs. Harmony erzeugt keine Fallback-Engines; ein fehlkonfigurierter DSN führt zu Startfehlern noch vor dem Lifespan.
+- Überwache `pg_stat_activity`, `pg_locks` und `pg_stat_statements`, wenn du Worker-Parallelität erhöhst. Harmonys Standardwerte erwarten mindestens 40 verfügbare Verbindungen (`max_connections`), damit API und Worker nicht um Sessions konkurrieren.
+- Setze `statement_timeout` und `idle_in_transaction_session_timeout` auf betrieblich sinnvolle Werte (z. B. 30 s bzw. 60 s), damit blockierende Sessions frühzeitig abgebrochen werden. Alembic-Migrationen respektieren diese Einstellungen.
+- Aktiviere Autovacuum aggressiver für stark wachsende Tabellen (`downloads`, `ingest_items`, `activity_log`): reduziere `autovacuum_vacuum_scale_factor` (z. B. 0.05) und prüfe `pg_stat_all_tables`, um Bloat zu vermeiden.
+- Für Produktionsumgebungen empfiehlt sich ein Connection-Pooler wie PgBouncer im Transaction-Modus. Passe dann `DATABASE_URL` auf den Pooler-Endpunkt an und stelle sicher, dass Hintergrundjobs mit langen Transaktionen (`SyncWorker`, `MatchingWorker`) weiterhin direkt über PostgreSQL laufen, falls Idle-Timeouts enger konfiguriert sind.
+
 ## Frontend & Runtime Injection
 
 - `VITE_API_BASE_URL` und `VITE_API_BASE_PATH` definieren die Basis-URL des Frontend-Clients.
