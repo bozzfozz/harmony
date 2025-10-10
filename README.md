@@ -546,8 +546,12 @@ Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](f
 
 ### Voraussetzungen
 
-- Node.js ≥ 20
-- pnpm oder npm (Beispiele verwenden npm)
+- Node.js 20.17.1 (LTS; via `nvm use` aus `.nvmrc` empfohlen)
+- npm 10.x (z. B. die mit Node 20.17.1 gebündelte Version)
+- pnpm optional, die Beispiele verwenden npm
+
+> Richte vor `npm ci` oder `npm run dev` unbedingt die Node- und npm-Versionen gemäß `.nvmrc` ein (`nvm use` oder `asdf install`),
+> damit Lockfiles und Builds reproduzierbar bleiben.
 
 ### Installation & Entwicklung
 
@@ -1236,7 +1240,7 @@ Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
 
 Die Frontend-Pipeline (CI, Nightly, Release) ist so gehärtet, dass jeder Lauf eine saubere, reproduzierbare `npm ci`-Installation nutzt:
 
-- GitHub Actions pinnt Node.js explizit auf LTS `20.x` und setzt `registry-url: https://registry.npmjs.org`.
+- GitHub Actions liest die Node.js-Version aus `.nvmrc` (aktuell `20.17.1`) und setzt `registry-url: https://registry.npmjs.org`.
 - Vor jedem Install werden `node_modules` entfernt und ein ephemerer Cache via `NPM_CONFIG_CACHE="$(mktemp -d)"` erzeugt.
 - `npm config` erzwingt `prefer-online`, fünf Fetch-Retries sowie verlängerte Timeouts (`fetch-timeout` und `fetch-retry-maxtimeout` je 600 s).
 - Die Jobs erlauben maximal zwei Wiederholungen (`npm ci` läuft bis zu drei Versuche) und reinigen den Cache (`npm cache clean --force`) zwischen den Versuchen.
