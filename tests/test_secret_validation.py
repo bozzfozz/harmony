@@ -84,6 +84,24 @@ async def test_slskd_live_with_prefixed_store_url() -> None:
 
 
 @pytest.mark.asyncio
+async def test_slskd_live_with_versioned_suffix_normalizes_path() -> None:
+    captured_path: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_path.append(request.url.path)
+        return httpx.Response(200)
+
+    service = _service_with_transport(httpx.MockTransport(handler))
+    store = SecretStore.from_values(
+        {"SLSKD_API_KEY": "abcdef123456", "SLSKD_URL": "http://slskd:5030/api/v1"}
+    )
+
+    await service.validate("slskd_api_key", store=store)
+
+    assert captured_path == ["/api/v2/me"]
+
+
+@pytest.mark.asyncio
 async def test_slskd_live_reports_invalid_credentials() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401)
