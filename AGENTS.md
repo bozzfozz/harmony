@@ -108,6 +108,8 @@ Ohne explizites Flag gilt **Write Mode**.
 - [ ] Testnachweise dokumentiert (Logs, Screens, Coverage).
 - [ ] **Change-Impact-Scan** (§20) ausgeführt.
 - [ ] **ToDo gepflegt – nur falls §25.0 „Erforderlichkeit“ ausgelöst** (Zeitstempel, Priorität, Sortierung, Verweise) **ODER** „No ToDo changes required“ im PR bestätigt.
+- [ ] **Wiring-Report** im PR-Body (angepasste Aufrufer/Registrierungen/Exporte).
+- [ ] **Removal-Report** im PR-Body (gelöschte Dateien + Begründung).
 
 ### Agent-Ausführung
 - [ ] Eingaben validiert, Schema geprüft.
@@ -299,6 +301,37 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 4. **Tests**: Betroffene Tests aktualisieren/ergänzen; Snapshots/Fixtures synchronisieren.
 5. **Cross-Module-Verträglichkeit**: Sicherstellen, dass angrenzende Bausteine weiterhin funktionieren (z. B. `api` ↔ `services` ↔ `integrations`).
 6. **Docs/ENV**: README/Docs/ENV synchron halten.
+
+### 20a. Wiring & Removal (verbindlich)
+**Ziel:** Nach jeder Änderung ist das System vollständig verdrahtet; nicht mehr benötigte Artefakte sind entfernt.
+
+**MUSS**
+1) **Repo-weites Wiring**: Jede neue/umbenannte Funktion, Klasse, Route, Worker oder CLI hat aktualisierte Aufrufer, Registrierungen und Exporte. Keine „stummen“ Entry-Points.
+2) **Konsistenter Umbau**: Wenn ein Modul/Namespace verschoben/ersetzt wurde, sind **alle** Referenzen, Tests, Fixtures, Snapshots, Docs und CI-Schritte angepasst.
+3) **Entfernung**: Veraltete Dateien, doppelte Implementierungen, Legacy-Shims und ungenutzte Tests/Dokus werden gelöscht (kein Parken im Repo).
+4) **Kein toter Code**: Keine ungenutzten Exporte/Imports/Symbole im Produktivcode.
+
+**Pflicht-Checks vor PR**
+- Referenzscan (mindestens):
+    git grep -n '<alter_name_oder_namespace>' -- . || true
+    git grep -n '<neuer_name_oder_namespace>' -- . || true
+- Ruff auf ungenutztes/undefiniertes:
+    ruff check --select F401,F841,F822 .
+- Vollständiger Build & Tests:
+    pytest -q || true
+    # Frontend (falls vorhanden):
+    npm run build || true
+
+**PR-Body MUSS enthalten**
+- „Wiring-Report“: Kurzliste der angepassten Aufrufer/Registrierungen/Exporte.
+- „Removal-Report“: Aufzählung gelöschter Dateien mit Begründung.
+
+**CI (read-only, blockierend)**
+- Unbenutztes/undefiniertes:
+    ruff check --select F401,F841,F822 --output-format=github .
+- Legacy-/Altpfad-Scanner (projektspezifische Muster siehe `.project-guard.yml`, falls vorhanden).
+
+Hinweis: „Wiring & Removal“ ist ein Merge-Gate. PRs mit fehlender Verdrahtung oder verbliebenen Altdateien werden nicht gemerged.
 
 ## 21. **Auto-Task-Splitting (erlaubt)**
 - Agent darf große Aufgaben in **Subtasks**/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).
