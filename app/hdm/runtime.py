@@ -12,10 +12,10 @@ from .completion import CompletionEventBus, DownloadCompletionMonitor
 from .dedup import DeduplicationManager
 from .idempotency import IdempotencyStore, InMemoryIdempotencyStore
 from .move import AtomicFileMover
+from .orchestrator import HdmOrchestrator
 from .pipeline import DownloadPipeline
 from .pipeline_impl import DefaultDownloadPipeline
 from .recovery import HdmRecovery, SidecarStore
-from .orchestrator import HdmOrchestrator
 from .tagging import AudioTagger
 
 
@@ -29,9 +29,7 @@ class HdmRuntime:
     recovery: HdmRecovery
 
 
-def build_hdm_runtime(
-    config: HdmConfig, soulseek: SoulseekConfig
-) -> HdmRuntime:
+def build_hdm_runtime(config: HdmConfig, soulseek: SoulseekConfig) -> HdmRuntime:
     """Initialise HDM components using the supplied configuration."""
 
     downloads_dir = Path(config.downloads_dir).expanduser().resolve()
@@ -102,4 +100,3 @@ __all__ = [
     "HdmRuntime",
     "build_hdm_runtime",
 ]
-

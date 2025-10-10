@@ -591,7 +591,9 @@ npm run build     # TypeScript + Vite Build
 Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
 
 ```bash
-isort --check-only .
+ruff format .
+ruff check --select I --fix .
+git diff --exit-code
 mypy app
 pytest -q
 python scripts/audit_wiring.py
@@ -605,9 +607,9 @@ npm run typecheck
 npm run build
 ```
 
-Nutze `isort .`, um Import-Reihenfolgen automatisch zu korrigieren. Für bewusst ungenutzte Importe (z. B. Test-Fixtures mit
-Seiteneffekten) bitte `# noqa` mit Begründung ergänzen. Formatierung jenseits der Import-Sortierung erfolgt nach PEP 8 und wird
-im Review abgestimmt.
+`ruff` übernimmt Formatierung **und** Import-Sortierung. Nutze vor jedem Commit die oben aufgeführten Befehle (1–3), um Drift
+zu beseitigen und sicherzustellen, dass `git diff` leer ist. Bewusst ungenutzte Importe (z. B. Test-Fixtures mit Seiteneffekten)
+bitte mit `# noqa` samt Begründung markieren.
 
 `pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
 Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
@@ -1204,20 +1206,22 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 ## Code Style & Tooling
 
-- **Imports:** `isort` hält die Reihenfolge konsistent und ist in `pyproject.toml` konfiguriert.
+- **Format & Imports:** `ruff` ist zentral konfiguriert (`pyproject.toml`) und übernimmt Formatierung sowie Import-Sortierung.
 - **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
 - **Dependencies:** `pip-audit` prüft `requirements.txt` auf veröffentlichte CVEs.
 
-### isort in pre-commit
+> Hinweis: Weder `isort` noch `black` sind aktiv. Ruff ist die alleinige Quelle der Formatierungs- und Import-Policy.
+
+### Ruff in pre-commit
 
 1. **Setup einmalig:**
    ```bash
    pip install pre-commit
    pre-commit install
    ```
-2. **Commit-Flow:** Beim `git commit` läuft `isort` automatisch und korrigiert Import-Reihenfolgen, bevor der Commit geschrieben wird.
-3. **Pull-Requests:** pre-commit.ci ist aktiviert. Sobald ein Push unsortierte Imports enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
-4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `isort --check-only .` aus und blockt den Merge bei Drift.
+2. **Commit-Flow:** Beim `git commit` laufen `ruff-format` und `ruff` automatisch. Dadurch werden Formatierung & Imports korrigiert, bevor der Commit geschrieben wird.
+3. **Pull-Requests:** pre-commit.ci ist aktiviert. Sobald ein Push Format- oder Import-Drift enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
+4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `ruff format --check .` sowie `ruff check --output-format=github .` aus und blockt den Merge bei Drift.
 
 Für manuelle Komplettläufe empfiehlt sich `pre-commit run --all-files`, um denselben Satz an Hooks on-demand auszuführen.
 

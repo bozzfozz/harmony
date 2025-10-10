@@ -7,6 +7,8 @@ from app.api.spotify import (
     core_router,
     free_ingest_router,
     free_router,
+)
+from app.api.spotify import (
     router as spotify_router,
 )
 

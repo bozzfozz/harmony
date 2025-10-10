@@ -170,9 +170,7 @@ class HdmConfig:
                 default=DEFAULT_SLSDK_TIMEOUT_SEC,
                 minimum=1,
             ),
-            move_template=str(
-                env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE
-            ),
+            move_template=str(env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE),
         )
 
 
@@ -817,7 +815,9 @@ DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS = 2_000
 DEFAULT_SIZE_STABLE_SECONDS = 30
 DEFAULT_DOWNLOAD_MAX_RETRIES = 5
 DEFAULT_SLSDK_TIMEOUT_SEC = 300
-DEFAULT_MOVE_TEMPLATE = "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
+DEFAULT_MOVE_TEMPLATE = (
+    "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
+)
 
 DEFAULT_WATCHLIST_TIMER_ENABLED = True
 DEFAULT_WATCHLIST_TIMER_INTERVAL_S = 900.0
@@ -1504,13 +1504,13 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             default=10,
         ),
     )
-    oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
+    oauth_public_host_hint = (
+        _env_value(env, "OAUTH_PUBLIC_HOST_HINT") or ""
+    ).strip() or None
     oauth_split_mode = _as_bool(_env_value(env, "OAUTH_SPLIT_MODE"), default=False)
     oauth_state_dir = (
-        (_env_value(env, "OAUTH_STATE_DIR") or "/data/runtime/oauth_state")
-        .strip()
-        or "/data/runtime/oauth_state"
-    )
+        _env_value(env, "OAUTH_STATE_DIR") or "/data/runtime/oauth_state"
+    ).strip() or "/data/runtime/oauth_state"
     oauth_state_ttl_seconds = max(
         1,
         _as_int(
@@ -1518,9 +1518,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             default=oauth_session_ttl_min * 60,
         ),
     )
-    oauth_store_hash_cv = _as_bool(
-        _env_value(env, "OAUTH_STORE_HASH_CV"), default=True
-    )
+    oauth_store_hash_cv = _as_bool(_env_value(env, "OAUTH_STORE_HASH_CV"), default=True)
 
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
@@ -1756,7 +1754,11 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     api_base_path = _normalise_base_path(_env_value(env, "API_BASE_PATH"))
     oauth_public_base = _normalise_prefix(
         _env_value(env, "OAUTH_PUBLIC_BASE")
-        or (f"{api_base_path}{'/oauth' if api_base_path != '/' else 'oauth'}" if api_base_path else "/oauth")
+        or (
+            f"{api_base_path}{'/oauth' if api_base_path != '/' else 'oauth'}"
+            if api_base_path
+            else "/oauth"
+        )
     )
 
     features = FeatureFlags(

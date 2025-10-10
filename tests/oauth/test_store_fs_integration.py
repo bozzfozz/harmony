@@ -9,7 +9,9 @@ from app.oauth.store_fs import FsOAuthTransactionStore
 from app.oauth.transactions import TransactionUsedError
 
 
-def _build_store(path: Path, *, current: datetime) -> tuple[FsOAuthTransactionStore, callable]:
+def _build_store(
+    path: Path, *, current: datetime
+) -> tuple[FsOAuthTransactionStore, callable]:
     time_ref = current
 
     def now() -> datetime:

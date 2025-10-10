@@ -39,13 +39,11 @@ from tests.simple_client import SimpleTestClient
 
 from app.core.transfers_api import TransfersApiError
 from app.db import init_db, reset_engine_for_tests, session_scope
-from app.dependencies import (
-    get_integration_service as dependency_integration_service,
-    get_matching_engine as dependency_matching_engine,
-    get_soulseek_client as dependency_soulseek_client,
-    get_spotify_client as dependency_spotify_client,
-    get_transfers_api as dependency_transfers_api,
-)
+from app.dependencies import get_integration_service as dependency_integration_service
+from app.dependencies import get_matching_engine as dependency_matching_engine
+from app.dependencies import get_soulseek_client as dependency_soulseek_client
+from app.dependencies import get_spotify_client as dependency_spotify_client
+from app.dependencies import get_transfers_api as dependency_transfers_api
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import (
     ProviderAlbum,

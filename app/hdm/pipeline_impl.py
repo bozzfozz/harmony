@@ -21,6 +21,8 @@ from .move import AtomicFileMover
 from .pipeline import DownloadPipeline, DownloadPipelineError, RetryableDownloadError
 from .recovery import SidecarStore
 from .tagging import AudioTagger
+
+
 class DefaultDownloadPipeline(DownloadPipeline):
     """Pipeline chaining download detection, tagging, moving and dedupe."""
 
@@ -200,4 +202,3 @@ def _format_quality(codec: str | None, bitrate: int | None) -> str | None:
 
 
 __all__ = ["DefaultDownloadPipeline"]
-

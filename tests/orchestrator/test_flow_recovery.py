@@ -7,6 +7,10 @@ import os
 from pathlib import Path
 
 import pytest
+from tests.orchestrator._flow_fixtures import (  # noqa: F401
+    configure_environment,
+    reset_activity_manager,
+)
 
 from app.hdm.completion import (
     CompletionEventBus,
@@ -17,10 +21,6 @@ from app.hdm.models import DownloadItem
 from app.hdm.recovery import (
     HdmRecovery,
     SidecarStore,
-)
-from tests.orchestrator._flow_fixtures import (  # noqa: F401
-    configure_environment,
-    reset_activity_manager,
 )
 
 
@@ -80,7 +80,9 @@ async def test_recovery_scans_sidecars_and_publishes_events(tmp_path: Path) -> N
         def __init__(self) -> None:
             self.paths: list[Path] = []
 
-        async def ensure_stable(self, path: Path) -> int:  # pragma: no cover - runtime exercised
+        async def ensure_stable(
+            self, path: Path
+        ) -> int:  # pragma: no cover - runtime exercised
             self.paths.append(path)
             return int(path.stat().st_size)
 

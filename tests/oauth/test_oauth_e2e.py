@@ -11,6 +11,7 @@ from fastapi import Request
 
 from app.config import load_config
 from app.oauth.store_fs import FsOAuthTransactionStore
+from app.oauth.transactions import TransactionUsedError
 from app.services.oauth_service import (
     ManualRateLimiter,
     OAuthErrorCode,
@@ -18,7 +19,6 @@ from app.services.oauth_service import (
     OAuthService,
     OAuthSessionStatus,
 )
-from app.oauth.transactions import TransactionUsedError
 
 
 class DummyCache:

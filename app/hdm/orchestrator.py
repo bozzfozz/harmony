@@ -232,7 +232,9 @@ class HdmOrchestrator:
                             processing_seconds=processing_seconds,
                         )
                         return
-                    backoff = self._compute_backoff(attempt, retryable.retry_after_seconds)
+                    backoff = self._compute_backoff(
+                        attempt, retryable.retry_after_seconds
+                    )
                     await asyncio.sleep(backoff)
                     attempt += 1
                     continue
@@ -274,11 +276,11 @@ class HdmOrchestrator:
         finally:
             await self._idempotency.release(item, success=success)
 
-    def _compute_backoff(
-        self, attempt: int, retry_after: float | None
-    ) -> float:
+    def _compute_backoff(self, attempt: int, retry_after: float | None) -> float:
         base = self._retry_base_seconds * (2 ** max(0, attempt - 1))
-        jitter_fraction = self._rng.uniform(-self._retry_jitter_pct, self._retry_jitter_pct)
+        jitter_fraction = self._rng.uniform(
+            -self._retry_jitter_pct, self._retry_jitter_pct
+        )
         delay = base * (1 + jitter_fraction)
         delay = max(0.0, delay)
         if retry_after is not None:

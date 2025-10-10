@@ -49,4 +49,3 @@ class AtomicFileMover:
 
 
 __all__ = ["AtomicFileMover"]
-

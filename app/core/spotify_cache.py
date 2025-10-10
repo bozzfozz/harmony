@@ -72,4 +72,3 @@ class SettingsCacheHandler(CacheHandler):
             else:
                 record.value = serialized
                 record.updated_at = now
-

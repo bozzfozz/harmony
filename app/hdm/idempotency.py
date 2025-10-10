@@ -20,10 +20,14 @@ class IdempotencyReservation:
 class IdempotencyStore:
     """Interface for acquiring and releasing idempotency reservations."""
 
-    async def reserve(self, item: DownloadItem) -> IdempotencyReservation:  # pragma: no cover - interface
+    async def reserve(
+        self, item: DownloadItem
+    ) -> IdempotencyReservation:  # pragma: no cover - interface
         raise NotImplementedError
 
-    async def release(self, item: DownloadItem, *, success: bool) -> None:  # pragma: no cover - interface
+    async def release(
+        self, item: DownloadItem, *, success: bool
+    ) -> None:  # pragma: no cover - interface
         raise NotImplementedError
 
 

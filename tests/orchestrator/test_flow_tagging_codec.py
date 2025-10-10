@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import types
+from pathlib import Path
 
 import pytest
-
-from app.hdm.models import DownloadItem
-from app.hdm.tagging import AudioTagger
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,
 )
+
+from app.hdm.models import DownloadItem
+from app.hdm.tagging import AudioTagger
 
 
 def _make_item() -> DownloadItem:
@@ -44,7 +44,9 @@ class _FakeAudio:
         self.saved = True
 
 
-def test_apply_tags_records_codec(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_tags_records_codec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     audio = _FakeAudio()
 
     def fake_file(path: Path, easy: bool = False):  # type: ignore[override]
@@ -70,7 +72,9 @@ def test_apply_tags_records_codec(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert audio.data["length"] == [str(item.duration_seconds)]
 
 
-def test_apply_tags_handles_unsupported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_tags_handles_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     def fake_file(path: Path, easy: bool = False):  # type: ignore[override]
         return None
 

@@ -42,7 +42,9 @@ def _build_request(client_ip: str = "203.0.113.10") -> Request:
 
 
 @pytest.mark.asyncio
-async def test_oauth_service_start_and_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_oauth_service_start_and_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runtime_env = {
         "SPOTIFY_CLIENT_ID": "client-id",
         "SPOTIFY_CLIENT_SECRET": "client-secret",
@@ -50,7 +52,9 @@ async def test_oauth_service_start_and_complete(monkeypatch: pytest.MonkeyPatch)
         "OAUTH_SESSION_TTL_MIN": "5",
     }
     config = load_config(runtime_env=runtime_env)
-    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
+    store = MemoryOAuthTransactionStore(
+        ttl=timedelta(minutes=config.oauth.session_ttl_minutes)
+    )
     cache = DummyCacheHandler()
 
     def client_factory() -> httpx.AsyncClient:
@@ -102,7 +106,9 @@ async def test_manual_rejects_unknown_state(monkeypatch: pytest.MonkeyPatch) -> 
     service = OAuthService(config=config, transactions=store)
 
     result = await service.manual(
-        request=OAuthManualRequest(redirect_url="http://127.0.0.1:8888/callback?code=abc&state=missing"),
+        request=OAuthManualRequest(
+            redirect_url="http://127.0.0.1:8888/callback?code=abc&state=missing"
+        ),
         client_ip="198.51.100.10",
     )
     assert not result.ok
@@ -118,7 +124,9 @@ async def test_manual_success_parses_redirect(monkeypatch: pytest.MonkeyPatch) -
         "OAUTH_SESSION_TTL_MIN": "2",
     }
     config = load_config(runtime_env=runtime_env)
-    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
+    store = MemoryOAuthTransactionStore(
+        ttl=timedelta(minutes=config.oauth.session_ttl_minutes)
+    )
 
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -134,7 +142,9 @@ async def test_manual_success_parses_redirect(monkeypatch: pytest.MonkeyPatch) -
     service = OAuthService(
         config=config,
         transactions=store,
-        http_client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        http_client_factory=lambda: httpx.AsyncClient(
+            transport=httpx.MockTransport(handler)
+        ),
     )
 
     # seed transaction

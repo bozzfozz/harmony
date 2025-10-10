@@ -20,11 +20,11 @@ from app.errors import AppError, ErrorCode
 from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
 from app.logging import get_logger
+from app.oauth import get_oauth_store, startup_check_oauth_store
+from app.oauth.transactions import OAuthTransactionStore
 from app.services.artist_service import ArtistService
 from app.services.download_service import DownloadService
 from app.services.integration_service import IntegrationService
-from app.oauth import get_oauth_store, startup_check_oauth_store
-from app.oauth.transactions import OAuthTransactionStore
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.watchlist_service import WatchlistService
 
@@ -76,9 +76,7 @@ def _ensure_oauth_store(config: AppConfig) -> OAuthTransactionStore:
         if _oauth_store_instance is None:
             store = get_oauth_store(config)
             if not _oauth_store_checked:
-                startup_check_oauth_store(
-                    store, split_mode=config.oauth.split_mode
-                )
+                startup_check_oauth_store(store, split_mode=config.oauth.split_mode)
                 _oauth_store_checked = True
             _oauth_store_instance = store
         return _oauth_store_instance

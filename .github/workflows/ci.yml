@@ -62,15 +62,12 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           pip install \
-            isort \
             mypy \
-            pytest-cov
+            pytest-cov \
+            ruff
 
       - name: Mypy (static typing)
         run: mypy app
-
-      - name: Isort (imports)
-        run: isort --check-only .
 
       - name: Pytest (unit + coverage)
         env:
@@ -86,6 +83,11 @@ jobs:
 
       - name: pip-audit (dependencies)
         run: pip-audit -r requirements.txt
+
+      - name: Ruff Final Check
+        run: |
+          ruff format --check .
+          ruff check --output-format=github .
 
       - name: Upload test reports
         if: always()

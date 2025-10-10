@@ -3,11 +3,14 @@ ci:
   autofix_commit_message: "chore: pre-commit.ci auto fixes"
 
 repos:
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.5
     hooks:
-      - id: isort
-        args: [--filter-files]
+      - id: ruff-format
+      - id: ruff
+        args:
+          - --fix
+          - --exit-non-zero-on-fix
   - repo: local
     hooks:
       - id: legacy-import-ban

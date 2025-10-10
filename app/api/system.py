@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Literal, Mapping, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 

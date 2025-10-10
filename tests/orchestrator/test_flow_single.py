@@ -7,6 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from tests.orchestrator._flow_fixtures import (  # noqa: F401
+    configure_environment,
+    reset_activity_manager,
+)
 
 from app.hdm.idempotency import InMemoryIdempotencyStore
 from app.hdm.models import (
@@ -18,10 +22,6 @@ from app.hdm.models import (
 )
 from app.hdm.orchestrator import HdmOrchestrator
 from app.hdm.pipeline import DownloadPipeline
-from tests.orchestrator._flow_fixtures import (  # noqa: F401
-    configure_environment,
-    reset_activity_manager,
-)
 
 
 class _ImmediatePipeline(DownloadPipeline):
@@ -73,7 +73,10 @@ async def test_submit_single_returns_success_summary() -> None:
 
     assert summary.status is BatchStatus.SUCCESS
     assert summary.totals.succeeded == 1
-    assert summary.items[0].final_path == Path("/library") / f"{summary.items[0].item_id}.flac"
+    assert (
+        summary.items[0].final_path
+        == Path("/library") / f"{summary.items[0].item_id}.flac"
+    )
     assert pipeline.calls and pipeline.calls[0] == summary.items[0].item_id
 
     await orchestrator.shutdown()

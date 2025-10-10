@@ -107,7 +107,9 @@ class ManualRateLimiter:
     def check(self, key: str) -> None:
         now = time.monotonic()
         entries = self._hits.setdefault(key, [])
-        entries[:] = [timestamp for timestamp in entries if now - timestamp <= self._window]
+        entries[:] = [
+            timestamp for timestamp in entries if now - timestamp <= self._window
+        ]
         if len(entries) >= self._limit:
             raise RuntimeError("rate limited")
         entries.append(now)
@@ -127,7 +129,9 @@ class OAuthService:
         self._transactions = transactions
         self._http_timeout = max(1.0, http_timeout)
         self._cache_handler = SettingsCacheHandler()
-        self._manual_limit = manual_limit or ManualRateLimiter(limit=6, window_seconds=300.0)
+        self._manual_limit = manual_limit or ManualRateLimiter(
+            limit=6, window_seconds=300.0
+        )
         self._http_client_factory = http_client_factory
         self._status_lock = Lock()
         self._statuses: dict[str, OAuthStatusResponse] = {}
@@ -266,10 +270,7 @@ class OAuthService:
                     error_code=None,
                     message="State is unknown or expired.",
                 )
-            if (
-                record.status is OAuthSessionStatus.PENDING
-                and record.expires_at <= now
-            ):
+            if record.status is OAuthSessionStatus.PENDING and record.expires_at <= now:
                 record.status = OAuthSessionStatus.EXPIRED
                 record.error_code = OAuthErrorCode.OAUTH_CODE_EXPIRED
                 record.message = "Authorization code expired. Start a new session."
@@ -327,7 +328,9 @@ class OAuthService:
         )
         return OAuthStartResponse(
             provider="spotify",
-            authorization_url=self._authorization_url(state=state, code_challenge=challenge),
+            authorization_url=self._authorization_url(
+                state=state, code_challenge=challenge
+            ),
             state=state,
             code_challenge_method="S256",
             expires_at=expires_at,
@@ -341,11 +344,15 @@ class OAuthService:
             return self._http_client_factory()
         return httpx.AsyncClient(timeout=self._http_timeout)
 
-    async def _exchange_code(self, code: str, transaction: Transaction) -> Mapping[str, Any]:
+    async def _exchange_code(
+        self, code: str, transaction: Transaction
+    ) -> Mapping[str, Any]:
         payload = {
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": str(transaction.meta.get("redirect_uri", self.redirect_uri)),
+            "redirect_uri": str(
+                transaction.meta.get("redirect_uri", self.redirect_uri)
+            ),
             "client_id": self._config.spotify.client_id,
             "code_verifier": transaction.code_verifier,
         }
@@ -491,7 +498,9 @@ class OAuthService:
         )
         return token_info
 
-    async def manual(self, *, request: OAuthManualRequest, client_ip: str | None) -> OAuthManualResponse:
+    async def manual(
+        self, *, request: OAuthManualRequest, client_ip: str | None
+    ) -> OAuthManualResponse:
         if not self.manual_enabled:
             return OAuthManualResponse(
                 ok=False,
@@ -628,4 +637,3 @@ class OAuthService:
             "public_host_hint": self.public_host_hint,
             "manual_url": manual_url,
         }
-

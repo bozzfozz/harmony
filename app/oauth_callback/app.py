@@ -94,11 +94,15 @@ def create_callback_app() -> FastAPI:
             await service.complete(state=state, code=code)
         except (TransactionNotFoundError, TransactionUsedError):
             message = "Der übergebene State ist unbekannt oder wurde bereits verwendet."
-            return HTMLResponse(content=f"<p>{message}</p>", status_code=status.HTTP_400_BAD_REQUEST)
+            return HTMLResponse(
+                content=f"<p>{message}</p>", status_code=status.HTTP_400_BAD_REQUEST
+            )
         except ValueError as exc:
             if exc.args and exc.args[0] == OAuthErrorCode.OAUTH_CODE_EXPIRED.value:
                 message = "Der Autorisierungscode ist abgelaufen. Bitte starte den Vorgang neu."
-                return HTMLResponse(content=f"<p>{message}</p>", status_code=status.HTTP_400_BAD_REQUEST)
+                return HTMLResponse(
+                    content=f"<p>{message}</p>", status_code=status.HTTP_400_BAD_REQUEST
+                )
             return HTMLResponse(
                 content="<p>Die Token-Ausstellung ist fehlgeschlagen.</p>",
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -137,4 +141,3 @@ def create_callback_app() -> FastAPI:
 
 
 app_oauth_callback = create_callback_app()
-

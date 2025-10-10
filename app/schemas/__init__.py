@@ -158,13 +158,17 @@ class SoulseekDownloadRequest(BaseModel):
 class HdmItemRequest(BaseModel):
     artist: str = Field(..., description="Artist name for the requested download")
     title: str = Field(..., description="Track title for the requested download")
-    album: Optional[str] = Field(None, description="Album name associated with the track")
+    album: Optional[str] = Field(
+        None, description="Album name associated with the track"
+    )
     isrc: Optional[str] = Field(None, description="ISRC identifier if available")
     duration_seconds: Optional[float] = Field(
         None, ge=0.0, description="Expected track duration in seconds"
     )
     bitrate: Optional[int] = Field(None, ge=0, description="Expected bitrate in kbps")
-    priority: Optional[int] = Field(None, ge=0, description="Priority override for the item")
+    priority: Optional[int] = Field(
+        None, ge=0, description="Priority override for the item"
+    )
     dedupe_key: Optional[str] = Field(
         None, description="Optional idempotency key for the individual item"
     )

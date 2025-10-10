@@ -72,9 +72,7 @@ class DownloadItem:
     duration_seconds: float | None = None
     bitrate: int | None = None
     index: int | None = None
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass(slots=True)

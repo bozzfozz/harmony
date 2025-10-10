@@ -81,7 +81,8 @@ DUE: <YYYY-MM-DD>
 ## 12) CI-Gates (Merge-Blocking, Schreiben nicht blockiert)
 - `pytest -q`
 - `mypy app`
-- `isort --check-only .`
+- `ruff format --check .`
+- `ruff check --output-format=github .`
 - `pip-audit -r requirements.txt`
 - OpenAPI-Snapshot aktualisiert (falls API betroffen)
 

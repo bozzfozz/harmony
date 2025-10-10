@@ -16,7 +16,9 @@ from app.utils import metrics
 
 
 @pytest.fixture(autouse=True)
-def configure_environment(monkeypatch: pytest.MonkeyPatch) -> None:  # pragma: no cover - override global autouse
+def configure_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # pragma: no cover - override global autouse
     """Override the repository-level configure_environment fixture."""
 
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
@@ -105,12 +107,15 @@ async def test_record_success_emits_phase_metrics() -> None:
     assert samples[("hdm_item_outcomes_total", (("state", "done"),))] == 1.0
     assert samples[("hdm_processing_seconds_count", ())] == 1.0
     assert samples[("hdm_processing_seconds_sum", ())] == pytest.approx(3.5)
-    assert samples[
-        (
-            "hdm_phase_duration_seconds_count",
-            (("phase", "download"),),
-        )
-    ] == 1.0
+    assert (
+        samples[
+            (
+                "hdm_phase_duration_seconds_count",
+                (("phase", "download"),),
+            )
+        ]
+        == 1.0
+    )
     assert samples[
         (
             "hdm_phase_duration_seconds_sum",
@@ -149,9 +154,7 @@ async def test_record_failure_tracks_failure_metrics() -> None:
 
     samples = _collect_metric_samples()
     assert samples[("hdm_item_outcomes_total", (("state", "failed"),))] == 1.0
-    assert samples[
-        ("hdm_item_failures_total", (("error_type", "ValueError"),))
-    ] == 1.0
+    assert samples[("hdm_item_failures_total", (("error_type", "ValueError"),))] == 1.0
     assert samples[("hdm_processing_seconds_count", ())] == 1.0
     assert samples[("hdm_processing_seconds_sum", ())] == pytest.approx(4.2)
 
@@ -180,9 +183,7 @@ async def test_record_retry_and_duplicate_metrics() -> None:
     )
 
     samples = _collect_metric_samples()
-    assert samples[
-        ("hdm_item_retries_total", (("error_type", "RuntimeError"),))
-    ] == 1.0
+    assert samples[("hdm_item_retries_total", (("error_type", "RuntimeError"),))] == 1.0
     assert samples[("hdm_duplicates_total", (("already_processed", "true"),))] == 1.0
     assert samples[("hdm_dedupe_hits_total", ())] == 1.0
     assert samples[("hdm_item_outcomes_total", (("state", "duplicate"),))] == 1.0

@@ -12,6 +12,7 @@ from app.dependencies import (
     get_soulseek_client,
     get_spotify_client,
 )
+from app.hdm.runtime import HdmRuntime, build_hdm_runtime
 from app.orchestrator.dispatcher import Dispatcher, JobHandler, default_handlers
 from app.orchestrator.handlers import (
     ARTIST_REFRESH_JOB_TYPE,
@@ -20,7 +21,6 @@ from app.orchestrator.handlers import (
     LyricsService,
     MetadataService,
 )
-from app.hdm.runtime import HdmRuntime, build_hdm_runtime
 from app.orchestrator.providers import (
     build_artist_delta_handler_deps,
     build_artist_refresh_handler_deps,
