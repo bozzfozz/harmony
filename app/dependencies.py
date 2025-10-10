@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 from datetime import timedelta
 from functools import lru_cache
+from threading import Lock
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator
 
 from fastapi import Depends, Request, status
@@ -28,6 +29,8 @@ from app.services.oauth_transactions import OAuthTransactionStore
 from app.services.watchlist_service import WatchlistService
 
 _integration_service_override: IntegrationService | None = None
+_oauth_service_instance: OAuthService | None = None
+_oauth_service_lock = Lock()
 
 logger = get_logger(__name__)
 
@@ -41,17 +44,27 @@ def get_oauth_service(request: Request) -> OAuthService:
     service = getattr(request.app.state, "oauth_service", None)
     if isinstance(service, OAuthService):
         return service
-    config = get_app_config()
-    ttl = timedelta(minutes=config.oauth.session_ttl_minutes)
-    store = OAuthTransactionStore(ttl=ttl)
-    manual_limit = ManualRateLimiter(limit=6, window_seconds=300.0)
-    service = OAuthService(
-        config=config,
-        transactions=store,
-        manual_limit=manual_limit,
-    )
+    global _oauth_service_instance
+    with _oauth_service_lock:
+        if _oauth_service_instance is None:
+            config = get_app_config()
+            ttl = timedelta(minutes=config.oauth.session_ttl_minutes)
+            store = OAuthTransactionStore(ttl=ttl)
+            manual_limit = ManualRateLimiter(limit=6, window_seconds=300.0)
+            _oauth_service_instance = OAuthService(
+                config=config,
+                transactions=store,
+                manual_limit=manual_limit,
+            )
+        service = _oauth_service_instance
     request.app.state.oauth_service = service
     return service
+
+
+def set_oauth_service_instance(service: OAuthService | None) -> None:
+    global _oauth_service_instance
+    with _oauth_service_lock:
+        _oauth_service_instance = service
 
 
 @lru_cache()

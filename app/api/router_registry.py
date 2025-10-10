@@ -183,7 +183,7 @@ def register_all(
 
 from app.api import (  # noqa: E402
     artists,
-    oauth,
+    oauth_public,
     search,
     spotify,
     spotify_free_links,
@@ -221,4 +221,4 @@ register_router("integrations", integrations_router)
 register_router("health", health_router, prefix="/health", tags=("Health",))
 register_domain("watchlist", watchlist.router, prefix="", tags=())
 register_domain("search", search.router, prefix="", tags=())
-register_router("oauth", oauth.router, prefix="/oauth", tags=("OAuth",))
+register_router("oauth", oauth_public.router_oauth_public, tags=("OAuth",))

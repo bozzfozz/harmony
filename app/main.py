@@ -17,20 +17,25 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
-from app.api import oauth as oauth_api
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
 from app.config import AppConfig, SecurityConfig, get_env, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
-from app.dependencies import get_app_config, get_soulseek_client, get_spotify_client
+from app.dependencies import (
+    get_app_config,
+    get_soulseek_client,
+    get_spotify_client,
+    set_oauth_service_instance,
+)
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
 from app.middleware import install_middleware
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
+from app.oauth_callback.app import app_oauth_callback
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.oauth_transactions import OAuthTransactionStore
@@ -676,8 +681,8 @@ app.state.oauth_service = OAuthService(
     transactions=app.state.oauth_transaction_store,
     manual_limit=ManualRateLimiter(limit=6, window_seconds=300.0),
 )
-
-app.include_router(oauth_api.callback_router)
+set_oauth_service_instance(app.state.oauth_service)
+app_oauth_callback.state.oauth_service = app.state.oauth_service
 
 _previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
 if _FRONTEND_INDEX_PATH.is_file():
