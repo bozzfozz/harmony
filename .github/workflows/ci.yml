@@ -33,16 +33,6 @@ jobs:
             echo "has_frontend=false" >>"$GITHUB_OUTPUT"
           fi
 
-  ban_isort:
-    name: ban legacy import sorter
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enforce Ruff-only import policy
-        run: scripts/ci/ban_isort.sh
-
   ban_test_flow_prefix:
     name: ban-test-flow-prefix
     runs-on: ubuntu-latest
@@ -71,7 +61,6 @@ jobs:
     name: tests
     runs-on: ubuntu-latest
     needs:
-      - ban_isort
       - ban_test_flow_prefix
     env:
       RUN_POSTGRES_TESTS: "0"

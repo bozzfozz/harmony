@@ -1238,7 +1238,7 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
    ```
 2. **Commit-Flow:** Beim `git commit` laufen `ruff-format` und `ruff` automatisch. Dadurch werden Formatierung & Imports korrigiert, bevor der Commit geschrieben wird.
 3. **Pull-Requests:** pre-commit.ci ist aktiviert. Sobald ein Push Format- oder Import-Drift enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
-4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `ruff format --check .` sowie `ruff check --output-format=github .` aus und blockt den Merge bei Drift.
+4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `ruff format --check .` sowie `ruff check --output-format=github .` aus und blockt den Merge bei Drift. Es gibt kein separates `isort`-Gate mehr; `ruff` ist die einzige Quelle für Formatierung und Import-Sortierung.
 
 Für manuelle Komplettläufe empfiehlt sich `pre-commit run --all-files`, um denselben Satz an Hooks on-demand auszuführen.
 

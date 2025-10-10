@@ -43,6 +43,7 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 - **Quality Tools**
   - Python: `ruff`, `mypy`, `pytest`, `pip-audit`.
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
+  - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind nicht erlaubt.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
