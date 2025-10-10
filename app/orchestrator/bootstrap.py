@@ -111,7 +111,9 @@ def bootstrap_orchestrator(
     )
     import_worker = ImportWorker(free_ingest_service=free_ingest_service)
 
-    download_flow_runtime = build_download_flow_runtime(config.download_flow)
+    download_flow_runtime = build_download_flow_runtime(
+        config.download_flow, config.soulseek
+    )
 
     enabled_jobs: dict[str, bool] = {}
     job_types = [

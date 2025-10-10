@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.config import DownloadFlowConfig
+from app.config import DownloadFlowConfig, SoulseekConfig
+from app.integrations.slskd_client import SlskdHttpClient
 
 from .completion import CompletionEventBus, DownloadCompletionMonitor
 from .controller import DownloadFlowOrchestrator
@@ -28,7 +29,9 @@ class DownloadFlowRuntime:
     recovery: DownloadFlowRecovery
 
 
-def build_download_flow_runtime(config: DownloadFlowConfig) -> DownloadFlowRuntime:
+def build_download_flow_runtime(
+    config: DownloadFlowConfig, soulseek: SoulseekConfig
+) -> DownloadFlowRuntime:
     """Initialise download flow components using the supplied configuration."""
 
     downloads_dir = Path(config.downloads_dir).expanduser().resolve()
@@ -52,12 +55,23 @@ def build_download_flow_runtime(config: DownloadFlowConfig) -> DownloadFlowRunti
         move_template=config.move_template,
     )
 
+    slskd_client = SlskdHttpClient(
+        base_url=soulseek.base_url,
+        api_key=soulseek.api_key,
+        timeout_ms=config.slskd_timeout_seconds * 1000,
+        max_attempts=max(1, config.max_retries),
+        backoff_base_ms=soulseek.retry_backoff_base_ms,
+        jitter_pct=int(round(soulseek.retry_jitter_pct)),
+    )
+
     pipeline: DownloadPipeline = DefaultDownloadPipeline(
         completion_monitor=completion_monitor,
         tagger=tagger,
         mover=mover,
         deduper=deduper,
         sidecars=sidecar_store,
+        slskd_client=slskd_client,
+        status_poll_interval=1.0,
     )
 
     idempotency_store: IdempotencyStore = InMemoryIdempotencyStore()

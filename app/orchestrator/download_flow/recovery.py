@@ -38,6 +38,7 @@ class DownloadSidecar:
     source_path: str | None = None
     final_path: str | None = None
     bytes_written: int | None = None
+    download_id: str | None = None
     updated_at: datetime = field(default_factory=_now)
 
     def to_dict(self) -> dict[str, object]:
@@ -50,6 +51,7 @@ class DownloadSidecar:
             "source_path": self.source_path,
             "final_path": self.final_path,
             "bytes_written": self.bytes_written,
+            "download_id": self.download_id,
             "updated_at": self.updated_at.isoformat(),
         }
 
@@ -76,6 +78,9 @@ class DownloadSidecar:
             final_path=str(payload.get("final_path")) if payload.get("final_path") else None,
             bytes_written=int(payload.get("bytes_written"))
             if payload.get("bytes_written") is not None
+            else None,
+            download_id=str(payload.get("download_id"))
+            if payload.get("download_id")
             else None,
             updated_at=updated,
         )
