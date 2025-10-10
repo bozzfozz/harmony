@@ -22,6 +22,7 @@ services:
       PUBLIC_FEATURE_FLAGS: "{}"
     ports:
       - "8080:8080"
+      - "8888:8080"
     volumes:
       - harmony-data:/data
     healthcheck:

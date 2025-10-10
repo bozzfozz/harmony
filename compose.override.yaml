@@ -16,5 +16,8 @@ services:
       PUBLIC_BACKEND_URL: http://localhost:8080
       PUBLIC_SENTRY_DSN: ""
       PUBLIC_FEATURE_FLAGS: "{}"
+    ports:
+      - "8080:8080"
+      - "8888:8080"
     volumes:
       - ./app:/app/app

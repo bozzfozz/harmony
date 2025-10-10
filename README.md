@@ -706,6 +706,10 @@ Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environme
 | `SPOTIFY_CLIENT_SECRET` | string | _(leer)_ | OAuth Client-Secret – niemals ins Repo. | 🔒 |
 | `SPOTIFY_REDIRECT_URI` | string | _(leer)_ | Registrierte Redirect-URI für den OAuth-Flow. | — |
 | `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
+| `OAUTH_CALLBACK_PORT` | int | `8888` | Port für den Spotify-Callback (`http://127.0.0.1:PORT/callback`). | — |
+| `OAUTH_PUBLIC_HOST_HINT` | string | _(leer)_ | Optionaler Hinweis für die Hilfeseite (z. B. öffentliche IP oder Hostname). | — |
+| `OAUTH_MANUAL_CALLBACK_ENABLE` | bool | `true` | Erlaubt den manuellen Abschluss via `POST /oauth/manual`. | — |
+| `OAUTH_SESSION_TTL_MIN` | int | `10` | Lebensdauer eines OAuth-States in Minuten. | — |
 | `INTEGRATIONS_ENABLED` | csv | `spotify,slskd` | Aktivierte Provider (z. B. `spotify,slskd`). | — |
 | `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
@@ -721,13 +725,26 @@ Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environme
 
 ##### Spotify OAuth (PRO-Modus)
 
-- PRO-Funktionen werden automatisch aktiviert, sobald `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` und `SPOTIFY_REDIRECT_URI`
-  hinterlegt sind. Die Werte stammen aus der Spotify Developer Console (App → _Settings_) und dürfen nicht eingecheckt
+- PRO-Funktionen werden automatisch aktiviert, sobald `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` und eine Redirect-URI
+  konfiguriert sind. Die Werte stammen aus der Spotify Developer Console (App → _Settings_) und dürfen nicht eingecheckt
   werden. Der aktuelle Zustand lässt sich über `GET /spotify/status` prüfen.
-- `SPOTIFY_REDIRECT_URI` muss exakt mit der in Spotify registrierten Redirect-URI übereinstimmen (inkl. Protokoll/Port). Für
-  lokale Tests bietet sich z. B. `http://localhost:3000/api/auth/spotify/callback` an.
+- Standardmäßig nutzt Harmony `http://127.0.0.1:8888/callback` als Redirect. Dieser Wert lässt sich bei Bedarf über
+  `SPOTIFY_REDIRECT_URI` oder die Settings-UI überschreiben – die URI muss exakt mit der Spotify-App übereinstimmen.
 - Optional können die Secrets auch über `/settings` in die Datenbank geschrieben werden. ENV-Werte dienen als Fallback bzw.
   Initialbefüllung.
+
+###### Docker OAuth Fix (Remote Access)
+
+- **Haupt-Redirect:** `http://127.0.0.1:8888/callback`. Die Docker-Compose-Templates veröffentlichen Port `8888` zusätzlich zum
+  API-Port.
+- **Host-Anpassung im Browser:** Läuft Harmony auf einem entfernten Host, lässt sich der Spotify-Callback abschließen, indem du
+  in der Adresszeile `127.0.0.1` durch die reale Server-Adresse ersetzt, z. B.
+  `http://127.0.0.1:8888/callback?code=XYZ&state=ABC` → `http://192.168.1.5:8888/callback?code=XYZ&state=ABC`.
+- **Manueller Abschluss:** Falls der Browser-Redirect blockiert wird, sende die vollständige Redirect-URL an
+  `POST /api/v1/oauth/manual` (Beispielpayload: `{ "redirect_url": "http://127.0.0.1:8888/callback?code=XYZ&state=ABC" }`).
+- **SSH-Tunnel:** Alternativ kann ein lokaler Port-Forward genutzt werden: `ssh -N -L 8888:127.0.0.1:8888 user@server`.
+- **Hinweis:** OAuth-States sind standardmäßig 10 Minuten gültig. Nach Container-Rebuilds oder Credential-Änderungen ist eine
+  erneute Anmeldung erforderlich.
 
 ##### slskd (Soulseek-Daemon)
 

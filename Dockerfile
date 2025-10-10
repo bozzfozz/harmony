@@ -33,7 +33,7 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend_dist
 
 RUN chmod +x scripts/docker-entrypoint.sh scripts/db/*.sh
 
-EXPOSE 8080
+EXPOSE 8080 8888
 
 # Standard: Production
 ENTRYPOINT ["./scripts/docker-entrypoint.sh"]

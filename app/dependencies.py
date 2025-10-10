@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+from datetime import timedelta
 from functools import lru_cache
 from typing import Any, Awaitable, Callable, Generator
 
@@ -22,6 +23,8 @@ from app.logging import get_logger
 from app.services.artist_service import ArtistService
 from app.services.download_service import DownloadService
 from app.services.integration_service import IntegrationService
+from app.services.oauth_service import ManualRateLimiter, OAuthService
+from app.services.oauth_transactions import OAuthTransactionStore
 from app.services.watchlist_service import WatchlistService
 
 _integration_service_override: IntegrationService | None = None
@@ -32,6 +35,23 @@ logger = get_logger(__name__)
 @lru_cache()
 def get_app_config() -> AppConfig:
     return load_config()
+
+
+def get_oauth_service(request: Request) -> OAuthService:
+    service = getattr(request.app.state, "oauth_service", None)
+    if isinstance(service, OAuthService):
+        return service
+    config = get_app_config()
+    ttl = timedelta(minutes=config.oauth.session_ttl_minutes)
+    store = OAuthTransactionStore(ttl=ttl)
+    manual_limit = ManualRateLimiter(limit=6, window_seconds=300.0)
+    service = OAuthService(
+        config=config,
+        transactions=store,
+        manual_limit=manual_limit,
+    )
+    request.app.state.oauth_service = service
+    return service
 
 
 @lru_cache()
