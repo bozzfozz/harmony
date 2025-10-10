@@ -4,10 +4,14 @@ services:
     container_name: harmony
     restart: unless-stopped
     depends_on:
+      - slskd
       - postgres
     env_file:
       - ./.env
     environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      UMASK: "${UMASK:-002}"
       DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -15,6 +19,11 @@ services:
       POSTGRES_USER: harmony
       POSTGRES_PASSWORD: harmony
       DATABASE_SSLMODE: disable
+      DOWNLOADS_DIR: /data/downloads
+      MUSIC_DIR: /data/music
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-4}"
+      MAX_RETRIES: "${DOWNLOAD_MAX_RETRIES:-5}"
+      SLSKD_BASE_URL: http://slskd:5030
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:8080
       PUBLIC_BACKEND_URL: http://localhost:8080
@@ -25,8 +34,38 @@ services:
       - "8888:8080"
     volumes:
       - harmony-data:/data
+      - type: bind
+        source: /srv/media/downloads
+        target: /data/downloads
+      - type: bind
+        source: /srv/media/music
+        target: /data/music
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  slskd:
+    image: ghcr.io/slskd/slskd:latest
+    container_name: slskd
+    restart: unless-stopped
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      UMASK: "${UMASK:-002}"
+    ports:
+      - "5030:5030"
+    volumes:
+      - type: bind
+        source: /srv/media/downloads
+        target: /data/downloads
+      - type: bind
+        source: /srv/media/music
+        target: /data/music
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5030/api/v0/health"]
       interval: 30s
       timeout: 5s
       retries: 3
