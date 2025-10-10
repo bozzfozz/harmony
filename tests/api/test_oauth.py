@@ -333,11 +333,24 @@ def test_oauth_routes_registered_without_duplicate_prefix() -> None:
     assert "/api/v1/oauth/start" in paths
     assert "/api/v1/oauth/manual" in paths
     assert "/api/v1/oauth/status/{state}" in paths
-    assert not any(
-        path.lstrip("/").split("/")[:2] == ["api", "v1"]
-        and path.lstrip("/").split("/").count("oauth") > 1
-        for path in paths
+
+    include_prefix_segments = [segment for segment in "/api/v1".split("/") if segment]
+    router_prefix_segments = [
+        segment for segment in router_oauth_public.prefix.split("/") if segment
+    ]
+    double_prefix_segments = (
+        include_prefix_segments
+        + router_prefix_segments
+        + router_prefix_segments
     )
+
+    def has_duplicate_router_prefix(path: str) -> bool:
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) < len(double_prefix_segments):
+            return False
+        return segments[: len(double_prefix_segments)] == double_prefix_segments
+
+    assert not any(has_duplicate_router_prefix(path) for path in paths)
 
 
 def test_openapi_schema_excludes_callback_route() -> None:
