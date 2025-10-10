@@ -2,7 +2,12 @@ services:
   harmony:
     build: .
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+    depends_on:
+      - slskd
     environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      UMASK: "${UMASK:-002}"
       DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -10,6 +15,11 @@ services:
       POSTGRES_USER: harmony
       POSTGRES_PASSWORD: harmony
       DATABASE_SSLMODE: disable
+      DOWNLOADS_DIR: /data/downloads
+      MUSIC_DIR: /data/music
+      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-4}"
+      MAX_RETRIES: "${DOWNLOAD_MAX_RETRIES:-5}"
+      SLSKD_BASE_URL: http://slskd:5030
       HARMONY_LOG_LEVEL: DEBUG
       HARMONY_API_KEYS: dev-key
       ALLOWED_ORIGINS: http://localhost:8080
@@ -21,3 +31,31 @@ services:
       - "8888:8080"
     volumes:
       - ./app:/app/app
+      - type: bind
+        source: /srv/media/downloads
+        target: /data/downloads
+      - type: bind
+        source: /srv/media/music
+        target: /data/music
+
+  slskd:
+    image: ghcr.io/slskd/slskd:latest
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      UMASK: "${UMASK:-002}"
+    ports:
+      - "5030:5030"
+    volumes:
+      - type: bind
+        source: /srv/media/downloads
+        target: /data/downloads
+      - type: bind
+        source: /srv/media/music
+        target: /data/music
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5030/api/v0/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
