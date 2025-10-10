@@ -123,6 +123,22 @@ class DownloadCompletionMonitor:
         finally:
             await self._bus.unsubscribe(dedupe_key, queue)
 
+    async def publish_event(
+        self,
+        dedupe_key: str,
+        *,
+        path: Path,
+        bytes_written: int,
+    ) -> None:
+        """Publish an externally observed completion event for *dedupe_key*."""
+
+        event = DownloadCompletionEvent(
+            path=path,
+            bytes_written=bytes_written,
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self._bus.publish(dedupe_key, event)
+
     async def _check_existing(
         self, expected_path: Path | None
     ) -> CompletionResult | None:

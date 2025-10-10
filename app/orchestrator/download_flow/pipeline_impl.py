@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Mapping
+
+from app.integrations.slskd_client import (
+    SlskdDownloadStatus,
+    SlskdHttpClient,
+)
 
 from .completion import (
     DownloadCompletionMonitor,
@@ -12,7 +18,7 @@ from .completion import (
 from .dedup import DeduplicationManager
 from .models import DownloadOutcome, DownloadWorkItem
 from .move import AtomicFileMover
-from .pipeline import DownloadPipeline
+from .pipeline import DownloadPipeline, DownloadPipelineError, RetryableDownloadError
 from .recovery import SidecarStore
 from .tagging import AudioTagger
 class DefaultDownloadPipeline(DownloadPipeline):
@@ -26,12 +32,16 @@ class DefaultDownloadPipeline(DownloadPipeline):
         mover: AtomicFileMover,
         deduper: DeduplicationManager,
         sidecars: SidecarStore,
+        slskd_client: SlskdHttpClient | None = None,
+        status_poll_interval: float = 1.0,
     ) -> None:
         self._completion = completion_monitor
         self._tagger = tagger
         self._mover = mover
         self._deduper = deduper
         self._sidecars = sidecars
+        self._slskd = slskd_client
+        self._status_poll_interval = max(0.25, float(status_poll_interval))
 
     async def execute(self, work_item: DownloadWorkItem) -> DownloadOutcome:  # type: ignore[override]
         item = work_item.item
@@ -54,6 +64,9 @@ class DefaultDownloadPipeline(DownloadPipeline):
                     quality=None,
                     events=(build_item_event("dedupe.skip", final_path=str(existing)),),
                 )
+
+            if self._slskd is not None:
+                await self._follow_remote_download(work_item, sidecar)
 
             expected_path = Path(sidecar.source_path) if sidecar.source_path else None
             completion = await self._completion.wait_for_completion(
@@ -109,6 +122,71 @@ class DefaultDownloadPipeline(DownloadPipeline):
                 quality=quality,
                 events=events,
             )
+
+    async def _follow_remote_download(
+        self, work_item: DownloadWorkItem, sidecar
+    ) -> None:
+        if self._slskd is None:
+            return
+
+        idempotency_key = work_item.item.dedupe_key
+        poll_interval = self._status_poll_interval
+
+        async for event in self._slskd.stream_download_events(
+            idempotency_key, poll_interval=poll_interval
+        ):
+            meta: dict[str, object] = {"download_id": event.download_id}
+            if event.bytes_written is not None:
+                meta["bytes_written"] = event.bytes_written
+            path = event.path
+            if path:
+                meta["path"] = path
+
+            if event.status is SlskdDownloadStatus.ACCEPTED:
+                work_item.record_event("download.accepted", meta=meta)
+                if sidecar.download_id != event.download_id:
+                    sidecar.download_id = event.download_id
+                    await self._sidecars.save(sidecar)
+                continue
+
+            if event.status is SlskdDownloadStatus.IN_PROGRESS:
+                work_item.record_event("download.in_progress", meta=meta)
+                continue
+
+            if event.status is SlskdDownloadStatus.COMPLETED:
+                work_item.record_event("download.completed", meta=meta)
+                if path:
+                    sidecar.source_path = path
+                    await self._completion.publish_event(
+                        work_item.item.dedupe_key,
+                        path=Path(path),
+                        bytes_written=event.bytes_written or 0,
+                    )
+                sidecar.download_id = event.download_id
+                await self._sidecars.save(sidecar)
+                return
+
+            if event.status is SlskdDownloadStatus.FAILED:
+                work_item.record_event("download.failed", meta=meta)
+                if event.retryable:
+                    retry_after = _retry_after_seconds(event.payload)
+                    raise RetryableDownloadError(
+                        "slskd reported retryable download failure",
+                        retry_after_seconds=retry_after,
+                    )
+                raise DownloadPipelineError("slskd reported fatal download failure")
+
+        raise DownloadPipelineError("slskd download stream terminated unexpectedly")
+
+
+def _retry_after_seconds(payload: Mapping[str, Any]) -> float | None:
+    candidate = payload.get("retry_after_seconds")
+    if isinstance(candidate, (int, float)):
+        return max(0.0, float(candidate))
+    candidate = payload.get("retry_after_ms")
+    if isinstance(candidate, (int, float)):
+        return max(0.0, float(candidate) / 1000.0)
+    return None
 
 
 def _format_quality(codec: str | None, bitrate: int | None) -> str | None:
