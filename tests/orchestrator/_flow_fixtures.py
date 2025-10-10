@@ -1,4 +1,4 @@
-"""Shared fixtures for download flow unit tests to bypass global DB setup."""
+"""Shared fixtures for Harmony Download Manager unit tests to bypass global DB setup."""
 
 from __future__ import annotations
 

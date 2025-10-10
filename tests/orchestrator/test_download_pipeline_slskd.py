@@ -6,13 +6,13 @@ from typing import AsyncIterator
 import pytest
 
 from app.integrations.slskd_client import SlskdDownloadEvent, SlskdDownloadStatus
-from app.orchestrator.download_flow.models import DownloadItem, DownloadWorkItem
-from app.orchestrator.download_flow.pipeline import (
+from app.hdm.models import DownloadItem, DownloadWorkItem
+from app.hdm.pipeline import (
     DownloadPipelineError,
     RetryableDownloadError,
 )
-from app.orchestrator.download_flow.pipeline_impl import DefaultDownloadPipeline
-from app.orchestrator.download_flow.recovery import DownloadSidecar
+from app.hdm.pipeline_impl import DefaultDownloadPipeline
+from app.hdm.recovery import DownloadSidecar
 
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")

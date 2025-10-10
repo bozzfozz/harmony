@@ -1,4 +1,6 @@
 ## v2.0.0 — unreleased
+- refactor(hdm): Harmonised the download orchestrator namespace to Harmony Download Manager (HDM), updated metrics/logs/docs and
+  provided temporary compatibility re-exports. [CODX-REFACTOR-HDM-001]
 - chore(ci): remove diff coverage gate, dependencies and documentation; CI now publishes junit/coverage artifacts without a diff blocker. [CODX-COVERAGE-DIFF-REMOVAL-001]
 - chore(security): Bandit entfernt (CI, pre-commit, Tooling, Docs, Policies) und Security-Autofix-Workflow stillgelegt. [CODX-SEC-BANDIT-REMOVAL-001]
 - chore(ci): remove Ruff/Black from toolchain, promote isort + mypy + bandit + pytest + pip-audit as the remaining backend gates; documentation and policies updated accordingly. [CODX-LINT-REMOVAL-001]

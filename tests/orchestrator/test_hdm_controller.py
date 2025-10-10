@@ -6,9 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
-from app.orchestrator.download_flow.idempotency import InMemoryIdempotencyStore
-from app.orchestrator.download_flow.models import (
+from app.hdm.idempotency import InMemoryIdempotencyStore
+from app.hdm.models import (
     BatchStatus,
     DownloadBatchRequest,
     DownloadOutcome,
@@ -17,7 +16,8 @@ from app.orchestrator.download_flow.models import (
     ItemState,
     DownloadWorkItem,
 )
-from app.orchestrator.download_flow.pipeline import DownloadPipeline, RetryableDownloadError
+from app.hdm.orchestrator import HdmOrchestrator
+from app.hdm.pipeline import DownloadPipeline, RetryableDownloadError
 
 
 class RecordingPipeline(DownloadPipeline):
@@ -56,7 +56,7 @@ class RecordingPipeline(DownloadPipeline):
 @pytest.mark.asyncio
 async def test_single_and_batch_flow_share_pipeline() -> None:
     pipeline = RecordingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=2,
@@ -89,7 +89,7 @@ async def test_single_and_batch_flow_share_pipeline() -> None:
 @pytest.mark.asyncio
 async def test_batches_processed_round_robin() -> None:
     pipeline = RecordingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,
@@ -142,7 +142,7 @@ class FlakyPipeline(DownloadPipeline):
 @pytest.mark.asyncio
 async def test_retry_until_success() -> None:
     pipeline = FlakyPipeline(retries_before_success=1)
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,
@@ -165,7 +165,7 @@ async def test_retry_until_success() -> None:
 @pytest.mark.asyncio
 async def test_duplicate_items_skipped_after_success() -> None:
     pipeline = RecordingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,
@@ -190,7 +190,7 @@ async def test_duplicate_items_skipped_after_success() -> None:
 @pytest.mark.asyncio
 async def test_percentile_statistics(monkeypatch: pytest.MonkeyPatch) -> None:
     pipeline = RecordingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,
@@ -202,7 +202,7 @@ async def test_percentile_statistics(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_monotonic() -> float:
         return next(monotonic_values)
 
-    monkeypatch.setattr("app.orchestrator.download_flow.controller.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("app.hdm.orchestrator.time.monotonic", fake_monotonic)
 
     request = DownloadBatchRequest(
         items=[

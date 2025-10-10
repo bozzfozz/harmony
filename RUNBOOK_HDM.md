@@ -1,10 +1,10 @@
-# RUNBOOK — FLOW-002 (Spotify PRO OAuth Upgrade)
+# RUNBOOK — Harmony Download Manager (HDM) (Spotify PRO OAuth Upgrade)
 
-Dieser Runbook richtet sich an Operator:innen, die den FLOW-002-End-to-End-Fluss
-bereitstellen, überwachen und im Fehlerfall wiederherstellen müssen. Ein
-architektonischer Überblick steht im Abschnitt
-[„FLOW-002 – Spotify PRO OAuth Upgrade“](README.md#flow-002--spotify-pro-oauth-upgrade).
-Der Audit-Status ist in [AUDIT-FLOW-002.md](AUDIT-FLOW-002.md) dokumentiert.
+Dieser Runbook richtet sich an Operator:innen, die den HDM-End-to-End-Fluss
+(vormals „FLOW-002“) bereitstellen, überwachen und im Fehlerfall
+wiederherstellen müssen. Ein architektonischer Überblick steht im Abschnitt
+[„Harmony Download Manager (HDM) – Spotify PRO OAuth Upgrade“](README.md#harmony-download-manager-hdm--spotify-pro-oauth-upgrade).
+Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
 
 ## Betriebsziele
 
@@ -130,5 +130,5 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 - **Vendor:** Spotify Support (Dashboard → _Contact Us_ → „Production Outage“).
 
 Alle Eskalationen sollten in der zentralen Incident-Dokumentation referenziert
-werden. Aktualisieren Sie `AUDIT-FLOW-002.md`, sobald neue Kontrollen eingeführt
+werden. Aktualisieren Sie `AUDIT-HDM.md`, sobald neue Kontrollen eingeführt
 werden.

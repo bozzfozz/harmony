@@ -155,7 +155,7 @@ class SoulseekDownloadRequest(BaseModel):
         return stripped
 
 
-class DownloadFlowItemRequest(BaseModel):
+class HdmItemRequest(BaseModel):
     artist: str = Field(..., description="Artist name for the requested download")
     title: str = Field(..., description="Track title for the requested download")
     album: Optional[str] = Field(None, description="Album name associated with the track")
@@ -181,10 +181,10 @@ class DownloadFlowItemRequest(BaseModel):
         return stripped
 
 
-class DownloadFlowBatchRequest(BaseModel):
+class HdmBatchRequest(BaseModel):
     requested_by: str = Field(..., description="Identifier for the requesting user")
-    items: List[DownloadFlowItemRequest] = Field(
-        ..., min_length=1, description="Items to submit to the download flow"
+    items: List[HdmItemRequest] = Field(
+        ..., min_length=1, description="Items to submit to the Harmony Download Manager"
     )
     batch_id: Optional[str] = Field(
         None, description="Optional client supplied batch identifier"
@@ -205,10 +205,16 @@ class DownloadFlowBatchRequest(BaseModel):
         return stripped
 
 
-class DownloadFlowSubmissionResponse(BaseModel):
+class HdmSubmissionResponse(BaseModel):
     batch_id: str
     items_total: int
     requested_by: str
+
+
+# Backward compatibility aliases (planned removal in v1.2.0)
+DownloadFlowItemRequest = HdmItemRequest
+DownloadFlowBatchRequest = HdmBatchRequest
+DownloadFlowSubmissionResponse = HdmSubmissionResponse
 
 
 class DiscographyDownloadRequest(BaseModel):

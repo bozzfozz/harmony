@@ -59,11 +59,11 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 - **Response:** Plain text in the Prometheus exposition format with `Content-Type: text/plain; version=0.0.4`.
 - **Caching:** Responses set `Cache-Control: no-store` so scrapers always fetch fresh samples.
 - **Highlights:**
-  - `download_flow_item_outcomes_total{state="…"}` – terminal outcome counts for orchestrated downloads (`done`, `failed`, `duplicate`).
-  - `download_flow_item_retries_total{error_type="…"}` – retry attempts by error class.
-  - `download_flow_item_failures_total{error_type="…"}` – fatal failures grouped by exception type.
-  - `download_flow_phase_duration_seconds{phase="download|tagging|moving"}` – phase-level histograms useful for latency breakdowns.
-  - `download_flow_processing_seconds` – total per-item processing latency histogram.
+  - `hdm_item_outcomes_total{state="…"}` – terminal outcome counts for orchestrated downloads (`done`, `failed`, `duplicate`).
+  - `hdm_item_retries_total{error_type="…"}` – retry attempts by error class.
+  - `hdm_item_failures_total{error_type="…"}` – fatal failures grouped by exception type.
+  - `hdm_phase_duration_seconds{phase="download|tagging|moving"}` – phase-level histograms useful for latency breakdowns.
+  - `hdm_processing_seconds` – total per-item processing latency histogram.
 
 ## Configuration
 

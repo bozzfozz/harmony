@@ -288,7 +288,7 @@ def _install_recording_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
             handlers=runtime.handlers,
             enabled_jobs=runtime.enabled_jobs,
             import_worker=runtime.import_worker,
-            download_flow=runtime.download_flow,
+            hdm=runtime.hdm,
         )
 
     monkeypatch.setattr(

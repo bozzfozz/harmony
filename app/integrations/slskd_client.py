@@ -1,4 +1,4 @@
-"""Async HTTP client for the slskd API used by the download flow."""
+"""Async HTTP client for the slskd API used by the Harmony Download Manager."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class SlskdDownloadEvent:
 
 @dataclass(slots=True)
 class SlskdHttpClient:
-    """HTTPX based client tailored to the Harmony download flow."""
+    """HTTPX based client tailored to the Harmony Download Manager (HDM)."""
 
     base_url: str
     api_key: str | None = None

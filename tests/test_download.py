@@ -68,7 +68,7 @@ def test_download_endpoint_returns_id_and_status(client) -> None:
     assert body["download_id"] in entries[0]["details"]["download_ids"]
 
 
-def test_download_flow_submission_returns_handle(client) -> None:
+def test_hdm_submission_returns_handle(client) -> None:
     payload = {
         "requested_by": "tester",
         "items": [

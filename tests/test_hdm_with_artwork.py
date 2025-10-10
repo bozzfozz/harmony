@@ -12,7 +12,7 @@ from app.utils import artwork_utils
 from app.workers.artwork_worker import ArtworkWorker
 
 
-def test_download_flow_with_artwork(
+def test_hdm_with_artwork(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     client,

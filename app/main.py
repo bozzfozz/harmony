@@ -322,18 +322,18 @@ async def _start_orchestrator_workers(
         "orchestrator_scheduler": False,
         "orchestrator_dispatcher": False,
         "orchestrator_watchlist_timer": False,
-        "download_flow": False,
+        "hdm": False,
     }
 
-    download_flow_config = settings.download_flow
+    hdm_config = settings.hdm
     logger.info(
-        "Download flow configuration loaded",
+        "HDM configuration loaded",
         extra={
-            "event": "download_flow.config",
-            "downloads_dir": download_flow_config.downloads_dir,
-            "music_dir": download_flow_config.music_dir,
-            "worker_concurrency": download_flow_config.worker_concurrency,
-            "max_retries": download_flow_config.max_retries,
+            "event": "hdm.config",
+            "downloads_dir": hdm_config.downloads_dir,
+            "music_dir": hdm_config.music_dir,
+            "worker_concurrency": hdm_config.worker_concurrency,
+            "max_retries": hdm_config.max_retries,
         },
     )
 
@@ -381,10 +381,10 @@ async def _start_orchestrator_workers(
     if state.import_worker is not None:
         await state.import_worker.start()
         worker_status["import"] = True
-    state.download_flow_runtime = orchestrator.download_flow
-    await orchestrator.download_flow.orchestrator.start()
-    await orchestrator.download_flow.recovery.start()
-    worker_status["download_flow"] = True
+    state.hdm_runtime = orchestrator.hdm
+    await orchestrator.hdm.orchestrator.start()
+    await orchestrator.hdm.recovery.start()
+    worker_status["hdm"] = True
     worker_status["orchestrator_scheduler"] = True
     worker_status["orchestrator_dispatcher"] = True
     orchestrator_status["scheduler_running"] = True
@@ -447,7 +447,7 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
     stop_event: asyncio.Event | None = getattr(state, "orchestrator_stop_event", None)
     runtime: OrchestratorRuntime | None = getattr(state, "orchestrator_runtime", None)
     timer: WatchlistTimer | None = getattr(state, "watchlist_timer", None)
-    download_flow_runtime = getattr(state, "download_flow_runtime", None)
+    hdm_runtime = getattr(state, "hdm_runtime", None)
 
     if runtime is not None:
         runtime.dispatcher.request_stop()
@@ -467,7 +467,7 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
         "orchestrator_stop_event",
         "orchestrator_runtime",
         "watchlist_timer",
-        "download_flow_runtime",
+        "hdm_runtime",
     ):
         if hasattr(state, attribute):
             delattr(state, attribute)
@@ -486,9 +486,9 @@ async def _stop_orchestrator_workers(app: FastAPI) -> None:
         if hasattr(state, attribute):
             delattr(state, attribute)
 
-    if download_flow_runtime is not None:
-        await download_flow_runtime.orchestrator.shutdown()
-        await download_flow_runtime.recovery.shutdown()
+    if hdm_runtime is not None:
+        await hdm_runtime.orchestrator.shutdown()
+        await hdm_runtime.recovery.shutdown()
 
     if orchestrator_status is not None:
         orchestrator_status["scheduler_running"] = False
