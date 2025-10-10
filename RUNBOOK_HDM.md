@@ -1,7 +1,7 @@
 # RUNBOOK — Harmony Download Manager (HDM) (Spotify PRO OAuth Upgrade)
 
 Dieser Runbook richtet sich an Operator:innen, die den HDM-End-to-End-Fluss
-(vormals „FLOW-002“) bereitstellen, überwachen und im Fehlerfall
+bereitstellen, überwachen und im Fehlerfall
 wiederherstellen müssen. Ein architektonischer Überblick steht im Abschnitt
 [„Harmony Download Manager (HDM) – Spotify PRO OAuth Upgrade“](README.md#harmony-download-manager-hdm--spotify-pro-oauth-upgrade).
 Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.

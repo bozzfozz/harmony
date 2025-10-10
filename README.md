@@ -34,7 +34,7 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 
 [RUNBOOK_HDM.md](RUNBOOK_HDM.md) beschreibt die operativen Schritte, während
 [AUDIT-HDM.md](AUDIT-HDM.md) die kontrollierte Umsetzung für Audits
-nachweist. (Historisch: FLOW-002)
+nachweist.
 
 ### Überblick
 
