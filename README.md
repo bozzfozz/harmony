@@ -45,9 +45,10 @@ Freigaben mit Soulseek-Downloads und Backfill-Läufen:
    zustandsbehafteten Vorgang in
    [`OAuthTransactionStore`](app/services/oauth_transactions.py) an und leitet zur
    Spotify-Consent-Seite weiter.
-2. **Callback-Verarbeitung** – `GET /spotify/oauth/callback` bzw. der manuelle Pfad
-   `POST /api/v1/oauth/manual` konsumieren den State, tauschen den Code gegen Tokens
-   (`OAuthService`) und persistieren Secrets via `SecretStore`.
+2. **Callback-Verarbeitung** – `GET http://127.0.0.1:8888/callback` (Mini-App) bzw. der
+   manuelle Pfad `POST /api/v1/oauth/manual` konsumieren den State, tauschen den Code
+   gegen Tokens (`OAuthService`) und persistieren Secrets via `SecretStore`. Clients
+   können den Fortschritt über `GET /api/v1/oauth/status/{state}` beobachten.
 3. **Backfill-Orchestrierung** – nach erfolgreicher Autorisierung löst
    [`BackfillService`](app/services/backfill_service.py) automatische Upgrades der
    FREE-Daten aus und aktualisiert Playlist-/Track-Metadaten.
@@ -68,6 +69,7 @@ Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
 | `SPOTIFY_REDIRECT_URI` | ✅ | Muss exakt mit der registrierten Redirect-URI übereinstimmen. |
 | `OAUTH_CALLBACK_PORT` | ➖ | Öffnet den lokalen Callback-Port (`http://127.0.0.1:<port>/callback`). |
 | `OAUTH_MANUAL_CALLBACK_ENABLE` | ➖ | Aktiviert den Fallback-Endpunkt für Remote-Fixes. |
+| `OAUTH_PUBLIC_BASE` | ➖ | Basis-Pfad der öffentlichen OAuth-API (Default: `/api/v1/oauth`). |
 | `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs. |
 | `FEATURE_REQUIRE_AUTH` & `HARMONY_API_KEYS` | ✅ (Prod) | Erzwingen API-Key-Schutz für OAuth-Endpoints. |
 
@@ -809,7 +811,8 @@ Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environme
 | `SPOTIFY_SCOPE` | string | `user-library-read playlist-read-private playlist-read-collaborative` | Angeforderte OAuth-Scopes. | — |
 | `OAUTH_CALLBACK_PORT` | int | `8888` | Port für den Spotify-Callback (`http://127.0.0.1:PORT/callback`). | — |
 | `OAUTH_PUBLIC_HOST_HINT` | string | _(leer)_ | Optionaler Hinweis für die Hilfeseite (z. B. öffentliche IP oder Hostname). | — |
-| `OAUTH_MANUAL_CALLBACK_ENABLE` | bool | `true` | Erlaubt den manuellen Abschluss via `POST /oauth/manual`. | — |
+| `OAUTH_MANUAL_CALLBACK_ENABLE` | bool | `true` | Erlaubt den manuellen Abschluss via `POST /api/v1/oauth/manual`. | — |
+| `OAUTH_PUBLIC_BASE` | string | `API_BASE_PATH + '/oauth'` | Basis-Pfad der öffentlichen OAuth-API (Default: `/api/v1/oauth`). | — |
 | `OAUTH_SESSION_TTL_MIN` | int | `10` | Lebensdauer eines OAuth-States in Minuten. | — |
 | `INTEGRATIONS_ENABLED` | csv | `spotify,slskd` | Aktivierte Provider (z. B. `spotify,slskd`). | — |
 | `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |

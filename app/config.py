@@ -110,6 +110,7 @@ class OAuthConfig:
     manual_callback_enabled: bool
     session_ttl_minutes: int
     public_host_hint: Optional[str]
+    public_base: str
 
 
 @dataclass(slots=True)
@@ -1729,6 +1730,10 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     )
 
     api_base_path = _normalise_base_path(_env_value(env, "API_BASE_PATH"))
+    oauth_public_base = _normalise_prefix(
+        _env_value(env, "OAUTH_PUBLIC_BASE")
+        or (f"{api_base_path}{'/oauth' if api_base_path != '/' else 'oauth'}" if api_base_path else "/oauth")
+    )
 
     features = FeatureFlags(
         enable_artwork=_as_bool(
@@ -2086,6 +2091,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         manual_callback_enabled=oauth_manual_enabled,
         session_ttl_minutes=oauth_session_ttl_min,
         public_host_hint=oauth_public_host_hint,
+        public_base=oauth_public_base,
     )
 
     security = SecurityConfig(

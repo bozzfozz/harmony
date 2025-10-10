@@ -6,9 +6,10 @@ import base64
 import hashlib
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from threading import Lock
 from typing import Any, Callable, Mapping
 from urllib.parse import urlencode, urlparse
 
@@ -31,6 +32,8 @@ __all__ = [
     "OAuthManualResponse",
     "OAuthService",
     "OAuthStartResponse",
+    "OAuthStatusResponse",
+    "OAuthSessionStatus",
 ]
 
 logger = get_logger(__name__)
@@ -70,6 +73,29 @@ class OAuthManualResponse:
     message: str | None = None
 
 
+class OAuthSessionStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    UNKNOWN = "unknown"
+
+
+@dataclass(slots=True)
+class OAuthStatusResponse:
+    provider: str
+    state: str
+    status: OAuthSessionStatus
+    created_at: datetime
+    expires_at: datetime
+    completed_at: datetime | None
+    manual_completion_available: bool
+    manual_completion_url: str | None
+    redirect_uri: str
+    error_code: OAuthErrorCode | None = None
+    message: str | None = None
+
+
 class ManualRateLimiter:
     def __init__(self, *, limit: int, window_seconds: float) -> None:
         self._limit = max(1, limit)
@@ -101,6 +127,8 @@ class OAuthService:
         self._cache_handler = SettingsCacheHandler()
         self._manual_limit = manual_limit or ManualRateLimiter(limit=6, window_seconds=300.0)
         self._http_client_factory = http_client_factory
+        self._status_lock = Lock()
+        self._statuses: dict[str, OAuthStatusResponse] = {}
 
     @property
     def redirect_uri(self) -> str:
@@ -114,6 +142,14 @@ class OAuthService:
     def public_host_hint(self) -> str | None:
         hint = (self._config.oauth.public_host_hint or "").strip()
         return hint or None
+
+    def _manual_completion_url(self) -> str | None:
+        if not self.manual_enabled:
+            return None
+        base = (self._config.oauth.public_base or "").rstrip("/")
+        if not base:
+            return "/manual"
+        return f"{base}/manual"
 
     def _generate_state(self) -> str:
         return secrets.token_urlsafe(24)
@@ -131,6 +167,111 @@ class OAuthService:
 
     def _transaction_ttl(self) -> timedelta:
         return self._transactions.ttl
+
+    def _record_pending_status(self, *, state: str, created_at: datetime) -> None:
+        manual_url = self._manual_completion_url()
+        record = OAuthStatusResponse(
+            provider="spotify",
+            state=state,
+            status=OAuthSessionStatus.PENDING,
+            created_at=created_at,
+            expires_at=created_at + self._transaction_ttl(),
+            completed_at=None,
+            manual_completion_available=self.manual_enabled,
+            manual_completion_url=manual_url,
+            redirect_uri=self.redirect_uri,
+            error_code=None,
+            message=None,
+        )
+        with self._status_lock:
+            self._statuses[state] = record
+
+    def _update_status_record(
+        self,
+        state: str,
+        *,
+        status: OAuthSessionStatus,
+        message: str | None = None,
+        error_code: OAuthErrorCode | None = None,
+        completed_at: datetime | None = None,
+        reference: datetime | None = None,
+    ) -> None:
+        now = reference or datetime.now(timezone.utc)
+        manual_url = self._manual_completion_url()
+        with self._status_lock:
+            record = self._statuses.get(state)
+            if record is None:
+                record = OAuthStatusResponse(
+                    provider="spotify",
+                    state=state,
+                    status=status,
+                    created_at=now,
+                    expires_at=now + self._transaction_ttl(),
+                    completed_at=completed_at,
+                    manual_completion_available=self.manual_enabled,
+                    manual_completion_url=manual_url,
+                    redirect_uri=self.redirect_uri,
+                    error_code=error_code,
+                    message=message,
+                )
+            else:
+                record.status = status
+                record.completed_at = completed_at
+                record.error_code = error_code
+                record.message = message
+                record.manual_completion_available = self.manual_enabled
+                record.manual_completion_url = manual_url
+                record.redirect_uri = self.redirect_uri
+                if reference is not None and status is OAuthSessionStatus.PENDING:
+                    record.created_at = reference
+                    record.expires_at = reference + self._transaction_ttl()
+                else:
+                    record.expires_at = record.created_at + self._transaction_ttl()
+            self._statuses[state] = record
+
+    def _purge_statuses(self, reference: datetime) -> None:
+        ttl = self._transaction_ttl()
+        cutoff = reference - (ttl * 2)
+        stale = [
+            state
+            for state, record in self._statuses.items()
+            if record.created_at <= cutoff
+        ]
+        for state in stale:
+            self._statuses.pop(state, None)
+
+    def status(self, state: str) -> OAuthStatusResponse:
+        now = datetime.now(timezone.utc)
+        manual_url = self._manual_completion_url()
+        with self._status_lock:
+            self._purge_statuses(now)
+            record = self._statuses.get(state)
+            if record is None:
+                return OAuthStatusResponse(
+                    provider="spotify",
+                    state=state,
+                    status=OAuthSessionStatus.UNKNOWN,
+                    created_at=now,
+                    expires_at=now,
+                    completed_at=None,
+                    manual_completion_available=self.manual_enabled,
+                    manual_completion_url=manual_url,
+                    redirect_uri=self.redirect_uri,
+                    error_code=None,
+                    message="State is unknown or expired.",
+                )
+            if (
+                record.status is OAuthSessionStatus.PENDING
+                and record.expires_at <= now
+            ):
+                record.status = OAuthSessionStatus.EXPIRED
+                record.error_code = OAuthErrorCode.OAUTH_CODE_EXPIRED
+                record.message = "Authorization code expired. Start a new session."
+                record.completed_at = None
+            record.manual_completion_available = self.manual_enabled
+            record.manual_completion_url = manual_url
+            record.redirect_uri = self.redirect_uri
+            return replace(record)
 
     def _authorization_url(self, *, state: str, code_challenge: str) -> str:
         params = {
@@ -163,10 +304,8 @@ class OAuthService:
         )
         self._transactions.save(transaction)
         expires_at = transaction.created_at + self._transaction_ttl()
-        manual_url = None
-        if self.manual_enabled:
-            base_path = self._config.api_base_path.rstrip("/")
-            manual_url = f"{base_path or ''}/oauth/manual"
+        manual_url = self._manual_completion_url()
+        self._record_pending_status(state=state, created_at=transaction.created_at)
         logger.info(
             "OAuth transaction created",
             extra={
@@ -249,14 +388,49 @@ class OAuthService:
         return transaction
 
     async def complete(self, *, state: str, code: str) -> Mapping[str, Any]:
-        transaction = self._consume_transaction(state)
+        try:
+            transaction = self._consume_transaction(state)
+        except TransactionNotFoundError:
+            self._update_status_record(
+                state,
+                status=OAuthSessionStatus.FAILED,
+                error_code=OAuthErrorCode.OAUTH_STATE_MISMATCH,
+                message="State is unknown or already used.",
+                completed_at=None,
+            )
+            raise
         if transaction.is_expired(ttl=self._transaction_ttl()):
             logger.warning(
                 "OAuth transaction expired",
                 extra={"event": "oauth.transaction.expired", "state": state},
             )
+            self._update_status_record(
+                state,
+                status=OAuthSessionStatus.EXPIRED,
+                error_code=OAuthErrorCode.OAUTH_CODE_EXPIRED,
+                message="Authorization code expired. Start a new session.",
+                completed_at=None,
+            )
             raise ValueError(OAuthErrorCode.OAUTH_CODE_EXPIRED.value)
-        return await self._exchange_code(code, transaction)
+        try:
+            token_info = await self._exchange_code(code, transaction)
+        except Exception:
+            self._update_status_record(
+                state,
+                status=OAuthSessionStatus.FAILED,
+                error_code=OAuthErrorCode.OAUTH_TOKEN_EXCHANGE_FAILED,
+                message="Failed to exchange authorization code.",
+                completed_at=None,
+            )
+            raise
+        completed_at = datetime.now(timezone.utc)
+        self._update_status_record(
+            state,
+            status=OAuthSessionStatus.COMPLETED,
+            completed_at=completed_at,
+            message="Authorization completed successfully.",
+        )
+        return token_info
 
     async def manual(self, *, request: OAuthManualRequest, client_ip: str | None) -> OAuthManualResponse:
         if not self.manual_enabled:
@@ -295,6 +469,14 @@ class OAuthService:
         code = query.get("code")
         state = query.get("state")
         if not code or not state:
+            if state:
+                self._update_status_record(
+                    state,
+                    status=OAuthSessionStatus.FAILED,
+                    error_code=OAuthErrorCode.OAUTH_INVALID_REDIRECT,
+                    message="Redirect URL must include code and state.",
+                    completed_at=None,
+                )
             return OAuthManualResponse(
                 ok=False,
                 provider="spotify",
@@ -365,10 +547,7 @@ class OAuthService:
         }
 
     def help_page_context(self) -> Mapping[str, Any]:
-        manual_url = None
-        if self.manual_enabled:
-            base_path = self._config.api_base_path.rstrip("/")
-            manual_url = f"{base_path or ''}/oauth/manual"
+        manual_url = self._manual_completion_url()
         return {
             "redirect_uri": self.redirect_uri,
             "public_host_hint": self.public_host_hint,

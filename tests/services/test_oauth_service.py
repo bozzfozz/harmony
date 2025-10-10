@@ -13,6 +13,7 @@ from app.services.oauth_service import (
     OAuthManualRequest,
     OAuthManualResponse,
     OAuthService,
+    OAuthSessionStatus,
 )
 from app.services.oauth_transactions import OAuthTransactionStore, TransactionNotFoundError
 
@@ -84,6 +85,8 @@ async def test_oauth_service_start_and_complete(monkeypatch: pytest.MonkeyPatch)
     await service.complete(state=start_response.state, code="auth-code")
     assert cache.saved is not None
     assert cache.saved["access_token"] == "token123"
+    status_info = service.status(start_response.state)
+    assert status_info.status is OAuthSessionStatus.COMPLETED
 
 
 @pytest.mark.asyncio
@@ -146,3 +149,33 @@ async def test_manual_success_parses_redirect(monkeypatch: pytest.MonkeyPatch) -
     with pytest.raises(TransactionNotFoundError):
         await service.complete(state=start.state, code="auth")
 
+
+def test_status_unknown_state_returns_unknown() -> None:
+    runtime_env = {
+        "SPOTIFY_CLIENT_ID": "client-id",
+        "SPOTIFY_CLIENT_SECRET": "client-secret",
+        "SPOTIFY_SCOPE": "user-read-email",
+    }
+    config = load_config(runtime_env=runtime_env)
+    store = OAuthTransactionStore(ttl=timedelta(minutes=1))
+    service = OAuthService(config=config, transactions=store)
+
+    status_info = service.status("does-not-exist")
+    assert status_info.status is OAuthSessionStatus.UNKNOWN
+    assert status_info.manual_completion_url == "/api/v1/oauth/manual"
+
+
+def test_status_pending_after_start() -> None:
+    runtime_env = {
+        "SPOTIFY_CLIENT_ID": "client-id",
+        "SPOTIFY_CLIENT_SECRET": "client-secret",
+        "SPOTIFY_SCOPE": "user-read-email",
+    }
+    config = load_config(runtime_env=runtime_env)
+    store = OAuthTransactionStore(ttl=timedelta(minutes=1))
+    service = OAuthService(config=config, transactions=store)
+
+    response = service.start(_build_request())
+    status_info = service.status(response.state)
+    assert status_info.status is OAuthSessionStatus.PENDING
+    assert status_info.manual_completion_available is True
