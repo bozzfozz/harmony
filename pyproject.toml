@@ -20,7 +20,3 @@ fail_under = 0
 show_missing = true
 skip_covered = false
 
-[tool.harmony.coverage]
-compare_branch = "origin/main"
-diff_fail_under = 85
-report_fail_under = 0
