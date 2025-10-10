@@ -4,6 +4,39 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 
 ---
 
+## 0. Normativer Rahmen (für 100 % Maschinenverständnis)
+
+### 0.1 Verbindliche Sprache (RFC-2119)
+- **MUST / MUSS** = zwingend einzuhalten.
+- **SHOULD / SOLL** = empfohlen, Abweichungen sind zu begründen.
+- **MAY / DARF** = optional.
+
+### 0.2 Standard-Parameter (Defaults)
+- `RUN_MODE ∈ {write, qa_readonly}` — **default=`write`**.
+- `SCOPE_MODE ∈ {backend, frontend}` — **default=`backend`** (Details in §19.1).
+- `INTENTIONAL_SCHEMA_CHANGE ∈ {0,1}` — **default=`0`**.
+- „grün“ bedeutet: jeweils **Exit-Code 0** des genannten Kommandos.
+
+### 0.3 Deterministische Ausführungssequenz (lokal, vor PR) — MUSS
+Reihenfolge ist strikt:
+1) Build/Lint/Typen (read-only Checks)
+2) Tests (Teil-Suite, dann Voll-Suite)
+3) Finale Format-Routine (siehe §14)
+4) `git diff --exit-code` muss leer sein
+5) Doku/CHANGELOG/PR-Text aktualisieren
+6) PR erstellen
+
+### 0.4 Exit-Codes (für Guard-Skripte; Tools MAY map to 1 intern)
+- `0` OK
+- `2` Companion/Tests/Doku fehlen
+- `3` Boundary-Verstoß
+- `4` Legacy-Treffer
+- `5` Junk/Artefakte im Index
+- `6` Orphan/Unreferenzierte Produktivdateien
+- `7` TODO/FIXME im Produktivcode
+
+---
+
 ## 1. Geltungsbereich und Rollen
 - **Agent**: Automatisierter Beitragender, deterministisch und auditierbar.
 - **Maintainer**: Review, Freigabe, Sicherheit, Releases.
@@ -43,7 +76,7 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
 - **Quality Tools**
   - Python: `ruff`, `mypy`, `pytest`, `pip-audit`.
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
-  - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind nicht erlaubt.
+  - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind **nicht erlaubt**.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
@@ -126,25 +159,30 @@ Ohne explizites Flag gilt **Write Mode**.
 ## 11. Durchsetzung
 - CI erzwingt Lint, Typen, Tests, Security-Scans.
 - **Schreibrechte sind nicht CI-gekoppelt**; Merge nur bei erfüllten Gates/Explizit-Freigabe.
-- Pre-Commit Hooks empfohlen: `ruff-format`, `ruff`.
+- Pre-Commit Hooks **SHOULD**: `ruff-format`, `ruff`.
 - PR blockiert, wenn **TASK_ID** oder Testnachweise fehlen.
 
+### 11.1 Repository-Guards — MUSS
+- Jedes Repo MUSS eine Guard-Konfiguration besitzen:
+  - `.project-guard.yml` (Konfiguration für Companion/Boundary/Legacy/Junk/Orphans/TODO)
+  - `.github/workflows/ci-completeness.yml` (führt Guard-Skripte read-only aus)
+- Guards liefern die in §0.4 definierten Exit-Codes (oder map auf 1 in CI), harte Verstöße sind nicht bypass-fähig.
+
 ## 12. Task-Template-Pflicht
-Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
+Alle Aufgaben **MÜSSEN** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
 - Abweichungen nur mit Maintainer-Freigabe (im PR begründen).
 - PR-Beschreibungen füllen alle Template-Sektionen (Scope, API-Vertrag, DB, Konfiguration, Sicherheit, Tests, DoD) aus.
 - **TASK_ID** bleibt im Titel/Body und verweist auf Template.
 
 ## 13. ToDo-Pflege (verbindlich, **nicht** als Changelog)
-- **Ort:** `ToDo.md` (Repo-Root).  
+- **Ort:** `ToDo.md` (Repo-Root, Markdown).  
 - **Kein Changelog-Ersatz.** ToDo ist **kein** Commit-/PR-Protokoll.  
 - **Pflicht nur, wenn §25.0 „Erforderlichkeit“** erfüllt ist. Andernfalls im PR-Body „No ToDo changes required“ bestätigen.
 
 ## §14 Code-Style, Lint & Tests — Auto-Fixes (verbindlich)
 
 ### Arbeitsablauf des Agents
-
-Finale Code-Aufräumroutine (verbindlich)
+Finale Code-Aufräumroutine (MUSS)
 1) Imports sortieren und Code formatieren:
     ruff format .
     ruff check --select I --fix .
@@ -164,12 +202,8 @@ Hinweise
     ruff check --output-format=github .
 
 ### §14a Ruff Format & Imports
-
-**Ziel:** Konsistente Formatierung, importierte Symmetrien und reproduzierbare Diffs über alle Commits hinweg.
-
-**Pflichten (Agent & Humans)**
-- Pre-commit Hooks `ruff-format` und `ruff` installiert und aktiv halten (`pre-commit install`, `pre-commit run -a`).
-- Finale Routine strikt als letzter Code-Schritt ausführen (siehe oben) und nur mit leerem `git diff` in die Doku-/CHANGELOG-/BACKUP-Phase wechseln.
+**MUSS**
+- Pre-commit Hooks `ruff-format` und `ruff` aktiv halten (`pre-commit install`, `pre-commit run -a`).
 - Keine Commits einreichen, die `ruff format --check .` oder `ruff check --output-format=github .` brechen.
 
 **PR-Checkliste (Ergänzung)**
@@ -181,54 +215,45 @@ Hinweise
 - `ruff format --check .`
 - `ruff check --output-format=github .`
 
-**Codex MUSS**
-- Vor jedem Push bzw. vor Doku-/CHANGELOG-/BACKUP-Aufgaben die finale Routine ausführen (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`).
-- Format-Anpassungen, die Ruff nicht beheben kann, explizit begründen und minimieren (keine stillen Massenformate).
-
 **Konfiguration (Referenz)**
 - `.pre-commit-config.yaml`: Hooks `ruff-format`, `ruff`
 - `pyproject.toml`: `[tool.ruff]` + Lint-/Format-Unterabschnitte
 
-**Hinweise**
-- Größere Stil-Anpassungen (z. B. neue Ruff-Regel-Sets) vorab mit Maintainer*innen abstimmen.
-
----
-
 ### §14b Pytest Auto-Repair
-
 **Ziel:** Failing Tests automatisch erkennen & beheben, ohne Public-Contracts zu verletzen.
 
-**Pflichten (Agent & Humans)**
-- Dev-Loop: `pytest --maxfail=1 --lf` → grün ⇒ vollständige Suite `pytest -q` (in CI).
-- Fix-Loop (automatisiert):
+**MUSS**
+- Dev-Loop: `pytest --maxfail=1 --lf` → grün ⇒ Vollsuite `pytest -q`.
+- Fix-Loop:
   1) Fehler klassifizieren: `ImportError`, `FixtureError`, `TypeError`, `AssertionError`, Snapshot/OpenAPI-Drift, Flakes.
-  2) **Erlaubte Auto-Fixes**:
+  2) **Auto-Fixes erlaubt**:
      - Fehlende/kaputte Imports, falsche Modul-/Pfad-Namen.
-     - Fixture-Reparatur (Scope, Defaults, Testdaten), deterministische Seeds/Clock-Freeze.
-     - Offensichtliche Flakes (Race/Timing/Tempfiles) stabilisieren.
-     - OpenAPI/Snapshots **nur**, wenn `INTENTIONAL_SCHEMA_CHANGE=true`; sonst **nicht** anfassen.
+     - Fixture-Reparatur, deterministische Seeds/Clock-Freeze.
+     - Offensichtliche Flakes stabilisieren.
+     - OpenAPI/Snapshots **nur**, wenn `INTENTIONAL_SCHEMA_CHANGE=1`.
   3) **Nicht erlaubt ohne Task-Freigabe**:
      - Public API/DB-Schema/Fehlercodes ändern.
      - Asserts lockern/entfernen, um „grün“ zu erzwingen.
-- Neue/änderte Features ⇒ Tests ergänzen/aktualisieren gemäß Akzeptanzkriterien; Coverage ≥ **85 %** der geänderten Module.
+- Neue/änderte Features ⇒ Tests ergänzen/aktualisieren; Coverage ≥ **85 %** der geänderten Module.
 
-**Selektives Testing im Dev-Loop**
-- Nur geänderte Tests:  
-  `pytest $(git diff --name-only origin/main...HEAD | rg '^tests/' -n || true) -q || true`
-- Nachbesserung: `pytest --ff --maxfail=1`
+Selektives Testing (schnell)
+    pytest $(git diff --name-only origin/main...HEAD | rg '^tests/' -n || true) -q || true
+Nachbesserung
+    pytest --ff --maxfail=1
 
-**PR-Pflichtfeld _Tests_**
+PR-Pflichtfeld _Tests_
 - Kurzbericht: *Was war kaputt? Ursache? Warum ist der Fix korrekt?* + Links zu Fail-Logs.
 
-**Commits**
+Commits
 - Auto-Fix: `test: repair <area> (<reason>)`
-- Unklare/fundamentale Brüche → Draft-PR **Clarification**: „Clarification: <TASK_ID>“ mit Minimalvorschlag.
+- Unklare Brüche → Draft-PR „Clarification: <TASK_ID>“.
 
-**Reihenfolge**
+Reihenfolge
 1. Schnelllauf (`--lf`)
 2. Volle Suite/CI
-3. Finale Routine ausführen (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`)
-```0
+3. Finale Routine (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`)
+
+---
 
 ## 15. Prohibited
 - Keine `BACKUP`-Dateien anlegen oder verändern.
@@ -255,7 +280,7 @@ Hinweise
 ### 19.1 **SCOPE_MODE (binär)**
 Wähle **genau einen** Scope pro PR/Task: **`backend`** oder **`frontend`**.
 
-**SCOPE_MODE = backend (Default für Backend-Aufgaben)**  
+**SCOPE_MODE = backend (Default)**  
 Fokus-Pfade (nicht exklusiv):
 - `app/**` (core, api, services, integrations, orchestrator, workers, middleware, schemas, utils, migrations)
 - `tests/**`, `reports/**`, `docs/**`
@@ -269,22 +294,22 @@ Fokus-Pfade (nicht exklusiv):
 - `reports/**`, `docs/**`
 - Tooling: `package*.json`, `pnpm-lock.yaml|yarn.lock`, `tsconfig*.json`, `.eslintrc*`, `.prettier*`, `vite|next|webpack|rollup|postcss|tailwind`-Configs
 
-> Änderungen **außerhalb** der Fokus-Pfade sind zulässig, wenn sie für Build, Tests, Doku oder einen kohärenten Refactor **zwingend erforderlich** sind. §15 gilt immer.
+> Änderungen außerhalb der Fokus-Pfade sind zulässig, wenn sie für Build, Tests, Doku oder einen kohärenten Refactor **zwingend erforderlich** sind. §15 gilt immer.
 
 ### 19.2 Zulässige Initiative (DRIFT-FIX)
-**Ohne Rückfrage (MAY; optional `[DRIFT-FIX]`)**
+**MAY** (ohne Rückfrage)
 - Defekte Tests/Lints/Typen reparieren, sofern **keine** Public-API betroffen.
 - Offensichtliche Import-/Pfad-Fehler, tote Importe entfernen.
-- Doku-Drift (README/ENV/OpenAPI-Beispiele) korrigieren, wenn Quelle eindeutig.
+- Doku-Drift korrigieren, wenn Quelle eindeutig.
 - Snapshots/OpenAPI **ohne Vertragsänderung** regenerieren.
 
-**Nur mit Task-Update/Freigabe**
+**Nur mit Task-Freigabe**
 - Schema-/API-Änderungen, neue Endpunkte/Felder.
-- Migrationslogik mit Datenmanipulation/-verlust-Risiko.
+- Riskante Migrationslogik.
 - UI-Flows, Feature-Flags, Konfiguration mit Nutzerwirkung.
 - Änderungen mit Performance-/Semantik-Einfluss.
 
-### 19.3 Clarification-Trigger (zwingend nachfragen)
+### 19.3 Clarification-Trigger (MUSS nachfragen)
 - Widerspruch zwischen Task und Code/Dokumentation/Guards.
 - Unklare Zielmetrik/ENV/Secrets.
 - Änderung berührt Public-API/DB/Migrationen.
@@ -299,44 +324,40 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 2. **Ref-Update**: Alle Aufrufer/Exports anpassen (Repo-weiter Grep).
 3. **Backcompat**: Abgelehnte/verschobene APIs mit Deprecation-Hinweis oder Adapter.
 4. **Tests**: Betroffene Tests aktualisieren/ergänzen; Snapshots/Fixtures synchronisieren.
-5. **Cross-Module-Verträglichkeit**: Sicherstellen, dass angrenzende Bausteine weiterhin funktionieren (z. B. `api` ↔ `services` ↔ `integrations`).
-6. **Docs/ENV**: README/Docs/ENV synchron halten.
+5. **Cross-Module-Verträglichkeit** sicherstellen.
+6. **Docs/ENV** synchron halten.
 
 ### 20a. Wiring & Removal (verbindlich)
 **Ziel:** Nach jeder Änderung ist das System vollständig verdrahtet; nicht mehr benötigte Artefakte sind entfernt.
 
 **MUSS**
-1) **Repo-weites Wiring**: Jede neue/umbenannte Funktion, Klasse, Route, Worker oder CLI hat aktualisierte Aufrufer, Registrierungen und Exporte. Keine „stummen“ Entry-Points.
-2) **Konsistenter Umbau**: Wenn ein Modul/Namespace verschoben/ersetzt wurde, sind **alle** Referenzen, Tests, Fixtures, Snapshots, Docs und CI-Schritte angepasst.
-3) **Entfernung**: Veraltete Dateien, doppelte Implementierungen, Legacy-Shims und ungenutzte Tests/Dokus werden gelöscht (kein Parken im Repo).
+1) **Repo-weites Wiring**: Neue/umbenannte Funktion/Klasse/Route/Worker/CLI hat aktualisierte Aufrufer, Registrierungen und Exporte. Keine „stummen“ Entry-Points.
+2) **Konsistenter Umbau**: Bei Moves/Ersetzungen sind **alle** Referenzen, Tests, Fixtures, Snapshots, Docs und CI-Schritte angepasst.
+3) **Entfernung**: Veraltete Dateien, doppelte Implementierungen, Legacy-Shims und ungenutzte Tests/Dokus werden gelöscht.
 4) **Kein toter Code**: Keine ungenutzten Exporte/Imports/Symbole im Produktivcode.
 
 **Pflicht-Checks vor PR**
-- Referenzscan (mindestens):
+- Referenzscan:
     git grep -n '<alter_name_oder_namespace>' -- . || true
     git grep -n '<neuer_name_oder_namespace>' -- . || true
-- Ruff auf ungenutztes/undefiniertes:
+- Ruff:
     ruff check --select F401,F841,F822 .
 - Vollständiger Build & Tests:
     pytest -q || true
-    # Frontend (falls vorhanden):
-    npm run build || true
+    npm run build || true  # falls Frontend
 
 **PR-Body MUSS enthalten**
-- „Wiring-Report“: Kurzliste der angepassten Aufrufer/Registrierungen/Exporte.
-- „Removal-Report“: Aufzählung gelöschter Dateien mit Begründung.
+- „Wiring-Report“
+- „Removal-Report“
 
-**CI (read-only, blockierend)**
-- Unbenutztes/undefiniertes:
-    ruff check --select F401,F841,F822 --output-format=github .
-- Legacy-/Altpfad-Scanner (projektspezifische Muster siehe `.project-guard.yml`, falls vorhanden).
-
-Hinweis: „Wiring & Removal“ ist ein Merge-Gate. PRs mit fehlender Verdrahtung oder verbliebenen Altdateien werden nicht gemerged.
+**CI (blockierend)**
+- `ruff check --select F401,F841,F822 --output-format=github .`
+- Guard-Scanner gemäß `.project-guard.yml` (s. §11.1)
 
 ## 21. **Auto-Task-Splitting (erlaubt)**
-- Agent darf große Aufgaben in **Subtasks**/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).
+- Agent DARF große Aufgaben in Subtasks/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).
 - Jeder Subtask enthält Ziel, Scope, DoD, Tests, Rollback.
-- Subtasks sollen **inkrementell** merge-bar sein.
+- Subtasks sollen inkrementell merge-bar sein.
 
 ## 22. **FAST-TRACK**
 - **Automatisch `FAST-TRACK: true`**, wenn **TASK_ID** eines der Präfixe matcht:
@@ -344,18 +365,17 @@ Hinweis: „Wiring & Removal“ ist ein Merge-Gate. PRs mit fehlender Verdrahtun
   - `CODX-P1-GW-*`
   - `CODX-P1-SPOT-*`
 - Wirkung:
-  - Agent darf **ohne weitere Rückfrage** implementieren, sofern §15/§19 eingehalten sind und Public-Contracts ungebrochen bleiben.
-  - Merge-Gates (§14) bleiben bestehen (Fast-Track beschleunigt Abstimmungen, **hebt Qualitätsschranken nicht auf**).
-- Manuelles Override im Task erlaubt: `FAST-TRACK: false`.
+  - Agent DARF ohne weitere Rückfrage implementieren, sofern §15/§19 eingehalten sind und Public-Contracts ungebrochen bleiben.
+  - Merge-Gates (§14) bleiben bestehen.
 
 ## 23. Beispiele (Do/Don't)
 
 | Do | Don't |
 | --- | --- |
-| ENV-Variable in README ergänzen, wenn `app/config.py` Quelle klar vorgibt. | Schema-Feld „klein“ erweitern ohne Migration/Task-Freigabe. |
-| Fehlenden Test importieren/Pfad korrigieren, weil `pytest` bricht. | Tests löschen/abschächen, um CI grün zu bekommen. |
-| OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route „weil praktisch“ ohne Scope/Task. |
-| Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern, ohne dass der Task es verlangt. |
+| ENV-Variable in README ergänzen, wenn `app/config.py` Quelle klar vorgibt. | Schema-Feld erweitern ohne Migration/Task-Freigabe. |
+| Fehlenden Test importieren/Pfad korrigieren, weil `pytest` bricht. | Tests löschen/abschwächen, um CI grün zu machen. |
+| OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route ohne Scope/Task. |
+| Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern ohne Task. |
 
 ## 24. Durchsetzung & Glossar
 - PRs, die gegen „MUST NOT“ verstoßen oder Gates reißen, werden nicht gemerged; Wiederholung ⇒ Policy-Update/Restriktion.
@@ -367,62 +387,59 @@ Hinweis: „Wiring & Removal“ ist ein Merge-Gate. PRs mit fehlender Verdrahtun
 
 **Zweck:** Zentraler, versionierter Backlog für **fehlende** oder **defizitäre** Funktionen, **technische Schulden**, **Risiken** und **gezielte Verbesserungen**.  
 **Ort:** `ToDo.md` (Repo-Root, Markdown).  
-**Abgrenzung:** ToDo ist **kein** CHANGELOG, kein Commit-Protokoll und keine allgemeine Tätigkeitsliste.
+**Abgrenzung:** ToDo ist **kein** CHANGELOG, kein Commit-/PR-Protokoll und keine allgemeine Tätigkeitsliste.
 
 ### 25.0 Erforderlichkeit (Wann ToDo-Eintrag anlegen?)
 **Ein ToDo-Item wird nur erstellt, wenn mindestens eine der Bedingungen erfüllt ist:**
-1. **Fehlende/platzhalterhafte Implementierung** entdeckt (`TODO|FIXME|pass|raise NotImplementedError`, leere Handler/Tests, Mock-Stubs in Produktion).
-2. **Funktionale Lücke**: Feature/Flow faktisch unvollständig (Kontrakt nicht erfüllt, UI/API/Worker ohne Wirkung).
-3. **Defekt oder instabile Robustheit**: Reproduzierbarer Bug, Race Condition, fehlende Idempotenz/Lease/Retry/Timeout.
-4. **Kontrakt-/Konfig-Drift**: Code ≠ Dokumentation/OpenAPI/ENV; Breaking ohne Migration.
-5. **Sicherheits-/Compliance-Lücke**: Sensitive Daten im Log, Secrets im Code, fehlende Validierung.
-6. **Observability-Lücke**: Fehlende Pflichtfelder im Logging-Contract; fehlende Metriken für kritische Pfade.
-7. **Architektur-/Code-Smell** mit Folgekosten: Duplikate, Dead Code/Orphans, zyklische Abhängigkeiten, übermäßige Kopplung.
-8. **Externe Abhängigkeit** erfordert Aktion: API-Deprecation, Paket-Sicherheitslücke, Rate-Limit-Änderung.
+1. Fehlende/platzhalterhafte Implementierung entdeckt (`TODO|FIXME|pass|raise NotImplementedError`, leere Handler/Tests, Mock-Stubs in Produktion).
+2. Funktionale Lücke: Feature/Flow faktisch unvollständig.
+3. Defekt oder instabile Robustheit.
+4. Kontrakt-/Konfig-Drift.
+5. Sicherheits-/Compliance-Lücke.
+6. Observability-Lücke.
+7. Architektur-/Code-Smell mit Folgekosten.
+8. Externe Abhängigkeit erfordert Aktion.
 
 **Nicht erzeugen** für:
-- Rein kosmetische Änderungen (Formatierung, Kommentare).
+- Kosmetik (Formatierung, Kommentare).
 - Reine Umbenennungen ohne Verhaltensänderung.
 - Routine-Doku-Updates ohne inhaltliche Drift.
 - Dependency-Bumps ohne Code-Follow-ups.
-- „Arbeitstagebuch“ (bitte ins PR/CHANGELOG).
+- „Arbeitstagebuch“.
 
-### 25.1 Eintrags-Format (pro Item)
-- **ID**: `TD-YYYYMMDD-XXX` (laufende Nummer pro Tag).
-- **Titel**: Kurz & prägnant.
-- **Status**: `todo` | `in-progress` | `blocked` | `done` | `wontdo`.
-- **Priorität**: `P0` (kritisch, Ausfall/Sicherheit) / `P1` (hoch, starke Beeinträchtigung) / `P2` (mittel) / `P3` (niedrig).
-- **Scope**: `backend` | `frontend` | `all`.
-- **Owner**: `codex` | `<Name>`.
-- **Created_at (UTC)**: ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`).
-- **Updated_at (UTC)**: Bei jeder Änderung aktualisieren.
-- **Due_at (UTC, optional)**.
-- **Tags**: z. B. `orchestrator`, `router`, `matching`, `observability`.
-- **Beschreibung**: Problem, Kontext, gewünschter Zielzustand (3–7 Sätze).
-- **Akzeptanzkriterien** (DoD): Messbare Kriterien.
-- **Risiko/Impact**: kurz; Backcompat/Performance/Sicherheit.
-- **Dependencies**: Blocker/abhängige Issues/Tasks.
-- **Verweise**: `TASK_ID`, PR-Links, Commit-Hashes.
-- **Subtasks**: Konkrete Schritte (Codex darf automatisch erzeugen/splitten).
+### 25.1 Eintrags-Format
+- **ID**: `TD-YYYYMMDD-XXX`
+- **Titel**
+- **Status**: `todo|in-progress|blocked|done|wontdo`
+- **Priorität**: `P0|P1|P2|P3`
+- **Scope**: `backend|frontend|all`
+- **Owner**: `codex` | `<Name>`
+- **Created_at (UTC)**, **Updated_at (UTC)**, optional **Due_at (UTC)**
+- **Tags**
+- **Beschreibung**
+- **Akzeptanzkriterien**
+- **Risiko/Impact**
+- **Dependencies**
+- **Verweise** (TASK_ID, PR, Commits)
+- **Subtasks**
 
 ### 25.2 Sortierung & Pflege
-- **Sortierung**: Nach **Priorität** (P0 → P3), innerhalb Priorität nach **Created_at** aufsteigend.
-- **Gruppierung** (optional): Nach **Status** (todo/in-progress/blocked/done/wontdo).
-- **Lebenszyklus**: Items ohne Update > 60 Tage → Review; ggf. `wontdo` mit Begründung statt löschen (Historie bewahren).
+- Sortierung nach Priorität, dann `Created_at` aufsteigend.
+- Optional Gruppierung nach Status.
+- Items ohne Update > 60 Tage ⇒ Review; ggf. `wontdo` statt löschen.
 
 ### 25.3 Automatische Pflege (durch Codex)
-- **Erzeugen**: Bei Change-Impact-Scan (§20) ToDo nur anlegen, wenn §25.0 erfüllt; Dedup über (Titel+Tags+Scope).
-- **Aktualisieren**: Beim Merge relevante Items auf `done` setzen; **Commit-Hash/PR** in „Verweise“ eintragen.
-- **Kein Bedarf**: Wenn §25.0 **nicht** erfüllt, PR-Body mit „No ToDo changes required“ versehen (siehe PR-Checkliste).
+- Erzeugen nur wenn §25.0 erfüllt; Dedup über (Titel+Tags+Scope).
+- Beim Merge passende Items auf `done` setzen; PR/Commit verlinken.
+- Wenn §25.0 nicht erfüllt: „No ToDo changes required“ im PR.
 
 ### 25.4 Beispiele
-
 **Erzeugen (OK):**
-- „Watchlist-Timer verliert Leases bei Langläufern“ (kritische Robustheit).
-- „ProviderGateway: fehlender Retry-Jitter“ (Defizit gem. Policy).
-- „OpenAPI sagt `200`, Code liefert `202`“ (Kontrakt-Drift).
+- „Watchlist-Timer verliert Leases bei Langläufern“
+- „ProviderGateway: fehlender Retry-Jitter“
+- „OpenAPI sagt `200`, Code liefert `202`“
 
 **Nicht erzeugen (NICHT OK):**
-- „eslint --fix hat 120 Dateien formatiert“ (kosmetisch).
-- „Kommentarstil vereinheitlicht“ (kosmetisch).
-- „Paket minor-Bump ohne Code-Follow-ups“ (kein Handlungsbedarf).
+- „eslint --fix hat 120 Dateien formatiert“
+- „Kommentarstil vereinheitlicht“
+- „Paket minor-Bump ohne Code-Follow-ups“
