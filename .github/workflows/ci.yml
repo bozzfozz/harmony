@@ -206,8 +206,17 @@ jobs:
         run: npm run lint
 
       - name: Build
+        id: build
         run: npm run build
 
       - name: Test
         run: npm test -- --runInBand
+
+      - name: Upload frontend dist artifact
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          if-no-files-found: error
 
