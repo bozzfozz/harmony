@@ -84,6 +84,10 @@ jobs:
             --cov-report=xml:"$COVERAGE_XML" \
             --cov-report=term
 
+      - name: Coverage gate (download flow)
+        run: |
+          coverage report --include "app/orchestrator/download_flow/*" --fail-under=90
+
       - name: pip-audit (dependencies)
         run: pip-audit -r requirements.txt
 
