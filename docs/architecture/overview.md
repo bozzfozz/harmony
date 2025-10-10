@@ -32,6 +32,8 @@ Diese Übersicht definiert den gemeinsamen Bezugsrahmen für Router, Services, C
 
 Der frühere Pfad `app/routers/*` stellt nur noch Legacy-Reexports bereit und darf nicht mehr als Quelle für neue Endpunkte verwendet werden. Beim Import geben diese Module eine `DeprecationWarning` mit dem Zielpfad (`app.api.routers.*`) aus und reichen den aktuellen Router unverändert weiter.
 
+Der Download-Manager ist vollständig unter `app.hdm` konsolidiert. Die einstigen Download-Flow-Reexports im Orchestrator-Paket wurden entfernt und führen nun zu einem ImportError, falls externe Skripte sie weiterhin verwenden.
+
 ## Kern-Flows
 
 ### Request → Response

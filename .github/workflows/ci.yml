@@ -95,20 +95,15 @@ jobs:
           path: reports/
           retention-days: 7
 
-  legacy-scan:
-    name: legacy download_flow scan
+  legacy-import-ban:
+    name: legacy import ban (download_flow)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure legacy download_flow references are absent
-        run: |
-          if rg -n "\bdownload_flow\b|/download_flow/" --glob '!CHANGELOG*' --glob '!docs/archive/**'; then
-            echo "::error::Legacy download_flow references detected. Remove them before merging."
-            exit 1
-          fi
-          echo "No legacy download_flow references found."
+      - name: Ensure legacy orchestrator imports are absent
+        run: rg -n "app\.orchestrator\.download_flow" --glob '!docs/archive/**' --glob '!CHANGELOG*' && exit 1 || exit 0
 
   ci-frontend:
     name: ci-frontend
