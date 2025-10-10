@@ -84,10 +84,6 @@ jobs:
             --cov-report=xml:"$COVERAGE_XML" \
             --cov-report=term
 
-      - name: Coverage gate (download flow)
-        run: |
-          coverage report --include "app/orchestrator/download_flow/*" --fail-under=90
-
       - name: pip-audit (dependencies)
         run: pip-audit -r requirements.txt
 
@@ -98,6 +94,21 @@ jobs:
           name: test-reports
           path: reports/
           retention-days: 7
+
+  legacy-scan:
+    name: legacy download_flow scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure legacy download_flow references are absent
+        run: |
+          if rg -n "\bdownload_flow\b|/download_flow/" --glob '!CHANGELOG*' --glob '!docs/archive/**'; then
+            echo "::error::Legacy download_flow references detected. Remove them before merging."
+            exit 1
+          fi
+          echo "No legacy download_flow references found."
 
   ci-frontend:
     name: ci-frontend
