@@ -41,19 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Enforce Ruff-only import policy
-        run: |
-          set -euo pipefail
-          matches=$(git grep -n "\bisort\b" -- . ':!CHANGELOG*' ':!docs/archive/**' || true)
-          if [ -z "$matches" ]; then
-            exit 0
-          fi
-          i_char="i"
-          allowed_pattern="^pyproject\\.toml:[0-9]\\+:\\[tool\\.ruff\\.lint\\.${i_char}sort\\]$"
-          filtered=$(printf "%s\n" "$matches" | grep -Ev "$allowed_pattern" || true)
-          if [ -n "$filtered" ]; then
-            printf '%s\n' "$filtered"
-            exit 1
-          fi
+        run: scripts/ci/ban_isort.sh
 
   ban_test_flow_prefix:
     name: ban-test-flow-prefix
