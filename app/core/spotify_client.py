@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from app.config import SpotifyConfig
+from app.core.spotify_cache import SettingsCacheHandler
 from app.logging import get_logger
 
 try:  # pragma: no cover - import guard
@@ -58,6 +59,7 @@ class SpotifyClient:
                 client_secret=config.client_secret,
                 redirect_uri=config.redirect_uri,
                 scope=config.scope,
+                cache_handler=SettingsCacheHandler(),
             )
             self._client = spotipy.Spotify(auth_manager=auth_manager)
 

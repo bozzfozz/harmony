@@ -104,6 +104,15 @@ class SpotifyConfig:
 
 
 @dataclass(slots=True)
+class OAuthConfig:
+    callback_port: int
+    redirect_uri: str
+    manual_callback_enabled: bool
+    session_ttl_minutes: int
+    public_host_hint: Optional[str]
+
+
+@dataclass(slots=True)
 class SoulseekConfig:
     base_url: str
     api_key: Optional[str]
@@ -492,6 +501,7 @@ class EnvironmentConfig:
 @dataclass(slots=True)
 class AppConfig:
     spotify: SpotifyConfig
+    oauth: OAuthConfig
     soulseek: SoulseekConfig
     logging: LoggingConfig
     database: DatabaseConfig
@@ -1468,6 +1478,25 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
 
     environment_config = _load_environment_config(env)
 
+    oauth_callback_port = _bounded_int(
+        _env_value(env, "OAUTH_CALLBACK_PORT"),
+        default=8888,
+        minimum=1,
+        maximum=65535,
+    )
+    oauth_redirect_uri = f"http://127.0.0.1:{oauth_callback_port}/callback"
+    oauth_manual_enabled = _as_bool(
+        _env_value(env, "OAUTH_MANUAL_CALLBACK_ENABLE"), default=True
+    )
+    oauth_session_ttl_min = max(
+        1,
+        _as_int(
+            _env_value(env, "OAUTH_SESSION_TTL_MIN"),
+            default=10,
+        ),
+    )
+    oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
+
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
             "SPOTIFY_CLIENT_ID",
@@ -1532,6 +1561,8 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             ),
         ),
     )
+    if not (spotify.redirect_uri or "").strip():
+        spotify.redirect_uri = oauth_redirect_uri
 
     soulseek_base_env = (
         _env_value(env, "SLSKD_BASE_URL")
@@ -2049,6 +2080,14 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         gzip=gzip_config,
     )
 
+    oauth_config = OAuthConfig(
+        callback_port=oauth_callback_port,
+        redirect_uri=oauth_redirect_uri,
+        manual_callback_enabled=oauth_manual_enabled,
+        session_ttl_minutes=oauth_session_ttl_min,
+        public_host_hint=oauth_public_host_hint,
+    )
+
     security = SecurityConfig(
         profile=security_profile,
         api_keys=api_keys,
@@ -2062,6 +2101,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
 
     return AppConfig(
         spotify=spotify,
+        oauth=oauth_config,
         soulseek=soulseek,
         logging=logging,
         database=database,

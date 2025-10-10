@@ -7,7 +7,7 @@ import inspect
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
+from app.api import oauth as oauth_api
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
@@ -31,6 +32,8 @@ from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrat
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
 from app.services.health import DependencyStatus, HealthService
+from app.services.oauth_service import ManualRateLimiter, OAuthService
+from app.services.oauth_transactions import OAuthTransactionStore
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
@@ -642,6 +645,16 @@ app.state.health_service = HealthService(
 app.state.secret_validation_service = SecretValidationService()
 
 install_middleware(app, _config_snapshot)
+
+_oauth_ttl = timedelta(minutes=_config_snapshot.oauth.session_ttl_minutes)
+app.state.oauth_transaction_store = OAuthTransactionStore(ttl=_oauth_ttl)
+app.state.oauth_service = OAuthService(
+    config=_config_snapshot,
+    transactions=app.state.oauth_transaction_store,
+    manual_limit=ManualRateLimiter(limit=6, window_seconds=300.0),
+)
+
+app.include_router(oauth_api.callback_router)
 
 _previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
 if _FRONTEND_INDEX_PATH.is_file():
