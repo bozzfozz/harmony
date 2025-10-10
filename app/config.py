@@ -713,6 +713,16 @@ class Settings:
         external = ExternalCallPolicy.from_env(env_map)
         watchlist_timer = WatchlistTimerConfig.from_env(env_map)
         hdm = HdmConfig.from_env(env_map)
+        logger.info(
+            "Resolved HDM directories",
+            extra={
+                "event": "config.hdm.paths",
+                "downloads_dir": hdm.downloads_dir,
+                "music_dir": hdm.music_dir,
+                "oauth_state_dir": str(env_map.get("OAUTH_STATE_DIR") or ""),
+                "oauth_split_mode": env_map.get("OAUTH_SPLIT_MODE"),
+            },
+        )
         profiles = _load_provider_profiles(env_map, external)
         return cls(
             orchestrator=orchestrator,

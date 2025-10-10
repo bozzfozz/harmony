@@ -11,11 +11,13 @@ pytest_plugins = [
 import asyncio
 import logging
 import os
+import socketserver
 import sys
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -75,6 +77,54 @@ SKIP_POSTGRES_ENV_VAR = "PYTEST_SKIP_POSTGRES"
 _POSTGRES_SKIP_REASON = (
     "PostgreSQL tests disabled via --skip-postgres or PYTEST_SKIP_POSTGRES"
 )
+
+
+class _ReadyHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:  # pragma: no cover - trivial handler
+        try:
+            self.request.recv(16)
+        except OSError:
+            return
+
+
+class _ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_runtime_environment() -> Iterator[None]:
+    env_root = ROOT / ".pytest_env"
+    downloads_dir = env_root / "downloads"
+    music_dir = env_root / "music"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    music_dir.mkdir(parents=True, exist_ok=True)
+
+    server = _ThreadedTCPServer(("127.0.0.1", 0), _ReadyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+
+    os.environ.setdefault("SPOTIFY_CLIENT_ID", "test-client-id")
+    os.environ.setdefault("SPOTIFY_CLIENT_SECRET", "test-client-secret")
+    os.environ.setdefault("OAUTH_SPLIT_MODE", "false")
+    os.environ.setdefault("HARMONY_API_KEY", "test-primary-key")
+    os.environ.setdefault("HEALTH_READY_REQUIRE_DB", "false")
+    os.environ.setdefault("DOWNLOADS_DIR", str(downloads_dir))
+    os.environ.setdefault("MUSIC_DIR", str(music_dir))
+    os.environ.setdefault("SLSKD_HOST", host)
+    os.environ.setdefault("SLSKD_PORT", str(port))
+
+    oauth_state_dir = env_root / "oauth_state"
+    oauth_state_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("OAUTH_STATE_DIR", str(oauth_state_dir))
+
+    try:
+        yield
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
 
 
 def _is_truthy(value: str | None) -> bool:

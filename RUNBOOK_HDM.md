@@ -31,6 +31,28 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
 4. **Netzwerk:** Ports `8080/tcp` (API) und `8888/tcp` (OAuth Callback) müssen
    erreichbar sein. Bei entfernten Hosts SSH-Port-Forwarding vorbereiten.
 
+## Go-Live-Checkliste
+
+1. **Startup-Guards ausführen:** `python -m app.ops.selfcheck --assert-startup`
+   muss mit Exit-Code `0` enden. Die wichtigsten Exit-Codes:
+   - `78 (EX_CONFIG)`: Pflicht-ENV/Secrets fehlen (`SPOTIFY_CLIENT_*`,
+     `HARMONY_API_KEY`, `OAUTH_STATE_DIR` bei Split-Mode).
+   - `71 (EX_OSERR)`: Verzeichnisse (`DOWNLOADS_DIR`, `MUSIC_DIR`, ggf.
+     `OAUTH_STATE_DIR`) existieren nicht oder sind nicht beschreibbar.
+   - `69 (EX_UNAVAILABLE)`: abhängige Dienste nicht erreichbar (`SLSKD_HOST`,
+     Datenbank bei `HEALTH_READY_REQUIRE_DB=true`).
+   - `70 (EX_SOFTWARE)`: interne Fehlkonfiguration (z. B. ungültige Ports oder
+     fehlerhafte Booleans).
+2. **Health-API prüfen:**
+   - `GET /api/health/live` → `200 {"status": "ok"}`.
+   - `GET /api/health/ready?verbose=1` → `200` und alle Checks auf `ok`.
+3. **Volumes & Rechte:** Download- und Musik-Verzeichnis mit Test-Datei
+   beschreibbar (`touch`, `fsync`, `rm`).
+4. **OAuth-State:** Bei Split-Mode sicherstellen, dass `OAUTH_STATE_DIR`
+   auf demselben Dateisystem wie `DOWNLOADS_DIR` liegt (siehe Self-Check).
+5. **Secrets-Dokumentation:** Rotationstermine und Speicherort der Secrets
+   (Spotify, API-Key, Datenbank) aktualisieren.
+
 ## Standardbetrieb
 
 1. **Container starten:** Verwenden Sie die im README dokumentierten

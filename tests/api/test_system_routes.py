@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from fastapi.testclient import TestClient
+
 from app.main import app
 
 
@@ -52,6 +54,8 @@ def test_ready_endpoint_reports_dependencies() -> None:
 
 def test_health_ready_alias_returns_status_ok() -> None:
     with TestClient(app) as client:
-        response = client.get("/api/health/ready")
+        response = client.get("/api/health/ready", params={"verbose": 1})
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert "checks" in body

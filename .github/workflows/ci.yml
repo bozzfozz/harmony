@@ -92,6 +92,69 @@ jobs:
             pytest-cov \
             ruff
 
+      - name: Startup-Guards (dry-run)
+        run: |
+          python - <<'PY'
+          import os
+          import socketserver
+          import subprocess
+          import sys
+          import tempfile
+          import threading
+          from pathlib import Path
+
+          class _Handler(socketserver.BaseRequestHandler):
+              def handle(self) -> None:  # pragma: no cover
+                  try:
+                      self.request.recv(8)
+                  except OSError:
+                      return
+
+          class _Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
+              allow_reuse_address = True
+              daemon_threads = True
+
+          with tempfile.TemporaryDirectory() as tmp_dir:
+              tmp_path = Path(tmp_dir)
+              downloads = tmp_path / "downloads"
+              music = tmp_path / "music"
+              oauth_state = tmp_path / "oauth_state"
+              downloads.mkdir(parents=True, exist_ok=True)
+              music.mkdir(parents=True, exist_ok=True)
+              oauth_state.mkdir(parents=True, exist_ok=True)
+
+              server = _Server(("127.0.0.1", 0), _Handler)
+              thread = threading.Thread(target=server.serve_forever, daemon=True)
+              thread.start()
+              host, port = server.server_address
+
+              env = os.environ.copy()
+              env.update(
+                  {
+                      "SPOTIFY_CLIENT_ID": "ci-client",
+                      "SPOTIFY_CLIENT_SECRET": "ci-secret",
+                      "OAUTH_SPLIT_MODE": "false",
+                      "DOWNLOADS_DIR": str(downloads),
+                      "MUSIC_DIR": str(music),
+                      "OAUTH_STATE_DIR": str(oauth_state),
+                      "SLSKD_HOST": host,
+                      "SLSKD_PORT": str(port),
+                      "HARMONY_API_KEY": "ci-startup-check",
+                      "HEALTH_READY_REQUIRE_DB": "false",
+                      "HARMONY_API_KEYS": "ci-startup-check",
+                  }
+              )
+              try:
+                  subprocess.check_call(
+                      [sys.executable, "-m", "app.ops.selfcheck", "--assert-startup"],
+                      env=env,
+                  )
+              finally:
+                  server.shutdown()
+                  server.server_close()
+                  thread.join(timeout=1)
+          PY
+
       - name: Mypy (static typing)
         run: mypy app
 
