@@ -39,6 +39,7 @@ jobs:
     env:
       RUN_POSTGRES_TESTS: "0"
       PYTHON_VERSION: "3.11"
+      COVERAGE_XML: reports/coverage.xml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,12 +76,12 @@ jobs:
         env:
           PYTEST_ADDOPTS: "-m 'not postgres' -r s"
         run: |
-          mkdir -p reports
+          mkdir -p "$(dirname "$COVERAGE_XML")"
           pytest \
             -q \
             --junitxml=reports/junit.xml \
             --cov=app \
-            --cov-report=xml:reports/coverage.xml \
+            --cov-report=xml:"$COVERAGE_XML" \
             --cov-report=term
 
       - name: pip-audit (dependencies)
@@ -132,8 +133,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - tests
+    if: ${{ needs.tests.result == 'success' && github.event.pull_request.head.repo.fork != true }}
     env:
       PYTHON_VERSION: "3.11"
+      COVERAGE_XML: reports/coverage.xml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -168,6 +171,10 @@ jobs:
         env:
           DIFF_COVER_COMPARE_BRANCH: ${{ github.base_ref != '' && format('origin/{0}', github.base_ref) || 'origin/main' }}
         run: |
+          if [ ! -f "$COVERAGE_XML" ]; then
+            echo "::error::Expected coverage report missing at $COVERAGE_XML. Did the tests job upload the artifact?"
+            exit 1
+          fi
           python scripts/run_diff_coverage_gate.py
 
       - name: Upload diff coverage report

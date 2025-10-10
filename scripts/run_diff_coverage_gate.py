@@ -23,14 +23,23 @@ except ModuleNotFoundError as exc:  # pragma: no cover - guards older runtimes
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
 REPORTS_DIR = PROJECT_ROOT / "reports"
-COVERAGE_XML = REPORTS_DIR / "coverage.xml"
+DEFAULT_COVERAGE_XML = REPORTS_DIR / "coverage.xml"
 DIFF_OUTPUT = REPORTS_DIR / "diff_coverage.txt"
 DEFAULT_COMPARE_BRANCH = "origin/main"
 FALLBACK_REF = "HEAD~1"
+MISSING_COVERAGE_EXIT_CODE_ENV = "DIFF_COVERAGE_MISSING_COVERAGE_EXIT_CODE"
 
 
 class CoverageConfigError(RuntimeError):
     """Raised when the coverage configuration is incomplete."""
+
+
+class MissingCoverageReportError(CoverageConfigError):
+    """Raised when the XML coverage report is absent."""
+
+    def __init__(self, message: str, exit_code: int) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
 
 
 def load_coverage_policy() -> Dict[str, Any]:
@@ -87,17 +96,52 @@ def ensure_reports_dir() -> None:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def run_diff_cover(compare_ref: str, threshold: float) -> int:
-    if not COVERAGE_XML.exists():
+def resolve_coverage_xml_path() -> Path:
+    configured = os.environ.get("COVERAGE_XML")
+    if not configured:
+        return DEFAULT_COVERAGE_XML
+
+    candidate = Path(configured)
+    if not candidate.is_absolute():
+        candidate = (PROJECT_ROOT / candidate).resolve()
+
+    return candidate
+
+
+def missing_coverage_exit_code() -> int:
+    raw_value = os.environ.get(MISSING_COVERAGE_EXIT_CODE_ENV)
+    if not raw_value:
+        return 1
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:  # pragma: no cover - defensive guard
         raise CoverageConfigError(
-            f"Coverage report not found at {COVERAGE_XML}. Did pytest --cov run?"
+            f"Invalid {MISSING_COVERAGE_EXIT_CODE_ENV} value: '{raw_value}'"
+        ) from exc
+
+    return parsed
+
+
+def run_diff_cover(compare_ref: str, threshold: float) -> int:
+    coverage_xml = resolve_coverage_xml_path()
+
+    if not coverage_xml.exists():
+        exit_code = missing_coverage_exit_code()
+        raise MissingCoverageReportError(
+            (
+                f"Coverage report not found at {coverage_xml}. "
+                "Ensure the 'tests' job executed pytest --cov and uploaded the 'test-reports' artifact. "
+                "Override the expected path via COVERAGE_XML if your workspace layout differs."
+            ),
+            exit_code,
         )
 
     ensure_reports_dir()
 
     command = [
         "diff-cover",
-        str(COVERAGE_XML),
+        str(coverage_xml),
         f"--compare-branch={compare_ref}",
         f"--fail-under={threshold}",
     ]
@@ -139,6 +183,9 @@ def main() -> int:
 
     try:
         exit_code = run_diff_cover(compare_ref, float(diff_threshold))
+    except MissingCoverageReportError as exc:
+        print(f"::error::{exc}")
+        return exc.exit_code
     except CoverageConfigError as exc:
         print(f"::error::{exc}")
         return 1
