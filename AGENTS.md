@@ -155,7 +155,7 @@ Finale Code-Aufräumroutine (verbindlich)
     - BACKUP-Block erzeugen
 
 Hinweise
-- Keine isort-/Black-Verwendung. Ruff ist alleinige Quelle für Format & Imports.
+- Formatierung & Import-Policy werden ausschließlich durch Ruff abgedeckt.
 - CI prüft anschließend mit:
     ruff format --check .
     ruff check --output-format=github .

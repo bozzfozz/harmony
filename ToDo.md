@@ -151,7 +151,7 @@
 - **Subtasks:**
   - [ ] CODX-CI-RESET-001A — Update branch protection required checks and attach configuration evidence in the operations runbook (`docs/operations/ci.md`).
 
-## TD-20251008-008 Enforce isort formatting
+## TD-20251008-008 Enforce Ruff import sorting
 - **Status:** done
 - **Priority:** P2
 - **Scope:** backend
@@ -159,16 +159,16 @@
 - **Created_at (UTC):** 2025-10-08T06:52:42Z
 - **Updated_at (UTC):** 2025-10-08T09:21:10Z
 - **Tags:** tooling, lint, formatting
-- **Description:** `isort --check-only` fails on numerous backend modules, signaling drift from the repo import style baseline. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【8bf225†L1-L20】
+- **Description:** `ruff check --select I` fails on numerous backend modules, signaling drift from the repo import style baseline. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【8bf225†L1-L20】
 - **Acceptance Criteria:**
   - All backend files sort imports per repo configuration (`pyproject.toml`).
-  - CI includes an isort check step alongside mypy, pytest and pip-audit gates.
-  - Developer documentation updated with isort usage instructions.
+  - CI includes Ruff formatting and lint steps (inkl. Importregel) alongside mypy, pytest and pip-audit gates.
+  - Developer documentation verweist auf Ruff für Formatierung & Import-Sortierung.
 - **Risks/Impact:** Large import reordering may cause merge conflicts; coordinate rollout across branches.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/isort_check.txt`. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【F:reports/analysis/_evidence/isort_check.txt†L1-L20】
+- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/ruff_import_check.txt`. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【F:reports/analysis/_evidence/ruff_import_check.txt†L1-L20】
 - **Subtasks:**
-  - [x] CODX-P2-TOOL-318 — Apply isort formatting and wire checks into CI.
+  - [x] CODX-P2-TOOL-318 — Apply Ruff import sorting and wire checks into CI.
 
 ## TD-20251008-009 Security scanner consolidation
 - **Status:** wontdo
