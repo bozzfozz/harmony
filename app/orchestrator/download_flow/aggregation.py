@@ -6,10 +6,11 @@ import asyncio
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Any, Iterable
 
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.utils.metrics import counter, histogram
 
 from .models import (
     BatchStatus,
@@ -24,6 +25,106 @@ from .models import (
 )
 
 _logger = get_logger(__name__)
+
+
+_ITEM_OUTCOME_COUNTER: Any
+_RETRY_COUNTER: Any
+_FAILURE_COUNTER: Any
+_DUPLICATE_COUNTER: Any
+_DEDUP_HIT_COUNTER: Any
+_PROCESSING_DURATION_SECONDS: Any
+_PHASE_DURATION_SECONDS: Any
+
+
+def register_metrics() -> None:
+    global _ITEM_OUTCOME_COUNTER
+    global _RETRY_COUNTER
+    global _FAILURE_COUNTER
+    global _DUPLICATE_COUNTER
+    global _DEDUP_HIT_COUNTER
+    global _PROCESSING_DURATION_SECONDS
+    global _PHASE_DURATION_SECONDS
+
+    _ITEM_OUTCOME_COUNTER = counter(
+        "download_flow_item_outcomes_total",
+        "Number of download flow items by terminal state",
+        label_names=("state",),
+    )
+
+    _RETRY_COUNTER = counter(
+        "download_flow_item_retries_total",
+        "Total number of download flow retries grouped by error type",
+        label_names=("error_type",),
+    )
+
+    _FAILURE_COUNTER = counter(
+        "download_flow_item_failures_total",
+        "Total number of download flow failures grouped by error type",
+        label_names=("error_type",),
+    )
+
+    _DUPLICATE_COUNTER = counter(
+        "download_flow_duplicates_total",
+        "Duplicate items encountered while processing download batches",
+        label_names=("already_processed",),
+    )
+
+    _DEDUP_HIT_COUNTER = counter(
+        "download_flow_dedupe_hits_total",
+        "Duplicate items skipped because the payload was already processed",
+    )
+
+    _PROCESSING_DURATION_SECONDS = histogram(
+        "download_flow_processing_seconds",
+        "Total processing time per download flow item",
+    )
+
+    _PHASE_DURATION_SECONDS = histogram(
+        "download_flow_phase_duration_seconds",
+        "Download flow phase durations in seconds",
+        label_names=("phase",),
+    )
+
+
+register_metrics()
+
+
+def _error_type(error: Exception) -> str:
+    return error.__class__.__name__
+
+
+def _observe_phase_durations(events: Iterable[ItemEvent]) -> None:
+    ordered = sorted(events, key=lambda event: event.timestamp)
+    if not ordered:
+        return
+
+    first_seen: dict[str, datetime] = {}
+    for event in ordered:
+        first_seen.setdefault(event.name, event.timestamp)
+
+    def _first(names: Iterable[str]) -> datetime | None:
+        candidates = [first_seen[name] for name in names if name in first_seen]
+        if not candidates:
+            return None
+        return min(candidates)
+
+    download_start = _first(("download.accepted", "download.in_progress"))
+    if download_start is None:
+        download_start = _first(("download.detected", "download.completed"))
+    download_end = _first(("download.detected", "download.completed"))
+    if download_start and download_end and download_end >= download_start:
+        duration = max((download_end - download_start).total_seconds(), 0.0)
+        _PHASE_DURATION_SECONDS.labels(phase="download").observe(duration)
+
+    tagging_end = _first(("tagging.completed", "tagging.skipped"))
+    if download_end and tagging_end and tagging_end >= download_end:
+        duration = max((tagging_end - download_end).total_seconds(), 0.0)
+        _PHASE_DURATION_SECONDS.labels(phase="tagging").observe(duration)
+
+    moving_end = _first(("file.moved",))
+    if tagging_end and moving_end and moving_end >= tagging_end:
+        duration = max((moving_end - tagging_end).total_seconds(), 0.0)
+        _PHASE_DURATION_SECONDS.labels(phase="moving").observe(duration)
 
 
 def _percentile(values: Iterable[float], percentile: float) -> float:
@@ -143,6 +244,11 @@ class DownloadBatchAggregator:
             state.results[item.item_id] = result
             if state.pending_items <= 0:
                 await self._finalise(state)
+        already_processed_label = "true" if already_processed else "false"
+        _DUPLICATE_COUNTER.labels(already_processed=already_processed_label).inc()
+        if already_processed:
+            _DEDUP_HIT_COUNTER.inc()
+        _ITEM_OUTCOME_COUNTER.labels(state=ItemState.DUPLICATE.value).inc()
         log_event(
             _logger,
             "download_flow.duplicate.skipped",
@@ -193,6 +299,7 @@ class DownloadBatchAggregator:
                 error=str(error),
                 events=tuple(events),
             )
+        _RETRY_COUNTER.labels(error_type=_error_type(error)).inc()
         log_event(
             _logger,
             "download_flow.failure.retry",
@@ -244,6 +351,9 @@ class DownloadBatchAggregator:
             state.results[item.item_id] = result
             if state.pending_items <= 0:
                 await self._finalise(state)
+        _ITEM_OUTCOME_COUNTER.labels(state=ItemState.DONE.value).inc()
+        _PROCESSING_DURATION_SECONDS.observe(max(processing_seconds, 0.0))
+        _observe_phase_durations(event_list)
         log_event(
             _logger,
             "download_flow.download.completed",
@@ -300,6 +410,9 @@ class DownloadBatchAggregator:
             state.results[item.item_id] = result
             if state.pending_items <= 0:
                 await self._finalise(state)
+        _ITEM_OUTCOME_COUNTER.labels(state=ItemState.FAILED.value).inc()
+        _FAILURE_COUNTER.labels(error_type=_error_type(error)).inc()
+        _PROCESSING_DURATION_SECONDS.observe(max(processing_seconds, 0.0))
         log_event(
             _logger,
             "download_flow.download.failed",
