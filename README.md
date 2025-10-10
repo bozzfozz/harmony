@@ -462,6 +462,21 @@ Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusi
 | `RETRY_ARTIST_SYNC_JITTER_PCT` | `0.2` | Jitter-Faktor für den Backoff des `artist_sync`-Jobs. |
 | `RETRY_ARTIST_SYNC_TIMEOUT_SECONDS` | `–` | Optionales Timeout (Sekunden) für `artist_sync`-Retries; leer = kein Timeout. |
 
+### Betriebsabhängigkeiten (verbindlich)
+
+| Kategorie | Variablen | Erwartung | Hinweise |
+| --- | --- | --- | --- |
+| Spotify OAuth | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Müssen gesetzt und nicht leer sein. | Secrets ausschließlich aus Secret-Store oder `.env` beziehen. |
+| OAuth-State (Split-Modus) | `OAUTH_SPLIT_MODE`, `OAUTH_STATE_DIR` | `OAUTH_SPLIT_MODE` akzeptiert nur `true`/`false`. Bei `true` muss `OAUTH_STATE_DIR` existieren, beschreibbar sein und auf demselben Dateisystem wie `DOWNLOADS_DIR` liegen. | Ohne Split-Modus bleibt `OAUTH_STATE_DIR` optional. |
+| Volumes/Pfade | `DOWNLOADS_DIR`, `MUSIC_DIR` | Verzeichnisse müssen vor dem Start existieren, beschreibbar sein und genügend Speicherplatz besitzen. | Der Ready-Check testet Schreibrechte (Create → fsync → unlink). |
+| Soulseekd | `SLSKD_HOST`, `SLSKD_PORT` | TCP-Reachability muss gegeben sein (`3 × 1 s` Timeout). | Ports außerhalb des Containers freigeben; Fehler melden `start.guard`-Logs. |
+| API-Schutz | `HARMONY_API_KEY` **oder** `HARMONY_API_KEYS` | Mindestens ein Key muss konfiguriert sein. | Mehrere Keys via CSV (`HARMONY_API_KEYS`) möglich. |
+| Datenbank (optional) | `DATABASE_URL` | Gültige PostgreSQL-URL; Host & Port erreichbar, wenn `HEALTH_READY_REQUIRE_DB=true`. | Standardmäßig prüft der Ready-Check die Erreichbarkeit. |
+
+Optionale Variablen wie `UMASK`, `PUID` und `PGID` werden beim Start protokolliert, beeinflussen die Guard-Entscheidung jedoch nicht.
+
+Self-Checks lassen sich vor Deployments mit `python -m app.ops.selfcheck --assert-startup` lokal oder in CI ausführen. Die Health-API spiegelt die Ergebnisse: `GET /api/health/live` liefert einen schlanken Liveness-Ping, `GET /api/health/ready?verbose=1` listet sämtliche Checks samt Status auf.
+
 ## Artist Watchlist
 
 Die Watchlist überwacht eingetragene Spotify-Künstler automatisch auf neue Releases. Ein periodischer Worker fragt die Spotify-API (Default alle 24 Stunden) nach frischen Alben und Singles ab, gleicht die enthaltenen Tracks mit der Download-Datenbank ab und stößt nur für fehlende Songs einen Soulseek-Download über den bestehenden `SyncWorker` an.

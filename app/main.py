@@ -11,12 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
+from app.api import health as health_api
 from app.api import router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
@@ -38,6 +39,7 @@ from app.oauth_callback.app import app_oauth_callback
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
+from app.ops.selfcheck import run_startup_guards
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
@@ -514,6 +516,7 @@ async def _stop_background_workers(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
+    run_startup_guards()
     _configure_application(config)
 
     _apply_security_dependencies(app, config.security)
@@ -730,17 +733,6 @@ async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/api/health/ready", tags=["System"], include_in_schema=False)
-async def legacy_health_ready() -> dict[str, str]:
-    """Compatibility readiness probe for legacy orchestrators."""
-
-    health_service: HealthService = app.state.health_service
-    result = await health_service.readiness()
-    if not result.ok:
-        raise HTTPException(status_code=503, detail={"status": "error"})
-    return {"status": "ok"}
-
-
 _versioned_router = APIRouter()
 _versioned_router.add_api_route("/", root, methods=["GET"], tags=["System"])
 router_registry.register_all(
@@ -749,6 +741,8 @@ router_registry.register_all(
     emit_log=True,
     router=_versioned_router,
 )
+
+app.include_router(health_api.router)
 
 maybe_register_admin_routes(app, config=_config_snapshot)
 
