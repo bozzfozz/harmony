@@ -333,7 +333,11 @@ def test_oauth_routes_registered_without_duplicate_prefix() -> None:
     assert "/api/v1/oauth/start" in paths
     assert "/api/v1/oauth/manual" in paths
     assert "/api/v1/oauth/status/{state}" in paths
-    assert all("/api/v1/oauth/oauth/" not in path for path in paths)
+    assert not any(
+        path.lstrip("/").split("/")[:2] == ["api", "v1"]
+        and path.lstrip("/").split("/").count("oauth") > 1
+        for path in paths
+    )
 
 
 def test_openapi_schema_excludes_callback_route() -> None:

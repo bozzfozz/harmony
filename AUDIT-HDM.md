@@ -16,6 +16,6 @@
 
 ## Nachweise & Referenzen
 
-- Incident-Records: Siehe internes Ticket-System (`HDM-*`, vormals `FLOW-002-*`).
+- Incident-Records: Siehe internes Ticket-System (`HDM-*`).
 - Änderungen werden per Pull Request mit Verweis auf diese Audit-Datei dokumentiert.
 - Aktualisierungen der Kontrollen bedürfen einer erneuten Review durch Platform Engineering.
