@@ -4,7 +4,7 @@
 - Critical admin artist APIs fail at runtime because the `activity_events` table referenced by models and services has no corresponding migration, leading PostgreSQL to raise `UndefinedTable` errors and blocking every admin endpoint plus multiple test suites. 【F:app/models.py†L168-L183】【b45c06†L137-L176】【f53942†L1-L1】
 - Observability coverage is regressing: orchestrator lease events are not emitted to logs and the search router fails to publish `api.request` telemetry, breaking alerting and two instrumentation tests. 【001fdf†L1-L44】【001fdf†L79-L117】
 - Runtime configuration paths drifted—`/system/stats` always uses the real `psutil` module despite overrides, `/spotify/status` responses are cached by the middleware so credential changes are never reflected, and playlist cache invalidation does not refresh stale payloads—causing eight downstream test failures. 【1e2e16†L363-L410】【5742eb†L610-L615】【b45c06†L122-L171】【c08376†L152-L230】
-- Quality and security gates are stale: `isort` fails on most backend modules and the required static security scan is missing from the toolchain, leaving style and security coverage unmonitored. 【8bf225†L1-L20】【2a7069†L1-L1】
+- Quality and security gates are stale: the Ruff import rule (`ruff check --select I`) fails on most backend modules and the required static security scan is missing from the toolchain, leaving style and security coverage unmonitored. 【8bf225†L1-L20】【2a7069†L1-L1】
 - Test infrastructure side effects (notably admin API fixtures) mutate global FastAPI state, producing OpenAPI drift when the full suite runs. 【e48f80†L48-L79】【b45c06†L137-L171】
 
 ## Findings
@@ -17,7 +17,7 @@
 | F5 | Bug (Caching) | P1 | `app/config.py`, cache middleware | Default cache pattern caches all `/spotify/**` responses, hiding credential changes and status updates. | Exclude status/diagnostic endpoints from cache pattern or add targeted cache-busting in status route; add integration test covering credential revocation. |
 | F6 | Bug (Workers) | P1 | `app/workers/playlist_sync_worker.py` | Playlist sync persists updates but cached responses remain stale (ETag unchanged, invalidation ineffective). | Investigate timestamp precision and cache invalidation flow; ensure `updated_at` changes even for rapid successive syncs and assert new ETags in tests. |
 | F7 | Test Infra | P1 | `tests/api/test_admin_artists.py` | Admin fixture permanently enables admin routes, mutating global OpenAPI schema for later tests. | Reset `FEATURE_ADMIN_API` (and cached routes) in fixture teardown and/or isolate FastAPI app per test module. |
-| F8 | Quality | P2 | repo-wide | `isort --check-only` fails on dozens of backend modules. | Apply isort with repository config and add CI guard. |
+| F8 | Quality | P2 | repo-wide | `ruff check --select I` fails on dozens of backend modules. | Apply Ruff import sorting with repository config and add CI guard. |
 | F9 | Security | P2 | tooling | Static security analyser missing from environment (command not found), so secure coding checks never run. | Add a vetted security scanner to dev requirements/CI and document usage. |
 
 ## Finding Details
@@ -63,11 +63,11 @@
 - **Recommendation:** Reset env vars and unregister routers in fixture teardown (or isolate app per module); add guard ensuring OpenAPI schema resets between tests.
 - **Suggested Tests:** Full `pytest` run plus `tests/snapshots/test_openapi_schema.py`.
 
-### F8. isort drift (P2)
-- **Evidence:** `isort --check-only` flags dozens of backend modules. 【8bf225†L1-L20】
+### F8. Ruff import rule drift (P2)
+- **Evidence:** `ruff check --select I` flags dozens of backend modules. 【8bf225†L1-L20】
 - **Impact:** Inconsistent import ordering increases merge noise and hides functional diffs.
-- **Recommendation:** Run `isort` with repo config, commit formatting, and add CI gate.
-- **Suggested Tests:** `isort --check-only .` in CI.
+- **Recommendation:** Run Ruff format/import fixes with repo config, commit formatting, and add CI gate.
+- **Suggested Tests:** `ruff format --check .` und `ruff check --select I .` in CI.
 
 ### F9. Missing static security analyser (P2)
 - **Evidence:** The configured security scan command fails (`command not found`). 【2a7069†L1-L1】

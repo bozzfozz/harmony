@@ -1210,8 +1210,6 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 - **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
 - **Dependencies:** `pip-audit` prüft `requirements.txt` auf veröffentlichte CVEs.
 
-> Hinweis: Weder `isort` noch `black` sind aktiv. Ruff ist die alleinige Quelle der Formatierungs- und Import-Policy.
-
 ### Ruff in pre-commit
 
 1. **Setup einmalig:**

@@ -14,7 +14,7 @@
 - **TD-20251008-005 – Spotify-Status entkoppelt vom Cache:** Cache-Regeln angepasst, sodass Credential-Änderungen sofort sichtbar sind; Regressionstest deckt den Flow ab. 【F:ToDo.md†L70-L96】
 - **TD-20251008-006 – Playlist-Cache-Invalidierung:** Invalidator leert List- und Detail-Caches inklusive Pfad-Präfixen und protokolliert betroffene IDs. 【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/spotify/test_playlist_cache_invalidation.py†L1-L40】
 - **TD-20251008-007 – Admin-Fixture stabilisiert:** Tests deregistrieren Admin-Routen und setzen das OpenAPI-Schema zurück, wodurch Snapshot-Drift vermieden wird. 【F:tests/api/test_admin_artists.py†L1-L220】【F:tests/snapshots/test_openapi_schema.py†L1-L40】
-- **TD-20251008-008 – isort-Erzwingung:** Import-Formatierung bereinigt und CI-Gate ergänzt; Dokumentation aktualisiert. 【F:ToDo.md†L108-L129】
+- **TD-20251008-008 – Ruff-Importregel erzwungen:** Import-Formatierung bereinigt und CI-Gate ergänzt; Dokumentation aktualisiert. 【F:ToDo.md†L108-L129】
 
 ## Laufende Arbeiten
 - **TD-20251008-009 – Security scanner consolidation:** Abschluss als `wontdo`; Dependency-Audits ersetzen den ursprünglichen Plan. 【F:ToDo.md†L131-L156】
