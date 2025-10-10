@@ -7,7 +7,7 @@ import inspect
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -28,6 +28,7 @@ from app.dependencies import (
     get_soulseek_client,
     get_spotify_client,
     set_oauth_service_instance,
+    set_oauth_store_instance,
 )
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
@@ -37,8 +38,8 @@ from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_T
 from app.orchestrator.timer import WatchlistTimer
 from app.oauth_callback.app import app_oauth_callback
 from app.services.health import DependencyStatus, HealthService
+from app.oauth import get_oauth_store, startup_check_oauth_store
 from app.services.oauth_service import ManualRateLimiter, OAuthService
-from app.services.oauth_transactions import OAuthTransactionStore
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.settings_store import ensure_default_settings
@@ -674,15 +675,20 @@ app.state.secret_validation_service = SecretValidationService()
 
 install_middleware(app, _config_snapshot)
 
-_oauth_ttl = timedelta(minutes=_config_snapshot.oauth.session_ttl_minutes)
-app.state.oauth_transaction_store = OAuthTransactionStore(ttl=_oauth_ttl)
+_oauth_store = get_oauth_store(_config_snapshot)
+startup_check_oauth_store(
+    _oauth_store, split_mode=_config_snapshot.oauth.split_mode
+)
+app.state.oauth_transaction_store = _oauth_store
+set_oauth_store_instance(_oauth_store)
 app.state.oauth_service = OAuthService(
     config=_config_snapshot,
-    transactions=app.state.oauth_transaction_store,
+    transactions=_oauth_store,
     manual_limit=ManualRateLimiter(limit=6, window_seconds=300.0),
 )
 set_oauth_service_instance(app.state.oauth_service)
 app_oauth_callback.state.oauth_service = app.state.oauth_service
+app_oauth_callback.state.oauth_transaction_store = _oauth_store
 
 _previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
 if _FRONTEND_INDEX_PATH.is_file():

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hmac
-from datetime import timedelta
 from functools import lru_cache
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator
@@ -24,12 +23,16 @@ from app.logging import get_logger
 from app.services.artist_service import ArtistService
 from app.services.download_service import DownloadService
 from app.services.integration_service import IntegrationService
+from app.oauth import get_oauth_store, startup_check_oauth_store
+from app.oauth.transactions import OAuthTransactionStore
 from app.services.oauth_service import ManualRateLimiter, OAuthService
-from app.services.oauth_transactions import OAuthTransactionStore
 from app.services.watchlist_service import WatchlistService
 
 _integration_service_override: IntegrationService | None = None
 _oauth_service_instance: OAuthService | None = None
+_oauth_store_instance: OAuthTransactionStore | None = None
+_oauth_store_checked = False
+_oauth_store_lock = Lock()
 _oauth_service_lock = Lock()
 
 logger = get_logger(__name__)
@@ -48,8 +51,7 @@ def get_oauth_service(request: Request) -> OAuthService:
     with _oauth_service_lock:
         if _oauth_service_instance is None:
             config = get_app_config()
-            ttl = timedelta(minutes=config.oauth.session_ttl_minutes)
-            store = OAuthTransactionStore(ttl=ttl)
+            store = _ensure_oauth_store(config)
             manual_limit = ManualRateLimiter(limit=6, window_seconds=300.0)
             _oauth_service_instance = OAuthService(
                 config=config,
@@ -57,6 +59,7 @@ def get_oauth_service(request: Request) -> OAuthService:
                 manual_limit=manual_limit,
             )
         service = _oauth_service_instance
+    request.app.state.oauth_transaction_store = _ensure_oauth_store(get_app_config())
     request.app.state.oauth_service = service
     return service
 
@@ -65,6 +68,27 @@ def set_oauth_service_instance(service: OAuthService | None) -> None:
     global _oauth_service_instance
     with _oauth_service_lock:
         _oauth_service_instance = service
+
+
+def _ensure_oauth_store(config: AppConfig) -> OAuthTransactionStore:
+    global _oauth_store_instance, _oauth_store_checked
+    with _oauth_store_lock:
+        if _oauth_store_instance is None:
+            store = get_oauth_store(config)
+            if not _oauth_store_checked:
+                startup_check_oauth_store(
+                    store, split_mode=config.oauth.split_mode
+                )
+                _oauth_store_checked = True
+            _oauth_store_instance = store
+        return _oauth_store_instance
+
+
+def set_oauth_store_instance(store: OAuthTransactionStore | None) -> None:
+    global _oauth_store_instance, _oauth_store_checked
+    with _oauth_store_lock:
+        _oauth_store_instance = store
+        _oauth_store_checked = store is not None
 
 
 @lru_cache()

@@ -85,3 +85,20 @@ async def oauth_status(
     }
     return JSONResponse(status_code=status.HTTP_200_OK, content=body)
 
+
+@router_oauth_public.get("/health")
+async def oauth_health(service: OAuthService = Depends(get_oauth_service)) -> JSONResponse:
+    info = service.health()
+    store_info = info.get("store", {}) if isinstance(info, dict) else {}
+    body = {
+        "provider": info.get("provider", "spotify"),
+        "backend": store_info.get("backend", "memory"),
+        "active_transactions": info.get("active_transactions", 0),
+        "ttl_seconds": info.get("ttl_seconds"),
+        "manual_enabled": info.get("manual_enabled"),
+        "redirect_uri": info.get("redirect_uri"),
+        "public_host_hint": info.get("public_host_hint"),
+        "store": store_info,
+    }
+    return JSONResponse(status_code=status.HTTP_200_OK, content=body)
+

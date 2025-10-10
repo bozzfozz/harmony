@@ -111,6 +111,10 @@ class OAuthConfig:
     session_ttl_minutes: int
     public_host_hint: Optional[str]
     public_base: str
+    split_mode: bool
+    state_dir: str
+    state_ttl_seconds: int
+    store_hash_code_verifier: bool
 
 
 @dataclass(slots=True)
@@ -1501,6 +1505,22 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         ),
     )
     oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
+    oauth_split_mode = _as_bool(_env_value(env, "OAUTH_SPLIT_MODE"), default=False)
+    oauth_state_dir = (
+        (_env_value(env, "OAUTH_STATE_DIR") or "/data/runtime/oauth_state")
+        .strip()
+        or "/data/runtime/oauth_state"
+    )
+    oauth_state_ttl_seconds = max(
+        1,
+        _as_int(
+            _env_value(env, "OAUTH_STATE_TTL_SEC"),
+            default=oauth_session_ttl_min * 60,
+        ),
+    )
+    oauth_store_hash_cv = _as_bool(
+        _env_value(env, "OAUTH_STORE_HASH_CV"), default=True
+    )
 
     spotify = SpotifyConfig(
         client_id=_resolve_setting(
@@ -2096,6 +2116,10 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         session_ttl_minutes=oauth_session_ttl_min,
         public_host_hint=oauth_public_host_hint,
         public_base=oauth_public_base,
+        split_mode=oauth_split_mode,
+        state_dir=oauth_state_dir,
+        state_ttl_seconds=oauth_state_ttl_seconds,
+        store_hash_code_verifier=oauth_store_hash_cv,
     )
 
     security = SecurityConfig(

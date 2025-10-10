@@ -14,7 +14,7 @@ from app.services.oauth_service import (
     OAuthStartResponse,
     OAuthStatusResponse,
 )
-from app.services.oauth_transactions import TransactionNotFoundError
+from app.oauth.transactions import TransactionNotFoundError
 from tests.simple_client import SimpleTestClient
 
 
