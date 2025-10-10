@@ -5,7 +5,7 @@ from __future__ import annotations
 import hmac
 from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Awaitable, Callable, Generator
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator
 
 from fastapi import Depends, Request, status
 from sqlalchemy.orm import Session
@@ -137,6 +137,27 @@ def get_session_runner() -> SessionRunner:
         return await run_session(func)
 
     return runner
+
+
+if TYPE_CHECKING:  # pragma: no cover - import hints only for static analysis
+    from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
+    from app.orchestrator.download_flow.runtime import DownloadFlowRuntime
+
+
+def get_download_flow_runtime(request: Request) -> "DownloadFlowRuntime":
+    from app.orchestrator.download_flow.runtime import DownloadFlowRuntime
+
+    runtime = getattr(request.app.state, "download_flow_runtime", None)
+    if not isinstance(runtime, DownloadFlowRuntime):
+        raise RuntimeError("Download flow runtime is not available")
+    return runtime
+
+
+def get_download_flow_orchestrator(request: Request) -> "DownloadFlowOrchestrator":
+    from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
+
+    runtime = get_download_flow_runtime(request)
+    return runtime.orchestrator
 
 
 @lru_cache()
