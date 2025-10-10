@@ -164,13 +164,13 @@ class DeduplicationManager:
             rendered = self._move_template.format(**metadata)
         except KeyError as exc:  # pragma: no cover - template misconfiguration
             missing = exc.args[0]
-            raise RuntimeError(f"Unknown placeholder in move template: {missing}") from exc
+            raise RuntimeError(
+                f"Unknown placeholder in move template: {missing}"
+            ) from exc
         clean = rendered.strip().strip("/")
         return Path(clean)
 
-    def _build_metadata(
-        self, item: DownloadItem, source_path: Path
-    ) -> dict[str, str]:
+    def _build_metadata(self, item: DownloadItem, source_path: Path) -> dict[str, str]:
         from app.utils.file_utils import sanitize_name
 
         extension = source_path.suffix.lstrip(".") or "bin"
@@ -186,4 +186,3 @@ class DeduplicationManager:
 
 
 __all__ = ["DeduplicationManager"]
-

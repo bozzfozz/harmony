@@ -77,4 +77,3 @@ class AudioTagger:
 
 
 __all__ = ["AudioTagger", "TaggingResult"]
-

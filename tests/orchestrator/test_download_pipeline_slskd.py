@@ -5,7 +5,6 @@ from typing import AsyncIterator
 
 import pytest
 
-from app.integrations.slskd_client import SlskdDownloadEvent, SlskdDownloadStatus
 from app.hdm.models import DownloadItem, DownloadWorkItem
 from app.hdm.pipeline import (
     DownloadPipelineError,
@@ -13,7 +12,7 @@ from app.hdm.pipeline import (
 )
 from app.hdm.pipeline_impl import DefaultDownloadPipeline
 from app.hdm.recovery import DownloadSidecar
-
+from app.integrations.slskd_client import SlskdDownloadEvent, SlskdDownloadStatus
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
@@ -91,7 +90,9 @@ class _NoopDeduper:
     def plan_destination(self, item: DownloadItem, path: Path) -> Path:
         return path
 
-    async def register_completion(self, *_: object) -> None:  # pragma: no cover - helper
+    async def register_completion(
+        self, *_: object
+    ) -> None:  # pragma: no cover - helper
         return None
 
 

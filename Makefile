@@ -4,7 +4,7 @@ OFF?=$(CI_OFFLINE)
 
 help:
         @echo "make install-dev    # install dev tools"
-        @echo "make quality        # isort --check-only, mypy, pytest"
+        @echo "make quality        # ruff format --check, ruff lint, mypy, pytest"
         @echo "make security       # pip-audit (skips if CI_OFFLINE=true)"
         @echo "make analyze        # radon, vulture (skips if CI_OFFLINE=true)"
         @echo "make all            # run quality + security + analyze"
@@ -15,7 +15,8 @@ install-dev:
 	pip install -r requirements-dev.txt
 
 quality:
-        isort --check-only .
+        ruff format --check .
+        ruff check --output-format=github .
         mypy app
         pytest -q
 

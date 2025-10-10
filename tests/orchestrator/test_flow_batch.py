@@ -6,6 +6,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from tests.orchestrator._flow_fixtures import (  # noqa: F401
+    configure_environment,
+    reset_activity_manager,
+)
 
 from app.hdm.idempotency import InMemoryIdempotencyStore
 from app.hdm.models import (
@@ -18,10 +22,6 @@ from app.hdm.models import (
 )
 from app.hdm.orchestrator import HdmOrchestrator
 from app.hdm.pipeline import DownloadPipeline
-from tests.orchestrator._flow_fixtures import (  # noqa: F401
-    configure_environment,
-    reset_activity_manager,
-)
 
 
 class _ConcurrentTrackingPipeline(DownloadPipeline):

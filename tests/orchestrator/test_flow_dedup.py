@@ -7,13 +7,13 @@ import json
 from pathlib import Path
 
 import pytest
-
-from app.hdm.dedup import DeduplicationManager
-from app.hdm.models import DownloadItem
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,
 )
+
+from app.hdm.dedup import DeduplicationManager
+from app.hdm.models import DownloadItem
 
 
 def _make_item(*, dedupe_key: str = "dedupe") -> DownloadItem:
@@ -59,7 +59,7 @@ async def test_acquire_lock_serialises_tasks(tmp_path: Path) -> None:
     await asyncio.wait_for(acquired_second.wait(), timeout=5)
     await asyncio.gather(task_one, task_two)
 
-    lock_path = (tmp_path / "state" / "locks" / f"{item.dedupe_key}.lock")
+    lock_path = tmp_path / "state" / "locks" / f"{item.dedupe_key}.lock"
     assert lock_path.exists()
 
 

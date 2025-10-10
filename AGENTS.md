@@ -41,7 +41,7 @@ Ziel: Einheitliche, sichere und nachvollziehbare Beiträge von Menschen und KI-A
   - Features/Fixes ⇒ neue Unit- & Integrationstests.
   - Coverage nicht senken ohne Plan.
 - **Quality Tools**
-  - Python: `isort`, `mypy`, `pytest`, `pip-audit`.
+  - Python: `ruff`, `mypy`, `pytest`, `pip-audit`.
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
@@ -99,7 +99,7 @@ Ohne explizites Flag gilt **Write Mode**.
 - [ ] **TASK_ID** im Titel & Body (Template genutzt).
 - [ ] **AGENTS.md** gelesen & Scope-Guard bestätigt.
 - [ ] Keine Secrets, keine `BACKUP`-/Lizenzdateien verändert.
-- [ ] Tests/Lint grün (`pytest`, `mypy`, `isort --check-only`, `pip-audit`) oder Ausnahme begründet.
+- [ ] Tests/Lint grün (`pytest`, `mypy`, `ruff format --check`, `ruff check --output-format=github`, `pip-audit`) oder Ausnahme begründet.
 - [ ] Security-Scan ohne Blocker.
 - [ ] OpenAPI/Snapshots aktualisiert (falls API betroffen).
 - [ ] Doku-/ENV-Drift behoben (README, CHANGELOG, ADRs).
@@ -123,7 +123,7 @@ Ohne explizites Flag gilt **Write Mode**.
 ## 11. Durchsetzung
 - CI erzwingt Lint, Typen, Tests, Security-Scans.
 - **Schreibrechte sind nicht CI-gekoppelt**; Merge nur bei erfüllten Gates/Explizit-Freigabe.
-- Pre-Commit Hooks empfohlen: `isort`.
+- Pre-Commit Hooks empfohlen: `ruff-format`, `ruff`.
 - PR blockiert, wenn **TASK_ID** oder Testnachweise fehlen.
 
 ## 12. Task-Template-Pflicht
@@ -139,32 +139,55 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 
 ## §14 Code-Style, Lint & Tests — Auto-Fixes (verbindlich)
 
-### §14a Imports & Stil
+### Arbeitsablauf des Agents
 
-**Ziel:** Konsistente Importreihenfolge und PEP-8-kompatibler Stil ohne zwingenden Formatter.
+Finale Code-Aufräumroutine (verbindlich)
+1) Imports sortieren und Code formatieren:
+    ruff format .
+    ruff check --select I --fix .
+2) Verifizieren, dass keine Änderungen mehr anstehen:
+    git diff --exit-code
+3) Wenn 2) fehlschlägt:
+    Änderungen committen und Schritt 1)–2) wiederholen, bis git diff leer ist.
+4) Erst dann fortfahren mit:
+    - Dokumentation (README/Runbook/agents.md)
+    - CHANGELOG aktualisieren
+    - BACKUP-Block erzeugen
+
+Hinweise
+- Keine isort-/Black-Verwendung. Ruff ist alleinige Quelle für Format & Imports.
+- CI prüft anschließend mit:
+    ruff format --check .
+    ruff check --output-format=github .
+
+### §14a Ruff Format & Imports
+
+**Ziel:** Konsistente Formatierung, importierte Symmetrien und reproduzierbare Diffs über alle Commits hinweg.
 
 **Pflichten (Agent & Humans)**
-- Vor jedem Commit `isort` anwenden (`isort app tests` oder `isort .`).
-- Pre-commit Hook `isort` aktiv halten: `pre-commit install` · `pre-commit run -a`.
-- Keine Commits, die das `isort`-Gate oder Typ-/Testläufe brechen.
+- Pre-commit Hooks `ruff-format` und `ruff` installiert und aktiv halten (`pre-commit install`, `pre-commit run -a`).
+- Finale Routine strikt als letzter Code-Schritt ausführen (siehe oben) und nur mit leerem `git diff` in die Doku-/CHANGELOG-/BACKUP-Phase wechseln.
+- Keine Commits einreichen, die `ruff format --check .` oder `ruff check --output-format=github .` brechen.
 
 **PR-Checkliste (Ergänzung)**
-- [ ] `isort --check-only .` **grün**
-- [ ] Hooks liefen (Output im letzten Commit oder `pre-commit run -a` verlinkt)
+- [ ] `ruff format --check .` **grün**
+- [ ] `ruff check --output-format=github .` **grün**
+- [ ] pre-commit Hooks liefen (Output im letzten Commit oder `pre-commit run -a` verlinkt)
 
 **CI-Gates (blockierend)**
-- `isort --check-only .`
+- `ruff format --check .`
+- `ruff check --output-format=github .`
 
 **Codex MUSS**
-- Vor jedem Push: `isort .`
-- Formatierung, die über Imports hinausgeht, mit Team/Review abstimmen (kein verpflichtender Auto-Formatter).
+- Vor jedem Push bzw. vor Doku-/CHANGELOG-/BACKUP-Aufgaben die finale Routine ausführen (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`).
+- Format-Anpassungen, die Ruff nicht beheben kann, explizit begründen und minimieren (keine stillen Massenformate).
 
 **Konfiguration (Referenz)**
-- `.pre-commit-config.yaml`: Hook `isort`
-- `pyproject.toml`: `[tool.isort] line_length = 88`, Mehrzeilen-Konfiguration gemäß aktuellem Profil
+- `.pre-commit-config.yaml`: Hooks `ruff-format`, `ruff`
+- `pyproject.toml`: `[tool.ruff]` + Lint-/Format-Unterabschnitte
 
 **Hinweise**
-- Größere Stil-Anpassungen separat diskutieren; keine stillen Massenformate.
+- Größere Stil-Anpassungen (z. B. neue Ruff-Regel-Sets) vorab mit Maintainer*innen abstimmen.
 
 ---
 
@@ -199,9 +222,9 @@ Alle Aufgaben **müssen** auf Basis von `docs/task-template.md` erstellt, umgese
 - Unklare/fundamentale Brüche → Draft-PR **Clarification**: „Clarification: <TASK_ID>“ mit Minimalvorschlag.
 
 **Reihenfolge**
-1. Imports bereinigen (`isort`)
-2. Schnelllauf (`--lf`)
-3. Volle Suite/CI
+1. Schnelllauf (`--lf`)
+2. Volle Suite/CI
+3. Finale Routine ausführen (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`)
 ```0
 
 ## 15. Prohibited

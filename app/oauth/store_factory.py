@@ -72,7 +72,9 @@ def startup_check_oauth_store(
         )
         return result
     if split_mode:
-        raise TransactionStoreError("OAUTH_MISCONFIG_FS_STORE: filesystem store required")
+        raise TransactionStoreError(
+            "OAUTH_MISCONFIG_FS_STORE: filesystem store required"
+        )
     return {
         "backend": "memory",
         "ttl_seconds": int(store.ttl.total_seconds()),

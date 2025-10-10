@@ -30,7 +30,9 @@ class CompletionEventBus:
     """In-memory event bus for completion notifications."""
 
     def __init__(self) -> None:
-        self._queues: dict[str, list[asyncio.Queue[DownloadCompletionEvent]]] = defaultdict(list)
+        self._queues: dict[str, list[asyncio.Queue[DownloadCompletionEvent]]] = (
+            defaultdict(list)
+        )
         self._lock = asyncio.Lock()
 
     async def publish(self, dedupe_key: str, event: DownloadCompletionEvent) -> None:
@@ -39,7 +41,9 @@ class CompletionEventBus:
         for queue in queues:
             await queue.put(event)
 
-    async def subscribe(self, dedupe_key: str) -> asyncio.Queue[DownloadCompletionEvent]:
+    async def subscribe(
+        self, dedupe_key: str
+    ) -> asyncio.Queue[DownloadCompletionEvent]:
         queue: asyncio.Queue[DownloadCompletionEvent] = asyncio.Queue()
         async with self._lock:
             self._queues[dedupe_key].append(queue)
@@ -99,7 +103,9 @@ class DownloadCompletionMonitor:
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=self._poll_interval)
+                    event = await asyncio.wait_for(
+                        queue.get(), timeout=self._poll_interval
+                    )
                 except asyncio.TimeoutError:
                     candidate = await self._check_existing(expected_path)
                     if candidate is not None:
@@ -203,7 +209,9 @@ class DownloadCompletionMonitor:
             if metadata is not None:
                 info = getattr(metadata, "info", None)
                 if info is not None:
-                    codec = getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
+                    codec = (
+                        getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
+                    )
                     length = getattr(info, "length", None)
                     if isinstance(length, (int, float)):
                         duration = float(length)
@@ -246,4 +254,3 @@ __all__ = [
     "build_item_event",
     "record_detection_event",
 ]
-

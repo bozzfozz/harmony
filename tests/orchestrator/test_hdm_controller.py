@@ -12,9 +12,9 @@ from app.hdm.models import (
     DownloadBatchRequest,
     DownloadOutcome,
     DownloadRequestItem,
+    DownloadWorkItem,
     ItemEvent,
     ItemState,
-    DownloadWorkItem,
 )
 from app.hdm.orchestrator import HdmOrchestrator
 from app.hdm.pipeline import DownloadPipeline, RetryableDownloadError
@@ -64,7 +64,9 @@ async def test_single_and_batch_flow_share_pipeline() -> None:
         batch_max_items=10,
     )
 
-    single_item = DownloadRequestItem(artist="Artist", title="Track", requested_by="tester")
+    single_item = DownloadRequestItem(
+        artist="Artist", title="Track", requested_by="tester"
+    )
     single_handle = await orchestrator.submit_single(single_item)
     single_summary = await single_handle.wait()
     assert single_summary.totals.succeeded == 1
@@ -151,7 +153,9 @@ async def test_retry_until_success() -> None:
         retry_base_seconds=0.0,
     )
     request = DownloadBatchRequest(
-        items=[DownloadRequestItem(artist="Retry", title="Song", requested_by="tester")],
+        items=[
+            DownloadRequestItem(artist="Retry", title="Song", requested_by="tester")
+        ],
         requested_by="tester",
     )
     summary = await (await orchestrator.submit_batch(request)).wait()

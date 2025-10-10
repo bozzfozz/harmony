@@ -8,6 +8,8 @@ from typing import Iterable
 
 from app.integrations.contracts import (
     ProviderTrack as GatewayProviderTrack,
+)
+from app.integrations.contracts import (
     SearchQuery as GatewaySearchQuery,
 )
 from app.logging import get_logger

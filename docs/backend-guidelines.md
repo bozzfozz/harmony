@@ -59,8 +59,8 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - Changelog nach [Keep a Changelog](https://keepachangelog.com/).
 
 ## 9. Linting & Formatting
-- Vor jedem Commit sind die Python-Gates (`isort`, `mypy`, `pytest`, `pip-audit`) lokal auszuführen.
-- Verwende `isort app tests`, um Import-Reihenfolgen automatisch zu korrigieren; `isort --check-only app tests` spiegelt den CI-Guard.
-- Formatierung, die `isort` nicht abdeckt, erfolgt nach PEP 8 und wird im Review abgestimmt.
+- Vor jedem Commit sind die Python-Gates (`ruff format --check`, `ruff check --output-format=github`, `mypy`, `pytest`, `pip-audit`) lokal auszuführen.
+- Finale Routine: `ruff format .`, `ruff check --select I --fix .`, anschließend `git diff --exit-code`. Ohne leeren Diff keine Doku-/CHANGELOG-/BACKUP-Schritte.
+- Ruff übernimmt Formatierung & Imports; zusätzliche Formatierungen nur nach Abstimmung (keine stillen Massenformate).
 - Verbleibende Hinweise (z. B. bewusst ungenutzte Importe) müssen manuell adressiert und dokumentiert werden (`# noqa`).
 

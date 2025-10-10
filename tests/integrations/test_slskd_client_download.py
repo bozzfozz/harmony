@@ -53,10 +53,14 @@ async def test_enqueue_download_attaches_headers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_request_uses_retry_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_request_uses_retry_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[tuple[int, int, int, int]] = []
 
-    async def _fake_with_retry(async_fn, *, attempts, base_ms, jitter_pct, timeout_ms, classify_err):
+    async def _fake_with_retry(
+        async_fn, *, attempts, base_ms, jitter_pct, timeout_ms, classify_err
+    ):
         calls.append((attempts, base_ms, jitter_pct, timeout_ms))
         return httpx.Response(200, json={"status": "completed"})
 

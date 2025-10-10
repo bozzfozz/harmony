@@ -33,12 +33,12 @@ from app.dependencies import (
 from app.logging import configure_logging, get_logger
 from app.logging_events import log_event
 from app.middleware import install_middleware
+from app.oauth import get_oauth_store, startup_check_oauth_store
+from app.oauth_callback.app import app_oauth_callback
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
-from app.oauth_callback.app import app_oauth_callback
 from app.services.health import DependencyStatus, HealthService
-from app.oauth import get_oauth_store, startup_check_oauth_store
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
@@ -676,9 +676,7 @@ app.state.secret_validation_service = SecretValidationService()
 install_middleware(app, _config_snapshot)
 
 _oauth_store = get_oauth_store(_config_snapshot)
-startup_check_oauth_store(
-    _oauth_store, split_mode=_config_snapshot.oauth.split_mode
-)
+startup_check_oauth_store(_oauth_store, split_mode=_config_snapshot.oauth.split_mode)
 app.state.oauth_transaction_store = _oauth_store
 set_oauth_store_instance(_oauth_store)
 app.state.oauth_service = OAuthService(

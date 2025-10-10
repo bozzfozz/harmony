@@ -75,7 +75,9 @@ class DownloadSidecar:
             source_path=str(payload.get("source_path"))
             if payload.get("source_path")
             else None,
-            final_path=str(payload.get("final_path")) if payload.get("final_path") else None,
+            final_path=str(payload.get("final_path"))
+            if payload.get("final_path")
+            else None,
             bytes_written=int(payload.get("bytes_written"))
             if payload.get("bytes_written") is not None
             else None,
@@ -211,9 +213,7 @@ class HdmRecovery:
         except asyncio.CancelledError:
             pass
         self._task = None
-        logger.info(
-            "HDM recovery stopped", extra={"event": "hdm.recovery.stopped"}
-        )
+        logger.info("HDM recovery stopped", extra={"event": "hdm.recovery.stopped"})
 
     async def _run(self) -> None:
         try:
@@ -248,4 +248,3 @@ class HdmRecovery:
 
 
 __all__ = ["HdmRecovery", "DownloadSidecar", "SidecarStore"]
-

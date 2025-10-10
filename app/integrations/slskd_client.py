@@ -137,7 +137,9 @@ class SlskdHttpClient:
     ) -> AsyncIterator[SlskdDownloadEvent]:
         """Yield status events for the download identified by *idempotency_key*."""
 
-        interval = poll_interval if poll_interval is not None else self.status_poll_interval
+        interval = (
+            poll_interval if poll_interval is not None else self.status_poll_interval
+        )
         interval = max(0.25, float(interval))
         last_status: SlskdDownloadStatus | None = None
         while True:
@@ -151,7 +153,10 @@ class SlskdHttpClient:
             if last_status != event.status:
                 yield event
                 last_status = event.status
-            if event.status in {SlskdDownloadStatus.COMPLETED, SlskdDownloadStatus.FAILED}:
+            if event.status in {
+                SlskdDownloadStatus.COMPLETED,
+                SlskdDownloadStatus.FAILED,
+            }:
                 return
             await asyncio.sleep(interval)
 

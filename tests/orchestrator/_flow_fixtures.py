@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from tests import conftest as root_conftest
 
 from app import dependencies as deps
-from tests import conftest as root_conftest
 
 
 @pytest.fixture(autouse=True)

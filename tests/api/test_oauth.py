@@ -3,9 +3,11 @@ from typing import Any, Callable
 
 import pytest
 from fastapi import FastAPI, Request
+from tests.simple_client import SimpleTestClient
 
 from app.api.oauth_public import router_oauth_public
 from app.dependencies import get_oauth_service, set_oauth_service_instance
+from app.oauth.transactions import TransactionNotFoundError
 from app.oauth_callback.app import create_callback_app
 from app.services.oauth_service import (
     OAuthErrorCode,
@@ -14,8 +16,6 @@ from app.services.oauth_service import (
     OAuthStartResponse,
     OAuthStatusResponse,
 )
-from app.oauth.transactions import TransactionNotFoundError
-from tests.simple_client import SimpleTestClient
 
 
 class StubOAuthService:
@@ -150,7 +150,9 @@ class StubOAuthService:
 
 
 @pytest.fixture
-def test_clients() -> Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]:
+def test_clients() -> Callable[
+    [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+]:
     contexts: list[tuple[SimpleTestClient, SimpleTestClient]] = []
 
     def _factory(
@@ -180,7 +182,9 @@ def test_clients() -> Callable[[StubOAuthService], tuple[SimpleTestClient, Simpl
 
 
 def test_start_endpoint_returns_payload(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     api_client, _ = test_clients(service)
@@ -193,7 +197,9 @@ def test_start_endpoint_returns_payload(
 
 
 def test_manual_endpoint_passes_redirect(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     manual_response = OAuthManualResponse(
@@ -218,7 +224,9 @@ def test_manual_endpoint_passes_redirect(
 
 
 def test_manual_rate_limit_maps_to_429(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     rate_limited = OAuthManualResponse(
@@ -240,7 +248,9 @@ def test_manual_rate_limit_maps_to_429(
 
 
 def test_callback_without_code_renders_help(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     _, callback_client = test_clients(service)
@@ -251,7 +261,9 @@ def test_callback_without_code_renders_help(
 
 
 def test_callback_success_calls_service(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     _, callback_client = test_clients(service)
@@ -265,7 +277,9 @@ def test_callback_success_calls_service(
 
 
 def test_callback_handles_expired_state(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     _, callback_client = test_clients(service)
@@ -279,7 +293,9 @@ def test_callback_handles_expired_state(
 
 
 def test_status_endpoint_returns_payload(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     api_client, _ = test_clients(service)
@@ -296,7 +312,9 @@ def test_status_endpoint_returns_payload(
 
 
 def test_status_endpoint_unknown_state(
-    test_clients: Callable[[StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]]
+    test_clients: Callable[
+        [StubOAuthService], tuple[SimpleTestClient, SimpleTestClient]
+    ],
 ) -> None:
     service = StubOAuthService()
     api_client, _ = test_clients(service)
@@ -331,4 +349,3 @@ def test_openapi_schema_excludes_callback_route() -> None:
     paths = schema["paths"].keys()
     assert "/callback" not in paths
     assert "/api/v1/oauth/start" in paths
-

@@ -6,12 +6,12 @@ import os
 from pathlib import Path
 
 import pytest
-
-from app.hdm.move import AtomicFileMover
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,
 )
+
+from app.hdm.move import AtomicFileMover
 
 
 def _write_file(path: Path, content: bytes = b"payload") -> None:
