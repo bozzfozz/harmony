@@ -7,6 +7,8 @@ import pytest
 from starlette.requests import Request
 
 from app.config import load_config
+from app.oauth.store_memory import MemoryOAuthTransactionStore
+from app.oauth.transactions import TransactionNotFoundError
 from app.services.oauth_service import (
     ManualRateLimiter,
     OAuthErrorCode,
@@ -15,7 +17,6 @@ from app.services.oauth_service import (
     OAuthService,
     OAuthSessionStatus,
 )
-from app.services.oauth_transactions import OAuthTransactionStore, TransactionNotFoundError
 
 
 class DummyCacheHandler:
@@ -49,7 +50,7 @@ async def test_oauth_service_start_and_complete(monkeypatch: pytest.MonkeyPatch)
         "OAUTH_SESSION_TTL_MIN": "5",
     }
     config = load_config(runtime_env=runtime_env)
-    store = OAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
+    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
     cache = DummyCacheHandler()
 
     def client_factory() -> httpx.AsyncClient:
@@ -97,7 +98,7 @@ async def test_manual_rejects_unknown_state(monkeypatch: pytest.MonkeyPatch) -> 
         "SPOTIFY_SCOPE": "user-read-email",
     }
     config = load_config(runtime_env=runtime_env)
-    store = OAuthTransactionStore(ttl=timedelta(minutes=1))
+    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=1))
     service = OAuthService(config=config, transactions=store)
 
     result = await service.manual(
@@ -117,7 +118,7 @@ async def test_manual_success_parses_redirect(monkeypatch: pytest.MonkeyPatch) -
         "OAUTH_SESSION_TTL_MIN": "2",
     }
     config = load_config(runtime_env=runtime_env)
-    store = OAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
+    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=config.oauth.session_ttl_minutes))
 
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -157,7 +158,7 @@ def test_status_unknown_state_returns_unknown() -> None:
         "SPOTIFY_SCOPE": "user-read-email",
     }
     config = load_config(runtime_env=runtime_env)
-    store = OAuthTransactionStore(ttl=timedelta(minutes=1))
+    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=1))
     service = OAuthService(config=config, transactions=store)
 
     status_info = service.status("does-not-exist")
@@ -172,7 +173,7 @@ def test_status_pending_after_start() -> None:
         "SPOTIFY_SCOPE": "user-read-email",
     }
     config = load_config(runtime_env=runtime_env)
-    store = OAuthTransactionStore(ttl=timedelta(minutes=1))
+    store = MemoryOAuthTransactionStore(ttl=timedelta(minutes=1))
     service = OAuthService(config=config, transactions=store)
 
     response = service.start(_build_request())

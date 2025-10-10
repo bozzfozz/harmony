@@ -70,6 +70,10 @@ Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
 | `OAUTH_CALLBACK_PORT` | ➖ | Öffnet den lokalen Callback-Port (`http://127.0.0.1:<port>/callback`). |
 | `OAUTH_MANUAL_CALLBACK_ENABLE` | ➖ | Aktiviert den Fallback-Endpunkt für Remote-Fixes. |
 | `OAUTH_PUBLIC_BASE` | ➖ | Basis-Pfad der öffentlichen OAuth-API (Default: `/api/v1/oauth`). |
+| `OAUTH_SPLIT_MODE` | ➖ | Aktiviert den Dateisystem-basierten OAuth-State-Store für getrennte Prozesse. |
+| `OAUTH_STATE_DIR` | ➖ | Gemeinsames Verzeichnis für OAuth-States (Default: `/data/runtime/oauth_state`). |
+| `OAUTH_STATE_TTL_SEC` | ➖ | Lebensdauer eines OAuth-States in Sekunden (Default: `600`). |
+| `OAUTH_STORE_HASH_CV` | ➖ | Speichert nur den Hash des Code-Verifiers (Default: `true`, in Split-Mode `false`). |
 | `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs. |
 | `FEATURE_REQUIRE_AUTH` & `HARMONY_API_KEYS` | ✅ (Prod) | Erzwingen API-Key-Schutz für OAuth-Endpoints. |
 
@@ -814,6 +818,10 @@ Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environme
 | `OAUTH_MANUAL_CALLBACK_ENABLE` | bool | `true` | Erlaubt den manuellen Abschluss via `POST /api/v1/oauth/manual`. | — |
 | `OAUTH_PUBLIC_BASE` | string | `API_BASE_PATH + '/oauth'` | Basis-Pfad der öffentlichen OAuth-API (Default: `/api/v1/oauth`). | — |
 | `OAUTH_SESSION_TTL_MIN` | int | `10` | Lebensdauer eines OAuth-States in Minuten. | — |
+| `OAUTH_SPLIT_MODE` | bool | `false` | Aktiviert den Dateisystem-Store für getrennte API- und Callback-Prozesse. | `true` ⇒ setzt voraus, dass `OAUTH_STATE_DIR` auf ein gemeinsames Volume zeigt und `OAUTH_STORE_HASH_CV=false` ist. |
+| `OAUTH_STATE_DIR` | string | `/data/runtime/oauth_state` | Verzeichnis für OAuth-State-Dateien (muss auf beiden Containern identisch gemountet sein). | — |
+| `OAUTH_STATE_TTL_SEC` | int | `600` | TTL der gespeicherten OAuth-States in Sekunden. | Überschreibt `OAUTH_SESSION_TTL_MIN`. |
+| `OAUTH_STORE_HASH_CV` | bool | `true` | Speichert nur den SHA-256-Hash des Code-Verifiers auf der Festplatte. | Im Split-Mode zwingend `false`, da der Callback den Klartext-Verifier benötigt. |
 | `INTEGRATIONS_ENABLED` | csv | `spotify,slskd` | Aktivierte Provider (z. B. `spotify,slskd`). | — |
 | `SLSKD_BASE_URL` | string | `http://127.0.0.1:5030` | Basis-URL für slskd (`SLSKD_URL` bzw. `SLSKD_HOST`/`SLSKD_PORT` werden weiterhin unterstützt). | — |
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
@@ -826,6 +834,15 @@ Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environme
 | `SLSKD_PREFERRED_FORMATS` | csv | `FLAC,ALAC,APE,MP3` | Ranking-Priorisierung für Audioformate. | — |
 | `SLSKD_MAX_RESULTS` | int | `50` | Maximale Treffer pro slskd-Suche. | — |
 | `PROVIDER_MAX_CONCURRENCY` | int | `4` | Parallele Provider-Aufrufe (Spotify/slskd). | — |
+
+##### Split-Callback ohne Redis
+
+- Setze `OAUTH_SPLIT_MODE=true`, wenn Public-API (`/api/v1/oauth/*`) und Callback-App (`http://127.0.0.1:8888/callback`) in getrennten Prozessen/Containern laufen.
+- Beide Dienste müssen dasselbe Host-Verzeichnis auf `/data/runtime/oauth_state` mounten (siehe Docker-Compose: `/srv/harmony/runtime/oauth_state`). Das Verzeichnis darf **nicht** auf unterschiedlichen Dateisystemen liegen – sonst scheitert das atomare `rename()`.
+- Verwende `UMASK=007` (bereits in Compose gesetzt), damit nur Service-User Zugriff erhalten. PUID/PGID müssen identisch konfiguriert werden.
+- `OAUTH_STORE_HASH_CV` **muss** auf `false` stehen, sobald `OAUTH_SPLIT_MODE=true`, damit der Callback den Klartext-Code-Verifier laden kann.
+- Beim Start validiert Harmony (`startup_check_oauth_store`), ob Schreiben, Lesen und Umbenennen im State-Verzeichnis funktionieren. Fehlt das Volume oder ist es read-only, bricht der Start mit `OAUTH_MISCONFIG_FS_STORE` ab.
+- `GET /api/v1/oauth/health` liefert Diagnoseinformationen zum eingesetzten Store (Backend, Verzeichnis, Schreibrechte, TTL).
 
 ##### Spotify OAuth (PRO-Modus)
 

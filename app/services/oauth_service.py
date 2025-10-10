@@ -20,10 +20,12 @@ from pydantic import BaseModel, Field
 from app.config import AppConfig
 from app.core.spotify_cache import SettingsCacheHandler
 from app.logging import get_logger
-from app.services.oauth_transactions import (
-    OAuthTransaction,
+from app.oauth.transactions import (
     OAuthTransactionStore,
+    Transaction,
+    TransactionExpiredError,
     TransactionNotFoundError,
+    TransactionUsedError,
 )
 
 __all__ = [
@@ -168,6 +170,10 @@ class OAuthService:
     def _transaction_ttl(self) -> timedelta:
         return self._transactions.ttl
 
+    def _state_fingerprint(self, state: str) -> str:
+        digest = hashlib.sha256(state.encode("utf-8")).hexdigest()
+        return digest[:12]
+
     def _record_pending_status(self, *, state: str, created_at: datetime) -> None:
         manual_url = self._manual_completion_url()
         record = OAuthStatusResponse(
@@ -292,27 +298,31 @@ class OAuthService:
         state = self._generate_state()
         verifier = self._generate_code_verifier()
         challenge = self._build_code_challenge(verifier)
-        transaction = OAuthTransaction(
-            provider="spotify",
+        issued_at = datetime.now(timezone.utc)
+        ttl_seconds = int(self._transaction_ttl().total_seconds())
+        meta = {
+            "provider": "spotify",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "redirect_uri": self.redirect_uri,
+            "client_hint_ip": request.client.host if request.client else None,
+        }
+        self._transactions.create(
             state=state,
             code_verifier=verifier,
-            code_challenge=challenge,
-            code_challenge_method="S256",
-            redirect_uri=self.redirect_uri,
-            created_at=datetime.now(timezone.utc),
-            client_hint_ip=request.client.host if request.client else None,
+            meta=meta,
+            ttl_seconds=ttl_seconds,
         )
-        self._transactions.save(transaction)
-        expires_at = transaction.created_at + self._transaction_ttl()
+        expires_at = issued_at + self._transaction_ttl()
         manual_url = self._manual_completion_url()
-        self._record_pending_status(state=state, created_at=transaction.created_at)
+        self._record_pending_status(state=state, created_at=issued_at)
         logger.info(
             "OAuth transaction created",
             extra={
                 "event": "oauth.transaction.created",
-                "provider": transaction.provider,
-                "state": state,
-                "client_hint_ip": transaction.client_hint_ip,
+                "provider": "spotify",
+                "state_fingerprint": self._state_fingerprint(state),
+                "client_hint_ip": meta.get("client_hint_ip"),
             },
         )
         return OAuthStartResponse(
@@ -331,11 +341,11 @@ class OAuthService:
             return self._http_client_factory()
         return httpx.AsyncClient(timeout=self._http_timeout)
 
-    async def _exchange_code(self, code: str, transaction: OAuthTransaction) -> Mapping[str, Any]:
+    async def _exchange_code(self, code: str, transaction: Transaction) -> Mapping[str, Any]:
         payload = {
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": transaction.redirect_uri,
+            "redirect_uri": str(transaction.meta.get("redirect_uri", self.redirect_uri)),
             "client_id": self._config.spotify.client_id,
             "code_verifier": transaction.code_verifier,
         }
@@ -353,7 +363,7 @@ class OAuthService:
                 "Spotify token exchange failed",
                 extra={
                     "event": "oauth.token_exchange.failed",
-                    "provider": transaction.provider,
+                    "provider": transaction.meta.get("provider", "spotify"),
                     "status": response.status_code,
                 },
             )
@@ -370,19 +380,40 @@ class OAuthService:
             "Spotify tokens stored",
             extra={
                 "event": "oauth.token_exchange.completed",
-                "provider": transaction.provider,
-                "state": transaction.state,
+                "provider": transaction.meta.get("provider", "spotify"),
+                "state_fingerprint": self._state_fingerprint(transaction.state),
             },
         )
         return token_info
 
-    def _consume_transaction(self, state: str) -> OAuthTransaction:
+    def _consume_transaction(self, state: str) -> Transaction:
         try:
             transaction = self._transactions.consume(state)
         except TransactionNotFoundError as exc:
             logger.warning(
                 "OAuth transaction missing or expired",
-                extra={"event": "oauth.transaction.missing", "state": state},
+                extra={
+                    "event": "oauth.transaction.missing",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
+            )
+            raise
+        except TransactionUsedError as exc:
+            logger.warning(
+                "OAuth transaction already consumed",
+                extra={
+                    "event": "oauth.transaction.used",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
+            )
+            raise
+        except TransactionExpiredError as exc:
+            logger.warning(
+                "OAuth transaction expired on consume",
+                extra={
+                    "event": "oauth.transaction.expired",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
             )
             raise
         return transaction
@@ -399,10 +430,38 @@ class OAuthService:
                 completed_at=None,
             )
             raise
-        if transaction.is_expired(ttl=self._transaction_ttl()):
+        except TransactionUsedError:
+            self._update_status_record(
+                state,
+                status=OAuthSessionStatus.FAILED,
+                error_code=OAuthErrorCode.OAUTH_STATE_MISMATCH,
+                message="State has already been used.",
+                completed_at=None,
+            )
+            raise
+        except TransactionExpiredError:
             logger.warning(
                 "OAuth transaction expired",
-                extra={"event": "oauth.transaction.expired", "state": state},
+                extra={
+                    "event": "oauth.transaction.expired",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
+            )
+            self._update_status_record(
+                state,
+                status=OAuthSessionStatus.EXPIRED,
+                error_code=OAuthErrorCode.OAUTH_CODE_EXPIRED,
+                message="Authorization code expired. Start a new session.",
+                completed_at=None,
+            )
+            raise ValueError(OAuthErrorCode.OAUTH_CODE_EXPIRED.value)
+        if transaction.is_expired(reference=datetime.now(timezone.utc)):
+            logger.warning(
+                "OAuth transaction expired",
+                extra={
+                    "event": "oauth.transaction.expired",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
             )
             self._update_status_record(
                 state,
@@ -487,7 +546,7 @@ class OAuthService:
             )
         try:
             await self.complete(state=state, code=code)
-        except TransactionNotFoundError:
+        except (TransactionNotFoundError, TransactionUsedError):
             return OAuthManualResponse(
                 ok=False,
                 provider="spotify",
@@ -517,7 +576,10 @@ class OAuthService:
         except Exception:
             logger.exception(
                 "Manual OAuth completion failed",
-                extra={"event": "oauth.manual.failed", "state": state},
+                extra={
+                    "event": "oauth.manual.failed",
+                    "state_fingerprint": self._state_fingerprint(state),
+                },
             )
             return OAuthManualResponse(
                 ok=False,
@@ -537,6 +599,18 @@ class OAuthService:
         )
 
     def health(self) -> Mapping[str, Any]:
+        describe = getattr(self._transactions, "describe", None)
+        store_info: Mapping[str, Any]
+        if callable(describe):
+            try:
+                store_info = describe()
+            except Exception:  # pragma: no cover - defensive
+                store_info = {"backend": "unknown"}
+        else:
+            store_info = {
+                "backend": "memory",
+                "ttl_seconds": int(self._transaction_ttl().total_seconds()),
+            }
         return {
             "provider": "spotify",
             "active_transactions": self._transactions.count(),
@@ -544,6 +618,7 @@ class OAuthService:
             "manual_enabled": self.manual_enabled,
             "redirect_uri": self.redirect_uri,
             "public_host_hint": self.public_host_hint,
+            "store": store_info,
         }
 
     def help_page_context(self) -> Mapping[str, Any]:

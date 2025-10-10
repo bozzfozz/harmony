@@ -11,7 +11,11 @@ services:
     environment:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
-      UMASK: "${UMASK:-002}"
+      UMASK: "${UMASK:-007}"
+      OAUTH_SPLIT_MODE: "${OAUTH_SPLIT_MODE:-false}"
+      OAUTH_STATE_DIR: /data/runtime/oauth_state
+      OAUTH_STATE_TTL_SEC: "${OAUTH_STATE_TTL_SEC:-600}"
+      OAUTH_STORE_HASH_CV: "${OAUTH_STORE_HASH_CV:-true}"
       DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -40,6 +44,9 @@ services:
       - type: bind
         source: /srv/media/music
         target: /data/music
+      - type: bind
+        source: /srv/harmony/runtime/oauth_state
+        target: /data/runtime/oauth_state
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/ready"]
       interval: 30s
@@ -54,7 +61,7 @@ services:
     environment:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
-      UMASK: "${UMASK:-002}"
+      UMASK: "${UMASK:-007}"
     ports:
       - "5030:5030"
     volumes:

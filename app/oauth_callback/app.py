@@ -6,8 +6,8 @@ from fastapi import Depends, FastAPI, status
 from fastapi.responses import HTMLResponse
 
 from app.dependencies import get_oauth_service
+from app.oauth.transactions import TransactionNotFoundError, TransactionUsedError
 from app.services.oauth_service import OAuthErrorCode, OAuthService
-from app.services.oauth_transactions import TransactionNotFoundError
 
 __all__ = ["app_oauth_callback", "create_callback_app"]
 
@@ -92,7 +92,7 @@ def create_callback_app() -> FastAPI:
             return HTMLResponse(content=html, status_code=status.HTTP_200_OK)
         try:
             await service.complete(state=state, code=code)
-        except TransactionNotFoundError:
+        except (TransactionNotFoundError, TransactionUsedError):
             message = "Der übergebene State ist unbekannt oder wurde bereits verwendet."
             return HTMLResponse(content=f"<p>{message}</p>", status_code=status.HTTP_400_BAD_REQUEST)
         except ValueError as exc:
