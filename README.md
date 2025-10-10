@@ -82,7 +82,9 @@ Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
 | `OAUTH_STATE_DIR` | ➖ | Gemeinsames Verzeichnis für OAuth-States (Default: `/data/runtime/oauth_state`). |
 | `OAUTH_STATE_TTL_SEC` | ➖ | Lebensdauer eines OAuth-States in Sekunden (Default: `600`). |
 | `OAUTH_STORE_HASH_CV` | ➖ | Speichert nur den Hash des Code-Verifiers (Default: `true`, in Split-Mode `false`). |
-| `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs. |
+| `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs (Default: `http://localhost:8080`). |
+| `PUBLIC_SENTRY_DSN` | ➖ | Optionaler Sentry-DSN für Laufzeitfehler im Frontend (Default: leer). |
+| `PUBLIC_FEATURE_FLAGS` | ➖ | JSON-kodierte Feature-Flags für das Frontend (Default: `{}`). |
 | `FEATURE_REQUIRE_AUTH` & `HARMONY_API_KEYS` | ✅ (Prod) | Erzwingen API-Key-Schutz für OAuth-Endpoints. |
 
 Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
@@ -560,6 +562,15 @@ cd frontend
 npm ci --no-audit --no-fund
 npm run dev
 ```
+
+#### Runtime-Konfiguration (`env.runtime.js`)
+
+- Die Laufzeitkonfiguration der SPA basiert auf [`public/env.runtime.js.tpl`](frontend/public/env.runtime.js.tpl).
+- Vor `npm run dev` und `npm run build` rendert `node scripts/render-runtime-config.mjs` automatisch `public/env.runtime.js`
+  sowie `dist/env.runtime.js`.
+- `PUBLIC_BACKEND_URL` und `PUBLIC_SENTRY_DSN` werden als Strings übernommen; fehlende Werte bleiben leer.
+- `PUBLIC_FEATURE_FLAGS` muss ein JSON-Objekt sein. Ungültige oder leere Werte fallen auf `{}` zurück und werden mit einem
+  Hinweis im Log ersetzt.
 
 Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_BASE_URL` (Host, z. B. `http://127.0.0.1:8000`) und optional `VITE_API_BASE_PATH` (Default: kein Präfix) angebunden werden.
 

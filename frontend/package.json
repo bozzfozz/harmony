@@ -8,7 +8,9 @@
     "npm": ">=10 <11"
   },
   "scripts": {
+    "predev": "node scripts/render-runtime-config.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/render-runtime-config.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
