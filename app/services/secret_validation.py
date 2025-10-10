@@ -284,15 +284,19 @@ class SecretValidationService:
     async def _request_slskd(self, api_key: str, base_url: str) -> httpx.Response:
         parsed = urlparse(base_url.strip())
         base_segments = [segment for segment in parsed.path.split("/") if segment]
+
+        trimmed_segments = list(base_segments)
+        if trimmed_segments and re.fullmatch(r"v\d+", trimmed_segments[-1]):
+            if len(trimmed_segments) >= 2 and trimmed_segments[-2] == "api":
+                trimmed_segments = trimmed_segments[:-2]
+            else:
+                trimmed_segments = trimmed_segments[:-1]
+        if trimmed_segments and trimmed_segments[-1] == "api":
+            trimmed_segments = trimmed_segments[:-1]
+
         target_segments = ["api", "v2", "me"]
-        overlap = 0
-        max_overlap = min(len(base_segments), len(target_segments))
-        for size in range(max_overlap, 0, -1):
-            if base_segments[-size:] == target_segments[:size]:
-                overlap = size
-                break
-        combined_segments = base_segments + target_segments[overlap:]
-        path = "/" + "/".join(combined_segments)
+        path_segments = trimmed_segments + target_segments
+        path = "/" + "/".join(path_segments)
         normalized_url = urlunparse(
             parsed._replace(path=path, params="", query="", fragment="")
         )
