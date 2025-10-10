@@ -30,6 +30,107 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
+## FLOW-002 – Spotify PRO OAuth Upgrade
+
+[RUNBOOK_FLOW_002.md](RUNBOOK_FLOW_002.md) beschreibt die operativen Schritte, während
+[AUDIT-FLOW-002.md](AUDIT-FLOW-002.md) die kontrollierte Umsetzung für Audits
+nachweist.
+
+### Überblick
+
+FLOW-002 aktiviert den vollständigen Spotify-PRO-Modus und verbindet OAuth-basierte
+Freigaben mit Soulseek-Downloads und Backfill-Läufen:
+
+1. **OAuth-Initialisierung** – `POST /spotify/pro/oauth/start` legt einen
+   zustandsbehafteten Vorgang in
+   [`OAuthTransactionStore`](app/services/oauth_transactions.py) an und leitet zur
+   Spotify-Consent-Seite weiter.
+2. **Callback-Verarbeitung** – `GET /spotify/oauth/callback` bzw. der manuelle Pfad
+   `POST /api/v1/oauth/manual` konsumieren den State, tauschen den Code gegen Tokens
+   (`OAuthService`) und persistieren Secrets via `SecretStore`.
+3. **Backfill-Orchestrierung** – nach erfolgreicher Autorisierung löst
+   [`BackfillService`](app/services/backfill_service.py) automatische Upgrades der
+   FREE-Daten aus und aktualisiert Playlist-/Track-Metadaten.
+4. **Soulseek-Synchronisation** – die Worker (`watchlist`, `download` und
+   `matching`) verwenden die neuen Tokens, um priorisierte Artists direkt mit
+   Soulseek zu verknüpfen.
+
+Der Flow gilt als erfolgreich, wenn `GET /spotify/status` `authorized: true`
+meldet, die Watchlist ohne OAuth-Fehler läuft und `reports/` keine neuen DLQ-Einträge
+für Spotify enthält. Alle Schritte sind idempotent; fehlgeschlagene
+Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
+
+### Relevante Umgebungsvariablen
+
+| Variable | Pflicht | Zweck |
+| --- | --- | --- |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | ✅ | OAuth-Client aus der Spotify Developer Console. |
+| `SPOTIFY_REDIRECT_URI` | ✅ | Muss exakt mit der registrierten Redirect-URI übereinstimmen. |
+| `OAUTH_CALLBACK_PORT` | ➖ | Öffnet den lokalen Callback-Port (`http://127.0.0.1:<port>/callback`). |
+| `OAUTH_MANUAL_CALLBACK_ENABLE` | ➖ | Aktiviert den Fallback-Endpunkt für Remote-Fixes. |
+| `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs. |
+| `FEATURE_REQUIRE_AUTH` & `HARMONY_API_KEYS` | ✅ (Prod) | Erzwingen API-Key-Schutz für OAuth-Endpoints. |
+
+Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
+[„Backend-Umgebungsvariablen“](#backend-umgebungsvariablen) dokumentiert.
+
+### Verzeichnislayout & Berechtigungen
+
+- **Codepfade:**
+  - `app/services/oauth_service.py` kapselt State-Validierung, Token-Austausch und
+    Fehlercodes.
+  - `app/services/secret_store.py` persistiert Secrets (`write` benötigt).
+  - `app/routers/spotify_router.py` und `app/routers/settings_router.py`
+    veröffentlichen die OAuth- und Status-Endpunkte.
+  - `frontend/src/pages/SpotifyPage.tsx` und
+    `frontend/src/pages/SpotifyProOAuthCallback.tsx` (siehe
+    [docs/frontend/spotify-pro-oauth.md](docs/frontend/spotify-pro-oauth.md)) liefern
+    die Benutzerführung.
+- **Laufzeitverzeichnisse:**
+  - `/data/` im Container speichert Downloads (`/data/downloads`) sowie die
+    normalisierte Musikbibliothek (`/data/music`).
+  - `reports/` enthält Coverage-, JUnit- sowie DLQ-/Backfill-Logs und sollte als
+    Persistenz-Ziel gemountet werden, wenn Analysen hostübergreifend benötigt
+    werden.
+  - Optional eingehängte Secret-Pfade (`/run/secrets/*` o. Ä.) müssen strikt mit
+    `chmod 600` (Files) bzw. `chmod 700` (Verzeichnisse) abgesichert sein, wenn
+    Spotify-Credentials nicht ausschließlich über ENV oder die Datenbank
+    bereitgestellt werden.
+
+### Wiederherstellung & Notfallmaßnahmen
+
+- **OAuth Remote Fix:** Folgen Sie dem Abschnitt
+  [„Docker OAuth Fix (Remote Access)”](#docker-oauth-fix-remote-access), um Codes
+  manuell einzuspielen oder Port-Forwarding zu aktivieren. Der Runbook-Abschnitt
+  [„OAuth-Token wiederherstellen“](RUNBOOK_FLOW_002.md#oauth-token-wiederherstellen)
+  beschreibt die Schritte im Detail.
+- **Token-Reset:** Löschen Sie die Secrets via `/settings`, setzen Sie neue ENV-Werte
+  oder führen Sie den Runbook-Punkt
+  [„Secrets rotieren“](RUNBOOK_FLOW_002.md#secrets-rotieren) aus. Worker stoppen
+  automatisch, falls `GET /spotify/status` `authorized: false` meldet.
+- **Backfill-DLQ bereinigen:** Folgen Sie `RUNBOOK_FLOW_002.md#dlq-und-backfill` für
+  das Abarbeiten von Fehlersätzen.
+
+### Docker-Mount-Beispiele
+
+```bash
+docker run -d \
+  --name harmony-flow-002 \
+  -p 8080:8080 \
+  -p 8888:8888 \
+  -e HARMONY_API_KEYS=change-me \
+  -e SPOTIFY_CLIENT_ID=your-client-id \
+  -e SPOTIFY_CLIENT_SECRET=your-client-secret \
+  -e SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback \
+  -v $(pwd)/data:/data:rw \
+  -v $(pwd)/secrets/oauth:/var/lib/harmony/oauth:rw \
+  -v $(pwd)/logs:/var/log/harmony:rw \
+  ghcr.io/bozzfozz/harmony:latest
+```
+
+Alle Mounts sind optional, ermöglichen jedoch Persistenz für Downloads (`/data`),
+OAuth-Secrets und strukturierte Logs.
+
 ## Testing & Coverage Policy
 
 - **Schnelle Feedback-Schleife:** `pytest -q -m "not postgres" -r s --cov=app --cov-report=term` erzeugt lokal denselben
