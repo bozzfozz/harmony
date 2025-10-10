@@ -153,23 +153,23 @@ def get_session_runner() -> SessionRunner:
 
 
 if TYPE_CHECKING:  # pragma: no cover - import hints only for static analysis
-    from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
-    from app.orchestrator.download_flow.runtime import DownloadFlowRuntime
+    from app.hdm.orchestrator import HdmOrchestrator
+    from app.hdm.runtime import HdmRuntime
 
 
-def get_download_flow_runtime(request: Request) -> "DownloadFlowRuntime":
-    from app.orchestrator.download_flow.runtime import DownloadFlowRuntime
+def get_hdm_runtime(request: Request) -> "HdmRuntime":
+    from app.hdm.runtime import HdmRuntime
 
-    runtime = getattr(request.app.state, "download_flow_runtime", None)
-    if not isinstance(runtime, DownloadFlowRuntime):
-        raise RuntimeError("Download flow runtime is not available")
+    runtime = getattr(request.app.state, "hdm_runtime", None)
+    if not isinstance(runtime, HdmRuntime):
+        raise RuntimeError("Harmony Download Manager runtime is not available")
     return runtime
 
 
-def get_download_flow_orchestrator(request: Request) -> "DownloadFlowOrchestrator":
-    from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
+def get_hdm_orchestrator(request: Request) -> "HdmOrchestrator":
+    from app.hdm.orchestrator import HdmOrchestrator
 
-    runtime = get_download_flow_runtime(request)
+    runtime = get_hdm_runtime(request)
     return runtime.orchestrator
 
 

@@ -1,4 +1,4 @@
-"""Tests for atomic file move fallbacks in the download flow."""
+"""Tests for atomic file move fallbacks in the Harmony Download Manager."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.move import AtomicFileMover
+from app.hdm.move import AtomicFileMover
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,

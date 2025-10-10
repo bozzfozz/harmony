@@ -1,4 +1,4 @@
-"""Focused tests for single item submission handling in the download flow."""
+"""Focused tests for single item submission handling in the Harmony Download Manager."""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
-from app.orchestrator.download_flow.idempotency import InMemoryIdempotencyStore
-from app.orchestrator.download_flow.models import (
+from app.hdm.idempotency import InMemoryIdempotencyStore
+from app.hdm.models import (
     BatchStatus,
     DownloadBatchRequest,
     DownloadOutcome,
     DownloadRequestItem,
     DownloadWorkItem,
 )
-from app.orchestrator.download_flow.pipeline import DownloadPipeline
+from app.hdm.orchestrator import HdmOrchestrator
+from app.hdm.pipeline import DownloadPipeline
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,
@@ -51,7 +51,7 @@ class _ImmediatePipeline(DownloadPipeline):
 @pytest.mark.asyncio
 async def test_submit_single_returns_success_summary() -> None:
     pipeline = _ImmediatePipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=2,
@@ -82,7 +82,7 @@ async def test_submit_single_returns_success_summary() -> None:
 @pytest.mark.asyncio
 async def test_submit_single_requires_requested_by() -> None:
     pipeline = _ImmediatePipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,
@@ -101,7 +101,7 @@ async def test_submit_single_requires_requested_by() -> None:
 @pytest.mark.asyncio
 async def test_batch_request_normalises_requested_by() -> None:
     pipeline = _ImmediatePipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=1,

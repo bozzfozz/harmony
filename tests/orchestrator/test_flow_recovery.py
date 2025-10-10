@@ -1,4 +1,4 @@
-"""Tests ensuring download flow recovery handles crash scenarios and size stability."""
+"""Tests ensuring Harmony Download Manager recovery handles crash scenarios and size stability."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.completion import (
+from app.hdm.completion import (
     CompletionEventBus,
     DownloadCompletionEvent,
     DownloadCompletionMonitor,
 )
-from app.orchestrator.download_flow.models import DownloadItem
-from app.orchestrator.download_flow.recovery import (
-    DownloadFlowRecovery,
+from app.hdm.models import DownloadItem
+from app.hdm.recovery import (
+    HdmRecovery,
     SidecarStore,
 )
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
@@ -85,7 +85,7 @@ async def test_recovery_scans_sidecars_and_publishes_events(tmp_path: Path) -> N
             return int(path.stat().st_size)
 
     monitor = DummyMonitor()
-    recovery = DownloadFlowRecovery(
+    recovery = HdmRecovery(
         size_stable_seconds=1,
         sidecars=SidecarStore(sidecar_dir),
         completion_monitor=monitor,  # type: ignore[arg-type]

@@ -1,9 +1,7 @@
-from __future__ import annotations
+"""Harmony Download Manager (HDM) package."""
 
-import warnings
-
-from app.hdm import (
-    BatchHandle,
+from .idempotency import IdempotencyReservation, IdempotencyStore, InMemoryIdempotencyStore
+from .models import (
     BatchStatus,
     BatchSummary,
     BatchTotals,
@@ -14,22 +12,11 @@ from app.hdm import (
     DownloadRequestItem,
     DownloadWorkItem,
     DurationStats,
-    HdmOrchestrator,
-    IdempotencyReservation,
-    IdempotencyStore,
-    InMemoryIdempotencyStore,
     ItemEvent,
     ItemState,
-    RetryableDownloadError,
 )
-
-warnings.warn(
-    f"{__package__} is deprecated; import from app.hdm instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-
-DownloadFlowOrchestrator = HdmOrchestrator
+from .orchestrator import BatchHandle, HdmOrchestrator
+from .pipeline import DownloadPipeline, DownloadPipelineError, RetryableDownloadError
 
 __all__ = [
     "BatchHandle",
@@ -37,10 +24,11 @@ __all__ = [
     "BatchSummary",
     "BatchTotals",
     "DownloadBatchRequest",
-    "DownloadFlowOrchestrator",
     "DownloadItem",
     "DownloadItemResult",
     "DownloadOutcome",
+    "DownloadPipeline",
+    "DownloadPipelineError",
     "DownloadRequestItem",
     "DownloadWorkItem",
     "DurationStats",

@@ -8,8 +8,8 @@ import types
 
 import pytest
 
-from app.orchestrator.download_flow.models import DownloadItem
-from app.orchestrator.download_flow.tagging import AudioTagger
+from app.hdm.models import DownloadItem
+from app.hdm.tagging import AudioTagger
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,

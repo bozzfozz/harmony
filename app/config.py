@@ -126,7 +126,7 @@ class SoulseekConfig:
 
 
 @dataclass(slots=True)
-class DownloadFlowConfig:
+class HdmConfig:
     downloads_dir: str
     music_dir: str
     worker_concurrency: int
@@ -137,7 +137,7 @@ class DownloadFlowConfig:
     move_template: str
 
     @classmethod
-    def from_env(cls, env: Mapping[str, Any]) -> "DownloadFlowConfig":
+    def from_env(cls, env: Mapping[str, Any]) -> "HdmConfig":
         return cls(
             downloads_dir=str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR),
             music_dir=str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR),
@@ -170,6 +170,10 @@ class DownloadFlowConfig:
                 env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE
             ),
         )
+
+
+# Backward compatibility alias (remove in v1.2.0)
+DownloadFlowConfig = HdmConfig
 
 
 @dataclass(slots=True)
@@ -696,7 +700,7 @@ class Settings:
     orchestrator: OrchestratorConfig
     external: ExternalCallPolicy
     watchlist_timer: WatchlistTimerConfig
-    download_flow: DownloadFlowConfig
+    hdm: HdmConfig
     provider_profiles: dict[str, ProviderProfile]
     retry_policy: "RetryPolicyConfig"
 
@@ -706,13 +710,13 @@ class Settings:
         orchestrator = OrchestratorConfig.from_env(env_map)
         external = ExternalCallPolicy.from_env(env_map)
         watchlist_timer = WatchlistTimerConfig.from_env(env_map)
-        download_flow = DownloadFlowConfig.from_env(env_map)
+        hdm = HdmConfig.from_env(env_map)
         profiles = _load_provider_profiles(env_map, external)
         return cls(
             orchestrator=orchestrator,
             external=external,
             watchlist_timer=watchlist_timer,
-            download_flow=download_flow,
+            hdm=hdm,
             provider_profiles=profiles,
             retry_policy=_load_retry_policy(env_map),
         )

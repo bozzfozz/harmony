@@ -7,7 +7,7 @@ from .artist_sync import (
     handle_artist_sync,
 )
 from .dispatcher import Dispatcher
-from .download_flow.controller import BatchHandle, DownloadFlowOrchestrator
+from app.hdm.orchestrator import BatchHandle, HdmOrchestrator
 from .handlers import enqueue_spotify_backfill, get_spotify_backfill_status
 from .scheduler import PriorityConfig, Scheduler
 from .timer import WatchlistTimer
@@ -16,7 +16,7 @@ __all__ = [
     "ArtistSyncHandlerDeps",
     "build_artist_sync_handler",
     "Dispatcher",
-    "DownloadFlowOrchestrator",
+    "HdmOrchestrator",
     "BatchHandle",
     "enqueue_artist_sync",
     "enqueue_spotify_backfill",

@@ -20,10 +20,7 @@ from app.orchestrator.handlers import (
     LyricsService,
     MetadataService,
 )
-from app.orchestrator.download_flow.runtime import (
-    DownloadFlowRuntime,
-    build_download_flow_runtime,
-)
+from app.hdm.runtime import HdmRuntime, build_hdm_runtime
 from app.orchestrator.providers import (
     build_artist_delta_handler_deps,
     build_artist_refresh_handler_deps,
@@ -47,7 +44,7 @@ class OrchestratorRuntime:
     handlers: Mapping[str, JobHandler]
     enabled_jobs: Mapping[str, bool]
     import_worker: Optional[ImportWorker]
-    download_flow: DownloadFlowRuntime
+    hdm: HdmRuntime
 
 
 def bootstrap_orchestrator(
@@ -111,9 +108,7 @@ def bootstrap_orchestrator(
     )
     import_worker = ImportWorker(free_ingest_service=free_ingest_service)
 
-    download_flow_runtime = build_download_flow_runtime(
-        config.download_flow, config.soulseek
-    )
+    hdm_runtime = build_hdm_runtime(config.hdm, config.soulseek)
 
     enabled_jobs: dict[str, bool] = {}
     job_types = [
@@ -137,7 +132,7 @@ def bootstrap_orchestrator(
         handlers=handlers,
         enabled_jobs=enabled_jobs,
         import_worker=import_worker,
-        download_flow=download_flow_runtime,
+        hdm=hdm_runtime,
     )
 
 

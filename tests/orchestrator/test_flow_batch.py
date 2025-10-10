@@ -1,4 +1,4 @@
-"""Stress tests for batch processing behaviour of the download flow orchestrator."""
+"""Stress tests for batch processing behaviour of the Harmony Download Manager orchestrator."""
 
 from __future__ import annotations
 
@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
-from app.orchestrator.download_flow.idempotency import InMemoryIdempotencyStore
-from app.orchestrator.download_flow.models import (
+from app.hdm.idempotency import InMemoryIdempotencyStore
+from app.hdm.models import (
     BatchStatus,
     DownloadBatchRequest,
     DownloadOutcome,
@@ -17,7 +16,8 @@ from app.orchestrator.download_flow.models import (
     DownloadWorkItem,
     ItemState,
 )
-from app.orchestrator.download_flow.pipeline import DownloadPipeline
+from app.hdm.orchestrator import HdmOrchestrator
+from app.hdm.pipeline import DownloadPipeline
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,
@@ -80,7 +80,7 @@ class _BlockingPipeline(DownloadPipeline):
 async def test_high_volume_batch_respects_concurrency_limits() -> None:
     total_items = 1200
     pipeline = _ConcurrentTrackingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=5,
@@ -115,7 +115,7 @@ async def test_high_volume_batch_respects_concurrency_limits() -> None:
 @pytest.mark.asyncio
 async def test_idempotency_skips_in_progress_duplicates() -> None:
     pipeline = _BlockingPipeline()
-    orchestrator = DownloadFlowOrchestrator(
+    orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=InMemoryIdempotencyStore(),
         worker_concurrency=2,

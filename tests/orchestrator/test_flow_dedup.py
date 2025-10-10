@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from app.orchestrator.download_flow.dedup import DeduplicationManager
-from app.orchestrator.download_flow.models import DownloadItem
+from app.hdm.dedup import DeduplicationManager
+from app.hdm.models import DownloadItem
 from tests.orchestrator._flow_fixtures import (  # noqa: F401
     configure_environment,
     reset_activity_manager,

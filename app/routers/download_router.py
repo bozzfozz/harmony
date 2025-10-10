@@ -9,16 +9,16 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 
-from app.dependencies import get_download_flow_orchestrator, get_download_service
+from app.dependencies import get_download_service, get_hdm_orchestrator
 from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
-from app.orchestrator.download_flow.models import DownloadBatchRequest, DownloadRequestItem
+from app.hdm.models import DownloadBatchRequest, DownloadRequestItem
+from app.hdm.orchestrator import HdmOrchestrator
 from app.schemas import (
     DownloadEntryResponse,
-    DownloadFlowBatchRequest,
-    DownloadFlowSubmissionResponse,
+    HdmBatchRequest,
+    HdmSubmissionResponse,
     DownloadListResponse,
     DownloadPriorityUpdate,
     SoulseekDownloadRequest,
@@ -26,7 +26,7 @@ from app.schemas import (
 from app.services.download_service import DownloadService
 
 router = APIRouter(tags=["Download"])
-logger = get_logger(__name__)
+logger = get_logger("hdm.router")
 
 
 def _parse_iso8601(value: str) -> datetime:
@@ -76,13 +76,13 @@ def list_downloads(
 @router.post(
     "/downloads",
     status_code=status.HTTP_202_ACCEPTED,
-    response_model=DownloadFlowSubmissionResponse,
+    response_model=HdmSubmissionResponse,
 )
-async def submit_download_flow(
-    payload: DownloadFlowBatchRequest,
-    orchestrator: DownloadFlowOrchestrator = Depends(get_download_flow_orchestrator),
-) -> DownloadFlowSubmissionResponse:
-    """Submit a batch of download flow requests to the orchestrator."""
+async def submit_hdm_batch(
+    payload: HdmBatchRequest,
+    orchestrator: HdmOrchestrator = Depends(get_hdm_orchestrator),
+) -> HdmSubmissionResponse:
+    """Submit a batch of Harmony Download Manager requests to the orchestrator."""
 
     items = [
         DownloadRequestItem(
@@ -107,15 +107,15 @@ async def submit_download_flow(
     )
     log_event(
         logger,
-        "api.download_flow.submit",
-        component="router.download_flow",
+        "api.hdm.submit",
+        component="router.hdm",
         status="requested",
         entity_id=batch_request.batch_id,
         items=len(batch_request.items),
         requested_by=batch_request.requested_by,
     )
     handle = await orchestrator.submit_batch(batch_request)
-    return DownloadFlowSubmissionResponse(
+    return HdmSubmissionResponse(
         batch_id=handle.batch_id,
         items_total=handle.items_total,
         requested_by=handle.requested_by,

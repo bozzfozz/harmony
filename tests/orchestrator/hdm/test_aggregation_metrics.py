@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from app.config import override_runtime_env
-from app.orchestrator.download_flow import aggregation as aggregation_module
-from app.orchestrator.download_flow.models import (
+from app.hdm import aggregation as aggregation_module
+from app.hdm.models import (
     DownloadItem,
     DownloadOutcome,
     ItemEvent,
@@ -102,30 +102,30 @@ async def test_record_success_emits_phase_metrics() -> None:
     )
 
     samples = _collect_metric_samples()
-    assert samples[("download_flow_item_outcomes_total", (("state", "done"),))] == 1.0
-    assert samples[("download_flow_processing_seconds_count", ())] == 1.0
-    assert samples[("download_flow_processing_seconds_sum", ())] == pytest.approx(3.5)
+    assert samples[("hdm_item_outcomes_total", (("state", "done"),))] == 1.0
+    assert samples[("hdm_processing_seconds_count", ())] == 1.0
+    assert samples[("hdm_processing_seconds_sum", ())] == pytest.approx(3.5)
     assert samples[
         (
-            "download_flow_phase_duration_seconds_count",
+            "hdm_phase_duration_seconds_count",
             (("phase", "download"),),
         )
     ] == 1.0
     assert samples[
         (
-            "download_flow_phase_duration_seconds_sum",
+            "hdm_phase_duration_seconds_sum",
             (("phase", "download"),),
         )
     ] == pytest.approx(1.0)
     assert samples[
         (
-            "download_flow_phase_duration_seconds_sum",
+            "hdm_phase_duration_seconds_sum",
             (("phase", "tagging"),),
         )
     ] == pytest.approx(1.0)
     assert samples[
         (
-            "download_flow_phase_duration_seconds_sum",
+            "hdm_phase_duration_seconds_sum",
             (("phase", "moving"),),
         )
     ] == pytest.approx(1.0)
@@ -148,12 +148,12 @@ async def test_record_failure_tracks_failure_metrics() -> None:
     )
 
     samples = _collect_metric_samples()
-    assert samples[("download_flow_item_outcomes_total", (("state", "failed"),))] == 1.0
+    assert samples[("hdm_item_outcomes_total", (("state", "failed"),))] == 1.0
     assert samples[
-        ("download_flow_item_failures_total", (("error_type", "ValueError"),))
+        ("hdm_item_failures_total", (("error_type", "ValueError"),))
     ] == 1.0
-    assert samples[("download_flow_processing_seconds_count", ())] == 1.0
-    assert samples[("download_flow_processing_seconds_sum", ())] == pytest.approx(4.2)
+    assert samples[("hdm_processing_seconds_count", ())] == 1.0
+    assert samples[("hdm_processing_seconds_sum", ())] == pytest.approx(4.2)
 
 
 @pytest.mark.asyncio()
@@ -181,8 +181,8 @@ async def test_record_retry_and_duplicate_metrics() -> None:
 
     samples = _collect_metric_samples()
     assert samples[
-        ("download_flow_item_retries_total", (("error_type", "RuntimeError"),))
+        ("hdm_item_retries_total", (("error_type", "RuntimeError"),))
     ] == 1.0
-    assert samples[("download_flow_duplicates_total", (("already_processed", "true"),))] == 1.0
-    assert samples[("download_flow_dedupe_hits_total", ())] == 1.0
-    assert samples[("download_flow_item_outcomes_total", (("state", "duplicate"),))] == 1.0
+    assert samples[("hdm_duplicates_total", (("already_processed", "true"),))] == 1.0
+    assert samples[("hdm_dedupe_hits_total", ())] == 1.0
+    assert samples[("hdm_item_outcomes_total", (("state", "duplicate"),))] == 1.0

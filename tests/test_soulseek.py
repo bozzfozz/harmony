@@ -19,7 +19,7 @@ def test_soulseek_search(client: SimpleTestClient) -> None:
     assert entry["files"][0]["title"].lower().startswith("test")
 
 
-def test_soulseek_download_flow(client: SimpleTestClient) -> None:
+def test_soulseek_hdm_flow(client: SimpleTestClient) -> None:
     download_payload = {
         "username": "tester",
         "files": [{"filename": "song.mp3", "size": 123}],

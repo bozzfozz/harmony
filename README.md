@@ -30,15 +30,15 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
-## FLOW-002 – Spotify PRO OAuth Upgrade
+## Harmony Download Manager (HDM) – Spotify PRO OAuth Upgrade
 
-[RUNBOOK_FLOW_002.md](RUNBOOK_FLOW_002.md) beschreibt die operativen Schritte, während
-[AUDIT-FLOW-002.md](AUDIT-FLOW-002.md) die kontrollierte Umsetzung für Audits
-nachweist.
+[RUNBOOK_HDM.md](RUNBOOK_HDM.md) beschreibt die operativen Schritte, während
+[AUDIT-HDM.md](AUDIT-HDM.md) die kontrollierte Umsetzung für Audits
+nachweist. (Historisch: FLOW-002)
 
 ### Überblick
 
-FLOW-002 aktiviert den vollständigen Spotify-PRO-Modus und verbindet OAuth-basierte
+HDM aktiviert den vollständigen Spotify-PRO-Modus und verbindet OAuth-basierte
 Freigaben mit Soulseek-Downloads und Backfill-Läufen:
 
 1. **OAuth-Initialisierung** – `POST /spotify/pro/oauth/start` legt einen
@@ -104,13 +104,13 @@ Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
 - **OAuth Remote Fix:** Folgen Sie dem Abschnitt
   [„Docker OAuth Fix (Remote Access)”](#docker-oauth-fix-remote-access), um Codes
   manuell einzuspielen oder Port-Forwarding zu aktivieren. Der Runbook-Abschnitt
-  [„OAuth-Token wiederherstellen“](RUNBOOK_FLOW_002.md#oauth-token-wiederherstellen)
+  [„OAuth-Token wiederherstellen“](RUNBOOK_HDM.md#oauth-token-wiederherstellen)
   beschreibt die Schritte im Detail.
 - **Token-Reset:** Löschen Sie die Secrets via `/settings`, setzen Sie neue ENV-Werte
   oder führen Sie den Runbook-Punkt
-  [„Secrets rotieren“](RUNBOOK_FLOW_002.md#secrets-rotieren) aus. Worker stoppen
+  [„Secrets rotieren“](RUNBOOK_HDM.md#secrets-rotieren) aus. Worker stoppen
   automatisch, falls `GET /spotify/status` `authorized: false` meldet.
-- **Backfill-DLQ bereinigen:** Folgen Sie `RUNBOOK_FLOW_002.md#dlq-und-backfill` für
+- **Backfill-DLQ bereinigen:** Folgen Sie `RUNBOOK_HDM.md#dlq-und-backfill` für
   das Abarbeiten von Fehlersätzen.
 
 ### Docker-Mount-Beispiele
