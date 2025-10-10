@@ -6,63 +6,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import DownloadFlowConfig
-from app.logging import get_logger
 
+from .completion import CompletionEventBus, DownloadCompletionMonitor
 from .controller import DownloadFlowOrchestrator
+from .dedup import DeduplicationManager
 from .idempotency import IdempotencyStore, InMemoryIdempotencyStore
-from .pipeline import DownloadOutcome, DownloadPipeline, DownloadPipelineError, DownloadWorkItem
-
-logger = get_logger(__name__)
-
-
-class StubDownloadPipeline(DownloadPipeline):
-    """Temporary pipeline implementation until FLOW-002 is fully implemented."""
-
-    def __init__(self, *, downloads_dir: Path, music_dir: Path) -> None:
-        self._downloads_dir = downloads_dir
-        self._music_dir = music_dir
-
-    async def execute(self, work_item: DownloadWorkItem) -> DownloadOutcome:  # type: ignore[override]
-        logger.error(
-            "Download flow pipeline invoked without an implementation",
-            extra={
-                "event": "download_flow.pipeline_unimplemented",
-                "downloads_dir": str(self._downloads_dir),
-                "music_dir": str(self._music_dir),
-                "batch_id": work_item.item.batch_id,
-                "item_id": work_item.item.item_id,
-            },
-        )
-        raise DownloadPipelineError("Download flow pipeline is not yet configured")
-
-
-class DownloadFlowRecovery:
-    """Placeholder recovery controller for FLOW-002 orchestration."""
-
-    def __init__(self, *, size_stable_seconds: int) -> None:
-        self._size_stable_seconds = size_stable_seconds
-        self._started = False
-
-    async def start(self) -> None:
-        if self._started:
-            return
-        self._started = True
-        logger.info(
-            "Download flow recovery started",
-            extra={
-                "event": "download_flow.recovery_started",
-                "size_stable_seconds": self._size_stable_seconds,
-            },
-        )
-
-    async def shutdown(self) -> None:
-        if not self._started:
-            return
-        self._started = False
-        logger.info(
-            "Download flow recovery stopped",
-            extra={"event": "download_flow.recovery_stopped"},
-        )
+from .move import AtomicFileMover
+from .pipeline import DownloadPipeline
+from .pipeline_impl import DefaultDownloadPipeline
+from .recovery import DownloadFlowRecovery, SidecarStore
+from .tagging import AudioTagger
 
 
 @dataclass(slots=True)
@@ -81,7 +34,32 @@ def build_download_flow_runtime(config: DownloadFlowConfig) -> DownloadFlowRunti
     downloads_dir = Path(config.downloads_dir).expanduser().resolve()
     music_dir = Path(config.music_dir).expanduser().resolve()
 
-    pipeline = StubDownloadPipeline(downloads_dir=downloads_dir, music_dir=music_dir)
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    music_dir.mkdir(parents=True, exist_ok=True)
+    state_dir = downloads_dir / ".harmony"
+    sidecar_store = SidecarStore(state_dir / "sidecars")
+    event_bus = CompletionEventBus()
+    completion_monitor = DownloadCompletionMonitor(
+        downloads_dir=downloads_dir,
+        size_stable_seconds=config.size_stable_seconds,
+        event_bus=event_bus,
+    )
+    tagger = AudioTagger()
+    mover = AtomicFileMover()
+    deduper = DeduplicationManager(
+        music_dir=music_dir,
+        state_dir=state_dir,
+        move_template=config.move_template,
+    )
+
+    pipeline: DownloadPipeline = DefaultDownloadPipeline(
+        completion_monitor=completion_monitor,
+        tagger=tagger,
+        mover=mover,
+        deduper=deduper,
+        sidecars=sidecar_store,
+    )
+
     idempotency_store: IdempotencyStore = InMemoryIdempotencyStore()
     orchestrator = DownloadFlowOrchestrator(
         pipeline=pipeline,
@@ -90,7 +68,12 @@ def build_download_flow_runtime(config: DownloadFlowConfig) -> DownloadFlowRunti
         max_retries=config.max_retries,
         batch_max_items=config.batch_max_items,
     )
-    recovery = DownloadFlowRecovery(size_stable_seconds=config.size_stable_seconds)
+    recovery = DownloadFlowRecovery(
+        size_stable_seconds=config.size_stable_seconds,
+        sidecars=sidecar_store,
+        completion_monitor=completion_monitor,
+        event_bus=event_bus,
+    )
 
     return DownloadFlowRuntime(
         orchestrator=orchestrator,
@@ -103,7 +86,6 @@ def build_download_flow_runtime(config: DownloadFlowConfig) -> DownloadFlowRunti
 __all__ = [
     "DownloadFlowRecovery",
     "DownloadFlowRuntime",
-    "StubDownloadPipeline",
     "build_download_flow_runtime",
 ]
 
