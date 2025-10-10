@@ -286,13 +286,18 @@ class SecretValidationService:
         base_segments = [segment for segment in parsed.path.split("/") if segment]
 
         trimmed_segments = list(base_segments)
-        if trimmed_segments and re.fullmatch(r"v\d+", trimmed_segments[-1]):
-            if len(trimmed_segments) >= 2 and trimmed_segments[-2] == "api":
-                trimmed_segments = trimmed_segments[:-2]
-            else:
-                trimmed_segments = trimmed_segments[:-1]
-        if trimmed_segments and trimmed_segments[-1] == "api":
-            trimmed_segments = trimmed_segments[:-1]
+
+        while trimmed_segments and trimmed_segments[-1].lower() == "me":
+            trimmed_segments.pop()
+
+        if trimmed_segments and re.fullmatch(
+            r"v\d+", trimmed_segments[-1], flags=re.IGNORECASE
+        ):
+            trimmed_segments.pop()
+            if trimmed_segments and trimmed_segments[-1].lower() == "api":
+                trimmed_segments.pop()
+        elif trimmed_segments and trimmed_segments[-1].lower() == "api":
+            trimmed_segments.pop()
 
         target_segments = ["api", "v2", "me"]
         path_segments = trimmed_segments + target_segments
