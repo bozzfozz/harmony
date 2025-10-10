@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Literal, Mapping, Optional, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from app.services.secret_validation import (
     SecretValidationService,
     SecretValidationSettings,
 )
+from app.utils import metrics
 from app.utils.activity import record_worker_stale
 from app.utils.events import WORKER_STALE
 from app.utils.service_health import evaluate_all_service_health
@@ -202,6 +204,16 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
     )
     response = error.as_response(request_path=request.url.path, method=request.method)
     return response
+
+
+@router.get("/metrics", tags=["System"])
+async def get_metrics() -> Response:
+    """Expose Prometheus metrics collected by the Harmony backend."""
+
+    registry = metrics.get_registry()
+    payload = generate_latest(registry)
+    headers = {"Cache-Control": "no-store"}
+    return Response(content=payload, media_type=CONTENT_TYPE_LATEST, headers=headers)
 
 
 @router.post(

@@ -54,6 +54,17 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 - **Alias:** `GET /api/health/ready` liefert für Infrastruktur-Checks ein reduziertes `{ "status": "ok" }` bzw. `503` im Fehlerfall.
 - **Behaviour:** Database checks honour `HEALTH_DB_TIMEOUT_MS`. Dependency checks run in parallel with the timeout configured by `HEALTH_DEP_TIMEOUT_MS`. When `HEALTH_READY_REQUIRE_DB=false` the database state is still reported but does not gate readiness.
 
+### `GET /api/v1/metrics`
+- **Purpose:** Prometheus scrape endpoint exposing Harmony runtime metrics.
+- **Response:** Plain text in the Prometheus exposition format with `Content-Type: text/plain; version=0.0.4`.
+- **Caching:** Responses set `Cache-Control: no-store` so scrapers always fetch fresh samples.
+- **Highlights:**
+  - `download_flow_item_outcomes_total{state="…"}` – terminal outcome counts for orchestrated downloads (`done`, `failed`, `duplicate`).
+  - `download_flow_item_retries_total{error_type="…"}` – retry attempts by error class.
+  - `download_flow_item_failures_total{error_type="…"}` – fatal failures grouped by exception type.
+  - `download_flow_phase_duration_seconds{phase="download|tagging|moving"}` – phase-level histograms useful for latency breakdowns.
+  - `download_flow_processing_seconds` – total per-item processing latency histogram.
+
 ## Configuration
 
 | Variable | Default | Description |
