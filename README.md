@@ -37,10 +37,14 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
   nicht ausgeführt wurde.
 - **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter
   `[tool.coverage.*]`. Sie dient als informative Kennzahl (`fail_under = 0`) und erzeugt `reports/coverage.xml` +
-  `reports/junit.xml`.
+  `reports/junit.xml`. CI und lokale Skripte nutzen dafür die Variable `COVERAGE_XML=reports/coverage.xml`; wer eine
+  alternative Struktur verwendet, kann den Pfad über dieselbe Variable anpassen.
 - **Diff-Gate ≥ 85 %:** Jede PR muss mindestens 85 % Diff-Coverage erreichen. CI ruft dafür
   `python scripts/run_diff_coverage_gate.py`, das die Schwellenwerte aus `[tool.harmony.coverage]` liest und `diff-cover`
   gegen `origin/<base>` bzw. als Fallback `HEAD~1` ausführt. Das Ergebnis landet in `reports/diff_coverage.txt`.
+- **Fork-Policy:** PRs aus Forks ohne Zugriff auf `origin/<base>` überspringen das Diff-Gate automatisch. Maintainer-Runs und
+  Branch-Builds im Hauptrepository brechen dagegen mit einem klaren Hinweis ab, wenn `reports/coverage.xml` fehlt – die CI
+  meldet explizit, dass der `tests`-Job mit `pytest --cov` durchlaufen und der `test-reports`-Artefakt verfügbar sein muss.
 - **Lokaler Check:** Nach dem Testlauf kann derselbe Gate mit `diff-cover reports/coverage.xml --compare-branch=origin/main`
   verifiziert werden. Für Forks ohne `origin/main` empfiehlt sich `git fetch upstream main && DIFF_COVER_COMPARE_BRANCH=upstream/main python scripts/run_diff_coverage_gate.py`.
 - **Artefakte:** CI lädt alle Report-Dateien (`reports/junit.xml`, `reports/coverage.xml`, `reports/diff_coverage.txt`) als
