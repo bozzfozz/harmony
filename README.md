@@ -61,6 +61,14 @@ meldet, die Watchlist ohne OAuth-Fehler läuft und `reports/` keine neuen DLQ-Ei
 für Spotify enthält. Alle Schritte sind idempotent; fehlgeschlagene
 Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
 
+### Modul-Namespace
+
+- Alle Download- und Orchestrator-Komponenten leben unter dem Namespace
+  `app.hdm`. Neue Features dürfen ausschließlich hier erweitert werden.
+- Das frühere Download-Flow-Kompatibilitätspaket im Modul `app.orchestrator`
+  wurde entfernt. Externe Skripte müssen auf `app.hdm.*` umgestellt sein, da der
+  Legacy-Pfad jetzt einen harten ImportError wirft.
+
 ### Relevante Umgebungsvariablen
 
 | Variable | Pflicht | Zweck |

@@ -8,3 +8,10 @@ repos:
     hooks:
       - id: isort
         args: [--filter-files]
+  - repo: local
+    hooks:
+      - id: legacy-import-ban
+        name: legacy orchestrator import ban
+        entry: bash -c "rg -n \"app\\.orchestrator\\.download_flow\" --glob '!docs/archive/**' --glob '!CHANGELOG*' && exit 1 || exit 0"
+        language: system
+        pass_filenames: false
