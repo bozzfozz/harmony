@@ -116,6 +116,53 @@ class SoulseekConfig:
 
 
 @dataclass(slots=True)
+class DownloadFlowConfig:
+    downloads_dir: str
+    music_dir: str
+    worker_concurrency: int
+    batch_max_items: int
+    size_stable_seconds: int
+    max_retries: int
+    slskd_timeout_seconds: int
+    move_template: str
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, Any]) -> "DownloadFlowConfig":
+        return cls(
+            downloads_dir=str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR),
+            music_dir=str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR),
+            worker_concurrency=_bounded_int(
+                env.get("WORKER_CONCURRENCY"),
+                default=DEFAULT_DOWNLOAD_WORKER_CONCURRENCY,
+                minimum=1,
+            ),
+            batch_max_items=_bounded_int(
+                env.get("BATCH_MAX_ITEMS"),
+                default=DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS,
+                minimum=1,
+            ),
+            size_stable_seconds=_bounded_int(
+                env.get("SIZE_STABLE_SEC"),
+                default=DEFAULT_SIZE_STABLE_SECONDS,
+                minimum=1,
+            ),
+            max_retries=_bounded_int(
+                env.get("MAX_RETRIES"),
+                default=DEFAULT_DOWNLOAD_MAX_RETRIES,
+                minimum=1,
+            ),
+            slskd_timeout_seconds=_bounded_int(
+                env.get("SLSDK_TIMEOUT_SEC"),
+                default=DEFAULT_SLSDK_TIMEOUT_SEC,
+                minimum=1,
+            ),
+            move_template=str(
+                env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE
+            ),
+        )
+
+
+@dataclass(slots=True)
 class LoggingConfig:
     level: str
 
@@ -638,6 +685,7 @@ class Settings:
     orchestrator: OrchestratorConfig
     external: ExternalCallPolicy
     watchlist_timer: WatchlistTimerConfig
+    download_flow: DownloadFlowConfig
     provider_profiles: dict[str, ProviderProfile]
     retry_policy: "RetryPolicyConfig"
 
@@ -647,11 +695,13 @@ class Settings:
         orchestrator = OrchestratorConfig.from_env(env_map)
         external = ExternalCallPolicy.from_env(env_map)
         watchlist_timer = WatchlistTimerConfig.from_env(env_map)
+        download_flow = DownloadFlowConfig.from_env(env_map)
         profiles = _load_provider_profiles(env_map, external)
         return cls(
             orchestrator=orchestrator,
             external=external,
             watchlist_timer=watchlist_timer,
+            download_flow=download_flow,
             provider_profiles=profiles,
             retry_policy=_load_retry_policy(env_map),
         )
@@ -740,6 +790,15 @@ DEFAULT_EXTERNAL_TIMEOUT_MS = 10_000
 DEFAULT_EXTERNAL_RETRY_MAX = 3
 DEFAULT_EXTERNAL_BACKOFF_BASE_MS = 250
 DEFAULT_EXTERNAL_JITTER_PCT = 20.0
+
+DEFAULT_DOWNLOADS_DIR = "/data/downloads"
+DEFAULT_MUSIC_DIR = "/data/music"
+DEFAULT_DOWNLOAD_WORKER_CONCURRENCY = 4
+DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS = 2_000
+DEFAULT_SIZE_STABLE_SECONDS = 30
+DEFAULT_DOWNLOAD_MAX_RETRIES = 5
+DEFAULT_SLSDK_TIMEOUT_SEC = 300
+DEFAULT_MOVE_TEMPLATE = "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
 
 DEFAULT_WATCHLIST_TIMER_ENABLED = True
 DEFAULT_WATCHLIST_TIMER_INTERVAL_S = 900.0
