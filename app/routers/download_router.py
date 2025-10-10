@@ -9,12 +9,16 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 
-from app.dependencies import get_download_service
+from app.dependencies import get_download_flow_orchestrator, get_download_service
 from app.errors import ValidationAppError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.orchestrator.download_flow.controller import DownloadFlowOrchestrator
+from app.orchestrator.download_flow.models import DownloadBatchRequest, DownloadRequestItem
 from app.schemas import (
     DownloadEntryResponse,
+    DownloadFlowBatchRequest,
+    DownloadFlowSubmissionResponse,
     DownloadListResponse,
     DownloadPriorityUpdate,
     SoulseekDownloadRequest,
@@ -67,6 +71,55 @@ def list_downloads(
         offset=offset,
     )
     return DownloadListResponse(downloads=downloads)
+
+
+@router.post(
+    "/downloads",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=DownloadFlowSubmissionResponse,
+)
+async def submit_download_flow(
+    payload: DownloadFlowBatchRequest,
+    orchestrator: DownloadFlowOrchestrator = Depends(get_download_flow_orchestrator),
+) -> DownloadFlowSubmissionResponse:
+    """Submit a batch of download flow requests to the orchestrator."""
+
+    items = [
+        DownloadRequestItem(
+            artist=item.artist.strip(),
+            title=item.title.strip(),
+            album=item.album.strip() if item.album else None,
+            isrc=item.isrc.strip() if item.isrc else None,
+            duration_seconds=item.duration_seconds,
+            bitrate=item.bitrate,
+            priority=item.priority if item.priority is not None else payload.priority,
+            dedupe_key=item.dedupe_key,
+            requested_by=(item.requested_by or payload.requested_by).strip(),
+        )
+        for item in payload.items
+    ]
+    batch_request = DownloadBatchRequest(
+        items=items,
+        requested_by=payload.requested_by,
+        batch_id=payload.batch_id,
+        priority=payload.priority,
+        dedupe_key=payload.dedupe_key,
+    )
+    log_event(
+        logger,
+        "api.download_flow.submit",
+        component="router.download_flow",
+        status="requested",
+        entity_id=batch_request.batch_id,
+        items=len(batch_request.items),
+        requested_by=batch_request.requested_by,
+    )
+    handle = await orchestrator.submit_batch(batch_request)
+    return DownloadFlowSubmissionResponse(
+        batch_id=handle.batch_id,
+        items_total=handle.items_total,
+        requested_by=handle.requested_by,
+    )
 
 
 @router.get("/download/{download_id}", response_model=DownloadEntryResponse)

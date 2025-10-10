@@ -155,6 +155,62 @@ class SoulseekDownloadRequest(BaseModel):
         return stripped
 
 
+class DownloadFlowItemRequest(BaseModel):
+    artist: str = Field(..., description="Artist name for the requested download")
+    title: str = Field(..., description="Track title for the requested download")
+    album: Optional[str] = Field(None, description="Album name associated with the track")
+    isrc: Optional[str] = Field(None, description="ISRC identifier if available")
+    duration_seconds: Optional[float] = Field(
+        None, ge=0.0, description="Expected track duration in seconds"
+    )
+    bitrate: Optional[int] = Field(None, ge=0, description="Expected bitrate in kbps")
+    priority: Optional[int] = Field(None, ge=0, description="Priority override for the item")
+    dedupe_key: Optional[str] = Field(
+        None, description="Optional idempotency key for the individual item"
+    )
+    requested_by: Optional[str] = Field(
+        None, description="Requesting user if different from the batch requester"
+    )
+
+    @field_validator("artist", "title")
+    @classmethod
+    def _ensure_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("field must not be empty")
+        return stripped
+
+
+class DownloadFlowBatchRequest(BaseModel):
+    requested_by: str = Field(..., description="Identifier for the requesting user")
+    items: List[DownloadFlowItemRequest] = Field(
+        ..., min_length=1, description="Items to submit to the download flow"
+    )
+    batch_id: Optional[str] = Field(
+        None, description="Optional client supplied batch identifier"
+    )
+    priority: Optional[int] = Field(
+        None, ge=0, description="Priority to apply to all items if provided"
+    )
+    dedupe_key: Optional[str] = Field(
+        None, description="Optional idempotency key for the batch"
+    )
+
+    @field_validator("requested_by")
+    @classmethod
+    def _ensure_requested_by(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("requested_by must not be empty")
+        return stripped
+
+
+class DownloadFlowSubmissionResponse(BaseModel):
+    batch_id: str
+    items_total: int
+    requested_by: str
+
+
 class DiscographyDownloadRequest(BaseModel):
     artist_id: str
     artist_name: Optional[str] = None

@@ -68,6 +68,24 @@ def test_download_endpoint_returns_id_and_status(client) -> None:
     assert body["download_id"] in entries[0]["details"]["download_ids"]
 
 
+def test_download_flow_submission_returns_handle(client) -> None:
+    payload = {
+        "requested_by": "tester",
+        "items": [
+            {"artist": "Example Artist", "title": "Example Track"},
+        ],
+    }
+
+    response = client.post("/downloads", json=payload)
+    assert response.status_code == 202
+
+    body = response.json()
+    assert body["items_total"] == 1
+    assert body["requested_by"] == "tester"
+    assert isinstance(body["batch_id"], str)
+    assert body["batch_id"]
+
+
 def test_download_returns_503_when_worker_missing(client) -> None:
     client.app.state.sync_worker = None
 
