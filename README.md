@@ -1092,6 +1092,33 @@ pytest
 Die Tests mocken externe Dienste und können lokal wie auch via GitHub Actions ausgeführt werden. Für deterministische
 Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
 
+### Deterministische NPM-Installs in CI
+
+Die Frontend-Pipeline (CI, Nightly, Release) ist so gehärtet, dass jeder Lauf eine saubere, reproduzierbare `npm ci`-Installation nutzt:
+
+- GitHub Actions pinnt Node.js explizit auf LTS `20.x` und setzt `registry-url: https://registry.npmjs.org`.
+- Vor jedem Install werden `node_modules` entfernt und ein ephemerer Cache via `NPM_CONFIG_CACHE="$(mktemp -d)"` erzeugt.
+- `npm config` erzwingt `prefer-online`, fünf Fetch-Retries sowie verlängerte Timeouts (`fetch-timeout` und `fetch-retry-maxtimeout` je 600 s).
+- Die Jobs erlauben maximal zwei Wiederholungen (`npm ci` läuft bis zu drei Versuche) und reinigen den Cache (`npm cache clean --force`) zwischen den Versuchen.
+- Persistente Registry-Mirrors oder wiederverwendete Caches sind deaktiviert; jeder Lauf interagiert ausschließlich mit `https://registry.npmjs.org/`.
+
+**Lokale Reproduktion bei EINTEGRITY-Fehlern:**
+
+```bash
+cd frontend
+rm -rf node_modules
+export NPM_CONFIG_CACHE="$(mktemp -d)"
+npm cache clean --force
+npm config set prefer-online true
+npm config set fetch-retries 5
+npm config set fetch-retry-maxtimeout 600000
+npm config set fetch-timeout 600000
+npm config set registry https://registry.npmjs.org/
+npm ci --no-audit --no-fund
+```
+
+Falls dennoch Integritätskonflikte auftreten, sollte der Lockfile nach einem Backup mit derselben npm-Version wie in der CI via `npm install --package-lock-only` regeneriert und anschließend erneut committed werden.
+
 ### PostgreSQL parity suite
 
 - Alle Backend-Jobs in der CI – inkl. [`ci.yml`](.github/workflows/ci.yml) und [`backend-postgres.yml`](.github/workflows/backend-postgres.yml) – betreiben einen separaten PostgreSQL 16 Service, führen `alembic upgrade head` aus und lassen **die komplette** Test- und Lint-Matrix gegen die Datenbank laufen. Anschließend sorgt `alembic downgrade base` für den „downward compatibility“-Check.

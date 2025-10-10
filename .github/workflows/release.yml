@@ -44,13 +44,57 @@ jobs:
         if: ${{ hashFiles('frontend/package.json') != '' }}
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.x"
+          registry-url: https://registry.npmjs.org
+
+      - name: Remove existing node_modules
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        working-directory: frontend
+        run: rm -rf node_modules
+
+      - name: Configure deterministic npm install
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          tmp_cache="$(mktemp -d)"
+          echo "Using ephemeral npm cache at $tmp_cache"
+          echo "NPM_CONFIG_CACHE=$tmp_cache" >> "$GITHUB_ENV"
+          export NPM_CONFIG_CACHE="$tmp_cache"
+          npm config set cache "$tmp_cache"
+          npm config set prefer-online true
+          npm config set fetch-retries 5
+          npm config set fetch-retry-maxtimeout 600000
+          npm config set fetch-timeout 600000
+          npm config set registry https://registry.npmjs.org/
+
+      - name: Install frontend dependencies
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          attempts=0
+          max_attempts=3
+          until [ "$attempts" -ge "$max_attempts" ]; do
+            attempts=$((attempts + 1))
+            echo "npm ci attempt ${attempts}/${max_attempts}"
+            if npm ci --no-audit --no-fund; then
+              echo "npm ci completed successfully on attempt ${attempts}."
+              break
+            fi
+            if [ "$attempts" -ge "$max_attempts" ]; then
+              echo "::error::npm ci failed after ${max_attempts} attempts."
+              exit 1
+            fi
+            echo "npm ci failed (attempt ${attempts}); cleaning cache and retrying..."
+            npm cache clean --force
+            sleep 5
+          done
 
       - name: Build frontend bundle
         if: ${{ hashFiles('frontend/package.json') != '' }}
         working-directory: frontend
         run: |
-          npm ci --no-audit --no-fund
           npm run build
           tar -C dist -czf ../frontend-dist.tar.gz .
 
