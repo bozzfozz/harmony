@@ -9,7 +9,7 @@
     - `ci-backend`: Python 3.11 toolchain (mypy, ruff format --check, ruff lint, pytest + coverage gate, pip-audit).
     - `ci-frontend`: Node.js 20 pipeline (eslint, build, unit tests). Automatically skips when no `frontend/package.json` is present.
   - Concurrency key `${{ github.workflow }}-${{ github.ref }}` cancels superseded runs per branch.
-  - Artifacts: `reports/coverage.xml`, `reports/junit.xml`.
+  - Artifacts: `reports/coverage.xml`, `reports/junit.xml`, `frontend-dist` (enthaltenes `frontend/dist`-Verzeichnis inkl. `env.runtime.js`).
 
 - **`Nightly`** (`.github/workflows/nightly.yml`)
   - Scheduled for 01:00 Europe/Berlin (handled by dual UTC triggers and runtime guard).

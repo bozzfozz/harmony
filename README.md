@@ -601,6 +601,10 @@ npm run build     # TypeScript + Vite Build
 > **Hinweis:** Die CI führt alle drei Befehle auf jedem Push/PR aus. Lokal hilft `npm ci`, eine saubere Umgebung analog zur
 > Pipeline zu erstellen.
 
+> **Deployment-Artefakt:** Der GitHub-Actions-Job `ci-frontend` lädt nach einem erfolgreichen Build das gesamte
+> `frontend/dist`-Verzeichnis (inklusive generiertem `env.runtime.js`) als Artefakt `frontend-dist` hoch. Verwende diesen
+> Download für statische Deployments oder um Builds ohne lokalen Re-Run zu verifizieren.
+
 ## Lokale Checks & CI-Gates
 
 Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:

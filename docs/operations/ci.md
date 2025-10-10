@@ -11,3 +11,4 @@
 
 - Änderungen sind in `.github/workflows/ci.yml` hinterlegt (Job `openapi`).
 - Ein lokaler Lauf mit `act` scheitert derzeit an fehlender Unterstützung in der Standardumgebung; in GitHub Actions wird der Job mit dem neuen Datenbankkontext ausgeführt.
+- Der Job `ci-frontend` veröffentlicht das gebaute `frontend/dist`-Verzeichnis als Artefakt `frontend-dist`. Lade dieses Paket herunter, um Deployments ohne erneuten lokalen Build anzustoßen oder die ausgelieferte `env.runtime.js` zu inspizieren.
