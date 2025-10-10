@@ -1512,6 +1512,10 @@ def configure_environment(
     monkeypatch.setenv("ENABLE_ARTWORK", "1")
     monkeypatch.setenv("ENABLE_LYRICS", "1")
     _install_recording_orchestrator(monkeypatch)
+    if request.node.get_closest_marker("no_database") is not None:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        yield
+        return
     configured_url = os.getenv("DATABASE_URL")
 
     def _seed_settings() -> None:
@@ -1579,7 +1583,10 @@ def configure_environment(
 
 
 @pytest.fixture(autouse=True)
-def reset_activity_manager() -> None:
+def reset_activity_manager(request: pytest.FixtureRequest) -> None:
+    if request.node.get_closest_marker("no_database") is not None:
+        yield
+        return
     activity_manager.clear()
     with session_scope() as session:
         session.query(ActivityEvent).delete()
