@@ -1,6 +1,7 @@
 ## v2.0.0 — unreleased
 - chore(orchestrator): remove the legacy `app.orchestrator.download_flow` namespace, archive remaining docs and add a CI legacy
   scan gate to enforce HDM-only usage. [CODX-HDM-DROP-LEGACY-IMPORTS-001]
+- chore(tests): Legacy-Tests mit Präfix test_flow entfernt und CI-Gate ergänzt. [CODX-TESTS-FLOW-PREFIX-REMOVE-001]
 - refactor(hdm): Harmonised the download orchestrator namespace to Harmony Download Manager (HDM), updated metrics/logs/docs and
   provided temporary compatibility re-exports. [CODX-REFACTOR-HDM-001]
 - chore(ci): remove diff coverage gate, dependencies and documentation; CI now publishes junit/coverage artifacts without a diff blocker. [CODX-COVERAGE-DIFF-REMOVAL-001]
