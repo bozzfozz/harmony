@@ -165,41 +165,25 @@ async def get_readiness(request: Request) -> Dict[str, Any]:
             "duration_ms": round(duration_ms, 2),
         },
     )
-    migrations = {
-        "up_to_date": result.migrations.up_to_date,
-        "current": result.migrations.current,
-        "head": list(result.migrations.head),
+    readiness_payload = {
+        "db": result.database,
+        "deps": filtered_deps,
+        "orchestrator": {
+            "components": orchestrator_components,
+            "jobs": orchestrator_jobs,
+            "enabled_jobs": orchestrator_enabled_jobs,
+        },
     }
-    if result.migrations.error:
-        migrations["error"] = result.migrations.error
 
     if result.ok:
-        return {
-            "ok": True,
-            "data": {
-                "db": result.database,
-                "deps": filtered_deps,
-                "migrations": migrations,
-                "orchestrator": {
-                    "components": orchestrator_components,
-                    "jobs": orchestrator_jobs,
-                    "enabled_jobs": orchestrator_enabled_jobs,
-                },
-            },
-            "error": None,
-        }
+        return {"ok": True, "data": readiness_payload, "error": None}
 
     error = DependencyError(
         "not ready",
         meta={
             "db": result.database,
             "deps": deps,
-            "migrations": migrations,
-            "orchestrator": {
-                "components": orchestrator_components,
-                "jobs": orchestrator_jobs,
-                "enabled_jobs": orchestrator_enabled_jobs,
-            },
+            "orchestrator": readiness_payload["orchestrator"],
         },
     )
     response = error.as_response(request_path=request.url.path, method=request.method)

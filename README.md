@@ -1006,7 +1006,7 @@ VITE_AUTH_HEADER_MODE=x-api-key
   ```
 
 - `GET /api/v1/ready` prüft Datenbank, deklarierte Dependencies und den
-  Migrationsstatus. Erfolgsantwort:
+  Orchestrator-Status. Erfolgsantwort:
 
   ```json
   {
@@ -1014,7 +1014,11 @@ VITE_AUTH_HEADER_MODE=x-api-key
     "data": {
       "db": "up",
       "deps": { "spotify": "up" },
-      "migrations": { "up_to_date": true, "current": "<rev>", "head": ["<rev>"] }
+      "orchestrator": {
+        "components": { "worker": "up" },
+        "jobs": { "sync": "idle" },
+        "enabled_jobs": { "sync": true }
+      }
     },
     "error": null
   }
@@ -1031,7 +1035,11 @@ VITE_AUTH_HEADER_MODE=x-api-key
       "meta": {
         "db": "down",
         "deps": { "spotify": "down" },
-        "migrations": { "up_to_date": false, "current": null, "head": ["<rev>"] }
+        "orchestrator": {
+          "components": { "worker": "down" },
+          "jobs": { "sync": "pending" },
+          "enabled_jobs": { "sync": true }
+        }
       }
     }
   }
