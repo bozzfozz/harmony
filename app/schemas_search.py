@@ -45,9 +45,7 @@ class SearchRequest(BaseModel):
         default=None,
         description="Preferred audio formats used for secondary sorting",
     )
-    limit: int = Field(
-        default=25, ge=1, description="Maximum number of items to return"
-    )
+    limit: int = Field(default=25, ge=1, description="Maximum number of items to return")
     offset: int = Field(default=0, ge=0, description="Offset for pagination")
 
     @field_validator("query")
@@ -103,9 +101,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("year_to")
     @classmethod
-    def _validate_year_range(
-        cls, year_to: Optional[int], info: ValidationInfo
-    ) -> Optional[int]:
+    def _validate_year_range(cls, year_to: Optional[int], info: ValidationInfo) -> Optional[int]:
         year_from = info.data.get("year_from") if info.data else None
         if year_from is not None and year_to is not None and year_from > year_to:
             raise ValueError("year_from must be less than or equal to year_to")

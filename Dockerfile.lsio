@@ -23,18 +23,13 @@ ENV PUID=1000 \
     PIP_NO_CACHE_DIR=1 \
     APP_PORT=8000 \
     HARMONY_PROFILE=prod \
-    DATABASE_URL="postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=prefer" \
-    POSTGRES_HOST=postgres \
-    POSTGRES_PORT=5432 \
-    POSTGRES_DB=harmony \
-    POSTGRES_USER=harmony \
-    POSTGRES_PASSWORD=harmony \
-    DATABASE_SSLMODE=prefer
+    DATABASE_URL="sqlite+aiosqlite:///config/harmony.db" \
+    DB_RESET=${DB_RESET:-0}
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel wget postgresql-libs && \
-    apk add --no-cache --virtual .build-deps build-base python3-dev musl-dev libffi-dev openssl-dev postgresql-dev linux-headers && \
+RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel wget && \
+    apk add --no-cache --virtual .build-deps build-base python3-dev musl-dev libffi-dev openssl-dev linux-headers && \
     python3 -m ensurepip && \
     pip3 install --no-cache-dir --upgrade pip
 

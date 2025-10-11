@@ -83,9 +83,7 @@ def update_setting(
 @router.get("/history", response_model=SettingsHistoryResponse)
 def get_settings_history(session: Session = Depends(get_db)) -> SettingsHistoryResponse:
     history_entries = (
-        session.execute(
-            select(SettingHistory).order_by(SettingHistory.changed_at.desc()).limit(50)
-        )
+        session.execute(select(SettingHistory).order_by(SettingHistory.changed_at.desc()).limit(50))
         .scalars()
         .all()
     )

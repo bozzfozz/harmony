@@ -77,9 +77,7 @@ class SearchQuery(BaseModel):
 
     @field_validator("year_to")
     @classmethod
-    def _validate_year_range(
-        cls, value: Optional[int], info: ValidationInfo
-    ) -> Optional[int]:
+    def _validate_year_range(cls, value: Optional[int], info: ValidationInfo) -> Optional[int]:
         year_from = info.data.get("year_from") if info.data else None
         if year_from is not None and value is not None and year_from > value:
             raise ValueError("year_from must be less than or equal to year_to")

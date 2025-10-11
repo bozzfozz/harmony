@@ -189,8 +189,6 @@ def get_hdm_runtime(request: Request) -> "HdmRuntime":
 
 
 def get_hdm_orchestrator(request: Request) -> "HdmOrchestrator":
-    from app.hdm.orchestrator import HdmOrchestrator
-
     runtime = get_hdm_runtime(request)
     return runtime.orchestrator
 

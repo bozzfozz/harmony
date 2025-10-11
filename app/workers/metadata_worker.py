@@ -101,9 +101,7 @@ class MetadataWorker:
             try:
                 metadata = await self._process_job(job)
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.exception(
-                    "Metadata enrichment failed for %s: %s", job.download_id, exc
-                )
+                logger.exception("Metadata enrichment failed for %s: %s", job.download_id, exc)
                 if not job.result.done():
                     job.result.set_exception(exc)
             else:
@@ -116,9 +114,7 @@ class MetadataWorker:
         metadata = await self._collect_metadata(job)
 
         try:
-            await asyncio.to_thread(
-                metadata_utils.write_metadata_tags, job.audio_path, metadata
-            )
+            await asyncio.to_thread(metadata_utils.write_metadata_tags, job.audio_path, metadata)
         except FileNotFoundError:
             logger.debug(
                 "Audio file missing for download %s: %s",
@@ -126,9 +122,7 @@ class MetadataWorker:
                 job.audio_path,
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug(
-                "Failed to persist metadata for download %s: %s", job.download_id, exc
-            )
+            logger.debug("Failed to persist metadata for download %s: %s", job.download_id, exc)
 
         self._persist_metadata(job.download_id, metadata)
         return metadata

@@ -46,8 +46,7 @@ async def create_free_import(
         * config.spotify.free_import_hard_cap_multiplier
     )
     hard_cap_bytes = (
-        config.spotify.free_import_max_file_bytes
-        * config.spotify.free_import_hard_cap_multiplier
+        config.spotify.free_import_max_file_bytes * config.spotify.free_import_hard_cap_multiplier
     )
 
     body = await request.body()
@@ -131,8 +130,7 @@ async def create_free_import(
             "accepted_count": len(parse_result.accepted),
             "skipped": list(parse_result.skipped),
             "rejected": [
-                {"url": item.url, "reason": item.reason}
-                for item in parse_result.rejected
+                {"url": item.url, "reason": item.reason} for item in parse_result.rejected
             ],
             "limits": limits,
         },

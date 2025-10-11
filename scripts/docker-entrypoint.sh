@@ -2,34 +2,33 @@
 set -euo pipefail
 
 if [ -z "${DATABASE_URL:-}" ]; then
-  POSTGRES_HOST=${POSTGRES_HOST:-postgres}
-  POSTGRES_PORT=${POSTGRES_PORT:-5432}
-  POSTGRES_DB=${POSTGRES_DB:-harmony}
-  POSTGRES_USER=${POSTGRES_USER:-harmony}
-  POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-harmony}
-  if [ -n "${DATABASE_SSLMODE:-}" ]; then
-    export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${DATABASE_SSLMODE}"
-  else
-    export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-  fi
-  echo "DATABASE_URL not provided; derived from POSTGRES_* variables."
+  export DATABASE_URL="sqlite+aiosqlite:///data/harmony.db"
+  echo "DATABASE_URL not provided; using ${DATABASE_URL}."
 fi
 
-case "${DATABASE_URL:-}" in
-  postgresql+psycopg://*|postgresql+asyncpg://*)
+case "${DATABASE_URL}" in
+  sqlite+aiosqlite://*|sqlite+pysqlite://*|sqlite://*)
     ;;
   *)
-    echo "Error: DATABASE_URL must be a PostgreSQL connection string (postgresql+psycopg:// or postgresql+asyncpg://)." >&2
+    echo "Error: DATABASE_URL must use a sqlite driver (sqlite+aiosqlite:/// or sqlite+pysqlite:///)." >&2
     exit 1
     ;;
 esac
 
-if [ "${FEATURE_RUN_MIGRATIONS:-on}" != "off" ]; then
-  echo "Applying database migrations..."
-  ./scripts/db/migrate.sh
-else
-  echo "Skipping database migrations (FEATURE_RUN_MIGRATIONS=${FEATURE_RUN_MIGRATIONS:-off})."
-fi
+python3 <<'PYTHON'
+import os
+from pathlib import Path
+
+from sqlalchemy.engine import make_url
+
+url = make_url(os.environ["DATABASE_URL"])
+path = url.database
+if path and path != ":memory:":
+    resolved = Path(path)
+    if not resolved.is_absolute():
+        resolved = (Path.cwd() / resolved).resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+PYTHON
 
 FRONTEND_DIST_DIR="/app/frontend_dist"
 RUNTIME_TEMPLATE_PATH="${FRONTEND_DIST_DIR}/env.runtime.js.tpl"

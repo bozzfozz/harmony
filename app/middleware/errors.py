@@ -52,9 +52,7 @@ def _extract_detail_meta(detail: Any) -> Mapping[str, Any] | None:
         candidate = detail.get("meta")
         if isinstance(candidate, Mapping):
             return candidate
-        extras = {
-            k: v for k, v in detail.items() if k not in {"message", "detail", "error"}
-        }
+        extras = {k: v for k, v in detail.items() if k not in {"message", "detail", "error"}}
         if extras:
             return extras
     return None
@@ -149,9 +147,7 @@ async def _render_http_exception(
     )
 
 
-async def _handle_request_validation(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def _handle_request_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
     fields: list[dict[str, str]] = []
     for error in exc.errors():
         raw_loc = error.get("loc", [])
@@ -161,9 +157,7 @@ async def _handle_request_validation(
             components = [raw_loc]
         location = _format_validation_field(components)
         if not location:
-            location = ".".join(
-                str(component) for component in components if component is not None
-            )
+            location = ".".join(str(component) for component in components if component is not None)
         message = error.get("msg", "Invalid input.")
         fields.append({"name": location or "?", "message": message})
     meta = {"fields": fields} if fields else None
@@ -207,9 +201,7 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
     return error.as_response(request_path=request.url.path, method=request.method)
 
 
-async def _handle_exception_group(
-    request: Request, exc: ExceptionGroup
-) -> JSONResponse:  # type: ignore[override]
+async def _handle_exception_group(request: Request, exc: ExceptionGroup) -> JSONResponse:  # type: ignore[override]
     _logger.exception("Unhandled application error group", exc_info=exc)
     error = InternalServerError()
     return error.as_response(request_path=request.url.path, method=request.method)

@@ -35,9 +35,7 @@ def _validation_error(provider: str, error: ProviderGatewayError) -> ValidationA
     meta: MutableMapping[str, object] = {}
     if status is not None:
         meta["provider_status"] = status
-    return ValidationAppError(
-        f"{provider} rejected the search request.", meta=meta or None
-    )
+    return ValidationAppError(f"{provider} rejected the search request.", meta=meta or None)
 
 
 def _rate_limited_error(provider: str, error: ProviderGatewayError) -> RateLimitedError:
@@ -67,9 +65,7 @@ def _dependency_error(provider: str, error: ProviderGatewayError) -> DependencyE
     meta: MutableMapping[str, object] = {}
     if status is not None:
         meta["provider_status"] = status
-    return DependencyError(
-        f"{provider} search is currently unavailable.", meta=meta or None
-    )
+    return DependencyError(f"{provider} search is currently unavailable.", meta=meta or None)
 
 
 def _internal_error(provider: str, error: ProviderGatewayError) -> InternalServerError:

@@ -36,9 +36,7 @@ def _parse_csv(value: str) -> dict[str, int]:
     return mapping
 
 
-def parse_priority_map(
-    env_val: str | None, default: Mapping[str, int]
-) -> dict[str, int]:
+def parse_priority_map(env_val: str | None, default: Mapping[str, int]) -> dict[str, int]:
     """Parse orchestrator priority mappings from JSON or CSV."""
 
     default_map = dict(default)

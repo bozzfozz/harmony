@@ -198,9 +198,7 @@ def load_sync_retry_policy(
 
     base_policy: RetryPolicy
     if env is not None:
-        provider = RetryPolicyProvider(
-            env_source=lambda env_map=env: env_map, reload_interval=0
-        )
+        provider = RetryPolicyProvider(env_source=lambda env_map=env: env_map, reload_interval=0)
         base_policy = provider.get_retry_policy(job_type)
     else:
         provider = get_retry_policy_provider()
@@ -219,9 +217,7 @@ def load_sync_retry_policy(
                 base_policy.base_seconds,
             ),
             jitter_pct=float(getattr(defaults, "jitter_pct", base_policy.jitter_pct)),
-            timeout_seconds=getattr(
-                defaults, "timeout_seconds", base_policy.timeout_seconds
-            ),
+            timeout_seconds=getattr(defaults, "timeout_seconds", base_policy.timeout_seconds),
         )
 
     resolved_max = _coerce_positive_int(
@@ -233,9 +229,7 @@ def load_sync_retry_policy(
         base_policy.base_seconds,
     )
 
-    resolved_jitter = (
-        base_policy.jitter_pct if jitter_pct is None else float(jitter_pct)
-    )
+    resolved_jitter = base_policy.jitter_pct if jitter_pct is None else float(jitter_pct)
     if resolved_jitter < 0:
         resolved_jitter = 0.0
 
@@ -253,9 +247,7 @@ def refresh_sync_retry_policy(
     """Force a refresh of the cached retry policy defaults and return the snapshot."""
 
     if env is not None:
-        provider = RetryPolicyProvider(
-            env_source=lambda env_map=env: env_map, reload_interval=0
-        )
+        provider = RetryPolicyProvider(env_source=lambda env_map=env: env_map, reload_interval=0)
         return provider.get_retry_policy(job_type)
 
     provider = get_retry_policy_provider()
@@ -580,8 +572,7 @@ async def handle_matching(
         "discarded": discarded,
         "average_confidence": rounded_average,
         "matches": [
-            {"candidate": candidate, "score": round(score, 4)}
-            for candidate, score in qualifying
+            {"candidate": candidate, "score": round(score, 4)} for candidate, score in qualifying
         ],
     }
 
@@ -616,9 +607,7 @@ class SyncHandlerDeps:
     )
     retry_job_type: str = "sync"
     retry_policy_override: InitVar[SyncRetryPolicy | None] = None
-    _retry_policy_override: SyncRetryPolicy | None = field(
-        init=False, default=None, repr=False
-    )
+    _retry_policy_override: SyncRetryPolicy | None = field(init=False, default=None, repr=False)
 
     def __post_init__(self, retry_policy_override: SyncRetryPolicy | None) -> None:
         self._retry_policy_override = retry_policy_override
@@ -675,9 +664,7 @@ class RetryHandlerDeps:
     auto_reschedule: bool = True
 
     def __post_init__(self) -> None:
-        self.batch_limit = _coerce_positive_int(
-            self.batch_limit, _RETRY_DEFAULT_BATCH_LIMIT
-        )
+        self.batch_limit = _coerce_positive_int(self.batch_limit, _RETRY_DEFAULT_BATCH_LIMIT)
         self.scan_interval = _coerce_positive_float(
             self.scan_interval, _RETRY_DEFAULT_SCAN_INTERVAL
         )
@@ -697,14 +684,10 @@ class ArtistRefreshHandlerDeps:
     submit_delta_job: SyncJobSubmitter = enqueue_artist_delta_job
     now_factory: Callable[[], datetime] = datetime.utcnow
     delta_priority: int = field(
-        default_factory=lambda: settings.orchestrator.priority_map.get(
-            "artist_delta", 0
-        )
+        default_factory=lambda: settings.orchestrator.priority_map.get("artist_delta", 0)
     )
     refresh_priority: int = field(
-        default_factory=lambda: settings.orchestrator.priority_map.get(
-            "artist_refresh", 0
-        )
+        default_factory=lambda: settings.orchestrator.priority_map.get("artist_refresh", 0)
     )
     cache_service: ArtistCacheService | None = None
     retry_budget: int = field(init=False)
@@ -751,12 +734,8 @@ class ArtistDeltaHandlerDeps:
         mode = (self.config.db_io_mode or "thread").strip().lower()
         self.db_mode = "async" if mode == "async" else "thread"
         timeout_cap = max(1, int(self.external_timeout_ms))
-        self.spotify_timeout_ms = min(
-            timeout_cap, max(1, int(self.config.spotify_timeout_ms))
-        )
-        self.search_timeout_ms = min(
-            timeout_cap, max(1, int(self.config.slskd_search_timeout_ms))
-        )
+        self.spotify_timeout_ms = min(timeout_cap, max(1, int(self.config.spotify_timeout_ms)))
+        self.search_timeout_ms = min(timeout_cap, max(1, int(self.config.slskd_search_timeout_ms)))
         self.retry_budget = max(1, int(self.config.retry_budget_per_artist))
         self.cooldown_minutes = max(0, int(self.config.cooldown_minutes))
         self.backoff_base_ms = max(0, int(self.config.backoff_base_ms))
@@ -811,9 +790,7 @@ def _artist_cooldown_until(deps: ArtistDeltaHandlerDeps) -> datetime:
     return now + timedelta(minutes=deps.cooldown_minutes)
 
 
-async def _call_workflow_dao(
-    deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs
-):
+async def _call_workflow_dao(deps: ArtistDeltaHandlerDeps, method_name: str, /, *args, **kwargs):
     method = getattr(deps.dao, method_name)
     if deps.db_mode == "thread":
         return await asyncio.to_thread(method, *args, **kwargs)
@@ -852,9 +829,7 @@ def _primary_artist_name(track: Mapping[str, Any], album: Mapping[str, Any]) -> 
     name = _extract_artist(artists)
     if name:
         return name
-    album_artists = (
-        album.get("artists") if isinstance(album.get("artists"), list) else None
-    )
+    album_artists = album.get("artists") if isinstance(album.get("artists"), list) else None
     return _extract_artist(album_artists)
 
 
@@ -886,9 +861,7 @@ def _extract_candidate(candidate: Any) -> tuple[str | None, Mapping[str, Any] | 
             if not entry.get("filename") and not entry.get("name"):
                 continue
             return str(username) if username else None, entry
-    if isinstance(candidate.get("filename"), str) or isinstance(
-        candidate.get("name"), str
-    ):
+    if isinstance(candidate.get("filename"), str) or isinstance(candidate.get("name"), str):
         return str(username) if username else None, candidate
     return None, None
 
@@ -1048,9 +1021,7 @@ async def _fetch_artist_candidates(
         elif isinstance(tracks, Iterable):
             track_list = [track for track in tracks if isinstance(track, Mapping)]
         for track in track_list:
-            candidate = ArtistTrackCandidate.from_mapping(
-                track, release, source="spotify"
-            )
+            candidate = ArtistTrackCandidate.from_mapping(track, release, source="spotify")
             if candidate is not None:
                 track_candidates.append(candidate)
 
@@ -1172,9 +1143,7 @@ async def _compute_artist_delta(
             known_count=0,
         )
         if deps.cache_service is not None:
-            await deps.cache_service.update_hint(
-                artist_id=artist.spotify_artist_id, hint=None
-            )
+            await deps.cache_service.update_hint(artist_id=artist.spotify_artist_id, hint=None)
         return None
 
     known_releases = await _call_workflow_dao(deps, "load_known_releases", artist.id)
@@ -1296,10 +1265,7 @@ async def _persist_candidates(
 
         payload = dict(file_info)
         filename = str(
-            payload.get("filename")
-            or payload.get("name")
-            or track_payload.get("name")
-            or "unknown"
+            payload.get("filename") or payload.get("name") or track_payload.get("name") or "unknown"
         )
         priority = _extract_priority(payload)
         track_id = str(track_payload.get("id") or "").strip()
@@ -1538,9 +1504,7 @@ def _enforce_retry_budget(
     )
 
 
-async def artist_refresh(
-    job: QueueJobDTO, deps: ArtistRefreshHandlerDeps
-) -> Mapping[str, Any]:
+async def artist_refresh(job: QueueJobDTO, deps: ArtistRefreshHandlerDeps) -> Mapping[str, Any]:
     started = time.perf_counter()
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
@@ -1550,9 +1514,7 @@ async def artist_refresh(
     try:
         artist_pk = int(artist_id_raw)
     except (TypeError, ValueError) as exc:  # pragma: no cover - defensive logging
-        raise MatchingJobError(
-            "invalid_payload", "invalid artist_id", retry=False
-        ) from exc
+        raise MatchingJobError("invalid_payload", "invalid artist_id", retry=False) from exc
 
     artist = await asyncio.to_thread(deps.dao.get_artist, artist_pk)
     attempts = int(job.attempts or 0)
@@ -1694,9 +1656,7 @@ async def artist_refresh(
     }
 
 
-async def artist_scan(
-    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
-) -> Mapping[str, Any]:
+async def artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     payload = dict(job.payload or {})
     artist_id_raw = payload.get("artist_id")
     if artist_id_raw is None:
@@ -1704,9 +1664,7 @@ async def artist_scan(
     try:
         artist_pk = int(artist_id_raw)
     except (TypeError, ValueError) as exc:  # pragma: no cover - defensive logging
-        raise MatchingJobError(
-            "invalid_payload", "invalid artist_id", retry=False
-        ) from exc
+        raise MatchingJobError("invalid_payload", "invalid artist_id", retry=False) from exc
 
     artist = await _call_workflow_dao(deps, "get_artist", artist_pk)
     start = time.perf_counter()
@@ -1831,9 +1789,7 @@ async def artist_scan(
                 content_hash=content_hash,
             )
             if deps.cache_service is not None and content_hash != previous_hash:
-                await deps.cache_service.evict_artist(
-                    artist_id=artist.spotify_artist_id
-                )
+                await deps.cache_service.evict_artist(artist_id=artist.spotify_artist_id)
             duration_ms = int((time.perf_counter() - start) * 1000)
             log_event(
                 logger,
@@ -1909,9 +1865,7 @@ async def artist_scan(
             error=exc.code,
         )
         _observe_scan_metrics("retry", duration_ms)
-        raise MatchingJobError(
-            exc.code, str(exc), retry=True, retry_in=retry_seconds
-        ) from exc
+        raise MatchingJobError(exc.code, str(exc), retry=True, retry_in=retry_seconds) from exc
 
     await _call_workflow_dao(
         deps,
@@ -1951,15 +1905,11 @@ async def handle_artist_refresh(
     return await artist_refresh(job, deps)
 
 
-async def handle_artist_scan(
-    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
-) -> Mapping[str, Any]:
+async def handle_artist_scan(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     return await artist_scan(job, deps)
 
 
-async def handle_artist_delta(
-    job: QueueJobDTO, deps: ArtistDeltaHandlerDeps
-) -> Mapping[str, Any]:
+async def handle_artist_delta(job: QueueJobDTO, deps: ArtistDeltaHandlerDeps) -> Mapping[str, Any]:
     return await artist_scan(job, deps)
 
 
@@ -2095,9 +2045,7 @@ def _prepare_retry_candidate(
     file_payload = dict(file_info)
     file_payload["download_id"] = int(record.id)
 
-    priority_source = (
-        file_payload.get("priority") or payload.get("priority") or record.priority
-    )
+    priority_source = file_payload.get("priority") or payload.get("priority") or record.priority
     priority = _coerce_priority(priority_source)
     if "priority" not in file_payload:
         file_payload["priority"] = priority
@@ -2205,9 +2153,7 @@ async def handle_retry(
     if batch_limit <= 0:
         batch_limit = deps.batch_limit
 
-    scan_interval = _coerce_positive_float(
-        payload.get("scan_interval"), deps.scan_interval
-    )
+    scan_interval = _coerce_positive_float(payload.get("scan_interval"), deps.scan_interval)
     reschedule_override = payload.get("reschedule_in")
     if reschedule_override is not None:
         try:
@@ -2218,9 +2164,7 @@ async def handle_retry(
             if override_value >= 0:
                 scan_interval = override_value
 
-    should_reschedule = _coerce_bool(
-        payload.get("auto_reschedule"), deps.auto_reschedule
-    )
+    should_reschedule = _coerce_bool(payload.get("auto_reschedule"), deps.auto_reschedule)
 
     now = deps.now_factory()
     policy = deps.retry_policy
@@ -2370,9 +2314,7 @@ async def process_sync_payload(
 
     try:
         await _invoke_with_timeout(
-            deps.soulseek_client.download(
-                {"username": username, "files": filtered_files}
-            ),
+            deps.soulseek_client.download({"username": username, "files": filtered_files}),
             deps.external_timeout_ms,
         )
     except Exception as exc:
@@ -2712,13 +2654,9 @@ async def fanout_download_completion(
                 request_payload=request_payload,
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug(
-                "Metadata service failed for download %s: %s", download_id, exc
-            )
+            logger.debug("Metadata service failed for download %s: %s", download_id, exc)
         else:
-            artwork_url = (
-                metadata.get("artwork_url") if isinstance(metadata, Mapping) else None
-            )
+            artwork_url = metadata.get("artwork_url") if isinstance(metadata, Mapping) else None
 
     metadata = dict(metadata or {})
     for source in (request_payload, payload):
@@ -2767,12 +2705,8 @@ async def fanout_download_completion(
                         file_path = str(existing_path)
                         record.filename = file_path
                     else:
-                        payload_copy: dict[str, Any] = dict(
-                            record.request_payload or {}
-                        )
-                        nested_metadata: dict[str, Any] = dict(
-                            payload_copy.get("metadata") or {}
-                        )
+                        payload_copy: dict[str, Any] = dict(record.request_payload or {})
+                        nested_metadata: dict[str, Any] = dict(payload_copy.get("metadata") or {})
                         for key, value in metadata.items():
                             if isinstance(value, (str, int, float)):
                                 text = str(value).strip()
@@ -2788,13 +2722,9 @@ async def fanout_download_completion(
                             )
                             organized_path = organize_file(record, target_dir)
                         except FileNotFoundError:
-                            logger.debug(
-                                "Download file missing for organization: %s", file_path
-                            )
+                            logger.debug("Download file missing for organization: %s", file_path)
                         except Exception as exc:  # pragma: no cover - defensive
-                            logger.warning(
-                                "Failed to organise download %s: %s", download_id, exc
-                            )
+                            logger.warning("Failed to organise download %s: %s", download_id, exc)
                         else:
                             file_path = str(organized_path)
 

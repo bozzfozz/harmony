@@ -49,9 +49,7 @@ def _parse_positive_int(value: Any, default: int, *, minimum: int = 1) -> int:
     return parsed
 
 
-def _parse_positive_float(
-    value: Any, default: float, *, minimum: float = 1e-3
-) -> float:
+def _parse_positive_float(value: Any, default: float, *, minimum: float = 1e-3) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
@@ -177,9 +175,7 @@ class RetryPolicyProvider:
         try:
             parsed = float(raw)
         except (TypeError, ValueError):
-            logger.warning(
-                "invalid reload interval for retry policy", extra={"value": raw}
-            )
+            logger.warning("invalid reload interval for retry policy", extra={"value": raw})
             return DEFAULT_RETRY_POLICY_RELOAD_S
         if parsed < 0:
             return DEFAULT_RETRY_POLICY_RELOAD_S
@@ -195,9 +191,7 @@ class RetryPolicyProvider:
         base_seconds = _parse_positive_float(
             overrides.get("RETRY_BASE_SECONDS"), DEFAULT_RETRY_BASE_SECONDS
         )
-        jitter_pct = _parse_jitter(
-            overrides.get("RETRY_JITTER_PCT"), DEFAULT_RETRY_JITTER_PCT
-        )
+        jitter_pct = _parse_jitter(overrides.get("RETRY_JITTER_PCT"), DEFAULT_RETRY_JITTER_PCT)
         timeout_seconds = _parse_optional_float(overrides.get("RETRY_TIMEOUT_SECONDS"))
         return RetryPolicy(
             max_attempts=max_attempts,
@@ -206,9 +200,7 @@ class RetryPolicyProvider:
             timeout_seconds=timeout_seconds,
         )
 
-    def _apply_job_overrides(
-        self, env: dict[str, Any], cache_key: str
-    ) -> dict[str, Any]:
+    def _apply_job_overrides(self, env: dict[str, Any], cache_key: str) -> dict[str, Any]:
         if cache_key == _DEFAULT_JOB_KEY:
             return env
 

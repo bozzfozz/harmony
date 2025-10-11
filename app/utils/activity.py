@@ -217,9 +217,7 @@ class ActivityManager:
             total = (count_query.scalar()) or 0
 
             events = (
-                events_query.order_by(
-                    ActivityEvent.timestamp.desc(), ActivityEvent.id.desc()
-                )
+                events_query.order_by(ActivityEvent.timestamp.desc(), ActivityEvent.id.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
@@ -405,9 +403,7 @@ def record_worker_started(
     _, stored_status = read_worker_status(worker)
     previous = (stored_status or "").lower()
     status: WorkerActivityStatus = (
-        WORKER_RESTARTED
-        if previous in {WORKER_STOPPED, WORKER_STALE}
-        else WORKER_STARTED
+        WORKER_RESTARTED if previous in {WORKER_STOPPED, WORKER_STALE} else WORKER_STARTED
     )
     extra: Dict[str, object] = {}
     if status == WORKER_RESTARTED and previous:
@@ -426,9 +422,7 @@ def record_worker_restarted(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(
-        worker, WORKER_RESTARTED, timestamp=timestamp, details=extra
-    )
+    return record_worker_event(worker, WORKER_RESTARTED, timestamp=timestamp, details=extra)
 
 
 def record_worker_stopped(
@@ -442,9 +436,7 @@ def record_worker_stopped(
     extra: Dict[str, object] = {}
     if reason:
         extra["reason"] = reason
-    return record_worker_event(
-        worker, WORKER_STOPPED, timestamp=timestamp, details=extra
-    )
+    return record_worker_event(worker, WORKER_STOPPED, timestamp=timestamp, details=extra)
 
 
 def record_worker_stale(

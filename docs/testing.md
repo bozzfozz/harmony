@@ -1,48 +1,42 @@
 # Testing Overview
 
-## Lifespan & Worker Lifecycle
+The streamlined test-suite focuses on verifying the SQLite bootstrap flow and the
+operational guards that keep Harmony healthy. All tests run against SQLite and
+avoid external services so the suite stays fast and deterministic.
 
-The FastAPI lifespan hook orchestrates worker start-up and shutdown. To verify
-the wiring without spawning the production workers, the test-suite installs a
-lightweight orchestrator harness in `tests/conftest.py` that records scheduler
-and dispatcher activity while patching media workers with async no-ops. Enable
-the suite with the `lifespan_workers` marker, which flips
-`HARMONY_DISABLE_WORKERS` to `0` and activates the fake orchestrator wiring.
+## Database bootstrap
 
-Key scenarios covered in `tests/test_lifespan_workers.py`:
+- `tests/test_db_bootstrap.py` covers `app.db.init_db()` creating a brand-new
+  schema on empty files as well as idempotent re-runs.
+- `tests/test_config_database.py` exercises the configuration defaults for
+  `DATABASE_URL` across environments (`dev`, `prod`, `test`).
+- `tests/test_ready_check.py` validates that the self-check logic reports the
+  correct mode (`file` vs. `memory`) and probes directory permissions for the
+  configured SQLite database file.
 
-- Successful start/stop sequences with log assertions.
-- Start-up failures bubbling out of the lifespan entrypoint and subsequent
-  manual cleanup.
-- Idempotent start/stop cycles (back-to-back lifespan contexts and repeated
-  shutdown invocations).
-- Cooperative cancellation of long-running tasks within the stop grace period.
-- Simulated start timeouts via `asyncio.wait_for` as well as background task
-  crashes reported through structured logs.
+These tests rely on temporary directories or `:memory:` URLs and can therefore
+run in parallel without coordinating shared state. Helper functions
+`reset_engine_for_tests()` and `init_db()` ensure a pristine engine for every
+scenario.
 
-Helper utilities live in `tests/support/async_utils.py`, providing polling and safe
-task cancellation primitives that keep the tests deterministic. The recording
-dispatcher collects processed jobs so tests can assert structured outcomes
-even though the production logging setup reconfigures handlers during the
-FastAPI lifespan startup.
+## Operational checks
 
-## PostgreSQL test matrix
+- Startup guards use `app.ops.selfcheck.aggregate_ready()` to validate
+  environment variables, directories and database reachability. Dedicated tests
+  assert the behaviour of these checks across failure modes (missing env, bad
+  DSNs, unwritable directories).
+- The readiness endpoint is powered by `app.services.health.HealthService`.
+  Unit tests confirm that dependency probes and database pings are aggregated
+  without relying on migrations.
 
-- Der Marker `@pytest.mark.postgres` kennzeichnet Tests, die explizit gegen
-  PostgreSQL laufen und Dialekt-Parität sicherstellen (Queue-Idempotenz,
-  Orchestrator-Leases/Heartbeats, Activity-Historie, Async-DAO und der Alembic
-  Roundtrip). Die Marker werden von `pytest.ini` registriert und können per
-  `pytest -m postgres -q` selektiv ausgeführt werden.
-- Ohne lokale Datenbank lässt sich die Suite mit `pytest --skip-postgres` oder
-  `PYTEST_SKIP_POSTGRES=1 pytest` starten. Alle Tests mit dem Marker werden
-  frühzeitig übersprungen, sodass keine Verbindungsversuche zur Datenbank
-  stattfinden.
-- Im CI übernimmt [`backend-postgres.yml`](../.github/workflows/backend-postgres.yml)
-  die Ausführung: `alembic downgrade base || true` → `alembic upgrade head` →
-  `pytest -m postgres -q` → `alembic downgrade base`. Der Job nutzt einen PostgreSQL-16-Service mit
-  temporären Schemas je Testlauf (`search_path`-Isolation).
-- Lokal können dieselben Schritte mit einer Docker-Instanz reproduziert werden.
-  Startet zunächst eine Datenbank per `docker compose up -d postgres` und setzt
-  anschließend `DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony`.
-  Die Tests kümmern sich automatisch um Schema-Cleanup
-  (`DropSchema(cascade=True)`) und hinterlassen keine Datenbankartefakte.
+## Running the suite
+
+Execute the full backend suite locally via:
+
+```bash
+pytest -q
+```
+
+The same command runs in CI and requires no additional services. SQLite is
+bootstrapped automatically; set `DB_RESET=1` to force a clean database between
+runs when reproducing production-like behaviour.

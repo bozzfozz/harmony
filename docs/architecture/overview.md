@@ -75,13 +75,8 @@ Der Download-Manager ist vollständig unter `app.hdm` konsolidiert. Die einstige
 - **Observability:** Structured Logs bleiben primär; ergänzend stehen Prometheus-Metriken für Scan/Refresh (`artist_scan_outcomes_total`, `artist_refresh_duration_seconds` u. a.) zur Verfügung. Externe Systeme abonnieren `event=request`, `event=worker_job`, `event=integration_call`.
 - **Caching:** `CACHE_WRITE_THROUGH` sorgt für sofortige Invalidierung der Spotify-Playlist-Routen; `cache.evict`-Events dokumentieren gezielte Räumungen.
 
-## Persistenz (PostgreSQL)
 
-- **Verbindungsvalidierung:** `app.config._require_postgres_database_url` akzeptiert ausschließlich `postgresql+psycopg://` bzw. `postgresql+asyncpg://` und liefert andernfalls eine `ValidationAppError`. Damit schlagen Fehlkonfigurationen mit nicht unterstützten Treibern frühzeitig fehl.
-- **Sync-Engine & Migrationen:** `app.db` baut eine SQLAlchemy-Engine auf dem bereitgestellten DSN, führt Alembic-Migrationen automatisch via `command.upgrade(..., "head")` aus und fällt ohne Alembic kontrolliert auf `Base.metadata.create_all()` zurück.
-- **Async-Zugriff:** `app.db_async` erzwingt bei Bedarf den Wechsel auf `postgresql+asyncpg://` und stellt einen globalen `async_sessionmaker` bereit, sodass Worker und FastAPI-Hintergrundjobs denselben PostgreSQL-Bestand nutzen.
-- **Alembic-Entrypoint:** `app.migrations.env` liest den konfigurierten DSN, validiert ihn erneut über `_require_postgres_database_url` und orchestriert Online-/Offline-Runs mit `compare_type`/`compare_server_default`, wodurch Schema-Drift erkannt wird.
-- **Betriebsartefakte:** Docker Compose und der Container-Entrypoint erzeugen standardisierte DSNs mit `postgresql+psycopg://` und starten bei Bedarf eine PostgreSQL-Instanz als Service, inklusive Health-Checks und persistentem Volume.
+- **Sync-Engine & Schema-Bootstrap:** `app.db` baut eine SQLAlchemy-Engine auf dem bereitgestellten DSN und erstellt das Schema direkt über `Base.metadata.create_all()`. `DB_RESET=1` erzwingt beim Start das Löschen und Neuaufsetzen der SQLite-Datei.
 
 ## Erweiterungspunkte
 

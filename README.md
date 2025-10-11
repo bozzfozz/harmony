@@ -26,7 +26,6 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 - **Globale API-Key-Authentifizierung** schützt sämtliche Produktiv-Endpunkte (`X-API-Key` oder `Authorization: Bearer`). Keys werden über `HARMONY_API_KEYS`/`HARMONY_API_KEYS_FILE` verwaltet, Ausnahmen via `AUTH_ALLOWLIST`, CORS über `ALLOWED_ORIGINS` restriktiv konfiguriert.
 - **Automatic Lyrics** *(Feature-Flag `ENABLE_LYRICS`, Default: deaktiviert)*: Für jeden neuen Download erzeugt Harmony automatisch eine synchronisierte LRC-Datei mit passenden Songtexten. Die Lyrics stammen vorrangig aus der Spotify-API; falls dort keine Texte verfügbar sind, greift Harmony auf externe Provider wie Musixmatch oder lyrics.ovh zurück.
 - **Matching-Engine** zur Ermittlung der besten Kandidaten zwischen Spotify ↔ Soulseek inklusive Persistierung (Plex-Matching archiviert).
-- **PostgreSQL-Datenbank** mit SQLAlchemy-Modellen für Playlists, Downloads, Matches und Settings.
 - **Hintergrund-Worker** für Soulseek-Synchronisation, Matching-Queue und Spotify-Playlist-Sync.
 - **Docker & GitHub Actions** für reproduzierbare Builds, Tests und Continuous Integration.
 
@@ -149,7 +148,7 @@ OAuth-Secrets und strukturierte Logs.
 
 ## Testing & Coverage Policy
 
-- **Schnelle Feedback-Schleife:** `pytest -q -m "not postgres" -r s --cov=app --cov-report=term` erzeugt lokal denselben
+- **Schnelle Feedback-Schleife:** `pytest -q --cov=app --cov-report=term` erzeugt lokal denselben
   Testlauf wie der CI-Check `tests`. Skip-Gründe werden über `-r s` ausgegeben, damit Reviewer nachvollziehen, warum ein Modul
   nicht ausgeführt wurde.
 - **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter
@@ -170,68 +169,19 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
-  -e POSTGRES_HOST=postgres \
-  -e POSTGRES_PORT=5432 \
-  -e POSTGRES_DB=harmony \
-  -e POSTGRES_USER=harmony \
-  -e POSTGRES_PASSWORD=harmony \
-  -e DATABASE_SSLMODE=disable \
-  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable \
   -e PUBLIC_BACKEND_URL=http://localhost:8080 \
   -e ALLOWED_ORIGINS=http://localhost:8080 \
   -v $(pwd)/data:/data \
   ghcr.io/bozzfozz/harmony:latest
 ```
 
-> ℹ️ Stelle sicher, dass ein PostgreSQL-Server (z. B. `postgres:16`) im selben
-> Docker-Netzwerk unter dem Hostnamen `postgres` erreichbar ist. Für lokale
-> Tests genügt `docker network create harmony && docker run --rm -d --network
-> harmony --name postgres -e POSTGRES_DB=harmony -e POSTGRES_USER=harmony -e
-> POSTGRES_PASSWORD=harmony postgres:16`. Der Container liest `DATABASE_URL`
-> oder baut bei Bedarf automatisch eine Verbindung aus den `POSTGRES_*`-
-> Variablen.
+> ℹ️ SQLite ist die Standard-Datenbank. Das Volume `/data` enthält `harmony.db`.
+> Setze `DB_RESET=1`, um den Datenbankfile beim Start neu anzulegen.
 
-### PostgreSQL Setup & Migrationen
+### Datenbank & Storage
 
-1. **Service-Container starten:**
-
-   ```bash
-   docker compose up -d postgres
-   # oder manuell:
-   docker run --rm -d \
-     --name harmony-postgres \
-     -e POSTGRES_DB=harmony \
-     -e POSTGRES_USER=harmony \
-     -e POSTGRES_PASSWORD=harmony \
-     -p 5432:5432 \
-     postgres:16
-   ```
-
-2. **Verbindungs-DSN prüfen:** Die Anwendung akzeptiert ausschließlich
-   PostgreSQL-Verbindungszeichenketten (`postgresql+psycopg://` oder
-   `postgresql+asyncpg://`). Ein vollständiges Beispiel inklusive SSL-Mode
-   lautet `postgresql+psycopg://harmony:harmony@localhost:5432/harmony?sslmode=disable`.
-
-3. **Migrationen ausführen:**
-
-   ```bash
-   # Lokal (Poetry oder virtualenv aktivieren)
-   alembic upgrade head
-
-   # Oder im laufenden Container
-   docker compose exec harmony alembic upgrade head
-   ```
-
-   Der Container ruft beim Start automatisch `./scripts/db/migrate.sh` auf. Das
-   Skript wartet optional (via `pg_isready`) auf PostgreSQL und führt anschließend
-   `alembic upgrade head` aus. Seit dem Baseline-Reset vom 15. 01. 2025 existiert
-   genau eine Revision; `alembic upgrade head` legt auf leeren Datenbanken das
-   komplette Schema neu an. Für frische Instanzen empfiehlt sich die Sequenz
-   `alembic downgrade base || true` gefolgt von `alembic upgrade head`, damit
-   eventuell vorhandene Artefakte aus älteren Testläufen zuverlässig entfernt
-   werden. Der Guard `MIGRATION_RESET=1` muss gesetzt sein, falls du den
-   Versionsordner bewusst leer räumen oder neu aufbauen möchtest – andernfalls
-   bricht die CI mit einem Hinweis ab.
+- **SQLite:** Produktions-Container schreiben nach `/data/harmony.db`. Entwicklungsprofile nutzen `./harmony.db`; Tests verwenden eine In-Memory-Instanz.
+- **Backups:** Kopiere die `.db`-Datei aus dem Volume `/data`. Für konsistente Snapshots Anwendung kurz stoppen oder `DB_RESET` deaktivieren.
 
 ### `compose.yaml`
 
@@ -248,22 +198,13 @@ Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) b
 
 | Variable                 | Beschreibung                                                                 | Default (`compose.yaml`) |
 | ------------------------ | ---------------------------------------------------------------------------- | ------------------------ |
-| `DATABASE_URL`           | Persistente PostgreSQL-Datenbank (z. B. `postgresql+psycopg://user:pass@host:5432/db?sslmode=prefer`). | `postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable` |
-| `POSTGRES_HOST`          | Hostname des PostgreSQL-Servers (fällt auf `postgres`).                        | `postgres`                 |
-| `POSTGRES_PORT`          | TCP-Port für PostgreSQL.                                                       | `5432`                    |
-| `POSTGRES_DB`            | Datenbankname für Harmony.                                                     | `harmony`                 |
-| `POSTGRES_USER`          | Benutzername für die Datenbankverbindung.                                      | `harmony`                 |
-| `POSTGRES_PASSWORD`      | Passwort für die Datenbankverbindung.                                          | `harmony`                 |
-| `DATABASE_SSLMODE`       | Optionaler `sslmode`-Parameter für PostgreSQL (`disable`, `prefer`, `require`, …). | `disable`                 |
+| `DATABASE_URL`           | SQLite-DSN (Datei oder In-Memory).                                              | `sqlite+aiosqlite:///data/harmony.db` |
+| `DB_RESET`               | Löscht beim Start die Datenbankdatei und bootstrappt das Schema neu.            | `0`                                     |
 | `HARMONY_API_KEYS`       | Kommagetrennte API-Schlüssel für Auth (`X-API-Key`).                            | `change-me`               |
 | `ALLOWED_ORIGINS`        | CORS-Origin-Liste für Browser-Clients.                                         | `http://localhost:8080`   |
 | `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`   |
 | `PUBLIC_SENTRY_DSN`      | Optionaler Sentry-DSN für das Frontend.                                        | _(leer)_                  |
 | `PUBLIC_FEATURE_FLAGS`   | Optionales JSON für Feature-Flags (z. B. `{ "beta": true }`).                 | `{}`                      |
-| `FEATURE_RUN_MIGRATIONS` | Steuert, ob der Container beim Start Alembic-Migrationen ausführt.             | `on`                      |
-| `WAIT_FOR_POSTGRES`      | Deaktiviert bei Bedarf das Warten auf PostgreSQL vor den Migrationen.          | `on`                      |
-| `POSTGRES_WAIT_ATTEMPTS` | Anzahl der `pg_isready`-Versuche vor dem Abbruch.                              | `60`                      |
-| `POSTGRES_WAIT_INTERVAL` | Wartezeit (Sekunden) zwischen den Versuchen.                                   | `1`                       |
 
 Weitere Konfigurationsvariablen findest du in [`app/config.py`](app/config.py) und der Tabelle in [`.env.example`](.env.example).
 
@@ -471,7 +412,6 @@ Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusi
 | Volumes/Pfade | `DOWNLOADS_DIR`, `MUSIC_DIR` | Verzeichnisse müssen vor dem Start existieren, beschreibbar sein und genügend Speicherplatz besitzen. | Der Ready-Check testet Schreibrechte (Create → fsync → unlink). |
 | Soulseekd | `SLSKD_HOST`, `SLSKD_PORT` | TCP-Reachability muss gegeben sein (`3 × 1 s` Timeout). | Ports außerhalb des Containers freigeben; Fehler melden `start.guard`-Logs. |
 | API-Schutz | `HARMONY_API_KEY` **oder** `HARMONY_API_KEYS` | Mindestens ein Key muss konfiguriert sein. | Mehrere Keys via CSV (`HARMONY_API_KEYS`) möglich. |
-| Datenbank (optional) | `DATABASE_URL` | Gültige PostgreSQL-URL; Host & Port erreichbar, wenn `HEALTH_READY_REQUIRE_DB=true`. | Standardmäßig prüft der Ready-Check die Erreichbarkeit. |
 
 Optionale Variablen wie `UMASK`, `PUID` und `PGID` werden beim Start protokolliert, beeinflussen die Guard-Entscheidung jedoch nicht.
 
@@ -650,9 +590,7 @@ Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende
 
 ## Datenbank-Migrationen
 
-- `make db.upgrade` führt `alembic downgrade base || true` sowie `alembic upgrade head` aus und bringt die Datenbank auf den aktuellen Baseline-Stand.
 - `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision (bei Reset-Arbeiten vorher `MIGRATION_RESET=1` setzen).
-- Der Docker-Entrypoint führt Migrationen beim Start automatisch aus; setze `FEATURE_RUN_MIGRATIONS=off`, um dies temporär zu deaktivieren (z. B. für lokale Debug-Sessions).
 
 ### Code-Qualität lokal (optional offline)
 
@@ -705,10 +643,8 @@ Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architectur
 ### Voraussetzungen
 
 - Python 3.11
-- Eine erreichbare PostgreSQL-Instanz (z. B. `postgres:16` via Docker)
 - Optional: Docker und Docker Compose
 
-Harmony unterstützt ausschließlich PostgreSQL als Datenbank-Backend; eingebettete oder file-basierte Engines funktionieren nicht mit den Migrationen und Tests.
 Legacy-Dateistores aus frühen Experimenten gelten als reine Smoke-Hilfen und werden in produktiven oder CI-Szenarien nicht mehr berücksichtigt.
 
 ### Lokales Setup
@@ -740,14 +676,11 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
-  -e DATABASE_URL=postgresql+psycopg://harmony:harmony@postgres:5432/harmony \
   -v $(pwd)/data:/data \
   ghcr.io/bozzfozz/harmony:latest
 
-> ℹ️ Die Runtime erwartet einen PostgreSQL-Server im selben Docker-Netzwerk.
 ```
 
-Der Container lauscht auf `8080`, liefert `GET /` als HTML und meldet seine Bereitschaft über `GET /api/health/ready`. Persistente Daten (PostgreSQL-Datenbank, Caches, Artefakte) sollten auf ein Host-Volume unter `/data` gemountet werden. Ein Update erfolgt klassisch per `docker pull ghcr.io/bozzfozz/harmony:latest && docker compose up -d`.
 
 ### Docker Compose
 
@@ -758,11 +691,9 @@ services:
   harmony:
     image: ghcr.io/bozzfozz/harmony:latest
     depends_on:
-      - postgres
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:8080
       PUBLIC_BACKEND_URL: http://localhost:8080
@@ -777,16 +708,10 @@ services:
       retries: 3
       start_period: 10s
 
-  postgres:
-    image: postgres:16
     environment:
-      POSTGRES_DB: harmony
-      POSTGRES_USER: harmony
-      POSTGRES_PASSWORD: harmony
     ports:
       - "5432:5432"
     volumes:
-      - harmony-pg-data:/var/lib/postgresql/data
 
 volumes:
   harmony-data:
@@ -805,14 +730,11 @@ try-Zugriffs im CI bewusst ausgelassen.
 
 ### Backend-Umgebungsvariablen
 
-Harmony löst Konfigurationswerte deterministisch in der Reihenfolge **Environment-Variablen → `.env` → Code-Default** auf. Eine lokale `.env` ist optional – ohne sie startet die Anwendung mit sicheren Dev-Defaults (z. B. `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` als Datenbank-DSN). Für Produktionsumgebungen **müssen** die benötigten Variablen explizit per Environment gesetzt werden. Alle unterstützten Keys inklusive kommentierter Defaults sind in [`.env.example`](./.env.example) dokumentiert.
 
 #### Kern & Sicherheit
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `DATABASE_URL` | string | `postgresql+psycopg://postgres:postgres@localhost:5432/harmony` | SQLAlchemy-Verbindungsstring zu einer PostgreSQL-Instanz. | 🔒 enthält ggf. Zugangsdaten |
-| `ALEMBIC_DATABASE_URL` | string | _(leer)_ | Optionales Override ausschließlich für Alembic (`alembic upgrade`, `alembic revision`); muss auf PostgreSQL verweisen. | 🔒 enthält ggf. Zugangsdaten |
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
 | `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
 | `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
@@ -1068,7 +990,6 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 
 ```bash
 # Auszug; vollständige Liste siehe `.env.example`
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
 HARMONY_API_KEYS=local-dev-key
 FEATURE_REQUIRE_AUTH=false
 WATCHLIST_MAX_CONCURRENCY=3
@@ -1192,7 +1113,6 @@ Die Logs eignen sich für ELK-/Loki-Pipelines und bilden die alleinige Quelle f�
 
 ### Performance & Zuverlässigkeit
 
-- Worker-Last wird über `WATCHLIST_*`, `SYNC_WORKER_CONCURRENCY`, `RETRY_*` und `MATCHING_WORKER_*` feinjustiert. Die Defaults sind auf PostgreSQL-Pools abgestimmt; erhöhe Parallelität nur, wenn `max_connections`, I/O und Query-Pläne des Datenbankservers ausreichend Reserven bieten.
 - Überwache bei Engpässen `pg_stat_activity`, `pg_locks` und `pg_stat_statements`, um Verbindungsengpässe und langsame SQL-Pfade frühzeitig zu erkennen. Harmonys Produktionsprofile rechnen mit mindestens 40 gleichzeitigen Sessions.
 - Der Response-Cache (`CACHE_*`) reduziert Lesezugriffe und generiert korrekte `ETag`-/`Cache-Control`-Header. Bei Fehlern fällt er dank `CACHE_FAIL_OPEN` auf Live-Responses zurück.
 - Backfill- und Ingest-Limits (`BACKFILL_MAX_ITEMS`, `FREE_*`, `INGEST_*`) verhindern Thundering-Herds und sichern deterministische Laufzeiten.
@@ -1236,7 +1156,6 @@ Die frühere Plex-Integration wurde entfernt und wird im aktiven Build nicht gel
 
 Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github/ISSUE_TEMPLATE/task.md) und füllt die komplette [Task-Vorlage](docs/task-template.md) aus (inkl. FAST-TRACK/SPLIT_ALLOWED). Verweist im PR auf die ausgefüllte Vorlage und nutzt die bereitgestellte PR-Checkliste.
 
-- **Datenbank-Checks beachten:** Führt vor neuen Schemaänderungen `alembic upgrade head` gegen eure PostgreSQL-Testinstanz sowie `pytest tests/migrations -q` aus. So bleibt sichergestellt, dass sämtliche Migrationen und Schutzprüfungen die PostgreSQL-Referenzimplementierung abdecken.
 
 ## Code Style & Tooling
 
@@ -1293,26 +1212,17 @@ npm ci --no-audit --no-fund
 
 Falls dennoch Integritätskonflikte auftreten, sollte der Lockfile nach einem Backup mit derselben npm-Version wie in der CI via `npm install --package-lock-only` regeneriert und anschließend erneut committed werden.
 
-### PostgreSQL parity suite
 
-- Alle Backend-Jobs in der CI – inkl. [`ci.yml`](.github/workflows/ci.yml) und [`backend-postgres.yml`](.github/workflows/backend-postgres.yml) – betreiben einen separaten PostgreSQL 16 Service, führen `alembic upgrade head` aus und lassen **die komplette** Test- und Lint-Matrix gegen die Datenbank laufen. Anschließend sorgt `alembic downgrade base` für den „downward compatibility“-Check.
 - Lokal lässt sich der Lauf mit einem Docker-Container spiegeln:
 
   ```bash
   docker run --rm \
-    -e POSTGRES_PASSWORD=postgres \
-    -e POSTGRES_USER=postgres \
-    -e POSTGRES_DB=harmony \
-    -p 5432:5432 postgres:16
   ```
 
   In einem zweiten Terminal:
 
   ```bash
-  export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/harmony
-  alembic upgrade head
   pytest -q
-  alembic downgrade base
   ```
 
   Die Tests erzeugen pro Lauf isolierte Schemas (`search_path`) und räumen diese nach Abschluss automatisch auf.

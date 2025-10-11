@@ -159,8 +159,7 @@ def register_all(
     if emit_log:
         duration_ms = (perf_counter() - start) * 1_000
         preview = [
-            compose_prefix(effective_base, entry.prefix) or "/"
-            for entry in _registry.values()
+            compose_prefix(effective_base, entry.prefix) or "/" for entry in _registry.values()
         ][:5]
         if len(_registry) > 5:
             preview.append("…")

@@ -136,16 +136,12 @@ class SecretValidationService:
         "slskd_api_key": ProviderDescriptor(
             name="slskd_api_key",
             format_validator=_slskd_format,
-            live_validator=lambda self, secret, store: self._validate_slskd(
-                secret, store
-            ),
+            live_validator=lambda self, secret, store: self._validate_slskd(secret, store),
         ),
         "spotify_client_secret": ProviderDescriptor(
             name="spotify_client_secret",
             format_validator=_spotify_secret_format,
-            live_validator=lambda self, secret, store: self._validate_spotify(
-                secret, store
-            ),
+            live_validator=lambda self, secret, store: self._validate_spotify(secret, store),
         ),
     }
 
@@ -268,9 +264,7 @@ class SecretValidationService:
             while history and now - history[0] > window_seconds:
                 history.popleft()
             if len(history) >= limit:
-                retry_after_ms = int(
-                    max(0.0, window_seconds - (now - history[0])) * 1000
-                )
+                retry_after_ms = int(max(0.0, window_seconds - (now - history[0])) * 1000)
                 raise RateLimitedError(
                     "Too many validation attempts.",
                     retry_after_ms=retry_after_ms,
@@ -290,9 +284,7 @@ class SecretValidationService:
         while trimmed_segments and trimmed_segments[-1].lower() == "me":
             trimmed_segments.pop()
 
-        if trimmed_segments and re.fullmatch(
-            r"v\d+", trimmed_segments[-1], flags=re.IGNORECASE
-        ):
+        if trimmed_segments and re.fullmatch(r"v\d+", trimmed_segments[-1], flags=re.IGNORECASE):
             trimmed_segments.pop()
             if trimmed_segments and trimmed_segments[-1].lower() == "api":
                 trimmed_segments.pop()
@@ -302,15 +294,11 @@ class SecretValidationService:
         target_segments = ["api", "v2", "me"]
         path_segments = trimmed_segments + target_segments
         path = "/" + "/".join(path_segments)
-        normalized_url = urlunparse(
-            parsed._replace(path=path, params="", query="", fragment="")
-        )
+        normalized_url = urlunparse(parsed._replace(path=path, params="", query="", fragment=""))
         async with self._client_factory() as client:
             return await client.get(normalized_url, headers={"X-API-Key": api_key})
 
-    async def _request_spotify(
-        self, client_id: str, client_secret: str
-    ) -> httpx.Response:
+    async def _request_spotify(self, client_id: str, client_secret: str) -> httpx.Response:
         data = {"grant_type": "client_credentials"}
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._client_factory() as client:
@@ -324,9 +312,7 @@ class SecretValidationService:
     async def _validate_slskd(
         self, secret_value: str, store: SecretStore
     ) -> SecretValidationDetails:
-        base_url = (
-            store.get("SLSKD_URL").value or ""
-        ).strip() or self._settings.slskd_base_url
+        base_url = (store.get("SLSKD_URL").value or "").strip() or self._settings.slskd_base_url
         response = await self._request_slskd(secret_value, base_url)
         if 200 <= response.status_code < 300:
             return SecretValidationDetails(mode="live", valid=True, at=_now())
@@ -362,9 +348,7 @@ class SecretValidationService:
     async def _validate_spotify(
         self, secret_value: str, store: SecretStore
     ) -> SecretValidationDetails:
-        client_id_record: SecretRecord = store.dependent_setting(
-            "spotify_client_secret", index=1
-        )
+        client_id_record: SecretRecord = store.dependent_setting("spotify_client_secret", index=1)
         client_id = (client_id_record.value or "").strip()
         if not client_id:
             return SecretValidationDetails(

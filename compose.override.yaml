@@ -2,8 +2,6 @@ services:
   harmony:
     build: .
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
-    depends_on:
-      - slskd
     environment:
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
@@ -12,28 +10,23 @@ services:
       OAUTH_STATE_DIR: /data/runtime/oauth_state
       OAUTH_STATE_TTL_SEC: "${OAUTH_STATE_TTL_SEC:-600}"
       OAUTH_STORE_HASH_CV: "${OAUTH_STORE_HASH_CV:-true}"
-      DATABASE_URL: postgresql+psycopg://harmony:harmony@postgres:5432/harmony?sslmode=disable
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: harmony
-      POSTGRES_USER: harmony
-      POSTGRES_PASSWORD: harmony
-      DATABASE_SSLMODE: disable
+      DATABASE_URL: sqlite+aiosqlite:///data/harmony.db
       DOWNLOADS_DIR: /data/downloads
       MUSIC_DIR: /data/music
       WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-4}"
       MAX_RETRIES: "${DOWNLOAD_MAX_RETRIES:-5}"
-      SLSKD_BASE_URL: http://slskd:5030
+      SLSKD_BASE_URL: "${SLSKD_BASE_URL:-http://localhost:5030}"
       HARMONY_LOG_LEVEL: DEBUG
-      HARMONY_API_KEYS: dev-key
-      ALLOWED_ORIGINS: http://localhost:8080
-      PUBLIC_BACKEND_URL: http://localhost:8080
-      PUBLIC_SENTRY_DSN: ""
-      PUBLIC_FEATURE_FLAGS: "{}"
+      HARMONY_API_KEYS: "${HARMONY_API_KEYS:-dev-key}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:8080}"
+      PUBLIC_BACKEND_URL: "${PUBLIC_BACKEND_URL:-http://localhost:8080}"
+      PUBLIC_SENTRY_DSN: "${PUBLIC_SENTRY_DSN:-}"
+      PUBLIC_FEATURE_FLAGS: "${PUBLIC_FEATURE_FLAGS:-{}}"
+      DB_RESET: "${DB_RESET:-0}"
     ports:
       - "8080:8080"
-      - "8888:8080"
     volumes:
+      - harmony-data:/data
       - ./app:/app/app
       - type: bind
         source: /srv/media/downloads
@@ -45,24 +38,6 @@ services:
         source: /srv/harmony/runtime/oauth_state
         target: /data/runtime/oauth_state
 
-  slskd:
-    image: ghcr.io/slskd/slskd:latest
-    environment:
-      PUID: "${PUID:-1000}"
-      PGID: "${PGID:-1000}"
-      UMASK: "${UMASK:-002}"
-    ports:
-      - "5030:5030"
-    volumes:
-      - type: bind
-        source: /srv/media/downloads
-        target: /data/downloads
-      - type: bind
-        source: /srv/media/music
-        target: /data/music
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5030/api/v0/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+volumes:
+  harmony-data:
+    driver: local

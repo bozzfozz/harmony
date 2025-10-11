@@ -1,15 +1,13 @@
 fastapi
 uvicorn
 sqlalchemy
-alembic
 aiohttp
-asyncpg
+aiosqlite
 spotipy
 pydantic
 pytest
 pytest-asyncio
 httpx
 psutil
-psycopg[binary]
 mutagen
 prometheus_client

@@ -11,7 +11,6 @@ from app.services.oauth_service import (
     OAuthManualRequest,
     OAuthManualResponse,
     OAuthService,
-    OAuthSessionStatus,
 )
 
 __all__ = ["router_oauth_public"]
@@ -27,9 +26,7 @@ async def oauth_start(
     try:
         response = service.start(request)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     return {
         "provider": response.provider,
         "authorization_url": response.authorization_url,
@@ -56,9 +53,7 @@ async def oauth_manual(
         "ok": result.ok,
         "provider": result.provider,
         "state": result.state,
-        "completed_at": result.completed_at.isoformat()
-        if result.completed_at
-        else None,
+        "completed_at": result.completed_at.isoformat() if result.completed_at else None,
         "error_code": result.error_code.value if result.error_code else None,
         "message": result.message,
     }
@@ -84,9 +79,7 @@ async def oauth_status(
         "manual_completion_available": status_response.manual_completion_available,
         "manual_completion_url": status_response.manual_completion_url,
         "redirect_uri": status_response.redirect_uri,
-        "error_code": status_response.error_code.value
-        if status_response.error_code
-        else None,
+        "error_code": status_response.error_code.value if status_response.error_code else None,
         "message": status_response.message,
     }
     return JSONResponse(status_code=status.HTTP_200_OK, content=body)

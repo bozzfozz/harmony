@@ -311,22 +311,16 @@ def download_artwork(
     if not url:
         raise ValueError("Artwork URL must be provided")
 
-    if allowed_hosts is not None and not allowed_remote_host(
-        url, allowed_hosts=allowed_hosts
-    ):
+    if allowed_hosts is not None and not allowed_remote_host(url, allowed_hosts=allowed_hosts):
         raise ValueError(f"Host for artwork {url} is not allowed")
 
     headers = {"User-Agent": USER_AGENT}
 
     try:
-        with httpx.Client(
-            timeout=timeout, follow_redirects=True, headers=headers
-        ) as client:
+        with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
             with client.stream("GET", url) as response:
                 response.raise_for_status()
-                content_type = (
-                    (response.headers.get("content-type") or "").split(";")[0].strip()
-                )
+                content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
                 if content_type and not content_type.startswith("image/"):
                     logger.debug(
                         "Discarding non-image artwork payload from %s (%s)",
@@ -348,9 +342,7 @@ def download_artwork(
                 destination = _resolve_destination(Path(path), suffix)
                 destination.parent.mkdir(parents=True, exist_ok=True)
 
-                fd, temp_path = tempfile.mkstemp(
-                    prefix="harmony-artwork-", suffix=suffix
-                )
+                fd, temp_path = tempfile.mkstemp(prefix="harmony-artwork-", suffix=suffix)
                 written = 0
                 try:
                     with os.fdopen(fd, "wb") as handle:
@@ -399,12 +391,8 @@ def fetch_caa_artwork(
     headers = {"User-Agent": USER_AGENT}
 
     try:
-        with httpx.Client(
-            timeout=timeout, headers=headers, follow_redirects=True
-        ) as client:
-            response = client.get(
-                "https://musicbrainz.org/ws/2/release-group/", params=params
-            )
+        with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
+            response = client.get("https://musicbrainz.org/ws/2/release-group/", params=params)
             response.raise_for_status()
             payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:  # pragma: no cover - network dependent
@@ -472,11 +460,7 @@ def embed_artwork(audio_file: Path, artwork_file: Path) -> None:
             return
 
         if suffix in {".m4a", ".mp4", ".aac", ".m4b"}:
-            cover_format = (
-                MP4Cover.FORMAT_PNG
-                if mime_type == "image/png"
-                else MP4Cover.FORMAT_JPEG
-            )
+            cover_format = MP4Cover.FORMAT_PNG if mime_type == "image/png" else MP4Cover.FORMAT_JPEG
             mp4 = MP4(audio_path)
             mp4.tags["covr"] = [MP4Cover(image_data, imageformat=cover_format)]
             mp4.save()

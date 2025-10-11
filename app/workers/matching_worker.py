@@ -155,9 +155,7 @@ class MatchingWorker:
             batch = [first_job]
             while len(batch) < self._batch_size:
                 try:
-                    job = await asyncio.wait_for(
-                        self._queue.get(), timeout=self._batch_wait
-                    )
+                    job = await asyncio.wait_for(self._queue.get(), timeout=self._batch_wait)
                 except asyncio.TimeoutError:
                     break
                 if job is None:
@@ -172,13 +170,9 @@ class MatchingWorker:
 
     async def _process_batch(self, jobs: List[QueueJobDTO]) -> None:
         for job in jobs:
-            leased = lease(
-                job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds
-            )
+            leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
             if leased is None:
-                logger.debug(
-                    "Matching job %s skipped because it could not be leased", job.id
-                )
+                logger.debug("Matching job %s skipped because it could not be leased", job.id)
                 continue
 
             try:

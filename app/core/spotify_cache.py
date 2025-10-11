@@ -27,9 +27,7 @@ class SettingsCacheHandler(CacheHandler):
 
     def get_cached_token(self) -> Mapping[str, Any] | None:
         with session_scope() as session:
-            record = (
-                session.query(Setting).filter(Setting.key == self._key).one_or_none()
-            )
+            record = session.query(Setting).filter(Setting.key == self._key).one_or_none()
             if record is None or not record.value:
                 return None
             try:
@@ -56,9 +54,7 @@ class SettingsCacheHandler(CacheHandler):
             )
         serialized = json.dumps(sanitized)
         with session_scope() as session:
-            record = (
-                session.query(Setting).filter(Setting.key == self._key).one_or_none()
-            )
+            record = session.query(Setting).filter(Setting.key == self._key).one_or_none()
             now = datetime.utcnow()
             if record is None:
                 session.add(

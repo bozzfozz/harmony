@@ -229,9 +229,7 @@ def _build_response(
             if safe_meta is None:
                 safe_meta = {}
             safe_meta.setdefault("debug_id", debug_id)
-            safe_meta.setdefault(
-                "hint", "Provide the debug_id when contacting support."
-            )
+            safe_meta.setdefault("hint", "Provide the debug_id when contacting support.")
 
         payload: MutableMapping[str, Any] = {
             "ok": False,

@@ -32,9 +32,7 @@ class _TokenBucket:
     def acquire(self, *, now: float) -> tuple[bool, float]:
         if self.refill_per_second > 0:
             elapsed = max(0.0, now - self.last_checked)
-            self.tokens = min(
-                self.capacity, self.tokens + elapsed * self.refill_per_second
-            )
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_per_second)
         self.last_checked = now
         if self.tokens >= 1.0:
             self.tokens -= 1.0
@@ -98,9 +96,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 retry_after_header = "1"
             else:
                 retry_after_ms = int(max(0.0, retry_after) * 1000)
-                retry_after_header = (
-                    str(max(1, math.ceil(retry_after))) if retry_after > 0 else "1"
-                )
+                retry_after_header = str(max(1, math.ceil(retry_after))) if retry_after > 0 else "1"
 
             log_event(
                 _logger,
@@ -110,11 +106,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 path=path,
                 method=request.method,
                 entity_id=getattr(request.state, "request_id", None),
-                meta=(
-                    {"retry_after_ms": retry_after_ms}
-                    if retry_after_ms is not None
-                    else None
-                ),
+                meta=({"retry_after_ms": retry_after_ms} if retry_after_ms is not None else None),
             )
             error = RateLimitedError(
                 retry_after_ms=retry_after_ms,
@@ -133,9 +125,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.client and request.client.host:
             client_host = request.client.host
         api_key = (
-            getattr(request.state, "api_key", None)
-            or _extract_presented_key(request)
-            or "anon"
+            getattr(request.state, "api_key", None) or _extract_presented_key(request) or "anon"
         )
         route = request.scope.get("route")
         path_template = getattr(route, "path_format", request.url.path)
@@ -149,9 +139,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         refill: float | None = None,
     ) -> tuple[bool, float]:
         bucket_capacity = max(1, capacity or self._config.bucket_capacity)
-        refill_rate = (
-            self._config.refill_per_second if refill is None else max(0.0, refill)
-        )
+        refill_rate = self._config.refill_per_second if refill is None else max(0.0, refill)
         key = f"{identity}|{bucket_capacity}|{refill_rate}"
         async with self._lock:
             bucket = self._buckets.get(key)

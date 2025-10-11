@@ -137,9 +137,7 @@ class SlskdHttpClient:
     ) -> AsyncIterator[SlskdDownloadEvent]:
         """Yield status events for the download identified by *idempotency_key*."""
 
-        interval = (
-            poll_interval if poll_interval is not None else self.status_poll_interval
-        )
+        interval = poll_interval if poll_interval is not None else self.status_poll_interval
         interval = max(0.25, float(interval))
         last_status: SlskdDownloadStatus | None = None
         while True:
@@ -215,17 +213,13 @@ class SlskdHttpClient:
             except httpx.TimeoutException as exc:
                 raise SlskdTimeoutError() from exc
             except httpx.HTTPError as exc:
-                raise SlskdClientError(
-                    f"slskd request failed: {exc}", retryable=True
-                ) from exc
+                raise SlskdClientError(f"slskd request failed: {exc}", retryable=True) from exc
 
             if response.status_code == httpx.codes.OK:
                 return response
             if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
                 retry_after = _parse_retry_after_ms(response.headers)
-                raise SlskdRateLimitedError(
-                    headers=response.headers, retry_after_ms=retry_after
-                )
+                raise SlskdRateLimitedError(headers=response.headers, retry_after_ms=retry_after)
 
             body_preview = response.text[:200]
             if 500 <= response.status_code < 600:
@@ -281,10 +275,7 @@ class SlskdHttpClient:
         raw_status = str(payload.get("status") or payload.get("state") or "").strip()
         status = _normalise_status(raw_status)
         download_id = str(
-            payload.get("download_id")
-            or payload.get("id")
-            or payload.get("job_id")
-            or fallback_id
+            payload.get("download_id") or payload.get("id") or payload.get("job_id") or fallback_id
         )
 
         retryable = bool(payload.get("retryable", False))

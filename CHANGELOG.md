@@ -14,7 +14,7 @@
 - docs(architecture): add overview, contracts, diagrams, ADR template [CODX-ARCH-DOC-301]
 - docs: enable Codex full write mode (default implement) [CODX-POL-092]
 - docs: enable Auto-FAST-TRACK for CODX-ORCH-* tasks in AGENTS.md [CODX-DOC-102]
-- chore(db): align Alembic environment, migrations and queue job schema with the
+- chore(db): align the legacy migration environment and queue job schema with the
   current ORM (additive, idempotent) [CODX-P0-MIG-105]
 - chore(frontend): align Radix UI dependencies and fix imports [CODX-FE-RADIX-302]
 - chore(frontend): bump Radix UI/test stack, add pointer polyfills & smoke tests [CODX-FE-RADIX-301]
@@ -43,16 +43,16 @@
 - docs: README/ENV aktualisiert, Health/Ready-Doku konsolidiert,
   `.env.example` ergänzt und neue Ops-Guides für Runtime-Konfiguration sowie
   Observability hinzugefügt.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/observability.md†L1-L120】
-- feat(watchlist): persistenter Cooldown speichert `retry_block_until`, Worker überspringt gesperrte Artists und löscht den Wert nach Erfolg; Migration, Tests und Doku decken Verhalten und Logs ab.【F:app/models.py†L205-L212】【F:app/services/watchlist_dao.py†L17-L153】【F:app/workers/watchlist_worker.py†L102-L428】【F:app/migrations/versions/b4e3a1f6c8f6_add_retry_block_until_watchlist.py†L1-L46】【F:tests/workers/test_watchlist_cooldown.py†L1-L123】【F:docs/worker_watchlist.md†L15-L63】
+- feat(watchlist): persistenter Cooldown speichert `retry_block_until`, Worker überspringt gesperrte Artists und löscht den Wert nach Erfolg; Migration, Tests und Doku decken Verhalten und Logs ab.【F:app/models.py†L205-L212】【F:app/services/watchlist_dao.py†L17-L153】【F:app/workers/watchlist_worker.py†L102-L428】【F:tests/workers/test_watchlist_cooldown.py†L1-L123】【F:docs/worker_watchlist.md†L15-L63】
 - chore(conf): konservative Watchlist-Defaults mit Retry-Budget und Cooldown
   festgeschrieben, Worker-Backoff gedeckelt, neue Tests und README-Tabelle
   dokumentieren die Limits.【F:app/config.py†L114-L200】【F:app/workers/watchlist_worker.py†L1-L420】【F:tests/workers/test_watchlist_defaults.py†L1-L260】【F:README.md†L87-L104】
 
 ## v1.0.0 — 2025-09-15
-- chore(ci): reset GitHub Actions to a two-lane CI with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip Postgres markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
+- chore(ci): reset GitHub Actions to a two-lane CI with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip database-specific markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
 - chore(ci): add nightly dependency and secret scans at 01:00 Europe/Berlin with CycloneDX SBOM exports and 7-day report retention.【F:.github/workflows/nightly.yml†L1-L103】
 - chore(ci): introduce tag-triggered release automation that publishes Python distributions and optional frontend bundles as GitHub release assets.【F:.github/workflows/release.yml†L1-L72】
-- docs: capture required checks, Postgres opt-in policy, and operational expectations in `REPO_MAINTENANCE.md`.【F:REPO_MAINTENANCE.md†L1-L74】
+- docs: capture required checks, database opt-in policy, and operational expectations in `REPO_MAINTENANCE.md`.【F:REPO_MAINTENANCE.md†L1-L74】
 - perf(worker): entblockt den Watchlist-Worker mit konfigurierbarem DB-I/O,
   strikten Spotify-/Soulseek-Timeouts, begrenzter Parallelität und
   exponentiellem Retry-Backoff; aktualisierte Tests und Dokumentation
@@ -90,7 +90,7 @@
 - feat: versioniere alle produktiven Endpunkte unter `/api/v1`, dokumentiere die neue Basis in OpenAPI/Docs, führe das Flag `FEATURE_ENABLE_LEGACY_ROUTES` zur temporären Alias-Bereitstellung ein und aktualisiere das Frontend auf den versionierten Pfad (`API_BASE_PATH`, `VITE_API_BASE_PATH`).
 - feat: add feature flags for artwork and lyrics (default disabled) with conditional worker wiring, 503 guards, and refreshed documentation/tests.
 - refactor: purge remaining Plex/Beets wiring, ensure routers/workers only load Spotify & Soulseek, add wiring audit guard, and refresh docs/tests.
-- infra: replace ad-hoc schema management with Alembic migrations (`init_db` runs `alembic upgrade head`, Docker entrypoint applies migrations automatically, Makefile gains `db.upgrade`/`db.revision`, README documents the flow, and the initial revision seeds missing columns/indexes).【F:app/db.py†L1-L107】【F:scripts/docker-entrypoint.sh†L1-L11】【F:Makefile†L1-L48】【F:README.md†L189-L202】【F:alembic.ini†L1-L29】【F:app/migrations/versions/7c9bdb5e1a3d_create_base_schema.py†L1-L111】
+- infra: replaced ad-hoc schema management with a managed schema bootstrap; `init_db` applied metadata upgrades automatically, Docker entrypoints ensured the schema existed, and the Makefile exposed revision helpers for the legacy workflow.
 - fix: offload Spotify lookups in the watchlist worker to executor threads to
   prevent event-loop starvation and add regression coverage around the
   cancellation-safe path.

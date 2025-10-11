@@ -8,8 +8,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncIterator
-
 from app.logging import get_logger
 
 from .models import DownloadItem, DownloadWorkItem, ItemEvent
@@ -30,9 +28,7 @@ class CompletionEventBus:
     """In-memory event bus for completion notifications."""
 
     def __init__(self) -> None:
-        self._queues: dict[str, list[asyncio.Queue[DownloadCompletionEvent]]] = (
-            defaultdict(list)
-        )
+        self._queues: dict[str, list[asyncio.Queue[DownloadCompletionEvent]]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
     async def publish(self, dedupe_key: str, event: DownloadCompletionEvent) -> None:
@@ -41,9 +37,7 @@ class CompletionEventBus:
         for queue in queues:
             await queue.put(event)
 
-    async def subscribe(
-        self, dedupe_key: str
-    ) -> asyncio.Queue[DownloadCompletionEvent]:
+    async def subscribe(self, dedupe_key: str) -> asyncio.Queue[DownloadCompletionEvent]:
         queue: asyncio.Queue[DownloadCompletionEvent] = asyncio.Queue()
         async with self._lock:
             self._queues[dedupe_key].append(queue)
@@ -103,9 +97,7 @@ class DownloadCompletionMonitor:
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(
-                        queue.get(), timeout=self._poll_interval
-                    )
+                    event = await asyncio.wait_for(queue.get(), timeout=self._poll_interval)
                 except asyncio.TimeoutError:
                     candidate = await self._check_existing(expected_path)
                     if candidate is not None:
@@ -145,9 +137,7 @@ class DownloadCompletionMonitor:
         )
         await self._bus.publish(dedupe_key, event)
 
-    async def _check_existing(
-        self, expected_path: Path | None
-    ) -> CompletionResult | None:
+    async def _check_existing(self, expected_path: Path | None) -> CompletionResult | None:
         if expected_path is not None and self._is_valid(expected_path):
             bytes_written = await self._ensure_stable(expected_path)
             return await self._build_result(expected_path, bytes_written)
@@ -209,9 +199,7 @@ class DownloadCompletionMonitor:
             if metadata is not None:
                 info = getattr(metadata, "info", None)
                 if info is not None:
-                    codec = (
-                        getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
-                    )
+                    codec = getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
                     length = getattr(info, "length", None)
                     if isinstance(length, (int, float)):
                         duration = float(length)
@@ -226,9 +214,7 @@ class DownloadCompletionMonitor:
         )
 
 
-def record_detection_event(
-    work_item: DownloadWorkItem, *, path: Path, bytes_written: int
-) -> None:
+def record_detection_event(work_item: DownloadWorkItem, *, path: Path, bytes_written: int) -> None:
     work_item.record_event(
         "download.detected",
         meta={

@@ -17,20 +17,15 @@ AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 _configured_async_url: str | None = None
 
 
-def _to_async_url(database_url: str) -> str:
-    url = make_url(database_url)
-    driver = url.drivername
-    if not driver.startswith("postgresql"):
-        raise ValueError(f"Unsupported database driver for async engine: {driver}")
-    async_url = url.set(drivername="postgresql+asyncpg")
-    return async_url.render_as_string(hide_password=False)
-
-
 def _ensure_async_engine() -> None:
     global _async_engine, AsyncSessionLocal, _configured_async_url
 
     config = load_config()
-    async_url = _to_async_url(config.database.url)
+    async_url = config.database.url
+    url = make_url(async_url)
+    driver = url.drivername.lower()
+    if not driver.startswith("sqlite+aiosqlite"):
+        raise ValueError(f"Unsupported database driver for async engine: {driver}")
 
     if _async_engine is not None and _configured_async_url == async_url:
         return

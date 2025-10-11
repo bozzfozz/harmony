@@ -84,9 +84,7 @@ def list_watchlist(
     return payload
 
 
-@router.post(
-    "", response_model=WatchlistEntryResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("", response_model=WatchlistEntryResponse, status_code=status.HTTP_201_CREATED)
 def create_watchlist_entry(
     payload: WatchlistEntryCreate,
     request: Request,
@@ -94,9 +92,7 @@ def create_watchlist_entry(
 ) -> WatchlistEntryResponse:
     started = perf_counter()
     try:
-        entry = service.create_entry(
-            artist_key=payload.artist_key, priority=payload.priority
-        )
+        entry = service.create_entry(artist_key=payload.artist_key, priority=payload.priority)
     except AppError as exc:
         duration_ms = (perf_counter() - started) * 1000
         _emit_api_event(
@@ -140,9 +136,7 @@ def update_watchlist_priority(
 ) -> WatchlistEntryResponse:
     started = perf_counter()
     try:
-        entry = service.update_priority(
-            artist_key=artist_key, priority=payload.priority
-        )
+        entry = service.update_priority(artist_key=artist_key, priority=payload.priority)
     except AppError as exc:
         duration_ms = (perf_counter() - started) * 1000
         _emit_api_event(
