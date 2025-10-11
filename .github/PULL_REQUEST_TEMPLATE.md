@@ -11,10 +11,10 @@
 
 ## Verträge
 - Public-API: unverändert / geändert (OpenAPI aktualisiert)
-- DB/Migration: nein / ja (idempotent, rollback-fähig)
+- DB-Bootstrap: nein / ja (Schema-Erweiterungen via `Base.metadata.create_all()` dokumentiert)
 
-## Migration & Deployment
-- Migration ausgeführt (`alembic upgrade head`): ja/nein
+## Deployment & Ops
+- Datenbank neu initialisiert (`DB_RESET=1` + Startlogs angehängt): ja/nein
 - ENV-Defaults geprüft/kommuniziert (siehe README „Orchestrator & Queue-Steuerung“, `docs/workers.md`):
 
 ## Doku & ToDo

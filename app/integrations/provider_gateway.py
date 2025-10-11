@@ -80,9 +80,7 @@ class ProviderGatewayConfig:
         default_policy = ProviderRetryPolicy.from_external(external)
         provider_policies: dict[str, ProviderRetryPolicy] = {}
         for name, profile in profiles.items():
-            provider_policies[name.lower()] = ProviderRetryPolicy.from_external(
-                profile.policy
-            )
+            provider_policies[name.lower()] = ProviderRetryPolicy.from_external(profile.policy)
         return cls(
             max_concurrency=max(1, max_concurrency),
             default_policy=default_policy,
@@ -93,21 +91,15 @@ class ProviderGatewayConfig:
 class ProviderGatewayError(RuntimeError):
     """Base class for gateway level failures."""
 
-    def __init__(
-        self, provider: str, message: str, *, cause: Exception | None = None
-    ) -> None:
+    def __init__(self, provider: str, message: str, *, cause: Exception | None = None) -> None:
         super().__init__(message)
         self.provider = provider
         self.cause = cause
 
 
 class ProviderGatewayTimeoutError(ProviderGatewayError):
-    def __init__(
-        self, provider: str, timeout_ms: int, *, cause: Exception | None = None
-    ) -> None:
-        super().__init__(
-            provider, f"{provider} timed out after {timeout_ms}ms", cause=cause
-        )
+    def __init__(self, provider: str, timeout_ms: int, *, cause: Exception | None = None) -> None:
+        super().__init__(provider, f"{provider} timed out after {timeout_ms}ms", cause=cause)
         self.timeout_ms = timeout_ms
 
 
@@ -210,15 +202,11 @@ class ProviderGateway:
         providers: Mapping[str, TrackProvider],
         config: ProviderGatewayConfig,
     ) -> None:
-        self._providers = {
-            name.lower(): provider for name, provider in providers.items()
-        }
+        self._providers = {name.lower(): provider for name, provider in providers.items()}
         self._config = config
         self._semaphore = asyncio.Semaphore(config.max_concurrency)
 
-    async def search_tracks(
-        self, provider: str, query: SearchQuery
-    ) -> list[ProviderTrack]:
+    async def search_tracks(self, provider: str, query: SearchQuery) -> list[ProviderTrack]:
         response = await self._search_provider(provider, query)
         if response.error is not None:
             raise response.error
@@ -356,15 +344,11 @@ class ProviderGateway:
         releases = await self._execute_provider_call(
             provider,
             "fetch_artist_releases",
-            lambda adapter: adapter.fetch_artist_releases(
-                artist_source_id, limit=limit
-            ),
+            lambda adapter: adapter.fetch_artist_releases(artist_source_id, limit=limit),
         )
         return list(releases)
 
-    async def fetch_album(
-        self, provider: str, album_source_id: str
-    ) -> ProviderAlbumDetails | None:
+    async def fetch_album(self, provider: str, album_source_id: str) -> ProviderAlbumDetails | None:
         return await self._execute_provider_call(
             provider,
             "fetch_album",
@@ -377,9 +361,7 @@ class ProviderGateway:
         tracks = await self._execute_provider_call(
             provider,
             "fetch_artist_top_tracks",
-            lambda adapter: adapter.fetch_artist_top_tracks(
-                artist_source_id, limit=limit
-            ),
+            lambda adapter: adapter.fetch_artist_top_tracks(artist_source_id, limit=limit),
         )
         return list(tracks)
 
@@ -402,9 +384,7 @@ class ProviderGateway:
         if isinstance(exc, ProviderTimeoutError):
             return ProviderGatewayTimeoutError(name, exc.timeout_ms, cause=exc)
         if isinstance(exc, ProviderValidationError):
-            return ProviderGatewayValidationError(
-                name, status_code=exc.status_code, cause=exc
-            )
+            return ProviderGatewayValidationError(name, status_code=exc.status_code, cause=exc)
         if isinstance(exc, ProviderRateLimitedError):
             return ProviderGatewayRateLimitedError(
                 name,
@@ -414,13 +394,9 @@ class ProviderGateway:
                 cause=exc,
             )
         if isinstance(exc, ProviderNotFoundError):
-            return ProviderGatewayNotFoundError(
-                name, status_code=exc.status_code, cause=exc
-            )
+            return ProviderGatewayNotFoundError(name, status_code=exc.status_code, cause=exc)
         if isinstance(exc, ProviderDependencyError):
-            return ProviderGatewayDependencyError(
-                name, status_code=exc.status_code, cause=exc
-            )
+            return ProviderGatewayDependencyError(name, status_code=exc.status_code, cause=exc)
         if isinstance(exc, ProviderInternalError):
             return ProviderGatewayInternalError(name, str(exc), cause=exc)
         if isinstance(exc, ProviderError):

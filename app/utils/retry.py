@@ -45,9 +45,7 @@ def exp_backoff_delays(base_ms: int, max_attempts: int, jitter_pct: int) -> list
     return delays
 
 
-def _resolve_directive(
-    result: RetryDirective | bool, error: Exception
-) -> RetryDirective:
+def _resolve_directive(result: RetryDirective | bool, error: Exception) -> RetryDirective:
     if isinstance(result, RetryDirective):
         resolved_error = result.error if result.error is not None else error
         return RetryDirective(

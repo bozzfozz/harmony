@@ -164,9 +164,7 @@ def normalize_spotify_track(
         artist_id = _coerce_str(_get(entry, "id"))
         artist_metadata: dict[str, Any] = {}
         genres_field = _get(entry, "genres")
-        genre_list = [
-            str(item) for item in _iter_sequence(genres_field) if _coerce_str(item)
-        ]
+        genre_list = [str(item) for item in _iter_sequence(genres_field) if _coerce_str(item)]
         if genre_list:
             artist_metadata["genres"] = tuple(genre_list)
             aggregated_genres.update(genre_list)
@@ -211,9 +209,7 @@ def normalize_spotify_track(
             album_artist_id = _coerce_str(_get(entry, "id"))
             album_artist_metadata: dict[str, Any] = {}
             genres = _get(entry, "genres")
-            genre_list = [
-                str(item) for item in _iter_sequence(genres) if _coerce_str(item)
-            ]
+            genre_list = [str(item) for item in _iter_sequence(genres) if _coerce_str(item)]
             if genre_list:
                 album_artist_metadata["genres"] = tuple(genre_list)
             album_artists.append(
@@ -234,9 +230,7 @@ def normalize_spotify_track(
             artists=tuple(album_artists),
             metadata=album_metadata,
             release_date=release_date,
-            total_tracks=(
-                _coerce_int(album_total) if album_total is not None else total_tracks
-            ),
+            total_tracks=(_coerce_int(album_total) if album_total is not None else total_tracks),
             images=album_images,
         )
 
@@ -274,9 +268,7 @@ def from_spotify_artist(payload: Mapping[str, Any] | Any) -> ProviderArtist:
     source_id = _coerce_str(_get_field(payload, "id"))
     popularity = _coerce_int(_get_field(payload, "popularity"))
     genres = tuple(
-        str(item)
-        for item in _iter_sequence(_get_field(payload, "genres"))
-        if _coerce_str(item)
+        str(item) for item in _iter_sequence(_get_field(payload, "genres")) if _coerce_str(item)
     )
     images = _collect_image_urls(_get_field(payload, "images"))
 
@@ -330,9 +322,7 @@ def _ensure_spotify_track(
             candidates=entry.candidates,
             metadata=entry.metadata,
         )
-    return normalize_spotify_track(
-        entry, provider=provider, album_payload=album_payload
-    )
+    return normalize_spotify_track(entry, provider=provider, album_payload=album_payload)
 
 
 def from_spotify_album_details(
@@ -380,15 +370,11 @@ def from_spotify_album_details(
                 album_metadata[key] = value
 
     normalized_tracks = [
-        _ensure_spotify_track(entry, provider=provider, album_payload=mapping)
-        for entry in tracks
+        _ensure_spotify_track(entry, provider=provider, album_payload=mapping) for entry in tracks
     ]
 
     effective_total_tracks = total_tracks
-    if (
-        effective_total_tracks is None
-        and album_metadata.get("total_tracks") is not None
-    ):
+    if effective_total_tracks is None and album_metadata.get("total_tracks") is not None:
         try:
             effective_total_tracks = int(album_metadata["total_tracks"])
         except (TypeError, ValueError):
@@ -429,9 +415,7 @@ def from_spotify_release(
     title = _coerce_str(_get_field(payload, "name")) or ""
     source_id = _coerce_str(_get_field(payload, "id"))
     release_date = _coerce_str(_get_field(payload, "release_date"))
-    release_type = _coerce_str(
-        _get_field(payload, "album_type") or _get_field(payload, "type")
-    )
+    release_type = _coerce_str(_get_field(payload, "album_type") or _get_field(payload, "type"))
     total_tracks = _coerce_int(_get_field(payload, "total_tracks"))
     version = _coerce_str(
         _get_field(payload, "version")
@@ -448,9 +432,7 @@ def from_spotify_release(
         metadata["release_date_precision"] = precision
     markets = _get_field(payload, "available_markets")
     if isinstance(markets, list):
-        metadata["available_markets"] = [
-            str(item) for item in markets if _coerce_str(item)
-        ]
+        metadata["available_markets"] = [str(item) for item in markets if _coerce_str(item)]
     metadata_payload = _extract_mapping(_get_field(payload, "metadata"))
     if metadata_payload:
         for key, value in metadata_payload.items():
@@ -508,9 +490,7 @@ def normalize_slskd_candidate(
     bitrate = _coerce_int(payload.get("bitrate") or payload.get("bitrate_kbps"))
     if bitrate is not None and bitrate <= 0:
         bitrate = None
-    size = _coerce_int(
-        payload.get("size") or payload.get("size_bytes") or payload.get("filesize")
-    )
+    size = _coerce_int(payload.get("size") or payload.get("size_bytes") or payload.get("filesize"))
     if size is not None and size < 0:
         size = None
     seeders = _coerce_int(
@@ -625,16 +605,8 @@ def from_slskd_artist(payload: Mapping[str, Any] | Any) -> ProviderArtist:
             genres.append(genre)
     images = _collect_image_urls(mapping.get("images") or mapping.get("image"))
 
-    metadata = (
-        dict(mapping.get("metadata"))
-        if isinstance(mapping.get("metadata"), Mapping)
-        else {}
-    )
-    aliases = [
-        str(item)
-        for item in _iter_sequence(mapping.get("aliases"))
-        if _coerce_str(item)
-    ]
+    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
+    aliases = [str(item) for item in _iter_sequence(mapping.get("aliases")) if _coerce_str(item)]
     if aliases and "aliases" not in metadata:
         metadata["aliases"] = aliases
 
@@ -649,9 +621,7 @@ def from_slskd_artist(payload: Mapping[str, Any] | Any) -> ProviderArtist:
     )
 
 
-def from_slskd_release(
-    payload: Mapping[str, Any] | Any, artist_id: str | None
-) -> ProviderRelease:
+def from_slskd_release(payload: Mapping[str, Any] | Any, artist_id: str | None) -> ProviderRelease:
     """Convert a slskd release payload into :class:`ProviderRelease`."""
 
     mapping = _extract_mapping(payload)
@@ -662,17 +632,11 @@ def from_slskd_release(
     source_id = _coerce_str(mapping.get("id") or mapping.get("release_id"))
     release_date = _coerce_str(mapping.get("release_date") or mapping.get("date"))
     release_type = _coerce_str(mapping.get("type") or mapping.get("release_type"))
-    total_tracks = _coerce_int(
-        mapping.get("total_tracks") or mapping.get("track_count")
-    )
+    total_tracks = _coerce_int(mapping.get("total_tracks") or mapping.get("track_count"))
     version = _coerce_str(mapping.get("version") or mapping.get("edition"))
     updated_at = _coerce_str(mapping.get("updated_at") or mapping.get("modified_at"))
 
-    metadata = (
-        dict(mapping.get("metadata"))
-        if isinstance(mapping.get("metadata"), Mapping)
-        else {}
-    )
+    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
     for key in ("catalog_number", "catalogue_number", "catno"):
         value = mapping.get(key)
         if value is not None and key not in metadata:
@@ -731,23 +695,15 @@ def from_slskd_album_details(
     release_date = _coerce_str(
         mapping.get("release_date") or mapping.get("date") or mapping.get("year")
     )
-    total_tracks = _coerce_int(
-        mapping.get("total_tracks") or mapping.get("track_count")
-    )
+    total_tracks = _coerce_int(mapping.get("total_tracks") or mapping.get("track_count"))
     images = _collect_image_urls(mapping.get("images") or mapping.get("image"))
 
-    normalized_tracks = [
-        _ensure_slskd_track(entry, provider=provider) for entry in tracks
-    ]
+    normalized_tracks = [_ensure_slskd_track(entry, provider=provider) for entry in tracks]
 
     if total_tracks is None and normalized_tracks:
         total_tracks = len(normalized_tracks)
 
-    metadata = (
-        dict(mapping.get("metadata"))
-        if isinstance(mapping.get("metadata"), Mapping)
-        else {}
-    )
+    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
     for key in ("catalog_number", "catalogue_number", "catno"):
         if key in mapping and key not in metadata:
             metadata[key] = mapping[key]
@@ -772,11 +728,7 @@ def from_slskd_album_details(
     )
 
     extra_metadata: dict[str, Any] = {}
-    aliases = [
-        str(item)
-        for item in _iter_sequence(mapping.get("aliases"))
-        if _coerce_str(item)
-    ]
+    aliases = [str(item) for item in _iter_sequence(mapping.get("aliases")) if _coerce_str(item)]
     if aliases:
         extra_metadata["aliases"] = aliases
 
@@ -816,9 +768,7 @@ def normalize_slskd_track(
     album = None
     if album_name:
         album_metadata = {
-            key: metadata[key]
-            for key in _TRACK_COUNT_KEYS
-            if metadata.get(key) is not None
+            key: metadata[key] for key in _TRACK_COUNT_KEYS if metadata.get(key) is not None
         }
         release_date = _coerce_str(metadata.get("release_date"))
         if not release_date:

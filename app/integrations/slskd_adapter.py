@@ -194,11 +194,7 @@ def _extract_artist(entry: Mapping[str, Any]) -> str | None:
     artists = entry.get("artists")
     if isinstance(artists, list):
         for item in artists:
-            name = (
-                _coerce_str(item.get("name"))
-                if isinstance(item, Mapping)
-                else _coerce_str(item)
-            )
+            name = _coerce_str(item.get("name")) if isinstance(item, Mapping) else _coerce_str(item)
             if name:
                 return normalize_quotes(name)
     artist = _coerce_str(entry.get("artist") or entry.get("uploader"))
@@ -223,9 +219,7 @@ def _extract_seeders(entry: Mapping[str, Any]) -> int | None:
     return None
 
 
-def _extract_availability(
-    entry: Mapping[str, Any], seeders: int | None
-) -> float | None:
+def _extract_availability(entry: Mapping[str, Any], seeders: int | None) -> float | None:
     for key in ("availability", "availability_score", "estimated_availability"):
         availability = _coerce_float(entry.get(key))
         if availability is not None:
@@ -288,9 +282,7 @@ def _build_candidate(entry: Mapping[str, Any]) -> TrackCandidate:
     bitrate = _coerce_int(entry.get("bitrate") or entry.get("bitrate_kbps"))
     if bitrate is not None and bitrate <= 0:
         bitrate = None
-    size = _coerce_int(
-        entry.get("size") or entry.get("size_bytes") or entry.get("filesize")
-    )
+    size = _coerce_int(entry.get("size") or entry.get("size_bytes") or entry.get("filesize"))
     if size is not None and size < 0:
         size = None
     seeders = _extract_seeders(entry)
@@ -327,9 +319,7 @@ def _sort_candidates(
             (candidate.format or "").upper(), len(preferred_formats)
         )
         seeders = -(candidate.seeders or 0)
-        size = (
-            candidate.size_bytes if candidate.size_bytes is not None else 1_000_000_000
-        )
+        size = candidate.size_bytes if candidate.size_bytes is not None else 1_000_000_000
         title = candidate.title.lower()
         return (format_rank, seeders, size, title)
 
@@ -409,14 +399,10 @@ class SlskdAdapter(TrackProvider):
     async def search_tracks(self, query: SearchQuery) -> list[ProviderTrack]:
         trimmed_query = query.text.strip()
         if not trimmed_query:
-            raise ProviderValidationError(
-                self.name, "query must not be empty", status_code=400
-            )
+            raise ProviderValidationError(self.name, "query must not be empty", status_code=400)
 
         normalized_query = _normalise_search_value(trimmed_query)
-        normalized_artist = (
-            _normalise_search_value(query.artist) if query.artist else None
-        )
+        normalized_artist = _normalise_search_value(query.artist) if query.artist else None
         combined = _combine_terms(normalized_query, normalized_artist)
         if not combined:
             raise ProviderValidationError(
@@ -435,9 +421,7 @@ class SlskdAdapter(TrackProvider):
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(self.name, self._timeout_ms, cause=exc) from exc
         except httpx.HTTPError as exc:
-            raise ProviderDependencyError(
-                self.name, "slskd request failed", cause=exc
-            ) from exc
+            raise ProviderDependencyError(self.name, "slskd request failed", cause=exc) from exc
 
         status_code = response.status_code
         if status_code == httpx.codes.OK:
@@ -449,15 +433,10 @@ class SlskdAdapter(TrackProvider):
                 ) from exc
             candidates = [_build_candidate(entry) for entry in _iter_files(payload)]
             if not candidates:
-                raise ProviderNotFoundError(
-                    self.name, "slskd returned no results", status_code=404
-                )
+                raise ProviderNotFoundError(self.name, "slskd returned no results", status_code=404)
             ranked = _sort_candidates(candidates, self._format_ranking)
             limited = ranked[:effective_limit]
-            return [
-                normalize_slskd_track(candidate, provider=self.name)
-                for candidate in limited
-            ]
+            return [normalize_slskd_track(candidate, provider=self.name) for candidate in limited]
 
         if status_code in {httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY}:
             raise ProviderValidationError(
@@ -554,9 +533,7 @@ class SlskdAdapter(TrackProvider):
             max_items = None
 
         search_limit = max_items or self._max_results
-        search_query = SearchQuery(
-            text=identifier, artist=identifier, limit=search_limit
-        )
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=search_limit)
         tracks = await self.search_tracks(search_query)
         if not tracks:
             return []
@@ -583,11 +560,7 @@ class SlskdAdapter(TrackProvider):
             if "metadata" in album_payload:
                 combined_metadata = dict(album_payload["metadata"])
                 combined_metadata.update(
-                    {
-                        k: v
-                        for k, v in track_metadata.items()
-                        if k not in combined_metadata
-                    }
+                    {k: v for k, v in track_metadata.items() if k not in combined_metadata}
                 )
                 album_payload["metadata"] = combined_metadata
             elif track_metadata:
@@ -620,9 +593,7 @@ class SlskdAdapter(TrackProvider):
             )
 
         search_limit = self._max_results
-        search_query = SearchQuery(
-            text=identifier, artist=identifier, limit=search_limit
-        )
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=search_limit)
         tracks = await self.search_tracks(search_query)
         if not tracks:
             raise ProviderNotFoundError(self.name, "album not found", status_code=404)
@@ -686,9 +657,7 @@ class SlskdAdapter(TrackProvider):
             max_items = None
 
         effective_limit = max_items or self._max_results
-        search_query = SearchQuery(
-            text=identifier, artist=identifier, limit=effective_limit
-        )
+        search_query = SearchQuery(text=identifier, artist=identifier, limit=effective_limit)
         tracks = await self.search_tracks(search_query)
         if max_items is not None:
             return tracks[:max_items]

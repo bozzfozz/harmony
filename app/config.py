@@ -9,7 +9,8 @@ from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -332,11 +333,7 @@ class WatchlistTimerConfig:
     @classmethod
     def from_env(cls, env: Mapping[str, Any]) -> "WatchlistTimerConfig":
         enabled = _as_bool(
-            (
-                str(env.get("WATCHLIST_TIMER_ENABLED"))
-                if "WATCHLIST_TIMER_ENABLED" in env
-                else None
-            ),
+            (str(env.get("WATCHLIST_TIMER_ENABLED")) if "WATCHLIST_TIMER_ENABLED" in env else None),
             default=DEFAULT_WATCHLIST_TIMER_ENABLED,
         )
         interval = _bounded_float(
@@ -367,9 +364,7 @@ class OrchestratorConfig:
             "sync": max(1, self.pool_sync or self.global_concurrency),
             "matching": max(1, self.pool_matching or self.global_concurrency),
             "retry": max(1, self.pool_retry or self.global_concurrency),
-            "artist_refresh": max(
-                1, self.pool_artist_refresh or self.global_concurrency
-            ),
+            "artist_refresh": max(1, self.pool_artist_refresh or self.global_concurrency),
             "artist_delta": max(1, self.pool_artist_delta or self.global_concurrency),
         }
 
@@ -734,12 +729,12 @@ class Settings:
         )
 
 
-DEFAULT_DB_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/harmony"
+DEFAULT_DB_URL_DEV = "sqlite+aiosqlite:///./harmony.db"
+DEFAULT_DB_URL_PROD = "sqlite+aiosqlite:///data/harmony.db"
+DEFAULT_DB_URL_TEST = "sqlite+aiosqlite:///:memory:"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
-DEFAULT_SPOTIFY_SCOPE = (
-    "user-library-read playlist-read-private playlist-read-collaborative"
-)
+DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
 DEFAULT_ARTWORK_DIR = "./artwork"
 DEFAULT_ARTWORK_TIMEOUT = 15.0
 DEFAULT_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
@@ -825,9 +820,7 @@ DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS = 2_000
 DEFAULT_SIZE_STABLE_SECONDS = 30
 DEFAULT_DOWNLOAD_MAX_RETRIES = 5
 DEFAULT_SLSDK_TIMEOUT_SEC = 300
-DEFAULT_MOVE_TEMPLATE = (
-    "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
-)
+DEFAULT_MOVE_TEMPLATE = "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
 
 DEFAULT_WATCHLIST_TIMER_ENABLED = True
 DEFAULT_WATCHLIST_TIMER_INTERVAL_S = 900.0
@@ -915,37 +908,67 @@ def _bounded_float(
     return resolved
 
 
-_POSTGRES_ALLOWED_PREFIXES = (
-    "postgresql+psycopg://",
-    "postgresql+asyncpg://",
+_SQLITE_ALLOWED_PREFIXES = (
+    "sqlite",
+    "sqlite+aiosqlite",
+    "sqlite+pysqlite",
 )
 
 
-def _require_postgres_database_url(candidate: Optional[str]) -> str:
+def _normalise_sqlite_database_url(candidate: Optional[str], *, default_hint: str) -> str:
     from app.errors import ValidationAppError
 
     value = (candidate or "").strip()
     if not value:
         raise ValidationAppError(
-            "DATABASE_URL must be configured with a postgresql+psycopg:// or postgresql+asyncpg:// connection string, "
-            f"for example {DEFAULT_DB_URL}.",
+            "DATABASE_URL must be configured with a sqlite+ connection string, "
+            f"for example {default_hint}.",
             meta={"field": "DATABASE_URL"},
         )
-    if not value.lower().startswith(_POSTGRES_ALLOWED_PREFIXES):
+
+    try:
+        url = make_url(value)
+    except (ArgumentError, ValueError) as exc:  # pragma: no cover - defensive guard
         raise ValidationAppError(
-            "DATABASE_URL must use a postgresql+psycopg:// or postgresql+asyncpg:// connection string.",
+            "DATABASE_URL is not a valid sqlite+ SQLAlchemy connection string.",
+            meta={"field": "DATABASE_URL"},
+        ) from exc
+
+    driver = url.drivername.lower()
+    if not any(driver.startswith(prefix) for prefix in _SQLITE_ALLOWED_PREFIXES):
+        raise ValidationAppError(
+            "DATABASE_URL must use a sqlite+aiosqlite:/// or sqlite+pysqlite:/// connection string.",
             meta={"field": "DATABASE_URL"},
         )
-    return value
+
+    return url.render_as_string(hide_password=False)
+
+
+def _default_database_url_for_profile(profile: str) -> str:
+    if profile == "prod" or profile == "staging":
+        return DEFAULT_DB_URL_PROD
+    if profile == "test":
+        return DEFAULT_DB_URL_TEST
+    return DEFAULT_DB_URL_DEV
 
 
 def _resolve_database_url(env: Mapping[str, Any], explicit: Optional[str]) -> str:
+    profile, _flags = _resolve_environment_profile(env)
+    default_url = _default_database_url_for_profile(profile)
     if explicit is not None:
-        return _require_postgres_database_url(explicit)
+        return _normalise_sqlite_database_url(explicit, default_hint=default_url)
     candidate = env.get("DATABASE_URL")
     if candidate:
-        return _require_postgres_database_url(str(candidate))
-    return _require_postgres_database_url(DEFAULT_DB_URL)
+        return _normalise_sqlite_database_url(str(candidate), default_hint=default_url)
+    return _normalise_sqlite_database_url(default_url, default_hint=default_url)
+
+
+def _resolve_sync_database_url(database_url: str) -> str:
+    url = make_url(database_url)
+    driver = url.drivername.lower()
+    if driver == "sqlite+aiosqlite" or driver == "sqlite":
+        url = url.set(drivername="sqlite+pysqlite")
+    return url.render_as_string(hide_password=False)
 
 
 def _parse_bool_override(value: Any) -> bool | None:
@@ -1159,25 +1182,17 @@ def _load_environment_config(env: Mapping[str, Any]) -> EnvironmentConfig:
     workers_enabled_raw = env.get("WORKERS_ENABLED")
     workers_enabled_override = _parse_bool_override(workers_enabled_raw)
     disable_workers = _as_bool(
-        (
-            str(env.get("HARMONY_DISABLE_WORKERS"))
-            if "HARMONY_DISABLE_WORKERS" in env
-            else None
-        ),
+        (str(env.get("HARMONY_DISABLE_WORKERS")) if "HARMONY_DISABLE_WORKERS" in env else None),
         default=False,
     )
-    visibility_override = _parse_optional_int(
-        env.get("WORKER_VISIBILITY_TIMEOUT_S"), minimum=5
-    )
+    visibility_override = _parse_optional_int(env.get("WORKER_VISIBILITY_TIMEOUT_S"), minimum=5)
     watchlist_interval = _parse_optional_float(env.get("WATCHLIST_INTERVAL"))
     watchlist_timer_enabled = _parse_bool_override(env.get("WATCHLIST_TIMER_ENABLED"))
 
     workers = WorkerEnvironmentConfig(
         disable_workers=disable_workers,
         enabled_override=workers_enabled_override,
-        enabled_raw=(
-            str(workers_enabled_raw) if workers_enabled_raw is not None else None
-        ),
+        enabled_raw=(str(workers_enabled_raw) if workers_enabled_raw is not None else None),
         visibility_timeout_s=visibility_override,
         watchlist_interval_s=watchlist_interval,
         watchlist_timer_enabled=watchlist_timer_enabled,
@@ -1407,9 +1422,10 @@ def _load_settings_from_db(
 
     runtime_env = env or get_runtime_env()
     database_url = _resolve_database_url(runtime_env, database_url)
+    sync_database_url = _resolve_sync_database_url(database_url)
 
     try:
-        engine = create_engine(database_url)
+        engine = create_engine(sync_database_url)
     except SQLAlchemyError:
         return {}
 
@@ -1488,9 +1504,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         "ENABLE_ARTWORK",
         "ENABLE_LYRICS",
     ]
-    db_settings = dict(
-        _load_settings_from_db(config_keys, database_url=database_url, env=env)
-    )
+    db_settings = dict(_load_settings_from_db(config_keys, database_url=database_url, env=env))
     legacy_slskd_url = _legacy_slskd_url(env)
     if legacy_slskd_url is not None:
         db_settings.pop("SLSKD_URL", None)
@@ -1504,9 +1518,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         maximum=65535,
     )
     oauth_redirect_uri = f"http://127.0.0.1:{oauth_callback_port}/callback"
-    oauth_manual_enabled = _as_bool(
-        _env_value(env, "OAUTH_MANUAL_CALLBACK_ENABLE"), default=True
-    )
+    oauth_manual_enabled = _as_bool(_env_value(env, "OAUTH_MANUAL_CALLBACK_ENABLE"), default=True)
     oauth_session_ttl_min = max(
         1,
         _as_int(
@@ -1514,9 +1526,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             default=10,
         ),
     )
-    oauth_public_host_hint = (
-        _env_value(env, "OAUTH_PUBLIC_HOST_HINT") or ""
-    ).strip() or None
+    oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
     oauth_split_mode = _as_bool(_env_value(env, "OAUTH_SPLIT_MODE"), default=False)
     oauth_state_dir = (
         _env_value(env, "OAUTH_STATE_DIR") or "/data/runtime/oauth_state"
@@ -1662,9 +1672,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     logging = LoggingConfig(level=_env_value(env, "HARMONY_LOG_LEVEL") or "INFO")
     database = DatabaseConfig(url=database_url)
 
-    artwork_dir = _env_value(env, "ARTWORK_DIR") or _env_value(
-        env, "HARMONY_ARTWORK_DIR"
-    )
+    artwork_dir = _env_value(env, "ARTWORK_DIR") or _env_value(env, "HARMONY_ARTWORK_DIR")
     timeout_value = _env_value(env, "ARTWORK_HTTP_TIMEOUT") or _env_value(
         env, "ARTWORK_TIMEOUT_SEC"
     )
@@ -1676,18 +1684,14 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     post_processors_raw = _env_value(env, "ARTWORK_POST_PROCESSORS")
     if post_processors_raw:
         processor_entries = post_processors_raw.replace("\n", ",").split(",")
-        post_processors = tuple(
-            entry.strip() for entry in processor_entries if entry.strip()
-        )
+        post_processors = tuple(entry.strip() for entry in processor_entries if entry.strip())
     else:
         post_processors = ()
 
     artwork_config = ArtworkConfig(
         directory=(artwork_dir or DEFAULT_ARTWORK_DIR),
         timeout_seconds=_as_float(timeout_value, default=DEFAULT_ARTWORK_TIMEOUT),
-        max_bytes=_as_int(
-            _env_value(env, "ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES
-        ),
+        max_bytes=_as_int(_env_value(env, "ARTWORK_MAX_BYTES"), default=DEFAULT_ARTWORK_MAX_BYTES),
         concurrency=max(
             1,
             _as_int(
@@ -1698,9 +1702,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         min_edge=_as_int(min_edge_value, default=DEFAULT_ARTWORK_MIN_EDGE),
         min_bytes=_as_int(min_bytes_value, default=DEFAULT_ARTWORK_MIN_BYTES),
         fallback=ArtworkFallbackConfig(
-            enabled=_as_bool(
-                _env_value(env, "ARTWORK_FALLBACK_ENABLED"), default=False
-            ),
+            enabled=_as_bool(_env_value(env, "ARTWORK_FALLBACK_ENABLED"), default=False),
             provider=(_env_value(env, "ARTWORK_FALLBACK_PROVIDER") or "musicbrainz"),
             timeout_seconds=_as_float(
                 _env_value(env, "ARTWORK_FALLBACK_TIMEOUT_SEC"),
@@ -1835,9 +1837,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             ),
         ),
         dependencies=_parse_dependency_names(_env_value(env, "HEALTH_DEPS")),
-        require_database=_as_bool(
-            _env_value(env, "HEALTH_READY_REQUIRE_DB"), default=True
-        ),
+        require_database=_as_bool(_env_value(env, "HEALTH_READY_REQUIRE_DB"), default=True),
     )
 
     concurrency_env = _env_value(env, "WATCHLIST_MAX_CONCURRENCY")
@@ -1939,9 +1939,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         )
 
     db_io_mode_raw = (
-        (_env_value(env, "WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE)
-        .strip()
-        .lower()
+        (_env_value(env, "WATCHLIST_DB_IO_MODE") or DEFAULT_WATCHLIST_DB_IO_MODE).strip().lower()
     )
     db_io_mode = "async" if db_io_mode_raw == "async" else "thread"
 
@@ -2021,18 +2019,14 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
 
     raw_env_keys = _parse_list(_env_value(env, "HARMONY_API_KEYS"))
     file_keys = _read_api_keys_from_file(_env_value(env, "HARMONY_API_KEYS_FILE") or "")
-    api_keys = _deduplicate_preserve_order(
-        key.strip() for key in [*raw_env_keys, *file_keys]
-    )
+    api_keys = _deduplicate_preserve_order(key.strip() for key in [*raw_env_keys, *file_keys])
 
     default_allowlist = [
-        _compose_allowlist_entry(api_base_path, suffix)
-        for suffix in DEFAULT_ALLOWLIST_SUFFIXES
+        _compose_allowlist_entry(api_base_path, suffix) for suffix in DEFAULT_ALLOWLIST_SUFFIXES
     ]
     default_allowlist.append("/api/health/ready")
     allowlist_override_entries = [
-        _normalise_prefix(entry)
-        for entry in _parse_list(_env_value(env, "AUTH_ALLOWLIST"))
+        _normalise_prefix(entry) for entry in _parse_list(_env_value(env, "AUTH_ALLOWLIST"))
     ]
     allowlist_entries = _deduplicate_preserve_order(
         entry for entry in [*default_allowlist, *allowlist_override_entries] if entry
@@ -2044,21 +2038,15 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     )
 
     security_profile, security_defaults = _resolve_security_profile(env)
-    require_auth_override = _parse_bool_override(
-        _env_value(env, "FEATURE_REQUIRE_AUTH")
-    )
+    require_auth_override = _parse_bool_override(_env_value(env, "FEATURE_REQUIRE_AUTH"))
     rate_limit_override = _parse_bool_override(_env_value(env, "FEATURE_RATE_LIMITING"))
     rate_limit_enabled = (
-        security_defaults.rate_limiting
-        if rate_limit_override is None
-        else rate_limit_override
+        security_defaults.rate_limiting if rate_limit_override is None else rate_limit_override
     )
 
     rate_limit_config = RateLimitMiddlewareConfig(
         enabled=rate_limit_enabled,
-        bucket_capacity=max(
-            1, _as_int(_env_value(env, "RATE_LIMIT_BUCKET_CAP"), default=60)
-        ),
+        bucket_capacity=max(1, _as_int(_env_value(env, "RATE_LIMIT_BUCKET_CAP"), default=60)),
         refill_per_second=_bounded_float(
             _env_value(env, "RATE_LIMIT_REFILL_PER_SEC"),
             default=1.0,
@@ -2075,9 +2063,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         enabled=_as_bool(_env_value(env, "CACHE_ENABLED"), default=True),
         default_ttl=max(0, _as_int(_env_value(env, "CACHE_DEFAULT_TTL_S"), default=30)),
         max_items=max(1, _as_int(_env_value(env, "CACHE_MAX_ITEMS"), default=5_000)),
-        etag_strategy=(_env_value(env, "CACHE_STRATEGY_ETAG") or "strong")
-        .strip()
-        .lower()
+        etag_strategy=(_env_value(env, "CACHE_STRATEGY_ETAG") or "strong").strip().lower()
         or "strong",
         fail_open=_as_bool(_env_value(env, "CACHE_FAIL_OPEN"), default=True),
         stale_while_revalidate=_parse_optional_duration(

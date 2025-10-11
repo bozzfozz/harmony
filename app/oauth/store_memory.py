@@ -8,7 +8,6 @@ from threading import Lock
 from typing import Any, Callable
 
 from .transactions import (
-    OAuthTransaction,
     OAuthTransactionStore,
     Transaction,
     TransactionExpiredError,
@@ -106,11 +105,7 @@ class MemoryOAuthTransactionStore(OAuthTransactionStore):
             return self._purge_expired(reference=moment)
 
     def _purge_expired(self, *, reference: datetime) -> int:
-        expired = [
-            key
-            for key, txn in self._pending.items()
-            if txn.is_expired(reference=reference)
-        ]
+        expired = [key for key, txn in self._pending.items() if txn.is_expired(reference=reference)]
         for key in expired:
             self._pending.pop(key, None)
             self._consumed.add(key)

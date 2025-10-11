@@ -125,9 +125,7 @@ class DefaultDownloadPipeline(DownloadPipeline):
                 events=events,
             )
 
-    async def _follow_remote_download(
-        self, work_item: DownloadWorkItem, sidecar
-    ) -> None:
+    async def _follow_remote_download(self, work_item: DownloadWorkItem, sidecar) -> None:
         if self._slskd is None:
             return
 

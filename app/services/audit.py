@@ -124,14 +124,10 @@ def list_audit_events(
         else:
             statement = statement.where(ArtistAuditRecord.id < cursor_value)
 
-    statement = statement.order_by(ArtistAuditRecord.id.desc()).limit(
-        resolved_limit + 1
-    )
+    statement = statement.order_by(ArtistAuditRecord.id.desc()).limit(resolved_limit + 1)
 
     with session_scope() as session:
-        records: Sequence[ArtistAuditRecord] = (
-            session.execute(statement).scalars().all()
-        )
+        records: Sequence[ArtistAuditRecord] = session.execute(statement).scalars().all()
 
     next_cursor: int | None = None
     if len(records) > resolved_limit:

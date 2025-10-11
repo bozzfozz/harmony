@@ -107,9 +107,7 @@ class ManualRateLimiter:
     def check(self, key: str) -> None:
         now = time.monotonic()
         entries = self._hits.setdefault(key, [])
-        entries[:] = [
-            timestamp for timestamp in entries if now - timestamp <= self._window
-        ]
+        entries[:] = [timestamp for timestamp in entries if now - timestamp <= self._window]
         if len(entries) >= self._limit:
             raise RuntimeError("rate limited")
         entries.append(now)
@@ -129,9 +127,7 @@ class OAuthService:
         self._transactions = transactions
         self._http_timeout = max(1.0, http_timeout)
         self._cache_handler = SettingsCacheHandler()
-        self._manual_limit = manual_limit or ManualRateLimiter(
-            limit=6, window_seconds=300.0
-        )
+        self._manual_limit = manual_limit or ManualRateLimiter(limit=6, window_seconds=300.0)
         self._http_client_factory = http_client_factory
         self._status_lock = Lock()
         self._statuses: dict[str, OAuthStatusResponse] = {}
@@ -242,11 +238,7 @@ class OAuthService:
     def _purge_statuses(self, reference: datetime) -> None:
         ttl = self._transaction_ttl()
         cutoff = reference - (ttl * 2)
-        stale = [
-            state
-            for state, record in self._statuses.items()
-            if record.created_at <= cutoff
-        ]
+        stale = [state for state, record in self._statuses.items() if record.created_at <= cutoff]
         for state in stale:
             self._statuses.pop(state, None)
 
@@ -328,9 +320,7 @@ class OAuthService:
         )
         return OAuthStartResponse(
             provider="spotify",
-            authorization_url=self._authorization_url(
-                state=state, code_challenge=challenge
-            ),
+            authorization_url=self._authorization_url(state=state, code_challenge=challenge),
             state=state,
             code_challenge_method="S256",
             expires_at=expires_at,
@@ -344,15 +334,11 @@ class OAuthService:
             return self._http_client_factory()
         return httpx.AsyncClient(timeout=self._http_timeout)
 
-    async def _exchange_code(
-        self, code: str, transaction: Transaction
-    ) -> Mapping[str, Any]:
+    async def _exchange_code(self, code: str, transaction: Transaction) -> Mapping[str, Any]:
         payload = {
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": str(
-                transaction.meta.get("redirect_uri", self.redirect_uri)
-            ),
+            "redirect_uri": str(transaction.meta.get("redirect_uri", self.redirect_uri)),
             "client_id": self._config.spotify.client_id,
             "code_verifier": transaction.code_verifier,
         }
@@ -396,7 +382,7 @@ class OAuthService:
     def _consume_transaction(self, state: str) -> Transaction:
         try:
             transaction = self._transactions.consume(state)
-        except TransactionNotFoundError as exc:
+        except TransactionNotFoundError:
             logger.warning(
                 "OAuth transaction missing or expired",
                 extra={
@@ -405,7 +391,7 @@ class OAuthService:
                 },
             )
             raise
-        except TransactionUsedError as exc:
+        except TransactionUsedError:
             logger.warning(
                 "OAuth transaction already consumed",
                 extra={
@@ -414,7 +400,7 @@ class OAuthService:
                 },
             )
             raise
-        except TransactionExpiredError as exc:
+        except TransactionExpiredError:
             logger.warning(
                 "OAuth transaction expired on consume",
                 extra={

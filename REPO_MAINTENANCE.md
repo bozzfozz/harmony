@@ -23,7 +23,6 @@
 
 ### Required Checks
 Configure branch protection so pull requests require:
-- **`ci-backend`** — ensures linting, formatting, typing, security, and test coverage succeed (`RUN_POSTGRES_TESTS=0`, `-m "not postgres"`).
 - **`ci-frontend`** — enable only when the frontend job runs (repository contains `frontend/package.json`).
 
 > **Action:** After merging the CI reset (TASK `CODX-CI-RESET-001`), set these jobs as required checks in repository settings (`Settings → Branches → Branch protection rules`). Document decisions in the rule description.
@@ -33,23 +32,16 @@ Configure branch protection so pull requests require:
 - Der Dienst führt denselben Hook wie lokal (`ruff-format` + `ruff`) aus und pusht ausschließlich, wenn Dateien geändert wurden.
 - CI bleibt merge-blockierend: `ci-backend` führt `ruff format --check .` sowie `ruff check --output-format=github .` read-only aus, falls nach den Auto-Fixes noch Drift besteht.
 
-### Postgres Marker Policy
-- CI defaults to `RUN_POSTGRES_TESTS="0"` with `pytest -m "not postgres"`.
-- To run database-dependent tests locally, export `RUN_POSTGRES_TESTS=1` and invoke `pytest` without the marker filter.
-- New Postgres-specific tests **must** use the `@pytest.mark.postgres` decorator to remain skipped in shared CI.
 - Reviewers verify new tests respect the marker policy before merge.
 
 ### Local Opt-in Examples
 ```bash
-# Run full test suite including Postgres cases
-export RUN_POSTGRES_TESTS=1
 pytest
 
 # Run backend pipeline locally
 ruff format --check .
 ruff check --output-format=github .
 mypy app
-pytest -m "not postgres" --cov=app --cov-fail-under=85
 pip-audit -r requirements.txt
 ```
 

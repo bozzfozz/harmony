@@ -271,9 +271,7 @@ def _matching_queue_size(_: Request) -> int:
             .select_from(QueueJob)
             .where(
                 QueueJob.type == "matching",
-                QueueJob.status.in_(
-                    [QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]
-                ),
+                QueueJob.status.in_([QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]),
             )
         )
         count = result.scalar_one_or_none()
@@ -282,9 +280,7 @@ def _matching_queue_size(_: Request) -> int:
 
 _WORKERS: Dict[str, WorkerDescriptor] = {
     "sync": WorkerDescriptor(attr="sync_worker", queue_fetcher=_sync_queue_size),
-    "matching": WorkerDescriptor(
-        attr="matching_worker", queue_fetcher=_matching_queue_size
-    ),
+    "matching": WorkerDescriptor(attr="matching_worker", queue_fetcher=_matching_queue_size),
     "playlist": WorkerDescriptor(attr="playlist_worker", queue_literal="n/a"),
     "backfill": WorkerDescriptor(attr="backfill_worker", queue_literal="n/a"),
     "watchlist": WorkerDescriptor(attr="watchlist_worker", queue_literal="n/a"),
@@ -305,9 +301,7 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
 }
 
 
-def _worker_payload(
-    name: str, descriptor: WorkerDescriptor, request: Request
-) -> Dict[str, Any]:
+def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -> Dict[str, Any]:
     stored_last_seen, stored_status = read_worker_status(name)
     last_seen_dt = parse_timestamp(stored_last_seen)
     now = datetime.now(timezone.utc)
@@ -372,8 +366,7 @@ async def get_status(request: Request) -> Dict[str, Any]:
         start_time = start_time.replace(tzinfo=timezone.utc)
     uptime_seconds = (now - start_time).total_seconds()
     workers = {
-        name: _worker_payload(name, descriptor, request)
-        for name, descriptor in _WORKERS.items()
+        name: _worker_payload(name, descriptor, request) for name, descriptor in _WORKERS.items()
     }
 
     with session_scope() as session:
@@ -390,9 +383,7 @@ async def get_status(request: Request) -> Dict[str, Any]:
     }
 
 
-def _call_dependency_override(
-    override: Callable[..., Any], request: Request | None
-) -> Any:
+def _call_dependency_override(override: Callable[..., Any], request: Request | None) -> Any:
     if request is None:
         return override()
 
@@ -473,9 +464,7 @@ async def get_system_stats(request: Request) -> Dict[str, Any]:
         net = current_psutil.net_io_counters()
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.exception("Failed to collect system statistics")
-        raise HTTPException(
-            status_code=500, detail="Failed to collect system statistics"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to collect system statistics") from exc
 
     stats = {
         "cpu": {

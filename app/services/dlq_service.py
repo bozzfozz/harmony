@@ -117,13 +117,9 @@ class DLQService:
         if reason:
             query = query.where(Download.last_error.ilike(f"%{reason}%"))
 
-        total = session.execute(
-            select(func.count()).select_from(query.subquery())
-        ).scalar_one()
+        total = session.execute(select(func.count()).select_from(query.subquery())).scalar_one()
 
-        sort_column = (
-            Download.created_at if order_by == "created_at" else Download.updated_at
-        )
+        sort_column = Download.created_at if order_by == "created_at" else Download.updated_at
         if order_dir == "asc":
             query = query.order_by(sort_column.asc(), Download.id.asc())
         else:
@@ -144,9 +140,7 @@ class DLQService:
             duration_ms,
         )
 
-        return DLQListResult(
-            items=items, page=page, page_size=page_size, total=int(total)
-        )
+        return DLQListResult(items=items, page=page, page_size=page_size, total=int(total))
 
     async def requeue_bulk(
         self,
@@ -163,14 +157,10 @@ class DLQService:
             raise ValidationAppError(f"ids exceed limit of {self._requeue_limit}")
 
         records = (
-            session.execute(select(Download).where(Download.id.in_(unique_ids)))
-            .scalars()
-            .all()
+            session.execute(select(Download).where(Download.id.in_(unique_ids))).scalars().all()
         )
         found_ids = {record.id for record in records}
-        missing = [
-            identifier for identifier in unique_ids if identifier not in found_ids
-        ]
+        missing = [identifier for identifier in unique_ids if identifier not in found_ids]
         if missing:
             raise NotFoundError("Some downloads were not found")
 
@@ -205,9 +195,7 @@ class DLQService:
             file_payload["download_id"] = record.id
             file_payload.setdefault("priority", priority)
 
-            payload.update(
-                {"file": dict(file_payload), "username": username, "priority": priority}
-            )
+            payload.update({"file": dict(file_payload), "username": username, "priority": priority})
 
             record.request_payload = payload
             record.state = DownloadState.QUEUED.value
@@ -328,9 +316,7 @@ class DLQService:
     def stats(self, session: Session) -> DLQStats:
         start = time.perf_counter()
         query = self._base_query()
-        total = session.execute(
-            select(func.count()).select_from(query.subquery())
-        ).scalar_one()
+        total = session.execute(select(func.count()).select_from(query.subquery())).scalar_one()
 
         reason_stmt = (
             select(Download.last_error, func.count(Download.id))

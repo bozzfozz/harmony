@@ -99,9 +99,7 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
         issued_at = self._now()
         expires_at = issued_at + timedelta(seconds=ttl_seconds)
         record = {
-            "cv": self._hash(code_verifier)
-            if self._hash_code_verifier
-            else code_verifier,
+            "cv": self._hash(code_verifier) if self._hash_code_verifier else code_verifier,
             "meta": dict(meta),
             "exp": int(expires_at.timestamp()),
             "iat": int(issued_at.timestamp()),
@@ -136,9 +134,7 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
         issued_at = datetime.fromtimestamp(record["iat"], tz=timezone.utc)
         expires_at = datetime.fromtimestamp(record["exp"], tz=timezone.utc)
         if self._hash_code_verifier:
-            raise TransactionStoreError(
-                "code verifier is not stored when hashing is enabled"
-            )
+            raise TransactionStoreError("code verifier is not stored when hashing is enabled")
         if self._now() >= expires_at:
             raise TransactionExpiredError(state)
         return Transaction(
@@ -157,9 +153,7 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
         if not isinstance(data, dict):
             raise TransactionStoreError(f"invalid transaction payload: {path}")
         if data.get("ver") != _JSON_VERSION:
-            raise TransactionStoreError(
-                f"unsupported transaction version: {data.get('ver')}"
-            )
+            raise TransactionStoreError(f"unsupported transaction version: {data.get('ver')}")
         return data
 
     def exists(self, state: str) -> bool:

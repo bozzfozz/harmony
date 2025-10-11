@@ -23,9 +23,7 @@ from app.services.dlq_service import (
 router = APIRouter(tags=["DLQ"])
 
 
-def _env_int(
-    name: str, default: int, *, minimum: int, maximum: int | None = None
-) -> int:
+def _env_int(name: str, default: int, *, minimum: int, maximum: int | None = None) -> int:
     raw = get_env(name)
     if raw is None:
         value = default
@@ -248,9 +246,7 @@ def dlq_stats(
 ) -> DLQStatsEnvelope:
     service = _build_service(request)
     result: DLQStats = service.stats(session)
-    data = DLQStatsData(
-        total=result.total, by_reason=result.by_reason, last_24h=result.last_24h
-    )
+    data = DLQStatsData(total=result.total, by_reason=result.by_reason, last_24h=result.last_24h)
     return DLQStatsEnvelope(ok=True, data=data, error=None)
 
 

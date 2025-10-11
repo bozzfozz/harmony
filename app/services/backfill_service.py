@@ -73,21 +73,15 @@ class BackfillJobStatus:
 class BackfillService:
     """Orchestrate Spotify enrichment for FREE ingest items."""
 
-    def __init__(
-        self, config: SpotifyConfig, spotify_client: SpotifyClient | None
-    ) -> None:
+    def __init__(self, config: SpotifyConfig, spotify_client: SpotifyClient | None) -> None:
         self._config = config
         self._spotify = spotify_client
         self._default_limit = max(1, getattr(config, "backfill_max_items", 2_000))
-        self._cache_ttl = max(
-            60, getattr(config, "backfill_cache_ttl_seconds", 604_800)
-        )
+        self._cache_ttl = max(60, getattr(config, "backfill_cache_ttl_seconds", 604_800))
 
     # Public API ---------------------------------------------------------
 
-    def create_job(
-        self, *, max_items: Optional[int], expand_playlists: bool
-    ) -> BackfillJobSpec:
+    def create_job(self, *, max_items: Optional[int], expand_playlists: bool) -> BackfillJobSpec:
         """Persist a new job entry that will later be executed by the worker."""
 
         self._ensure_authenticated()
@@ -117,9 +111,7 @@ class BackfillService:
             )
             session.add(job)
 
-        return BackfillJobSpec(
-            id=job_id, limit=limit, expand_playlists=expand_playlists
-        )
+        return BackfillJobSpec(id=job_id, limit=limit, expand_playlists=expand_playlists)
 
     async def execute(self, job: BackfillJobSpec) -> None:
         """Run a backfill job asynchronously inside a worker thread."""
@@ -175,9 +167,7 @@ class BackfillService:
             candidates = self._load_candidates(job.limit)
             for candidate in candidates:
                 processed += 1
-                matched_item, from_cache = self._process_candidate(
-                    candidate, metadata_cache
-                )
+                matched_item, from_cache = self._process_candidate(candidate, metadata_cache)
                 if from_cache:
                     cache_hits += 1
                 else:
@@ -254,9 +244,7 @@ class BackfillService:
             if cached is not None:
                 cache_hit = True
                 track_id, album_id = cached
-                metadata = self._fetch_track_metadata(
-                    track_id, album_id, metadata_cache
-                )
+                metadata = self._fetch_track_metadata(track_id, album_id, metadata_cache)
 
         if metadata is None:
             cache_hit = False if key else cache_hit
@@ -377,9 +365,7 @@ class BackfillService:
         for item_id, job_id, url in rows:
             if not url:
                 continue
-            links.append(
-                PlaylistLink(item_id=int(item_id), job_id=str(job_id), url=str(url))
-            )
+            links.append(PlaylistLink(item_id=int(item_id), job_id=str(job_id), url=str(url)))
         return links
 
     def _expand_playlist(self, job_id: str, playlist: PlaylistLink) -> Optional[int]:
@@ -394,9 +380,7 @@ class BackfillService:
             return 0
 
         fingerprints = [
-            self._hash_parts(
-                "playlist", playlist_id, track.get("id") or track.get("name")
-            )
+            self._hash_parts("playlist", playlist_id, track.get("id") or track.get("name"))
             for track in tracks
         ]
 
@@ -428,9 +412,7 @@ class BackfillService:
 
                 existing_fingerprints.add(fingerprint)
 
-                album = (
-                    track.get("album") if isinstance(track.get("album"), dict) else {}
-                )
+                album = track.get("album") if isinstance(track.get("album"), dict) else {}
                 external_ids = track.get("external_ids")
                 isrc = None
                 if isinstance(external_ids, dict):
@@ -463,9 +445,7 @@ class BackfillService:
                     album=album.get("name") if isinstance(album, dict) else None,
                     duration_sec=duration_sec,
                     spotify_track_id=str(track_id) if track_id else None,
-                    spotify_album_id=(
-                        str(album.get("id")) if isinstance(album, dict) else None
-                    ),
+                    spotify_album_id=(str(album.get("id")) if isinstance(album, dict) else None),
                     isrc=isrc,
                     dedupe_hash=dedupe_hash,
                     source_fingerprint=fingerprint,
@@ -492,9 +472,7 @@ class BackfillService:
 
         while True:
             try:
-                response = client.get_playlist_items(
-                    playlist_id, limit=limit, offset=offset
-                )
+                response = client.get_playlist_items(playlist_id, limit=limit, offset=offset)
             except Exception as exc:  # pragma: no cover - defensive guard
                 logger.warning(
                     "event=backfill playlist_fetch_failed playlist_id=%s error=%s",
@@ -534,9 +512,7 @@ class BackfillService:
 
     # Persistence helpers ------------------------------------------------
 
-    def _update_job_state(
-        self, job_id: str, *, state: str, error: Optional[str]
-    ) -> None:
+    def _update_job_state(self, job_id: str, *, state: str, error: Optional[str]) -> None:
         with session_scope() as session:
             record = session.get(BackfillJob, job_id)
             if record is None:
@@ -620,9 +596,7 @@ class BackfillService:
                 return None
             return entry.track_id, entry.album_id
 
-    def _store_cache_entry(
-        self, key: str, track_id: str, album_id: Optional[str]
-    ) -> None:
+    def _store_cache_entry(self, key: str, track_id: str, album_id: Optional[str]) -> None:
         if not track_id:
             return
         expires_at = datetime.utcnow() + timedelta(seconds=self._cache_ttl)

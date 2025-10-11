@@ -112,9 +112,7 @@ class ResponseCache:
                 return None
             raise
 
-    async def set(
-        self, key: str, entry: CacheEntry, *, ttl: float | None = None
-    ) -> None:
+    async def set(self, key: str, entry: CacheEntry, *, ttl: float | None = None) -> None:
         ttl_value = self._resolve_ttl(ttl)
         try:
             async with self._lock:
@@ -173,9 +171,7 @@ class ResponseCache:
                 removed = [self._cache.pop(key, None) for key in keys]
                 removed = [entry for entry in removed if entry is not None]
                 count = len(removed)
-            operation = (
-                "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
-            )
+            operation = "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
             status = "evicted" if count else "noop"
             fields: dict[str, object] = {
                 "key_hash": prefix,
@@ -219,9 +215,7 @@ class ResponseCache:
                 for key, entry in self._cache.items():
                     if not key.startswith(method_key):
                         continue
-                    if key.startswith(prefix) or self._path_matches_entry(
-                        normalized, entry
-                    ):
+                    if key.startswith(prefix) or self._path_matches_entry(normalized, entry):
                         keys_to_remove.append(key)
                 for key in keys_to_remove:
                     removed = self._cache.pop(key, None)
@@ -273,9 +267,7 @@ class ResponseCache:
             async with self._lock:
                 matching_keys = [key for key in self._cache if compiled.search(key)]
                 removed_entries = [self._cache.pop(key, None) for key in matching_keys]
-                removed_entries = [
-                    entry for entry in removed_entries if entry is not None
-                ]
+                removed_entries = [entry for entry in removed_entries if entry is not None]
                 count = len(removed_entries)
             operation = "evict" if reason or entity_id else "invalidate"
             status = "evicted" if count else "noop"
@@ -423,15 +415,11 @@ def playlist_filters_hash(query_string: str) -> str:
     return build_query_hash(query_string)
 
 
-def playlist_list_cache_key(
-    *, query_string: str = "", filters_hash: str | None = None
-) -> str:
+def playlist_list_cache_key(*, query_string: str = "", filters_hash: str | None = None) -> str:
     """Construct the canonical cache key for playlist collection responses."""
 
     resolved_hash = (
-        filters_hash
-        if filters_hash is not None
-        else playlist_filters_hash(query_string)
+        filters_hash if filters_hash is not None else playlist_filters_hash(query_string)
     )
     return f"{PLAYLIST_LIST_CACHE_PREFIX}:{resolved_hash}"
 

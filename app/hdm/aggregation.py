@@ -173,12 +173,8 @@ class DownloadBatchAggregator:
     def __init__(self) -> None:
         self._batches: dict[str, _BatchState] = {}
 
-    def create_batch(
-        self, batch_id: str, *, requested_by: str, total: int
-    ) -> _BatchState:
-        state = _BatchState(
-            batch_id=batch_id, requested_by=requested_by, items_total=total
-        )
+    def create_batch(self, batch_id: str, *, requested_by: str, total: int) -> _BatchState:
+        state = _BatchState(batch_id=batch_id, requested_by=requested_by, items_total=total)
         self._batches[batch_id] = state
         return state
 
@@ -479,7 +475,5 @@ class DownloadBatchAggregator:
     async def wait_for_summary(self, batch_id: str) -> BatchSummary:
         state = self._batches[batch_id]
         await state.completed_event.wait()
-        assert (
-            state.summary is not None
-        )  # defensive: summary must be set when event fires
+        assert state.summary is not None  # defensive: summary must be set when event fires
         return state.summary

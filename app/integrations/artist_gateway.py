@@ -48,9 +48,7 @@ class ArtistGatewayResponse:
     @property
     def errors(self) -> Mapping[str, ProviderGatewayError]:
         return {
-            result.provider: result.error
-            for result in self.results
-            if result.error is not None
+            result.provider: result.error for result in self.results if result.error is not None
         }
 
     @property

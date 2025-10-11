@@ -63,7 +63,6 @@ jobs:
     needs:
       - ban_test_flow_prefix
     env:
-      RUN_POSTGRES_TESTS: "0"
       PYTHON_VERSION: "3.11"
       COVERAGE_XML: reports/coverage.xml
     steps:
@@ -159,8 +158,6 @@ jobs:
         run: mypy app
 
       - name: Pytest (unit + coverage)
-        env:
-          PYTEST_ADDOPTS: "-m 'not postgres' -r s"
         run: |
           mkdir -p "$(dirname "$COVERAGE_XML")"
           pytest \

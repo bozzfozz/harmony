@@ -16,15 +16,13 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from app.db import Base
-
-UTC_NOW = text("timezone('utc', now())")
 
 
 def _utcnow() -> datetime:
@@ -71,9 +69,7 @@ class Download(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(1024), nullable=False)
-    state = Column(
-        String(50), nullable=False, default=DownloadState.QUEUED.value, index=True
-    )
+    state = Column(String(50), nullable=False, default=DownloadState.QUEUED.value, index=True)
     progress = Column(Float, nullable=False, default=0.0)
     priority = Column(Integer, nullable=False, default=0)
     username = Column(String(255), nullable=True)
@@ -92,7 +88,7 @@ class Download(Base):
     lyrics_path = Column(String(2048), nullable=True)
     lyrics_status = Column(String(32), nullable=False, default="pending")
     has_lyrics = Column(Boolean, nullable=False, default=False)
-    request_payload = Column(JSONB, nullable=True)
+    request_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(
         DateTime,
@@ -157,9 +153,7 @@ class Setting(Base):
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
 class SettingHistory(Base):
@@ -185,15 +179,14 @@ class ActivityEvent(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(
-        TIMESTAMP(timezone=True),
+        DateTime(timezone=True),
         default=_utcnow,
-        server_default=UTC_NOW,
         nullable=False,
         index=True,
     )
     type = Column(String(128), nullable=False)
     status = Column(String(128), nullable=False)
-    details = Column(JSONB, nullable=True)
+    details = Column(JSON, nullable=True)
 
 
 class ArtistPreference(Base):
@@ -289,10 +282,10 @@ class ArtistRecord(Base):
     source = Column(String(50), nullable=False)
     source_id = Column(String(255), nullable=True)
     name = Column(String(512), nullable=False)
-    genres = Column(JSONB, nullable=False, default=list)
-    images = Column(JSONB, nullable=False, default=list)
+    genres = Column(JSON, nullable=False, default=list)
+    images = Column(JSON, nullable=False, default=list)
     popularity = Column(Integer, nullable=True)
-    metadata_json = Column("metadata", JSONB, nullable=False, default=dict)
+    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
     etag = Column(String(64), nullable=False)
     version = Column(String(64), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -307,9 +300,7 @@ class ArtistRecord(Base):
 class ArtistReleaseRecord(Base):
     __tablename__ = "artist_releases"
     __table_args__ = (
-        Index(
-            "uq_artist_releases_source_source_id", "source", "source_id", unique=True
-        ),
+        Index("uq_artist_releases_source_source_id", "source", "source_id", unique=True),
         Index("ix_artist_releases_artist_id", "artist_id"),
         Index("ix_artist_releases_artist_key", "artist_key"),
         Index("ix_artist_releases_release_date", "release_date"),
@@ -318,9 +309,7 @@ class ArtistReleaseRecord(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    artist_id = Column(
-        Integer, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
-    )
+    artist_id = Column(Integer, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
     artist_key = Column(String(255), nullable=False)
     source = Column(String(50), nullable=False)
     source_id = Column(String(255), nullable=True)
@@ -330,7 +319,7 @@ class ArtistReleaseRecord(Base):
     total_tracks = Column(Integer, nullable=True)
     version = Column(String(64), nullable=True)
     etag = Column(String(64), nullable=False)
-    metadata_json = Column("metadata", JSONB, nullable=False, default=dict)
+    metadata_json = Column("metadata", JSON, nullable=False, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
@@ -357,15 +346,13 @@ class ArtistAuditRecord(Base):
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(255), nullable=True)
     event = Column(String(32), nullable=False)
-    before_json = Column("before", JSONB, nullable=True)
-    after_json = Column("after", JSONB, nullable=True)
+    before_json = Column("before", JSON, nullable=True)
+    after_json = Column("after", JSON, nullable=True)
 
 
 class ArtistWatchlistEntry(Base):
     __tablename__ = "artist_watchlist"
-    __table_args__ = (
-        Index("ix_artist_watchlist_priority", "priority", "last_enqueued_at"),
-    )
+    __table_args__ = (Index("ix_artist_watchlist_priority", "priority", "last_enqueued_at"),)
 
     artist_key = Column(String(255), primary_key=True)
     priority = Column(Integer, nullable=False, default=0)
@@ -383,9 +370,7 @@ class ArtistWatchlistEntry(Base):
 
 class ImportSession(Base):
     __tablename__ = "import_sessions"
-    __table_args__ = (
-        CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),
-    )
+    __table_args__ = (CheckConstraint("mode IN ('FREE','PRO')", name="ck_import_sessions_mode"),)
 
     id = Column(String(64), primary_key=True)
     mode = Column(String(10), nullable=False)
@@ -406,9 +391,7 @@ class ImportBatch(Base):
     )
 
     id = Column(String(64), primary_key=True)
-    session_id = Column(
-        String(64), ForeignKey("import_sessions.id"), nullable=False, index=True
-    )
+    session_id = Column(String(64), ForeignKey("import_sessions.id"), nullable=False, index=True)
     playlist_id = Column(String(128), nullable=False, index=True)
     offset = Column(Integer, nullable=False, default=0)
     limit = Column(Integer, nullable=True)
@@ -430,7 +413,7 @@ class WorkerJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     worker = Column(String(64), index=True, nullable=False)
-    payload = Column(JSONB, nullable=False)
+    payload = Column(JSON, nullable=False)
     state = Column(String(32), nullable=False, default="queued")
     attempts = Column(Integer, nullable=False, default=0)
     last_error = Column(Text, nullable=True)
@@ -478,7 +461,7 @@ class QueueJob(Base):
             "ix_queue_jobs_idempotency_key_not_null",
             "idempotency_key",
             unique=True,
-            postgresql_where=text("idempotency_key IS NOT NULL"),
+            sqlite_where=text("idempotency_key IS NOT NULL"),
         ),
     )
 
@@ -490,29 +473,29 @@ class QueueJob(Base):
         default=QueueJobStatus.PENDING.value,
         index=True,
     )
-    payload = Column("payload_json", JSONB, nullable=False, default=dict)
+    payload = Column("payload_json", JSON, nullable=False, default=dict)
     priority = Column(Integer, nullable=False, default=0)
     attempts = Column(Integer, nullable=False, default=0)
     available_at = Column(
-        TIMESTAMP(timezone=True),
+        DateTime(timezone=True),
         nullable=False,
-        server_default=UTC_NOW,
+        default=_utcnow,
     )
-    lease_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
     idempotency_key = Column(String(128), nullable=True)
     last_error = Column(Text, nullable=True)
     stop_reason = Column(String(64), nullable=True)
-    result_payload = Column(JSONB, nullable=True)
+    result_payload = Column(JSON, nullable=True)
     created_at = Column(
-        TIMESTAMP(timezone=True),
+        DateTime(timezone=True),
         nullable=False,
-        server_default=UTC_NOW,
+        default=_utcnow,
     )
     updated_at = Column(
-        TIMESTAMP(timezone=True),
+        DateTime(timezone=True),
         nullable=False,
-        server_default=UTC_NOW,
-        server_onupdate=UTC_NOW,
+        default=_utcnow,
+        onupdate=_utcnow,
     )
 
 
@@ -572,9 +555,7 @@ class IngestItem(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(
-        String(64), ForeignKey("ingest_jobs.id"), nullable=False, index=True
-    )
+    job_id = Column(String(64), ForeignKey("ingest_jobs.id"), nullable=False, index=True)
     source_type = Column(String(32), nullable=False)
     playlist_url = Column(String(2048), nullable=True)
     raw_line = Column(Text, nullable=True)

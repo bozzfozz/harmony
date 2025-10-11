@@ -72,9 +72,7 @@ def parse_and_validate_links(
 ) -> ParseResult:
     """Parse the request payload and validate Spotify playlist links."""
 
-    candidates = list(
-        _extract_links_from_payload(raw_body=raw_body, content_type=content_type)
-    )
+    candidates = list(_extract_links_from_payload(raw_body=raw_body, content_type=content_type))
     total_candidates = len(candidates)
 
     if total_candidates > hard_cap_links:
@@ -97,9 +95,7 @@ def parse_and_validate_links(
         )
 
         if playlist_id is None:
-            rejected.append(
-                RejectedLink(url=text, reason=rejection_reason or "INVALID_URL")
-            )
+            rejected.append(RejectedLink(url=text, reason=rejection_reason or "INVALID_URL"))
             continue
 
         if playlist_id in accepted_ids:
@@ -121,9 +117,7 @@ def parse_and_validate_links(
     )
 
 
-def _extract_links_from_payload(
-    *, raw_body: bytes, content_type: str | None
-) -> Iterable[str]:
+def _extract_links_from_payload(*, raw_body: bytes, content_type: str | None) -> Iterable[str]:
     if not raw_body:
         return []
 

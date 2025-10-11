@@ -243,9 +243,7 @@ def soulseek_download_lyrics(
         content = lyrics_path.read_text(encoding="utf-8")
     except OSError as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to read lyrics file %s: %s", lyrics_path, exc)
-        raise HTTPException(
-            status_code=500, detail="Unable to read lyrics file"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Unable to read lyrics file") from exc
 
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
@@ -363,9 +361,7 @@ def _build_track_info(download: Download) -> Dict[str, Any]:
     if album:
         info["album"] = album
 
-    duration = _resolve_numeric_field(
-        ("duration", "duration_ms", "durationMs", "length"), sources
-    )
+    duration = _resolve_numeric_field(("duration", "duration_ms", "durationMs", "length"), sources)
     if duration is not None:
         info["duration"] = duration
 
@@ -478,13 +474,9 @@ async def soulseek_refresh_artwork(
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
-    request_payload = (
-        download.request_payload if isinstance(download.request_payload, dict) else {}
-    )
+    request_payload = download.request_payload if isinstance(download.request_payload, dict) else {}
     metadata: Dict[str, Any] = {}
-    nested_metadata = (
-        request_payload.get("metadata") if isinstance(request_payload, dict) else {}
-    )
+    nested_metadata = request_payload.get("metadata") if isinstance(request_payload, dict) else {}
     if isinstance(nested_metadata, dict):
         metadata.update(nested_metadata)
     if isinstance(request_payload, dict):
@@ -541,9 +533,7 @@ async def soulseek_refresh_artwork(
         )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to refresh artwork for download %s: %s", download.id, exc)
-        raise HTTPException(
-            status_code=502, detail="Failed to refresh artwork"
-        ) from exc
+        raise HTTPException(status_code=502, detail="Failed to refresh artwork") from exc
 
     return JSONResponse(status_code=202, content={"status": "pending"})
 
@@ -603,9 +593,7 @@ async def soulseek_requeue_download(
         raise HTTPException(status_code=404, detail="Download not found")
 
     if download.state == "dead_letter":
-        raise HTTPException(
-            status_code=409, detail="Download is in the dead-letter queue"
-        )
+        raise HTTPException(status_code=409, detail="Download is in the dead-letter queue")
 
     if download.state in {"queued", "downloading"}:
         raise HTTPException(status_code=409, detail="Download is already active")
@@ -621,14 +609,10 @@ async def soulseek_requeue_download(
 
     username = request_payload.get("username") or download.username
     if not username:
-        raise HTTPException(
-            status_code=409, detail="Download username missing for retry"
-        )
+        raise HTTPException(status_code=409, detail="Download username missing for retry")
 
     priority_value = SyncWorker._coerce_priority(
-        file_info.get("priority")
-        or request_payload.get("priority")
-        or download.priority
+        file_info.get("priority") or request_payload.get("priority") or download.priority
     )
 
     file_payload = dict(file_info)
@@ -669,9 +653,7 @@ async def soulseek_requeue_download(
                 record.state = "failed"
                 record.last_error = str(exc)
                 record.updated_at = datetime.utcnow()
-        raise HTTPException(
-            status_code=502, detail="Failed to requeue download"
-        ) from exc
+        raise HTTPException(status_code=502, detail="Failed to requeue download") from exc
 
     return JSONResponse(status_code=202, content={"status": "enqueued"})
 

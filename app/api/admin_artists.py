@@ -131,9 +131,7 @@ class ReconcileResponse(BaseModel):
     dry_run: bool = Field(alias="dryRun")
     applied: bool
     providers: list[str]
-    provider_errors: dict[str, str] = Field(
-        default_factory=dict, alias="providerErrors"
-    )
+    provider_errors: dict[str, str] = Field(default_factory=dict, alias="providerErrors")
     delta: ReconcileDeltaOut
     safety: SafetyReport
     warnings: list[str] = Field(default_factory=list)
@@ -179,9 +177,7 @@ class InvalidateResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def maybe_register_admin_routes(
-    app: FastAPI, *, config: AppConfig | None = None
-) -> bool:
+def maybe_register_admin_routes(app: FastAPI, *, config: AppConfig | None = None) -> bool:
     """Include or remove the admin router based on feature flag state."""
 
     resolved_config = config or get_app_config()
@@ -274,9 +270,7 @@ async def _fetch_remote_state(
 ) -> tuple[ArtistRemoteState, list[str], dict[str, str]]:
     source, source_id = _split_artist_key(artist_key)
     payload = {"artist_key": artist_key}
-    providers = _resolve_providers(
-        payload, default=deps.providers, fallback_source=source
-    )
+    providers = _resolve_providers(payload, default=deps.providers, fallback_source=source)
     release_limit = _resolve_release_limit(payload, deps.release_limit)
     lookup_identifier = source_id or artist_key
 
@@ -318,9 +312,7 @@ def _queue_state(artist_key: str) -> QueueState:
             session.query(QueueJob)
             .filter(
                 QueueJob.type == _JOB_TYPE,
-                QueueJob.status.in_(
-                    [QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]
-                ),
+                QueueJob.status.in_([QueueJobStatus.PENDING.value, QueueJobStatus.LEASED.value]),
             )
             .all()
         )
@@ -486,12 +478,8 @@ async def reconcile_artist(
         )
 
     try:
-        local_state, artist_row, release_snapshots = await _load_local_state(
-            context.deps.dao, key
-        )
-        remote_state, providers, provider_errors = await _fetch_remote_state(
-            context.deps, key
-        )
+        local_state, artist_row, release_snapshots = await _load_local_state(context.deps.dao, key)
+        remote_state, providers, provider_errors = await _fetch_remote_state(context.deps, key)
         delta = determine_delta(local_state, remote_state)
         delta_payload = _build_delta_payload(delta)
         safety = await _safety_report(
@@ -507,9 +495,7 @@ async def reconcile_artist(
                 "Existing data appears stale; consider refreshing provider sources before applying."
             )
         if provider_errors:
-            warnings.append(
-                "One or more providers returned errors during reconciliation."
-            )
+            warnings.append("One or more providers returned errors during reconciliation.")
 
         if not dry_run:
             if safety.locked:

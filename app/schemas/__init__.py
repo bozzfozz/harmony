@@ -142,9 +142,7 @@ class DownloadFileRequest(BaseModel):
 
 class SoulseekDownloadRequest(BaseModel):
     username: str = Field(..., description="Soulseek username hosting the files")
-    files: List[DownloadFileRequest] = Field(
-        ..., description="List of files to download"
-    )
+    files: List[DownloadFileRequest] = Field(..., description="List of files to download")
 
     @field_validator("username")
     @classmethod
@@ -158,17 +156,13 @@ class SoulseekDownloadRequest(BaseModel):
 class HdmItemRequest(BaseModel):
     artist: str = Field(..., description="Artist name for the requested download")
     title: str = Field(..., description="Track title for the requested download")
-    album: Optional[str] = Field(
-        None, description="Album name associated with the track"
-    )
+    album: Optional[str] = Field(None, description="Album name associated with the track")
     isrc: Optional[str] = Field(None, description="ISRC identifier if available")
     duration_seconds: Optional[float] = Field(
         None, ge=0.0, description="Expected track duration in seconds"
     )
     bitrate: Optional[int] = Field(None, ge=0, description="Expected bitrate in kbps")
-    priority: Optional[int] = Field(
-        None, ge=0, description="Priority override for the item"
-    )
+    priority: Optional[int] = Field(None, ge=0, description="Priority override for the item")
     dedupe_key: Optional[str] = Field(
         None, description="Optional idempotency key for the individual item"
     )
@@ -190,15 +184,11 @@ class HdmBatchRequest(BaseModel):
     items: List[HdmItemRequest] = Field(
         ..., min_length=1, description="Items to submit to the Harmony Download Manager"
     )
-    batch_id: Optional[str] = Field(
-        None, description="Optional client supplied batch identifier"
-    )
+    batch_id: Optional[str] = Field(None, description="Optional client supplied batch identifier")
     priority: Optional[int] = Field(
         None, ge=0, description="Priority to apply to all items if provided"
     )
-    dedupe_key: Optional[str] = Field(
-        None, description="Optional idempotency key for the batch"
-    )
+    dedupe_key: Optional[str] = Field(None, description="Optional idempotency key for the batch")
 
     @field_validator("requested_by")
     @classmethod

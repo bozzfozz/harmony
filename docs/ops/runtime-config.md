@@ -37,19 +37,18 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ### Integrationen & Workers
 
 - Spotify/slskd-Zeitlimits (`SPOTIFY_TIMEOUT_MS`, `SLSKD_TIMEOUT_MS`) greifen sowohl in REST-Endpunkten als auch in Workern (z. B. Watchlist).
-- `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn sich PostgreSQL-Connection-Pools füllen, und beobachte `pg_stat_activity` sowie Autovacuum-Latenzen, bevor du die Parallelität erhöhst.
+- `WATCHLIST_*`-Variablen begrenzen Lastspitzen: reduziere `WATCHLIST_MAX_CONCURRENCY`, wenn sich Datenbank-Threads stauen, und beobachte I/O-Latenzen sowie Lock-Wartezeiten, bevor du die Parallelität erhöhst.
 - Download-Retries (`RETRY_*`) konfigurieren die Sync-/Retry-Handler des Orchestrators; die historischen `RETRY_SCAN_*`-Werte werden nur noch für Legacy-Fallbacks gelesen.
 - Der zentrale `RetryPolicyProvider` liest `RETRY_*` zur Laufzeit (inkl. Job-spezifischer Overrides wie `RETRY_SYNC_MAX_ATTEMPTS`) und cached das Ergebnis für `RETRY_POLICY_RELOAD_S` Sekunden. Nach Ablauf der TTL greifen neue ENV-Werte automatisch ohne Neustart; `SyncWorker.refresh_retry_policy()` erzwingt bei Bedarf eine sofortige Aktualisierung.
 - Matching-Flags (`FEATURE_MATCHING_EDITION_AWARE`, `MATCH_*`) beeinflussen sowohl REST (`/matching`) als auch den Hintergrund-Worker.
 
-### PostgreSQL-Betrieb
+### SQLite-Betrieb
 
-- Verwende ausschließlich `postgresql+psycopg://`- oder `postgresql+asyncpg://`-DSNs. Harmony erzeugt keine Fallback-Engines; ein fehlkonfigurierter DSN führt zu Startfehlern noch vor dem Lifespan. Das frühere eingebettete Test-Backend existiert nur noch als Minimal-Smoke-Runner und ersetzt keinen echten Datenbankdienst.
-- Für isolierte Unit-Tests ohne PostgreSQL kann `HARMONY_INIT_DB=0` gesetzt werden. Der Wert überschreibt den Profil-Default (Tests deaktivieren die Initialisierung automatisch, produktive Profile bleiben unverändert). Setze `HARMONY_INIT_DB=1`, um in Testläufen bewusst die echte Datenbank zu initialisieren.
-- Überwache `pg_stat_activity`, `pg_locks` und `pg_stat_statements`, wenn du Worker-Parallelität erhöhst. Harmonys Standardwerte erwarten mindestens 40 verfügbare Verbindungen (`max_connections`), damit API und Worker nicht um Sessions konkurrieren.
-- Setze `statement_timeout` und `idle_in_transaction_session_timeout` auf betrieblich sinnvolle Werte (z. B. 30 s bzw. 60 s), damit blockierende Sessions frühzeitig abgebrochen werden. Alembic-Migrationen respektieren diese Einstellungen.
-- Aktiviere Autovacuum aggressiver für stark wachsende Tabellen (`downloads`, `ingest_items`, `activity_log`): reduziere `autovacuum_vacuum_scale_factor` (z. B. 0.05) und prüfe `pg_stat_all_tables`, um Bloat zu vermeiden.
-- Für Produktionsumgebungen empfiehlt sich ein Connection-Pooler wie PgBouncer im Transaction-Modus. Passe dann `DATABASE_URL` auf den Pooler-Endpunkt an und stelle sicher, dass Hintergrundjobs mit langen Transaktionen (`SyncWorker`, `MatchingWorker`) weiterhin direkt über PostgreSQL laufen, falls Idle-Timeouts enger konfiguriert sind.
+- Standardmäßig nutzt Harmony SQLite (`sqlite+aiosqlite:///`). Produktionsprofile schreiben nach `/data/harmony.db`; Entwicklungsprofile nach `./harmony.db`. Tests verwenden eine In-Memory-Instanz.
+- Setze `DB_RESET=1`, um den Datenbankfile beim Start zu löschen und das Schema frisch zu bootstrappen. Ohne das Flag bleibt der bestehende Inhalt erhalten.
+- Prüfe, dass das über `DATABASE_URL` adressierte Verzeichnis existiert und beschreibbar ist (Health-Check `/api/health/ready`). Bei Container-Deployments sollte ein Volume `/data` gemountet werden.
+- SQLite serialisiert Schreibzugriffe. Hohe Parallelität in Worker-Jobs lässt sich durch kleinere Batches (`WATCHLIST_*`, `RETRY_*`) und Warteschlangensteuerung kompensieren.
+- Backups bestehen aus einem Kopieren der `.db`-Datei. Stoppe die Applikation oder setze `DB_RESET=0`, bevor du Snapshots ziehst, um Konsistenz zu gewährleisten.
 
 ## Frontend & Runtime Injection
 

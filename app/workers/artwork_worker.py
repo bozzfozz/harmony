@@ -66,9 +66,7 @@ class ArtworkProcessingResult:
     has_artwork: bool
 
 
-PostProcessingHook = Callable[
-    [ArtworkJob, ArtworkProcessingResult], Awaitable[None] | None
-]
+PostProcessingHook = Callable[[ArtworkJob, ArtworkProcessingResult], Awaitable[None] | None]
 
 
 class ArtworkWorker:
@@ -136,9 +134,7 @@ class ArtworkWorker:
             return
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         self._running = True
-        self._workers = [
-            asyncio.create_task(self._worker_loop()) for _ in range(self._concurrency)
-        ]
+        self._workers = [asyncio.create_task(self._worker_loop()) for _ in range(self._concurrency)]
 
     async def stop(self) -> None:
         if not self._running:
@@ -202,9 +198,7 @@ class ArtworkWorker:
                 record = session.get(Download, download_id)
                 if record is not None:
                     payload = record.request_payload
-                    payload_mapping = (
-                        dict(payload) if isinstance(payload, Mapping) else None
-                    )
+                    payload_mapping = dict(payload) if isinstance(payload, Mapping) else None
                     download_context = DownloadContext(
                         id=record.id,
                         filename=record.filename,
@@ -311,9 +305,7 @@ class ArtworkWorker:
         if download and download.artwork_path:
             existing_artwork_path = Path(download.artwork_path)
 
-        existing_info = await asyncio.to_thread(
-            artwork_utils.extract_embed_info, audio_path
-        )
+        existing_info = await asyncio.to_thread(artwork_utils.extract_embed_info, audio_path)
         has_existing = existing_info is not None
         was_low_res = bool(
             existing_info
@@ -457,9 +449,7 @@ class ArtworkWorker:
                     timeout=self._fallback_timeout,
                 )
                 if fallback_url:
-                    job.cache_key = job.cache_key or self._extract_fallback_cache_key(
-                        fallback_url
-                    )
+                    job.cache_key = job.cache_key or self._extract_fallback_cache_key(fallback_url)
                     job.artwork_url = fallback_url
                     urls.append(fallback_url)
                     logger.info(
@@ -504,11 +494,7 @@ class ArtworkWorker:
 
         context = DownloadContext(
             id=download.id if download is not None else (job.download_id or 0),
-            filename=(
-                job.file_path
-                if job.file_path
-                else (download.filename if download else "")
-            ),
+            filename=(job.file_path if job.file_path else (download.filename if download else "")),
             spotify_track_id=job.spotify_track_id
             or (download.spotify_track_id if download else None),
             spotify_album_id=download.spotify_album_id if download else None,
@@ -636,12 +622,7 @@ class ArtworkWorker:
         return best_url
 
     def _generate_storage_name(self, job: ArtworkJob, audio_path: Path) -> str:
-        candidate = (
-            job.cache_key
-            or job.spotify_album_id
-            or job.spotify_track_id
-            or audio_path.stem
-        )
+        candidate = job.cache_key or job.spotify_album_id or job.spotify_track_id or audio_path.stem
         if not candidate and job.download_id is not None:
             candidate = f"download-{job.download_id}"
         if not candidate:
@@ -738,9 +719,7 @@ class ArtworkWorker:
                 if isinstance(nested, Mapping):
                     sources.append(nested)
 
-            track_payload = (
-                payload.get("track") if isinstance(payload, Mapping) else None
-            )
+            track_payload = payload.get("track") if isinstance(payload, Mapping) else None
             if isinstance(track_payload, Mapping):
                 sources.append(track_payload)
 
@@ -820,9 +799,7 @@ class ArtworkWorker:
                     },
                 )
 
-    def _import_post_processors(
-        self, dotted_paths: Sequence[str]
-    ) -> list[PostProcessingHook]:
+    def _import_post_processors(self, dotted_paths: Sequence[str]) -> list[PostProcessingHook]:
         hooks: list[PostProcessingHook] = []
         for path in dotted_paths:
             if not path:

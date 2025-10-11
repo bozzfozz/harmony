@@ -7,14 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Iterable, List, Mapping, Sequence
 
-from sqlalchemy import Select, bindparam, case, func, insert, or_, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Select, bindparam, func, or_, select, update
 from sqlalchemy.orm import Session
-
-try:  # pragma: no cover - optional dependency guard
-    from psycopg.errors import UniqueViolation
-except Exception:  # pragma: no cover - fallback for alternative drivers
-    UniqueViolation = None  # type: ignore[assignment]
 
 from app.config import settings
 from app.db import session_scope
@@ -64,9 +58,7 @@ def register_lease_telemetry_hook(
     _lease_telemetry_hook = hook
 
 
-def _emit_lease_telemetry(
-    job: "QueueJobDTO", status: str, *, lease_timeout: int
-) -> None:
+def _emit_lease_telemetry(job: "QueueJobDTO", status: str, *, lease_timeout: int) -> None:
     if _lease_telemetry_hook is None:
         return
 
@@ -133,9 +125,7 @@ def _resolve_priority(payload: Mapping[str, Any]) -> int:
     return max(0, parsed)
 
 
-def _resolve_visibility_timeout(
-    payload: Mapping[str, Any], override: int | None = None
-) -> int:
+def _resolve_visibility_timeout(payload: Mapping[str, Any], override: int | None = None) -> int:
     if override is not None:
         try:
             resolved_override = int(override)
@@ -152,14 +142,10 @@ def _resolve_visibility_timeout(
     worker_env = config.environment.workers
     env_override = worker_env.visibility_timeout_s
     resolved_default = (
-        env_override
-        if env_override is not None
-        else settings.orchestrator.visibility_timeout_s
+        env_override if env_override is not None else settings.orchestrator.visibility_timeout_s
     )
     try:
-        payload_resolved = (
-            int(payload_value) if payload_value is not None else resolved_default
-        )
+        payload_resolved = int(payload_value) if payload_value is not None else resolved_default
     except (TypeError, ValueError):
         payload_resolved = resolved_default
     return max(5, payload_resolved)
@@ -213,9 +199,7 @@ def _to_dto(record: QueueJob) -> QueueJobDTO:
         status=QueueJobStatus(record.status),
         idempotency_key=record.idempotency_key,
         last_error=record.last_error,
-        result_payload=(
-            dict(record.result_payload or {}) if record.result_payload else None
-        ),
+        result_payload=(dict(record.result_payload or {}) if record.result_payload else None),
         stop_reason=record.stop_reason,
         lease_timeout_seconds=_resolve_visibility_timeout(payload),
     )
@@ -238,12 +222,7 @@ def _upsert_queue_job(
 ) -> tuple[QueueJob, bool]:
     """Insert or update a queue job guarded by the idempotency key."""
 
-    bind = session.get_bind()
-    dialect_name = getattr(getattr(bind, "dialect", None), "name", "") if bind else ""
-
-    stmt_base: Select[QueueJob] = select(QueueJob).where(
-        QueueJob.idempotency_key == dedupe_key
-    )
+    stmt_base: Select[QueueJob] = select(QueueJob).where(QueueJob.idempotency_key == dedupe_key)
 
     def _log_dedupe() -> None:
         logger.debug(
@@ -252,30 +231,36 @@ def _upsert_queue_job(
                 "event": "queue.job.dedupe",
                 "job_type": job_type,
                 "idempotency_key": dedupe_key,
-                "dialect": dialect_name or "unknown",
             },
         )
 
-    if dialect_name != "postgresql":
-        logger.error(
-            "Queue job persistence now requires PostgreSQL",  # pragma: no cover - guard rail
-            extra={
-                "event": "queue.job.unsupported_dialect",
-                "idempotency_key": dedupe_key,
-                "dialect": dialect_name or "unknown",
-            },
-        )
-        raise RuntimeError("Queue job persistence requires PostgreSQL")
+    existing = session.execute(stmt_base).scalars().first()
+    now_value = _utcnow()
 
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    if existing is not None:
+        previous_status = existing.status
+        existing.payload = dict(payload)
+        existing.priority = priority
+        existing.available_at = scheduled_for or now_value
+        existing.status = QueueJobStatus.PENDING.value
+        existing.stop_reason = None
+        existing.lease_expires_at = None
+        existing.last_error = None
+        existing.result_payload = None
+        if previous_status in {
+            QueueJobStatus.COMPLETED.value,
+            QueueJobStatus.CANCELLED.value,
+        }:
+            existing.attempts = 0
+        existing.updated_at = now_value
+        _log_dedupe()
+        return existing, True
 
-    available_value: Any = scheduled_for if scheduled_for is not None else func.now()
-    now_value = func.now()
-    insert_stmt = pg_insert(QueueJob).values(
+    record = QueueJob(
         type=job_type,
         payload=dict(payload),
         priority=priority,
-        available_at=available_value,
+        available_at=scheduled_for or now_value,
         idempotency_key=dedupe_key,
         status=QueueJobStatus.PENDING.value,
         stop_reason=None,
@@ -286,74 +271,8 @@ def _upsert_queue_job(
         created_at=now_value,
         updated_at=now_value,
     )
-    excluded = insert_stmt.excluded
-    update_stmt = insert_stmt.on_conflict_do_update(
-        index_elements=["idempotency_key"],
-        set_={
-            "payload": excluded.payload,
-            "priority": excluded.priority,
-            "available_at": excluded.available_at,
-            "status": QueueJobStatus.PENDING.value,
-            "stop_reason": None,
-            "lease_expires_at": None,
-            "last_error": None,
-            "result_payload": None,
-            "updated_at": now_value,
-            "attempts": case(
-                (
-                    QueueJob.status.in_(
-                        [
-                            QueueJobStatus.COMPLETED.value,
-                            QueueJobStatus.CANCELLED.value,
-                        ]
-                    ),
-                    0,
-                ),
-                else_=QueueJob.attempts,
-            ),
-        },
-        where=(QueueJob.type == job_type),
-    ).returning(QueueJob.id, text("xmax = 0").label("inserted"))
-
-    try:
-        result = session.execute(update_stmt)
-    except IntegrityError as exc:
-        original = getattr(exc, "orig", exc)
-        if UniqueViolation is not None and isinstance(original, UniqueViolation):
-            existing = session.execute(stmt_base).scalars().first()
-            if existing is None:
-                raise
-            _log_dedupe()
-            return existing, True
-        raise
-
-    row = result.first()
-    if row is None:
-        existing = session.execute(stmt_base).scalars().first()
-        if existing is None:
-            raise RuntimeError("Queue job upsert conflict without existing record")
-        if existing.type != job_type:
-            logger.warning(
-                "Queue job idempotency key reused by different job type",
-                extra={
-                    "event": "queue.job.dedupe_conflict",
-                    "requested_type": job_type,
-                    "existing_type": existing.type,
-                    "idempotency_key": dedupe_key,
-                    "dialect": dialect_name or "unknown",
-                },
-            )
-        _log_dedupe()
-        return existing, True
-
-    record = session.get(QueueJob, row.id)
-    if record is None:
-        raise RuntimeError("Queue job record missing after upsert")
-
-    deduped = not bool(row.inserted)
-    if deduped:
-        _log_dedupe()
-    return record, deduped
+    session.add(record)
+    return record, False
 
 
 def enqueue(
@@ -369,9 +288,7 @@ def enqueue(
     scheduled_for = available_at
     payload_dict = dict(payload)
     dedupe_key = idempotency_key or _derive_idempotency_key(job_type, payload_dict)
-    resolved_priority = (
-        priority if priority is not None else _resolve_priority(payload_dict)
-    )
+    resolved_priority = priority if priority is not None else _resolve_priority(payload_dict)
 
     with session_scope() as session:
         if dedupe_key:
@@ -384,31 +301,23 @@ def enqueue(
                 scheduled_for=scheduled_for,
             )
         else:
-            now_expr = func.now()
-            insert_stmt = (
-                insert(QueueJob)
-                .values(
-                    type=job_type,
-                    payload=payload_dict,
-                    priority=resolved_priority,
-                    available_at=scheduled_for or now_expr,
-                    idempotency_key=None,
-                    status=QueueJobStatus.PENDING.value,
-                    stop_reason=None,
-                    lease_expires_at=None,
-                    last_error=None,
-                    result_payload=None,
-                    attempts=0,
-                    created_at=now_expr,
-                    updated_at=now_expr,
-                )
-                .returning(QueueJob.id)
+            now_value = _utcnow()
+            record = QueueJob(
+                type=job_type,
+                payload=payload_dict,
+                priority=resolved_priority,
+                available_at=scheduled_for or now_value,
+                idempotency_key=None,
+                status=QueueJobStatus.PENDING.value,
+                stop_reason=None,
+                lease_expires_at=None,
+                last_error=None,
+                result_payload=None,
+                attempts=0,
+                created_at=now_value,
+                updated_at=now_value,
             )
-            result = session.execute(insert_stmt)
-            inserted_id = result.scalar_one()
-            record = session.get(QueueJob, inserted_id)
-            if record is None:
-                raise RuntimeError("Queue job record missing after insert")
+            session.add(record)
             deduped = False
 
         dto = _refresh_instance(session, record)
@@ -574,8 +483,7 @@ def heartbeat(
                 QueueJob.lease_expires_at > func.now(),
             )
             .values(
-                lease_expires_at=func.now()
-                + func.make_interval(secs=bindparam("lease_timeout")),
+                lease_expires_at=func.now() + func.make_interval(secs=bindparam("lease_timeout")),
                 updated_at=func.now(),
             )
         )
@@ -709,9 +617,7 @@ def to_dlq(
             return False
         dto = _to_dto(record)
     if dto is None:
-        raise RuntimeError(
-            "Queue job refresh failed after moving to dead-letter queue."
-        )
+        raise RuntimeError("Queue job refresh failed after moving to dead-letter queue.")
     _emit_worker_job_event(dto, "dead_letter", stop_reason=reason)
     if reason == "max_retries_exhausted":
         _emit_retry_exhausted(dto, stop_reason=reason)
@@ -883,9 +789,7 @@ async def lease_async(
 ) -> QueueJobDTO | None:
     """Async wrapper around :func:`lease`."""
 
-    return await asyncio.to_thread(
-        lease, job_id, job_type=job_type, lease_seconds=lease_seconds
-    )
+    return await asyncio.to_thread(lease, job_id, job_type=job_type, lease_seconds=lease_seconds)
 
 
 async def complete_async(

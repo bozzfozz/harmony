@@ -72,18 +72,12 @@ class DownloadSidecar:
             dedupe_key=str(payload.get("dedupe_key")),
             attempt=int(payload.get("attempt", 1)),
             status=str(payload.get("status", "pending")),
-            source_path=str(payload.get("source_path"))
-            if payload.get("source_path")
-            else None,
-            final_path=str(payload.get("final_path"))
-            if payload.get("final_path")
-            else None,
+            source_path=str(payload.get("source_path")) if payload.get("source_path") else None,
+            final_path=str(payload.get("final_path")) if payload.get("final_path") else None,
             bytes_written=int(payload.get("bytes_written"))
             if payload.get("bytes_written") is not None
             else None,
-            download_id=str(payload.get("download_id"))
-            if payload.get("download_id")
-            else None,
+            download_id=str(payload.get("download_id")) if payload.get("download_id") else None,
             updated_at=updated,
         )
 
@@ -220,9 +214,7 @@ class HdmRecovery:
             while not self._stopping.is_set():
                 await self._scan()
                 try:
-                    await asyncio.wait_for(
-                        self._stopping.wait(), timeout=self._poll_interval
-                    )
+                    await asyncio.wait_for(self._stopping.wait(), timeout=self._poll_interval)
                 except asyncio.TimeoutError:
                     continue
         except asyncio.CancelledError:  # pragma: no cover - shutdown path

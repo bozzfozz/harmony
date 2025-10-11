@@ -90,18 +90,14 @@ class SpotifyDomainService:
         backfill_service_factory: (
             Callable[[SpotifyConfig, SpotifyClient | None], BackfillService] | None
         ) = None,
-        backfill_worker_factory: (
-            Callable[[BackfillService], BackfillWorker] | None
-        ) = None,
+        backfill_worker_factory: (Callable[[BackfillService], BackfillWorker] | None) = None,
         session_runner: Callable[[SessionCallable[Any]], Awaitable[Any]] | None = None,
     ) -> None:
         self._config = config
         self._spotify = spotify_client
         self._soulseek = soulseek_client
         self._state = app_state
-        self._free_ingest_factory = (
-            free_ingest_factory or self._default_free_ingest_factory
-        )
+        self._free_ingest_factory = free_ingest_factory or self._default_free_ingest_factory
         self._backfill_service_factory = (
             backfill_service_factory or self._default_backfill_service_factory
         )
@@ -173,19 +169,13 @@ class SpotifyDomainService:
     def search_tracks(self, query: str) -> Sequence[ProviderTrack]:
         client = self._require_spotify()
         response = client.search_tracks(query)
-        tracks_section = (
-            response.get("tracks") if isinstance(response, Mapping) else None
-        )
-        raw_items = (
-            tracks_section.get("items") if isinstance(tracks_section, Mapping) else None
-        )
+        tracks_section = response.get("tracks") if isinstance(response, Mapping) else None
+        raw_items = tracks_section.get("items") if isinstance(tracks_section, Mapping) else None
         normalized: list[ProviderTrack] = []
         if isinstance(raw_items, Iterable):
             for entry in raw_items:
                 if isinstance(entry, Mapping):
-                    normalized.append(
-                        normalize_spotify_track(entry, provider="spotify")
-                    )
+                    normalized.append(normalize_spotify_track(entry, provider="spotify"))
         return tuple(normalized)
 
     def search_artists(self, query: str) -> Sequence[dict[str, Any]]:
@@ -201,9 +191,7 @@ class SpotifyDomainService:
     def get_followed_artists(self) -> Sequence[dict[str, Any]]:
         client = self._require_spotify()
         response = client.get_followed_artists()
-        artists_section = (
-            response.get("artists") if isinstance(response, dict) else None
-        )
+        artists_section = response.get("artists") if isinstance(response, dict) else None
         items: Sequence[dict[str, Any]] = []
         if isinstance(artists_section, dict):
             raw_items = artists_section.get("items") or []
@@ -231,24 +219,14 @@ class SpotifyDomainService:
         for entry in albums_payload or []:
             if not isinstance(entry, dict):
                 continue
-            album_data = (
-                entry.get("album") if isinstance(entry.get("album"), dict) else None
-            )
+            album_data = entry.get("album") if isinstance(entry.get("album"), dict) else None
             if album_data is None:
-                album_data = {
-                    key: value for key, value in entry.items() if key != "tracks"
-                }
+                album_data = {key: value for key, value in entry.items() if key != "tracks"}
             tracks_payload = entry.get("tracks")
             if isinstance(tracks_payload, list):
-                track_items = [
-                    track for track in tracks_payload if isinstance(track, dict)
-                ]
+                track_items = [track for track in tracks_payload if isinstance(track, dict)]
             elif isinstance(tracks_payload, dict):
-                raw_items = (
-                    tracks_payload.get("items")
-                    if isinstance(tracks_payload, dict)
-                    else []
-                )
+                raw_items = tracks_payload.get("items") if isinstance(tracks_payload, dict) else []
                 track_items = [track for track in raw_items if isinstance(track, dict)]
             else:
                 track_items = []
@@ -258,9 +236,7 @@ class SpotifyDomainService:
     def list_playlists(self, session: Session) -> Sequence[Playlist]:
         return session.query(Playlist).order_by(Playlist.updated_at.desc()).all()
 
-    def get_playlist_items(
-        self, playlist_id: str, *, limit: int
-    ) -> PlaylistItemsResult:
+    def get_playlist_items(self, playlist_id: str, *, limit: int) -> PlaylistItemsResult:
         client = self._require_spotify()
         payload = client.get_playlist_items(playlist_id, limit=limit)
         total = payload.get("total") if isinstance(payload, Mapping) else None
@@ -312,23 +288,17 @@ class SpotifyDomainService:
             normalized_tracks.append(replace(track, metadata=metadata))
 
         fallback_total = total if total is not None else len(filtered_items)
-        return PlaylistItemsResult(
-            items=tuple(normalized_tracks), total=int(fallback_total or 0)
-        )
+        return PlaylistItemsResult(items=tuple(normalized_tracks), total=int(fallback_total or 0))
 
     def add_tracks_to_playlist(self, playlist_id: str, uris: Sequence[str]) -> None:
         client = self._require_spotify()
         client.add_tracks_to_playlist(playlist_id, list(uris))
 
-    def remove_tracks_from_playlist(
-        self, playlist_id: str, uris: Sequence[str]
-    ) -> None:
+    def remove_tracks_from_playlist(self, playlist_id: str, uris: Sequence[str]) -> None:
         client = self._require_spotify()
         client.remove_tracks_from_playlist(playlist_id, list(uris))
 
-    def reorder_playlist(
-        self, playlist_id: str, *, range_start: int, insert_before: int
-    ) -> None:
+    def reorder_playlist(self, playlist_id: str, *, range_start: int, insert_before: int) -> None:
         client = self._require_spotify()
         client.reorder_playlist_items(
             playlist_id,
@@ -346,14 +316,10 @@ class SpotifyDomainService:
         features = client.get_audio_features(track_id)
         return features if features else None
 
-    def get_multiple_audio_features(
-        self, track_ids: Sequence[str]
-    ) -> Sequence[dict[str, Any]]:
+    def get_multiple_audio_features(self, track_ids: Sequence[str]) -> Sequence[dict[str, Any]]:
         client = self._require_spotify()
         response = client.get_multiple_audio_features(list(track_ids))
-        audio_features = (
-            response.get("audio_features") if isinstance(response, dict) else []
-        )
+        audio_features = response.get("audio_features") if isinstance(response, dict) else []
         if not isinstance(audio_features, Iterable):
             return []
         return [item for item in audio_features if isinstance(item, dict)]
@@ -515,9 +481,7 @@ class SpotifyDomainService:
         self, *, max_items: Optional[int], expand_playlists: bool
     ) -> BackfillJobSpec:
         service = self.ensure_backfill_service()
-        return service.create_job(
-            max_items=max_items, expand_playlists=expand_playlists
-        )
+        return service.create_job(max_items=max_items, expand_playlists=expand_playlists)
 
     def get_backfill_status(self, job_id: str) -> Optional[BackfillJobStatus]:
         service = self.ensure_backfill_service()

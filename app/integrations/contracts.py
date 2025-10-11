@@ -100,12 +100,8 @@ class ProviderError(RuntimeError):
 class ProviderTimeoutError(ProviderError):
     """Raised when the provider did not respond within the configured timeout."""
 
-    def __init__(
-        self, provider: str, timeout_ms: int, *, cause: Exception | None = None
-    ) -> None:
-        super().__init__(
-            provider, f"{provider} timed out after {timeout_ms}ms", cause=cause
-        )
+    def __init__(self, provider: str, timeout_ms: int, *, cause: Exception | None = None) -> None:
+        super().__init__(provider, f"{provider} timed out after {timeout_ms}ms", cause=cause)
         self.timeout_ms = timeout_ms
 
 

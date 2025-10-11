@@ -98,9 +98,7 @@ class IntegrationService:
                 )
             ) from exc
 
-        query_model = SearchQuery(
-            text=trimmed_query, artist=normalized_artist, limit=clamped_limit
-        )
+        query_model = SearchQuery(text=trimmed_query, artist=normalized_artist, limit=clamped_limit)
 
         started = perf_counter()
         try:

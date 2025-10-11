@@ -164,9 +164,7 @@ class DeduplicationManager:
             rendered = self._move_template.format(**metadata)
         except KeyError as exc:  # pragma: no cover - template misconfiguration
             missing = exc.args[0]
-            raise RuntimeError(
-                f"Unknown placeholder in move template: {missing}"
-            ) from exc
+            raise RuntimeError(f"Unknown placeholder in move template: {missing}") from exc
         clean = rendered.strip().strip("/")
         return Path(clean)
 

@@ -52,9 +52,7 @@ def _sort_parameters(parameters: list[Any]) -> list[Any]:
             sortable.append((_SortKey("", ""), _sort_value(item)))
     return [
         value
-        for _, value in sorted(
-            sortable, key=lambda entry: (entry[0].primary, entry[0].secondary)
-        )
+        for _, value in sorted(sortable, key=lambda entry: (entry[0].primary, entry[0].secondary))
     ]
 
 
@@ -89,9 +87,7 @@ def _sort_tags(tags: Iterable[Any]) -> list[Any]:
             sortable.append((_SortKey(str(raw), ""), _sort_value(raw)))
     return [
         value
-        for _, value in sorted(
-            sortable, key=lambda entry: (entry[0].primary, entry[0].secondary)
-        )
+        for _, value in sorted(sortable, key=lambda entry: (entry[0].primary, entry[0].secondary))
     ]
 
 
@@ -192,9 +188,7 @@ def _ensure_deterministic_structure(schema: MutableMapping[str, Any]) -> None:
 
 
 def _hash_schema(schema: Mapping[str, Any]) -> str:
-    payload = json.dumps(
-        schema, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
+    payload = json.dumps(schema, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -254,9 +248,7 @@ def _apply_error_contract(paths: MutableMapping[str, Any]) -> None:
                         existing.setdefault("description", description)
                         content = existing.setdefault("content", {})
                         if isinstance(content, MutableMapping):
-                            content.setdefault(
-                                "application/json", {"schema": error_ref}
-                            )
+                            content.setdefault("application/json", {"schema": error_ref})
 
 
 def _apply_cache_headers(paths: MutableMapping[str, Any]) -> None:
@@ -290,9 +282,7 @@ def _apply_cache_headers(paths: MutableMapping[str, Any]) -> None:
                         "Cache-Control",
                         "Vary",
                     ):
-                        headers.setdefault(
-                            header_name, deepcopy(cache_headers[header_name])
-                        )
+                        headers.setdefault(header_name, deepcopy(cache_headers[header_name]))
 
 
 def _apply_health_examples(app: FastAPI, paths: MutableMapping[str, Any]) -> None:

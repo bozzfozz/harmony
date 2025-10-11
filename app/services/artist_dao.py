@@ -302,9 +302,7 @@ class ArtistDao:
                 raise
         raise RuntimeError("Artist upsert failed after retries.")
 
-    def upsert_releases(
-        self, releases: Sequence[ArtistReleaseUpsertDTO]
-    ) -> list[ArtistReleaseRow]:
+    def upsert_releases(self, releases: Sequence[ArtistReleaseUpsertDTO]) -> list[ArtistReleaseRow]:
         if not releases:
             return []
 
@@ -335,12 +333,9 @@ class ArtistDao:
         rows: list[ArtistReleaseRow] = []
 
         with session_scope() as session:
-            artist_stmt = select(ArtistRecord).where(
-                ArtistRecord.artist_key.in_(artist_keys)
-            )
+            artist_stmt = select(ArtistRecord).where(ArtistRecord.artist_key.in_(artist_keys))
             artist_map = {
-                record.artist_key: record
-                for record in session.execute(artist_stmt).scalars().all()
+                record.artist_key: record for record in session.execute(artist_stmt).scalars().all()
             }
 
             for dto in deduped.values():
@@ -354,9 +349,7 @@ class ArtistDao:
                     ArtistReleaseRecord.source == dto.source,
                 )
                 if dto.source_id is not None:
-                    statement = statement.where(
-                        ArtistReleaseRecord.source_id == dto.source_id
-                    )
+                    statement = statement.where(ArtistReleaseRecord.source_id == dto.source_id)
                 else:
                     statement = statement.where(
                         ArtistReleaseRecord.source_id.is_(None),
@@ -428,11 +421,7 @@ class ArtistDao:
                     elif not record.etag:
                         record.etag = _hash_values(
                             record.title,
-                            (
-                                record.release_date.isoformat()
-                                if record.release_date
-                                else ""
-                            ),
+                            (record.release_date.isoformat() if record.release_date else ""),
                             record.release_type or "",
                             record.updated_at.isoformat(timespec="seconds"),
                         )
@@ -592,18 +581,14 @@ class ArtistDao:
         hard_delete: bool = False,
     ) -> list[ArtistReleaseRow]:
         ids = {
-            int(value)
-            for value in release_ids
-            if isinstance(value, int) or str(value).isdigit()
+            int(value) for value in release_ids if isinstance(value, int) or str(value).isdigit()
         }
         if not ids:
             return []
         timestamp = self._now()
         updated: list[ArtistReleaseRow] = []
         with session_scope() as session:
-            statement = select(ArtistReleaseRecord).where(
-                ArtistReleaseRecord.id.in_(ids)
-            )
+            statement = select(ArtistReleaseRecord).where(ArtistReleaseRecord.id.in_(ids))
             records = session.execute(statement).scalars().all()
             if hard_delete:
                 for record in records:

@@ -55,7 +55,9 @@ def compute_playlist_collection_metadata(
             latest = updated_at
 
     total_count = len(normalized)
-    payload = f"playlists|{_PLAYLIST_CACHE_VERSION}|{resolved_filters}|{total_count}|{latest.isoformat()}"
+    payload = (
+        f"playlists|{_PLAYLIST_CACHE_VERSION}|{resolved_filters}|{total_count}|{latest.isoformat()}"
+    )
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     etag = f'"pl-{_PLAYLIST_CACHE_VERSION}-{digest}:{total_count}"'
     return CacheMetadata(etag=etag, last_modified=latest)
@@ -78,9 +80,7 @@ def is_request_not_modified(
     if etag:
         if_none_match = request.headers.get("if-none-match")
         if if_none_match:
-            candidates = {
-                token.strip() for token in if_none_match.split(",") if token.strip()
-            }
+            candidates = {token.strip() for token in if_none_match.split(",") if token.strip()}
             if etag in candidates:
                 return True
 

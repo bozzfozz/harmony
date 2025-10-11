@@ -29,7 +29,7 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 ## 4. Datenbank / Persistenz
 - Nutzung von Sessions und Transaktionen (z. B. SQLAlchemy Session).  
 - Indizes für häufig verwendete Filterspalten setzen.  
-- Migrationen mit Tools wie Alembic pflegen.  
+- Schema-Änderungen über SQLAlchemy-Models kapseln; `Base.metadata.create_all()` hält SQLite-Schemata synchron.
 - Kein direkter SQL-String-Zugriff in Routern oder Services.  
 
 ## 5. Sicherheit (OWASP API Top 10 Light)

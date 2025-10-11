@@ -4,7 +4,8 @@ __pycache__/
 *.tmp
 *.swp
 .DS_Store
-harmony.db
+*.db
+data/*.db
 dist/
 build/
 node_modules/

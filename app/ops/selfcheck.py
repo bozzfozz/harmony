@@ -6,15 +6,21 @@ import argparse
 import json
 import os
 import socket
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, MutableMapping, Sequence
-from urllib.parse import urlparse
 from uuid import uuid4
 
-from app.config import load_runtime_env
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
+
+from app.config import (
+    DEFAULT_DB_URL_DEV,
+    DEFAULT_DB_URL_PROD,
+    DEFAULT_DB_URL_TEST,
+    load_runtime_env,
+)
 from app.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +42,32 @@ _REQUIRED_ENV_BASE = (
 )
 
 _OPTIONAL_ENV_KEYS = ("UMASK", "PUID", "PGID")
+
+
+def _resolve_profile(env: Mapping[str, Any]) -> str:
+    raw = str(env.get("APP_ENV") or env.get("ENVIRONMENT") or "").strip()
+    if not raw and env.get("PYTEST_CURRENT_TEST"):
+        raw = "test"
+    normalized = raw.lower()
+    aliases = {
+        "development": "dev",
+        "local": "dev",
+        "production": "prod",
+        "live": "prod",
+        "stage": "staging",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"dev", "staging", "prod", "test"}:
+        return "dev"
+    return normalized
+
+
+def _default_database_url(profile: str) -> str:
+    if profile in {"prod", "staging"}:
+        return DEFAULT_DB_URL_PROD
+    if profile == "test":
+        return DEFAULT_DB_URL_TEST
+    return DEFAULT_DB_URL_DEV
 
 
 @dataclass(slots=True)
@@ -136,6 +168,19 @@ def check_path_exists_writable(path: Path, *, anchor: Path | None = None) -> dic
     return info
 
 
+def _probe_file_writable(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        with path.open("ab") as handle:
+            handle.write(b"")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return True
+    except OSError:
+        return False
+
+
 def check_tcp_reachable(
     host: str,
     port: int,
@@ -199,9 +244,6 @@ def aggregate_ready(
     database_required = _parse_bool(env.get("HEALTH_READY_REQUIRE_DB"))
     if database_required is None:
         database_required = True
-
-    if database_required and not _has_value(env.get("DATABASE_URL")):
-        missing_keys.add("DATABASE_URL")
 
     if missing_keys:
         env_check["missing"] = sorted(missing_keys)
@@ -298,7 +340,7 @@ def aggregate_ready(
                     )
                 )
             elif oauth_state_info.get("same_filesystem") is False:
-                # TODO: Confirm reference directory for filesystem equivalence. Assuming DOWNLOADS_DIR.
+                # The OAuth state directory must share a filesystem with the downloads directory for atomic moves.
                 issues.append(
                     ReadyIssue(
                         component="oauth",
@@ -354,43 +396,82 @@ def aggregate_ready(
             )
     checks["soulseekd"] = soulseekd
 
+    profile = _resolve_profile(env)
+    configured_url = env.get("DATABASE_URL")
+    database_url = configured_url if _has_value(configured_url) else _default_database_url(profile)
+
     database: dict[str, Any] = {
         "required": database_required,
-        "configured": _has_value(env.get("DATABASE_URL")),
-        "reachable": None,
-        "host": None,
-        "port": None,
+        "configured": bool(_has_value(configured_url)),
+        "mode": None,
+        "path": None,
+        "exists": None,
+        "writable": None,
+        "using_default": not _has_value(configured_url),
     }
 
-    db_url = env.get("DATABASE_URL") if database["configured"] else None
-    if db_url:
-        parsed = urlparse(db_url)
-        database["host"] = parsed.hostname
-        database["port"] = parsed.port
-        if parsed.hostname is None or parsed.port is None:
+    try:
+        url = make_url(database_url)
+    except ArgumentError:
+        database["error"] = "invalid_url"
+        issues.append(
+            ReadyIssue(
+                component="database",
+                message="DATABASE_URL is not a valid sqlite+ SQLAlchemy URL",
+                exit_code=EX_CONFIG,
+                details={"url": database_url},
+            )
+        )
+    else:
+        driver = url.drivername.lower()
+        database["driver"] = driver
+        if not driver.startswith("sqlite"):
             issues.append(
                 ReadyIssue(
                     component="database",
-                    message="DATABASE_URL must include hostname and port",
-                    exit_code=EX_SOFTWARE,
-                    details={"url": db_url},
+                    message="DATABASE_URL must use a sqlite+ driver",
+                    exit_code=EX_CONFIG,
+                    details={"driver": driver, "url": database_url},
                 )
             )
         else:
-            reachable = check_tcp_reachable(parsed.hostname, parsed.port)
-            database["reachable"] = reachable
-            if database_required and not reachable:
-                issues.append(
-                    ReadyIssue(
-                        component="database",
-                        message=f"Unable to reach database host {parsed.hostname}:{parsed.port}",
-                        exit_code=EX_UNAVAILABLE,
-                        details={"host": parsed.hostname, "port": parsed.port},
-                    )
-                )
-    elif database_required:
-        database["reachable"] = False
-
+            database["mode"] = "memory"
+            database["exists"] = True
+            database["writable"] = True
+            database_path: Path | None = None
+            if url.database and url.database not in {":memory:"}:
+                database_path = Path(url.database)
+                if not database_path.is_absolute():
+                    database_path = (Path.cwd() / database_path).resolve()
+                database["mode"] = "file"
+                database["path"] = str(database_path)
+                exists = database_path.exists()
+                database["exists"] = exists
+                parent_info = check_path_exists_writable(database_path.parent)
+                database["parent"] = parent_info
+                if exists:
+                    writable = _probe_file_writable(database_path)
+                    database["writable"] = writable
+                    if database_required and not writable:
+                        issues.append(
+                            ReadyIssue(
+                                component="database",
+                                message="Database file is not writable",
+                                exit_code=EX_OSERR,
+                                details={"path": str(database_path)},
+                            )
+                        )
+                else:
+                    database["writable"] = False
+                    if database_required:
+                        issues.append(
+                            ReadyIssue(
+                                component="database",
+                                message="Database file does not exist",
+                                exit_code=EX_OSERR,
+                                details={"path": str(database_path)},
+                            )
+                        )
     checks["database"] = database
 
     status = "ok" if not issues else "fail"
@@ -427,8 +508,9 @@ def run_startup_guards(
             "soulseekd_host": soulseekd.get("host"),
             "soulseekd_port": soulseekd.get("port"),
             "database_required": database.get("required"),
-            "database_host": database.get("host"),
-            "database_port": database.get("port"),
+            "database_mode": database.get("mode"),
+            "database_path": database.get("path"),
+            "database_using_default": database.get("using_default"),
             "umask": optional_env_snapshot.get("UMASK"),
             "puid": optional_env_snapshot.get("PUID"),
             "pgid": optional_env_snapshot.get("PGID"),

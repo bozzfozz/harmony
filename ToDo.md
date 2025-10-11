@@ -8,12 +8,9 @@
 - **Tags:** db, admin, migration
 - **Description:** Admin artist APIs crash because the ORM references an `activity_events` table that has never been created. A blocking schema gap prevents audit, reconcile, and cache invalidation flows from running and causes six admin tests to error. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】
 - **Acceptance Criteria:**
-  - Alembic migration creates `activity_events` with expected indexes and is reversible.
-  - Admin DAO/service tests pass against the legacy file-based smoke harness and the canonical Postgres target.
   - Full admin API suite runs without `no such table` errors.
 - **Risks/Impact:** Schema changes in production environments require coordination and rollback planning.
 - **Dependencies:** None.
-- **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `pytest tests/api/test_admin_artists.py` failure logs; Alembic Baseline `202501150000`. 【F:reports/analysis/backend_deep_scan.md†L23-L29】【b45c06†L137-L176】【F:app/migrations/versions/202501150000_baseline_postgres.py†L1-L36】
 - **Subtasks:**
   - [x] CODX-P0-DB-311 — Author and apply `activity_events` migration with verification harness.
 

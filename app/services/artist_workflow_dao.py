@@ -211,9 +211,7 @@ class ArtistWorkflowDAO:
     def supports_async(self) -> bool:
         return self._async_session_factory is not None
 
-    def with_async_session_factory(
-        self, factory: Callable[[], AsyncSession]
-    ) -> ArtistWorkflowDAO:
+    def with_async_session_factory(self, factory: Callable[[], AsyncSession]) -> ArtistWorkflowDAO:
         return ArtistWorkflowDAO(
             now_factory=self._now_factory,
             async_session_factory=factory,
@@ -253,9 +251,7 @@ class ArtistWorkflowDAO:
                 statement = (
                     select(Download.spotify_track_id)
                     .where(Download.spotify_track_id.in_(track_ids))
-                    .where(
-                        Download.state.notin_(["failed", "cancelled", "dead_letter"])
-                    )
+                    .where(Download.state.notin_(["failed", "cancelled", "dead_letter"]))
                 )
                 values = session.execute(statement).scalars().all()
                 return {str(value) for value in values if value}
@@ -297,9 +293,7 @@ class ArtistWorkflowDAO:
                 session.add(download)
                 if known_release is not None:
                     if artist_id is None:
-                        raise ValueError(
-                            "artist_id is required when known_release is provided"
-                        )
+                        raise ValueError("artist_id is required when known_release is provided")
                     self._upsert_known_release(
                         session,
                         int(artist_id),

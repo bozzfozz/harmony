@@ -54,9 +54,7 @@ class ArtistService:
     """Expose artist centric operations for the API layer."""
 
     dao: ArtistDao = field(default_factory=ArtistDao)
-    _enqueue_fn: Callable[..., Awaitable[QueueJobDTO]] | None = field(
-        default=None, repr=False
-    )
+    _enqueue_fn: Callable[..., Awaitable[QueueJobDTO]] | None = field(default=None, repr=False)
     _persistence_module: Any = field(default=persistence, repr=False)
     _logger: Any = field(init=False, repr=False)
 
@@ -129,9 +127,7 @@ class ArtistService:
         capped_limit = min(limit, 100)
         start = perf_counter()
         try:
-            items, total = self.dao.list_watchlist_entries(
-                limit=capped_limit, offset=offset
-            )
+            items, total = self.dao.list_watchlist_entries(limit=capped_limit, offset=offset)
         except Exception as exc:  # pragma: no cover - defensive logging path
             duration_ms = (perf_counter() - start) * 1000
             log_event(
@@ -157,9 +153,7 @@ class ArtistService:
             result_count=len(items),
             meta={"limit": capped_limit, "offset": offset, "total": total},
         )
-        return WatchlistPage(
-            items=list(items), total=total, limit=capped_limit, offset=offset
-        )
+        return WatchlistPage(items=list(items), total=total, limit=capped_limit, offset=offset)
 
     def upsert_watchlist(
         self,
@@ -262,9 +256,7 @@ class ArtistService:
             entity_id=key,
         )
 
-    async def enqueue_sync(
-        self, artist_key: str, *, force: bool = False
-    ) -> EnqueueResult:
+    async def enqueue_sync(self, artist_key: str, *, force: bool = False) -> EnqueueResult:
         """Schedule an artist sync job in the orchestrator queue."""
 
         key = self._normalise_key(artist_key)
@@ -274,9 +266,7 @@ class ArtistService:
         job_payload = {"artist_key": key, "force": bool(force)}
         args_hash = json.dumps(job_payload, sort_keys=True, default=str)
         idempotency_key = make_idempotency_key(_ARTIST_SYNC_JOB, key, args_hash)
-        existing = self._persistence_module.find_by_idempotency(
-            _ARTIST_SYNC_JOB, idempotency_key
-        )
+        existing = self._persistence_module.find_by_idempotency(_ARTIST_SYNC_JOB, idempotency_key)
 
         start = perf_counter()
         try:
