@@ -12,13 +12,19 @@ set -euo pipefail
 # 16 Projektstruktur unvollständig
 
 : "${FE_DIR:=frontend}"
-: "${REQUIRED_NODE_MAJOR:=20}"
-: "${REQUIRED_NPM_MAJOR:=11}"
 : "${TIMEOUT_SEC:=600}"
 : "${VERBOSE:=0}"
 : "${SKIP_INSTALL:=0}"
 : "${SKIP_BUILD:=0}"
 : "${SKIP_TYPECHECK:=0}"
+: "${SUPPLY_GUARD_RAN:=0}"
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
+TOOLCHAIN_NODE_FILE="${REPO_ROOT}/.nvmrc"
+TOOLCHAIN_NODE_VERSION_FILE="${REPO_ROOT}/.node-version"
+TOOLCHAIN_NPM_FILE="${REPO_ROOT}/${FE_DIR}/.npm-version"
+DEFAULT_REGISTRY="https://registry.npmjs.org/"
 
 cleanup_env_runtime=0
 cleanup_env_runtime_path=""
@@ -33,13 +39,58 @@ die(){
   exit "${code}"
 }
 
+trim(){
+  local value="$1"
+  printf '%s' "${value}" | tr -d '\r' | sed -e 's/^\s\+//' -e 's/\s\+$//'
+}
+
 run_to(){
   local secs="$1"
   shift
   if command -v timeout >/dev/null 2>&1; then
-    timeout --preserve-status "${secs}" "$@"
+    if timeout --help 2>/dev/null | grep -q "--preserve-status"; then
+      timeout --preserve-status "${secs}" "$@"
+    else
+      timeout "${secs}" "$@"
+    fi
   else
     "$@"
+  fi
+}
+
+sha256_file(){
+  local target="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${target}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${target}" | awk '{print $1}'
+  else
+    die 16 "sha256sum/shasum nicht verfügbar"
+  fi
+}
+
+normalize_registry(){
+  local value="$1"
+  value="$(trim "${value}")"
+  value="${value%/}"
+  if [ -z "${value}" ]; then
+    echo ""
+    return
+  fi
+  printf '%s/' "${value}"
+}
+
+ensure_registry_line(){
+  local file="$1"
+  local context="$2"
+  if [ ! -f "${file}" ]; then
+    die 12 "${context}: .npmrc fehlt"
+  fi
+  if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' "${file}"; then
+    die 12 "${context}: .npmrc Registry != ${DEFAULT_REGISTRY}"
+  fi
+  if grep -E 'registry=' "${file}" | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
+    die 12 "${context}: zusätzliche Registry-Einträge gefunden"
   fi
 }
 
@@ -67,7 +118,7 @@ has_package_script(){
     return 1
   fi
 
-  node - <<'EOF' "${script_name}" >/dev/null 2>&1
+  node - <<'__NODE__' "${script_name}" >/dev/null 2>&1
 const fs = require('fs');
 const name = process.argv[1];
 try {
@@ -77,7 +128,7 @@ try {
   }
 } catch (err) {}
 process.exit(1);
-EOF
+__NODE__
   local status=$?
   if [ "${status}" -eq 0 ]; then
     return 0
@@ -85,37 +136,93 @@ EOF
   return 1
 }
 
+maybe_run_supply_guard(){
+  if [ "${SUPPLY_GUARD_RAN}" = "1" ]; then
+    return
+  fi
+  local guard_script="${REPO_ROOT}/scripts/dev/supply_guard.sh"
+  if [ -x "${guard_script}" ]; then
+    vlog "Starte supply-guard ..."
+    SUPPLY_GUARD_RAN=1 bash "${guard_script}"
+    SUPPLY_GUARD_RAN=1
+  else
+    vlog "supply-guard Skript nicht gefunden"
+  fi
+}
+
 main(){
   ensure_boolean "${SKIP_INSTALL}"
   ensure_boolean "${SKIP_BUILD}"
   ensure_boolean "${SKIP_TYPECHECK}"
+  ensure_boolean "${SUPPLY_GUARD_RAN}"
 
-  [ -d "${FE_DIR}" ] || die 16 "Ordner '${FE_DIR}' fehlt"
+  if [ "${SKIP_INSTALL}" = "1" ]; then
+    die 16 "SKIP_INSTALL=1 wird nicht unterstützt"
+  fi
 
-  pushd "${FE_DIR}" >/dev/null
+  [ -d "${REPO_ROOT}/${FE_DIR}" ] || die 16 "Ordner '${FE_DIR}' fehlt"
+
+  cd "${REPO_ROOT}" >/dev/null
+
+  require_cmd node
+  require_cmd npm
+
+  if [ ! -f "${TOOLCHAIN_NODE_FILE}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NODE_FILE} fehlt"
+  fi
+  if [ ! -f "${TOOLCHAIN_NODE_VERSION_FILE}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NODE_VERSION_FILE} fehlt"
+  fi
+  if [ ! -f "${TOOLCHAIN_NPM_FILE}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NPM_FILE} fehlt"
+  fi
+
+  local required_node required_npm alt_node node_version npm_version
+  required_node=$(trim "$(cat "${TOOLCHAIN_NODE_FILE}")")
+  alt_node=$(trim "$(cat "${TOOLCHAIN_NODE_VERSION_FILE}")")
+  required_npm=$(trim "$(cat "${TOOLCHAIN_NPM_FILE}")")
+
+  if [ -z "${required_node}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NODE_FILE} ist leer"
+  fi
+  if [ -z "${alt_node}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NODE_VERSION_FILE} ist leer"
+  fi
+  if [ "${required_node}" != "${alt_node}" ]; then
+    die 16 ".node-version (${alt_node}) weicht von .nvmrc (${required_node}) ab"
+  fi
+  if [ -z "${required_npm}" ]; then
+    die 16 "Toolchain-Datei ${TOOLCHAIN_NPM_FILE} ist leer"
+  fi
+
+  node_version="$(node --version | sed 's/^v//')"
+  npm_version="$(npm --version 2>/dev/null | tail -n1)"
+  if [ "${node_version}" != "${required_node}" ]; then
+    die 10 "Node-Version Drift: erwartet ${required_node}, erhalten ${node_version}"
+  fi
+  if [ "${npm_version}" != "${required_npm}" ]; then
+    die 10 "npm-Version Drift: erwartet ${required_npm}, erhalten ${npm_version}"
+  fi
+  vlog "Node ${node_version}, npm ${npm_version}"
+
+  ensure_registry_line "${REPO_ROOT}/.npmrc" "repo-root"
+  ensure_registry_line "${REPO_ROOT}/${FE_DIR}/.npmrc" "${FE_DIR}"
+
+  local npm_config_registry
+  npm_config_registry="$(normalize_registry "$(npm config get registry 2>/dev/null || true)")"
+  if [ "${npm_config_registry}" != "${DEFAULT_REGISTRY}" ]; then
+    die 12 "npm config registry ist '${npm_config_registry}', erwartet ${DEFAULT_REGISTRY}"
+  fi
+
+  maybe_run_supply_guard
+
+  pushd "${REPO_ROOT}/${FE_DIR}" >/dev/null
   cleanup_env_runtime=0
   cleanup_env_runtime_path="$(pwd)/public/env.runtime.js"
   trap 'if [ "${cleanup_env_runtime}" = "1" ]; then rm -f "${cleanup_env_runtime_path}"; fi' EXIT
 
-  # 1) Toolchain prüfen
-  require_cmd node
-  require_cmd npm
-  local node_major npm_version npm_major
-  node_major="$(node --version | sed 's/^v//' | cut -d. -f1)"
-  npm_version="$(npm --version 2>/dev/null | tail -n1)"
-  npm_major="$(echo "${npm_version}" | cut -d. -f1)"
-  if ! [[ "${node_major}" =~ ^[0-9]+$ ]]; then
-    die 10 "Node-Version konnte nicht bestimmt werden (erhalten: ${node_major})"
-  fi
-  if ! [[ "${npm_major}" =~ ^[0-9]+$ ]]; then
-    die 10 "npm-Version konnte nicht bestimmt werden (erhalten: ${npm_version})"
-  fi
-  vlog "Node v${node_major}, npm v${npm_version}"
-  [ "${node_major}" -ge "${REQUIRED_NODE_MAJOR}" ] || die 10 "Node-Major zu alt (${node_major}) < ${REQUIRED_NODE_MAJOR}"
-  [ "${npm_major}" -ge "${REQUIRED_NPM_MAJOR}" ] || die 10 "NPM-Major zu alt (${npm_major}) < ${REQUIRED_NPM_MAJOR}"
-
-  # 2) Struktur/Manifeste
   [ -f package.json ] || die 16 "package.json fehlt"
+
   local pm="" lock_hint=""
   declare -a install_cmd=()
   declare -a run_cmd=()
@@ -140,11 +247,16 @@ main(){
     die 11 "Lockfile fehlt (package-lock.json|pnpm-lock.yaml|yarn.lock)"
   fi
 
-  if [ -f .npmrc ] && ! grep -Eqs '^registry=https://registry\.npmjs\.org/?' .npmrc; then
-    die 12 ".npmrc Registry ist nicht npmjs.org"
+  local lock_hash_before=""
+  if [ -n "${lock_hint}" ] && [ -f "${lock_hint}" ]; then
+    lock_hash_before="$(sha256_file "${lock_hint}")"
   fi
 
-  # 3) Installation (deterministisch)
+  vlog "npm cache verify ..."
+  run_to "${TIMEOUT_SEC}" npm cache verify >/dev/null 2>&1 || die 13 "npm cache verify fehlgeschlagen"
+  vlog "npm cache clean --force ..."
+  run_to "${TIMEOUT_SEC}" npm cache clean --force >/dev/null 2>&1 || die 13 "npm cache clean fehlgeschlagen"
+
   if [ "${SKIP_INSTALL}" = "0" ]; then
     rm -rf node_modules
     vlog "${pm} install (${lock_hint}) ..."
@@ -155,11 +267,17 @@ main(){
     [ -d node_modules ] || die 13 "node_modules fehlt (Installation übersprungen)"
   fi
 
-  # 4) Sanity: Kernabhängigkeiten vorhanden (heuristisch, optional)
+  if [ -n "${lock_hint}" ] && [ -f "${lock_hint}" ]; then
+    local lock_hash_after
+    lock_hash_after="$(sha256_file "${lock_hint}")"
+    if [ "${lock_hash_after}" != "${lock_hash_before}" ]; then
+      die 11 "${lock_hint} wurde verändert. Lockfile mit gepinnter Toolchain neu erzeugen."
+    fi
+  fi
+
   node -e "require.resolve('react')" >/dev/null 2>&1 || vlog "Hinweis: 'react' nicht auflösbar (optional)"
   node -e "require.resolve('vite')" >/dev/null 2>&1 || vlog "Hinweis: 'vite' nicht auflösbar (optional)"
 
-  # 5) Optional: Typecheck, wenn definiert
   if [ "${SKIP_TYPECHECK}" = "0" ] && has_package_script typecheck; then
     vlog "${pm} run typecheck ..."
     run_to "${TIMEOUT_SEC}" "${run_cmd[@]}" typecheck || die 13 "typecheck fehlgeschlagen"
@@ -167,7 +285,6 @@ main(){
     vlog "Typecheck-Skript vorhanden, aber übersprungen"
   fi
 
-  # 6) Runtime-Config prüfen (env.runtime.js)
   if [ -f public/env.runtime.js ]; then
     vlog "env.runtime.js vorhanden"
   else
@@ -183,7 +300,6 @@ main(){
     fi
   fi
 
-  # 7) Build
   if [ "${SKIP_BUILD}" = "0" ]; then
     if has_package_script build; then
       vlog "${pm} run build ..."

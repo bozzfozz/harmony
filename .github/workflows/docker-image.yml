@@ -20,6 +20,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   APP_PORT: "8080"
   SMOKE_PATH: "/live"
+  NPM_REGISTRY: https://registry.npmjs.org/
 
 jobs:
   build-publish:
@@ -28,6 +29,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          registry-url: ${{ env.NPM_REGISTRY }}
+
+      - name: Install pinned npm
+        env:
+          NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
+        run: npm install -g npm@$(cat frontend/.npm-version)
+
+      - name: Supply guard
+        env:
+          NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
+        run: bash scripts/dev/supply_guard.sh
+
+      - name: Frontend verify
+        env:
+          NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
+        run: |
+          set -euo pipefail
+          SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

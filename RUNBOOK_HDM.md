@@ -159,6 +159,14 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 - Das Guard-Skript `scripts/audit_wiring.py` blockiert Commits mit neuen `test_flow*`-Artefakten oder Referenzen. Analysieren Sie bei
   einem roten Gate die Job-Ausgabe und bereinigen Sie die gemeldeten Dateien.
 
+### Frontend-Lockfile neu erzeugen
+
+1. **Toolchain setzen:** `nvm use` (Version laut `.nvmrc`/`.node-version`), anschließend `npm install -g npm@$(cat frontend/.npm-version)`.
+2. **Workspace bereinigen:** `rm -rf frontend/node_modules` und optional das aktuelle `frontend/package-lock.json` sichern.
+3. **Lockfile schreiben:** `cd frontend && npm install --package-lock-only`.
+4. **Guard & Verify:** zurück im Repo-Root `bash scripts/dev/supply_guard.sh` ausführen und danach `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
+5. **Commit:** Wenn die Checks grün sind und nur das Lockfile drifft, Änderung committen und im PR erwähnen.
+
 ## Eskalation
 
 - **SRE-Rotation:** TODO (PagerDuty-Handle aktualisieren).

@@ -512,18 +512,23 @@ Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](f
 
 ### Voraussetzungen
 
-- Node.js 20.17.1 (LTS; via `nvm use` aus `.nvmrc` empfohlen)
-- npm 10.x (z. B. die mit Node 20.17.1 gebündelte Version)
+- Node.js 20.17.1 (LTS; via `nvm use` aus `.nvmrc` oder `.node-version` empfohlen)
+- npm 10.8.2 (`npm install -g npm@$(cat frontend/.npm-version)`)
 - pnpm optional, die Beispiele verwenden npm
 
-> Richte vor `npm ci` oder `npm run dev` unbedingt die Node- und npm-Versionen gemäß `.nvmrc` ein (`nvm use` oder `asdf install`),
-> damit Lockfiles und Builds reproduzierbar bleiben.
+> Setze Node und npm exakt auf die in `.nvmrc`/`.node-version` bzw. `frontend/.npm-version` vermerkten Versionen, bevor du Skripte ausführst. Abweichungen führen zu einem „Toolchain Drift“-Abbruch in `scripts/dev/fe_install_verify.sh` und in der CI.
 
 ### Installation & Entwicklung
 
 ```bash
+# aus dem Repo-Root: deterministische Installation + Build + Checks
+bash scripts/dev/fe_install_verify.sh
+
+# optional nur Installation (ohne Build/Typecheck)
+SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
+
+# danach wie gewohnt entwickeln
 cd frontend
-npm ci --no-audit --no-fund
 npm run dev
 ```
 
@@ -562,12 +567,12 @@ npm run typecheck # TypeScript Strict-Checks (`tsc --noEmit`)
 npm run build     # TypeScript + Vite Build
 ```
 
-> Tipp: `scripts/dev/dep_sync_js.sh` führt dieselben Lint- und Dependency-Prüfungen aus wie die Merge-Gates (`npm ci`, ESLint, Depcheck). Fehler dort entsprechen den manuellen Einzelbefehlen.
+> Tipp: `scripts/dev/dep_sync_js.sh` verkabelt `supply_guard` + `fe_install_verify` (inkl. Toolchain-/Registry-Checks) und führt anschließend ESLint sowie `depcheck` aus. Fehlschläge entsprechen exakt den Merge-Gates.
 
 ## Lokaler Qualitäts-Check (ohne CI)
 
 - **Schnellstart:** `make doctor && make all`
-- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, Frontend-Installation (`fe-install`) und -Build (`fe-build`) sowie den Smoke-Test aus.
+- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, den Supply-Guard und `fe-verify` (inkl. deterministischer Installation + Build) sowie den Smoke-Test aus.
 - **Hooks:** `pre-commit install && pre-commit run -a` sowie `pre-commit install --hook-type pre-push` stellen sicher, dass lokale Hooks aktiv sind.
 - **Runbook:** Details und Troubleshooting findest du in [`docs/operations/local-workflow.md`](docs/operations/local-workflow.md).
 
@@ -1173,31 +1178,30 @@ scripts/dev/test_py.sh
 
 Die Tests mocken externe Dienste und laufen vollständig lokal. Setze für reproduzierbare Läufe `HARMONY_DISABLE_WORKERS=1`, damit keine Hintergrund-Worker starten.
 
-### Deterministische npm-Installs
+### Deterministische npm-Installs & Lockfile-Neuaufbau
 
-Nutze `npm ci --no-audit --no-fund`, um eine saubere, reproduzierbare Installation sicherzustellen. Die folgenden Schritte helfen bei hartnäckigen Integritätsfehlern:
+Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), verifiziert das Cache-State, führt `npm cache verify/clean`, erzwingt die Registry `https://registry.npmjs.org/`, startet `npm ci --no-audit --no-fund` und bricht ab, sobald das Lockfile verändert würde.
 
-- Verwende die Node.js-Version aus `.nvmrc` (aktuell `20.17.1`).
-- Entferne vor dem Install vorhandene `node_modules`-Verzeichnisse und verwende einen frischen Cache (`NPM_CONFIG_CACHE="$(mktemp -d)"`).
-- Erzwinge `prefer-online`, erhöhte Fetch-Retries und großzügige Timeouts.
-- Reinige den Cache zwischen Wiederholungen mit `npm cache clean --force`.
-
-**Lokaler Reproduktions-Flow:**
+**Standard-Flow (lokal & CI):**
 
 ```bash
-cd frontend
-rm -rf node_modules
-export NPM_CONFIG_CACHE="$(mktemp -d)"
-npm cache clean --force
-npm config set prefer-online true
-npm config set fetch-retries 5
-npm config set fetch-retry-maxtimeout 600000
-npm config set fetch-timeout 600000
-npm config set registry https://registry.npmjs.org/
-npm ci --no-audit --no-fund
+bash scripts/dev/supply_guard.sh
+SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh
 ```
 
-Falls dennoch Integritätskonflikte auftreten, regeneriere den Lockfile nach einem Backup mit derselben npm-Version via `npm install --package-lock-only` und committe die aktualisierte Datei.
+**Nur Installation ohne Build/Typecheck:**
+
+```bash
+SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
+```
+
+**Lockfile sauber neu erzeugen:**
+
+1. Stelle Node/NPM auf die gepinnte Version ein (`nvm use`, anschließend `npm install -g npm@$(cat frontend/.npm-version)`).
+2. Lösche `frontend/node_modules` und sichere das bestehende `frontend/package-lock.json` bei Bedarf.
+3. Führe im Ordner `frontend/` ein `npm install --package-lock-only` aus.
+4. Verifiziere das Ergebnis: `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
+5. Prüfe das Diff und committe das neue Lockfile.
 
 ## Lizenz
 
