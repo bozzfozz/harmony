@@ -424,7 +424,7 @@ Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusi
 
 Optionale Variablen wie `UMASK`, `PUID` und `PGID` werden beim Start protokolliert, beeinflussen die Guard-Entscheidung jedoch nicht.
 
-Self-Checks lassen sich vor Deployments mit `python -m app.ops.selfcheck --assert-startup` lokal ausführen. Die Health-API spiegelt die Ergebnisse: `GET /api/health/live` liefert einen schlanken Liveness-Ping, `GET /api/health/ready?verbose=1` listet sämtliche Checks samt Status auf.
+Self-Checks lassen sich vor Deployments mit `python -m app.ops.selfcheck --assert-startup` lokal ausführen. Die Health-API spiegelt die Ergebnisse: `GET /live` liefert einen schlanken Liveness-Ping (`/api/health/live` bleibt als Alias bestehen), `GET /api/health/ready?verbose=1` listet sämtliche Checks samt Status auf.
 
 ## Artist Watchlist
 
@@ -536,7 +536,7 @@ npm run dev
 - `PUBLIC_FEATURE_FLAGS` muss ein JSON-Objekt sein. Ungültige oder leere Werte fallen auf `{}` zurück und werden mit einem
   Hinweis im Log ersetzt.
 
-Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_BASE_URL` (Host, z. B. `http://127.0.0.1:8000`) und optional `VITE_API_BASE_PATH` (Default: kein Präfix) angebunden werden.
+Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_BASE_URL` (Host, z. B. `http://127.0.0.1:8080`) und optional `VITE_API_BASE_PATH` (Default: kein Präfix) angebunden werden.
 
 ### API-Key-Authentifizierung im Frontend
 
@@ -578,7 +578,7 @@ npm run build     # TypeScript + Vite Build
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
 - **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
 - **Build:** `scripts/dev/fe_install_verify.sh` prüft Toolchain & Lockfile, installiert deterministisch und baut das Frontend (Make-Target `fe-verify`). TypeScript- oder Vite-Fehler erscheinen direkt im Konsolen-Log.
-- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt `/api/health/live`. Prüfe die Logdatei bei Fehlschlägen.
+- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Passe `SMOKE_PATH` bei Bedarf an und prüfe die Logdatei bei Fehlschlägen.
 
 ## Datenbank-Migrationen
 
@@ -641,7 +641,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8000` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
+Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8080` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
 
 ### Docker
 
@@ -958,7 +958,7 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 
 | Variable | Typ | Default | Beschreibung | Sicherheit |
 | --- | --- | --- | --- | --- |
-| `VITE_API_BASE_URL` | string | `http://127.0.0.1:8000` | Basis-URL des Backends ohne Pfadanteil. | — |
+| `VITE_API_BASE_URL` | string | `http://127.0.0.1:8080` | Basis-URL des Backends ohne Pfadanteil. | — |
 | `VITE_API_BASE_PATH` | string | _(leer)_ | Optionales Präfix für alle REST-Aufrufe (z. B. `/api`). | — |
 | `VITE_API_TIMEOUT_MS` | int | `8000` | Timeout (in Millisekunden) für HTTP-Requests des Frontends. | — |
 | `VITE_USE_OPENAPI_CLIENT` | bool | `false` | Aktiviert den optionalen OpenAPI-Client (falls generiert). | — |
@@ -975,7 +975,7 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 HARMONY_API_KEYS=local-dev-key
 FEATURE_REQUIRE_AUTH=false
 WATCHLIST_MAX_CONCURRENCY=3
-VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8080
 VITE_AUTH_HEADER_MODE=x-api-key
 ```
 

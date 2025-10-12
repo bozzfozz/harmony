@@ -15,7 +15,7 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make fe-verify`    | `scripts/dev/fe_install_verify.sh` | Prüft Node/npm-Versionen, Lockfiles, `env.runtime.js` sowie deterministische Installation und Build.
 | `make fe-install`   | `scripts/dev/fe_install_verify.sh` | Führt eine deterministische Installation (`npm ci`/`pnpm install`/`yarn install`) ohne Build & Typecheck aus.
 | `make fe-build`     | `npm run build` (Frontend)         | Baut die SPA und ruft vorab automatisch `make fe-install` auf.
-| `make smoke`        | `scripts/dev/smoke_unified.sh` | Startet `uvicorn app.main:app`, pingt `/api/health/live` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft.
+| `make smoke`        | `scripts/dev/smoke_unified.sh` | Startet `uvicorn app.main:app`, pingt standardmäßig `/live` (Alias für `/api/health/live`) und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft.
 | `make all`          | —                              | Kombiniert `fmt lint dep-sync be-verify fe-install fe-build smoke` in fester Reihenfolge.
 
 ## Ablauf vor jedem Merge
