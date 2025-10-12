@@ -83,6 +83,12 @@ Reihenfolge ist strikt:
   - `.npmrc` im Repo-Root und in `frontend/` pinnt exklusiv `https://registry.npmjs.org/`. Zusätzliche Registries oder Mirrors sind untersagt.
   - Frontend-Installationen erfolgen ausschließlich via `scripts/dev/supply_guard.sh` + `scripts/dev/fe_install_verify.sh`. `SKIP_INSTALL=1` ist verboten (auch in Dockerfiles, Workflows, Makefile-Zielen).
   - Node.js **20.17.1** ist für alle Pfade (lokal, Docker, CI) verpflichtend. `scripts/dev/supply_guard.sh` kennt `STRICT` (Default in CI/Docker) und `WARN` (nur lokal via `TOOLCHAIN_STRICT=false` oder `SUPPLY_MODE=WARN`). WARN-Modus liefert Exit 0, loggt aber Node-/npm-Drift, `npm ci --dry-run`-Abweichungen sowie Python-Hash-Drift mit `WARN` und fordert Follow-up ein. Registry-403 (`E403`/HTTP 403) wird im WARN-Modus als Warnung klassifiziert (Install/Build-Pfad läuft kontrolliert weiter), im STRICT-Modus bleibt er blockierend. Off-Registry-Befunde bleiben in allen Modi blockierend. Vor Commit/Push müssen sämtliche WARNs bereinigt werden. CI/Workflows dürfen keinen WARN-Modus aktivieren. `scripts/dev/fe_install_verify.sh` respektiert denselben Modus; in CI und Docker wird STRICT erzwungen. Feinsteuerung ist über `SUPPLY_FAIL_NODE_DRIFT`, `SUPPLY_FAIL_NPM_DRIFT`, `SUPPLY_FAIL_NPM_INTEGRITY` und `SUPPLY_FAIL_PY_HASH` möglich (Default: CI `1`, lokaler WARN-Modus `0`; Off-Registry bleibt `1`).
+- **Auto-Repair First (verbindlich)**
+  - Reihenfolge aller Reparaturversuche: **SCAN → DECIDE → FIX → VERIFY → RE-RUN**, maximal 3 Iterationen pro Kategorie. Jeder Schritt wird im Reason-Trace dokumentiert.
+  - Lokal (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`) gilt: niemals mit Exit≠0 abbrechen. Stattdessen Fix-Versuch oder WARN-Summary mit nächstbestem Workaround. Einzige Blocker bleiben Off-Registry-Funde und Sicherheitsrisiken Klasse P0.
+  - In CI/PR-Branches darf Codex `ci(auto-fix): …`-Commits pushen. Nach jedem Fix-Commit Pipeline erneut anstoßen. Auf `main` werden keine Auto-Commits geschrieben, stattdessen WARN-Report.
+  - Reason-Trace-Protokoll ist Pflicht: jedes Ereignis mit `STEP`, `WHY`, `COMMAND`, `RESULT`, `NEXT`. Keine Interna, nur faktenbasierte Entscheidungen, Secrets sind zu maskieren.
+  - `AUTO_FIX_MAX_ITERS=3` ist Standard. `SUPPLY_MODE`, `TOOLCHAIN_STRICT` und Stage-spezifische Overrides steuern STRICT vs WARN.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
 ## 5. Prompt- & Agent-Spezifika
