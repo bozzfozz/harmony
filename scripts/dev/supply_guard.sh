@@ -167,6 +167,37 @@ report_warnable(){
   fi
 }
 
+detect_registry_forbidden(){
+  local log_file="$1"
+  if [ ! -f "${log_file}" ]; then
+    return 1
+  fi
+  if grep -Eqi '(E403|code E403|status[^0-9]*403|403 Forbidden)' "${log_file}"; then
+    return 0
+  fi
+  return 1
+}
+
+report_registry_forbidden(){
+  local source="$1"
+  local log_file="$2"
+  local hint="Prüfe Proxy/Firewall, Tokens und führe \"npm ping\" erneut aus"
+  local sample="-"
+  if [ -f "${log_file}" ]; then
+    sample="$(grep -Eio 'E403[^\\r\\n]*|403[^\\r\\n]*Forbidden' "${log_file}" | head -n1 | tr -d '\r' | sed 's/^\s\+//' | sed 's/\s\+$//' )"
+    if [ -z "${sample}" ]; then
+      sample="HTTP 403 von Registry"
+    fi
+  fi
+  local details="${source}: Registry-403 erkannt (${sample})"
+
+  if [ "${MODE}" = "WARN" ] && [ "${IS_CI}" -eq 0 ]; then
+    report_warn "REGISTRY_FORBIDDEN" "${details} – WARN-Modus fährt fort" "${hint}"
+  else
+    report_blocking "REGISTRY_FORBIDDEN" "${details}" "${hint}"
+  fi
+}
+
 run_with_timeout(){
   local secs="$1"
   shift
@@ -323,6 +354,21 @@ check_repo_registry(){
   fi
 }
 
+check_install_environment(){
+  local current_node_env
+  current_node_env="$(lower "${NODE_ENV:-}")"
+  if [ "${current_node_env}" = "production" ]; then
+    report_error "NODE_ENV" "NODE_ENV=production erkannt – npm install würde devDependencies auslassen" "Entferne NODE_ENV vor supply_guard/Installationen und setze es erst in der Runtime-Stage"
+  fi
+
+  local flag
+  for flag in NPM_CONFIG_PRODUCTION npm_config_production; do
+    if is_truthy "${!flag:-}"; then
+      report_error "NPM_CONFIG_PRODUCTION" "${flag}=true erkannt – devDependencies würden pruned" "Setze ${flag}=false für Builder/CI; Runtime darf NODE_ENV=production setzen"
+    fi
+  done
+}
+
 check_node(){
   if [ ! -d frontend ]; then
     report_info "NODE" "frontend/ nicht vorhanden – überspringe Node-Prüfungen" "-"
@@ -380,16 +426,23 @@ check_node(){
   fi
 
   if [ -f package-lock.json ]; then
+    local npm_ci_log
+    npm_ci_log="$(mktemp -t supply-guard-npmci-XXXX.log)"
     set +e
-    run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" npm ci --dry-run --no-audit --no-fund >/dev/null 2>&1
+    run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" npm ci --dry-run --no-audit --no-fund >"${npm_ci_log}" 2>&1
     local status=$?
     set -e
     if [ "${status}" -eq 124 ]; then
       report_error "NPM_INTEGRITY" "npm ci --dry-run Timeout nach ${SUPPLY_GUARD_TIMEOUT_SEC}s" "Prüfe auf Blocker bei npm ci --dry-run"
     elif [ "${status}" -ne 0 ]; then
-      local fix="npm ci && npm install --package-lock-only"
-      report_warnable "npm_integrity" "npm ci --dry-run meldet Resolver/Integrity-Fehler (Exit ${status})" "${fix}"
+      if detect_registry_forbidden "${npm_ci_log}"; then
+        report_registry_forbidden "npm ci --dry-run" "${npm_ci_log}"
+      else
+        local fix="npm ci && npm install --package-lock-only"
+        report_warnable "npm_integrity" "npm ci --dry-run meldet Resolver/Integrity-Fehler (Exit ${status})" "${fix}"
+      fi
     fi
+    rm -f "${npm_ci_log}"
   fi
 
   popd >/dev/null || true
@@ -647,6 +700,7 @@ main(){
 
   report_info "INIT" "Start SUPPLY_GUARD_TIMEOUT_SEC=${SUPPLY_GUARD_TIMEOUT_SEC} verbose=${SUPPLY_GUARD_VERBOSE}" "-"
 
+  check_install_environment
   load_toolchain_manifest
   check_repo_registry
   check_node

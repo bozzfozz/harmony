@@ -2,7 +2,8 @@ FROM node:20.17.1-alpine AS frontend-builder
 
 ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
     npm_config_registry=https://registry.npmjs.org/ \
-    NODE_ENV=production \
+    NPM_CONFIG_PRODUCTION=false \
+    npm_config_production=false \
     TOOLCHAIN_STRICT=true \
     SUPPLY_MODE=STRICT
 
@@ -25,7 +26,8 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_CREATE=false \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    NODE_ENV=production
 
 WORKDIR /app
 

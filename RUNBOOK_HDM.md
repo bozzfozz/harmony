@@ -161,10 +161,20 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 ### Frontend-Lockfile neu erzeugen
 
-1. **Toolchain setzen:** `nvm install 20.17.1 && nvm use` (laut `.nvmrc`/`.node-version`) und danach `npm install -g npm@$(cat frontend/.npm-version)`. Im STRICT-Modus (CI/Docker Default) brechen `scripts/dev/supply_guard.sh` und `scripts/dev/fe_install_verify.sh` bei Drift sofort ab; lokal kannst du bei Bedarf `TOOLCHAIN_STRICT=false`/`SUPPLY_MODE=WARN` setzen, dann werden Abweichungen als `WARN` geloggt und müssen vor Commit behoben werden.
+1. **Toolchain setzen:** `nvm install 20.17.1 && nvm use` (laut `.nvmrc`/`.node-version`) und danach `npm install -g npm@$(cat frontend/.npm-version)`. Im STRICT-Modus (CI/Docker Default) brechen `scripts/dev/supply_guard.sh` und `scripts/dev/fe_install_verify.sh` bei Drift oder Registry-403 sofort ab; lokal kannst du bei Bedarf `TOOLCHAIN_STRICT=false`/`SUPPLY_MODE=WARN` setzen, dann werden Abweichungen als `WARN` geloggt und müssen vor Commit behoben werden.
 2. **Workspace bereinigen:** `rm -rf frontend/node_modules` und optional das aktuelle `frontend/package-lock.json` sichern.
 3. **Lockfile schreiben:** `cd frontend && npm install --package-lock-only`.
 4. **Guard & Verify:** zurück im Repo-Root `bash scripts/dev/supply_guard.sh` ausführen und danach `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
+
+   - WARN-Modus (nur lokal) kennzeichnet Registry-403/Netzfehler als Warnung. Bestehende `node_modules/` werden – falls Lockfile & `package.json` unverändert sind – weitergenutzt, Build-Schritte laufen nur, wenn DevDependencies (`vite`, `typescript`) verfügbar bleiben.
+   - STRICT-Modus (CI/Docker) bricht bei Registry-403/Netzfehlern sofort mit Exit≠0 und `REGISTRY_FORBIDDEN` ab.
+
+5. **Registry-Störung beheben:**
+
+   - `npm ping --registry https://registry.npmjs.org/`
+   - Proxy/Auth-Overrides zurücksetzen (`npm config delete //registry.npmjs.org/:_authToken`)
+   - Cache leeren (`npm cache clean --force`)
+   - Skripte erneut ausführen; bei persistenter Sperre Netz-/Firewall-Regeln prüfen.
 5. **Commit:** Wenn die Checks grün sind und nur das Lockfile drifft, Änderung committen und im PR erwähnen.
 
 ## Eskalation

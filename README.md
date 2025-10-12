@@ -14,11 +14,12 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 
 ## Toolchain
 
-- **Node.js:** `20.17.1` (gepinnt in [`.nvmrc`](.nvmrc) und [`.node-version`](.node-version)). Installiere die Version einmalig via `nvm install 20.17.1` und aktiviere sie mit `nvm use`.
+- **Node.js:** `20.17.1` (Single-Source in [`.nvmrc`](.nvmrc); [`.node-version`](.node-version), Dockerfile und CI werden daraus gespiegelt). Installiere die Version einmalig via `nvm install 20.17.1` und aktiviere sie mit `nvm use`. Bei Patchwechsel `.nvmrc` aktualisieren, anschließend `.node-version`, Docker-Basis und Workflows spiegeln.
 - **npm:** Version aus [`frontend/.npm-version`](frontend/.npm-version) (derzeit `10.8.2`). Aktualisiere sie mit `npm install -g npm@$(cat frontend/.npm-version)`.
 - **Guards:** Vor jeder Frontend-Installation oder jedem Build sind `bash scripts/dev/supply_guard.sh` und danach `SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh` auszuführen. Der Supply Guard liefert strukturierte `INFO/WARN/ERROR`-Logs plus Summary; WARNs markieren Node-/npm-Drift, `npm ci --dry-run`-Integritätsabweichungen oder Python-Hash-Drift und nennen direkte Fix-Hinweise. Off-Registry-Treffer bleiben stets blockierend.
 - **Override nur lokal:** `STRICT` ist der Standardmodus (CI, Docker, PRs). Lokal kannst du per `TOOLCHAIN_STRICT=false` oder `SUPPLY_MODE=WARN` in den WARN-Modus wechseln: WARNs werden geloggt, Exit-Code bleibt 0. Vor jedem Commit/Push müssen alle WARNs bereinigt werden. CI/Docker dürfen keinen WARN-Modus nutzen; dort brechen Drift- oder Integritätsbefunde sofort ab.
 - **Feingranulare Failover:** Optional lassen sich Checks über `SUPPLY_FAIL_NODE_DRIFT`, `SUPPLY_FAIL_NPM_DRIFT`, `SUPPLY_FAIL_NPM_INTEGRITY` und `SUPPLY_FAIL_PY_HASH` schärfen bzw. lockern (`0|1`). In CI sind alle Flags `1`, im lokalen WARN-Modus standardmäßig `0` (Off-Registry bleibt immer blockierend).
+- **Frontend-Build-Umgebung:** Builder behalten `NODE_ENV` während Installation/Build auf dem Default (kein `production`); `NODE_ENV=production` wird ausschließlich in der Runtime-Stage gesetzt. Falls individuelle Pipelines zwingend `NODE_ENV=production` benötigen, muss parallel `NPM_CONFIG_PRODUCTION=false` exportiert werden, damit `devDependencies` (z. B. Vite/TypeScript) erhalten bleiben.
 
 ## Features
 
@@ -1188,7 +1189,13 @@ Die Tests mocken externe Dienste und laufen vollständig lokal. Setze für repro
 
 ### Deterministische npm-Installs & Lockfile-Neuaufbau
 
-Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), verifiziert das Cache-State, führt `npm cache verify/clean`, erzwingt die Registry `https://registry.npmjs.org/`, startet `npm ci --no-audit --no-fund` und bricht ab, sobald das Lockfile verändert würde.
+Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), erzwingt die Registry `https://registry.npmjs.org/`, führt vor der Installation einen `npm ping`-Health-Check aus und stoppt deterministisch, sobald Lockfiles verändert würden. Registry-403 (`E403`) und Netzwerkstörungen werden im STRICT-Modus sofort blockierend behandelt; im WARN-Modus (nur lokal) wird – sofern passende `node_modules/` vorhanden sind – die Installation übersprungen, die vorhandenen Abhängigkeiten weiterverwendet und der Build-Pfad transparent protokolliert.
+
+**Summary-Ausgabe (`fe_install_verify`):**
+
+- Strukturierte Zeilen `LEVEL | CHECK | DETAILS | SUGGESTED_FIX`
+- Schlussblock `SUMMARY` mit `MODE`, `REGISTRY`, `REGISTRY_URL`, `INSTALL`, `BUILD`, `FINAL_EXIT`
+- WARN-Modus liefert Exit-Code `0`, dokumentiert aber Drift- und Registry-Probleme inklusive Handlungsempfehlungen.
 
 **Standard-Flow (lokal & CI):**
 
@@ -1210,6 +1217,14 @@ SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_ver
 3. Führe im Ordner `frontend/` ein `npm install --package-lock-only` aus.
 4. Verifiziere das Ergebnis: `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
 5. Prüfe das Diff und committe das neue Lockfile.
+
+#### Registry-Störungen lokal beheben
+
+1. Prüfe die Konnektivität: `npm ping --registry https://registry.npmjs.org/`.
+2. Entferne ggf. veraltete Auth-Tokens oder Proxy-Overrides: `npm config delete //registry.npmjs.org/:_authToken`.
+3. Räume den lokalen Cache auf: `npm cache clean --force`.
+4. Wiederhole `scripts/dev/supply_guard.sh` sowie `scripts/dev/fe_install_verify.sh` im WARN-Modus (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`).
+5. Bleiben 403/Netzfehler bestehen, prüfe Firewall/Proxy-Policies und versuche es erneut mit frischem Netzwerk.
 
 ## Lizenz
 
