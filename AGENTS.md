@@ -258,6 +258,70 @@ Reihenfolge
 2. Volle Suite
 3. Finale Routine (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`)
 
+### §14e Supply-Chain & Build-Determinismus (ökosystem-neutral)
+
+Grundsätze (MUSS)
+1. Lockfile-Pflicht: committe Lockfiles des jeweiligen Ökosystems. Node: package-lock.json|pnpm-lock.yaml|yarn.lock. Python: poetry.lock oder requirements.txt mit Hashes (pip-tools). Go: go.sum. Rust: Cargo.lock. Java/Kotlin: Gradle-Lockfiles oder Maven-Dependency-Locking. Ruby: Gemfile.lock. PHP: composer.lock.
+2. Versionen pinnen: keine offenen Ranges, Toolchain-Versionen fixieren und versionieren (.tool-versions, .node-version, requires-python, engines).
+3. Registry/Quellen pinnen: nur freigegebene Registries verwenden, keine Misch-Registries ohne Dokumentation.
+4. Hash/Checksum verifizieren: Node SRI via Lockfile, Python --require-hashes oder Poetry-Lock, Go „go mod verify“, Docker-Basisimages per Digest.
+5. Deterministische Builds: identische Toolchain-Major erzeugt das Lockfile. Keine impliziten globalen Zustände.
+6. Artefakt-Policy: keine Build-Artefakte committen. Nur Manifeste/Locks.
+7. Wiring & Removal: Abhängigkeitsänderungen erfordern konsistente Aufrufer/Exporte und das Entfernen ungenutzter Pakete.
+
+Ökosystem-Profile (SOLLEN)
+Node/JS/TS: Registry https://registry.npmjs.org/, „npm ci“, Lockfile unter definierter NPM-Major erzeugen, optional „overrides“.
+Python: Poetry-Lock oder pip-tools mit --generate-hashes; Install per --require-hashes oder Poetry strikt; constraints.txt für transitive Pins.
+Go: go mod tidy + go mod verify; GOSUMDB/GOPROXY definiert.
+Rust: Cargo.lock verpflichtend; keine Stern-Versionen; optional cargo vendor.
+Java/Kotlin: Gradle Dependency-Lockfiles oder Maven exakte Versionen; Checksummen aktiv.
+Ruby: Gemfile.lock; bundle config frozen true.
+PHP: composer.lock; composer install --no-dev --prefer-dist.
+Docker: FROM mit Digest, keine latest; Health-/Smoke-Check.
+OS-Pakete: Snapshots, signierte Keys, Versionen fixieren.
+CDN/Assets: HTML-SRI oder lokal bundlen.
+Git-Abhängigkeiten: auf Commit-Hash pinnen, keine Branch-Refs.
+
+Lokale Gates (ohne CI, MUSS)
+1. „Supply-Guard“ vor Doku/CHANGELOG/BACKUP ausführen: make supply-guard.
+2. Lockfile-Diff nach Guard auflösen, dann erneut ausführen bis Exit 0.
+3. PR-Body enthält Wiring-Report und Removal-Report zu Manifesten/Locks.
+
+Standard-Exitcodes
+0 = OK
+2 = Warnung (nicht-blockierend, z. B. Docker-Basis ohne Digest)
+3 = Drift (Lockfile/Manifest widersprüchlich)
+4 = Integrity-Fehler (Hash/SRI/Verify fehlgeschlagen oder Lockfile fehlt)
+5 = Toolchain fehlt/inkompatibel (falsche Major, fehlendes Werkzeug)
+
+Umgebungsvariablen
+SKIP_SUPPLY_GUARD=1  → Guard überspringen
+SUPPLY_GUARD_VERBOSE=1  → ausführliche Ausgabe
+SUPPLY_GUARD_TIMEOUT_SEC=120  → Zeitlimit pro Ökosystem-Check
+
+Zeitlimits (Richtwerte)
+Pro Ökosystem-Check 120 s. Bei Timeout → Exit 3 (Drift) mit Hinweis.
+
+Warnung-vs.-Fail-Matrix (Auszug)
+Docker FROM ohne Digest → 2
+Misch-Registries erkannt → 3
+Lockfile fehlt → 4
+Integrity/Verify-Fehler → 4
+Toolchain-Major abweichend → 5
+
+Betriebssystem-Hinweis
+Offiziell unterstützt: Linux, macOS. Windows via WSL.
+
+Offline-Strategie (optional)
+Vendor/Cache-Schritte dürfen dokumentiert werden, sind nicht Pflicht.
+
+Glossar
+Lockfile = deterministische Auflösung
+Digest = fester Image-Hash
+Registry = Paket-Quelle
+SRI = Subresource Integrity
+Determinismus = gleicher Input erzeugt gleiche Outputs
+
 ---
 
 ## 15. Prohibited

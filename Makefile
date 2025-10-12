@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 
 .PHONY: fmt lint test dep-sync fe-build smoke doctor all
+.PHONY: supply-guard supply-guard-verbose
 
 fmt:
 	./scripts/dev/fmt.sh
@@ -25,3 +26,9 @@ doctor:
 	./scripts/dev/doctor.sh
 
 all: fmt lint dep-sync test fe-build smoke
+
+supply-guard:
+	@bash scripts/dev/supply_guard.sh
+
+supply-guard-verbose:
+	@SUPPLY_GUARD_VERBOSE=1 bash scripts/dev/supply_guard.sh
