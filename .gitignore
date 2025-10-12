@@ -9,11 +9,6 @@ data/*.db
 dist/
 build/
 node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/build/
-frontend/.vite/
-frontend/public/env.runtime.js
 coverage*/
 reports/*
 !reports/auto_repair_summary.md

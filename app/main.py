@@ -147,7 +147,7 @@ _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
 
 _FRONTEND_DIST_ENV_VAR = "FRONTEND_DIST"
-_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend_dist"
+_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "static"
 _frontend_dist_override = get_env(_FRONTEND_DIST_ENV_VAR)
 if _frontend_dist_override:
     FRONTEND_DIST = Path(_frontend_dist_override).expanduser().resolve()
@@ -682,7 +682,21 @@ app_oauth_callback.state.oauth_transaction_store = _oauth_store
 _previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
 if _FRONTEND_INDEX_PATH.is_file():
     logger.info("Serving frontend assets from %s", FRONTEND_DIST)
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount(
+        "/static",
+        StaticFiles(directory=FRONTEND_DIST, html=False),
+        name="frontend-static",
+    )
+
+    async def _frontend_index() -> Response:
+        return FileResponse(_FRONTEND_INDEX_PATH)
+
+    app.add_api_route(
+        "/",
+        _frontend_index,
+        include_in_schema=False,
+        methods=["GET"],
+    )
 
     async def _frontend_fallback(request: Request, exc: StarletteHTTPException) -> Response:
         path = request.url.path

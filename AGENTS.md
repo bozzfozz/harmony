@@ -79,10 +79,10 @@ Reihenfolge ist strikt:
   - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind **nicht erlaubt**.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Frontend Supply-Chain (verbindlich)**
-  - `.nvmrc` und `.node-version` müssen identische Node-Versionen definieren; `frontend/.npm-version` ist die einzige zulässige npm-Version.
-  - `.npmrc` im Repo-Root und in `frontend/` pinnt exklusiv `https://registry.npmjs.org/`. Zusätzliche Registries oder Mirrors sind untersagt.
-  - Frontend-Installationen erfolgen ausschließlich via `scripts/dev/supply_guard.sh` + `scripts/dev/fe_install_verify.sh`. `SKIP_INSTALL=1` ist verboten (auch in Dockerfiles, Workflows, Makefile-Zielen).
-  - Node.js **20.17.1** ist für alle Pfade (lokal, Docker, CI) verpflichtend. `scripts/dev/supply_guard.sh` kennt `STRICT` (Default in CI/Docker) und `WARN` (nur lokal via `TOOLCHAIN_STRICT=false` oder `SUPPLY_MODE=WARN`). WARN-Modus liefert Exit 0, loggt aber Node-/npm-Drift, `npm ci --dry-run`-Abweichungen sowie Python-Hash-Drift mit `WARN` und fordert Follow-up ein. Registry-403 (`E403`/HTTP 403) wird im WARN-Modus als Warnung klassifiziert (Install/Build-Pfad läuft kontrolliert weiter), im STRICT-Modus bleibt er blockierend. Off-Registry-Befunde bleiben in allen Modi blockierend. Vor Commit/Push müssen sämtliche WARNs bereinigt werden. CI/Workflows dürfen keinen WARN-Modus aktivieren. `scripts/dev/fe_install_verify.sh` respektiert denselben Modus; in CI und Docker wird STRICT erzwungen. Feinsteuerung ist über `SUPPLY_FAIL_NODE_DRIFT`, `SUPPLY_FAIL_NPM_DRIFT`, `SUPPLY_FAIL_NPM_INTEGRITY` und `SUPPLY_FAIL_PY_HASH` möglich (Default: CI `1`, lokaler WARN-Modus `0`; Off-Registry bleibt `1`).
+  - Das Frontend besteht aus statischen ES-Modulen unter `frontend/static/` und nutzt ausschließlich Import-Maps.
+  - `frontend/importmap.json` und `frontend/static/importmap.json` enthalten ausschließlich HTTPS-URLs mit festen Versions-Pins (`@x.y.z`). `latest`, relative CDN-Pfade oder unversionierte Bundler sind verboten.
+  - `scripts/dev/supply_guard.sh` prüft Import-Maps und stellt sicher, dass keine Node-/npm-/pnpm-Artefakte eingecheckt sind. Vor jedem Commit muss der Guard grün laufen.
+  - Offline-Betrieb erfolgt über `scripts/dev/vendor_frontend.sh`; das Skript darf committed werden, erzeugte Artefakte (`frontend/static/vendor/*`) nur wenn ausdrücklich benötigt.
 - **Auto-Repair First (verbindlich)**
   - Reihenfolge aller Reparaturversuche: **SCAN → DECIDE → FIX → VERIFY → RE-RUN**, maximal 3 Iterationen pro Kategorie. Jeder Schritt wird im Reason-Trace dokumentiert.
   - Lokal (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`) gilt: niemals mit Exit≠0 abbrechen. Stattdessen Fix-Versuch oder WARN-Summary mit nächstbestem Workaround. Einzige Blocker bleiben Off-Registry-Funde und Sicherheitsrisiken Klasse P0.
@@ -121,7 +121,7 @@ Ohne explizites Flag gilt **Write Mode**.
 
 ## 6. Daten, Geheimnisse, Compliance
 - **Secrets**: Niemals im Code/Commit; Secret-Manager nutzen; Rotation dokumentieren.
-- **Security-Scanner**: Python `pip-audit`; JS/TS `npm audit` o. Ä.; Findings adressieren.
+- **Security-Scanner**: Python `pip-audit`; für das buildlose Frontend Import-Map-Quellen manuell auf CVEs prüfen.
 - **Datenschutz**: Datenminimierung, Zweckbindung, Löschkonzepte.
 - **Lizenzen**: Drittcode nur mit kompatibler Lizenz; bis zur Wahl: Datei-Header „Copyright <year> Contributors“.
 
@@ -272,8 +272,8 @@ Reihenfolge
 ### §14e Supply-Chain & Build-Determinismus (ökosystem-neutral)
 
 Grundsätze (MUSS)
-1. Lockfile-Pflicht: committe Lockfiles des jeweiligen Ökosystems. Node: package-lock.json|pnpm-lock.yaml|yarn.lock. Python: poetry.lock oder requirements.txt mit Hashes (pip-tools). Go: go.sum. Rust: Cargo.lock. Java/Kotlin: Gradle-Lockfiles oder Maven-Dependency-Locking. Ruby: Gemfile.lock. PHP: composer.lock.
-2. Versionen pinnen: keine offenen Ranges, Toolchain-Versionen fixieren und versionieren (.tool-versions, .node-version, requires-python, engines).
+1. Lockfile-Pflicht: committe Lockfiles des jeweiligen Ökosystems. Buildloses Frontend nutzt keine Paketmanager-Lockfiles; Python: poetry.lock oder requirements.txt mit Hashes (pip-tools). Go: go.sum. Rust: Cargo.lock. Java/Kotlin: Gradle-Lockfiles oder Maven-Dependency-Locking. Ruby: Gemfile.lock. PHP: composer.lock.
+2. Versionen pinnen: keine offenen Ranges, Toolchain-Versionen fixieren und versionieren (.tool-versions, requires-python, engines).
 3. Registry/Quellen pinnen: nur freigegebene Registries verwenden, keine Misch-Registries ohne Dokumentation.
 4. Hash/Checksum verifizieren: Node SRI via Lockfile, Python --require-hashes oder Poetry-Lock, Go „go mod verify“, Docker-Basisimages per Digest.
 5. Deterministische Builds: identische Toolchain-Major erzeugt das Lockfile. Keine impliziten globalen Zustände.
@@ -281,7 +281,7 @@ Grundsätze (MUSS)
 7. Wiring & Removal: Abhängigkeitsänderungen erfordern konsistente Aufrufer/Exporte und das Entfernen ungenutzter Pakete.
 
 Ökosystem-Profile (SOLLEN)
-Node/JS/TS: Registry https://registry.npmjs.org/, „npm ci“, Lockfile unter definierter NPM-Major erzeugen, optional „overrides“.
+Frontend-ESM: Import-Map pflegen, `scripts/dev/vendor_frontend.sh` für Offline-Betrieb nutzen, keine Paketmanager.
 Python: Poetry-Lock oder pip-tools mit --generate-hashes; Install per --require-hashes oder Poetry strikt; constraints.txt für transitive Pins.
 Go: go mod tidy + go mod verify; GOSUMDB/GOPROXY definiert.
 Rust: Cargo.lock verpflichtend; keine Stern-Versionen; optional cargo vendor.
@@ -366,11 +366,11 @@ Fokus-Pfade (nicht exklusiv):
 - `tests/**`, `reports/**`, `docs/**`
 - Build/Infra: `pyproject.toml`, `requirements*.txt`, `Makefile`, `Dockerfile*`
 
-**SCOPE_MODE = frontend**  
+**SCOPE_MODE = frontend**
 Fokus-Pfade (nicht exklusiv):
-- `frontend/**`, `tests/frontend/**`, `public/**`, `static/**`
+- `frontend/static/**`, `frontend/importmap.json`, `frontend/vendor/**`
 - `reports/**`, `docs/**`
-- Tooling: `package*.json`, `pnpm-lock.yaml|yarn.lock`, `tsconfig*.json`, `.eslintrc*`, `.prettier*`, `vite|next|webpack|rollup|postcss|tailwind`-Configs
+- Tooling: `scripts/dev/vendor_frontend.sh`, Import-Maps, CDN/Vendoring-Doku
 
 > Änderungen außerhalb der Fokus-Pfade sind zulässig, wenn sie für Build, Tests, Doku oder einen kohärenten Refactor **zwingend erforderlich** sind. §15 gilt immer.
 
@@ -422,7 +422,7 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
     ruff check --select F401,F841,F822 .
 - Vollständiger Build & Tests:
     pytest -q || true
-    npm run build || true  # falls Frontend
+    make supply-guard || true
 
 **PR-Body MUSS enthalten**
 - „Wiring-Report“

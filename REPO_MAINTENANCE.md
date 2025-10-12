@@ -6,10 +6,10 @@ Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beit
 
 | Pflichtlauf | Zweck |
 | ------------ | ----- |
-| `make doctor` | Stellt sicher, dass alle benötigten Tools vorhanden sind (Python, Ruff, Pytest, Node/npm, pip-check-reqs) und `/data/downloads`/`/data/music` beschreibbar sind. |
-| `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Frontend-Build und Smoke-Test aus. |
+| `make doctor` | Stellt sicher, dass alle benötigten Tools vorhanden sind (Python, Ruff, Pytest, pip-check-reqs) und `/data/downloads`/`/data/music` beschreibbar sind. |
+| `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
-| `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` und `scripts/dev/dep_sync_js.sh` vor dem Push aus. |
+| `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
 
 ## Branch Protection & Evidence
 
@@ -28,12 +28,12 @@ pre-commit run --hook-stage push
 ```
 
 - Lokale Hooks rufen `scripts/dev/fmt.sh` und `scripts/dev/dep_sync_py.sh` auf.
-- Der Pre-Push-Hook startet `scripts/dev/test_py.sh` und `scripts/dev/dep_sync_js.sh`. Bei Fehlern werden Pushes abgebrochen.
+- Der Pre-Push-Hook startet `scripts/dev/test_py.sh`. Bei Fehlern werden Pushes abgebrochen.
 
 ## Manuelle Nightly-/Security-Checks
 
-- Führe `pip-audit -r requirements.txt` und `npm audit --omit=dev` bei Bedarf lokal aus. Dokumentiere Ergebnisse im PR oder in `ToDo.md`.
-- Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` bzw. `npm ls --json`.
+- Führe `pip-audit -r requirements.txt` bei Bedarf lokal aus. Dokumentiere Ergebnisse im PR oder in `ToDo.md`.
+- Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und erfasse zusätzlich die Import-Map-Quellen für Frontend-Module.
 
 ## Release Checklist
 
@@ -41,7 +41,7 @@ pre-commit run --hook-stage push
 2. `make all` und optionale Security-Scans erneut ausführen.
 3. Artefakte erstellen:
    - Python: `python -m build`
-   - Frontend: `scripts/dev/fe_install_verify.sh` (liefert Build nach erfolgreicher Installation, Output in `frontend/dist/`)
+   - Frontend: statische Assets (`frontend/static/**`) und ggf. `scripts/dev/vendor_frontend.sh` für Offline-Betrieb
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership

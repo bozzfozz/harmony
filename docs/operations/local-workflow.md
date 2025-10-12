@@ -4,19 +4,19 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 
 ## Pflichtkommandos
 
-| Kommando            | Script                         | Zweck |
-| ------------------- | ------------------------------ | ----- |
-| `make doctor`       | `scripts/dev/doctor.sh`        | Prüft Tooling (Python, Ruff, Pytest, Node/npm, pip-check-reqs) sowie Schreibrechte auf `/data/downloads` und `/data/music`.
-| `make fmt`          | `scripts/dev/fmt.sh`           | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus.
-| `make lint`         | `scripts/dev/lint_py.sh`       | Ruft `ruff check --output-format=concise .` auf.
-| `make dep-sync`     | `dep_sync_py.sh` + `dep_sync_js.sh` | Prüft Python- und npm-Abhängigkeiten auf fehlende oder ungenutzte Pakete.
-| `make test`         | `scripts/dev/test_py.sh`       | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`.
-| `make be-verify`    | —                              | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf.
-| `make fe-verify`    | `scripts/dev/fe_install_verify.sh` | Verkabelt Supply-Guard + Toolchain-Checks, führt deterministische Installation und Build aus.
-| `make fe-install`   | `scripts/dev/fe_install_verify.sh` | Supply-Guard + deterministische Installation ohne Build & Typecheck (`SKIP_BUILD=1 SKIP_TYPECHECK=1`).
-| `make fe-build`     | `scripts/dev/fe_install_verify.sh` | Alias zu `fe-verify` (Build inkl. Guard).
-| `make smoke`        | `scripts/dev/smoke_unified.sh` | Startet `uvicorn app.main:app`, pingt standardmäßig `/live` (Alias für `/api/health/live`) und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft.
-| `make all`          | —                              | Kombiniert `fmt lint dep-sync be-verify fe-verify smoke` in fester Reihenfolge.
+| Kommando                  | Script                              | Zweck |
+| ------------------------- | ----------------------------------- | ----- |
+| `make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff, Pytest, pip-check-reqs) sowie Schreibrechte auf `/data/downloads` und `/data/music`. |
+| `make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
+| `make lint`               | `scripts/dev/lint_py.sh`            | Ruft `ruff check --output-format=concise .` auf. |
+| `make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
+| `make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. |
+| `make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
+| `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Stellt sicher, dass keine Paketmanager-Artefakte vorhanden sind und Import-Maps gepinnt bleiben. |
+| `make vendor-frontend`    | `scripts/dev/vendor_frontend.sh`    | Lädt CDN-Module in `frontend/static/vendor/` und rewritet Import-Maps für Offline-Betrieb. |
+| `make vendor-frontend-reset` | `scripts/dev/vendor_frontend.sh --reset` | Entfernt lokale Vendor-Dateien und stellt den CDN-Modus wieder her. |
+| `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt standardmäßig `/live` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
+| `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge. |
 
 ## Ablauf vor jedem Merge
 
@@ -27,42 +27,29 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
    pre-commit install --hook-type pre-push
    pre-commit run --all-files
    ```
-3. **Kompletter Gate-Lauf:** `make all` (inklusive Supply-Guard + `fe-verify`)
-4. **Beispielsequenz:** `make supply-guard && make be-verify && make all`
+3. **Kompletter Gate-Lauf:** `make all`
+4. **Optionaler Offline-Test:** `make vendor-frontend` ausführen, Applikation ohne Internetzugang testen und anschließend via `make vendor-frontend-reset` zurück in den CDN-Modus wechseln.
 5. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
 6. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
 
 ## Troubleshooting
 
 ### `make doctor`
-- **Fehlende Tools:** Installiere Python ≥ 3.10, Ruff, Pytest sowie Node.js inklusive npm.
+- **Fehlende Tools:** Installiere Python ≥ 3.10, Ruff, Pytest sowie `pip-check-reqs`.
 - **pip-check-reqs fehlt:** `pip install pip-check-reqs`
 - **Write-Permissions:** Erstelle `/data/downloads` und `/data/music` und setze Schreibrechte für deinen Benutzer.
 
-### `make fmt` / `make lint`
-- **Persistente Drift:** Führe `scripts/dev/fmt.sh` erneut aus. Bewusst ungenutzte Importe mit `# noqa` + Begründung versehen.
-- **Unbekannter Fehlercode:** Aktualisiere Ruff (`pip install -U ruff`).
-
 ### `make dep-sync`
-- **Missing Dependencies:** Passe `requirements*.txt` oder `package.json`/`package-lock.json` an und wiederhole den Lauf.
+- **Missing Dependencies:** Passe `requirements*.txt` an und wiederhole den Lauf.
 - **Unused Dependencies:** Entferne nicht mehr benötigte Pakete oder markiere sie als bewusst benötigt (z. B. durch tatsächliche Nutzung in Code/Tests).
 
-### `make test`
-- **SQLite-Lock:** Lösche `.tmp/test.db` und wiederhole den Lauf; stelle sicher, dass keine parallelen Server laufen.
-- **Flaky Tests:** Prüfe Logs im Pytest-Output und halte reproduzierbare Schritte für den PR fest.
+### `make supply-guard`
+- **Import-Map ungepinnt:** Prüfe `frontend/importmap.json`, setze feste Versions-Pins (`@x.y.z`) und wiederhole den Lauf.
+- **Verbotene Artefakte:** Entferne `package-lock.json`, `.npmrc`, `.nvmrc` oder ähnliche Dateien. Das Frontend arbeitet vollständig ohne Paketmanager.
 
-### `make fe-verify`
-- **Exit-Codes beachten:** `0` = OK, `10`–`16` siehe Script-Header. Fehlermeldungen sind mit `[fe-verify]` prefixed.
-- **Verbose-Modus:** `VERBOSE=1 make fe-verify` zeigt Supply-Guard-Logs, Toolchain-Versionen sowie Install- und Build-Kommandos.
-- **npm-Cache-Probleme:** Das Skript führt automatisch `npm cache verify` und `npm cache clean --force` aus. Falls lokale Caches weiterhin blockieren, setze zusätzlich `NPM_CONFIG_CACHE="$(mktemp -d)"`.
-
-### `make fe-install`
-- **Nur Installation:** Führt Supply-Guard + deterministische Installation aus (`SKIP_BUILD=1 SKIP_TYPECHECK=1`).
-- **Typecheck aktivieren:** Entferne `SKIP_TYPECHECK=1`, z. B. `SKIP_TYPECHECK=0 make fe-install`, falls der Script-Lauf überprüft werden soll.
-
-### `make fe-build`
-- **Alias:** Ruft `fe-verify` auf und fügt keinen separaten Build-Schritt hinzu.
-- **Dist-Output:** Erwartet nach dem Lauf `frontend/dist/` (bzw. `build/`) aus dem `fe_install_verify`-Skript.
+### `make vendor-frontend`
+- **Download-Fehler:** Stelle sicher, dass die CDN-Quellen erreichbar sind. Bei Bedarf Proxy konfigurieren oder Module manuell in `frontend/static/vendor/` legen.
+- **Unerwünschte Änderungen:** Nutze `make vendor-frontend-reset`, um den Ausgangszustand wiederherzustellen.
 
 ### `make smoke`
 - **Server startet nicht:** Kontrolliere `.tmp/smoke.log` und stelle sicher, dass `DATABASE_URL` auf eine schreibbare SQLite-Datei zeigt.

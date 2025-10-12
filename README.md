@@ -14,16 +14,15 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 
 ## Toolchain
 
-- **Node.js:** `20.17.1` (Single-Source in [`.nvmrc`](.nvmrc); [`.node-version`](.node-version), Dockerfile und CI werden daraus gespiegelt). Installiere die Version einmalig via `nvm install 20.17.1` und aktiviere sie mit `nvm use`. Bei Patchwechsel `.nvmrc` aktualisieren, anschließend `.node-version`, Docker-Basis und Workflows spiegeln.
-- **npm:** Version aus [`frontend/.npm-version`](frontend/.npm-version) (derzeit `10.8.2`). Aktualisiere sie mit `npm install -g npm@$(cat frontend/.npm-version)`.
-- **Guards:** Vor jeder Frontend-Installation oder jedem Build sind `bash scripts/dev/supply_guard.sh` und danach `SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh` auszuführen. Der Supply Guard liefert strukturierte `INFO/WARN/ERROR`-Logs plus Summary; WARNs markieren Node-/npm-Drift, `npm ci --dry-run`-Integritätsabweichungen oder Python-Hash-Drift und nennen direkte Fix-Hinweise. Off-Registry-Treffer bleiben stets blockierend.
-- **Override nur lokal:** `STRICT` ist der Standardmodus (CI, Docker, PRs). Lokal kannst du per `TOOLCHAIN_STRICT=false` oder `SUPPLY_MODE=WARN` in den WARN-Modus wechseln: WARNs werden geloggt, Exit-Code bleibt 0. Vor jedem Commit/Push müssen alle WARNs bereinigt werden. CI/Docker dürfen keinen WARN-Modus nutzen; dort brechen Drift- oder Integritätsbefunde sofort ab.
-- **Feingranulare Failover:** Optional lassen sich Checks über `SUPPLY_FAIL_NODE_DRIFT`, `SUPPLY_FAIL_NPM_DRIFT`, `SUPPLY_FAIL_NPM_INTEGRITY` und `SUPPLY_FAIL_PY_HASH` schärfen bzw. lockern (`0|1`). In CI sind alle Flags `1`, im lokalen WARN-Modus standardmäßig `0` (Off-Registry bleibt immer blockierend).
-- **Frontend-Build-Umgebung:** Builder behalten `NODE_ENV` während Installation/Build auf dem Default (kein `production`); `NODE_ENV=production` wird ausschließlich in der Runtime-Stage gesetzt. Falls individuelle Pipelines zwingend `NODE_ENV=production` benötigen, muss parallel `NPM_CONFIG_PRODUCTION=false` exportiert werden, damit `devDependencies` (z. B. Vite/TypeScript) erhalten bleiben.
+- **Python:** 3.11 (wie im Dockerfile). Installiere Abhängigkeiten über `pip install -r requirements.txt`.
+- **Frontend-Assets:** Das UI besteht aus statischen ES-Module-Dateien unter [`frontend/static/`](frontend/static). Es ist kein Node-/npm-Setup mehr nötig.
+- **Import-Map:** Pflege alle externen Module in [`frontend/importmap.json`](frontend/importmap.json) mit explizit gepinnten CDN-URLs (`https://…@x.y.z`).
+- **Vendoring:** `scripts/dev/vendor_frontend.sh` lädt die im Import-Map hinterlegten Module in `frontend/static/vendor/` und rewritet [`frontend/static/importmap.json`](frontend/static/importmap.json) auf lokale Pfade. Mit `--reset` stellst du den CDN-Modus wieder her.
+- **Supply-Guard:** `make supply-guard` prüft auf verbotene Paketmanager-Artefakte, validiert die Import-Map und verhindert ungepinnte Abhängigkeiten.
 
 ## Features
 
-- **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
+- **Harmony Web UI (buildloses ESM-Frontend)** liefert eine minimalistische Statusoberfläche direkt aus statischen ES-Modulen ohne Build-Schritt.
 - **Artist Watchlist & Detail UI** unter `/artists` mit Prioritäts-Management, Match-Kuration und Queue-Aktionen (siehe [docs/frontend/artists-ui.md](docs/frontend/artists-ui.md)).
 - **Vollständige Spotify-Integration** für Suche, Playlists, Audio-Features, Empfehlungen und Benutzerbibliotheken.
 - **Spotify FREE-Modus** für parserbasierte Imports ohne OAuth inklusive Free-Ingest-Pipeline: Text- oder Datei-Eingaben sowie bis zu 100 Playlist-Links werden normalisiert, dedupliziert und als Soulseek-Downloads in Batches eingeplant.
@@ -90,9 +89,6 @@ Token-Aktualisierungen werden zurückgerollt und lösen keinen Download aus.
 | `OAUTH_STATE_DIR` | ➖ | Gemeinsames Verzeichnis für OAuth-States (Default: `/data/runtime/oauth_state`). |
 | `OAUTH_STATE_TTL_SEC` | ➖ | Lebensdauer eines OAuth-States in Sekunden (Default: `600`). |
 | `OAUTH_STORE_HASH_CV` | ➖ | Speichert nur den Hash des Code-Verifiers (Default: `true`, in Split-Mode `false`). |
-| `PUBLIC_BACKEND_URL` | ➖ | Liefert dem Frontend die Basis-URL für Status- und Session-Refreshs (Default: `http://localhost:8080`). |
-| `PUBLIC_SENTRY_DSN` | ➖ | Optionaler Sentry-DSN für Laufzeitfehler im Frontend (Default: leer). |
-| `PUBLIC_FEATURE_FLAGS` | ➖ | JSON-kodierte Feature-Flags für das Frontend (Default: `{}`). |
 | `FEATURE_REQUIRE_AUTH` & `HARMONY_API_KEYS` | ✅ (Prod) | Erzwingen API-Key-Schutz für OAuth-Endpoints. |
 
 Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
@@ -106,10 +102,6 @@ Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
   - `app/services/secret_store.py` persistiert Secrets (`write` benötigt).
   - `app/routers/spotify_router.py` und `app/routers/settings_router.py`
     veröffentlichen die OAuth- und Status-Endpunkte.
-  - `frontend/src/pages/SpotifyPage.tsx` und
-    `frontend/src/pages/SpotifyProOAuthCallback.tsx` (siehe
-    [docs/frontend/spotify-pro-oauth.md](docs/frontend/spotify-pro-oauth.md)) liefern
-    die Benutzerführung.
 - **Laufzeitverzeichnisse:**
   - `/data/` im Container speichert Downloads (`/data/downloads`) sowie die
     normalisierte Musikbibliothek (`/data/music`).
@@ -163,18 +155,10 @@ OAuth-Secrets und strukturierte Logs.
 
 ## Supply-Chain & Determinismus
 Vor jedem PR lokal ausführen:
-- `make supply-guard` → Exit 0 = OK, 2 = Warnung, 3/4/5 = beheben und erneut ausführen.
+- `make supply-guard` → Exit 0 = OK, 1 = Fehler (Import-Map ungepinnt, verbotene Artefakte, o. Ä.).
 Steuerung:
 - `SUPPLY_GUARD_VERBOSE=1 make supply-guard`
-- `SUPPLY_GUARD_TIMEOUT_SEC=180 make supply-guard`
-- Überspringen (nur lokal): `SKIP_SUPPLY_GUARD=1 make supply-guard`
-
-> **Hinweis:** Für `package-lock.json` nutzt das Skript optional `jq`, um `resolved`-URLs exakt zu extrahieren und Off-Registry-Referenzen zu melden. Falls `jq` nicht installiert ist, greift eine portable `grep`-Fallback-Heuristik; CI setzt `jq` nicht voraus.
-
-## Frontend-Installationsprüfung (lokal)
-- Verifizieren: `make fe-verify`
-- Variablen: `REQUIRED_NODE_MAJOR=20 REQUIRED_NPM_MAJOR=11 VERBOSE=1 TIMEOUT_SEC=600 make fe-verify`
-- Exit-Codes: 0 OK · 10 Toolchain · 11 Lockfile · 12 Registry-Drift · 13 Install · 14 Build · 15 Runtime-Config · 16 Struktur
+- `make vendor-frontend` lädt externe Module lokal herunter und rewritet die Import-Map; `make vendor-frontend-reset` stellt den CDN-Modus wieder her.
 
 ## Unified Docker Image
 
@@ -515,107 +499,55 @@ Der normalisierte Zielpfad wird zusätzlich in der Datenbank (`downloads.organiz
 
 ## Harmony Web UI
 
-Die neue React-basierte Oberfläche befindet sich im Verzeichnis [`frontend/`](frontend/). Sie orientiert sich am Porttracker-Layout mit Sidebar, Header, Karten, Tabellen und Tabs. Das UI nutzt Tailwind CSS, shadcn/ui (Radix UI Komponenten) und React Query für Live-Daten aus den bestehenden APIs.
+Das Frontend ist ein buildloses ES-Module-Setup unter [`frontend/static/`](frontend/static). `index.html` lädt die Import-Map [`frontend/static/importmap.json`](frontend/static/importmap.json) und startet [`frontend/static/app.js`](frontend/static/app.js). Das UI zeigt den Service-Status basierend auf `GET /live` und benötigt keine Build-Pipeline.
 
-![Harmony Dashboard](docs/harmony-ui.svg)
+### Entwicklung & Vorschau
 
-### Voraussetzungen
+- Starte das Backend (`uvicorn app.main:app` oder `make smoke`).
+- Öffne `http://localhost:8080/` im Browser. Das Frontend wird direkt vom Backend unter `/static` ausgeliefert.
+- Zur Anpassung der Import-Map bearbeite [`frontend/importmap.json`](frontend/importmap.json) und kopiere Änderungen nach [`frontend/static/importmap.json`](frontend/static/importmap.json).
 
-- Node.js 20.17.1 (LTS; via `nvm use` aus `.nvmrc` oder `.node-version` empfohlen)
-- npm 10.8.2 (`npm install -g npm@$(cat frontend/.npm-version)`)
-- pnpm optional, die Beispiele verwenden npm
-
-> Setze Node und npm exakt auf die in `.nvmrc`/`.node-version` bzw. `frontend/.npm-version` vermerkten Versionen, bevor du Skripte ausführst. Abweichungen führen zu einem „Toolchain Drift“-Abbruch in `scripts/dev/fe_install_verify.sh` und in der CI.
-
-### Installation & Entwicklung
+### Offline-Betrieb
 
 ```bash
-# aus dem Repo-Root: deterministische Installation + Build + Checks
-bash scripts/dev/fe_install_verify.sh
-
-# optional nur Installation (ohne Build/Typecheck)
-SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
-
-# danach wie gewohnt entwickeln
-cd frontend
-npm run dev
+make vendor-frontend          # lädt CDN-Module und rewritet Import-Map auf /static/vendor
+make vendor-frontend-reset    # stellt den CDN-Modus wieder her
 ```
 
-#### Runtime-Konfiguration (`env.runtime.js`)
+Die vendorten Dateien liegen unter `frontend/static/vendor/`. Committe sie nur, wenn Deployments ohne Internetzugang notwendig sind.
 
-- Die Laufzeitkonfiguration der SPA basiert auf [`public/env.runtime.js.tpl`](frontend/public/env.runtime.js.tpl).
-- Vor `npm run dev` und `npm run build` rendert `node scripts/render-runtime-config.mjs` automatisch `public/env.runtime.js`
-  sowie `dist/env.runtime.js`.
-- `PUBLIC_BACKEND_URL` und `PUBLIC_SENTRY_DSN` werden als Strings übernommen; fehlende Werte bleiben leer.
-- `PUBLIC_FEATURE_FLAGS` muss ein JSON-Objekt sein. Ungültige oder leere Werte fallen auf `{}` zurück und werden mit einem
-  Hinweis im Log ersetzt.
+### Sicherheits- und Konfigurationshinweise
 
-Die Dev-Instanz ist standardmäßig unter `http://localhost:5173` erreichbar. Das Backend kann über die Umgebungsvariablen `VITE_API_BASE_URL` (Host, z. B. `http://127.0.0.1:8080`) und optional `VITE_API_BASE_PATH` (Default: kein Präfix) angebunden werden.
-
-### API-Key-Authentifizierung im Frontend
-
-Das Frontend setzt API-Keys automatisch auf jede Anfrage, sofern Authentifizierung aktiv ist. Die Konfiguration erfolgt über folgende Variablen:
-
-```bash
-# .env.local
-VITE_REQUIRE_AUTH=false            # blockiert Netzaufrufe ohne Key (Default: false)
-VITE_AUTH_HEADER_MODE=x-api-key    # oder "bearer" für Authorization-Header
-VITE_API_KEY=dev-local-key         # optionaler Build-Zeit-Key (nur lokal verwenden)
-```
-
-Die Auflösung des API-Keys erfolgt priorisiert: `VITE_API_KEY` → `localStorage[HARMONY_API_KEY]` → Laufzeitkonfiguration (z. B. über `window.__HARMONY_RUNTIME_API_KEY__`). Ist `VITE_REQUIRE_AUTH=false`, sendet der Client keine Auth-Header und lässt Requests ohne Key zu. Bei aktivem `VITE_REQUIRE_AUTH=true` und fehlendem Schlüssel werden Requests vor dem Versand abgebrochen und liefern `{ ok: false, error: { code: "AUTH_REQUIRED", message: "API key missing" } }` zurück.
-
-Für lokale Entwicklung stellt die Einstellungsseite ein Panel bereit, das den Key maskiert anzeigt, explizit offenlegt und das Speichern/Löschen im Browser ermöglicht. Das Panel beeinflusst ausschließlich den lokalen Storage und überschreibt keine Build-Zeit-Variablen.
-
-### Tests & Builds
-
-```bash
-npm run lint      # ESLint über das komplette Frontend
-npm test          # Jest-Suite im jsdom-Environment
-npm run typecheck # TypeScript Strict-Checks (`tsc --noEmit`)
-npm run build     # TypeScript + Vite Build
-```
-
-> Tipp: `scripts/dev/dep_sync_js.sh` verkabelt `supply_guard` + `fe_install_verify` (inkl. Toolchain-/Registry-Checks) und führt anschließend ESLint sowie `depcheck` aus. Fehlschläge entsprechen exakt den Merge-Gates.
+- Alle Import-Map-URLs müssen HTTPS verwenden und eine feste Version (`@x.y.z`) enthalten.
+- Zusätzliche Laufzeitkonfiguration erfolgt über Backend-Endpunkte; es existiert keine separate `env.runtime.js` mehr.
+- API-Keys und Authentifizierung entsprechen weiterhin den Backend-Routen (`/settings`), da das Frontend ausschließlich auf vorhandene REST-Endpunkte zugreift.
 
 ## Lokaler Qualitäts-Check (ohne CI)
 
 - **Schnellstart:** `make doctor && make all`
-- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, den Supply-Guard und `fe-verify` (inkl. deterministischer Installation + Build) sowie den Smoke-Test aus.
+- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, den Supply-Guard und den Smoke-Test aus.
 - **Hooks:** `pre-commit install && pre-commit run -a` sowie `pre-commit install --hook-type pre-push` stellen sicher, dass lokale Hooks aktiv sind.
 - **Runbook:** Details und Troubleshooting findest du in [`docs/operations/local-workflow.md`](docs/operations/local-workflow.md).
 
 ### Fehlerbilder & Behebung
 
 - **Dependency-Drift (Python):** `scripts/dev/dep_sync_py.sh` listet fehlende oder ungenutzte Pakete. Aktualisiere `requirements*.txt` entsprechend und wiederhole den Lauf.
-- **Dependency-Drift (Frontend):** `scripts/dev/dep_sync_js.sh` meldet fehlende oder ungenutzte npm-Pakete. Passe `package.json` und `package-lock.json` an.
+- **Import-Map-Drift:** `make supply-guard` meldet ungepinnte oder unsichere URLs. Passe `frontend/importmap.json` an.
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
 - **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
-- **Build:** `scripts/dev/fe_install_verify.sh` prüft Toolchain & Lockfile, installiert deterministisch und baut das Frontend (Make-Target `fe-verify`). TypeScript- oder Vite-Fehler erscheinen direkt im Konsolen-Log.
 - **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Passe `SMOKE_PATH` bei Bedarf an und prüfe die Logdatei bei Fehlschlägen.
 
 ## Datenbank-Migrationen
 
 - `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision (bei Reset-Arbeiten vorher `MIGRATION_RESET=1` setzen).
 
-
 ### Features der UI
 
-- Dashboard mit Systeminformationen, Service-Status und aktiven Jobs.
-- Library-Seite bündelt Artists, Downloads und Watchlist mit konsistenter Tab-Navigation; nur der aktive Tab wird lazy geladen und führt Polling aus.
-- Detailseiten für Spotify und Soulseek inkl. Tabs für Übersicht und Einstellungen (Legacy-Plex-Ansichten archiviert).
-- Matching-Ansicht mit Fortschrittsanzeigen.
-- Settings-Bereich mit Formularen für sämtliche Integrationen.
-- Dark-/Light-Mode Switch (Radix Switch) und globale Toast-Benachrichtigungen.
+- Minimaler Service-Status mit Anzeige von Version und Zustand.
+- Fehlerfall zeigt Retry-Button und Fehlermeldung an.
+- Styling basiert auf CSS ohne Build-Schritt und reagiert auf Dark/Light-Mode.
 
-Alle REST-Aufrufe nutzen die aktiven Endpunkte (`/spotify`, `/soulseek`, `/matching`, `/settings`). Archivierte Routen (`/plex`) werden nicht mehr ausgeliefert.
-
-### Fehlgeschlagene Downloads verwalten
-
-- Im Downloads-Tab zeigt eine Badge "Fehlgeschlagen: N" den aktuellen Bestand. Die Zahl wird nur für den aktiven Tab geladen; Invalidation erfolgt nach Aktionen oder beim erneuten Aktivieren.
-- Ein Klick auf die Badge aktiviert automatisch den Statusfilter „failed“ und blendet fehlgeschlagene Einträge in der Liste ein.
-- Zeilen mit Status `failed` bieten nun direkte Aktionen: **Neu starten** (POST `/download/{id}/retry`) und **Entfernen** (DELETE `/download/{id}`) aktualisieren Tabelle und Badge unmittelbar.
-- Während Requests sind Buttons deaktiviert; inaktive Tabs poll nicht im Hintergrund.
+Alle REST-Aufrufe nutzen die bestehenden Endpunkte (`/live`, `/api/**`).
 
 ## Architekturüberblick
 
@@ -692,7 +624,6 @@ services:
     environment:
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:8080
-      PUBLIC_BACKEND_URL: http://localhost:8080
     ports:
       - "8080:8080"
     volumes:
@@ -718,9 +649,7 @@ volumes:
 
 ### GitHub Actions
 
-Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull
-Requests ausschließlich die Backend-Tests (`pytest`) unter Python 3.11 aus. Frontend-Tests werden aufgrund fehlenden npm-Regis
-try-Zugriffs in automatisierten Läufen bewusst ausgelassen.
+Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull Requests die Backend-Tests (`pytest`) unter Python 3.11 aus. Das buildlose Frontend erfordert keine separaten Build- oder Lint-Schritte.
 
 ## Betrieb & Konfiguration
 
@@ -1165,7 +1094,7 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 - **Format & Imports:** `ruff` ist zentral konfiguriert (`pyproject.toml`) und übernimmt Formatierung sowie Import-Sortierung.
 - **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
-- **Dependencies:** `scripts/dev/dep_sync_py.sh` und `scripts/dev/dep_sync_js.sh` prüfen Python- bzw. npm-Abhängigkeiten auf Drift.
+- **Dependencies:** `scripts/dev/dep_sync_py.sh` prüft Python-Abhängigkeiten auf Drift; das Frontend nutzt keine Paketmanager.
 
 ### Ruff in pre-commit
 
@@ -1176,7 +1105,7 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
    pre-commit install --hook-type pre-push
    ```
 2. **Commit-Flow:** Beim `git commit` laufen `ruff-format`, `ruff` und die lokal registrierten Hooks aus `.pre-commit-config.yaml`. Führe `scripts/dev/fmt.sh` aus, falls nach dem Commit noch Drift verbleibt.
-3. **Pre-Push:** Die Pre-Push-Hooks rufen `scripts/dev/test_py.sh` und `scripts/dev/dep_sync_js.sh` auf. Stelle sicher, dass beide Kommandos grün sind, bevor du Änderungen veröffentlichst.
+3. **Pre-Push:** Die Pre-Push-Hooks rufen `scripts/dev/test_py.sh` auf. Stelle sicher, dass das Kommando grün ist, bevor du Änderungen veröffentlichst.
 4. **Manueller Lauf:** `pre-commit run --all-files` spiegelt alle Hooks on-demand.
 
 ## Tests
@@ -1186,45 +1115,6 @@ scripts/dev/test_py.sh
 ```
 
 Die Tests mocken externe Dienste und laufen vollständig lokal. Setze für reproduzierbare Läufe `HARMONY_DISABLE_WORKERS=1`, damit keine Hintergrund-Worker starten.
-
-### Deterministische npm-Installs & Lockfile-Neuaufbau
-
-Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), erzwingt die Registry `https://registry.npmjs.org/`, führt vor der Installation einen `npm ping`-Health-Check aus und stoppt deterministisch, sobald Lockfiles verändert würden. Registry-403 (`E403`) und Netzwerkstörungen werden im STRICT-Modus sofort blockierend behandelt; im WARN-Modus (nur lokal) wird – sofern passende `node_modules/` vorhanden sind – die Installation übersprungen, die vorhandenen Abhängigkeiten weiterverwendet und der Build-Pfad transparent protokolliert.
-
-**Summary-Ausgabe (`fe_install_verify`):**
-
-- Strukturierte Zeilen `LEVEL | CHECK | DETAILS | SUGGESTED_FIX`
-- Schlussblock `SUMMARY` mit `MODE`, `REGISTRY`, `REGISTRY_URL`, `INSTALL`, `BUILD`, `FINAL_EXIT`
-- WARN-Modus liefert Exit-Code `0`, dokumentiert aber Drift- und Registry-Probleme inklusive Handlungsempfehlungen.
-
-**Standard-Flow (lokal & CI):**
-
-```bash
-bash scripts/dev/supply_guard.sh
-SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh
-```
-
-**Nur Installation ohne Build/Typecheck:**
-
-```bash
-SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
-```
-
-**Lockfile sauber neu erzeugen:**
-
-1. Stelle Node/NPM auf die gepinnte Version ein (`nvm use`, anschließend `npm install -g npm@$(cat frontend/.npm-version)`).
-2. Lösche `frontend/node_modules` und sichere das bestehende `frontend/package-lock.json` bei Bedarf.
-3. Führe im Ordner `frontend/` ein `npm install --package-lock-only` aus.
-4. Verifiziere das Ergebnis: `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
-5. Prüfe das Diff und committe das neue Lockfile.
-
-#### Registry-Störungen lokal beheben
-
-1. Prüfe die Konnektivität: `npm ping --registry https://registry.npmjs.org/`.
-2. Entferne ggf. veraltete Auth-Tokens oder Proxy-Overrides: `npm config delete //registry.npmjs.org/:_authToken`.
-3. Räume den lokalen Cache auf: `npm cache clean --force`.
-4. Wiederhole `scripts/dev/supply_guard.sh` sowie `scripts/dev/fe_install_verify.sh` im WARN-Modus (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`).
-5. Bleiben 403/Netzfehler bestehen, prüfe Firewall/Proxy-Policies und versuche es erneut mit frischem Netzwerk.
 
 ## Lizenz
 
