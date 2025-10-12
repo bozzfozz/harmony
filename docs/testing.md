@@ -37,6 +37,6 @@ Execute the full backend suite locally via:
 pytest -q
 ```
 
-The same command runs in CI and requires no additional services. SQLite is
+The same command runs locally without additional services. SQLite is
 bootstrapped automatically; set `DB_RESET=1` to force a clean database between
 runs when reproducing production-like behaviour.

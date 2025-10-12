@@ -148,15 +148,9 @@ OAuth-Secrets und strukturierte Logs.
 
 ## Testing & Coverage Policy
 
-- **Schnelle Feedback-Schleife:** `pytest -q --cov=app --cov-report=term` erzeugt lokal denselben
-  Testlauf wie der CI-Check `tests`. Skip-Gründe werden über `-r s` ausgegeben, damit Reviewer nachvollziehen, warum ein Modul
-  nicht ausgeführt wurde.
-- **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter
-  `[tool.coverage.*]`. Sie dient als informative Kennzahl (`fail_under = 0`) und erzeugt `reports/coverage.xml` +
-  `reports/junit.xml`. CI und lokale Skripte nutzen dafür die Variable `COVERAGE_XML=reports/coverage.xml`; wer eine
-  alternative Struktur verwendet, kann den Pfad über dieselbe Variable anpassen.
-- **Artefakte:** CI lädt alle Report-Dateien (`reports/junit.xml`, `reports/coverage.xml`) als Artefakte hoch, sodass
-  Reviewer das Ergebnis ohne lokalen Re-Run nachvollziehen können.
+- **Schnelle Feedback-Schleife:** `pytest -q --cov=app --cov-report=term` spiegelt den Lauf von `scripts/dev/test_py.sh`. Skip-Gründe werden über `-r s` ausgegeben, damit Reviewer nachvollziehen, warum ein Modul nicht ausgeführt wurde.
+- **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter `[tool.coverage.*]`. Sie dient als informative Kennzahl (`fail_under = 0`) und erzeugt `reports/coverage.xml` + `reports/junit.xml`. Wer eine alternative Struktur benötigt, kann den Pfad über `COVERAGE_XML=reports/coverage.xml` anpassen.
+- **Reports:** Automatisches Sammeln von Artefakten entfällt. Hänge relevante Ausschnitte aus `reports/` in deinem PR an, sobald zusätzliche Nachweise erforderlich sind.
 
 ## Unified Docker Image
 
@@ -415,7 +409,7 @@ Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusi
 
 Optionale Variablen wie `UMASK`, `PUID` und `PGID` werden beim Start protokolliert, beeinflussen die Guard-Entscheidung jedoch nicht.
 
-Self-Checks lassen sich vor Deployments mit `python -m app.ops.selfcheck --assert-startup` lokal oder in CI ausführen. Die Health-API spiegelt die Ergebnisse: `GET /api/health/live` liefert einen schlanken Liveness-Ping, `GET /api/health/ready?verbose=1` listet sämtliche Checks samt Status auf.
+Self-Checks lassen sich vor Deployments mit `python -m app.ops.selfcheck --assert-startup` lokal ausführen. Die Health-API spiegelt die Ergebnisse: `GET /api/health/live` liefert einen schlanken Liveness-Ping, `GET /api/health/ready?verbose=1` listet sämtliche Checks samt Status auf.
 
 ## Artist Watchlist
 
@@ -553,55 +547,28 @@ npm run typecheck # TypeScript Strict-Checks (`tsc --noEmit`)
 npm run build     # TypeScript + Vite Build
 ```
 
-> **Hinweis:** Die CI führt alle drei Befehle auf jedem Push/PR aus. Lokal hilft `npm ci`, eine saubere Umgebung analog zur
-> Pipeline zu erstellen.
+> Tipp: `scripts/dev/dep_sync_js.sh` führt dieselben Lint- und Dependency-Prüfungen aus wie die Merge-Gates (`npm ci`, ESLint, Depcheck). Fehler dort entsprechen den manuellen Einzelbefehlen.
 
-> **Deployment-Artefakt:** Der GitHub-Actions-Job `ci-frontend` lädt nach einem erfolgreichen Build das gesamte
-> `frontend/dist`-Verzeichnis (inklusive generiertem `env.runtime.js`) als Artefakt `frontend-dist` hoch. Verwende diesen
-> Download für statische Deployments oder um Builds ohne lokalen Re-Run zu verifizieren.
+## Lokaler Qualitäts-Check (ohne CI)
 
-## Lokale Checks & CI-Gates
+- **Schnellstart:** `make doctor && make all`
+- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, Frontend-Build und Smoke-Test aus.
+- **Hooks:** `pre-commit install && pre-commit run -a` sowie `pre-commit install --hook-type pre-push` stellen sicher, dass lokale Hooks aktiv sind.
+- **Runbook:** Details und Troubleshooting findest du in [`docs/operations/local-workflow.md`](docs/operations/local-workflow.md).
 
-Die GitHub-Actions-Pipeline validiert Backend und Frontend parallel. Vor einem Commit empfiehlt sich derselbe Satz an Prüfungen:
+### Fehlerbilder & Behebung
 
-```bash
-ruff format .
-ruff check --select I --fix .
-git diff --exit-code
-mypy app
-pytest -q
-python scripts/audit_wiring.py
-pip-audit -r requirements.txt
-
-cd frontend
-npm ci --no-audit --no-fund
-npm run lint
-npm test -- --runInBand
-npm run typecheck
-npm run build
-```
-
-`ruff` übernimmt Formatierung **und** Import-Sortierung. Nutze vor jedem Commit die oben aufgeführten Befehle (1–3), um Drift
-zu beseitigen und sicherzustellen, dass `git diff` leer ist. Bewusst ungenutzte Importe (z. B. Test-Fixtures mit Seiteneffekten)
-bitte mit `# noqa` samt Begründung markieren.
-
-`pip-audit -r requirements.txt` prüft alle direkten Abhängigkeiten auf bekannte CVEs und blockt Builds, sobald verwundbare
-Pakete gefunden werden. Führe den Scan vor jedem Commit lokal aus oder verwende `make security`, das denselben Befehl bündelt.
+- **Dependency-Drift (Python):** `scripts/dev/dep_sync_py.sh` listet fehlende oder ungenutzte Pakete. Aktualisiere `requirements*.txt` entsprechend und wiederhole den Lauf.
+- **Dependency-Drift (Frontend):** `scripts/dev/dep_sync_js.sh` meldet fehlende oder ungenutzte npm-Pakete. Passe `package.json` und `package-lock.json` an.
+- **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
+- **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
+- **Build:** `scripts/dev/build_fe.sh` führt `npm ci` und `npm run build` aus. TypeScript- oder Vite-Fehler erscheinen direkt im Konsolen-Log.
+- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt `/api/health/live`. Prüfe die Logdatei bei Fehlschlägen.
 
 ## Datenbank-Migrationen
 
 - `make db.revision msg="..."` erzeugt auf Basis der SQLAlchemy-Models eine neue, automatisch generierte Revision (bei Reset-Arbeiten vorher `MIGRATION_RESET=1` setzen).
 
-### Code-Qualität lokal (optional offline)
-
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-# Tools vollständig:
-make all
-# Offline-Fallback (nur Pflichtgates laufen):
-CI_OFFLINE=true make all
-```
 
 ### Features der UI
 
@@ -645,7 +612,7 @@ Eine ausführliche Beschreibung der Komponenten findest du in [`docs/architectur
 - Python 3.11
 - Optional: Docker und Docker Compose
 
-Legacy-Dateistores aus frühen Experimenten gelten als reine Smoke-Hilfen und werden in produktiven oder CI-Szenarien nicht mehr berücksichtigt.
+Legacy-Dateistores aus frühen Experimenten gelten als reine Smoke-Hilfen und werden in produktiven Szenarien nicht mehr berücksichtigt.
 
 ### Lokales Setup
 
@@ -724,7 +691,7 @@ volumes:
 
 Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) führt bei jedem Push auf `main` sowie bei Pull
 Requests ausschließlich die Backend-Tests (`pytest`) unter Python 3.11 aus. Frontend-Tests werden aufgrund fehlenden npm-Regis
-try-Zugriffs im CI bewusst ausgelassen.
+try-Zugriffs in automatisierten Läufen bewusst ausgelassen.
 
 ## Betrieb & Konfiguration
 
@@ -1169,7 +1136,7 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
 
 - **Format & Imports:** `ruff` ist zentral konfiguriert (`pyproject.toml`) und übernimmt Formatierung sowie Import-Sortierung.
 - **Typing:** `mypy` nutzt `mypy.ini` mit `strict_optional` und Plugin-Defaults.
-- **Dependencies:** `pip-audit` prüft `requirements.txt` auf veröffentlichte CVEs.
+- **Dependencies:** `scripts/dev/dep_sync_py.sh` und `scripts/dev/dep_sync_js.sh` prüfen Python- bzw. npm-Abhängigkeiten auf Drift.
 
 ### Ruff in pre-commit
 
@@ -1177,33 +1144,30 @@ Erstellt neue Aufgaben über das Issue-Template ["Task (Codex-ready)"](./.github
    ```bash
    pip install pre-commit
    pre-commit install
+   pre-commit install --hook-type pre-push
    ```
-2. **Commit-Flow:** Beim `git commit` laufen `ruff-format` und `ruff` automatisch. Dadurch werden Formatierung & Imports korrigiert, bevor der Commit geschrieben wird.
-3. **Pull-Requests:** pre-commit.ci ist aktiviert. Sobald ein Push Format- oder Import-Drift enthält, erzeugt der Dienst einen separaten Auto-Fix-Commit mit der Nachricht `chore: pre-commit.ci auto fixes`.
-4. **CI-Gate:** Der Workflow [`ci.yml`](.github/workflows/ci.yml) führt `ruff format --check .` sowie `ruff check --output-format=github .` aus und blockt den Merge bei Drift. Es gibt kein separates `isort`-Gate mehr; `ruff` ist die einzige Quelle für Formatierung und Import-Sortierung.
+2. **Commit-Flow:** Beim `git commit` laufen `ruff-format`, `ruff` und die lokal registrierten Hooks aus `.pre-commit-config.yaml`. Führe `scripts/dev/fmt.sh` aus, falls nach dem Commit noch Drift verbleibt.
+3. **Pre-Push:** Die Pre-Push-Hooks rufen `scripts/dev/test_py.sh` und `scripts/dev/dep_sync_js.sh` auf. Stelle sicher, dass beide Kommandos grün sind, bevor du Änderungen veröffentlichst.
+4. **Manueller Lauf:** `pre-commit run --all-files` spiegelt alle Hooks on-demand.
 
-Für manuelle Komplettläufe empfiehlt sich `pre-commit run --all-files`, um denselben Satz an Hooks on-demand auszuführen.
-
-## Tests & CI
+## Tests
 
 ```bash
-pytest
+scripts/dev/test_py.sh
 ```
 
-Die Tests mocken externe Dienste und können lokal wie auch via GitHub Actions ausgeführt werden. Für deterministische
-Runs sollten die Worker mit `HARMONY_DISABLE_WORKERS=1` deaktiviert werden.
+Die Tests mocken externe Dienste und laufen vollständig lokal. Setze für reproduzierbare Läufe `HARMONY_DISABLE_WORKERS=1`, damit keine Hintergrund-Worker starten.
 
-### Deterministische NPM-Installs in CI
+### Deterministische npm-Installs
 
-Die Frontend-Pipeline (CI, Nightly, Release) ist so gehärtet, dass jeder Lauf eine saubere, reproduzierbare `npm ci`-Installation nutzt:
+Nutze `npm ci --no-audit --no-fund`, um eine saubere, reproduzierbare Installation sicherzustellen. Die folgenden Schritte helfen bei hartnäckigen Integritätsfehlern:
 
-- GitHub Actions liest die Node.js-Version aus `.nvmrc` (aktuell `20.17.1`) und setzt `registry-url: https://registry.npmjs.org`.
-- Vor jedem Install werden `node_modules` entfernt und ein ephemerer Cache via `NPM_CONFIG_CACHE="$(mktemp -d)"` erzeugt.
-- `npm config` erzwingt `prefer-online`, fünf Fetch-Retries sowie verlängerte Timeouts (`fetch-timeout` und `fetch-retry-maxtimeout` je 600 s).
-- Die Jobs erlauben maximal zwei Wiederholungen (`npm ci` läuft bis zu drei Versuche) und reinigen den Cache (`npm cache clean --force`) zwischen den Versuchen.
-- Persistente Registry-Mirrors oder wiederverwendete Caches sind deaktiviert; jeder Lauf interagiert ausschließlich mit `https://registry.npmjs.org/`.
+- Verwende die Node.js-Version aus `.nvmrc` (aktuell `20.17.1`).
+- Entferne vor dem Install vorhandene `node_modules`-Verzeichnisse und verwende einen frischen Cache (`NPM_CONFIG_CACHE="$(mktemp -d)"`).
+- Erzwinge `prefer-online`, erhöhte Fetch-Retries und großzügige Timeouts.
+- Reinige den Cache zwischen Wiederholungen mit `npm cache clean --force`.
 
-**Lokale Reproduktion bei EINTEGRITY-Fehlern:**
+**Lokaler Reproduktions-Flow:**
 
 ```bash
 cd frontend
@@ -1218,22 +1182,7 @@ npm config set registry https://registry.npmjs.org/
 npm ci --no-audit --no-fund
 ```
 
-Falls dennoch Integritätskonflikte auftreten, sollte der Lockfile nach einem Backup mit derselben npm-Version wie in der CI via `npm install --package-lock-only` regeneriert und anschließend erneut committed werden.
-
-
-- Lokal lässt sich der Lauf mit einem Docker-Container spiegeln:
-
-  ```bash
-  docker run --rm \
-  ```
-
-  In einem zweiten Terminal:
-
-  ```bash
-  pytest -q
-  ```
-
-  Die Tests erzeugen pro Lauf isolierte Schemas (`search_path`) und räumen diese nach Abschluss automatisch auf.
+Falls dennoch Integritätskonflikte auftreten, regeneriere den Lockfile nach einem Backup mit derselben npm-Version via `npm install --package-lock-only` und committe die aktualisierte Datei.
 
 ## Lizenz
 

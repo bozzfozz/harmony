@@ -78,12 +78,11 @@ DUE: <YYYY-MM-DD>
 - [ ] Doku: README/CHANGELOG/ADR (falls Architekturentscheidung)
 - [ ] Report/Notizen (optional: `reports/`)
 
-## 12) CI-Gates (Merge-Blocking, Schreiben nicht blockiert)
-- `pytest -q`
-- `mypy app`
-- `ruff format --check .`
-- `ruff check --output-format=github .`
-- `pip-audit -r requirements.txt`
+## 12) Lokale Gates (Merge-Blocking, Schreiben nicht blockiert)
+- `make doctor`
+- `make all`
+- `pre-commit run --all-files`
+- `pre-commit run --hook-stage push`
 - OpenAPI-Snapshot aktualisiert (falls API betroffen)
 
 ## 13) PR-Checkliste (muss im PR abgehakt sein)

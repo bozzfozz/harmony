@@ -1,13 +1,17 @@
 ## Kurzfassung
-**Was/Warum:**  
+**Was/Warum:**
 **TASK_ID:** <z. B. CODX-XXX-123> (muss existieren; basiert auf `docs/task-template.md`)
 
 ## Änderungen (Dateien)
 - Neu/Geändert/Gelöscht:
 
 ## Tests & Nachweise
-- Befehle/Logs/Screens:
-- Coverage (geänderte Module): ≥ 85 % | Begründete Ausnahme:
+- Befehle/Logs/Screens (jeweils letzte Zeilen anfügen):
+  - `make doctor`
+  - `make all`
+  - optionale Zusatzchecks (`mypy app`, `npm test`, `pip-audit` …)
+- Wiring-Report (angepasste Aufrufer/Registrierungen/Exporte):
+- Removal-Report (gelöschte Dateien + Begründung):
 
 ## Verträge
 - Public-API: unverändert / geändert (OpenAPI aktualisiert)
@@ -21,7 +25,12 @@
 - README/CHANGELOG/ADR aktualisiert: ja/nein
 - ToDo.md aktualisiert (Nachweis-Link):
 
-## Checkliste
+## Merge-Checkliste (ohne CI)
 - [ ] AGENTS.md gelesen & Scope-Guard geprüft
 - [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert
-- [ ] `pytest -q`, `mypy app`, `ruff`, `black --check` grün oder Ausnahme dokumentiert
+- [ ] `make doctor` **grün**
+- [ ] `make all` **grün**
+- [ ] `pre-commit run --all-files`
+- [ ] `pre-commit run --hook-stage push`
+- [ ] Wiring-Report und Removal-Report im PR-Body gepflegt
+- [ ] Logs der Pflichtläufe angehängt

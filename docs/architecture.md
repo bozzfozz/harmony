@@ -123,7 +123,7 @@ Fehlgeschlagene Downloads werden ausschließlich über den orchestrierten `retry
 ### Observability & Wiring Guard
 
 - Beim Start protokolliert `app/main.py` ein `wiring_summary` mit aktiven Routern, Workern und Integrationen (deaktivierte Provider erscheinen mit `False`).
-- `scripts/audit_wiring.py` stellt sicher, dass keine Legacy-Integrations-Referenzen (z. B. Plex) außerhalb des Archivs in `app/` oder `tests/` landen und ist in der CI eingebunden.
+- `scripts/audit_wiring.py` stellt sicher, dass keine Legacy-Integrations-Referenzen (z. B. Plex) außerhalb des Archivs in `app/` oder `tests/` landen; führe das Skript bei Architekturänderungen manuell aus.
 
 ### Archivierte Module
 

@@ -61,7 +61,7 @@ Reihenfolge ist strikt:
    - Klein & fokussiert. Issue referenzieren. **TASK_ID** im Titel/Body.
    - Erkläre Was/Warum inkl. Testnachweisen.
 5. **Review**: Zwei-Augen-Prinzip bei risiko-/vertragsrelevanten Änderungen.
-6. **CI-Quality Gates**: Lint, Typen, Tests, Security-Scans müssen grün sein.
+6. **Lokale Quality Gates**: `make doctor`, `make all`, `pre-commit run --all-files` und `pre-commit run --hook-stage push` müssen grün sein.
 7. **Merge**: Squash-Merge bevorzugt. CHANGELOG pflegen.
 8. **Release**: SemVer, Tags, Notes, Rollback-Plan.
 9. **Post-merge**: Monitoring, Metriken, Incident-Prozess.
@@ -157,16 +157,15 @@ Ohne explizites Flag gilt **Write Mode**.
 - **ADR (Kurz)**: Titel, Datum, Kontext, Entscheidung, Alternativen, Folgen.
 
 ## 11. Durchsetzung
-- CI erzwingt Lint, Typen, Tests, Security-Scans.
-- **Schreibrechte sind nicht CI-gekoppelt**; Merge nur bei erfüllten Gates/Explizit-Freigabe.
-- Pre-Commit Hooks **SHOULD**: `ruff-format`, `ruff`.
+- Lokale Gates erzwingen Lint, Typen, Tests und Security-Checks (`make all`, `pre-commit`).
+- **Schreibrechte sind nicht Gate-gekoppelt**; Merge nur bei erfüllten Pflichten oder expliziter Maintainer-Freigabe.
+- Pre-Commit Hooks **SHOULD**: `ruff-format`, `ruff`, lokale Skripte.
 - PR blockiert, wenn **TASK_ID** oder Testnachweise fehlen.
 
 ### 11.1 Repository-Guards — MUSS
-- Jedes Repo MUSS eine Guard-Konfiguration besitzen:
-  - `.project-guard.yml` (Konfiguration für Companion/Boundary/Legacy/Junk/Orphans/TODO)
-  - `.github/workflows/ci-completeness.yml` (führt Guard-Skripte read-only aus)
-- Guards liefern die in §0.4 definierten Exit-Codes (oder map auf 1 in CI), harte Verstöße sind nicht bypass-fähig.
+- `.project-guard.yml` bleibt die zentrale Konfiguration für Companion/Boundary/Legacy/Junk/Orphans/TODO.
+- Guard-Skripte laufen lokal (z. B. `python scripts/audit_wiring.py`) und müssen dieselben Exit-Codes wie in §0.4 definieren.
+- Harte Verstöße sind nicht bypass-fähig.
 
 ## 12. Task-Template-Pflicht
 Alle Aufgaben **MÜSSEN** auf Basis von `docs/task-template.md` erstellt, umgesetzt und reviewed werden.
@@ -189,31 +188,37 @@ Finale Code-Aufräumroutine (MUSS)
 2) Verifizieren, dass keine Änderungen mehr anstehen:
     git diff --exit-code
 3) Wenn 2) fehlschlägt:
-    Änderungen committen und Schritt 1)–2) wiederholen, bis git diff leer ist.
-4) Erst dann fortfahren mit:
-    - Dokumentation (README/Runbook/agents.md)
-    - CHANGELOG aktualisieren
-    - BACKUP-Block erzeugen
+    Änderungen committen und Schritt 1)–2) wiederholen, bis `git diff` leer ist.
+4) Danach Pflichtläufe:
+    make dep-sync
+    make test
+    make fe-build
+    make smoke
+5) Erst danach Doku/CHANGELOG/PR-Text aktualisieren und Nachweise sichern.
 
 Hinweise
 - Formatierung & Import-Policy werden ausschließlich durch Ruff abgedeckt.
-- CI prüft anschließend mit:
-    ruff format --check .
-    ruff check --output-format=github .
+- `make all` bündelt Formatierung, Lint, Dependency-Sync, Tests, Frontend-Build und Smoke.
 
 ### §14a Ruff Format & Imports
 **MUSS**
 - Pre-commit Hooks `ruff-format` und `ruff` aktiv halten (`pre-commit install`, `pre-commit run -a`).
-- Keine Commits einreichen, die `ruff format --check .` oder `ruff check --output-format=github .` brechen.
+- `scripts/dev/fmt.sh` und `scripts/dev/lint_py.sh` vor dem Commit ausführen; keine Commits einreichen, die Drift hinterlassen.
 
 **PR-Checkliste (Ergänzung)**
-- [ ] `ruff format --check .` **grün**
-- [ ] `ruff check --output-format=github .` **grün**
-- [ ] pre-commit Hooks liefen (Output im letzten Commit oder `pre-commit run -a` verlinkt)
+- [ ] `make doctor` **grün** (Session-Beginn)
+- [ ] `make fmt` **grün**
+- [ ] `make lint` **grün**
+- [ ] `make dep-sync` **grün**
+- [ ] `make test` **grün**
+- [ ] `make fe-build` **grün**
+- [ ] `make smoke` **grün**
+- [ ] `pre-commit run --all-files` + `pre-commit run --hook-stage push` dokumentiert
 
-**CI-Gates (blockierend)**
-- `ruff format --check .`
-- `ruff check --output-format=github .`
+**Lokale Gates (blockierend)**
+- `make all`
+- `pre-commit run --all-files`
+- `pre-commit run --hook-stage push`
 
 **Konfiguration (Referenz)**
 - `.pre-commit-config.yaml`: Hooks `ruff-format`, `ruff`
@@ -250,7 +255,7 @@ Commits
 
 Reihenfolge
 1. Schnelllauf (`--lf`)
-2. Volle Suite/CI
+2. Volle Suite
 3. Finale Routine (`ruff format .`, `ruff check --select I --fix .`, `git diff --exit-code`)
 
 ---
@@ -284,13 +289,11 @@ Wähle **genau einen** Scope pro PR/Task: **`backend`** oder **`frontend`**.
 Fokus-Pfade (nicht exklusiv):
 - `app/**` (core, api, services, integrations, orchestrator, workers, middleware, schemas, utils, migrations)
 - `tests/**`, `reports/**`, `docs/**`
-- `.github/workflows/**` (Backend-CI)
 - Build/Infra: `pyproject.toml`, `requirements*.txt`, `Makefile`, `Dockerfile*`
 
 **SCOPE_MODE = frontend**  
 Fokus-Pfade (nicht exklusiv):
 - `frontend/**`, `tests/frontend/**`, `public/**`, `static/**`
-- `.github/workflows/**` (Frontend-CI)
 - `reports/**`, `docs/**`
 - Tooling: `package*.json`, `pnpm-lock.yaml|yarn.lock`, `tsconfig*.json`, `.eslintrc*`, `.prettier*`, `vite|next|webpack|rollup|postcss|tailwind`-Configs
 
@@ -332,7 +335,7 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 
 **MUSS**
 1) **Repo-weites Wiring**: Neue/umbenannte Funktion/Klasse/Route/Worker/CLI hat aktualisierte Aufrufer, Registrierungen und Exporte. Keine „stummen“ Entry-Points.
-2) **Konsistenter Umbau**: Bei Moves/Ersetzungen sind **alle** Referenzen, Tests, Fixtures, Snapshots, Docs und CI-Schritte angepasst.
+2) **Konsistenter Umbau**: Bei Moves/Ersetzungen sind **alle** Referenzen, Tests, Fixtures, Snapshots, Docs und Makefile-/Skript-Aufrufe angepasst.
 3) **Entfernung**: Veraltete Dateien, doppelte Implementierungen, Legacy-Shims und ungenutzte Tests/Dokus werden gelöscht.
 4) **Kein toter Code**: Keine ungenutzten Exporte/Imports/Symbole im Produktivcode.
 
@@ -350,9 +353,10 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 - „Wiring-Report“
 - „Removal-Report“
 
-**CI (blockierend)**
-- `ruff check --select F401,F841,F822 --output-format=github .`
-- Guard-Scanner gemäß `.project-guard.yml` (s. §11.1)
+**Lokale Gates (Pflicht)**
+- `make all`
+- `pre-commit run --all-files`
+- `pre-commit run --hook-stage push`
 
 ## 21. **Auto-Task-Splitting (erlaubt)**
 - Agent DARF große Aufgaben in Subtasks/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).
@@ -373,7 +377,7 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 | Do | Don't |
 | --- | --- |
 | ENV-Variable in README ergänzen, wenn `app/config.py` Quelle klar vorgibt. | Schema-Feld erweitern ohne Migration/Task-Freigabe. |
-| Fehlenden Test importieren/Pfad korrigieren, weil `pytest` bricht. | Tests löschen/abschwächen, um CI grün zu machen. |
+| Fehlenden Test importieren/Pfad korrigieren, weil `pytest` bricht. | Tests löschen/abschwächen, um Gates grün zu machen. |
 | OpenAPI-Beispiel aktualisieren, wenn Response-Model bereits geändert wurde. | Neue API-Route ohne Scope/Task. |
 | Snapshot-Drift beheben und `[DRIFT-FIX]` dokumentieren. | Feature-Flag-Default ändern ohne Task. |
 

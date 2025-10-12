@@ -9,7 +9,7 @@
 | Check | Status | Notes |
 | --- | --- | --- |
 | `ruff format --check .` | ✅ | Formatting is locked down via `pyproject.toml`. |
-| `ruff check --output-format=github .` | ✅ | Import order and lint gates enforced via CI/pre-commit. |
+| `ruff check --output-format=concise .` | ✅ | Import order and lint gates enforced via lokalen Ruff-Hooks. |
 | `mypy app` | ✅ | Strict settings honoured; no untyped defs in `app/**`. |
 | `pytest -q` | ✅ | Full suite passes; FastAPI lifespan migration eliminates prior `on_event` warnings. |
 | `vulture app tests --exclude .venv` | ⚠️ | Binary unavailable in the offline environment; cannot verify dead-code findings without vendored wheel. |
@@ -26,6 +26,6 @@
 - Consider extending mypy strictness (`strict = True`) in a follow-up once the additional tooling pipeline is stabilised.
 
 ## Follow-up Recommendations
-1. Add pre-built wheels or a local package cache for the missing security/static analysers and wire them into CI so they run consistently.
+1. Add pre-built wheels or a local package cache for the missing security/static analysers and wire them into `make all` so they run consistently.
 2. Evaluate converting FastAPI worker lifecycle tests into dedicated unit coverage to assert start/stop ordering and resilience to partial failures.
 3. Review remaining pytest deprecation notices (HTTP status constants in dependencies) and coordinate upstream upgrades where necessary.

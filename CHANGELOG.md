@@ -1,11 +1,11 @@
 ## v2.0.0 — unreleased
-- chore(orchestrator): retire the legacy download-flow namespace from the orchestrator package, archive remaining docs and add a CI legacy
+- chore(orchestrator): retire the legacy download-flow namespace from the orchestrator package, archive remaining docs and add an automated pipeline legacy
   scan gate to enforce HDM-only usage. [CODX-HDM-DROP-LEGACY-IMPORTS-001]
-- chore(tests): Legacy-Tests mit Präfix test_flow entfernt und CI-Gate ergänzt. [CODX-TESTS-FLOW-PREFIX-REMOVE-001]
+- chore(tests): Legacy-Tests mit Präfix test_flow entfernt und Pipeline-Gate ergänzt. [CODX-TESTS-FLOW-PREFIX-REMOVE-001]
 - refactor(hdm): Harmonised the download orchestrator namespace to Harmony Download Manager (HDM), updated metrics/logs/docs and
   provided temporary compatibility re-exports. [CODX-REFACTOR-HDM-001]
-- chore(ci): remove diff coverage gate, dependencies and documentation; CI now publishes junit/coverage artifacts without a diff blocker. [CODX-COVERAGE-DIFF-REMOVAL-001]
-- chore(security): Bandit entfernt (CI, pre-commit, Tooling, Docs, Policies) und Security-Autofix-Workflow stillgelegt. [CODX-SEC-BANDIT-REMOVAL-001]
+- chore(ci): remove diff coverage gate, dependencies and documentation; The pipeline now publishes junit/coverage artifacts without a diff blocker. [CODX-COVERAGE-DIFF-REMOVAL-001]
+- chore(security): Bandit entfernt (Pipeline, pre-commit, Tooling, Docs, Policies) und Security-Autofix-Workflow stillgelegt. [CODX-SEC-BANDIT-REMOVAL-001]
 - chore(ci): remove Ruff/Black from toolchain, promote isort + mypy + bandit + pytest + pip-audit as the remaining backend gates; documentation and policies updated accordingly. [CODX-LINT-REMOVAL-001]
 - sec(ci): introduce Bandit security-autofix workflow, allowlist policy updates in AGENTS.md, documentation for reviewers and developers, plus local pre-commit support. [CODX-SEC-AUTOFIX-001]
 - infra(docker): konsolidierte Build-Pipeline, Compose & Doku für das einheitliche Harmony-Image (`ghcr.io/bozzfozz/harmony`) mit Health-Check `/api/health/ready` und Port 8080. [CODX-P0-IMG-600]
@@ -39,7 +39,7 @@
 - feat(integrations): harden slskd adapter with strict config validation, URL normalisation,
   jittered retries, structured logging and updated contract tests; integration service and
   configuration wiring follow suit.【F:app/integrations/slskd_adapter.py†L1-L470】【F:app/services/integration_service.py†L1-L120】【F:app/config.py†L570-L640】【F:app/integrations/registry.py†L1-L80】【F:tests/integrations/test_slskd_adapter.py†L1-L220】【F:tests/services/test_integration_service_slskd.py†L1-L160】
-- docs: AGENTS.md um Initiative-, Scope-Guard- und Clarification-Regeln inkl. Checklisten, CI-Gates und Beispielen erweitert.
+- docs: AGENTS.md um Initiative-, Scope-Guard- und Clarification-Regeln inkl. Checklisten, Pipeline-Gates und Beispielen erweitert.
 - docs: README/ENV aktualisiert, Health/Ready-Doku konsolidiert,
   `.env.example` ergänzt und neue Ops-Guides für Runtime-Konfiguration sowie
   Observability hinzugefügt.【F:README.md†L328-L612】【F:.env.example†L1-L108】【F:docs/ops/runtime-config.md†L1-L83】【F:docs/observability.md†L1-L120】
@@ -49,7 +49,7 @@
   dokumentieren die Limits.【F:app/config.py†L114-L200】【F:app/workers/watchlist_worker.py†L1-L420】【F:tests/workers/test_watchlist_defaults.py†L1-L260】【F:README.md†L87-L104】
 
 ## v1.0.0 — 2025-09-15
-- chore(ci): reset GitHub Actions to a two-lane CI with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip database-specific markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
+- chore(ci): reset GitHub Actions to a two-lane pipeline with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip database-specific markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
 - chore(ci): add nightly dependency and secret scans at 01:00 Europe/Berlin with CycloneDX SBOM exports and 7-day report retention.【F:.github/workflows/nightly.yml†L1-L103】
 - chore(ci): introduce tag-triggered release automation that publishes Python distributions and optional frontend bundles as GitHub release assets.【F:.github/workflows/release.yml†L1-L72】
 - docs: capture required checks, database opt-in policy, and operational expectations in `REPO_MAINTENANCE.md`.【F:REPO_MAINTENANCE.md†L1-L74】
@@ -98,7 +98,7 @@
   lifespan API, refresh deprecated status-code constants, and document the
   current code-health baseline.
 - ci: add dev toolchain (radon/vulture/pip-audit) with offline fallback
-  targets and extended CI gates across security and analysis tooling.
+  targets and extended pipeline gates across security and analysis tooling.
 - fix: preserve FREE ingest partial failure details when skips occur and surface
   skip metadata (queued/failed/skipped counts, skip reason) in job status
   responses.
@@ -123,5 +123,5 @@
 - Complete Discographies – gesamte Künstlerdiskografien können automatisch heruntergeladen und kategorisiert werden.
 - Automatic Lyrics – Downloads enthalten jetzt synchronisierte `.lrc`-Dateien mit Songtexten aus der Spotify-API (Fallback Musixmatch/lyrics.ovh) samt neuen Endpunkten zum Abruf und Refresh.
 - Artist Watchlist – neue Tabelle `watchlist_artists`, API-Endpunkte (`GET/POST/DELETE /watchlist`) sowie ein periodischer Worker, der neue Releases erkennt, fehlende Tracks via Soulseek lädt und an den SyncWorker übergibt. Konfigurierbar über `WATCHLIST_INTERVAL`.
-- CI-Gates – Push/PR-Workflow führt Ruff, Black, Mypy, Pytest, Jest, TypeScript-Build und einen OpenAPI-Snapshot-Vergleich aus und sorgt damit für reproduzierbare Qualitätsprüfungen.
+- Pipeline-Gates – Push/PR-Workflow führt Ruff, Black, Mypy, Pytest, Jest, TypeScript-Build und einen OpenAPI-Snapshot-Vergleich aus und sorgt damit für reproduzierbare Qualitätsprüfungen.
 - Persistente Soulseek-Retries – Downloads behalten `retry_count`, `next_retry_at`, `last_error` und wechseln nach Überschreitung der Grenze in den Dead-Letter-Status. Ein neuer Retry-Scheduler re-enqueued fällige Jobs mit exponentiellem Backoff, und `/soulseek/downloads/{id}/requeue` erlaubt manuelle Neuversuche.

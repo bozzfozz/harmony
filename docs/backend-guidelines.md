@@ -45,12 +45,12 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - **Audit-Logs/Activity Feed** für nachvollziehbare Änderungen pflegen.  
 - **Logs** strukturiert ausgeben und optional in Systeme wie Prometheus, Grafana, ELK weiterleiten.  
 
-## 7. Testing & CI/CD
+## 7. Testing & lokale Gates
 - Unit-Tests für Services und Core-Clients.  
 - API-Tests für Router-Endpunkte (Happy Path + Fehlerfälle).  
 - Worker-Tests mit Queue-Simulationen.  
 - Integration-Tests (End-to-End-Flows).  
-- CI führt Tests und Linter standardmäßig aus.  
+- `scripts/dev/test_py.sh` sowie `make all` laufen vor jedem Merge lokal.  
 
 ## 8. Dokumentation
 - API-Endpunkte mit Beispielen dokumentieren (Markdown, OpenAPI).
