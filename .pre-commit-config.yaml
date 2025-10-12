@@ -34,3 +34,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: fe-verify
+        name: fe-verify
+        entry: bash scripts/dev/fe_install_verify.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

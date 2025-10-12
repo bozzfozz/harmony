@@ -160,6 +160,11 @@ Steuerung:
 - `SUPPLY_GUARD_TIMEOUT_SEC=180 make supply-guard`
 - Überspringen (nur lokal): `SKIP_SUPPLY_GUARD=1 make supply-guard`
 
+## Frontend-Installationsprüfung (lokal)
+- Verifizieren: `make fe-verify`
+- Variablen: `REQUIRED_NODE_MAJOR=20 REQUIRED_NPM_MAJOR=11 VERBOSE=1 TIMEOUT_SEC=600 make fe-verify`
+- Exit-Codes: 0 OK · 10 Toolchain · 11 Lockfile · 12 Registry-Drift · 13 Install · 14 Build · 15 Runtime-Config · 16 Struktur
+
 ## Unified Docker Image
 
 Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört standardmäßig auf Port `8080` – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
@@ -570,7 +575,7 @@ npm run build     # TypeScript + Vite Build
 - **Dependency-Drift (Frontend):** `scripts/dev/dep_sync_js.sh` meldet fehlende oder ungenutzte npm-Pakete. Passe `package.json` und `package-lock.json` an.
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
 - **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
-- **Build:** `scripts/dev/build_fe.sh` führt `npm ci` und `npm run build` aus. TypeScript- oder Vite-Fehler erscheinen direkt im Konsolen-Log.
+- **Build:** `scripts/dev/fe_install_verify.sh` prüft Toolchain & Lockfile, installiert deterministisch und baut das Frontend (Make-Target `fe-verify`). TypeScript- oder Vite-Fehler erscheinen direkt im Konsolen-Log.
 - **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt `/api/health/live`. Prüfe die Logdatei bei Fehlschlägen.
 
 ## Datenbank-Migrationen
