@@ -1,0 +1,109 @@
+name: docker-image
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short,prefix=sha-,priority=400
+            type=ref,event=branch,priority=300
+            type=semver,pattern={{version}},priority=200
+            type=semver,pattern={{major}}.{{minor}},priority=190
+            type=raw,value=edge,enable=${{ startsWith(github.ref, 'refs/heads/main') }},priority=100
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }},priority=90
+          labels: |
+            org.opencontainers.image.title=Harmony
+            org.opencontainers.image.description=Unified Backend + Frontend
+            org.opencontainers.image.url=https://github.com/${{ env.IMAGE_NAME }}
+            org.opencontainers.image.source=https://github.com/${{ env.IMAGE_NAME }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Local smoke build (amd64, not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci-smoke-${{ github.run_id }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'edge' }}
+
+      - name: Smoke test container
+        run: |
+          docker run -d --rm -p 127.0.0.1:8000:8000 --name hsmoke ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci-smoke-${{ github.run_id }}
+          tries=0
+          until curl -fsS http://127.0.0.1:8000/live >/dev/null || [ $tries -ge 30 ]; do
+            tries=$((tries+1))
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/live >/dev/null
+          docker logs hsmoke --tail=100 || true
+          docker stop hsmoke || true
+
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'edge' }}
