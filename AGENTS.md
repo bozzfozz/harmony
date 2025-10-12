@@ -78,6 +78,10 @@ Reihenfolge ist strikt:
   - JS/TS: `eslint`, `prettier`, Build-/Type-Checks.
   - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind **nicht erlaubt**.
 - Lint-Warnungen beheben, toten Code entfernen.
+- **Frontend Supply-Chain (verbindlich)**
+  - `.nvmrc` und `.node-version` müssen identische Node-Versionen definieren; `frontend/.npm-version` ist die einzige zulässige npm-Version.
+  - `.npmrc` im Repo-Root und in `frontend/` pinnt exklusiv `https://registry.npmjs.org/`. Zusätzliche Registries oder Mirrors sind untersagt.
+  - Frontend-Installationen erfolgen ausschließlich via `scripts/dev/supply_guard.sh` + `scripts/dev/fe_install_verify.sh`. `SKIP_INSTALL=1` ist verboten (auch in Dockerfiles, Workflows, Makefile-Zielen).
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
 ## 5. Prompt- & Agent-Spezifika

@@ -14,9 +14,12 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-cd "$FRONTEND_DIR"
+cd "$ROOT_DIR"
 
-npm ci --no-audit --no-fund
+bash "$ROOT_DIR/scripts/dev/supply_guard.sh"
+SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash "$ROOT_DIR/scripts/dev/fe_install_verify.sh"
+
+cd "$FRONTEND_DIR"
 npx eslint "src/**/*.{ts,tsx,js,jsx}" --max-warnings=0
 
 TMP_REPORT=$(mktemp)

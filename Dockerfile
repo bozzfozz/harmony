@@ -1,17 +1,23 @@
-FROM node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
+FROM node:20.17.1-alpine AS frontend-builder
 
-RUN mkdir -p /app/frontend \
+ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
+    npm_config_registry=https://registry.npmjs.org/ \
+    NODE_ENV=production
+
+RUN apk add --no-cache bash coreutils jq
+
+WORKDIR /app
+
+COPY . .
+
+RUN npm install -g "npm@$(tr -d '\r\n' < frontend/.npm-version)" \
+    && chmod +x scripts/dev/*.sh \
     && chown -R node:node /app
+
 USER node
 
-COPY --chown=node:node frontend/package*.json ./
-COPY --chown=node:node frontend/.npmrc ./.npmrc
-RUN npm ci --no-audit --no-fund
-
-COPY --chown=node:node frontend/ ./
-ENV NODE_ENV=production
-RUN npm run build
+RUN bash scripts/dev/supply_guard.sh
+RUN SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh
 
 FROM python:3.11-slim
 

@@ -18,14 +18,14 @@ dep-sync:
 	./scripts/dev/dep_sync_py.sh
 	./scripts/dev/dep_sync_js.sh
 
-fe-verify:
-	@bash scripts/dev/fe_install_verify.sh
+fe-verify: supply-guard
+        @SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh
 
-fe-install:
-	@SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
+fe-install: supply-guard
+        @SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
 
-fe-build: fe-install
-	@cd frontend && npm run build
+fe-build: fe-verify
+        @:
 
 smoke:
 	./scripts/dev/smoke_unified.sh
@@ -33,7 +33,7 @@ smoke:
 doctor:
 	./scripts/dev/doctor.sh
 
-all: fmt lint dep-sync be-verify fe-install fe-build smoke
+all: fmt lint dep-sync be-verify fe-verify smoke
 
 supply-guard:
 	@bash scripts/dev/supply_guard.sh

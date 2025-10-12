@@ -20,6 +20,25 @@ fi
 
 warn_flag=0
 fail_code=0
+DEFAULT_REGISTRY="https://registry.npmjs.org/"
+REQUIRED_NODE_VERSION=""
+REQUIRED_NPM_VERSION=""
+
+trim() {
+  local value="$1"
+  printf '%s' "${value}" | tr -d '\r' | sed -e 's/^\s\+//' -e 's/\s\+$//'
+}
+
+normalize_registry() {
+  local value="$1"
+  value="$(trim "${value}")"
+  value="${value%/}"
+  if [ -z "${value}" ]; then
+    echo ""
+    return
+  fi
+  printf '%s/' "${value}"
+}
 
 run_with_timeout() {
   local secs="$1"
@@ -53,6 +72,79 @@ vlog() {
   fi
 }
 
+check_repo_registry() {
+  local code=${EXIT_OK}
+  if [ ! -f .npmrc ]; then
+    log "Repo .npmrc fehlt"
+    return ${EXIT_DRIFT}
+  fi
+  if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' .npmrc; then
+    log "Repo .npmrc Registry != ${DEFAULT_REGISTRY}"
+    code=${EXIT_DRIFT}
+  fi
+  if grep -E 'registry=' .npmrc | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
+    log "Repo .npmrc zusätzliche Registry-Einträge gefunden"
+    code=${EXIT_DRIFT}
+  fi
+  if [ -d frontend ]; then
+    if [ ! -f frontend/.npmrc ]; then
+      log "frontend/.npmrc fehlt"
+      code=${EXIT_DRIFT}
+    else
+      if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' frontend/.npmrc; then
+        log "frontend/.npmrc Registry != ${DEFAULT_REGISTRY}"
+        code=${EXIT_DRIFT}
+      fi
+      if grep -E 'registry=' frontend/.npmrc | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
+        log "frontend/.npmrc zusätzliche Registry-Einträge gefunden"
+        code=${EXIT_DRIFT}
+      fi
+    fi
+  fi
+  return ${code}
+}
+
+load_toolchain_manifest() {
+  local code=${EXIT_OK}
+  local node_file_version=""
+  if [ -f .nvmrc ]; then
+    REQUIRED_NODE_VERSION=$(trim "$(cat .nvmrc)")
+    if [ -z "${REQUIRED_NODE_VERSION}" ]; then
+      log ".nvmrc ist leer"
+      code=${EXIT_DRIFT}
+    fi
+  else
+    log ".nvmrc fehlt"
+    code=${EXIT_DRIFT}
+  fi
+  if [ -f .node-version ]; then
+    node_file_version=$(trim "$(cat .node-version)")
+    if [ -z "${node_file_version}" ]; then
+      log ".node-version ist leer"
+      code=${EXIT_DRIFT}
+    fi
+  else
+    log ".node-version fehlt"
+    code=${EXIT_DRIFT}
+  fi
+  if [ -n "${REQUIRED_NODE_VERSION}" ] && [ -n "${node_file_version}" ] \
+     && [ "${REQUIRED_NODE_VERSION}" != "${node_file_version}" ]; then
+    log ".nvmrc (${REQUIRED_NODE_VERSION}) != .node-version (${node_file_version})"
+    code=${EXIT_DRIFT}
+  fi
+  if [ -f frontend/.npm-version ]; then
+    REQUIRED_NPM_VERSION=$(trim "$(cat frontend/.npm-version)")
+    if [ -z "${REQUIRED_NPM_VERSION}" ]; then
+      log "frontend/.npm-version ist leer"
+      code=${EXIT_DRIFT}
+    fi
+  else
+    log "frontend/.npm-version fehlt"
+    code=${EXIT_DRIFT}
+  fi
+  return ${code}
+}
+
 check_node() {
   if [ ! -d "frontend" ]; then
     return ${EXIT_OK}
@@ -66,15 +158,27 @@ check_node() {
     code=${EXIT_TOOL}
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ]; then
-    local npm_major
-    npm_major="$(npm --version 2>/dev/null | cut -d. -f1 || echo 0)"
-    if ! [[ ${npm_major} =~ ^[0-9]+$ ]]; then
-      npm_major=0
+  if [ "${code}" -eq ${EXIT_OK} ] && [ -n "${REQUIRED_NODE_VERSION}" ]; then
+    local actual_node
+    actual_node="$(node --version 2>/dev/null | sed 's/^v//')"
+    if [ -n "${actual_node}" ] && [ "${actual_node}" != "${REQUIRED_NODE_VERSION}" ]; then
+      log "Node-Version Drift: ${actual_node} != ${REQUIRED_NODE_VERSION}"
+      code=${EXIT_DRIFT}
     fi
-    if [ "${npm_major}" -lt 9 ]; then
-      log "NPM-Major zu alt: ${npm_major}"
+  fi
+
+  if [ "${code}" -eq ${EXIT_OK} ]; then
+    local npm_version
+    npm_version="$(npm --version 2>/dev/null | tail -n1 || echo 0)"
+    if [ -z "${npm_version}" ]; then
+      log "npm-Version konnte nicht gelesen werden"
       code=${EXIT_TOOL}
+    fi
+    if [ "${code}" -eq ${EXIT_OK} ] && [ -n "${REQUIRED_NPM_VERSION}" ]; then
+      if [ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]; then
+        log "npm-Version Drift: ${npm_version} != ${REQUIRED_NPM_VERSION}"
+        code=${EXIT_DRIFT}
+      fi
     fi
   fi
 
@@ -88,6 +192,15 @@ check_node() {
   if [ "${code}" -eq ${EXIT_OK} ] && [ -f .npmrc ]; then
     if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?' .npmrc; then
       log ".npmrc Registry nicht npmjs.org"
+      code=${EXIT_DRIFT}
+    fi
+  fi
+
+  if [ "${code}" -eq ${EXIT_OK} ]; then
+    local npm_registry
+    npm_registry="$(normalize_registry "$(npm config get registry 2>/dev/null || true)")"
+    if [ "${npm_registry}" != "${DEFAULT_REGISTRY}" ]; then
+      log "npm config registry ist '${npm_registry}'"
       code=${EXIT_DRIFT}
     fi
   fi
@@ -348,6 +461,24 @@ accumulate() {
 }
 
 log "start SUPPLY_GUARD_TIMEOUT_SEC=${SUPPLY_GUARD_TIMEOUT_SEC} verbose=${SUPPLY_GUARD_VERBOSE}"
+
+code=${EXIT_OK}
+if load_toolchain_manifest; then
+  code=${EXIT_OK}
+else
+  code=$?
+fi
+log "load_toolchain_manifest -> ${code}"
+accumulate "${code}"
+
+code=${EXIT_OK}
+if check_repo_registry; then
+  code=${EXIT_OK}
+else
+  code=$?
+fi
+log "check_repo_registry -> ${code}"
+accumulate "${code}"
 
 for check in check_node check_python check_go check_rust check_java_kotlin check_ruby check_php check_docker; do
   if declare -F "${check}" >/dev/null 2>&1; then
