@@ -47,7 +47,14 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
    - `GET /api/health/live` → `200 {"status": "ok"}`.
    - `GET /api/health/ready?verbose=1` → `200` und alle Checks auf `ok`.
 3. **Volumes & Rechte:** Download- und Musik-Verzeichnis mit Test-Datei
-   beschreibbar (`touch`, `fsync`, `rm`).
+  beschreibbar (`touch`, `fsync`, `rm`).
+  - HDM erzwingt bei Cross-Device-Moves jetzt einen `fsync` auf der temporären
+    Kopie und dem Zielverzeichnis, bevor es per Rename finalisiert. Achten Sie
+    in den Logs auf `hdm.move.copy_fallback.succeeded`, wenn unterschiedliche
+    Mounts involviert sind.
+  - Die Laufzeit (`build_hdm_runtime` → `DefaultDownloadPipeline`) injiziert den
+    `AtomicFileMover`, der die Dateiübergabe steuert und beim Schritt
+    `file.moved` ausgeführt wird.
 4. **OAuth-State:** Bei Split-Mode sicherstellen, dass `OAUTH_STATE_DIR`
    auf demselben Dateisystem wie `DOWNLOADS_DIR` liegt (siehe Self-Check).
 5. **Secrets-Dokumentation:** Rotationstermine und Speicherort der Secrets
