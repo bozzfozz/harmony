@@ -323,6 +323,21 @@ check_repo_registry(){
   fi
 }
 
+check_install_environment(){
+  local current_node_env
+  current_node_env="$(lower "${NODE_ENV:-}")"
+  if [ "${current_node_env}" = "production" ]; then
+    report_error "NODE_ENV" "NODE_ENV=production erkannt – npm install würde devDependencies auslassen" "Entferne NODE_ENV vor supply_guard/Installationen und setze es erst in der Runtime-Stage"
+  fi
+
+  local flag
+  for flag in NPM_CONFIG_PRODUCTION npm_config_production; do
+    if is_truthy "${!flag:-}"; then
+      report_error "NPM_CONFIG_PRODUCTION" "${flag}=true erkannt – devDependencies würden pruned" "Setze ${flag}=false für Builder/CI; Runtime darf NODE_ENV=production setzen"
+    fi
+  done
+}
+
 check_node(){
   if [ ! -d frontend ]; then
     report_info "NODE" "frontend/ nicht vorhanden – überspringe Node-Prüfungen" "-"
@@ -647,6 +662,7 @@ main(){
 
   report_info "INIT" "Start SUPPLY_GUARD_TIMEOUT_SEC=${SUPPLY_GUARD_TIMEOUT_SEC} verbose=${SUPPLY_GUARD_VERBOSE}" "-"
 
+  check_install_environment
   load_toolchain_manifest
   check_repo_registry
   check_node

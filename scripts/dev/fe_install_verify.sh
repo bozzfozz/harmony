@@ -134,6 +134,15 @@ ensure_boolean(){
   esac
 }
 
+ensure_module_available(){
+  local module="$1"
+  local label="${2:-$1}"
+  if ! node -e "require.resolve('${module}')" >/dev/null 2>&1; then
+    die 13 "Dev dependency '${label}' fehlt – npm install hat vermutlich --omit=dev genutzt (NODE_ENV=production?)"
+  fi
+  vlog "${label} auflösbar"
+}
+
 has_package_script(){
   local script_name="$1"
   if command -v jq >/dev/null 2>&1; then
@@ -302,8 +311,8 @@ main(){
     fi
   fi
 
-  node -e "require.resolve('react')" >/dev/null 2>&1 || vlog "Hinweis: 'react' nicht auflösbar (optional)"
-  node -e "require.resolve('vite')" >/dev/null 2>&1 || vlog "Hinweis: 'vite' nicht auflösbar (optional)"
+  ensure_module_available "vite" "vite"
+  ensure_module_available "typescript" "typescript"
 
   if [ "${SKIP_TYPECHECK}" = "0" ] && has_package_script typecheck; then
     vlog "${pm} run typecheck ..."
