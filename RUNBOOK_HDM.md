@@ -44,7 +44,7 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
    - `70 (EX_SOFTWARE)`: interne Fehlkonfiguration (z. B. ungültige Ports oder
      fehlerhafte Booleans).
 2. **Health-API prüfen:**
-   - `GET /api/health/live` → `200 {"status": "ok"}`.
+   - `GET /live` → `200 {"status": "ok"}` (`/api/health/live` bleibt als Alias erhalten).
    - `GET /api/health/ready?verbose=1` → `200` und alle Checks auf `ok`.
 3. **Volumes & Rechte:** Download- und Musik-Verzeichnis mit Test-Datei
   beschreibbar (`touch`, `fsync`, `rm`).

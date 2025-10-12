@@ -719,6 +719,12 @@ async def root() -> dict[str, str]:
     return {"status": "ok", "version": app.version}
 
 
+async def live_probe() -> dict[str, str]:
+    """Expose a top-level liveness probe forwarding to the health router."""
+
+    return await health_api.live()
+
+
 _versioned_router = APIRouter()
 _versioned_router.add_api_route("/", root, methods=["GET"], tags=["System"])
 router_registry.register_all(
@@ -727,6 +733,8 @@ router_registry.register_all(
     emit_log=True,
     router=_versioned_router,
 )
+
+app.add_api_route("/live", live_probe, methods=["GET"], include_in_schema=False, tags=["System"])
 
 app.include_router(health_api.router)
 

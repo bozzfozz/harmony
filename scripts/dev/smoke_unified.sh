@@ -26,6 +26,7 @@ fi
 
 HOST=${SMOKE_HOST:-127.0.0.1}
 PORT=${SMOKE_PORT:-8080}
+PATH_SUFFIX=${SMOKE_PATH:-/live}
 TMP_DIR="$ROOT_DIR/.tmp"
 mkdir -p "$TMP_DIR"
 DB_FILE="$TMP_DIR/smoke.db"
@@ -47,7 +48,7 @@ $PYTHON_BIN -m uvicorn app.main:app --host "$HOST" --port "$PORT" >"$SMOKE_LOG" 
 SERVER_PID=$!
 
 RETRIES=30
-until curl --fail --silent --show-error "http://$HOST:$PORT/api/health/live" >/dev/null 2>&1; do
+until curl --fail --silent --show-error "http://$HOST:$PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
   if [[ $RETRIES -le 0 ]]; then
     echo "Backend failed to become ready. Logs:" >&2
@@ -62,7 +63,7 @@ until curl --fail --silent --show-error "http://$HOST:$PORT/api/health/live" >/d
   fi
 done
 
-echo "Backend smoke check passed: /api/health/live returned 200."
+echo "Backend smoke check passed: ${PATH_SUFFIX} returned 200."
 
 if command -v docker >/dev/null 2>&1; then
   IMAGE=${SMOKE_UNIFIED_IMAGE:-harmony-unified:local}
@@ -78,7 +79,7 @@ if command -v docker >/dev/null 2>&1; then
       exit 1
     fi
     DOCKER_RETRIES=30
-    until curl --fail --silent --show-error "http://127.0.0.1:$CONTAINER_PORT/api/health/live" >/dev/null 2>&1; do
+    until curl --fail --silent --show-error "http://127.0.0.1:$CONTAINER_PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
       DOCKER_RETRIES=$((DOCKER_RETRIES - 1))
       if [[ $DOCKER_RETRIES -le 0 ]]; then
         echo "Docker smoke check failed for $IMAGE" >&2

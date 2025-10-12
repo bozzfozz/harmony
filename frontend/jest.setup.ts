@@ -41,15 +41,15 @@ const globalProcess = (globalThis as { process?: { env?: Record<string, string |
 if (globalProcess) {
   globalProcess.env = {
     ...globalProcess.env,
-    VITE_API_BASE_URL: globalProcess.env?.VITE_API_BASE_URL ?? globalProcess.env?.VITE_API_URL ?? 'http://127.0.0.1:8000',
-    VITE_API_URL: globalProcess.env?.VITE_API_URL ?? 'http://127.0.0.1:8000',
+    VITE_API_BASE_URL: globalProcess.env?.VITE_API_BASE_URL ?? globalProcess.env?.VITE_API_URL ?? 'http://127.0.0.1:8080',
+    VITE_API_URL: globalProcess.env?.VITE_API_URL ?? 'http://127.0.0.1:8080',
     VITE_API_BASE_PATH: globalProcess.env?.VITE_API_BASE_PATH ?? '',
     VITE_API_TIMEOUT_MS: globalProcess.env?.VITE_API_TIMEOUT_MS ?? '8000'
   };
 }
 
 const importMetaEnv = {
-  VITE_API_BASE_URL: globalProcess?.env?.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000',
+  VITE_API_BASE_URL: globalProcess?.env?.VITE_API_BASE_URL ?? 'http://127.0.0.1:8080',
   VITE_API_BASE_PATH: globalProcess?.env?.VITE_API_BASE_PATH ?? '',
   VITE_API_TIMEOUT_MS: globalProcess?.env?.VITE_API_TIMEOUT_MS ?? '8000',
   VITE_REQUIRE_AUTH: globalProcess?.env?.VITE_REQUIRE_AUTH,
