@@ -152,6 +152,14 @@ OAuth-Secrets und strukturierte Logs.
 - **Coverage-Berichte:** Die globale Coverage-Konfiguration lebt ausschließlich in `pyproject.toml` unter `[tool.coverage.*]`. Sie dient als informative Kennzahl (`fail_under = 0`) und erzeugt `reports/coverage.xml` + `reports/junit.xml`. Wer eine alternative Struktur benötigt, kann den Pfad über `COVERAGE_XML=reports/coverage.xml` anpassen.
 - **Reports:** Automatisches Sammeln von Artefakten entfällt. Hänge relevante Ausschnitte aus `reports/` in deinem PR an, sobald zusätzliche Nachweise erforderlich sind.
 
+## Supply-Chain & Determinismus
+Vor jedem PR lokal ausführen:
+- `make supply-guard` → Exit 0 = OK, 2 = Warnung, 3/4/5 = beheben und erneut ausführen.
+Steuerung:
+- `SUPPLY_GUARD_VERBOSE=1 make supply-guard`
+- `SUPPLY_GUARD_TIMEOUT_SEC=180 make supply-guard`
+- Überspringen (nur lokal): `SKIP_SUPPLY_GUARD=1 make supply-guard`
+
 ## Unified Docker Image
 
 Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört standardmäßig auf Port `8080` – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
