@@ -1,6 +1,7 @@
 ## v2.0.0 — unreleased
 - Governance: §14e in AGENTS.md präzisiert (Exitcodes, Variablen, Zeitlimits, Matrix, Glossar).
 - Tooling: scripts/dev/supply_guard.sh hinzugefügt, Makefile-Targets und pre-commit Hook ergänzt.
+- fix(supply-guard): npm Off-Registry-Erkennung ohne Look-Ahead; keine `grep`-Warnungen mehr.
 - chore(orchestrator): retire the legacy download-flow namespace from the orchestrator package, archive remaining docs and add an automated pipeline legacy
   scan gate to enforce HDM-only usage. [CODX-HDM-DROP-LEGACY-IMPORTS-001]
 - chore(tests): Legacy-Tests mit Präfix test_flow entfernt und Pipeline-Gate ergänzt. [CODX-TESTS-FLOW-PREFIX-REMOVE-001]

@@ -93,9 +93,24 @@ check_node() {
   fi
 
   if [ "${code}" -eq ${EXIT_OK} ] && [ -f package-lock.json ]; then
-    if grep -Eq '"resolved":\s*"https?://(?!registry\.npmjs\.org/)' package-lock.json; then
-      log "Lockfile resolved-URLs zeigen nicht auf npmjs.org"
-      code=${EXIT_DRIFT}
+    if command -v jq >/dev/null 2>&1; then
+      local off_url=""
+      off_url="$(jq -r '..|.resolved? // empty' package-lock.json \
+        | grep -E '^https?://' \
+        | grep -Ev '^https?://registry\.npmjs\.org/' \
+        | head -n 1 || true)"
+      if [ -n "${off_url}" ]; then
+        log "Lockfile enthält Off-Registry-URL: ${off_url}"
+        popd >/dev/null || true
+        return ${EXIT_DRIFT}
+      fi
+    else
+      if grep -E '"resolved":\s*"https?://[^"]+' package-lock.json \
+         | grep -Ev 'https?://registry\.npmjs\.org/' >/dev/null 2>&1; then
+        log "Lockfile resolved-URLs zeigen nicht auf npmjs.org"
+        popd >/dev/null || true
+        return ${EXIT_DRIFT}
+      fi
     fi
   fi
 

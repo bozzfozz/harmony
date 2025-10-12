@@ -160,6 +160,8 @@ Steuerung:
 - `SUPPLY_GUARD_TIMEOUT_SEC=180 make supply-guard`
 - Überspringen (nur lokal): `SKIP_SUPPLY_GUARD=1 make supply-guard`
 
+> **Hinweis:** Für `package-lock.json` nutzt das Skript optional `jq`, um `resolved`-URLs exakt zu extrahieren und Off-Registry-Referenzen zu melden. Falls `jq` nicht installiert ist, greift eine portable `grep`-Fallback-Heuristik; CI setzt `jq` nicht voraus.
+
 ## Frontend-Installationsprüfung (lokal)
 - Verifizieren: `make fe-verify`
 - Variablen: `REQUIRED_NODE_MAJOR=20 REQUIRED_NPM_MAJOR=11 VERBOSE=1 TIMEOUT_SEC=600 make fe-verify`
