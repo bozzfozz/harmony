@@ -82,6 +82,7 @@ Reihenfolge ist strikt:
   - `.nvmrc` und `.node-version` müssen identische Node-Versionen definieren; `frontend/.npm-version` ist die einzige zulässige npm-Version.
   - `.npmrc` im Repo-Root und in `frontend/` pinnt exklusiv `https://registry.npmjs.org/`. Zusätzliche Registries oder Mirrors sind untersagt.
   - Frontend-Installationen erfolgen ausschließlich via `scripts/dev/supply_guard.sh` + `scripts/dev/fe_install_verify.sh`. `SKIP_INSTALL=1` ist verboten (auch in Dockerfiles, Workflows, Makefile-Zielen).
+  - Node.js **20.17.1** ist für alle Pfade (lokal, Docker, CI) verpflichtend. `scripts/dev/supply_guard.sh` und `scripts/dev/fe_install_verify.sh` brechen bei Drift hart ab. Das Flag `TOOLCHAIN_STRICT=false` ist ausschließlich für lokale Experimente gedacht und darf in CI, Docker oder PR-Builds **nicht** gesetzt werden.
 - **Konfiguration**: Runtime-Settings ausschließlich über den zentralen Loader in `app.config` beziehen; `.env` ist optional und ergänzt Code-Defaults, Environment-Variablen haben oberste Priorität.
 
 ## 5. Prompt- & Agent-Spezifika

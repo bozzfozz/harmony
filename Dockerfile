@@ -2,7 +2,8 @@ FROM node:20.17.1-alpine AS frontend-builder
 
 ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
     npm_config_registry=https://registry.npmjs.org/ \
-    NODE_ENV=production
+    NODE_ENV=production \
+    TOOLCHAIN_STRICT=true
 
 RUN apk add --no-cache bash coreutils jq
 

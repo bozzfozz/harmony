@@ -19,6 +19,17 @@ set -euo pipefail
 : "${SKIP_TYPECHECK:=0}"
 : "${SUPPLY_GUARD_RAN:=0}"
 
+STRICT_ENV="${TOOLCHAIN_STRICT:-true}"
+TOOLCHAIN_STRICT_MODE=1
+case "$(printf '%s' "${STRICT_ENV}" | tr '[:upper:]' '[:lower:]')" in
+  0|false|no|off)
+    TOOLCHAIN_STRICT_MODE=0
+    ;;
+  *)
+    TOOLCHAIN_STRICT_MODE=1
+    ;;
+esac
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
 TOOLCHAIN_NODE_FILE="${REPO_ROOT}/.nvmrc"
@@ -37,6 +48,22 @@ die(){
   shift
   echo "[fe-verify] ERROR: $*" >&2
   exit "${code}"
+}
+
+toolchain_violation(){
+  # $1 component, $2 expected, $3 actual, $4 remediation hint
+  local component="$1"
+  local expected="$2"
+  local actual="$3"
+  local hint="$4"
+  local message="Toolchain Drift (${component}): erhalten ${actual:-<unbekannt>}, erwartet ${expected}. ${hint}"
+
+  if [ "${TOOLCHAIN_STRICT_MODE}" -eq 1 ]; then
+    die 10 "${message}"
+  fi
+
+  log "WARN ${message}"
+  log "WARN TOOLCHAIN_STRICT=false erkannt – weiterlaufen nur lokal erlaubt."
 }
 
 trim(){
@@ -198,10 +225,10 @@ main(){
   node_version="$(node --version | sed 's/^v//')"
   npm_version="$(npm --version 2>/dev/null | tail -n1)"
   if [ "${node_version}" != "${required_node}" ]; then
-    die 10 "Node-Version Drift: erwartet ${required_node}, erhalten ${node_version}"
+    toolchain_violation "Node.js" "${required_node}" "${node_version}" "Fix: nvm install ${required_node} && nvm use ${required_node}"
   fi
   if [ "${npm_version}" != "${required_npm}" ]; then
-    die 10 "npm-Version Drift: erwartet ${required_npm}, erhalten ${npm_version}"
+    toolchain_violation "npm" "${required_npm}" "${npm_version}" "Fix: npm install -g npm@${required_npm}"
   fi
   vlog "Node ${node_version}, npm ${npm_version}"
 

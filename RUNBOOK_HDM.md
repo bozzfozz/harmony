@@ -161,7 +161,7 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 ### Frontend-Lockfile neu erzeugen
 
-1. **Toolchain setzen:** `nvm use` (Version laut `.nvmrc`/`.node-version`), anschließend `npm install -g npm@$(cat frontend/.npm-version)`.
+1. **Toolchain setzen:** `nvm install 20.17.1 && nvm use` (laut `.nvmrc`/`.node-version`) und danach `npm install -g npm@$(cat frontend/.npm-version)`. Abweichungen führen zu einem sofortigen Abbruch von `scripts/dev/supply_guard.sh` und `scripts/dev/fe_install_verify.sh`.
 2. **Workspace bereinigen:** `rm -rf frontend/node_modules` und optional das aktuelle `frontend/package-lock.json` sichern.
 3. **Lockfile schreiben:** `cd frontend && npm install --package-lock-only`.
 4. **Guard & Verify:** zurück im Repo-Root `bash scripts/dev/supply_guard.sh` ausführen und danach `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.

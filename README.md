@@ -12,6 +12,13 @@ Harmony setzt auf ein geschichtetes Kernsystem (Router → Services → Domain �
 
 Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest du im [Projektstatus-Dashboard](docs/project_status.md).
 
+## Toolchain
+
+- **Node.js:** `20.17.1` (gepinnt in [`.nvmrc`](.nvmrc) und [`.node-version`](.node-version)). Installiere die Version einmalig via `nvm install 20.17.1` und aktiviere sie mit `nvm use`.
+- **npm:** Version aus [`frontend/.npm-version`](frontend/.npm-version) (derzeit `10.8.2`). Aktualisiere sie mit `npm install -g npm@$(cat frontend/.npm-version)`.
+- **Guards:** Vor jeder Frontend-Installation oder jedem Build sind `bash scripts/dev/supply_guard.sh` und danach `SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh` auszuführen. Beide Skripte brechen bei Toolchain-Drift hart ab und nennen Ist-/Soll-Version inklusive Fix-Hinweisen.
+- **Override nur lokal:** Setze `TOOLCHAIN_STRICT=false` ausschließlich für kurzfristige lokale Experimente. CI, Docker-Builds und PRs müssen ohne dieses Override laufen; dort führt jede Abweichung von Node `20.17.1` bzw. dem gepinnten npm zu einem sofortigen Fehler.
+
 ## Features
 
 - **Harmony Web UI (React + Vite)** mit Dashboard, Service-Tabs, Tabellen, Karten und Dark-/Light-Mode.
