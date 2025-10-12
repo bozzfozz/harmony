@@ -24,6 +24,17 @@ DEFAULT_REGISTRY="https://registry.npmjs.org/"
 REQUIRED_NODE_VERSION=""
 REQUIRED_NPM_VERSION=""
 
+STRICT_ENV="${TOOLCHAIN_STRICT:-true}"
+STRICT_MODE=1
+case "$(printf '%s' "${STRICT_ENV}" | tr '[:upper:]' '[:lower:]')" in
+  0|false|no|off)
+    STRICT_MODE=0
+    ;;
+  *)
+    STRICT_MODE=1
+    ;;
+esac
+
 trim() {
   local value="$1"
   printf '%s' "${value}" | tr -d '\r' | sed -e 's/^\s\+//' -e 's/\s\+$//'
@@ -70,6 +81,23 @@ vlog() {
   if [ "${SUPPLY_GUARD_VERBOSE}" = "1" ]; then
     echo "[supply-guard] $*"
   fi
+}
+
+toolchain_drift() {
+  # $1 component, $2 expected, $3 actual, $4 remediation hint, $5 [optional] exit code
+  local component="$1"
+  local expected="$2"
+  local actual="$3"
+  local hint="$4"
+  local code="${5:-${EXIT_DRIFT}}"
+
+  if [ "${STRICT_MODE}" -eq 1 ]; then
+    log "Toolchain Drift (${component}): erhalten ${actual:-<unbekannt>}, erwartet ${expected}. ${hint}"
+    return "${code}"
+  fi
+
+  log "WARN Toolchain Drift (${component}): erhalten ${actual:-<unbekannt>}, erwartet ${expected}. TOOLCHAIN_STRICT=false erkannt – läuft weiter (nur lokal). ${hint}"
+  return ${EXIT_OK}
 }
 
 check_repo_registry() {
@@ -162,8 +190,13 @@ check_node() {
     local actual_node
     actual_node="$(node --version 2>/dev/null | sed 's/^v//')"
     if [ -n "${actual_node}" ] && [ "${actual_node}" != "${REQUIRED_NODE_VERSION}" ]; then
-      log "Node-Version Drift: ${actual_node} != ${REQUIRED_NODE_VERSION}"
-      code=${EXIT_DRIFT}
+      local hint="Fix: nvm install ${REQUIRED_NODE_VERSION} && nvm use ${REQUIRED_NODE_VERSION}"
+      code=${EXIT_OK}
+      if toolchain_drift "Node.js" "${REQUIRED_NODE_VERSION}" "${actual_node}" "${hint}"; then
+        code=${EXIT_OK}
+      else
+        code=$?
+      fi
     fi
   fi
 
@@ -176,8 +209,13 @@ check_node() {
     fi
     if [ "${code}" -eq ${EXIT_OK} ] && [ -n "${REQUIRED_NPM_VERSION}" ]; then
       if [ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]; then
-        log "npm-Version Drift: ${npm_version} != ${REQUIRED_NPM_VERSION}"
-        code=${EXIT_DRIFT}
+        local hint="Fix: npm install -g npm@${REQUIRED_NPM_VERSION}"
+        code=${EXIT_OK}
+        if toolchain_drift "npm" "${REQUIRED_NPM_VERSION}" "${npm_version}" "${hint}"; then
+          code=${EXIT_OK}
+        else
+          code=$?
+        fi
       fi
     fi
   fi
