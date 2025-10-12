@@ -37,8 +37,6 @@ fi
 
 check_command ruff "install via 'pip install ruff'"
 check_command pytest "install via 'pip install pytest'"
-check_command node "install Node.js from https://nodejs.org" 
-check_command npm "install Node.js from https://nodejs.org"
 check_command pip-missing-reqs "install via 'pip install pip-check-reqs'"
 check_command pip-extra-reqs "install via 'pip install pip-check-reqs'"
 
