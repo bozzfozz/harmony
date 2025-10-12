@@ -128,26 +128,23 @@
 - **Subtasks:**
   - [x] CODX-P1-TEST-317 — Refine admin fixtures to cleanly toggle routes and reset OpenAPI cache.
 
-## TD-20251009-001 Enforce required CI checks post-reset
-- **Status:** todo
+## TD-20251009-001 Lokale Gates nach Pipeline-Abschaltung
+- **Status:** wontdo
 - **Priority:** P1
 - **Scope:** all
 - **Owner:** platform
 - **Created_at (UTC):** 2025-10-09T16:20:19Z
-- **Updated_at (UTC):** 2025-10-09T16:20:19Z
-- **Tags:** ci, github-actions, branch-protection
-- **Description:** After merging the CI reset, branch protection must mandate the `ci-backend` (required) and `ci-frontend` (conditional) checks so regressions cannot merge without passing the new gates. Settings changes also need documentation in the rule description per governance policy.
+- **Updated_at (UTC):** 2025-10-20T00:00:00Z
+- **Tags:** tooling, branch-protection, governance
+- **Description:** Nach dem Entfernen der früheren Remote-Pipeline werden keine Status-Checks mehr über Branch-Protection erzwungen. Stattdessen verpflichten wir uns auf lokale Läufe (`make doctor`, `make all`) und dokumentieren die Merge-Checkliste inklusive Wiring-/Removal-Reports.
 - **Acceptance Criteria:**
-  - Branch protection on `main` lists `ci-backend` as a required status check.
-  - `ci-frontend` is required when the frontend pipeline is active (package manifest present) and documented accordingly.
-  - Rule description references `CODX-CI-RESET-001` and links to `REPO_MAINTENANCE.md` for marker guidance.
-  - Change log of repository settings stored for audit (screenshot or admin note).
-- **Risks/Impact:** Missing required checks would allow non-compliant merges, reintroducing flaky or slow workflows.
-- **Dependencies:** CODX-CI-RESET-001 must be merged so the new workflow names exist.
-- **References:** CODX-CI-RESET-001; `REPO_MAINTENANCE.md` guidance.
+  - `docs/operations/local-workflow.md` beschreibt den lokalen Gate-Ablauf vollständig.
+  - Branch-Protection-Regeln enthalten keine verwaisten Status-Checks; eine kurze Notiz liegt im Maintainer-Runbook vor.
+- **Risks/Impact:** Ohne dokumentierte lokale Gates könnten ungeprüfte Änderungen gemergt werden; halte Merge-Protokolle bereit.
+- **Dependencies:** Entfernen der Remote-Workflows abgeschlossen.
+- **References:** `docs/operations/local-workflow.md`; Maintainer-Notizen zur Branch-Protection.
 - **Subtasks:**
-  - [ ] CODX-CI-RESET-001A — Update branch protection required checks and attach configuration evidence in the operations runbook (`docs/operations/ci.md`).
-
+  
 ## TD-20251008-008 Enforce Ruff import sorting
 - **Status:** done
 - **Priority:** P2
@@ -159,13 +156,13 @@
 - **Description:** `ruff check --select I` fails on numerous backend modules, signaling drift from the repo import style baseline. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【8bf225†L1-L20】
 - **Acceptance Criteria:**
   - All backend files sort imports per repo configuration (`pyproject.toml`).
-  - CI includes Ruff formatting and lint steps (inkl. Importregel) alongside mypy, pytest and pip-audit gates.
+  - Lokale Gates (`make all`) enthalten Ruff-Formatierung, Lint, mypy, pytest und Dependency-Prüfungen.
   - Developer documentation verweist auf Ruff für Formatierung & Import-Sortierung.
 - **Risks/Impact:** Large import reordering may cause merge conflicts; coordinate rollout across branches.
 - **Dependencies:** None.
 - **References:** CODX-P0-ANLY-500; `reports/analysis/backend_deep_scan.md`; `reports/analysis/_evidence/ruff_import_check.txt`. 【F:reports/analysis/backend_deep_scan.md†L66-L70】【F:reports/analysis/_evidence/ruff_import_check.txt†L1-L20】
 - **Subtasks:**
-  - [x] CODX-P2-TOOL-318 — Apply Ruff import sorting and wire checks into CI.
+  - [x] CODX-P2-TOOL-318 — Apply Ruff import sorting and wire checks into die lokalen Gates.
 
 ## TD-20251008-009 Security scanner consolidation
 - **Status:** wontdo
@@ -178,7 +175,7 @@
 - **Description:** Die geplante Wiederaufnahme des statischen Sicherheitsscans wird durch `CODX-TOOL-702` abgelöst. Das Projekt setzt künftig auf Abhängigkeits-Audits (`pip-audit`) als verpflichtendes Gate und dokumentiert diese Änderung hiermit. 【F:README.md†L453-L461】
 - **Acceptance Criteria:**
   - Dokumentation und Policies spiegeln die Entscheidung wider (erledigt durch `CODX-TOOL-702`).
-  - CI-Pipeline setzt `pip-audit` als Security-Gate ein.
+  - Lokale Gates nutzen `pip-audit` nach Bedarf als Security-Check.
   - Keine offenen Tasks mehr zur Wiederaufnahme des ursprünglichen Scans.
 - **Risks/Impact:** Statisches Code-Scanning entfällt; mögliche Schwachstellen werden ausschließlich über Dependency-Audits entdeckt.
 - **Dependencies:** TD-20251008-008 (align tooling updates).

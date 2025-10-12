@@ -45,6 +45,6 @@ For a complete list of security-related environment variables refer to the
 
 ## Security scans
 
-Der CI-Workflow [`ci.yml`](../.github/workflows/ci.yml) führt `pip-audit` gegen `requirements.txt` aus. Falsche Positive lassen sich wie gewohnt über `pip-audit`-Ignore-Regeln adressieren; dokumentiere Ausnahmen im PR.
+Führe `pip-audit -r requirements.txt` lokal aus, wenn du zusätzliche Security-Nachweise benötigst. Dokumentiere Ausnahmen im PR.
 
 Zusätzliche Security-Tasks oder Toolchain-Anpassungen werden im Repository über reguläre CODX-Issues und Policies in [`AGENTS.md`](../AGENTS.md) gesteuert.

@@ -93,7 +93,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 
 ## OpenAPI
 
-`tests/snapshots/openapi.json` enthält einen Snapshot der generierten OpenAPI-Spezifikation. Die CI validiert Änderungen automatisch (`python -m app.main` → `app.openapi()`).
+`tests/snapshots/openapi.json` enthält einen Snapshot der generierten OpenAPI-Spezifikation. Vergleiche Änderungen lokal, indem du `python - <<'PY'` verwendest oder `python -m app.main` startest und `app.openapi()` inspizierst.
 
 ## HTTP-Caching
 

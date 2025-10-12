@@ -156,7 +156,7 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 - Die historischen `tests/orchestrator/test_flow*.py`-Suiten wurden entfernt. Verwenden Sie die HDM-Regressionstests unter
   `tests/orchestrator/` (inklusive `tests/orchestrator/hdm/`) für End-to-End-Abnahmen.
-- Der CI-Job `ban-test-flow-prefix` blockiert Commits mit neuen `test_flow*`-Artefakten oder Referenzen. Analysieren Sie bei
+- Das Guard-Skript `scripts/audit_wiring.py` blockiert Commits mit neuen `test_flow*`-Artefakten oder Referenzen. Analysieren Sie bei
   einem roten Gate die Job-Ausgabe und bereinigen Sie die gemeldeten Dateien.
 
 ## Eskalation

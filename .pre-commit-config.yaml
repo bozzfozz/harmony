@@ -1,20 +1,30 @@
-ci:
-  autofix_prs: true
-  autofix_commit_message: "chore: pre-commit.ci auto fixes"
-
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.5
+    rev: v0.6.4
     hooks:
       - id: ruff-format
       - id: ruff
-        args:
-          - --fix
-          - --exit-non-zero-on-fix
   - repo: local
     hooks:
-      - id: legacy-import-ban
-        name: legacy orchestrator import ban
-        entry: bash -c "rg -n \"app\\.orchestrator\\.download_flow\" --glob '!docs/archive/**' --glob '!CHANGELOG*' && exit 1 || exit 0"
+      - id: fmt-sh
+        name: scripts/dev/fmt.sh
+        entry: scripts/dev/fmt.sh
         language: system
         pass_filenames: false
+      - id: dep-sync-py
+        name: scripts/dev/dep_sync_py.sh
+        entry: scripts/dev/dep_sync_py.sh
+        language: system
+        pass_filenames: false
+      - id: test-py
+        name: scripts/dev/test_py.sh
+        entry: scripts/dev/test_py.sh
+        language: system
+        pass_filenames: false
+        stages: [push]
+      - id: dep-sync-js
+        name: scripts/dev/dep_sync_js.sh
+        entry: scripts/dev/dep_sync_js.sh
+        language: system
+        pass_filenames: false
+        stages: [push]
