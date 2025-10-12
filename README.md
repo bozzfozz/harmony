@@ -1189,7 +1189,13 @@ Die Tests mocken externe Dienste und laufen vollständig lokal. Setze für repro
 
 ### Deterministische npm-Installs & Lockfile-Neuaufbau
 
-Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), verifiziert das Cache-State, führt `npm cache verify/clean`, erzwingt die Registry `https://registry.npmjs.org/`, startet `npm ci --no-audit --no-fund` und bricht ab, sobald das Lockfile verändert würde.
+Die Pipeline setzt `scripts/dev/fe_install_verify.sh` als einzige Quelle für Frontend-Installationen ein. Das Skript prüft die Toolchain-Versionen (`.nvmrc`, `.node-version`, `frontend/.npm-version`), erzwingt die Registry `https://registry.npmjs.org/`, führt vor der Installation einen `npm ping`-Health-Check aus und stoppt deterministisch, sobald Lockfiles verändert würden. Registry-403 (`E403`) und Netzwerkstörungen werden im STRICT-Modus sofort blockierend behandelt; im WARN-Modus (nur lokal) wird – sofern passende `node_modules/` vorhanden sind – die Installation übersprungen, die vorhandenen Abhängigkeiten weiterverwendet und der Build-Pfad transparent protokolliert.
+
+**Summary-Ausgabe (`fe_install_verify`):**
+
+- Strukturierte Zeilen `LEVEL | CHECK | DETAILS | SUGGESTED_FIX`
+- Schlussblock `SUMMARY` mit `MODE`, `REGISTRY`, `REGISTRY_URL`, `INSTALL`, `BUILD`, `FINAL_EXIT`
+- WARN-Modus liefert Exit-Code `0`, dokumentiert aber Drift- und Registry-Probleme inklusive Handlungsempfehlungen.
 
 **Standard-Flow (lokal & CI):**
 
@@ -1211,6 +1217,14 @@ SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_ver
 3. Führe im Ordner `frontend/` ein `npm install --package-lock-only` aus.
 4. Verifiziere das Ergebnis: `SUPPLY_GUARD_RAN=1 SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh`.
 5. Prüfe das Diff und committe das neue Lockfile.
+
+#### Registry-Störungen lokal beheben
+
+1. Prüfe die Konnektivität: `npm ping --registry https://registry.npmjs.org/`.
+2. Entferne ggf. veraltete Auth-Tokens oder Proxy-Overrides: `npm config delete //registry.npmjs.org/:_authToken`.
+3. Räume den lokalen Cache auf: `npm cache clean --force`.
+4. Wiederhole `scripts/dev/supply_guard.sh` sowie `scripts/dev/fe_install_verify.sh` im WARN-Modus (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`).
+5. Bleiben 403/Netzfehler bestehen, prüfe Firewall/Proxy-Policies und versuche es erneut mit frischem Netzwerk.
 
 ## Lizenz
 
