@@ -19,10 +19,12 @@ from .models import (
     ItemEvent,
     ItemState,
 )
+from .move import AtomicFileMover
 from .orchestrator import BatchHandle, HdmOrchestrator
 from .pipeline import DownloadPipeline, DownloadPipelineError, RetryableDownloadError
 
 __all__ = [
+    "AtomicFileMover",
     "BatchHandle",
     "BatchStatus",
     "BatchSummary",
