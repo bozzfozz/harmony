@@ -11,11 +11,12 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make lint`         | `scripts/dev/lint_py.sh`       | Ruft `ruff check --output-format=concise .` auf.
 | `make dep-sync`     | `dep_sync_py.sh` + `dep_sync_js.sh` | Prüft Python- und npm-Abhängigkeiten auf fehlende oder ungenutzte Pakete.
 | `make test`         | `scripts/dev/test_py.sh`       | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`.
+| `make be-verify`    | —                              | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf.
 | `make fe-verify`    | `scripts/dev/fe_install_verify.sh` | Prüft Node/npm-Versionen, Lockfiles, `env.runtime.js` sowie deterministische Installation und Build.
-| `make fe-install`   | `scripts/dev/fe_install_verify.sh` | Führt Installation mit `SKIP_BUILD=1` und `SKIP_TYPECHECK=1` (überspringt Build & Typecheck).
-| `make fe-build`     | `scripts/dev/fe_install_verify.sh` | Erstellt das Frontend-Build über `SKIP_INSTALL=1`; setzt bestehende `node_modules/` voraus.
+| `make fe-install`   | `scripts/dev/fe_install_verify.sh` | Führt eine deterministische Installation (`npm ci`/`pnpm install`/`yarn install`) ohne Build & Typecheck aus.
+| `make fe-build`     | `npm run build` (Frontend)         | Baut die SPA und ruft vorab automatisch `make fe-install` auf.
 | `make smoke`        | `scripts/dev/smoke_unified.sh` | Startet `uvicorn app.main:app`, pingt `/api/health/live` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft.
-| `make all`          | —                              | Kombiniert `fmt lint dep-sync test fe-build smoke` in fester Reihenfolge.
+| `make all`          | —                              | Kombiniert `fmt lint dep-sync be-verify fe-install fe-build smoke` in fester Reihenfolge.
 
 ## Ablauf vor jedem Merge
 
@@ -26,9 +27,10 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
    pre-commit install --hook-type pre-push
    pre-commit run --all-files
    ```
-3. **Kompletter Gate-Lauf:** `make all`
-4. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
-5. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
+3. **Kompletter Gate-Lauf:** `make all` (inklusive Frontend-Installationsschritt vor dem Build)
+4. **Beispielsequenz:** `make supply-guard && make be-verify && make all`
+5. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
+6. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
 
 ## Troubleshooting
 
@@ -56,10 +58,12 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 
 ### `make fe-install`
 - **Nur Installation:** Führt `npm ci`/`pnpm install`/`yarn install` mit Lockfile-Checks aus, überspringt Build und Typecheck (Default).
+- **Trigger für `fe-build`:** Das Build-Target hängt von `fe-install` ab. Ein direkter `make fe-build`-Aufruf startet deshalb automatisch eine frische Installation, bevor der Build beginnt.
 - **Typecheck aktivieren:** Entferne `SKIP_TYPECHECK=1`, z. B. `SKIP_TYPECHECK=0 make fe-install`, falls der Script-Lauf überprüft werden soll.
 
 ### `make fe-build`
-- **Install-Skip:** Nutzt `SKIP_INSTALL=1`; stelle sicher, dass `node_modules/` zuvor über `make fe-install` oder `make fe-verify` erstellt wurde.
+- **Automatische Installation:** Hängt von `fe-install` ab. Entferne `frontend/node_modules` und starte `make fe-build`, um Installation und Build in einem Lauf auszuführen.
+- **Build-Lauf:** Führt `npm run build` im Frontend-Verzeichnis aus und erwartet nach dem Lauf ein `dist/`- oder `build/`-Verzeichnis.
 - **TypeScript-Fehler:** Richte dich nach dem Terminal-Output (`tsc`/Vite) und committe die notwendigen Code-Anpassungen.
 
 ### `make smoke`

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync fe-build smoke doctor all fe-verify fe-install
+.PHONY: fmt lint test dep-sync be-verify fe-build smoke doctor all fe-verify fe-install
 .PHONY: supply-guard supply-guard-verbose
 
 fmt:
@@ -12,6 +12,8 @@ lint:
 test:
 	./scripts/dev/test_py.sh
 
+be-verify: test
+
 dep-sync:
 	./scripts/dev/dep_sync_py.sh
 	./scripts/dev/dep_sync_js.sh
@@ -22,8 +24,8 @@ fe-verify:
 fe-install:
 	@SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
 
-fe-build:
-	@SKIP_INSTALL=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
+fe-build: fe-install
+	@cd frontend && npm run build
 
 smoke:
 	./scripts/dev/smoke_unified.sh
@@ -31,7 +33,7 @@ smoke:
 doctor:
 	./scripts/dev/doctor.sh
 
-all: fmt lint dep-sync test fe-build smoke
+all: fmt lint dep-sync be-verify fe-install fe-build smoke
 
 supply-guard:
 	@bash scripts/dev/supply_guard.sh

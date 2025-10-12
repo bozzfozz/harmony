@@ -567,7 +567,7 @@ npm run build     # TypeScript + Vite Build
 ## Lokaler Qualitäts-Check (ohne CI)
 
 - **Schnellstart:** `make doctor && make all`
-- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, Frontend-Build und Smoke-Test aus.
+- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, Frontend-Installation (`fe-install`) und -Build (`fe-build`) sowie den Smoke-Test aus.
 - **Hooks:** `pre-commit install && pre-commit run -a` sowie `pre-commit install --hook-type pre-push` stellen sicher, dass lokale Hooks aktiv sind.
 - **Runbook:** Details und Troubleshooting findest du in [`docs/operations/local-workflow.md`](docs/operations/local-workflow.md).
 
