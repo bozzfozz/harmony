@@ -41,7 +41,7 @@ pre-commit run --hook-stage push
 2. `make all` und optionale Security-Scans erneut ausführen.
 3. Artefakte erstellen:
    - Python: `python -m build`
-   - Frontend: `scripts/dev/build_fe.sh` (Ausgabe in `frontend/dist/`)
+   - Frontend: `scripts/dev/fe_install_verify.sh` (liefert Build nach erfolgreicher Installation, Output in `frontend/dist/`)
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership

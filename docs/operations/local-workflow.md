@@ -11,7 +11,9 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make lint`         | `scripts/dev/lint_py.sh`       | Ruft `ruff check --output-format=concise .` auf.
 | `make dep-sync`     | `dep_sync_py.sh` + `dep_sync_js.sh` | Prüft Python- und npm-Abhängigkeiten auf fehlende oder ungenutzte Pakete.
 | `make test`         | `scripts/dev/test_py.sh`       | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`.
-| `make fe-build`     | `scripts/dev/build_fe.sh`      | Installiert npm-Abhängigkeiten (`npm ci`) und baut das Frontend (`npm run build`).
+| `make fe-verify`    | `scripts/dev/fe_install_verify.sh` | Prüft Node/npm-Versionen, Lockfiles, `env.runtime.js` sowie deterministische Installation und Build.
+| `make fe-install`   | `scripts/dev/fe_install_verify.sh` | Führt Installation mit `SKIP_BUILD=1` und `SKIP_TYPECHECK=1` (überspringt Build & Typecheck).
+| `make fe-build`     | `scripts/dev/fe_install_verify.sh` | Erstellt das Frontend-Build über `SKIP_INSTALL=1`; setzt bestehende `node_modules/` voraus.
 | `make smoke`        | `scripts/dev/smoke_unified.sh` | Startet `uvicorn app.main:app`, pingt `/api/health/live` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft.
 | `make all`          | —                              | Kombiniert `fmt lint dep-sync test fe-build smoke` in fester Reihenfolge.
 
@@ -47,8 +49,17 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 - **SQLite-Lock:** Lösche `.tmp/test.db` und wiederhole den Lauf; stelle sicher, dass keine parallelen Server laufen.
 - **Flaky Tests:** Prüfe Logs im Pytest-Output und halte reproduzierbare Schritte für den PR fest.
 
+### `make fe-verify`
+- **Exit-Codes beachten:** `0` = OK, `10`–`16` siehe Script-Header. Fehlermeldungen sind mit `[fe-verify]` prefixed.
+- **Verbose-Modus:** `VERBOSE=1 make fe-verify` zeigt Toolchain-Versionen, Install- und Build-Kommandos.
+- **npm-Cache-Probleme:** Setze `NPM_CONFIG_CACHE="$(mktemp -d)"` und wiederhole `make fe-verify`, wenn `npm ci` cachedaten blockiert.
+
+### `make fe-install`
+- **Nur Installation:** Führt `npm ci`/`pnpm install`/`yarn install` mit Lockfile-Checks aus, überspringt Build und Typecheck (Default).
+- **Typecheck aktivieren:** Entferne `SKIP_TYPECHECK=1`, z. B. `SKIP_TYPECHECK=0 make fe-install`, falls der Script-Lauf überprüft werden soll.
+
 ### `make fe-build`
-- **npm-Cache-Probleme:** Setze `NPM_CONFIG_CACHE="$(mktemp -d)"` und wiederhole `npm ci`.
+- **Install-Skip:** Nutzt `SKIP_INSTALL=1`; stelle sicher, dass `node_modules/` zuvor über `make fe-install` oder `make fe-verify` erstellt wurde.
 - **TypeScript-Fehler:** Richte dich nach dem Terminal-Output (`tsc`/Vite) und committe die notwendigen Code-Anpassungen.
 
 ### `make smoke`

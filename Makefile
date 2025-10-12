@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync fe-build smoke doctor all
+.PHONY: fmt lint test dep-sync fe-build smoke doctor all fe-verify fe-install
 .PHONY: supply-guard supply-guard-verbose
 
 fmt:
@@ -16,8 +16,14 @@ dep-sync:
 	./scripts/dev/dep_sync_py.sh
 	./scripts/dev/dep_sync_js.sh
 
+fe-verify:
+	@bash scripts/dev/fe_install_verify.sh
+
+fe-install:
+	@SKIP_BUILD=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
+
 fe-build:
-	./scripts/dev/build_fe.sh
+	@SKIP_INSTALL=1 SKIP_TYPECHECK=1 bash scripts/dev/fe_install_verify.sh
 
 smoke:
 	./scripts/dev/smoke_unified.sh
