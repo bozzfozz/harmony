@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 .PHONY: fmt lint test dep-sync be-verify fe-build smoke doctor all fe-verify fe-install
-.PHONY: supply-guard supply-guard-verbose
+.PHONY: supply-guard supply-guard-verbose supply-guard-warn
 
 fmt:
 	./scripts/dev/fmt.sh
@@ -36,7 +36,10 @@ doctor:
 all: fmt lint dep-sync be-verify fe-verify smoke
 
 supply-guard:
-	@bash scripts/dev/supply_guard.sh
+        @bash scripts/dev/supply_guard.sh
 
 supply-guard-verbose:
-	@SUPPLY_GUARD_VERBOSE=1 bash scripts/dev/supply_guard.sh
+        @SUPPLY_GUARD_VERBOSE=1 bash scripts/dev/supply_guard.sh
+
+supply-guard-warn:
+        @TOOLCHAIN_STRICT=false SUPPLY_MODE=WARN bash scripts/dev/supply_guard.sh

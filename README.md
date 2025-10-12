@@ -16,8 +16,9 @@ Einen aktuellen Überblick über erledigte, laufende und offene Arbeiten findest
 
 - **Node.js:** `20.17.1` (gepinnt in [`.nvmrc`](.nvmrc) und [`.node-version`](.node-version)). Installiere die Version einmalig via `nvm install 20.17.1` und aktiviere sie mit `nvm use`.
 - **npm:** Version aus [`frontend/.npm-version`](frontend/.npm-version) (derzeit `10.8.2`). Aktualisiere sie mit `npm install -g npm@$(cat frontend/.npm-version)`.
-- **Guards:** Vor jeder Frontend-Installation oder jedem Build sind `bash scripts/dev/supply_guard.sh` und danach `SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh` auszuführen. Beide Skripte brechen bei Toolchain-Drift hart ab und nennen Ist-/Soll-Version inklusive Fix-Hinweisen.
-- **Override nur lokal:** Setze `TOOLCHAIN_STRICT=false` ausschließlich für kurzfristige lokale Experimente. CI, Docker-Builds und PRs müssen ohne dieses Override laufen; dort führt jede Abweichung von Node `20.17.1` bzw. dem gepinnten npm zu einem sofortigen Fehler.
+- **Guards:** Vor jeder Frontend-Installation oder jedem Build sind `bash scripts/dev/supply_guard.sh` und danach `SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh` auszuführen. Der Supply Guard liefert strukturierte `INFO/WARN/ERROR`-Logs plus Summary; WARNs markieren Node-/npm-Drift, `npm ci --dry-run`-Integritätsabweichungen oder Python-Hash-Drift und nennen direkte Fix-Hinweise. Off-Registry-Treffer bleiben stets blockierend.
+- **Override nur lokal:** `STRICT` ist der Standardmodus (CI, Docker, PRs). Lokal kannst du per `TOOLCHAIN_STRICT=false` oder `SUPPLY_MODE=WARN` in den WARN-Modus wechseln: WARNs werden geloggt, Exit-Code bleibt 0. Vor jedem Commit/Push müssen alle WARNs bereinigt werden. CI/Docker dürfen keinen WARN-Modus nutzen; dort brechen Drift- oder Integritätsbefunde sofort ab.
+- **Feingranulare Failover:** Optional lassen sich Checks über `SUPPLY_FAIL_NODE_DRIFT`, `SUPPLY_FAIL_NPM_DRIFT`, `SUPPLY_FAIL_NPM_INTEGRITY` und `SUPPLY_FAIL_PY_HASH` schärfen bzw. lockern (`0|1`). In CI sind alle Flags `1`, im lokalen WARN-Modus standardmäßig `0` (Off-Registry bleibt immer blockierend).
 
 ## Features
 
