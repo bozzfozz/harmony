@@ -44,18 +44,21 @@ jobs:
         env:
           NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
           TOOLCHAIN_STRICT: "true"
+          SUPPLY_MODE: STRICT
         run: npm install -g npm@$(cat frontend/.npm-version)
 
       - name: Supply guard
         env:
           NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
           TOOLCHAIN_STRICT: "true"
+          SUPPLY_MODE: STRICT
         run: bash scripts/dev/supply_guard.sh
 
       - name: Frontend verify
         env:
           NPM_CONFIG_REGISTRY: ${{ env.NPM_REGISTRY }}
           TOOLCHAIN_STRICT: "true"
+          SUPPLY_MODE: STRICT
         run: |
           set -euo pipefail
           SUPPLY_GUARD_RAN=1 bash scripts/dev/fe_install_verify.sh

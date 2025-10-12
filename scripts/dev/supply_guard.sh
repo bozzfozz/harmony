@@ -1,46 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Exit codes:
-# 0 OK, 2 Warnung, 3 Drift, 4 Integrity-Fehler, 5 Toolchain fehlt
-EXIT_OK=0
-EXIT_WARN=2
-EXIT_DRIFT=3
-EXIT_INT=4
-EXIT_TOOL=5
-
 : "${SUPPLY_GUARD_VERBOSE:=0}"
 : "${SUPPLY_GUARD_TIMEOUT_SEC:=120}"
 : "${SKIP_SUPPLY_GUARD:=0}"
 
-if [ "${SKIP_SUPPLY_GUARD}" = "1" ]; then
-  echo "[supply-guard] skipped via SKIP_SUPPLY_GUARD=1"
-  exit ${EXIT_OK}
-fi
-
-warn_flag=0
-fail_code=0
 DEFAULT_REGISTRY="https://registry.npmjs.org/"
+
+MODE="STRICT"
+MODE_REASON="default"
+IS_CI=0
+
 REQUIRED_NODE_VERSION=""
 REQUIRED_NPM_VERSION=""
 
-STRICT_ENV="${TOOLCHAIN_STRICT:-true}"
-STRICT_MODE=1
-case "$(printf '%s' "${STRICT_ENV}" | tr '[:upper:]' '[:lower:]')" in
-  0|false|no|off)
-    STRICT_MODE=0
-    ;;
-  *)
-    STRICT_MODE=1
-    ;;
-esac
+declare -i ERROR_COUNT=0
+declare -i WARN_COUNT=0
+declare -i INFO_COUNT=0
+declare -i P0_COUNT=0
+declare -i WARN_ONLY_COUNT=0
+declare -i WARNABLE_TOTAL=0
+declare -i EXIT_CODE=0
+WARN_PRESENT=0
 
-trim() {
+FAIL_NODE_DRIFT=1
+FAIL_NPM_DRIFT=1
+FAIL_NPM_INTEGRITY=1
+FAIL_PY_HASH=1
+FAIL_OFFREGISTRY=1
+
+lower(){
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+trim(){
   local value="$1"
   printf '%s' "${value}" | tr -d '\r' | sed -e 's/^\s\+//' -e 's/\s\+$//'
 }
 
-normalize_registry() {
+normalize_registry(){
   local value="$1"
   value="$(trim "${value}")"
   value="${value%/}"
@@ -51,240 +49,376 @@ normalize_registry() {
   printf '%s/' "${value}"
 }
 
-run_with_timeout() {
+is_truthy(){
+  local raw="$(lower "${1:-}")"
+  case "${raw}" in
+    1|true|yes|on)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+emit_event(){
+  local level="$1"
+  local check="$2"
+  local details="$3"
+  local fix="${4:--}"
+  printf '[supply-guard] %s | %s | %s | %s\n' "${level}" "${check}" "${details}" "${fix}"
+  case "${level}" in
+    ERROR)
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+      EXIT_CODE=1
+      ;;
+    WARN)
+      WARN_COUNT=$((WARN_COUNT + 1))
+      WARN_PRESENT=1
+      ;;
+    INFO)
+      INFO_COUNT=$((INFO_COUNT + 1))
+      ;;
+  esac
+}
+
+report_info(){
+  emit_event "INFO" "$1" "$2" "${3:--}"
+}
+
+report_warn(){
+  emit_event "WARN" "$1" "$2" "${3:--}"
+}
+
+report_error(){
+  emit_event "ERROR" "$1" "$2" "${3:--}"
+}
+
+report_blocking(){
+  P0_COUNT=$((P0_COUNT + 1))
+  report_error "$1" "$2" "$3"
+}
+
+resolve_flag(){
+  local name="$1"
+  local raw="$2"
+  local default_value="$3"
+  if [ -z "${raw}" ]; then
+    echo "${default_value}"
+    return
+  fi
+  local normalized
+  normalized="$(lower "${raw}")"
+  case "${normalized}" in
+    1|true|yes|on)
+      echo 1
+      ;;
+    0|false|no|off)
+      echo 0
+      ;;
+    *)
+      report_warn "CONFIG" "Ungültiger Bool-Wert für ${name}: '${raw}', verwende Default ${default_value}" "Setze ${name}=0 oder ${name}=1"
+      echo "${default_value}"
+      ;;
+  esac
+}
+
+report_warnable(){
+  local kind="$1"
+  local details="$2"
+  local fix="${3:--}"
+  local check="${kind}"
+  local fail_flag=1
+
+  case "${kind}" in
+    node_drift)
+      check="NODE_VERSION"
+      fail_flag=${FAIL_NODE_DRIFT}
+      ;;
+    npm_drift)
+      check="NPM_VERSION"
+      fail_flag=${FAIL_NPM_DRIFT}
+      ;;
+    npm_integrity)
+      check="NPM_INTEGRITY"
+      fail_flag=${FAIL_NPM_INTEGRITY}
+      ;;
+    python_hash)
+      check="PYTHON_HASH"
+      fail_flag=${FAIL_PY_HASH}
+      ;;
+  esac
+
+  WARNABLE_TOTAL=$((WARNABLE_TOTAL + 1))
+
+  local severity="ERROR"
+  local details_text="${details}"
+
+  if [ "${MODE}" = "WARN" ] && [ "${fail_flag}" -eq 0 ]; then
+    severity="WARN"
+    WARN_ONLY_COUNT=$((WARN_ONLY_COUNT + 1))
+    details_text="${details_text} (STRICT-Modus bricht ab.)"
+  fi
+
+  if [ "${severity}" = "ERROR" ]; then
+    report_error "${check}" "${details_text}" "${fix}"
+  else
+    report_warn "${check}" "${details_text}" "${fix}"
+  fi
+}
+
+run_with_timeout(){
   local secs="$1"
   shift
-  set +e
+  local status
   if command -v timeout >/dev/null 2>&1; then
     if timeout --help 2>&1 | grep -q "--preserve-status"; then
       timeout --preserve-status "${secs}" "$@"
+      status=$?
     else
       timeout "${secs}" "$@"
+      status=$?
     fi
   else
     "$@"
+    status=$?
   fi
-  local status=$?
-  set -e
-  return ${status}
+  return "${status}"
 }
 
-has_any() {
+has_any(){
   command -v "$1" >/dev/null 2>&1
 }
 
-log() {
-  echo "[supply-guard] $*"
-}
+determine_mode(){
+  local mode_override="${SUPPLY_MODE:-}"
+  local toolchain_setting="${TOOLCHAIN_STRICT:-}"
 
-vlog() {
-  if [ "${SUPPLY_GUARD_VERBOSE}" = "1" ]; then
-    echo "[supply-guard] $*"
-  fi
-}
+  MODE="STRICT"
+  MODE_REASON="default"
+  IS_CI=0
 
-toolchain_drift() {
-  # $1 component, $2 expected, $3 actual, $4 remediation hint, $5 [optional] exit code
-  local component="$1"
-  local expected="$2"
-  local actual="$3"
-  local hint="$4"
-  local code="${5:-${EXIT_DRIFT}}"
-
-  if [ "${STRICT_MODE}" -eq 1 ]; then
-    log "Toolchain Drift (${component}): erhalten ${actual:-<unbekannt>}, erwartet ${expected}. ${hint}"
-    return "${code}"
+  if is_truthy "${CI:-}" || is_truthy "${GITHUB_ACTIONS:-}"; then
+    IS_CI=1
   fi
 
-  log "WARN Toolchain Drift (${component}): erhalten ${actual:-<unbekannt>}, erwartet ${expected}. TOOLCHAIN_STRICT=false erkannt – läuft weiter (nur lokal). ${hint}"
-  return ${EXIT_OK}
-}
-
-check_repo_registry() {
-  local code=${EXIT_OK}
-  if [ ! -f .npmrc ]; then
-    log "Repo .npmrc fehlt"
-    return ${EXIT_DRIFT}
-  fi
-  if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' .npmrc; then
-    log "Repo .npmrc Registry != ${DEFAULT_REGISTRY}"
-    code=${EXIT_DRIFT}
-  fi
-  if grep -E 'registry=' .npmrc | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
-    log "Repo .npmrc zusätzliche Registry-Einträge gefunden"
-    code=${EXIT_DRIFT}
-  fi
-  if [ -d frontend ]; then
-    if [ ! -f frontend/.npmrc ]; then
-      log "frontend/.npmrc fehlt"
-      code=${EXIT_DRIFT}
-    else
-      if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' frontend/.npmrc; then
-        log "frontend/.npmrc Registry != ${DEFAULT_REGISTRY}"
-        code=${EXIT_DRIFT}
-      fi
-      if grep -E 'registry=' frontend/.npmrc | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
-        log "frontend/.npmrc zusätzliche Registry-Einträge gefunden"
-        code=${EXIT_DRIFT}
-      fi
+  if [ "${IS_CI}" -eq 1 ]; then
+    MODE="STRICT"
+    MODE_REASON="CI erzwingt STRICT"
+    if [ -n "${mode_override}" ] && [ "$(lower "${mode_override}")" = "warn" ]; then
+      report_warn "MODE" "SUPPLY_MODE=WARN wird in CI ignoriert; STRICT erzwungen." "Entferne SUPPLY_MODE=WARN aus CI-Umgebungen"
     fi
+    return
   fi
-  return ${code}
+
+  if [ -n "${mode_override}" ]; then
+    case "$(lower "${mode_override}")" in
+      warn)
+        MODE="WARN"
+        MODE_REASON="SUPPLY_MODE=WARN"
+        return
+        ;;
+      strict)
+        MODE="STRICT"
+        MODE_REASON="SUPPLY_MODE=STRICT"
+        return
+        ;;
+      *)
+        report_warn "MODE" "SUPPLY_MODE='${mode_override}' unbekannt, fallback STRICT." "Nutze SUPPLY_MODE=STRICT oder SUPPLY_MODE=WARN"
+        ;;
+    esac
+  fi
+
+  if [ -n "${toolchain_setting}" ]; then
+    case "$(lower "${toolchain_setting}")" in
+      0|false|no|off)
+        MODE="WARN"
+        MODE_REASON="TOOLCHAIN_STRICT=false"
+        return
+        ;;
+      *)
+        MODE="STRICT"
+        MODE_REASON="TOOLCHAIN_STRICT=true"
+        return
+        ;;
+    esac
+  fi
+
+  MODE="STRICT"
+  MODE_REASON="Default STRICT"
 }
 
-load_toolchain_manifest() {
-  local code=${EXIT_OK}
-  local node_file_version=""
+init_fail_matrix(){
+  local default_warnable=1
+  if [ "${MODE}" = "WARN" ] && [ "${IS_CI}" -eq 0 ]; then
+    default_warnable=0
+  fi
+
+  FAIL_NODE_DRIFT=$(resolve_flag "SUPPLY_FAIL_NODE_DRIFT" "${SUPPLY_FAIL_NODE_DRIFT:-${default_warnable}}" "${default_warnable}")
+  FAIL_NPM_DRIFT=$(resolve_flag "SUPPLY_FAIL_NPM_DRIFT" "${SUPPLY_FAIL_NPM_DRIFT:-${default_warnable}}" "${default_warnable}")
+  FAIL_NPM_INTEGRITY=$(resolve_flag "SUPPLY_FAIL_NPM_INTEGRITY" "${SUPPLY_FAIL_NPM_INTEGRITY:-${default_warnable}}" "${default_warnable}")
+  FAIL_PY_HASH=$(resolve_flag "SUPPLY_FAIL_PY_HASH" "${SUPPLY_FAIL_PY_HASH:-${default_warnable}}" "${default_warnable}")
+
+  local off_default=1
+  FAIL_OFFREGISTRY=$(resolve_flag "SUPPLY_FAIL_OFFREGISTRY" "${SUPPLY_FAIL_OFFREGISTRY:-${off_default}}" "${off_default}")
+  if [ "${FAIL_OFFREGISTRY}" -ne 1 ]; then
+    FAIL_OFFREGISTRY=1
+    report_warn "CONFIG" "SUPPLY_FAIL_OFFREGISTRY kann nicht deaktiviert werden; erzwinge Blockierung." "Entferne SUPPLY_FAIL_OFFREGISTRY Override"
+  fi
+}
+
+ensure_registry_file(){
+  local file="$1"
+  local context="$2"
+  if [ ! -f "${file}" ]; then
+    report_error "REGISTRY" "${context}: .npmrc fehlt" "Lege ${file} mit registry=${DEFAULT_REGISTRY} an"
+    return
+  fi
+  if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?$' "${file}"; then
+    report_error "REGISTRY" "${context}: Registry != ${DEFAULT_REGISTRY}" "Setze registry=${DEFAULT_REGISTRY} in ${file}"
+  fi
+  if grep -E 'registry=' "${file}" | grep -Ev '^registry=https://registry\.npmjs\.org/?$' >/dev/null 2>&1; then
+    report_error "REGISTRY" "${context}: zusätzliche Registry-Einträge gefunden" "Entferne alternative Registries aus ${file}"
+  fi
+}
+
+load_toolchain_manifest(){
   if [ -f .nvmrc ]; then
     REQUIRED_NODE_VERSION=$(trim "$(cat .nvmrc)")
     if [ -z "${REQUIRED_NODE_VERSION}" ]; then
-      log ".nvmrc ist leer"
-      code=${EXIT_DRIFT}
+      report_error "TOOLCHAIN" ".nvmrc ist leer" "Trage die gepinnte Node-Version in .nvmrc ein"
     fi
   else
-    log ".nvmrc fehlt"
-    code=${EXIT_DRIFT}
+    report_error "TOOLCHAIN" ".nvmrc fehlt" "Füge .nvmrc mit der geforderten Node-Version hinzu"
   fi
+
+  local node_version_file=""
   if [ -f .node-version ]; then
-    node_file_version=$(trim "$(cat .node-version)")
-    if [ -z "${node_file_version}" ]; then
-      log ".node-version ist leer"
-      code=${EXIT_DRIFT}
+    node_version_file=$(trim "$(cat .node-version)")
+    if [ -z "${node_version_file}" ]; then
+      report_error "TOOLCHAIN" ".node-version ist leer" "Trage die Node-Version in .node-version ein"
     fi
   else
-    log ".node-version fehlt"
-    code=${EXIT_DRIFT}
+    report_error "TOOLCHAIN" ".node-version fehlt" "Erzeuge .node-version mit derselben Version wie .nvmrc"
   fi
-  if [ -n "${REQUIRED_NODE_VERSION}" ] && [ -n "${node_file_version}" ] \
-     && [ "${REQUIRED_NODE_VERSION}" != "${node_file_version}" ]; then
-    log ".nvmrc (${REQUIRED_NODE_VERSION}) != .node-version (${node_file_version})"
-    code=${EXIT_DRIFT}
+
+  if [ -n "${REQUIRED_NODE_VERSION}" ] && [ -n "${node_version_file}" ] && [ "${REQUIRED_NODE_VERSION}" != "${node_version_file}" ]; then
+    report_error "TOOLCHAIN" ".nvmrc (${REQUIRED_NODE_VERSION}) != .node-version (${node_version_file})" "Gleiche .nvmrc und .node-version an"
   fi
+
   if [ -f frontend/.npm-version ]; then
     REQUIRED_NPM_VERSION=$(trim "$(cat frontend/.npm-version)")
     if [ -z "${REQUIRED_NPM_VERSION}" ]; then
-      log "frontend/.npm-version ist leer"
-      code=${EXIT_DRIFT}
+      report_error "TOOLCHAIN" "frontend/.npm-version ist leer" "Trage die npm-Version ein"
     fi
   else
-    log "frontend/.npm-version fehlt"
-    code=${EXIT_DRIFT}
+    report_error "TOOLCHAIN" "frontend/.npm-version fehlt" "Füge frontend/.npm-version mit der erwarteten npm-Version hinzu"
   fi
-  return ${code}
 }
 
-check_node() {
-  if [ ! -d "frontend" ]; then
-    return ${EXIT_OK}
+check_repo_registry(){
+  ensure_registry_file .npmrc "Repo"
+  if [ -d frontend ]; then
+    ensure_registry_file frontend/.npmrc "frontend"
+  fi
+}
+
+check_node(){
+  if [ ! -d frontend ]; then
+    report_info "NODE" "frontend/ nicht vorhanden – überspringe Node-Prüfungen" "-"
+    return
   fi
 
-  pushd frontend >/dev/null || return ${EXIT_OK}
-  local code=${EXIT_OK}
+  pushd frontend >/dev/null || return
 
-  if ! has_any node || ! has_any npm; then
-    log "Node/NPM nicht gefunden"
-    code=${EXIT_TOOL}
+  if ! has_any node; then
+    report_error "NODE_TOOLCHAIN" "Node.js nicht gefunden" "Installiere Node $(printf '%s' "${REQUIRED_NODE_VERSION:-<siehe .nvmrc>}") via nvm"
+    popd >/dev/null || true
+    return
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ] && [ -n "${REQUIRED_NODE_VERSION}" ]; then
-    local actual_node
-    actual_node="$(node --version 2>/dev/null | sed 's/^v//')"
-    if [ -n "${actual_node}" ] && [ "${actual_node}" != "${REQUIRED_NODE_VERSION}" ]; then
-      local hint="Fix: nvm install ${REQUIRED_NODE_VERSION} && nvm use ${REQUIRED_NODE_VERSION}"
-      code=${EXIT_OK}
-      if toolchain_drift "Node.js" "${REQUIRED_NODE_VERSION}" "${actual_node}" "${hint}"; then
-        code=${EXIT_OK}
-      else
-        code=$?
-      fi
-    fi
+  local actual_node
+  actual_node="$(node --version 2>/dev/null | sed 's/^v//')"
+  if [ -n "${REQUIRED_NODE_VERSION}" ] && [ -n "${actual_node}" ] && [ "${actual_node}" != "${REQUIRED_NODE_VERSION}" ]; then
+    local fix="nvm install ${REQUIRED_NODE_VERSION} && nvm use ${REQUIRED_NODE_VERSION}"
+    report_warnable "node_drift" "Node.js ${actual_node} erkannt, erwartet ${REQUIRED_NODE_VERSION}" "${fix}"
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ]; then
+  if ! has_any npm; then
+    report_error "NODE_TOOLCHAIN" "npm nicht gefunden" "Installiere npm ${REQUIRED_NPM_VERSION:-<laut frontend/.npm-version>}"
+  else
     local npm_version
-    npm_version="$(npm --version 2>/dev/null | tail -n1 || echo 0)"
-    if [ -z "${npm_version}" ]; then
-      log "npm-Version konnte nicht gelesen werden"
-      code=${EXIT_TOOL}
-    fi
-    if [ "${code}" -eq ${EXIT_OK} ] && [ -n "${REQUIRED_NPM_VERSION}" ]; then
-      if [ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]; then
-        local hint="Fix: npm install -g npm@${REQUIRED_NPM_VERSION}"
-        code=${EXIT_OK}
-        if toolchain_drift "npm" "${REQUIRED_NPM_VERSION}" "${npm_version}" "${hint}"; then
-          code=${EXIT_OK}
-        else
-          code=$?
-        fi
-      fi
+    npm_version="$(npm --version 2>/dev/null | tail -n1 || true)"
+    if [ -n "${REQUIRED_NPM_VERSION}" ] && [ -n "${npm_version}" ] && [ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]; then
+      local fix="npm install -g npm@${REQUIRED_NPM_VERSION}"
+      report_warnable "npm_drift" "npm ${npm_version} erkannt, erwartet ${REQUIRED_NPM_VERSION}" "${fix}"
     fi
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ]; then
-    if [ ! -f package-lock.json ] && [ ! -f pnpm-lock.yaml ] && [ ! -f yarn.lock ]; then
-      log "Lockfile fehlt im frontend/"
-      code=${EXIT_INT}
+  if [ ! -f package-lock.json ] && [ ! -f pnpm-lock.yaml ] && [ ! -f yarn.lock ]; then
+    report_error "LOCKFILE" "Kein Lockfile im frontend/ gefunden" "Führe npm ci aus und committe package-lock.json"
+  fi
+
+  if [ -f package-lock.json ]; then
+    local off_url=""
+    if command -v jq >/dev/null 2>&1; then
+      off_url="$(jq -r '..|.resolved? // empty' package-lock.json | grep -E '^https?://' | grep -Ev '^https?://registry\.npmjs\.org/' | head -n 1 || true)"
+    else
+      off_url="$(grep -E '"resolved":\s*"https?://[^" ]+' package-lock.json | grep -Ev 'https?://registry\.npmjs\.org/' | head -n 1 || true)"
+    fi
+    if [ -n "${off_url}" ]; then
+      report_blocking "OFF_REGISTRY" "Lockfile nutzt Off-Registry URL ${off_url}" "Aktualisiere auf Pakete von ${DEFAULT_REGISTRY}"
     fi
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ] && [ -f .npmrc ]; then
-    if ! grep -Eqs '^registry=https://registry\.npmjs\.org/?' .npmrc; then
-      log ".npmrc Registry nicht npmjs.org"
-      code=${EXIT_DRIFT}
-    fi
-  fi
-
-  if [ "${code}" -eq ${EXIT_OK} ]; then
+  if has_any npm; then
     local npm_registry
     npm_registry="$(normalize_registry "$(npm config get registry 2>/dev/null || true)")"
-    if [ "${npm_registry}" != "${DEFAULT_REGISTRY}" ]; then
-      log "npm config registry ist '${npm_registry}'"
-      code=${EXIT_DRIFT}
+    if [ -n "${npm_registry}" ] && [ "${npm_registry}" != "${DEFAULT_REGISTRY}" ]; then
+      report_error "REGISTRY" "npm config registry=${npm_registry}, erwartet ${DEFAULT_REGISTRY}" "npm config set registry ${DEFAULT_REGISTRY}"
     fi
   fi
 
-  if [ "${code}" -eq ${EXIT_OK} ] && [ -f package-lock.json ]; then
-    if command -v jq >/dev/null 2>&1; then
-      local off_url=""
-      off_url="$(jq -r '..|.resolved? // empty' package-lock.json \
-        | grep -E '^https?://' \
-        | grep -Ev '^https?://registry\.npmjs\.org/' \
-        | head -n 1 || true)"
-      if [ -n "${off_url}" ]; then
-        log "Lockfile enthält Off-Registry-URL: ${off_url}"
-        popd >/dev/null || true
-        return ${EXIT_DRIFT}
-      fi
-    else
-      if grep -E '"resolved":\s*"https?://[^"]+' package-lock.json \
-         | grep -Ev 'https?://registry\.npmjs\.org/' >/dev/null 2>&1; then
-        log "Lockfile resolved-URLs zeigen nicht auf npmjs.org"
-        popd >/dev/null || true
-        return ${EXIT_DRIFT}
-      fi
-    fi
-  fi
-
-  if [ "${code}" -eq ${EXIT_OK} ]; then
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" npm ci --dry-run --no-audit --no-fund >/dev/null 2>&1; then
-      :
-    else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "npm ci --dry-run Timeout"
-        code=${EXIT_DRIFT}
-      else
-        log "npm ci --dry-run Integrity/Resolver-Fehler"
-        code=${EXIT_INT}
-      fi
+  if [ -f package-lock.json ]; then
+    set +e
+    run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" npm ci --dry-run --no-audit --no-fund >/dev/null 2>&1
+    local status=$?
+    set -e
+    if [ "${status}" -eq 124 ]; then
+      report_error "NPM_INTEGRITY" "npm ci --dry-run Timeout nach ${SUPPLY_GUARD_TIMEOUT_SEC}s" "Prüfe auf Blocker bei npm ci --dry-run"
+    elif [ "${status}" -ne 0 ]; then
+      local fix="npm ci && npm install --package-lock-only"
+      report_warnable "npm_integrity" "npm ci --dry-run meldet Resolver/Integrity-Fehler (Exit ${status})" "${fix}"
     fi
   fi
 
   popd >/dev/null || true
-  return ${code}
 }
 
-check_python() {
+collect_requirement_files(){
+  local -n ref=$1
+  while IFS= read -r -d '' path; do
+    case "${path}" in
+      ./frontend/*)
+        continue
+        ;;
+    esac
+    ref+=("${path#./}")
+  done < <(find . -maxdepth 2 -type f -name 'requirements*.txt' -print0 2>/dev/null)
+}
+
+run_pip_install(){
+  local pip_cmd="$1"
+  shift
+  if [ "${pip_cmd}" = "pip" ]; then
+    run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" pip "$@"
+  else
+    # shellcheck disable=SC2086
+    run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" ${pip_cmd} "$@"
+  fi
+}
+
+check_python(){
   local py=""
   if has_any python3; then
     py="python3"
@@ -292,252 +426,241 @@ check_python() {
     py="python"
   fi
 
-  if [ -z "${py}" ] || ! has_any pip; then
-    vlog "Python/pip nicht gefunden, überspringe"
-    return ${EXIT_OK}
+  local pip_cmd=""
+  if has_any pip; then
+    pip_cmd="pip"
+  elif [ -n "${py}" ] && "${py}" -m pip --version >/dev/null 2>&1; then
+    pip_cmd="${py} -m pip"
   fi
 
-  if [ -f "pyproject.toml" ] && grep -Eq '^\s*tool\.poetry\b' pyproject.toml; then
-    if ! has_any poetry; then
-      log "Poetry nicht installiert"
-      return ${EXIT_TOOL}
+  local requirement_files=()
+  collect_requirement_files requirement_files
+
+  if [ "${#requirement_files[@]}" -eq 0 ]; then
+    report_info "PYTHON" "Keine requirements*.txt gefunden – überspringe Python-Check" "-"
+    return
+  fi
+
+  if [ -z "${pip_cmd}" ]; then
+    report_warnable "python_hash" "pip nicht gefunden – Hash-Validierung nicht möglich" "Installiere pip (python -m ensurepip --upgrade)"
+    return
+  fi
+
+  local file
+  for file in "${requirement_files[@]}"; do
+    if [ ! -f "${file}" ]; then
+      continue
     fi
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" poetry check >/dev/null 2>&1; then
-      :
+    if ! grep -Eq -- '--hash=' "${file}"; then
+      report_warnable "python_hash" "${file} enthält keine --hash Einträge" "Regeneriere via pip-compile --generate-hashes > ${file}"
+      continue
+    fi
+    set +e
+    run_pip_install "${pip_cmd}" install --dry-run --require-hashes --no-deps -r "${file}" >/dev/null 2>&1
+    local status=$?
+    set -e
+    if [ "${status}" -eq 124 ]; then
+      report_error "PYTHON_HASH" "pip --require-hashes Timeout für ${file}" "Führe pip install --require-hashes -r ${file} lokal aus"
+    elif [ "${status}" -ne 0 ]; then
+      report_warnable "python_hash" "pip meldet Hash-/Resolver-Drift in ${file} (Exit ${status})" "Regeneriere ${file} via pip-compile --generate-hashes"
     else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "Poetry check Timeout"
-        return ${EXIT_DRIFT}
-      fi
-      log "Poetry-Konfiguration fehlerhaft"
-      return ${EXIT_DRIFT}
+      report_info "PYTHON_HASH" "Hashes für ${file} verifiziert" "-"
     fi
-    if [ ! -f "poetry.lock" ]; then
-      log "poetry.lock fehlt"
-      return ${EXIT_INT}
-    fi
-    return ${EXIT_OK}
-  fi
-
-  if [ -f "requirements.txt" ]; then
-    if grep -Eq '(^|\s)--hash=' requirements.txt; then
-      vlog "requirements.txt mit Hashes erkannt"
-      return ${EXIT_OK}
-    fi
-    log "requirements.txt ohne Hashes (Prod)"
-    return ${EXIT_DRIFT}
-  fi
-
-  vlog "Kein Python-Manifest erkannt, überspringe"
-  return ${EXIT_OK}
+  done
 }
 
-check_go() {
-  if [ -f "go.mod" ]; then
-    if ! has_any go; then
-      log "Go nicht installiert"
-      return ${EXIT_TOOL}
-    fi
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" go mod verify >/dev/null 2>&1; then
-      :
-    else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "go mod verify Timeout"
-        return ${EXIT_DRIFT}
-      fi
-      log "go mod verify fehlgeschlagen"
-      return ${EXIT_INT}
-    fi
+check_go(){
+  if [ ! -f go.mod ]; then
+    return
   fi
-  return ${EXIT_OK}
+  if ! has_any go; then
+    report_error "GO" "go nicht gefunden" "Installiere Go und stelle PATH bereit"
+    return
+  fi
+  set +e
+  run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" go mod verify >/dev/null 2>&1
+  local status=$?
+  set -e
+  if [ "${status}" -eq 124 ]; then
+    report_error "GO" "go mod verify Timeout" "Führe go mod verify lokal für weitere Details aus"
+  elif [ "${status}" -ne 0 ]; then
+    report_error "GO" "go mod verify fehlgeschlagen" "Synchronisiere Module via go mod tidy"
+  else
+    report_info "GO" "go.mod erfolgreich verifiziert" "-"
+  fi
 }
 
-check_rust() {
-  if [ -f "Cargo.toml" ]; then
-    if ! has_any cargo; then
-      log "Cargo nicht installiert"
-      return ${EXIT_TOOL}
-    fi
-    if [ ! -f "Cargo.lock" ]; then
-      log "Cargo.lock fehlt"
-      return ${EXIT_INT}
-    fi
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" cargo generate-lockfile --locked >/dev/null 2>&1; then
-      :
-    else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "Cargo generate-lockfile Timeout"
-        return ${EXIT_DRIFT}
-      fi
-      log "Cargo-Lock nicht reproduzierbar"
-      return ${EXIT_DRIFT}
-    fi
+check_rust(){
+  if [ ! -f Cargo.toml ]; then
+    return
   fi
-  return ${EXIT_OK}
+  if ! has_any cargo; then
+    report_error "RUST" "cargo nicht gefunden" "Installiere Rust/Cargo"
+    return
+  fi
+  if [ ! -f Cargo.lock ]; then
+    report_error "RUST" "Cargo.lock fehlt" "Erzeuge Cargo.lock via cargo generate-lockfile"
+    return
+  fi
+  set +e
+  run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" cargo generate-lockfile --locked >/dev/null 2>&1
+  local status=$?
+  set -e
+  if [ "${status}" -eq 124 ]; then
+    report_error "RUST" "cargo generate-lockfile Timeout" "Prüfe auf Lockfile-Konflikte"
+  elif [ "${status}" -ne 0 ]; then
+    report_error "RUST" "Cargo-Lock nicht reproduzierbar" "Führe cargo update --locked und committe das Ergebnis"
+  else
+    report_info "RUST" "Cargo.lock bestätigt" "-"
+  fi
 }
 
-check_java_kotlin() {
-  if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+check_java_kotlin(){
+  if [ -f build.gradle ] || [ -f build.gradle.kts ]; then
     if ! has_any gradle; then
-      log "Gradle nicht installiert"
-      return ${EXIT_TOOL}
+      report_error "GRADLE" "gradle nicht gefunden" "Installiere Gradle"
+      return
     fi
     if ! grep -Eqs "dependencyLocking" build.gradle*; then
-      log "Gradle Dependency-Locking nicht aktiviert"
-      return ${EXIT_DRIFT}
+      report_error "GRADLE" "dependencyLocking nicht aktiviert" "Aktiviere dependencyLocking in build.gradle"
+    else
+      report_info "GRADLE" "Gradle dependencyLocking vorhanden" "-"
     fi
-    return ${EXIT_OK}
+    return
   fi
 
-  if [ -f "pom.xml" ]; then
+  if [ -f pom.xml ]; then
     if ! has_any mvn; then
-      log "Maven nicht installiert"
-      return ${EXIT_TOOL}
+      report_error "MAVEN" "mvn nicht gefunden" "Installiere Maven"
+      return
     fi
     if ! grep -Eqs "<dependencyManagement>" pom.xml; then
-      log "Maven dependencyManagement fehlt"
-      return ${EXIT_DRIFT}
-    fi
-    return ${EXIT_OK}
-  fi
-
-  return ${EXIT_OK}
-}
-
-check_ruby() {
-  if [ -f "Gemfile" ]; then
-    if ! has_any bundle; then
-      log "Bundler nicht installiert"
-      return ${EXIT_TOOL}
-    fi
-    if [ ! -f "Gemfile.lock" ]; then
-      log "Gemfile.lock fehlt"
-      return ${EXIT_INT}
-    fi
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" bundle check >/dev/null 2>&1; then
-      :
+      report_error "MAVEN" "dependencyManagement Abschnitt fehlt" "Füge <dependencyManagement> hinzu"
     else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "bundle check Timeout"
-        return ${EXIT_DRIFT}
-      fi
-      log "bundle check fehlgeschlagen"
-      return ${EXIT_DRIFT}
+      report_info "MAVEN" "dependencyManagement vorhanden" "-"
     fi
   fi
-  return ${EXIT_OK}
 }
 
-check_php() {
-  if [ -f "composer.json" ]; then
-    if ! has_any composer; then
-      log "Composer nicht installiert"
-      return ${EXIT_TOOL}
-    fi
-    if [ ! -f "composer.lock" ]; then
-      log "composer.lock fehlt"
-      return ${EXIT_INT}
-    fi
-    if run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" composer validate --no-check-publish >/dev/null 2>&1; then
-      :
-    else
-      local status=$?
-      if [ "${status}" -eq 124 ]; then
-        log "composer validate Timeout"
-        return ${EXIT_DRIFT}
-      fi
-      log "composer validate fehlgeschlagen"
-      return ${EXIT_DRIFT}
-    fi
+check_ruby(){
+  if [ ! -f Gemfile ]; then
+    return
   fi
-  return ${EXIT_OK}
+  if ! has_any bundle; then
+    report_error "BUNDLER" "bundler nicht gefunden" "Installiere Bundler"
+    return
+  fi
+  if [ ! -f Gemfile.lock ]; then
+    report_error "BUNDLER" "Gemfile.lock fehlt" "Führe bundle lock aus"
+    return
+  fi
+  set +e
+  run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" bundle check >/dev/null 2>&1
+  local status=$?
+  set -e
+  if [ "${status}" -eq 124 ]; then
+    report_error "BUNDLER" "bundle check Timeout" "Führe bundle check lokal für Details aus"
+  elif [ "${status}" -ne 0 ]; then
+    report_error "BUNDLER" "bundle check fehlgeschlagen" "Führe bundle install --deployment"
+  else
+    report_info "BUNDLER" "bundle check erfolgreich" "-"
+  fi
 }
 
-check_docker() {
+check_php(){
+  if [ ! -f composer.json ]; then
+    return
+  fi
+  if ! has_any composer; then
+    report_error "COMPOSER" "composer nicht gefunden" "Installiere Composer"
+    return
+  fi
+  if [ ! -f composer.lock ]; then
+    report_error "COMPOSER" "composer.lock fehlt" "Erzeuge composer.lock via composer install"
+    return
+  fi
+  set +e
+  run_with_timeout "${SUPPLY_GUARD_TIMEOUT_SEC}" composer validate --no-check-publish >/dev/null 2>&1
+  local status=$?
+  set -e
+  if [ "${status}" -eq 124 ]; then
+    report_error "COMPOSER" "composer validate Timeout" "Führe composer validate lokal aus"
+  elif [ "${status}" -ne 0 ]; then
+    report_error "COMPOSER" "composer validate fehlgeschlagen" "Führe composer update --lock"
+  else
+    report_info "COMPOSER" "composer validate erfolgreich" "-"
+  fi
+}
+
+check_docker(){
   local dockerfiles
   dockerfiles=$(ls Dockerfile Dockerfile.* 2>/dev/null || true)
   if [ -z "${dockerfiles}" ]; then
-    return ${EXIT_OK}
+    return
   fi
 
   if grep -Rqs "^FROM .*:latest" Dockerfile Dockerfile.* 2>/dev/null; then
-    log "Docker FROM mit 'latest' gefunden"
-    return ${EXIT_WARN}
+    report_warn "DOCKER" "Docker FROM nutzt :latest" "Pinne eine konkrete Version oder Digest"
   fi
 
-  if grep -Rqs "^FROM .*@" Dockerfile Dockerfile.* 2>/dev/null; then
-    return ${EXIT_OK}
+  if ! grep -Rqs "^FROM .*@" Dockerfile Dockerfile.* 2>/dev/null; then
+    report_warn "DOCKER" "Docker FROM ohne Digest" "Nutze ein Image mit Digest (name@sha256:...)"
+  else
+    report_info "DOCKER" "Docker FROM nutzt Digest" "-"
   fi
-
-  log "Docker FROM ohne Digest"
-  return ${EXIT_WARN}
 }
 
-accumulate() {
-  local code="$1"
-  case "${code}" in
-    0)
-      ;;
-    2)
-      warn_flag=1
-      ;;
-    3|4|5)
-      if [ "${code}" -gt "${fail_code}" ]; then
-        fail_code="${code}"
-      fi
-      ;;
-    *)
-      if [ "${code}" -gt "${fail_code}" ]; then
-        fail_code="${code}"
-      fi
-      ;;
-  esac
+print_summary(){
+  local mode_note="${MODE}"
+  if [ "${IS_CI}" -eq 1 ]; then
+    mode_note="${mode_note} (CI enforced)"
+  fi
+
+  printf '[supply-guard] SUMMARY | MODE | %s | -\n' "${mode_note}"
+  printf '[supply-guard] SUMMARY | ERROR_COUNT | %d | -\n' "${ERROR_COUNT}"
+  printf '[supply-guard] SUMMARY | WARN_COUNT | %d | -\n' "${WARN_COUNT}"
+  printf '[supply-guard] SUMMARY | INFO_COUNT | %d | -\n' "${INFO_COUNT}"
+  printf '[supply-guard] SUMMARY | WARNABLE_TOTAL | %d | -\n' "${WARNABLE_TOTAL}"
+  printf '[supply-guard] SUMMARY | WARN_ONLY | %d | Resolve vor Commit (Follow-up required)\n' "${WARN_ONLY_COUNT}"
+  printf '[supply-guard] SUMMARY | P0_BLOCKS | %d | -\n' "${P0_COUNT}"
+  printf '[supply-guard] SUMMARY | EXIT_STATUS | %d | -\n' "${EXIT_CODE}"
+
+  if [ "${WARN_PRESENT}" -eq 1 ]; then
+    printf '[supply-guard] WARN | SUMMARY | WARNINGS erkannt – Follow-up erforderlich | Behebe WARNs vor Commit/Push\n'
+  fi
 }
 
-log "start SUPPLY_GUARD_TIMEOUT_SEC=${SUPPLY_GUARD_TIMEOUT_SEC} verbose=${SUPPLY_GUARD_VERBOSE}"
-
-code=${EXIT_OK}
-if load_toolchain_manifest; then
-  code=${EXIT_OK}
-else
-  code=$?
-fi
-log "load_toolchain_manifest -> ${code}"
-accumulate "${code}"
-
-code=${EXIT_OK}
-if check_repo_registry; then
-  code=${EXIT_OK}
-else
-  code=$?
-fi
-log "check_repo_registry -> ${code}"
-accumulate "${code}"
-
-for check in check_node check_python check_go check_rust check_java_kotlin check_ruby check_php check_docker; do
-  if declare -F "${check}" >/dev/null 2>&1; then
-    vlog "running ${check}"
-    code=${EXIT_OK}
-    if "${check}"; then
-      code=${EXIT_OK}
-    else
-      code=$?
-    fi
-    log "${check} -> ${code}"
-    accumulate "${code}"
+main(){
+  if [ "${SKIP_SUPPLY_GUARD}" = "1" ]; then
+    report_info "SKIP" "Supply-Guard via SKIP_SUPPLY_GUARD=1 deaktiviert" "-"
+    exit 0
   fi
-done
 
-if [ "${fail_code}" -gt 0 ]; then
-  exit "${fail_code}"
-fi
+  determine_mode
+  init_fail_matrix
+  local mode_note="${MODE}"
+  if [ "${IS_CI}" -eq 1 ]; then
+    mode_note="${mode_note} (CI enforced)"
+  fi
+  report_info "MODE" "Supply-Guard Modus ${mode_note} (${MODE_REASON}) aktiv" "Setze SUPPLY_MODE=STRICT|WARN für Overrides"
+  report_info "CONFIG" "Fail-Matrix: node=${FAIL_NODE_DRIFT}, npm=${FAIL_NPM_DRIFT}, npm_integrity=${FAIL_NPM_INTEGRITY}, python=${FAIL_PY_HASH}, off_registry=${FAIL_OFFREGISTRY}" "Überschreibe via SUPPLY_FAIL_*"
 
-if [ "${warn_flag}" -eq 1 ]; then
-  exit ${EXIT_WARN}
-fi
+  report_info "INIT" "Start SUPPLY_GUARD_TIMEOUT_SEC=${SUPPLY_GUARD_TIMEOUT_SEC} verbose=${SUPPLY_GUARD_VERBOSE}" "-"
 
-exit ${EXIT_OK}
+  load_toolchain_manifest
+  check_repo_registry
+  check_node
+  check_python
+  check_go
+  check_rust
+  check_java_kotlin
+  check_ruby
+  check_php
+  check_docker
+
+  print_summary
+
+  exit "${EXIT_CODE}"
+}
+
+main "$@"
