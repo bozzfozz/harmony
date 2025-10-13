@@ -20,7 +20,7 @@ from starlette.responses import Response
 from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
-from app.config import AppConfig, SecurityConfig, get_env, settings
+from app.config import AppConfig, SecurityConfig, get_env, resolve_app_port, settings
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
 from app.dependencies import (
@@ -625,6 +625,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         },
     )
 
+    port = resolve_app_port()
+    logger.info(
+        "listening on 0.0.0.0:%s path=/live",
+        port,
+        extra={"event": "startup.listening", "port": port, "path": "/live"},
+    )
     logger.info("Harmony application started")
     try:
         yield
