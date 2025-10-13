@@ -5,9 +5,9 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from app.config import load_config
 from app.db import init_db, session_scope

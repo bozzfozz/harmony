@@ -13,9 +13,9 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.db import session_scope
-from app.config import AppConfig
 from app.dependencies import get_app_config, get_db, get_soulseek_client
 from app.errors import DependencyError
 from app.logging import get_logger
@@ -251,9 +251,7 @@ def soulseek_download_lyrics(
         try:
             lyrics_path = ensure_within_roots(download.lyrics_path, allowed_roots=allowed_roots)
         except ValueError as exc:
-            logger.warning(
-                "Download %s has lyrics path outside allowed roots", download_id
-            )
+            logger.warning("Download %s has lyrics path outside allowed roots", download_id)
             raise HTTPException(status_code=400, detail="Invalid lyrics path") from exc
         if not lyrics_path.exists():
             raise HTTPException(status_code=404, detail="Lyrics file not found")

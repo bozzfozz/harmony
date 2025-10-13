@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import re
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence
+import re
 
 from app.config import AppConfig, Settings, settings as global_settings
-
 
 _WINDOWS_DRIVE_PATTERN = re.compile(r"^[a-zA-Z]:[\\/]")
 
@@ -98,4 +97,3 @@ __all__ = [
     "ensure_within_roots",
     "normalise_download_path",
 ]
-

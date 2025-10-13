@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 import inspect
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -19,8 +19,8 @@ from app.db import run_session
 from app.logging import get_logger
 from app.models import Download
 from app.utils import lyrics_utils
-from app.utils.path_safety import ensure_within_roots
 from app.utils.lyrics_utils import convert_to_lrc, fetch_spotify_lyrics, save_lrc_file
+from app.utils.path_safety import ensure_within_roots
 
 logger = get_logger(__name__)
 
