@@ -211,8 +211,8 @@ apply to the single service; optional features are disabled by default.
 | `WATCHLIST_COOLDOWN_MINUTES` | _(empty)_ | `15` | Cooldown duration applied after retries are exhausted. |
 | `ARTIST_COOLDOWN_S` | _(empty)_ | `900` | Alias for cooldown duration. |
 | `WATCHLIST_INTERVAL` | _(empty)_ | `86400` | Interval between full watchlist scans (seconds). |
-| `WATCHLIST_TIMER_ENABLED` | `false` | `true` | Enables the periodic watchlist timer. |
-| `WATCHLIST_TIMER_INTERVAL_S` | `86400.0` | `900` | Interval (seconds) between timer executions. |
+| `WATCHLIST_TIMER_ENABLED` | `true` | `false` | Enables the periodic watchlist timer. |
+| `WATCHLIST_TIMER_INTERVAL_S` | `900.0` | `86400` | Interval (seconds) between timer executions. |
 | `ORCH_GLOBAL_CONCURRENCY` | `20` | `10` | Max concurrent jobs across the orchestrator. |
 | `ORCH_HEARTBEAT_S` | `5` | `10` | Interval for lease heartbeats (seconds). |
 | `ORCH_POLL_INTERVAL_MS` | `200` | `500` | Base polling interval for the job queue. |
