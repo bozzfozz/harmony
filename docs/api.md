@@ -45,6 +45,11 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/soulseek/download/{id}/lyrics` | Gibt generierte `.lrc`-Datei zurück. |
 | `POST` | `/soulseek/download/{id}/lyrics/refresh` | Erzwingt Lyrics-Refresh. |
 
+- **Pfadvalidierung:** `files[].filename` muss relativ zum konfigurierten Downloads-Ordner
+  (`DOWNLOADS_DIR`) sein. Absolute Pfade, Parent-Verweise (`..`) oder Laufwerkspräfixe werden
+  mit `400 Bad Request` abgewiesen. Gleiches gilt für nachgelagerte Refresh-Routen, die lokale
+  Dateien erneut einlesen.
+
 ## Suche & Matching
 
 | Methode | Route | Beschreibung |

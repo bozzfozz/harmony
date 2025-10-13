@@ -8,13 +8,14 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download, DownloadState
 from app.utils import metadata_utils
+from app.utils.path_safety import ensure_within_roots
 
 logger = get_logger(__name__)
 
@@ -37,12 +38,17 @@ class MetadataWorker:
         self,
         *,
         spotify_client: SpotifyClient | None = None,
+        allowed_roots: Sequence[Path] | None = None,
     ) -> None:
         self._spotify = spotify_client
         metadata_utils.SPOTIFY_CLIENT = spotify_client
         self._queue: asyncio.Queue[MetadataJob | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
+        roots = [Path(path) for path in allowed_roots] if allowed_roots else []
+        self._allowed_roots: tuple[Path, ...] = tuple(
+            root.expanduser().resolve(strict=False) for root in roots
+        )
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -71,9 +77,11 @@ class MetadataWorker:
     ) -> dict[str, Any]:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        resolved_path = self._ensure_allowed_path(audio_path)
+
         job = MetadataJob(
             download_id=download_id,
-            audio_path=audio_path,
+            audio_path=resolved_path,
             payload=dict(payload or {}),
             request_payload=dict(request_payload or {}),
             result=future,
@@ -149,6 +157,11 @@ class MetadataWorker:
                     metadata[key] = text
 
         return metadata
+
+    def _ensure_allowed_path(self, path: Path | str) -> Path:
+        if not self._allowed_roots:
+            return Path(path)
+        return ensure_within_roots(path, allowed_roots=self._allowed_roots)
 
     def _persist_metadata(self, download_id: int, metadata: Mapping[str, Any]) -> None:
         relevant_keys = {"genre", "composer", "producer", "isrc", "copyright"}

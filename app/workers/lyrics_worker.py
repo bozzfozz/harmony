@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import inspect
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import quote
 
 import httpx
@@ -19,6 +19,7 @@ from app.db import run_session
 from app.logging import get_logger
 from app.models import Download
 from app.utils import lyrics_utils
+from app.utils.path_safety import ensure_within_roots
 from app.utils.lyrics_utils import convert_to_lrc, fetch_spotify_lyrics, save_lrc_file
 
 logger = get_logger(__name__)
@@ -84,6 +85,7 @@ class LyricsWorker:
         *,
         spotify_client: SpotifyClient | None = None,
         fallback_provider: LyricsProvider | None = None,
+        allowed_roots: Sequence[Path] | None = None,
     ) -> None:
         self._spotify = spotify_client
         lyrics_utils.SPOTIFY_CLIENT = spotify_client
@@ -91,6 +93,10 @@ class LyricsWorker:
         self._queue: asyncio.Queue[LyricsJob | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
+        roots = [Path(path) for path in allowed_roots] if allowed_roots else []
+        self._allowed_roots: tuple[Path, ...] = tuple(
+            root.expanduser().resolve(strict=False) for root in roots
+        )
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -156,8 +162,9 @@ class LyricsWorker:
             await self._update_download(download_id, status="done", path=str(lrc_path))
 
     async def _create_lrc(self, job: LyricsJob) -> Path:
-        audio_path = Path(job.file_path)
+        audio_path = self._ensure_allowed_path(job.file_path)
         target = audio_path.with_suffix(".lrc")
+        target = self._ensure_allowed_path(target)
 
         lyrics_payload = await self._obtain_lyrics(job.track_info)
         if not lyrics_payload:
@@ -199,6 +206,11 @@ class LyricsWorker:
             session.add(download)
 
         await run_session(_apply)
+
+    def _ensure_allowed_path(self, path: str | Path) -> Path:
+        if not self._allowed_roots:
+            return Path(path)
+        return ensure_within_roots(path, allowed_roots=self._allowed_roots)
 
     @staticmethod
     def _extract_spotify_id(track_info: Mapping[str, Any]) -> str | None:
