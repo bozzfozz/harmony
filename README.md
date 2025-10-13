@@ -183,7 +183,7 @@ docker run -d \
 
 > 🔀 **Port anpassen:** Setze `-e APP_PORT=<port>` und passe das Mapping zu `-p <port>:<port>` an, wenn `8080` bereits belegt ist. Der Container bindet stets an `0.0.0.0:${APP_PORT}`.
 
-> ❌ **Keine Legacy-Ports:** `PORT`, `UVICORN_PORT`, `SERVICE_PORT`, `WEB_PORT` und `FRONTEND_PORT` werden nicht mehr ausgewertet. Setze ausschließlich `APP_PORT`; widersprüchliche Werte führen zum Startfehler.
+> ⚠️ **Legacy-Aliasse:** Werte in `PORT`, `UVICORN_PORT`, `SERVICE_PORT`, `WEB_PORT` und `FRONTEND_PORT` werden automatisch auf `APP_PORT` normalisiert, falls `APP_PORT` selbst fehlt. Setze `APP_PORT` explizit, um Warnungen zu vermeiden und den aktiven Port eindeutig zu dokumentieren.
 
 > ✅ **Smoke-Test:** `curl -fsS http://127.0.0.1:8080/live` liefert `{ "status": "ok" }`. In den Logs erscheint `listening on 0.0.0.0:8080 path=/live`, sobald der Server bindet.
 
