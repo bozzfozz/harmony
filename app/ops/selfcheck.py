@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -21,8 +22,10 @@ from app.config import (
     DEFAULT_DB_URL_DEV,
     DEFAULT_DB_URL_PROD,
     DEFAULT_DB_URL_TEST,
+    HdmConfig,
     load_runtime_env,
 )
+from app.hdm.idempotency import SQLITE_CREATE_TABLE, SQLITE_DELETE, SQLITE_INSERT
 from app.logging import get_logger
 
 logger = get_logger(__name__)
@@ -183,6 +186,44 @@ def _probe_file_writable(path: Path) -> bool:
         return True
     except OSError:
         return False
+
+
+def _probe_idempotency_sqlite(path: Path) -> tuple[bool, dict[str, Any]]:
+    info: dict[str, Any] = {"path": str(path)}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        info["error"] = str(exc)
+        info["errno"] = getattr(exc, "errno", None)
+        return False, info
+
+    connection: sqlite3.Connection | None = None
+    inserted = False
+    token = f"ready-{uuid4().hex}"
+    try:
+        connection = sqlite3.connect(path, timeout=0.25)
+        connection.isolation_level = None
+        connection.execute(SQLITE_CREATE_TABLE)
+        connection.execute("BEGIN IMMEDIATE")
+        now = time.time()
+        inserted = connection.execute(SQLITE_INSERT, (token, now, now)).rowcount == 1
+        connection.execute(SQLITE_DELETE, (token,))
+        connection.commit()
+        info["inserted"] = inserted
+        return True, info
+    except sqlite3.Error as exc:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except sqlite3.Error:
+                pass
+        info["error"] = str(exc)
+        info["type"] = exc.__class__.__name__
+        info["inserted"] = inserted
+        return False, info
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def check_tcp_reachable(
@@ -574,6 +615,47 @@ def aggregate_ready(
                         )
     checks["database"] = database
 
+    idempotency: dict[str, Any] = {}
+    try:
+        hdm_config = HdmConfig.from_env(env)
+    except ValueError as exc:
+        idempotency.update(
+            {
+                "status": "fail",
+                "error": str(exc),
+                "backend": str(env.get("IDEMPOTENCY_BACKEND")),
+            }
+        )
+        issues.append(
+            ReadyIssue(
+                component="idempotency",
+                message="Invalid idempotency configuration",
+                exit_code=EX_CONFIG,
+                details=dict(idempotency),
+            )
+        )
+    else:
+        backend = hdm_config.idempotency_backend
+        idempotency["backend"] = backend
+        if backend == "sqlite":
+            sqlite_path = Path(hdm_config.idempotency_sqlite_path).expanduser()
+            success, details = _probe_idempotency_sqlite(sqlite_path)
+            idempotency.update(details)
+            idempotency["status"] = "ok" if success else "fail"
+            if not success:
+                issues.append(
+                    ReadyIssue(
+                        component="idempotency",
+                        message="SQLite idempotency probe failed",
+                        exit_code=EX_UNAVAILABLE,
+                        details=dict(idempotency),
+                    )
+                )
+        else:
+            idempotency["status"] = "ok"
+            idempotency["mode"] = "memory"
+    checks["idempotency"] = idempotency
+
     status = "ok" if not issues else "fail"
     return ReadyReport(status=status, checks=checks, issues=issues)
 
@@ -596,6 +678,7 @@ def run_startup_guards(
     oauth = report.checks.get("oauth", {})
     soulseekd = report.checks.get("soulseekd", {})
     database = report.checks.get("database", {})
+    idempotency = report.checks.get("idempotency", {})
 
     logger.info(
         "Startup environment summary",
@@ -611,6 +694,9 @@ def run_startup_guards(
             "database_mode": database.get("mode"),
             "database_path": database.get("path"),
             "database_using_default": database.get("using_default"),
+            "idempotency_backend": idempotency.get("backend"),
+            "idempotency_status": idempotency.get("status"),
+            "idempotency_path": idempotency.get("path"),
             "umask": optional_env_snapshot.get("UMASK"),
             "puid": optional_env_snapshot.get("PUID"),
             "pgid": optional_env_snapshot.get("PGID"),

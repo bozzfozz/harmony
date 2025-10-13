@@ -37,6 +37,10 @@ no separate services are required.
 
 - Jobs are idempotent. Duplicate submissions collapse into a single queue entry and
   return `already_enqueued` where applicable.
+- Idempotency reservations are persisted in SQLite by default under
+  `<downloads_dir>/.harmony/idempotency.db`, ensuring restarts do not reprocess
+  completed tracks. Deployments can fall back to the in-memory backend for
+  ephemeral test runs.
 - Volume expectations:
   - `/data/downloads` must support writes, renames and `fsync`. Cross-device moves
     trigger copy-and-rename fallbacks handled by HDM.

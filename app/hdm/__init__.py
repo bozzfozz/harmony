@@ -4,6 +4,7 @@ from .idempotency import (
     IdempotencyReservation,
     IdempotencyStore,
     InMemoryIdempotencyStore,
+    SQLiteIdempotencyStore,
 )
 from .models import (
     BatchStatus,
@@ -42,6 +43,7 @@ __all__ = [
     "IdempotencyReservation",
     "IdempotencyStore",
     "InMemoryIdempotencyStore",
+    "SQLiteIdempotencyStore",
     "ItemEvent",
     "ItemState",
     "RetryableDownloadError",

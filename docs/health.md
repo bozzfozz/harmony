@@ -18,6 +18,9 @@ upstream dependency checks.
   optional dependency details.
 - **Default behaviour:**
   - Checks SQLite availability (unless `HEALTH_READY_REQUIRE_DB=false`).
+  - Executes an idempotency probe using the configured backend. For the default
+    SQLite store the probe performs a lightweight reserve/release cycle against
+    `<downloads_dir>/.harmony/idempotency.db` (or `IDEMPOTENCY_SQLITE_PATH`).
   - Executes configured dependency probes listed via the `HEALTH_DEPS` environment
     variable (e.g. `spotify`, `slskd`).
   - Reports aggregated status in the `status` field (`ok`, `degraded`, `down`).

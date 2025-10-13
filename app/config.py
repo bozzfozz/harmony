@@ -227,12 +227,18 @@ class HdmConfig:
     max_retries: int
     slskd_timeout_seconds: int
     move_template: str
+    idempotency_backend: str
+    idempotency_sqlite_path: str
 
     @classmethod
     def from_env(cls, env: Mapping[str, Any]) -> HdmConfig:
+        downloads_dir = str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR)
+        music_dir = str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR)
+        backend = _parse_idempotency_backend(env.get("IDEMPOTENCY_BACKEND"))
+        sqlite_path = _resolve_idempotency_sqlite_path(env, downloads_dir)
         return cls(
-            downloads_dir=str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR),
-            music_dir=str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR),
+            downloads_dir=downloads_dir,
+            music_dir=music_dir,
             worker_concurrency=_bounded_int(
                 env.get("WORKER_CONCURRENCY"),
                 default=DEFAULT_DOWNLOAD_WORKER_CONCURRENCY,
@@ -255,6 +261,8 @@ class HdmConfig:
             ),
             slskd_timeout_seconds=_resolve_slskd_timeout_seconds(env),
             move_template=str(env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE),
+            idempotency_backend=backend,
+            idempotency_sqlite_path=sqlite_path,
         )
 
 
@@ -285,6 +293,30 @@ def _resolve_slskd_timeout_seconds(env: Mapping[str, Any]) -> int:
             )
 
     return DEFAULT_SLSKD_TIMEOUT_SEC
+
+
+_SUPPORTED_IDEMPOTENCY_BACKENDS = {"memory", "sqlite"}
+DEFAULT_IDEMPOTENCY_BACKEND = "sqlite"
+
+
+def _parse_idempotency_backend(raw_value: Any) -> str:
+    if raw_value is None:
+        return DEFAULT_IDEMPOTENCY_BACKEND
+    backend = str(raw_value).strip().lower()
+    if not backend:
+        return DEFAULT_IDEMPOTENCY_BACKEND
+    if backend not in _SUPPORTED_IDEMPOTENCY_BACKENDS:
+        options = ", ".join(sorted(_SUPPORTED_IDEMPOTENCY_BACKENDS))
+        raise ValueError(f"IDEMPOTENCY_BACKEND must be one of: {options}")
+    return backend
+
+
+def _resolve_idempotency_sqlite_path(env: Mapping[str, Any], downloads_dir: str) -> str:
+    raw_path = env.get("IDEMPOTENCY_SQLITE_PATH")
+    if raw_path is None or not str(raw_path).strip():
+        base = Path(downloads_dir).expanduser()
+        return str(base / ".harmony" / "idempotency.db")
+    return str(Path(str(raw_path)).expanduser())
 
 
 @dataclass(slots=True)
