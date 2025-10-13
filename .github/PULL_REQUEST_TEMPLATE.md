@@ -30,6 +30,7 @@
 - [ ] Keine Secrets/`BACKUP`/Lizenzdateien verändert
 - [ ] `make doctor` **grün**
 - [ ] `make all` **grün**
+- [ ] `make foss-scan` ausgeführt (Report ohne Blocker)
 - [ ] `pre-commit run --all-files`
 - [ ] `pre-commit run --hook-stage push`
 - [ ] Wiring-Report und Removal-Report im PR-Body gepflegt

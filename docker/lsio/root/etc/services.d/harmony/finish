@@ -1,6 +1,0 @@
-#!/usr/bin/with-contenv sh
-CODE="${1:-0}"
-if [ "${CODE}" != "0" ]; then
-  echo "harmony service exited with status ${CODE}" >&2
-fi
-exit 0

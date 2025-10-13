@@ -156,9 +156,11 @@ OAuth-Secrets und strukturierte Logs.
 ## Supply-Chain & Determinismus
 Vor jedem PR lokal ausführen:
 - `make supply-guard` → Exit 0 = OK, 1 = Fehler (Import-Map ungepinnt, verbotene Artefakte, o. Ä.).
+- `make foss-scan` → erzeugt `reports/foss_guard_summary.md` und meldet Lizenzen/Registries (Warn-Modus, Exit 0). Details siehe [docs/compliance/foss_policy.md](docs/compliance/foss_policy.md).
 Steuerung:
 - `SUPPLY_GUARD_VERBOSE=1 make supply-guard`
 - `make vendor-frontend` lädt externe Module lokal herunter und rewritet die Import-Map; `make vendor-frontend-reset` stellt den CDN-Modus wieder her.
+- `make foss-enforce` startet den FOSS-Guard im Strict-Modus (`FOSS_STRICT=true`) und bricht bei Blockern mit Exit 12 ab.
 
 ## Unified Docker Image
 
