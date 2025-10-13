@@ -183,6 +183,8 @@ docker run -d \
 
 > 🔀 **Port anpassen:** Setze `-e APP_PORT=<port>` und passe das Mapping zu `-p <port>:<port>` an, wenn `8080` bereits belegt ist. Der Container bindet stets an `0.0.0.0:${APP_PORT}`.
 
+> ❌ **Keine Legacy-Ports:** `PORT`, `UVICORN_PORT`, `SERVICE_PORT`, `WEB_PORT` und `FRONTEND_PORT` werden nicht mehr ausgewertet. Setze ausschließlich `APP_PORT`; widersprüchliche Werte führen zum Startfehler.
+
 > ✅ **Smoke-Test:** `curl -fsS http://127.0.0.1:8080/live` liefert `{ "status": "ok" }`. In den Logs erscheint `listening on 0.0.0.0:8080 path=/live`, sobald der Server bindet.
 
 ### Datenbank & Storage
@@ -214,6 +216,7 @@ Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) b
 | `PUBLIC_BACKEND_URL`     | Basis-URL, die das Frontend zur API-Kommunikation verwendet.                   | `http://localhost:8080`   |
 | `PUBLIC_SENTRY_DSN`      | Optionaler Sentry-DSN für das Frontend.                                        | _(leer)_                  |
 | `PUBLIC_FEATURE_FLAGS`   | Optionales JSON für Feature-Flags (z. B. `{ "beta": true }`).                 | `{}`                      |
+| `UVICORN_EXTRA_ARGS`     | Optionale zusätzliche Uvicorn-Flags (z. B. `--log-level debug`).               | _(leer)_        |
 
 Weitere Konfigurationsvariablen findest du in [`app/config.py`](app/config.py) und der Tabelle in [`.env.example`](.env.example).
 

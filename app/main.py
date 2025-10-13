@@ -50,6 +50,8 @@ from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(UTC)
+_APP_LISTEN_HOST = "0.0.0.0"
+_LIVE_HEALTH_PATH = "/live"
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
@@ -627,9 +629,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     port = resolve_app_port()
     logger.info(
-        "listening on 0.0.0.0:%s path=/live",
+        "listening on %s:%s path=%s",
+        _APP_LISTEN_HOST,
         port,
-        extra={"event": "startup.listening", "port": port, "path": "/live"},
+        _LIVE_HEALTH_PATH,
+        extra={
+            "event": "startup.listening",
+            "host": _APP_LISTEN_HOST,
+            "port": port,
+            "path": _LIVE_HEALTH_PATH,
+        },
     )
     logger.info("Harmony application started")
     try:
@@ -739,9 +748,9 @@ async def root() -> dict[str, str]:
 
 
 async def live_probe() -> dict[str, str]:
-    """Expose a top-level liveness probe forwarding to the health router."""
+    """Expose a top-level liveness probe independent of other routers."""
 
-    return await health_api.live()
+    return {"status": "ok"}
 
 
 _versioned_router = APIRouter()
@@ -753,7 +762,13 @@ router_registry.register_all(
     router=_versioned_router,
 )
 
-app.add_api_route("/live", live_probe, methods=["GET"], include_in_schema=False, tags=["System"])
+app.add_api_route(
+    _LIVE_HEALTH_PATH,
+    live_probe,
+    methods=["GET"],
+    include_in_schema=False,
+    tags=["System"],
+)
 
 app.include_router(health_api.router)
 

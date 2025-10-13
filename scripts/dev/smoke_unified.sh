@@ -95,6 +95,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+dump_smoke_log() {
+  echo "--- backend logs (last 200 lines) ---" >&2
+  if [[ -f "$SMOKE_LOG" ]]; then
+    tail -n 200 "$SMOKE_LOG" >&2 || true
+  else
+    echo "smoke log missing at $SMOKE_LOG" >&2
+  fi
+}
+
 dump_local_diagnostics() {
   echo "--- process snapshot ---" >&2
   if [[ -n "${SERVER_PID:-}" ]]; then
@@ -112,6 +121,18 @@ dump_local_diagnostics() {
   fi
 }
 
+dump_container_diagnostics() {
+  local container="$1"
+  echo "--- docker logs (last 200 lines) ---" >&2
+  docker logs --tail=200 "$container" >&2 || true
+  echo "--- docker process list ---" >&2
+  docker exec "$container" ps -ef >&2 || true
+  echo "--- docker listening sockets ---" >&2
+  docker exec "$container" sh -c 'ss -ltnp || netstat -ltnp' >&2 || true
+  echo "--- docker environment (sorted) ---" >&2
+  docker exec "$container" sh -c 'printenv | sort' >&2 || true
+}
+
 $PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
 SERVER_PID=$!
 
@@ -123,7 +144,7 @@ while (( LISTEN_RETRIES > 0 )); do
   fi
   if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
     echo "Backend process terminated before binding. Logs:" >&2
-    cat "$SMOKE_LOG" >&2
+    dump_smoke_log
     dump_local_diagnostics
     exit 1
   fi
@@ -136,14 +157,14 @@ until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}
   RETRIES=$((RETRIES - 1))
   if [[ $RETRIES -le 0 ]]; then
     echo "Backend failed to become ready. Logs:" >&2
-    cat "$SMOKE_LOG" >&2
+    dump_smoke_log
     dump_local_diagnostics
     exit 1
   fi
   sleep 1
   if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
     echo "Backend process terminated unexpectedly. Logs:" >&2
-    cat "$SMOKE_LOG" >&2
+    dump_smoke_log
     exit 1
   fi
 done
@@ -159,8 +180,7 @@ if command -v docker >/dev/null 2>&1; then
     CONTAINER_PORT=$(docker port "$CONTAINER_NAME" "${PORT}/tcp" | head -n1 | awk -F: '{print $2}')
     if [[ -z "$CONTAINER_PORT" ]]; then
       echo "Failed to determine mapped port for $IMAGE" >&2
-      docker logs "$CONTAINER_NAME" >&2 || true
-      docker exec "$CONTAINER_NAME" ss -tlnp >&2 || docker exec "$CONTAINER_NAME" netstat -tlnp >&2 || true
+      dump_container_diagnostics "$CONTAINER_NAME"
       docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
       exit 1
     fi
@@ -169,8 +189,7 @@ if command -v docker >/dev/null 2>&1; then
       DOCKER_RETRIES=$((DOCKER_RETRIES - 1))
       if [[ $DOCKER_RETRIES -le 0 ]]; then
         echo "Docker smoke check failed for $IMAGE" >&2
-        docker logs "$CONTAINER_NAME" >&2 || true
-        docker exec "$CONTAINER_NAME" ss -tlnp >&2 || docker exec "$CONTAINER_NAME" netstat -tlnp >&2 || true
+        dump_container_diagnostics "$CONTAINER_NAME"
         docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
         exit 1
       fi
