@@ -14,6 +14,7 @@ upstream service.
 | `SLSKD_BASE_URL` | `http://localhost:5030` | Base URL of the slskd service. When omitted, provide `SLSKD_HOST` and `SLSKD_PORT`; the readiness checks and adapter honour both forms (legacy `SLSKD_URL` remains supported). |
 | `SLSKD_API_KEY` | _(required)_ | Mandatory API key presented via the `X-API-Key` header. |
 | `SLSKD_TIMEOUT_MS` | `8_000` | Hard timeout for upstream requests in milliseconds. |
+| `SLSKD_TIMEOUT_SEC` | `300` | HDM download timeout in seconds; overrides the value derived from `SLSKD_TIMEOUT_MS`. |
 | `SLSKD_RETRY_MAX` | `3` | Number of retry attempts on timeouts/5xx/429 responses. |
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | Base value for exponential backoff (capped at 2 000 ms). |
 | `SLSKD_JITTER_PCT` | `20` | Percentage of symmetric jitter applied to the computed backoff. |

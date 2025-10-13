@@ -80,6 +80,7 @@ Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert.
 | --- | ---: | --- | --- |
 | `PROVIDER_MAX_CONCURRENCY` | `4` | Maximale Parallelität für Integrationen. | Sollte zu Provider-Limits passen. |
 | `SLSKD_TIMEOUT_MS` | `8_000` | Timeout (ms) für Soulseek-Requests. | Bei instabilen Netzen erhöhen. |
+| `SLSKD_TIMEOUT_SEC` | `300` | Timeout (s) für den HDM-Soulseek-Client. | Überschreibt den aus `SLSKD_TIMEOUT_MS` abgeleiteten Wert. |
 | `SLSKD_RETRY_MAX` | `3` | Retries für Soulseek-Anfragen. | | 
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | Basis-Delay für Soulseek-Retries. | |
 | `SLSKD_JITTER_PCT` | `20.0` | Zufallsjitter (±20 %) für Soulseek-Retries. | |
@@ -106,6 +107,7 @@ WATCHLIST_BACKOFF_BASE_MS=250
 WATCHLIST_JITTER_PCT=0.2
 WORKER_VISIBILITY_TIMEOUT_S=45
 PROVIDER_MAX_CONCURRENCY=3
+SLSKD_TIMEOUT_SEC=120
 SLSKD_TIMEOUT_MS=10000
 SLSKD_RETRY_MAX=2
 SLSKD_RETRY_BACKOFF_BASE_MS=250
@@ -124,6 +126,7 @@ WATCHLIST_BACKOFF_BASE_MS=250
 WATCHLIST_JITTER_PCT=0.2
 WORKER_VISIBILITY_TIMEOUT_S=60
 PROVIDER_MAX_CONCURRENCY=4
+SLSKD_TIMEOUT_SEC=180
 SLSKD_TIMEOUT_MS=8_000
 SLSKD_RETRY_MAX=3
 SLSKD_RETRY_BACKOFF_BASE_MS=250
@@ -137,7 +140,7 @@ FEATURE_RATE_LIMITING=true
 - **Worker starten nicht:** Prüfen, ob `HARMONY_DISABLE_WORKERS=1` gesetzt ist oder Feature-Flags einzelne Worker blockieren.
 - **Watchlist-Läufe dauern zu lange:** `WATCHLIST_INTERVAL`, `WATCHLIST_MAX_CONCURRENCY` und `WATCHLIST_MAX_PER_TICK` an API-Limits und Datenvolumen anpassen.
 - **Jobs bleiben in der Queue hängen:** `WORKER_VISIBILITY_TIMEOUT_S` für langlaufende Aufgaben erhöhen und DLQ via `/dlq`-Endpoints prüfen.
-- **Soulseek-Timeouts:** `SLSKD_TIMEOUT_MS` und `SLSKD_RETRY_MAX` schrittweise erhöhen; Backoff-Werte zur Schonung des Providers nutzen.
+- **Soulseek-Timeouts:** `SLSKD_TIMEOUT_SEC` (HDM) bzw. `SLSKD_TIMEOUT_MS` und `SLSKD_RETRY_MAX` schrittweise erhöhen; Backoff-Werte zur Schonung des Providers nutzen.
 - **Rate-Limit-Fehler über Gateway:** `FEATURE_RATE_LIMITING` deaktivieren oder Limits in der Gateway-Konfiguration anpassen.
 
 ## Weiterführende Ressourcen
