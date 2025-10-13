@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Iterable, Mapping, MutableMapping, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ class SecretRecord:
     """Represents a stored secret value without exposing the payload."""
 
     key: str
-    value: Optional[str]
+    value: str | None
 
     @property
     def present(self) -> bool:
@@ -30,7 +30,7 @@ class SecretRecord:
         return bool((self.value or "").strip())
 
     @property
-    def last4(self) -> Optional[str]:
+    def last4(self) -> str | None:
         """Return the last four characters if a value exists."""
 
         if not self.present:
@@ -49,10 +49,10 @@ class SecretStore:
             setting_key for values in _PROVIDER_SETTINGS.values() for setting_key in values
         }
         rows = session.execute(select(Setting.key, Setting.value).where(Setting.key.in_(keys)))
-        self._values: MutableMapping[str, Optional[str]] = {key: value for key, value in rows}
+        self._values: MutableMapping[str, str | None] = {key: value for key, value in rows}
 
     @classmethod
-    def from_values(cls, values: Mapping[str, Optional[str]]) -> "SecretStore":
+    def from_values(cls, values: Mapping[str, str | None]) -> SecretStore:
         """Create a store from an in-memory mapping (primarily for testing)."""
 
         instance = cls.__new__(cls)

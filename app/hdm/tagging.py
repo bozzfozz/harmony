@@ -62,10 +62,10 @@ class AudioTagger:
         if info is not None:
             codec = getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
             bitrate_value = getattr(info, "bitrate", None)
-            if isinstance(bitrate_value, (int, float)):
+            if isinstance(bitrate_value, int | float):
                 bitrate = int(round(bitrate_value / 1000)) if bitrate_value else None
             duration_value = getattr(info, "length", None)
-            if isinstance(duration_value, (int, float)):
+            if isinstance(duration_value, int | float):
                 duration_seconds = float(duration_value)
 
         return TaggingResult(

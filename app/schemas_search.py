@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -18,30 +19,30 @@ class SearchRequest(BaseModel):
     type: SearchTypeLiteral = Field(
         default="mixed", description="Result type filter (artist/album/track/mixed)"
     )
-    sources: List[SourceLiteral] = Field(
+    sources: list[SourceLiteral] = Field(
         default_factory=lambda: ["spotify", "soulseek"],
         description="Sources to query",
     )
-    genre: Optional[str] = Field(
+    genre: str | None = Field(
         default=None,
         description="Optional genre filter (case-insensitive, diacritic agnostic)",
     )
-    year_from: Optional[int] = Field(
+    year_from: int | None = Field(
         default=None,
         ge=1900,
         le=2099,
         description="Lower bound of the release year (inclusive)",
     )
-    year_to: Optional[int] = Field(
+    year_to: int | None = Field(
         default=None,
         ge=1900,
         le=2099,
         description="Upper bound of the release year (inclusive)",
     )
-    min_bitrate: Optional[int] = Field(
+    min_bitrate: int | None = Field(
         default=None, ge=0, description="Minimum acceptable bitrate in kbps"
     )
-    format_priority: Optional[List[str]] = Field(
+    format_priority: list[str] | None = Field(
         default=None,
         description="Preferred audio formats used for secondary sorting",
     )
@@ -58,7 +59,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def _normalise_sources(cls, value: Optional[Sequence[str]]) -> List[SourceLiteral]:
+    def _normalise_sources(cls, value: Sequence[str] | None) -> list[SourceLiteral]:
         if value in (None, "", []):
             return ["spotify", "soulseek"]
         normalised: list[SourceLiteral] = []
@@ -72,7 +73,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("genre")
     @classmethod
-    def _strip_genre(cls, value: Optional[str]) -> Optional[str]:
+    def _strip_genre(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
@@ -80,7 +81,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("format_priority", mode="before")
     @classmethod
-    def _normalise_formats(cls, value: Optional[Sequence[str]]) -> Optional[List[str]]:
+    def _normalise_formats(cls, value: Sequence[str] | None) -> list[str] | None:
         if value in (None, ""):
             return None
         normalised: list[str] = []
@@ -101,7 +102,7 @@ class SearchRequest(BaseModel):
 
     @field_validator("year_to")
     @classmethod
-    def _validate_year_range(cls, year_to: Optional[int], info: ValidationInfo) -> Optional[int]:
+    def _validate_year_range(cls, year_to: int | None, info: ValidationInfo) -> int | None:
         year_from = info.data.get("year_from") if info.data else None
         if year_from is not None and year_to is not None and year_from > year_to:
             raise ValueError("year_from must be less than or equal to year_to")
@@ -115,18 +116,18 @@ class SearchItem(BaseModel):
     id: str
     source: SourceLiteral
     title: str
-    artist: Optional[str] = None
-    album: Optional[str] = None
-    year: Optional[int] = None
-    genres: List[str] = Field(default_factory=list)
-    bitrate: Optional[int] = None
-    format: Optional[str] = None
+    artist: str | None = None
+    album: str | None = None
+    year: int | None = None
+    genres: list[str] = Field(default_factory=list)
+    bitrate: int | None = None
+    format: str | None = None
     score: float = Field(default=0.0, ge=0.0, le=1.0)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("metadata", mode="before")
     @classmethod
-    def _ensure_metadata(cls, value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _ensure_metadata(cls, value: dict[str, Any] | None) -> dict[str, Any]:
         if value is None:
             return {}
         return value
@@ -139,4 +140,4 @@ class SearchResponse(BaseModel):
     total: int
     limit: int
     offset: int
-    items: List[SearchItem]
+    items: list[SearchItem]

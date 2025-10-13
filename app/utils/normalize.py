@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 import unicodedata
-from typing import Iterable, Optional, Sequence
 
 
 def normalize_text(value: str | None) -> str:
@@ -39,7 +39,7 @@ def clamp_score(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def boost_for_format(audio_format: Optional[str]) -> float:
+def boost_for_format(audio_format: str | None) -> float:
     """Return the score boost associated with *audio_format*."""
 
     if not audio_format:
@@ -54,7 +54,7 @@ def boost_for_format(audio_format: Optional[str]) -> float:
     return 0.0
 
 
-def boost_for_bitrate(bitrate: Optional[int]) -> float:
+def boost_for_bitrate(bitrate: int | None) -> float:
     """Return the score boost derived from the given *bitrate*."""
 
     if bitrate is None:
@@ -68,9 +68,7 @@ def boost_for_bitrate(bitrate: Optional[int]) -> float:
     return 0.0
 
 
-def year_distance_bonus(
-    year: Optional[int], year_from: Optional[int], year_to: Optional[int]
-) -> float:
+def year_distance_bonus(year: int | None, year_from: int | None, year_to: int | None) -> float:
     """Return a small bonus when *year* falls into the requested interval."""
 
     if year is None:
@@ -82,7 +80,7 @@ def year_distance_bonus(
     return 0.05 if year_from is not None or year_to is not None else 0.0
 
 
-def format_priority_index(audio_format: Optional[str], priority: Sequence[str]) -> int:
+def format_priority_index(audio_format: str | None, priority: Sequence[str]) -> int:
     """Return the stable index for *audio_format* based on *priority* order."""
 
     if not priority:
@@ -96,7 +94,7 @@ def format_priority_index(audio_format: Optional[str], priority: Sequence[str]) 
     return len(priority)
 
 
-def bitrate_penalty(bitrate: Optional[int]) -> float:
+def bitrate_penalty(bitrate: int | None) -> float:
     """Return a small penalty for missing or very low bitrate."""
 
     if bitrate is None:

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from app.utils.settings_store import read_setting, write_setting
 
@@ -16,7 +17,7 @@ STALE_TIMEOUT_SECONDS = 60
 def _utcnow_iso() -> str:
     """Return an ISO8601 timestamp in UTC."""
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def heartbeat_key(name: str) -> str:
@@ -46,13 +47,13 @@ def mark_worker_status(name: str, status: str) -> None:
     write_setting(status_key(name), status)
 
 
-def read_worker_status(name: str) -> tuple[Optional[str], Optional[str]]:
+def read_worker_status(name: str) -> tuple[str | None, str | None]:
     """Return the stored ``(last_seen, status)`` tuple for ``name``."""
 
     return read_setting(heartbeat_key(name)), read_setting(status_key(name))
 
 
-def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
+def parse_timestamp(value: str | None) -> datetime | None:
     """Parse an ISO8601 timestamp if possible."""
 
     if not value:
@@ -64,10 +65,10 @@ def parse_timestamp(value: Optional[str]) -> Optional[datetime]:
 
 
 def resolve_status(
-    stored_status: Optional[str],
-    last_seen: Optional[datetime],
+    stored_status: str | None,
+    last_seen: datetime | None,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     stale_after: float = STALE_TIMEOUT_SECONDS,
 ) -> str:
     """Determine the effective worker status based on stored data."""
@@ -76,9 +77,9 @@ def resolve_status(
     if status == "stopped":
         return "stopped"
 
-    reference = now or datetime.now(timezone.utc)
+    reference = now or datetime.now(UTC)
     if last_seen is not None and last_seen.tzinfo is None:
-        last_seen = last_seen.replace(tzinfo=timezone.utc)
+        last_seen = last_seen.replace(tzinfo=UTC)
 
     if last_seen is None:
         return status

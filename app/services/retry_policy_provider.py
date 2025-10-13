@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 import re
 import threading
 import time
-from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from app.config import (
     DEFAULT_RETRY_BASE_SECONDS,

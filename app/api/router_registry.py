@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Iterator, Sequence
 
 from fastapi import APIRouter, FastAPI
 
@@ -34,7 +34,7 @@ class RouterConfig:
     kind: str
 
 
-_registry: "OrderedDict[str, RouterConfig]" = OrderedDict()
+_registry: OrderedDict[str, RouterConfig] = OrderedDict()
 _logger = get_logger(__name__)
 _DEFAULT_BASE = "/api/v1"
 

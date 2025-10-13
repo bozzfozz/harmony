@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import time
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+import hashlib
+import time
+from typing import Any
 from urllib.parse import urlparse
+import uuid
 
 from sqlalchemy import Select, func, select
 
@@ -30,8 +30,8 @@ class CandidateItem:
     id: int
     artist: str
     title: str
-    album: Optional[str]
-    duration_ms: Optional[int]
+    album: str | None
+    duration_ms: int | None
 
 
 @dataclass(slots=True)
@@ -66,8 +66,8 @@ class BackfillJobStatus:
     expanded_playlists: int
     expanded_tracks: int
     expand_playlists: bool
-    duration_ms: Optional[int]
-    error: Optional[str]
+    duration_ms: int | None
+    error: str | None
 
 
 class BackfillService:
@@ -81,7 +81,7 @@ class BackfillService:
 
     # Public API ---------------------------------------------------------
 
-    def create_job(self, *, max_items: Optional[int], expand_playlists: bool) -> BackfillJobSpec:
+    def create_job(self, *, max_items: int | None, expand_playlists: bool) -> BackfillJobSpec:
         """Persist a new job entry that will later be executed by the worker."""
 
         self._ensure_authenticated()
@@ -119,7 +119,7 @@ class BackfillService:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.run_job, job)
 
-    def get_status(self, job_id: str) -> Optional[BackfillJobStatus]:
+    def get_status(self, job_id: str) -> BackfillJobStatus | None:
         """Return a snapshot of the persisted job state."""
 
         with session_scope() as session:
@@ -152,7 +152,7 @@ class BackfillService:
         cache_misses = 0
         playlists_expanded = 0
         tracks_added = 0
-        metadata_cache: Dict[str, Dict[str, Any]] = {}
+        metadata_cache: dict[str, dict[str, Any]] = {}
 
         logger.info(
             "event=backfill job_id=%s state=running limit=%s expand_playlists=%s",
@@ -233,11 +233,11 @@ class BackfillService:
     def _process_candidate(
         self,
         candidate: CandidateItem,
-        metadata_cache: Dict[str, Dict[str, Any]],
-    ) -> Tuple[bool, bool]:
+        metadata_cache: dict[str, dict[str, Any]],
+    ) -> tuple[bool, bool]:
         key = self._build_cache_key(candidate)
         cache_hit = False
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: dict[str, Any] | None = None
 
         if key:
             cached = self._get_cache_entry(key)
@@ -269,8 +269,8 @@ class BackfillService:
         self._update_ingest_item(candidate.id, metadata)
         return True, cache_hit
 
-    def _load_candidates(self, limit: int) -> List[CandidateItem]:
-        statement: Select[Tuple[int, str, str, Optional[str], Optional[int]]] = (
+    def _load_candidates(self, limit: int) -> list[CandidateItem]:
+        statement: Select[tuple[int, str, str, str | None, int | None]] = (
             select(
                 IngestItem.id,
                 IngestItem.artist,
@@ -291,7 +291,7 @@ class BackfillService:
         with session_scope() as session:
             rows = session.execute(statement).all()
 
-        candidates: List[CandidateItem] = []
+        candidates: list[CandidateItem] = []
         for item_id, artist, title, album, duration_sec in rows:
             if not artist or not title:
                 continue
@@ -307,7 +307,7 @@ class BackfillService:
             )
         return candidates
 
-    def _update_ingest_item(self, item_id: int, metadata: Dict[str, Any]) -> None:
+    def _update_ingest_item(self, item_id: int, metadata: dict[str, Any]) -> None:
         duration_ms = metadata.get("duration_ms")
         duration_sec = int(round(duration_ms / 1000)) if duration_ms else None
 
@@ -325,7 +325,7 @@ class BackfillService:
 
     # Playlist expansion -------------------------------------------------
 
-    def _expand_playlists(self, job_id: str) -> Tuple[int, int]:
+    def _expand_playlists(self, job_id: str) -> tuple[int, int]:
         playlists = self._load_playlist_links()
         if not playlists:
             return 0, 0
@@ -342,7 +342,7 @@ class BackfillService:
 
         return total_playlists, total_tracks
 
-    def _load_playlist_links(self) -> List[PlaylistLink]:
+    def _load_playlist_links(self) -> list[PlaylistLink]:
         statement = (
             select(IngestItem.id, IngestItem.job_id, IngestItem.playlist_url)
             .where(
@@ -361,14 +361,14 @@ class BackfillService:
         with session_scope() as session:
             rows = session.execute(statement).all()
 
-        links: List[PlaylistLink] = []
+        links: list[PlaylistLink] = []
         for item_id, job_id, url in rows:
             if not url:
                 continue
             links.append(PlaylistLink(item_id=int(item_id), job_id=str(job_id), url=str(url)))
         return links
 
-    def _expand_playlist(self, job_id: str, playlist: PlaylistLink) -> Optional[int]:
+    def _expand_playlist(self, job_id: str, playlist: PlaylistLink) -> int | None:
         playlist_id = self._extract_playlist_id(playlist.url)
         if not playlist_id:
             self._mark_playlist_complete(playlist.item_id, error="invalid_url")
@@ -422,9 +422,7 @@ class BackfillService:
 
                 duration_ms = track.get("duration_ms")
                 duration_sec = (
-                    int(round(duration_ms / 1000))
-                    if isinstance(duration_ms, (int, float))
-                    else None
+                    int(round(duration_ms / 1000)) if isinstance(duration_ms, int | float) else None
                 )
 
                 artist_names = SpotifyClient._extract_artist_names(track.get("artists"))
@@ -464,9 +462,9 @@ class BackfillService:
 
         return created
 
-    def _fetch_playlist_tracks(self, playlist_id: str) -> List[Dict[str, Any]]:
+    def _fetch_playlist_tracks(self, playlist_id: str) -> list[dict[str, Any]]:
         client = self._require_spotify()
-        tracks: List[Dict[str, Any]] = []
+        tracks: list[dict[str, Any]] = []
         offset = 0
         limit = 100
 
@@ -497,7 +495,7 @@ class BackfillService:
             offset += len(items)
 
             total = response.get("total")
-            total_int: Optional[int]
+            total_int: int | None
             try:
                 total_int = int(total) if total is not None else None
             except (TypeError, ValueError):
@@ -512,7 +510,7 @@ class BackfillService:
 
     # Persistence helpers ------------------------------------------------
 
-    def _update_job_state(self, job_id: str, *, state: str, error: Optional[str]) -> None:
+    def _update_job_state(self, job_id: str, *, state: str, error: str | None) -> None:
         with session_scope() as session:
             record = session.get(BackfillJob, job_id)
             if record is None:
@@ -552,7 +550,7 @@ class BackfillService:
         *,
         state: str,
         duration_ms: int,
-        error: Optional[str],
+        error: str | None,
     ) -> None:
         with session_scope() as session:
             record = session.get(BackfillJob, job_id)
@@ -564,7 +562,7 @@ class BackfillService:
             record.updated_at = datetime.utcnow()
             session.add(record)
 
-    def _mark_playlist_complete(self, item_id: int, *, error: Optional[str]) -> None:
+    def _mark_playlist_complete(self, item_id: int, *, error: str | None) -> None:
         with session_scope() as session:
             item = session.get(IngestItem, item_id)
             if item is None:
@@ -575,7 +573,7 @@ class BackfillService:
 
     # Cache helpers ------------------------------------------------------
 
-    def _build_cache_key(self, candidate: CandidateItem) -> Optional[str]:
+    def _build_cache_key(self, candidate: CandidateItem) -> str | None:
         artist = SpotifyClient._normalise_text(candidate.artist)
         title = SpotifyClient._normalise_text(candidate.title)
         album = SpotifyClient._normalise_text(candidate.album)
@@ -583,7 +581,7 @@ class BackfillService:
             return None
         return f"{artist}|{title}|{album}".strip("|")
 
-    def _get_cache_entry(self, key: str) -> Optional[Tuple[str, Optional[str]]]:
+    def _get_cache_entry(self, key: str) -> tuple[str, str | None] | None:
         now = datetime.utcnow()
         with session_scope() as session:
             entry = session.get(SpotifyCache, key)
@@ -596,7 +594,7 @@ class BackfillService:
                 return None
             return entry.track_id, entry.album_id
 
-    def _store_cache_entry(self, key: str, track_id: str, album_id: Optional[str]) -> None:
+    def _store_cache_entry(self, key: str, track_id: str, album_id: str | None) -> None:
         if not track_id:
             return
         expires_at = datetime.utcnow() + timedelta(seconds=self._cache_ttl)
@@ -619,9 +617,9 @@ class BackfillService:
     def _fetch_track_metadata(
         self,
         track_id: str,
-        album_id: Optional[str],
-        cache: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        album_id: str | None,
+        cache: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
         if not track_id:
             return {
                 "track_id": None,
@@ -647,7 +645,7 @@ class BackfillService:
         return metadata
 
     @staticmethod
-    def _extract_track_metadata(track: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_track_metadata(track: dict[str, Any]) -> dict[str, Any]:
         album = track.get("album") if isinstance(track.get("album"), dict) else {}
         external_ids = track.get("external_ids")
         isrc = None
@@ -657,7 +655,7 @@ class BackfillService:
                 isrc = str(value)
 
         duration_ms = track.get("duration_ms")
-        if not isinstance(duration_ms, (int, float)):
+        if not isinstance(duration_ms, int | float):
             duration_ms = None
 
         metadata = {
@@ -687,7 +685,7 @@ class BackfillService:
         if not authenticated:
             raise PermissionError("Spotify authentication required for backfill")
 
-    def _resolve_limit(self, max_items: Optional[int]) -> int:
+    def _resolve_limit(self, max_items: int | None) -> int:
         if max_items is None:
             return self._default_limit
         try:
@@ -720,7 +718,7 @@ class BackfillService:
         return digest.hexdigest()
 
     @staticmethod
-    def _extract_playlist_id(url: str) -> Optional[str]:
+    def _extract_playlist_id(url: str) -> str | None:
         if not url:
             return None
         if url.startswith("spotify:playlist:"):

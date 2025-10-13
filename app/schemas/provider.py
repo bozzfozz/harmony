@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -14,11 +14,11 @@ class ProviderArtist(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    id: Optional[ID] = None
+    id: ID | None = None
     name: str
-    uri: Optional[URI] = None
-    genres: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    uri: URI | None = None
+    genres: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -34,13 +34,13 @@ class ProviderAlbum(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    id: Optional[ID] = None
+    id: ID | None = None
     name: str
-    uri: Optional[URI] = None
-    artists: List[ProviderArtist] = Field(default_factory=list)
-    release_date: Optional[ISODateTime] = None
-    total_tracks: Optional[int] = Field(default=None, ge=0)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    uri: URI | None = None
+    artists: list[ProviderArtist] = Field(default_factory=list)
+    release_date: ISODateTime | None = None
+    total_tracks: int | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -56,16 +56,16 @@ class ProviderTrack(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    id: Optional[ID] = None
+    id: ID | None = None
     name: str
     provider: str
-    uri: Optional[URI] = None
-    artists: List[ProviderArtist] = Field(default_factory=list)
-    album: Optional[ProviderAlbum] = None
-    duration_ms: Optional[int] = Field(default=None, ge=0)
-    isrc: Optional[str] = None
-    score: Optional[float] = Field(default=None, ge=0.0)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    uri: URI | None = None
+    artists: list[ProviderArtist] = Field(default_factory=list)
+    album: ProviderAlbum | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    isrc: str | None = None
+    score: float | None = Field(default=None, ge=0.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name", "provider")
     @classmethod

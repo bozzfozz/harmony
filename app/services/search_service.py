@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from time import perf_counter
-from typing import Iterable
 
 from app.integrations.contracts import (
     ProviderTrack as GatewayProviderTrack,
-)
-from app.integrations.contracts import (
     SearchQuery as GatewaySearchQuery,
 )
 from app.logging import get_logger
@@ -214,7 +211,7 @@ def _sanitise_value(value: object) -> object:
         return value
     if isinstance(value, Mapping):
         return _sanitise_mapping(value)
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         return [_sanitise_value(item) for item in value]
     return str(value)
 
@@ -226,7 +223,7 @@ def _extract_int(mapping: Mapping[str, object], *keys: str) -> int | None:
         value = mapping[key]
         if isinstance(value, bool):  # pragma: no cover - defensive
             continue
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return int(value)
         try:
             return int(str(value))
@@ -242,7 +239,7 @@ def _collect_genres(*mappings: Mapping[str, object] | None) -> list[str]:
         if not mapping:
             continue
         raw = mapping.get("genres")
-        if isinstance(raw, (list, tuple, set)):
+        if isinstance(raw, list | tuple | set):
             for value in raw:
                 text = str(value).strip()
                 lowered = text.lower()

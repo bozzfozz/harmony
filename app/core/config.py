@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 DEFAULT_SETTINGS: Mapping[str, str] = {
     "sync_worker_concurrency": "1",

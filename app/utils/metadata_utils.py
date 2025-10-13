@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any
 
 try:  # Python 3.11+: ``asyncio`` is only required when optional metadata
     # extraction helpers receive coroutine results. Import lazily to keep
@@ -38,7 +39,7 @@ TAG_FIELDS = {
 }
 
 
-def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
+def extract_metadata_from_spotify(track_id: str) -> dict[str, str]:
     """Return rich metadata for the given Spotify track identifier.
 
     The helper consolidates information from the track payload itself together
@@ -55,7 +56,7 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
         logger.debug("Spotify metadata requested for %s but no client configured", track_id)
         return {}
 
-    metadata: Dict[str, str] = {}
+    metadata: dict[str, str] = {}
 
     track_payload: Mapping[str, Any] | None = None
     try:
@@ -112,7 +113,7 @@ def extract_metadata_from_spotify(track_id: str) -> Dict[str, str]:
     return metadata
 
 
-def write_metadata_tags(audio_file: Path, metadata: Dict[str, Any]) -> None:
+def write_metadata_tags(audio_file: Path, metadata: dict[str, Any]) -> None:
     """Persist the provided metadata onto the local audio file."""
 
     if not metadata:
@@ -151,12 +152,12 @@ def write_metadata_tags(audio_file: Path, metadata: Dict[str, Any]) -> None:
         raise
 
 
-def _merge_metadata_value(metadata: Dict[str, str], key: str, value: Optional[str]) -> None:
+def _merge_metadata_value(metadata: dict[str, str], key: str, value: str | None) -> None:
     if value and key not in metadata:
         metadata[key] = value
 
 
-def _extract_person(payload: Mapping[str, Any], keys: Iterable[str]) -> Optional[str]:
+def _extract_person(payload: Mapping[str, Any], keys: Iterable[str]) -> str | None:
     for key in keys:
         value = payload.get(key)
         text = _normalise_text(value)
@@ -172,7 +173,7 @@ def _extract_person(payload: Mapping[str, Any], keys: Iterable[str]) -> Optional
     return None
 
 
-def _extract_genre(payload: Mapping[str, Any]) -> Optional[str]:
+def _extract_genre(payload: Mapping[str, Any]) -> str | None:
     genres = payload.get("genres")
     if isinstance(genres, list):
         for item in genres:
@@ -183,7 +184,7 @@ def _extract_genre(payload: Mapping[str, Any]) -> Optional[str]:
     return _normalise_text(genre)
 
 
-def _extract_copyright(payload: Any) -> Optional[str]:
+def _extract_copyright(payload: Any) -> str | None:
     if isinstance(payload, list):
         for entry in payload:
             text = _normalise_text(entry)
@@ -194,10 +195,10 @@ def _extract_copyright(payload: Any) -> Optional[str]:
     return _normalise_text(payload)
 
 
-def _pick_best_image(images: Any) -> Optional[str]:
+def _pick_best_image(images: Any) -> str | None:
     if not isinstance(images, list):
         return None
-    best_url: Optional[str] = None
+    best_url: str | None = None
     best_score = -1
     for item in images:
         if not isinstance(item, Mapping):
@@ -221,11 +222,11 @@ def _coerce_int(value: Any) -> int:
         return 0
 
 
-def _normalise_text(value: Any) -> Optional[str]:
+def _normalise_text(value: Any) -> str | None:
     if isinstance(value, str):
         text = value.strip()
         return text or None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         text = str(value).strip()
         return text or None
     if isinstance(value, Mapping):

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, MutableMapping, Sequence
+from typing import Any
 
 from app.integrations.contracts import TrackProvider
 from app.integrations.registry import ProviderRegistry

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -176,7 +176,7 @@ class WatchlistService:
             payload["reason"] = pause_reason
         if resume_at_value:
             payload["resume_at"] = (
-                resume_at_value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+                resume_at_value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
             )
         log_event(self._logger, "service.call", **payload)
         return entry
@@ -260,7 +260,7 @@ class WatchlistService:
         if timestamp is None:
             return None
         if timestamp.tzinfo is not None:
-            return timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+            return timestamp.astimezone(UTC).replace(tzinfo=None)
         return timestamp
 
     def _insert_record(
@@ -302,7 +302,7 @@ class WatchlistService:
         paused = bool(record.stop_reason and record.stop_reason.strip())
         resume_at = record.retry_block_until
         if resume_at is not None:
-            resume_at = resume_at.replace(tzinfo=timezone.utc)
+            resume_at = resume_at.replace(tzinfo=UTC)
         return WatchlistEntry(
             id=int(record.id),
             artist_key=artist_key,

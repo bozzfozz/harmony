@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from time import perf_counter
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
-    Callable,
-    Iterable,
-    Mapping,
-    Optional,
-    Sequence,
     cast,
 )
 
@@ -113,7 +108,7 @@ class SpotifyDomainService:
     def _default_free_ingest_factory(
         config: AppConfig,
         soulseek: SoulseekClient,
-        worker: "SyncWorker | None",
+        worker: SyncWorker | None,
         session_runner: Callable[[SessionCallable[Any]], Awaitable[Any]] | None = None,
     ) -> FreeIngestService:
         return FreeIngestService(
@@ -306,12 +301,12 @@ class SpotifyDomainService:
             insert_before=insert_before,
         )
 
-    def get_track_details(self, track_id: str) -> Optional[dict[str, Any]]:
+    def get_track_details(self, track_id: str) -> dict[str, Any] | None:
         client = self._require_spotify()
         details = client.get_track_details(track_id)
         return details if details else None
 
-    def get_audio_features(self, track_id: str) -> Optional[dict[str, Any]]:
+    def get_audio_features(self, track_id: str) -> dict[str, Any] | None:
         client = self._require_spotify()
         features = client.get_audio_features(track_id)
         return features if features else None
@@ -344,7 +339,7 @@ class SpotifyDomainService:
         client = self._require_spotify()
         client.remove_saved_tracks(list(track_ids))
 
-    def get_current_user(self) -> Optional[dict[str, Any]]:
+    def get_current_user(self) -> dict[str, Any] | None:
         client = self._require_spotify()
         profile = client.get_current_user()
         return profile if isinstance(profile, dict) else None
@@ -362,9 +357,9 @@ class SpotifyDomainService:
     def get_recommendations(
         self,
         *,
-        seed_tracks: Optional[Sequence[str]] = None,
-        seed_artists: Optional[Sequence[str]] = None,
-        seed_genres: Optional[Sequence[str]] = None,
+        seed_tracks: Sequence[str] | None = None,
+        seed_artists: Sequence[str] | None = None,
+        seed_genres: Sequence[str] | None = None,
         limit: int,
     ) -> dict[str, Any]:
         client = self._require_spotify()
@@ -388,7 +383,7 @@ class SpotifyDomainService:
         *,
         playlist_links: Sequence[str] | None = None,
         tracks: Sequence[str] | None = None,
-        batch_hint: Optional[int] = None,
+        batch_hint: int | None = None,
     ) -> IngestSubmission:
         return await self._submit_free_import(
             playlist_links=playlist_links,
@@ -401,7 +396,7 @@ class SpotifyDomainService:
         *,
         playlist_links: Sequence[str] | None = None,
         tracks: Sequence[str] | None = None,
-        batch_hint: Optional[int] = None,
+        batch_hint: int | None = None,
     ) -> IngestSubmission:
         """Submit a FREE import request via the orchestrator."""
 
@@ -432,7 +427,7 @@ class SpotifyDomainService:
         )
         return result
 
-    def get_free_ingest_job(self, job_id: str) -> Optional[JobStatus]:
+    def get_free_ingest_job(self, job_id: str) -> JobStatus | None:
         service = self._build_free_ingest_service()
         return service.get_job_status(job_id)
 
@@ -441,7 +436,7 @@ class SpotifyDomainService:
         *,
         playlist_links: Sequence[str] | None,
         tracks: Sequence[str] | None,
-        batch_hint: Optional[int],
+        batch_hint: int | None,
     ) -> IngestSubmission:
         service = self._build_free_ingest_service()
         return await service.submit(
@@ -478,12 +473,12 @@ class SpotifyDomainService:
         return worker
 
     def create_backfill_job(
-        self, *, max_items: Optional[int], expand_playlists: bool
+        self, *, max_items: int | None, expand_playlists: bool
     ) -> BackfillJobSpec:
         service = self.ensure_backfill_service()
         return service.create_job(max_items=max_items, expand_playlists=expand_playlists)
 
-    def get_backfill_status(self, job_id: str) -> Optional[BackfillJobStatus]:
+    def get_backfill_status(self, job_id: str) -> BackfillJobStatus | None:
         service = self.ensure_backfill_service()
         return service.get_status(job_id)
 

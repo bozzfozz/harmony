@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+import time
+
 from app.logging import get_logger
 
 from .models import DownloadItem, DownloadWorkItem, ItemEvent
@@ -98,7 +99,7 @@ class DownloadCompletionMonitor:
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=self._poll_interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     candidate = await self._check_existing(expected_path)
                     if candidate is not None:
                         return candidate
@@ -133,7 +134,7 @@ class DownloadCompletionMonitor:
         event = DownloadCompletionEvent(
             path=path,
             bytes_written=bytes_written,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         await self._bus.publish(dedupe_key, event)
 
@@ -201,7 +202,7 @@ class DownloadCompletionMonitor:
                 if info is not None:
                     codec = getattr(info, "codec", None) or getattr(info, "mime", [None])[0]
                     length = getattr(info, "length", None)
-                    if isinstance(length, (int, float)):
+                    if isinstance(length, int | float):
                         duration = float(length)
         except Exception:  # pragma: no cover - metadata extraction best effort
             logger.debug("Failed to inspect audio metadata", exc_info=True)
@@ -227,7 +228,7 @@ def record_detection_event(work_item: DownloadWorkItem, *, path: Path, bytes_wri
 def build_item_event(name: str, **meta: object) -> ItemEvent:
     return ItemEvent(
         name=name,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         meta={k: v for k, v in meta.items() if v is not None},
     )
 

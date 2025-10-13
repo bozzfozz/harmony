@@ -3,22 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-import inspect
-import re
-import time
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import importlib
+import inspect
 from pathlib import Path
+import re
+import time
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    Mapping,
-    Optional,
-    Sequence,
     cast,
 )
 from urllib.parse import urlparse
@@ -36,13 +30,13 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class ArtworkJob:
-    download_id: Optional[int]
+    download_id: int | None
     file_path: str
-    metadata: Dict[str, Any]
-    spotify_track_id: Optional[str]
-    spotify_album_id: Optional[str]
-    artwork_url: Optional[str]
-    cache_key: Optional[str] = None
+    metadata: dict[str, Any]
+    spotify_track_id: str | None
+    spotify_album_id: str | None
+    artwork_url: str | None
+    cache_key: str | None = None
     refresh: bool = False
 
 
@@ -50,10 +44,10 @@ class ArtworkJob:
 class DownloadContext:
     id: int
     filename: str
-    spotify_track_id: Optional[str]
-    spotify_album_id: Optional[str]
+    spotify_track_id: str | None
+    spotify_album_id: str | None
     request_payload: Mapping[str, Any] | None
-    artwork_path: Optional[str]
+    artwork_path: str | None
     has_artwork: bool
 
 
@@ -125,7 +119,7 @@ class ArtworkWorker:
         if post_processing_hooks:
             self._post_processing_hooks.extend(post_processing_hooks)
 
-        self._queue: asyncio.Queue[Optional[ArtworkJob]] = asyncio.Queue()
+        self._queue: asyncio.Queue[ArtworkJob | None] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
         self._running = False
 
@@ -256,7 +250,7 @@ class ArtworkWorker:
             return
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
-        stored_path: Optional[str] = None
+        stored_path: str | None = None
         if result.artwork_path is not None:
             stored_path = str(result.artwork_path)
         elif download_context and download_context.artwork_path:
@@ -476,11 +470,11 @@ class ArtworkWorker:
         self,
         job: ArtworkJob,
         download: DownloadContext | None,
-    ) -> Optional[str]:
+    ) -> str | None:
         if job.spotify_album_id:
             return job.spotify_album_id
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if download is not None and download.request_payload:
             payload.update(download.request_payload)
         if job.metadata:
@@ -541,7 +535,7 @@ class ArtworkWorker:
 
         return None
 
-    def _get_spotify_artwork_url(self, track_id: str | None) -> Optional[str]:
+    def _get_spotify_artwork_url(self, track_id: str | None) -> str | None:
         if not track_id or self._spotify is None:
             return None
         try:
@@ -564,7 +558,7 @@ class ArtworkWorker:
 
         return None
 
-    def _extract_metadata_artwork(self, metadata: Mapping[str, Any]) -> Optional[str]:
+    def _extract_metadata_artwork(self, metadata: Mapping[str, Any]) -> str | None:
         keys = (
             "artwork_url",
             "cover_url",
@@ -602,10 +596,10 @@ class ArtworkWorker:
         return urls
 
     @staticmethod
-    def _pick_best_image(images: Any) -> Optional[str]:
+    def _pick_best_image(images: Any) -> str | None:
         if not isinstance(images, list):
             return None
-        best_url: Optional[str] = None
+        best_url: str | None = None
         best_score = -1
         for item in images:
             if not isinstance(item, Mapping):
@@ -686,7 +680,7 @@ class ArtworkWorker:
         self,
         job: ArtworkJob,
         download: DownloadContext | None,
-    ) -> tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         sources = list(self._collect_metadata_sources(job, download))
         artist = self._extract_text(
             ("artist", "artist_name", "artistName", "artists"),
@@ -733,7 +727,7 @@ class ArtworkWorker:
         self,
         keys: Sequence[str],
         sources: Iterable[Mapping[str, Any]],
-    ) -> Optional[str]:
+    ) -> str | None:
         for source in sources:
             for key in keys:
                 if key not in source:
@@ -743,7 +737,7 @@ class ArtworkWorker:
                     return candidate
         return None
 
-    def _normalise_text(self, value: Any) -> Optional[str]:
+    def _normalise_text(self, value: Any) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
         if isinstance(value, Mapping):
@@ -752,14 +746,14 @@ class ArtworkWorker:
                 candidate = self._normalise_text(nested)
                 if candidate:
                     return candidate
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
             for entry in value:
                 candidate = self._normalise_text(entry)
                 if candidate:
                     return candidate
         return None
 
-    def _extract_fallback_cache_key(self, url: str) -> Optional[str]:
+    def _extract_fallback_cache_key(self, url: str) -> str | None:
         try:
             parsed = urlparse(url)
         except ValueError:

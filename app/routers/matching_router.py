@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -22,7 +23,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _extract_target_id(candidate: Optional[Dict[str, Any]]) -> Optional[str]:
+def _extract_target_id(candidate: dict[str, Any] | None) -> str | None:
     if not candidate:
         return None
     for key in ("id", "ratingKey", "filename"):
@@ -33,8 +34,8 @@ def _extract_target_id(candidate: Optional[Dict[str, Any]]) -> Optional[str]:
 
 
 def _attach_download_metadata(
-    best_match: Optional[Dict[str, Any]], session: Session
-) -> Optional[Dict[str, Any]]:
+    best_match: dict[str, Any] | None, session: Session
+) -> dict[str, Any] | None:
     if not best_match:
         return best_match
 
@@ -48,7 +49,7 @@ def _attach_download_metadata(
         if download is None:
             continue
         enriched = dict(best_match)
-        metadata_payload: Dict[str, Any] = {}
+        metadata_payload: dict[str, Any] = {}
         if isinstance(enriched.get("metadata"), dict):
             metadata_payload = dict(enriched["metadata"])
         for field in ("genre", "composer", "producer", "isrc"):
@@ -94,7 +95,7 @@ def spotify_to_soulseek(
 ) -> MatchingResponse:
     """Match a Spotify track against Soulseek candidates and persist the result."""
 
-    best_candidate: Optional[Dict[str, Any]] = None
+    best_candidate: dict[str, Any] | None = None
     best_score = 0.0
     spotify_track_dto = normalize_spotify_track(payload.spotify_track)
     for candidate in payload.candidates:

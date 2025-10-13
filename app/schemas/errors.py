@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -29,8 +29,8 @@ class ApiError(BaseModel):
         *,
         code: ErrorCode,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "ApiError":
+        details: dict[str, Any] | None = None,
+    ) -> ApiError:
         return cls(error=ProblemDetail(code=code.value, message=message, details=details))
 
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import UTC, date, datetime
 import hashlib
 import json
-from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timezone
-from typing import Callable, Iterable, Mapping, Sequence
 
 from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -72,7 +72,7 @@ def _normalise_datetime(value: datetime | None) -> datetime | None:
         return None
     if value.tzinfo is None:
         return value.replace(tzinfo=None)
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _coerce_int(value: object | None) -> int | None:

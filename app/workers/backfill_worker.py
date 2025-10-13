@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
 
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -21,7 +20,7 @@ class BackfillWorker:
     def __init__(self, service: BackfillService) -> None:
         self._service = service
         self._queue: asyncio.Queue[BackfillJobSpec] | None = None
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
         self._running = False
         self._loop: asyncio.AbstractEventLoop | None = None
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, MutableMapping
+from dataclasses import dataclass, field
 import math
 import re
-from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, MutableMapping
+from typing import Any
 
 from .errors import InvalidInputError
 
@@ -61,7 +62,7 @@ def _coerce_int(value: Any) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, int | float) and not isinstance(value, bool):
         result = int(value)
         return result
     if isinstance(value, str) and value.strip():
@@ -75,7 +76,7 @@ def _coerce_int(value: Any) -> int | None:
 def _iter_sequence(obj: Any) -> Iterable[Any]:
     if obj is None:
         return ()
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return obj
     return (obj,)
 

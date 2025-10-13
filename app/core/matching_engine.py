@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Iterable, Mapping, Sequence
+import re
+from typing import Any
+import unicodedata
 
 from app.config import MatchingConfig, load_matching_config
 
@@ -240,7 +241,7 @@ def _as_int(value: Any) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, int | float) and not isinstance(value, bool):
         return int(value)
     text = str(value).strip()
     if not text:
@@ -384,7 +385,7 @@ def calculate_slskd_match_confidence(spotify_track: Any, soulseek_entry: Any) ->
 def _ensure_iterable(obj: Any) -> Iterable[Any]:
     if obj is None:
         return ()
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return obj
     return (obj,)
 

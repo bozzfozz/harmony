@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+import logging
 from pathlib import Path
-from typing import Callable, Iterator, Optional, TypeVar
+from typing import TypeVar
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import URL, make_url
@@ -22,8 +23,8 @@ class Base(DeclarativeBase):
 metadata = Base.metadata
 
 
-_engine: Optional[Engine] = None
-SessionLocal: Optional[sessionmaker[Session]] = None
+_engine: Engine | None = None
+SessionLocal: sessionmaker[Session] | None = None
 _initializing_db = False
 
 _logger = logging.getLogger(__name__)

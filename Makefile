@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn vendor-frontend vendor-frontend-reset
 .PHONY: foss-scan foss-enforce
 
@@ -24,7 +24,31 @@ smoke:
 doctor:
 	./scripts/dev/doctor.sh
 
-all: fmt lint dep-sync be-verify supply-guard smoke
+all:
+	@set -euo pipefail; \
+		ruff format --check .; \
+		ruff check --output-format=github .; \
+		pytest -q
+
+lint-fix:
+	@set -euo pipefail; \
+	while true; do \
+		before="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
+		ruff format .; \
+		ruff check --select I --fix .; \
+		ruff check --fix .; \
+		after="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
+		if [ "$$before" = "$$after" ]; then \
+			break; \
+		fi; \
+		done
+
+precommit:
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		pre-commit run -a; \
+	else \
+		echo "[warn] pre-commit nicht installiert, Target \u00fcbersprungen"; \
+	fi
 
 supply-guard:
 	@bash scripts/dev/supply_guard.sh

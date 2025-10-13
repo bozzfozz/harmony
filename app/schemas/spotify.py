@@ -3,32 +3,32 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class SpotifySearchResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
 
 
 class FollowedArtistsResponse(BaseModel):
-    artists: List[Dict[str, Any]]
+    artists: list[dict[str, Any]]
 
 
 class ArtistReleasesResponse(BaseModel):
     artist_id: str
-    releases: List[Dict[str, Any]]
+    releases: list[dict[str, Any]]
 
 
 class DiscographyAlbum(BaseModel):
-    album: Dict[str, Any]
-    tracks: List[Dict[str, Any]] = Field(default_factory=list)
+    album: dict[str, Any]
+    tracks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DiscographyResponse(BaseModel):
     artist_id: str
-    albums: List[DiscographyAlbum] = Field(default_factory=list)
+    albums: list[DiscographyAlbum] = Field(default_factory=list)
 
 
 class PlaylistEntry(BaseModel):
@@ -41,34 +41,34 @@ class PlaylistEntry(BaseModel):
 
 
 class PlaylistResponse(BaseModel):
-    playlists: List[PlaylistEntry]
+    playlists: list[PlaylistEntry]
 
 
 class TrackDetailResponse(BaseModel):
-    track: Dict[str, Any]
+    track: dict[str, Any]
 
 
 class AudioFeaturesResponse(BaseModel):
-    audio_features: Dict[str, Any] | List[Dict[str, Any]]
+    audio_features: dict[str, Any] | list[dict[str, Any]]
 
 
 class PlaylistItemsResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
     total: int
 
 
 class SavedTracksResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
     total: int
 
 
 class UserProfileResponse(BaseModel):
-    profile: Dict[str, Any]
+    profile: dict[str, Any]
 
 
 class RecommendationsResponse(BaseModel):
-    tracks: List[Dict[str, Any]]
-    seeds: List[Dict[str, Any]]
+    tracks: list[dict[str, Any]]
+    seeds: list[dict[str, Any]]
 
 
 __all__ = [

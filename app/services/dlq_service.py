@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import re
-import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Mapping, Protocol, Sequence
+import re
+import time
+from typing import Any, Protocol
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
@@ -147,11 +148,11 @@ class DLQService:
         session: Session,
         *,
         ids: Sequence[int],
-        worker: "DLQWorker",
+        worker: DLQWorker,
         actor: str | None = None,
     ) -> DLQRequeueResult:
         if not ids:
-            raise ValidationAppError("ids required (1..%d)" % self._requeue_limit)
+            raise ValidationAppError(f"ids required (1..{self._requeue_limit})")
         unique_ids = list(dict.fromkeys(ids))
         if len(unique_ids) > self._requeue_limit:
             raise ValidationAppError(f"ids exceed limit of {self._requeue_limit}")

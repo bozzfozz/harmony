@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import UTC, datetime
 import json
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 from spotipy.oauth2 import CacheHandler
 
@@ -49,9 +50,7 @@ class SettingsCacheHandler(CacheHandler):
                 expires_in = int(sanitized["expires_in"])
             except (TypeError, ValueError):
                 expires_in = 0
-            sanitized["expires_at"] = int(
-                datetime.now(timezone.utc).timestamp() + max(0, expires_in)
-            )
+            sanitized["expires_at"] = int(datetime.now(UTC).timestamp() + max(0, expires_in))
         serialized = json.dumps(sanitized)
         with session_scope() as session:
             record = session.query(Setting).filter(Setting.key == self._key).one_or_none()

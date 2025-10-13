@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import mimetypes
 from datetime import datetime
+import mimetypes
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -100,7 +100,7 @@ async def soulseek_search(
         logger.error("Soulseek search failed: %s", exc)
         raise HTTPException(status_code=502, detail="Soulseek search failed") from exc
     items: list[Any]
-    raw_payload: Dict[str, Any] | None = None
+    raw_payload: dict[str, Any] | None = None
     if isinstance(results, dict):
         raw_payload = results
         extracted = results.get("results", [])
@@ -124,8 +124,8 @@ async def soulseek_download(
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided for download")
 
-    created_downloads: List[Dict[str, Any]] = []
-    job_files: List[Dict[str, Any]] = []
+    created_downloads: list[dict[str, Any]] = []
+    job_files: list[dict[str, Any]] = []
     try:
         for file_info in payload.files:
             file_payload = file_info.to_payload()
@@ -204,7 +204,7 @@ async def soulseek_download(
         session.commit()
         raise HTTPException(status_code=502, detail="Soulseek download failed") from exc
 
-    detail: Dict[str, Any] = {"downloads": created_downloads}
+    detail: dict[str, Any] = {"downloads": created_downloads}
     return SoulseekDownloadResponse(status="queued", detail=detail)
 
 
@@ -342,8 +342,8 @@ async def refresh_download_metadata(
     return JSONResponse(status_code=202, content={"status": "queued"})
 
 
-def _build_track_info(download: Download) -> Dict[str, Any]:
-    info: Dict[str, Any] = {}
+def _build_track_info(download: Download) -> dict[str, Any]:
+    info: dict[str, Any] = {}
     sources = _collect_track_sources(download)
 
     filename = download.filename or ""
@@ -374,8 +374,8 @@ def _build_track_info(download: Download) -> Dict[str, Any]:
     return info
 
 
-def _collect_track_sources(download: Download) -> List[Dict[str, Any]]:
-    sources: List[Dict[str, Any]] = []
+def _collect_track_sources(download: Download) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
     payload = download.request_payload or {}
     if isinstance(payload, dict):
         sources.append(payload)
@@ -388,7 +388,7 @@ def _collect_track_sources(download: Download) -> List[Dict[str, Any]]:
 
 def _resolve_track_field(
     keys: tuple[str, ...],
-    sources: List[Dict[str, Any]],
+    sources: list[dict[str, Any]],
     *,
     default: str = "",
 ) -> str:
@@ -414,7 +414,7 @@ def _resolve_track_field(
 
 def _resolve_numeric_field(
     keys: tuple[str, ...],
-    sources: List[Dict[str, Any]],
+    sources: list[dict[str, Any]],
 ) -> float | None:
     for source in sources:
         for key in keys:
@@ -475,7 +475,7 @@ async def soulseek_refresh_artwork(
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     request_payload = download.request_payload if isinstance(download.request_payload, dict) else {}
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
     nested_metadata = request_payload.get("metadata") if isinstance(request_payload, dict) else {}
     if isinstance(nested_metadata, dict):
         metadata.update(nested_metadata)
@@ -690,7 +690,7 @@ async def soulseek_cancel(
 async def soulseek_download_detail(
     download_id: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.get_download(download_id)
     except SoulseekClientError as exc:
@@ -700,7 +700,7 @@ async def soulseek_download_detail(
 @router.get("/downloads/all")
 async def soulseek_all_downloads(
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         downloads = await client.get_all_downloads()
     except SoulseekClientError as exc:
@@ -711,7 +711,7 @@ async def soulseek_all_downloads(
 @router.delete("/downloads/completed")
 async def soulseek_remove_completed_downloads(
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.remove_completed_downloads()
     except SoulseekClientError as exc:
@@ -722,7 +722,7 @@ async def soulseek_remove_completed_downloads(
 async def soulseek_download_queue(
     download_id: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.get_queue_position(download_id)
     except SoulseekClientError as exc:
@@ -733,7 +733,7 @@ async def soulseek_download_queue(
 async def soulseek_enqueue(
     payload: SoulseekDownloadRequest,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         files = [file_info.to_payload() for file_info in payload.files]
         return await client.enqueue(payload.username, files)
@@ -745,7 +745,7 @@ async def soulseek_enqueue(
 async def soulseek_cancel_upload(
     upload_id: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.cancel_upload(upload_id)
     except SoulseekClientError as exc:
@@ -756,7 +756,7 @@ async def soulseek_cancel_upload(
 async def soulseek_upload_detail(
     upload_id: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.get_upload(upload_id)
     except SoulseekClientError as exc:
@@ -766,7 +766,7 @@ async def soulseek_upload_detail(
 @router.get("/uploads")
 async def soulseek_uploads(
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         uploads = await client.get_uploads()
     except SoulseekClientError as exc:
@@ -777,7 +777,7 @@ async def soulseek_uploads(
 @router.get("/uploads/all")
 async def soulseek_all_uploads(
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         uploads = await client.get_all_uploads()
     except SoulseekClientError as exc:
@@ -788,7 +788,7 @@ async def soulseek_all_uploads(
 @router.delete("/uploads/completed")
 async def soulseek_remove_completed_uploads(
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.remove_completed_uploads()
     except SoulseekClientError as exc:
@@ -799,7 +799,7 @@ async def soulseek_remove_completed_uploads(
 async def soulseek_user_address(
     username: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_address(username)
     except SoulseekClientError as exc:
@@ -810,7 +810,7 @@ async def soulseek_user_address(
 async def soulseek_user_browse(
     username: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_browse(username)
     except SoulseekClientError as exc:
@@ -821,7 +821,7 @@ async def soulseek_user_browse(
 async def soulseek_user_browsing_status(
     username: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_browsing_status(username)
     except SoulseekClientError as exc:
@@ -833,7 +833,7 @@ async def soulseek_user_directory(
     username: str,
     path: str = Query(..., description="Directory path to browse"),
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_directory(username, path)
     except SoulseekClientError as exc:
@@ -844,7 +844,7 @@ async def soulseek_user_directory(
 async def soulseek_user_info(
     username: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_info(username)
     except SoulseekClientError as exc:
@@ -855,7 +855,7 @@ async def soulseek_user_info(
 async def soulseek_user_status(
     username: str,
     client: SoulseekClient = Depends(get_soulseek_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         return await client.user_status(username)
     except SoulseekClientError as exc:

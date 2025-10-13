@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Optional
 
 from app.dependencies import (
     get_app_config,
@@ -43,7 +43,7 @@ class OrchestratorRuntime:
     dispatcher: Dispatcher
     handlers: Mapping[str, JobHandler]
     enabled_jobs: Mapping[str, bool]
-    import_worker: Optional[ImportWorker]
+    import_worker: ImportWorker | None
     hdm: HdmRuntime
 
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 import csv
+from dataclasses import dataclass
 import io
 import json
-from dataclasses import dataclass
-from typing import Iterable, List, Sequence
 from urllib.parse import urlparse
 
 __all__ = [
@@ -39,9 +39,9 @@ class RejectedLink:
 class ParseResult:
     """Outcome of parsing a FREE ingest payload."""
 
-    accepted: List[PlaylistLink]
-    rejected: List[RejectedLink]
-    skipped: List[str]
+    accepted: list[PlaylistLink]
+    rejected: list[RejectedLink]
+    skipped: list[str]
     total_links: int
 
 
@@ -78,10 +78,10 @@ def parse_and_validate_links(
     if total_candidates > hard_cap_links:
         raise TooManyItemsError(total_candidates, hard_cap_links)
 
-    accepted: List[PlaylistLink] = []
+    accepted: list[PlaylistLink] = []
     accepted_ids: set[str] = set()
-    rejected: List[RejectedLink] = []
-    skipped: List[str] = []
+    rejected: list[RejectedLink] = []
+    skipped: list[str] = []
 
     for candidate in candidates:
         text = candidate.strip()

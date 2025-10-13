@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from time import perf_counter
-from typing import Iterable, Sequence
 
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery, TrackProvider

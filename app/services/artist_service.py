@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+import json
 from time import perf_counter
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any
 
 from app.errors import (
     DependencyError,

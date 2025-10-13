@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import random
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, TypeVar
+import random
+from typing import TypeVar
 
 T = TypeVar("T")
 

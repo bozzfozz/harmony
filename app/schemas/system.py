@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,34 +12,34 @@ from app.schemas.common import ISODateTime
 
 class StatusResponse(BaseModel):
     status: str
-    artist_count: Optional[int] = None
-    album_count: Optional[int] = None
-    track_count: Optional[int] = None
-    last_scan: Optional[datetime] = None
-    connections: Optional[Dict[str, str]] = None
+    artist_count: int | None = None
+    album_count: int | None = None
+    track_count: int | None = None
+    last_scan: datetime | None = None
+    connections: dict[str, str] | None = None
 
 
 class ServiceHealthResponse(BaseModel):
     service: str
     status: str
-    missing: List[str] = Field(default_factory=list)
-    optional_missing: List[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    optional_missing: list[str] = Field(default_factory=list)
 
 
 class HealthStatus(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     status: str
-    version: Optional[str] = None
-    uptime_s: Optional[float] = Field(default=None, ge=0)
+    version: str | None = None
+    uptime_s: float | None = Field(default=None, ge=0)
 
 
 class VersionInfo(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     version: str
-    build: Optional[str] = None
-    commit: Optional[str] = None
+    build: str | None = None
+    commit: str | None = None
     generated_at: ISODateTime
 
 
@@ -48,7 +48,7 @@ class Ping(BaseModel):
 
     ok: bool = True
     at: ISODateTime
-    meta: Dict[str, Any] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
 
 
 __all__ = [

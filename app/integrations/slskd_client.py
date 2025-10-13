@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncIterator, Awaitable, Callable, Mapping
+from typing import Any
 
 import httpx
 
@@ -353,7 +354,7 @@ def _parse_retry_after_ms(headers: Mapping[str, Any]) -> int | None:
     value = headers.get("Retry-After") if isinstance(headers, Mapping) else None
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return max(0, int(value * 1000))
     try:
         numeric = int(str(value).strip())

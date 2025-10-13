@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 import random
 import time as _time
-from datetime import datetime, timezone
 
 __all__ = ["now_utc", "monotonic_ms", "sleep_jitter_ms"]
 
@@ -13,7 +13,7 @@ __all__ = ["now_utc", "monotonic_ms", "sleep_jitter_ms"]
 def now_utc() -> datetime:
     """Return the current UTC time with timezone information."""
 
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def monotonic_ms() -> int:

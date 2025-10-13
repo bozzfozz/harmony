@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.config import SpotifyConfig
 from app.core.spotify_cache import SettingsCacheHandler
@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover - during tests we mock the client
     SpotifyOAuth = Any  # type: ignore
 
     class SpotifyException(Exception):  # type: ignore
-        http_status: Optional[int] = None
+        http_status: int | None = None
 
 
 logger = get_logger(__name__)
@@ -34,7 +34,7 @@ class SpotifyClient:
     def __init__(
         self,
         config: SpotifyConfig,
-        client: Optional[Spotify] = None,
+        client: Spotify | None = None,
         rate_limit_seconds: float = 0.2,
         max_retries: int = 3,
     ) -> None:
@@ -101,10 +101,10 @@ class SpotifyClient:
         self,
         query: str,
         *,
-        genre: Optional[str] = None,
-        year: Optional[int] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
+        genre: str | None = None,
+        year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> str:
         terms = [query]
         if genre:
@@ -122,14 +122,14 @@ class SpotifyClient:
         return " ".join(term for term in terms if term)
 
     @staticmethod
-    def _normalise_text(value: Optional[str]) -> str:
+    def _normalise_text(value: str | None) -> str:
         if not value:
             return ""
         text = re.sub(r"[^\w\s]", " ", str(value).lower())
         return " ".join(text.split())
 
     @staticmethod
-    def _format_query_field(field: str, value: Optional[str]) -> str:
+    def _format_query_field(field: str, value: str | None) -> str:
         if not value:
             return ""
         value = str(value).strip()
@@ -143,7 +143,7 @@ class SpotifyClient:
     def _extract_artist_names(payload: Any) -> str:
         if not isinstance(payload, list):
             return ""
-        names: List[str] = []
+        names: list[str] = []
         for entry in payload:
             if isinstance(entry, dict):
                 name = entry.get("name")
@@ -155,13 +155,13 @@ class SpotifyClient:
 
     @staticmethod
     def _score_track_candidate(
-        candidate: Dict[str, Any],
+        candidate: dict[str, Any],
         *,
         artist: str,
         title: str,
-        album: Optional[str],
-        duration_ms: Optional[int],
-        isrc: Optional[str],
+        album: str | None,
+        duration_ms: int | None,
+        isrc: str | None,
     ) -> float:
         score = 0.0
         target_artist = SpotifyClient._normalise_text(artist)
@@ -208,7 +208,7 @@ class SpotifyClient:
                 score += 4.0
 
         candidate_duration = candidate.get("duration_ms")
-        if duration_ms and isinstance(candidate_duration, (int, float)):
+        if duration_ms and isinstance(candidate_duration, int | float):
             difference = abs(int(candidate_duration) - int(duration_ms))
             if difference <= 2000:
                 score += 25.0
@@ -224,11 +224,11 @@ class SpotifyClient:
         query: str,
         limit: int = 20,
         *,
-        genre: Optional[str] = None,
-        year: Optional[int] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        genre: str | None = None,
+        year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+    ) -> dict[str, Any]:
         search_query = self._build_search_query(
             query, genre=genre, year=year, year_from=year_from, year_to=year_to
         )
@@ -239,17 +239,17 @@ class SpotifyClient:
         query: str,
         limit: int = 20,
         *,
-        genre: Optional[str] = None,
-        year: Optional[int] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        genre: str | None = None,
+        year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+    ) -> dict[str, Any]:
         search_query = self._build_search_query(
             query, genre=genre, year=year, year_from=year_from, year_to=year_to
         )
         return self._execute(self._client.search, q=search_query, type="artist", limit=limit)
 
-    def get_artist(self, artist_id: str) -> Dict[str, Any] | None:
+    def get_artist(self, artist_id: str) -> dict[str, Any] | None:
         if not artist_id:
             return None
         return self._execute(self._client.artist, artist_id)
@@ -259,33 +259,33 @@ class SpotifyClient:
         query: str,
         limit: int = 20,
         *,
-        genre: Optional[str] = None,
-        year: Optional[int] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        genre: str | None = None,
+        year: int | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
+    ) -> dict[str, Any]:
         search_query = self._build_search_query(
             query, genre=genre, year=year, year_from=year_from, year_to=year_to
         )
         return self._execute(self._client.search, q=search_query, type="album", limit=limit)
 
-    def get_user_playlists(self, limit: int = 50) -> Dict[str, Any]:
+    def get_user_playlists(self, limit: int = 50) -> dict[str, Any]:
         return self._execute(self._client.current_user_playlists, limit=limit)
 
-    def get_track_details(self, track_id: str) -> Dict[str, Any]:
+    def get_track_details(self, track_id: str) -> dict[str, Any]:
         return self._execute(self._client.track, track_id)
 
-    def get_audio_features(self, track_id: str) -> Dict[str, Any]:
+    def get_audio_features(self, track_id: str) -> dict[str, Any]:
         features = self._execute(self._client.audio_features, [track_id]) or []
         return features[0] if features else {}
 
-    def get_multiple_audio_features(self, track_ids: List[str]) -> Dict[str, Any]:
+    def get_multiple_audio_features(self, track_ids: list[str]) -> dict[str, Any]:
         features = self._execute(self._client.audio_features, track_ids)
         return {"audio_features": features or []}
 
     def get_playlist_items(
         self, playlist_id: str, limit: int = 100, *, offset: int = 0
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self._execute(self._client.playlist_items, playlist_id, limit=limit, offset=offset)
 
     def find_track_match(
@@ -293,11 +293,11 @@ class SpotifyClient:
         *,
         artist: str,
         title: str,
-        album: Optional[str] = None,
-        duration_ms: Optional[int] = None,
-        isrc: Optional[str] = None,
+        album: str | None = None,
+        duration_ms: int | None = None,
+        isrc: str | None = None,
         limit: int = 20,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         artist = artist or ""
         title = title or ""
         if not artist.strip() or not title.strip():
@@ -321,7 +321,7 @@ class SpotifyClient:
             return None
 
         best_score = float("-inf")
-        best_track: Optional[Dict[str, Any]] = None
+        best_track: dict[str, Any] | None = None
 
         for candidate in items:
             if not isinstance(candidate, dict):
@@ -344,10 +344,10 @@ class SpotifyClient:
 
         return best_track
 
-    def add_tracks_to_playlist(self, playlist_id: str, track_uris: List[str]) -> Dict[str, Any]:
+    def add_tracks_to_playlist(self, playlist_id: str, track_uris: list[str]) -> dict[str, Any]:
         return self._execute(self._client.playlist_add_items, playlist_id, track_uris)
 
-    def get_album_details(self, album_id: str) -> Dict[str, Any]:
+    def get_album_details(self, album_id: str) -> dict[str, Any]:
         """Return metadata for a single Spotify album."""
 
         return self._execute(self._client.album, album_id)
@@ -356,18 +356,18 @@ class SpotifyClient:
         self,
         artist_id: str,
         *,
-        include_groups: Optional[str] = None,
+        include_groups: str | None = None,
         limit: int = 50,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return the list of albums for a Spotify artist."""
 
         if not artist_id:
             return []
 
-        albums: List[Dict[str, Any]] = []
+        albums: list[dict[str, Any]] = []
         offset = 0
         while True:
-            kwargs: Dict[str, Any] = {"limit": limit, "offset": offset}
+            kwargs: dict[str, Any] = {"limit": limit, "offset": offset}
             if include_groups:
                 kwargs["include_groups"] = include_groups
             response = self._execute(self._client.artist_albums, artist_id, **kwargs)
@@ -393,13 +393,13 @@ class SpotifyClient:
         album_id: str,
         *,
         limit: int = 50,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return all tracks for the given Spotify album."""
 
         if not album_id:
             return []
 
-        tracks: List[Dict[str, Any]] = []
+        tracks: list[dict[str, Any]] = []
         offset = 0
         while True:
             response = self._execute(
@@ -426,8 +426,8 @@ class SpotifyClient:
         return tracks
 
     def remove_tracks_from_playlist(
-        self, playlist_id: str, track_uris: List[str]
-    ) -> Dict[str, Any]:
+        self, playlist_id: str, track_uris: list[str]
+    ) -> dict[str, Any]:
         return self._execute(
             self._client.playlist_remove_all_occurrences_of_items,
             playlist_id,
@@ -436,7 +436,7 @@ class SpotifyClient:
 
     def reorder_playlist_items(
         self, playlist_id: str, range_start: int, insert_before: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self._execute(
             self._client.playlist_reorder_items,
             playlist_id,
@@ -444,32 +444,32 @@ class SpotifyClient:
             insert_before=insert_before,
         )
 
-    def get_saved_tracks(self, limit: int = 20) -> Dict[str, Any]:
+    def get_saved_tracks(self, limit: int = 20) -> dict[str, Any]:
         return self._execute(self._client.current_user_saved_tracks, limit=limit)
 
-    def save_tracks(self, track_ids: List[str]) -> Dict[str, Any]:
+    def save_tracks(self, track_ids: list[str]) -> dict[str, Any]:
         return self._execute(self._client.current_user_saved_tracks_add, track_ids)
 
-    def remove_saved_tracks(self, track_ids: List[str]) -> Dict[str, Any]:
+    def remove_saved_tracks(self, track_ids: list[str]) -> dict[str, Any]:
         return self._execute(self._client.current_user_saved_tracks_delete, track_ids)
 
-    def get_current_user(self) -> Dict[str, Any]:
+    def get_current_user(self) -> dict[str, Any]:
         return self._execute(self._client.current_user)
 
-    def get_top_tracks(self, limit: int = 20) -> Dict[str, Any]:
+    def get_top_tracks(self, limit: int = 20) -> dict[str, Any]:
         return self._execute(self._client.current_user_top_tracks, limit=limit)
 
-    def get_top_artists(self, limit: int = 20) -> Dict[str, Any]:
+    def get_top_artists(self, limit: int = 20) -> dict[str, Any]:
         return self._execute(self._client.current_user_top_artists, limit=limit)
 
     def get_recommendations(
         self,
-        seed_tracks: Optional[List[str]] = None,
-        seed_artists: Optional[List[str]] = None,
-        seed_genres: Optional[List[str]] = None,
+        seed_tracks: list[str] | None = None,
+        seed_artists: list[str] | None = None,
+        seed_genres: list[str] | None = None,
         limit: int = 20,
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"limit": limit}
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
         if seed_tracks:
             params["seed_tracks"] = seed_tracks
         if seed_artists:
@@ -478,36 +478,34 @@ class SpotifyClient:
             params["seed_genres"] = seed_genres
         return self._execute(self._client.recommendations, **params)
 
-    def get_followed_artists(self, limit: int = 50) -> Dict[str, Any]:
+    def get_followed_artists(self, limit: int = 50) -> dict[str, Any]:
         return self._execute(self._client.current_user_followed_artists, limit=limit)
 
-    def get_artist_releases(self, artist_id: str) -> Dict[str, Any]:
+    def get_artist_releases(self, artist_id: str) -> dict[str, Any]:
         return self._execute(
             self._client.artist_albums,
             artist_id,
             album_type="album,single,compilation",
         )
 
-    def get_artist_top_tracks(
-        self, artist_id: str, *, market: Optional[str] = None
-    ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {}
+    def get_artist_top_tracks(self, artist_id: str, *, market: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {}
         if market:
             params["market"] = market
         return self._execute(self._client.artist_top_tracks, artist_id, **params)
 
     def get_album_tracks(  # noqa: F811
-        self, album_id: str, *, market: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, album_id: str, *, market: str | None = None
+    ) -> dict[str, Any]:
         """Return all tracks for a Spotify album."""
 
         limit = 50
         offset = 0
-        collected: List[Dict[str, Any]] = []
-        last_response: Dict[str, Any] | None = None
+        collected: list[dict[str, Any]] = []
+        last_response: dict[str, Any] | None = None
 
         while True:
-            params: Dict[str, Any] = {"limit": limit, "offset": offset}
+            params: dict[str, Any] = {"limit": limit, "offset": offset}
             if market:
                 params["market"] = market
             response = self._execute(self._client.album_tracks, album_id, **params)
@@ -530,12 +528,12 @@ class SpotifyClient:
         )
         return {"items": collected, "total": total_tracks}
 
-    def get_artist_discography(self, artist_id: str) -> Dict[str, Any]:
+    def get_artist_discography(self, artist_id: str) -> dict[str, Any]:
         """Fetch the complete discography for an artist including tracks."""
 
         limit = 50
         offset = 0
-        albums: List[Dict[str, Any]] = []
+        albums: list[dict[str, Any]] = []
         seen_album_ids: set[str] = set()
 
         while True:
@@ -567,8 +565,8 @@ class SpotifyClient:
 
         return {"artist_id": artist_id, "albums": albums}
 
-    def get_track_metadata(self, track_id: str) -> Dict[str, Any]:
-        metadata: Dict[str, Any] = {}
+    def get_track_metadata(self, track_id: str) -> dict[str, Any]:
+        metadata: dict[str, Any] = {}
         if not track_id:
             return metadata
 
@@ -588,7 +586,7 @@ class SpotifyClient:
 
         album = track.get("album") or {}
         album_id = album.get("id")
-        album_data: Dict[str, Any] | None = None
+        album_data: dict[str, Any] | None = None
         if album_id:
             try:
                 album_data = self._execute(self._client.album, album_id)
@@ -640,10 +638,10 @@ class SpotifyClient:
         return metadata
 
     @staticmethod
-    def _pick_best_image(images: Any) -> Optional[str]:
+    def _pick_best_image(images: Any) -> str | None:
         if not isinstance(images, list):
             return None
-        best_url: Optional[str] = None
+        best_url: str | None = None
         best_score = -1
         for item in images:
             if not isinstance(item, dict):
@@ -660,7 +658,7 @@ class SpotifyClient:
         return best_url
 
     @staticmethod
-    def _extract_copyright(payload: Any) -> Optional[str]:
+    def _extract_copyright(payload: Any) -> str | None:
         if isinstance(payload, list):
             for entry in payload:
                 if isinstance(entry, dict):

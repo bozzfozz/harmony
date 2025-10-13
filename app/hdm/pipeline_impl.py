@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
+from typing import Any
 
 from app.integrations.slskd_client import (
     SlskdDownloadStatus,
@@ -181,10 +182,10 @@ class DefaultDownloadPipeline(DownloadPipeline):
 
 def _retry_after_seconds(payload: Mapping[str, Any]) -> float | None:
     candidate = payload.get("retry_after_seconds")
-    if isinstance(candidate, (int, float)):
+    if isinstance(candidate, int | float):
         return max(0.0, float(candidate))
     candidate = payload.get("retry_after_ms")
-    if isinstance(candidate, (int, float)):
+    if isinstance(candidate, int | float):
         return max(0.0, float(candidate) / 1000.0)
     return None
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from email.utils import format_datetime, parsedate_to_datetime
 import hashlib
 import re
-from datetime import datetime, timezone
-from email.utils import format_datetime, parsedate_to_datetime
-from typing import Iterable
 
 from fastapi import Request
 from starlette.concurrency import iterate_in_threadpool
@@ -298,7 +298,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
         if body is None:
             return None
 
-        now = datetime.now(timezone.utc).replace(microsecond=0)
+        now = datetime.now(UTC).replace(microsecond=0)
         last_modified = response.headers.get("Last-Modified")
         if last_modified:
             try:
@@ -307,8 +307,8 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 parsed = None
             if parsed is not None:
                 if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
-                now = parsed.astimezone(timezone.utc).replace(microsecond=0)
+                    parsed = parsed.replace(tzinfo=UTC)
+                now = parsed.astimezone(UTC).replace(microsecond=0)
 
         existing_etag = response.headers.get("ETag")
         if existing_etag:
@@ -350,7 +350,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
             if iterator is not None:
                 chunks = []
                 async for chunk in iterator:
-                    chunk_bytes = chunk if isinstance(chunk, (bytes, bytearray)) else bytes(chunk)
+                    chunk_bytes = chunk if isinstance(chunk, bytes | bytearray) else bytes(chunk)
                     chunks.append(bytes(chunk_bytes))
                 if not chunks:
                     chunks.append(b"")
@@ -361,7 +361,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
         body = response.body
         if body is None:
             return None
-        return body if isinstance(body, (bytes, bytearray)) else bytes(body)
+        return body if isinstance(body, bytes | bytearray) else bytes(body)
 
     def _generate_etag(self, body: bytes) -> str:
         digest = hashlib.blake2b(body, digest_size=16).hexdigest()
@@ -407,7 +407,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
         return Response(status_code=304, headers=headers)
 
     def _age(self, entry: CacheEntry) -> float:
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(UTC).timestamp()
         return max(0.0, now - entry.created_at)
 
     def _resolve_durations(self, rule: CacheRule | None) -> tuple[int, int | None]:
@@ -440,7 +440,7 @@ class CacheMiddleware(BaseHTTPMiddleware):
                 candidate = None
             if candidate is not None:
                 if candidate.tzinfo is None:
-                    candidate = candidate.replace(tzinfo=timezone.utc)
+                    candidate = candidate.replace(tzinfo=UTC)
                 if entry.last_modified_ts <= int(candidate.timestamp()):
                     return True
         return False

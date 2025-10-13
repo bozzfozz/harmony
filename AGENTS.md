@@ -437,9 +437,9 @@ Bei Änderungen im gewählten **SCOPE_MODE**:
 - „Removal-Report“
 
 **Lokale Gates (Pflicht)**
-- `make all`
-- `pre-commit run --all-files`
-- `pre-commit run --hook-stage push`
+- `make all` (Ruff-Format-Check, Ruff-Lint, Tests)
+- `make precommit` *(optional; wird übersprungen, wenn `pre-commit` fehlt)*
+- `make lint-fix` führt die Ruff-Finalroutine iterativ aus; führe sie spätestens vor Doku- oder CHANGELOG-Updates aus.
 
 ## 21. **Auto-Task-Splitting (erlaubt)**
 - Agent DARF große Aufgaben in Subtasks/PR-Serie aufteilen (z. B. `CODX-ORCH-084A/B/C`).

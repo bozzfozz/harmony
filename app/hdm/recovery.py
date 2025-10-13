@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 import json
 import os
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.logging import get_logger
@@ -22,7 +22,7 @@ logger = get_logger("hdm.recovery")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(slots=True)
@@ -56,7 +56,7 @@ class DownloadSidecar:
         }
 
     @classmethod
-    def from_dict(cls, path: Path, payload: dict[str, object]) -> "DownloadSidecar":
+    def from_dict(cls, path: Path, payload: dict[str, object]) -> DownloadSidecar:
         updated_raw = payload.get("updated_at")
         if isinstance(updated_raw, str):
             try:
@@ -215,7 +215,7 @@ class HdmRecovery:
                 await self._scan()
                 try:
                     await asyncio.wait_for(self._stopping.wait(), timeout=self._poll_interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
         except asyncio.CancelledError:  # pragma: no cover - shutdown path
             return

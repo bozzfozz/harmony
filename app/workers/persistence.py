@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Iterable, List, Mapping, Sequence
+from typing import Any
 
 from sqlalchemy import Select, bindparam, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -32,7 +33,7 @@ def _utcnow() -> datetime:
 
 
 def _emit_worker_job_event(
-    job: "QueueJobDTO", status: str, *, deduped: bool | None = None, **extra: Any
+    job: QueueJobDTO, status: str, *, deduped: bool | None = None, **extra: Any
 ) -> None:
     payload: dict[str, Any] = {
         "component": "queue.persistence",
@@ -58,7 +59,7 @@ def register_lease_telemetry_hook(
     _lease_telemetry_hook = hook
 
 
-def _emit_lease_telemetry(job: "QueueJobDTO", status: str, *, lease_timeout: int) -> None:
+def _emit_lease_telemetry(job: QueueJobDTO, status: str, *, lease_timeout: int) -> None:
     if _lease_telemetry_hook is None:
         return
 
@@ -89,7 +90,7 @@ def _emit_worker_tick(job_type: str, *, status: str, count: int | None = None) -
     log_event(logger, "worker.tick", **payload)
 
 
-def _emit_retry_exhausted(job: "QueueJobDTO", *, stop_reason: str) -> None:
+def _emit_retry_exhausted(job: QueueJobDTO, *, stop_reason: str) -> None:
     provider = get_retry_policy_provider()
     policy = provider.get_retry_policy(job.type)
     bounded_attempt = max(0, min(int(job.attempts), 6))
@@ -156,7 +157,7 @@ def _derive_idempotency_key(job_type: str, payload: Mapping[str, Any]) -> str | 
     if candidate is None:
         return None
 
-    if isinstance(candidate, (dict, list, tuple, set)):
+    if isinstance(candidate, dict | list | tuple | set):
         serialised = safe_dumps(candidate)
         return make_idempotency_key(job_type, serialised)
 
@@ -330,10 +331,10 @@ def enqueue_many(
     payloads: Iterable[Mapping[str, Any]],
     *,
     priority: int | None = None,
-) -> List[QueueJobDTO]:
+) -> list[QueueJobDTO]:
     """Persist a batch of jobs returning their DTO representations."""
 
-    jobs: List[QueueJobDTO] = []
+    jobs: list[QueueJobDTO] = []
     for payload in payloads:
         jobs.append(enqueue(job_type, payload, priority=priority))
     return jobs
@@ -360,7 +361,7 @@ def _release_expired_leases(session: Session, job_type: str) -> bool:
     return bool(result.rowcount)
 
 
-def fetch_ready(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
+def fetch_ready(job_type: str, *, limit: int = 100) -> list[QueueJobDTO]:
     """Return queue jobs ready for processing (expired leases are reset)."""
 
     with session_scope() as session:
@@ -775,7 +776,7 @@ async def enqueue_async(
     )
 
 
-async def fetch_ready_async(job_type: str, *, limit: int = 100) -> List[QueueJobDTO]:
+async def fetch_ready_async(job_type: str, *, limit: int = 100) -> list[QueueJobDTO]:
     """Async wrapper around :func:`fetch_ready`."""
 
     return await asyncio.to_thread(fetch_ready, job_type, limit=limit)

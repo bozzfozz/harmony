@@ -54,7 +54,7 @@ class ProviderAlbumDetails:
 
     source: str
     album: ProviderAlbum
-    tracks: tuple["ProviderTrack", ...] = ()
+    tracks: tuple[ProviderTrack, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
 
 

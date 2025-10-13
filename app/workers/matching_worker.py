@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
@@ -116,7 +116,7 @@ class MatchingWorker:
     def queue(self) -> asyncio.Queue[QueueJobDTO | None]:
         return self._queue
 
-    async def enqueue(self, payload: Dict[str, Any]) -> None:
+    async def enqueue(self, payload: dict[str, Any]) -> None:
         job = enqueue(self._job_type, payload)
         if self._running.is_set():
             await self._queue.put(job)
@@ -156,7 +156,7 @@ class MatchingWorker:
             while len(batch) < self._batch_size:
                 try:
                     job = await asyncio.wait_for(self._queue.get(), timeout=self._batch_wait)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
                 if job is None:
                     self._queue.task_done()
@@ -168,7 +168,7 @@ class MatchingWorker:
             for _ in batch:
                 self._queue.task_done()
 
-    async def _process_batch(self, jobs: List[QueueJobDTO]) -> None:
+    async def _process_batch(self, jobs: list[QueueJobDTO]) -> None:
         for job in jobs:
             leased = lease(job.id, job_type=self._job_type, lease_seconds=job.lease_timeout_seconds)
             if leased is None:

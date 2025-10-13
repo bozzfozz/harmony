@@ -11,9 +11,10 @@ records for the sync worker.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any
 
 from sqlalchemy import Select, and_, func, or_, select
 

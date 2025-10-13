@@ -43,7 +43,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
     class _CounterChild:
         __slots__ = ("_parent", "_labels")
 
-        def __init__(self, parent: "Counter", labels: tuple[str, ...]) -> None:
+        def __init__(self, parent: Counter, labels: tuple[str, ...]) -> None:
             self._parent = parent
             self._labels = labels
 
@@ -86,7 +86,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
     class _HistogramChild:
         __slots__ = ("_parent", "_labels")
 
-        def __init__(self, parent: "Histogram", labels: tuple[str, ...]) -> None:
+        def __init__(self, parent: Histogram, labels: tuple[str, ...]) -> None:
             self._parent = parent
             self._labels = labels
 

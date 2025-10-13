@@ -27,14 +27,15 @@ def _render_help_page(context: dict[str, Any]) -> str:
     else:
         instructions.append(
             """
-<li>Ersetze <code>127.0.0.1</code> in der Adresszeile durch die öffentliche IP deines Harmony-Servers
-und lade die Seite neu.</li>
+<li>Ersetze <code>127.0.0.1</code> in der Adresszeile durch die öffentliche IP
+deines Harmony-Servers und lade die Seite neu.</li>
 """.strip()
         )
     if manual_url:
         instructions.append(
             """
-<li>Kopiere die vollständige URL aus der Adresszeile und füge sie unter <code>{manual_url}</code> in Harmony ein.</li>
+<li>Kopiere die vollständige URL aus der Adresszeile und füge sie unter
+<code>{manual_url}</code> in Harmony ein.</li>
 """.strip().format(manual_url=manual_url)
         )
     instructions_html = "\n".join(instructions)
@@ -66,7 +67,8 @@ und lade die Seite neu.</li>
       wird zu<br />
       <code>{example_url}</code>
     </div>
-    <p>Der Autorisierungscode ist nur wenige Minuten gültig. Wenn der Aufruf erneut scheitert, starte den Vorgang in Harmony neu.</p>
+    <p>Der Autorisierungscode ist nur wenige Minuten gültig. Wenn der Aufruf erneut
+scheitert, starte den Vorgang in Harmony neu.</p>
   </div>
 </body>
 </html>

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Protocol
+from typing import Any, Protocol
 
 
 @dataclass(slots=True, frozen=True)

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from collections import deque
-from typing import Deque
+import time
 
 from app.middleware import install_middleware
 
@@ -22,7 +21,7 @@ class _RateLimiter:
             raise ValueError("window_seconds must be positive")
         self._max_requests = max_requests
         self._window_seconds = window_seconds
-        self._timestamps: Deque[float] = deque(maxlen=max_requests)
+        self._timestamps: deque[float] = deque(maxlen=max_requests)
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> tuple[bool, float | None]:

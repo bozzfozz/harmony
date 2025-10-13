@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
@@ -38,7 +38,7 @@ def _parse_iso8601(value: str) -> datetime:
     except ValueError as exc:  # pragma: no cover - defensive validation
         raise ValidationAppError("Invalid datetime parameter") from exc
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
     return parsed
 
 
@@ -47,7 +47,7 @@ def list_downloads(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     all: bool = False,  # noqa: A002 - query parameter name mandated by API contract
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     service: DownloadService = Depends(get_download_service),
 ) -> DownloadListResponse:
     """Return downloads with optional status filtering."""
@@ -165,7 +165,7 @@ async def start_download(
     payload: SoulseekDownloadRequest,
     request: Request,
     service: DownloadService = Depends(get_download_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Persist requested downloads and enqueue them for the SyncWorker."""
 
     worker = getattr(request.app.state, "sync_worker", None)
@@ -176,7 +176,7 @@ async def start_download(
 async def cancel_download(
     download_id: int,
     service: DownloadService = Depends(get_download_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Cancel a queued or running download."""
 
     log_event(
@@ -192,9 +192,9 @@ async def cancel_download(
 @router.get("/downloads/export")
 def export_downloads(
     format: str = Query("json"),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    from_time: Optional[str] = Query(None, alias="from"),
-    to_time: Optional[str] = Query(None, alias="to"),
+    status_filter: str | None = Query(None, alias="status"),
+    from_time: str | None = Query(None, alias="from"),
+    to_time: str | None = Query(None, alias="to"),
     service: DownloadService = Depends(get_download_service),
 ) -> Response:
     """Export downloads as JSON or CSV without paging limits."""
@@ -227,7 +227,7 @@ def export_downloads(
 async def retry_download(
     download_id: int,
     service: DownloadService = Depends(get_download_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Retry a failed or cancelled download by creating a new entry."""
 
     log_event(

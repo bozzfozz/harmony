@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Final, Mapping
+from collections.abc import Mapping
+from typing import Final
 
 _CACHE_HEADERS_DESCRIPTION: Final[str] = (
     "Responses leverage conditional request caching via ETag and Last-Modified headers."

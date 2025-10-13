@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import format_datetime, parsedate_to_datetime
-from typing import Sequence
+import hashlib
 
 from fastapi import Request
 
 from app.models import Playlist
 
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _PLAYLIST_CACHE_VERSION = "v1"
 
 
@@ -99,8 +99,8 @@ def _ensure_utc(value: datetime | None) -> datetime:
     if value is None:
         return _EPOCH
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _parse_http_datetime(value: str) -> datetime | None:
@@ -111,8 +111,8 @@ def _parse_http_datetime(value: str) -> datetime | None:
     if parsed is None:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).replace(microsecond=0)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).replace(microsecond=0)
 
 
 __all__ = [

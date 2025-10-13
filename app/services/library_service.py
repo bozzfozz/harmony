@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
-from typing import Iterable, Mapping, Sequence
+import hashlib
+import json
 
 from app.schemas.errors import ApiError, ErrorCode
 from app.schemas.provider import ProviderAlbum, ProviderArtist, ProviderTrack
@@ -151,13 +151,13 @@ class LibraryService:
         return payload
 
     def _normalize_value(self, value: object) -> object:
-        if isinstance(value, (datetime, date)):
+        if isinstance(value, datetime | date):
             return value.isoformat()
         if isinstance(value, Mapping):
             return {
                 str(key): self._normalize_value(subvalue) for key, subvalue in sorted(value.items())
             }
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [self._normalize_value(item) for item in value]
         return value
 

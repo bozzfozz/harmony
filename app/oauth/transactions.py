@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, MutableMapping, Protocol
+from datetime import UTC, datetime, timedelta
+from typing import Any, Protocol
 
 __all__ = [
     "OAuthTransaction",
@@ -27,7 +28,7 @@ class Transaction:
     expires_at: datetime
 
     def is_expired(self, *, reference: datetime | None = None) -> bool:
-        moment = reference or datetime.now(timezone.utc)
+        moment = reference or datetime.now(UTC)
         return moment >= self.expires_at
 
 

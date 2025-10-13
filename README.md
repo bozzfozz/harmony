@@ -527,11 +527,12 @@ Die vendorten Dateien liegen unter `frontend/static/vendor/`. Committe sie nur, 
 - Zusätzliche Laufzeitkonfiguration erfolgt über Backend-Endpunkte; es existiert keine separate `env.runtime.js` mehr.
 - API-Keys und Authentifizierung entsprechen weiterhin den Backend-Routen (`/settings`), da das Frontend ausschließlich auf vorhandene REST-Endpunkte zugreift.
 
-## Lokaler Qualitäts-Check (ohne CI)
+## Lokale Prüfungen
 
 - **Schnellstart:** `make doctor && make all`
-- **Pflichtlauf vor Merge:** `make all` führt Formatierung, Linting, Dependency-Sync, Backend-Tests, den Supply-Guard und den Smoke-Test aus.
-- **Hooks:** `pre-commit install && pre-commit run -a` sowie `pre-commit install --hook-type pre-push` stellen sicher, dass lokale Hooks aktiv sind.
+- **make all:** führt `ruff format --check .`, `ruff check --output-format=github .` und `pytest -q` aus.
+- **make lint-fix:** repariert Format- und Lint-Verstöße automatisch (Ruff-Finalroutine) und wiederholt die Schritte, bis keine weiteren Änderungen auftreten.
+- **make precommit (optional):** nutzt lokale `pre-commit`-Hooks, wird aber übersprungen, wenn `pre-commit` nicht installiert ist.
 - **Runbook:** Details und Troubleshooting findest du in [`docs/operations/local-workflow.md`](docs/operations/local-workflow.md).
 
 ### Fehlerbilder & Behebung

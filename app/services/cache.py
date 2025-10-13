@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import re
 import time
-from collections import OrderedDict
-from dataclasses import dataclass
-from functools import lru_cache
-from typing import Callable, Iterable, Mapping
 from urllib.parse import parse_qsl
 
 from app.logging import get_logger
@@ -70,7 +70,7 @@ class ResponseCache:
         self._max_items = max_items
         self._default_ttl = default_ttl
         self._fail_open = fail_open
-        self._cache: "OrderedDict[str, CacheEntry]" = OrderedDict()
+        self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
         self._lock = asyncio.Lock()
         self._now: TimeProvider = time_func or time.time
         self._write_through = write_through
@@ -454,7 +454,7 @@ def artist_cache_templates(base_path: str | None) -> tuple[str, ...]:
 
 
 async def bust_artist_cache(
-    cache: "ResponseCache" | None,
+    cache: ResponseCache | None,
     *,
     artist_key: str,
     base_path: str | None = None,

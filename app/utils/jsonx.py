@@ -27,7 +27,7 @@ def safe_dumps(obj: Any) -> str:
 def safe_loads(data: str | bytes | bytearray) -> Any:
     """Parse JSON data strictly, rejecting blank inputs."""
 
-    if isinstance(data, (bytes, bytearray)):
+    if isinstance(data, bytes | bytearray):
         text = data.decode("utf-8")
     elif isinstance(data, str):
         text = data

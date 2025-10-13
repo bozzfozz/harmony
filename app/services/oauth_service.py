@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+from enum import Enum
 import hashlib
 import secrets
-import time
-from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
-from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Mapping
+import time
+from typing import Any
 from urllib.parse import urlencode, urlparse
 
-import httpx
 from fastapi import Request
+import httpx
 from pydantic import BaseModel, Field
 
 from app.config import AppConfig
@@ -202,7 +203,7 @@ class OAuthService:
         completed_at: datetime | None = None,
         reference: datetime | None = None,
     ) -> None:
-        now = reference or datetime.now(timezone.utc)
+        now = reference or datetime.now(UTC)
         manual_url = self._manual_completion_url()
         with self._status_lock:
             record = self._statuses.get(state)
@@ -243,7 +244,7 @@ class OAuthService:
             self._statuses.pop(state, None)
 
     def status(self, state: str) -> OAuthStatusResponse:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         manual_url = self._manual_completion_url()
         with self._status_lock:
             self._purge_statuses(now)
@@ -291,7 +292,7 @@ class OAuthService:
         state = self._generate_state()
         verifier = self._generate_code_verifier()
         challenge = self._build_code_challenge(verifier)
-        issued_at = datetime.now(timezone.utc)
+        issued_at = datetime.now(UTC)
         ttl_seconds = int(self._transaction_ttl().total_seconds())
         meta = {
             "provider": "spotify",
@@ -448,7 +449,7 @@ class OAuthService:
                 completed_at=None,
             )
             raise ValueError(OAuthErrorCode.OAUTH_CODE_EXPIRED.value)
-        if transaction.is_expired(reference=datetime.now(timezone.utc)):
+        if transaction.is_expired(reference=datetime.now(UTC)):
             logger.warning(
                 "OAuth transaction expired",
                 extra={
@@ -475,7 +476,7 @@ class OAuthService:
                 completed_at=None,
             )
             raise
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         self._update_status_record(
             state,
             status=OAuthSessionStatus.COMPLETED,
@@ -588,7 +589,7 @@ class OAuthService:
             ok=True,
             provider="spotify",
             state=state,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(UTC),
             error_code=None,
             message="Authorization completed successfully.",
         )

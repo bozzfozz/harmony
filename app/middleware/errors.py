@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -151,7 +152,7 @@ async def _handle_request_validation(request: Request, exc: RequestValidationErr
     fields: list[dict[str, str]] = []
     for error in exc.errors():
         raw_loc = error.get("loc", [])
-        if isinstance(raw_loc, (list, tuple)):
+        if isinstance(raw_loc, list | tuple):
             components = list(raw_loc)
         else:
             components = [raw_loc]

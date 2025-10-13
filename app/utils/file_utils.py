@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Optional
+import re
+from typing import Any
+import unicodedata
 
 from app.models import Download
 
@@ -27,7 +28,7 @@ def sanitize_name(name: str) -> str:
     return cleaned or "Unknown"
 
 
-def guess_album_from_filename(filename: str) -> Optional[str]:
+def guess_album_from_filename(filename: str) -> str | None:
     """Attempt to infer an album name from a raw *filename*."""
 
     stem = Path(filename).stem
@@ -49,11 +50,11 @@ def guess_album_from_filename(filename: str) -> Optional[str]:
     return None
 
 
-def _normalise_value(value: Any) -> Optional[str]:
+def _normalise_value(value: Any) -> str | None:
     if isinstance(value, str):
         text = value.strip()
         return text or None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         text = str(value).strip()
         return text or None
     if isinstance(value, Mapping):
@@ -61,7 +62,7 @@ def _normalise_value(value: Any) -> Optional[str]:
             nested = _normalise_value(value.get(key))
             if nested:
                 return nested
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         for item in value:
             nested = _normalise_value(item)
             if nested:
@@ -88,7 +89,7 @@ def _merge_metadata(target: MutableMapping[str, str], source: Mapping[str, Any])
         target.setdefault(key.lower(), text)
 
 
-def _first_text(metadata: Mapping[str, str], *keys: str) -> Optional[str]:
+def _first_text(metadata: Mapping[str, str], *keys: str) -> str | None:
     for key in keys:
         value = metadata.get(key.lower())
         if value:
@@ -96,7 +97,7 @@ def _first_text(metadata: Mapping[str, str], *keys: str) -> Optional[str]:
     return None
 
 
-def _parse_track_number(value: Optional[str]) -> Optional[int]:
+def _parse_track_number(value: str | None) -> int | None:
     if value is None:
         return None
     try:

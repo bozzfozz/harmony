@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import UTC, datetime
 import logging
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 from app.logging_events import log_event
 from app.utils.settings_store import increment_counter
@@ -20,7 +21,7 @@ def format_datetime(value: datetime | None) -> str | None:
         return None
     if value.tzinfo is None:
         return value.isoformat()
-    return value.astimezone(timezone.utc).isoformat()
+    return value.astimezone(UTC).isoformat()
 
 
 def emit_schedule_event(

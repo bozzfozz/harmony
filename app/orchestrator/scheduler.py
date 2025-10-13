@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from collections.abc import Mapping
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 from time import perf_counter
@@ -27,13 +27,13 @@ class PriorityConfig:
         object.__setattr__(self, "priorities", MappingProxyType(dict(self.priorities)))
 
     @classmethod
-    def from_config(cls, config: OrchestratorConfig) -> "PriorityConfig":
+    def from_config(cls, config: OrchestratorConfig) -> PriorityConfig:
         return cls(priorities=dict(config.priority_map))
 
     @classmethod
     def from_env(
         cls, env: Mapping[str, Any] | None = None
-    ) -> "PriorityConfig":  # pragma: no cover - compatibility shim
+    ) -> PriorityConfig:  # pragma: no cover - compatibility shim
         if env is None:
             return cls.from_config(settings.orchestrator)
         return cls(priorities=OrchestratorConfig.from_env(env).priority_map)

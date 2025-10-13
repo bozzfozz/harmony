@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Mapping
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -60,7 +59,7 @@ class HealthService:
         dependency_probes: Mapping[str, Probe] | None = None,
     ) -> None:
         if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
+            start_time = start_time.replace(tzinfo=UTC)
         self._start_time = start_time
         self._version = version
         self._config = config
@@ -77,7 +76,7 @@ class HealthService:
     def liveness(self) -> HealthSummary:
         """Return process information for the liveness probe."""
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         uptime = (now - self._start_time).total_seconds()
         return HealthSummary(status="up", version=self._version, uptime_s=max(uptime, 0.0))
 
@@ -112,7 +111,7 @@ class HealthService:
             success = await asyncio.wait_for(
                 asyncio.to_thread(self._ping_database), timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Database readiness probe timed out after %.2f ms", timeout * 1000)
             return "down"
         except Exception as exc:  # pragma: no cover - defensive logging
@@ -147,7 +146,7 @@ class HealthService:
                 else:
                     awaitable = asyncio.sleep(0, result=result)
             raw_status = await asyncio.wait_for(awaitable, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Dependency probe timed out", extra={"dependency": name})
             return DependencyStatus(ok=False, status="down")
         except Exception as exc:  # pragma: no cover - defensive logging

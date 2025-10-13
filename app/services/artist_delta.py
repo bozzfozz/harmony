@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Iterable, Mapping, Sequence, Tuple
+import hashlib
+import json
+from typing import Any
 
 from app.core import (
     ProviderAlbumDTO,
@@ -37,7 +38,7 @@ class ReleaseSnapshot:
     inactive_reason: str | None
 
     @classmethod
-    def from_row(cls, row: ArtistReleaseRow) -> "ReleaseSnapshot":
+    def from_row(cls, row: ArtistReleaseRow) -> ReleaseSnapshot:
         return cls(
             id=row.id,
             artist_key=row.artist_key,
@@ -64,22 +65,22 @@ class ReleaseUpdate:
 
 @dataclass(slots=True, frozen=True)
 class ReleaseDelta:
-    added: Tuple[ArtistReleaseUpsertDTO, ...]
-    updated: Tuple[ReleaseUpdate, ...]
-    removed: Tuple[ReleaseSnapshot, ...]
+    added: tuple[ArtistReleaseUpsertDTO, ...]
+    updated: tuple[ReleaseUpdate, ...]
+    removed: tuple[ReleaseSnapshot, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class AliasDelta:
-    added: Tuple[str, ...]
-    removed: Tuple[str, ...]
+    added: tuple[str, ...]
+    removed: tuple[str, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class TrackDelta:
-    added: Tuple[Any, ...] = ()
-    updated: Tuple[Any, ...] = ()
-    removed: Tuple[Any, ...] = ()
+    added: tuple[Any, ...] = ()
+    updated: tuple[Any, ...] = ()
+    removed: tuple[Any, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
@@ -91,7 +92,7 @@ class ReleaseDeltaSummary:
     release_type: str | None
 
     @classmethod
-    def from_dto(cls, dto: ArtistReleaseUpsertDTO) -> "ReleaseDeltaSummary":
+    def from_dto(cls, dto: ArtistReleaseUpsertDTO) -> ReleaseDeltaSummary:
         return cls(
             title=dto.title,
             source=dto.source,
@@ -101,7 +102,7 @@ class ReleaseDeltaSummary:
         )
 
     @classmethod
-    def from_snapshot(cls, snapshot: ReleaseSnapshot) -> "ReleaseDeltaSummary":
+    def from_snapshot(cls, snapshot: ReleaseSnapshot) -> ReleaseDeltaSummary:
         return cls(
             title=snapshot.title,
             source=snapshot.source,
@@ -122,11 +123,11 @@ class ReleaseDeltaSummary:
 
 @dataclass(slots=True, frozen=True)
 class DeltaSummaryView:
-    added: Tuple[ReleaseDeltaSummary, ...]
-    updated: Tuple[ReleaseDeltaSummary, ...]
-    removed: Tuple[ReleaseDeltaSummary, ...]
-    alias_added: Tuple[str, ...]
-    alias_removed: Tuple[str, ...]
+    added: tuple[ReleaseDeltaSummary, ...]
+    updated: tuple[ReleaseDeltaSummary, ...]
+    removed: tuple[ReleaseDeltaSummary, ...]
+    alias_added: tuple[str, ...]
+    alias_removed: tuple[str, ...]
     added_count: int
     updated_count: int
     removed_count: int
@@ -136,14 +137,14 @@ class DeltaSummaryView:
 
 @dataclass(slots=True, frozen=True)
 class ArtistLocalState:
-    releases: Tuple[ReleaseSnapshot, ...] = ()
-    aliases: Tuple[str, ...] = ()
+    releases: tuple[ReleaseSnapshot, ...] = ()
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
 class ArtistRemoteState:
-    releases: Tuple[ArtistReleaseUpsertDTO, ...] = ()
-    aliases: Tuple[str, ...] = ()
+    releases: tuple[ArtistReleaseUpsertDTO, ...] = ()
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass(slots=True, frozen=True)
@@ -156,7 +157,7 @@ class DeltaResult:
 def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> DeltaResult:
     """Return the delta between the persisted artist state and provider payloads."""
 
-    release_index: dict[Tuple[str, ...], list[ReleaseSnapshot]] = {}
+    release_index: dict[tuple[str, ...], list[ReleaseSnapshot]] = {}
     for snapshot in local.releases:
         key = _release_identity_from_snapshot(snapshot)
         bucket = release_index.setdefault(key, [])
@@ -171,7 +172,7 @@ def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> Delta
 
     added: list[ArtistReleaseUpsertDTO] = []
     updated: list[ReleaseUpdate] = []
-    seen_remote: set[Tuple[str, ...]] = set()
+    seen_remote: set[tuple[str, ...]] = set()
 
     for dto in remote.releases:
         identity = _release_identity_from_dto(dto)
@@ -287,7 +288,7 @@ def _requires_release_update(snapshot: ReleaseSnapshot, dto: ArtistReleaseUpsert
     return _release_fingerprint_from_snapshot(snapshot) != _release_fingerprint_from_dto(dto)
 
 
-def _release_identity_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...]:
+def _release_identity_from_snapshot(snapshot: ReleaseSnapshot) -> tuple[str, ...]:
     source = _clean_source(snapshot.source)
     source_id = _clean_optional(snapshot.source_id)
     if source_id:
@@ -301,7 +302,7 @@ def _release_identity_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...
     )
 
 
-def _release_identity_from_dto(dto: ArtistReleaseUpsertDTO) -> Tuple[str, ...]:
+def _release_identity_from_dto(dto: ArtistReleaseUpsertDTO) -> tuple[str, ...]:
     source = _clean_source(dto.source)
     source_id = _clean_optional(dto.source_id)
     if source_id:
@@ -315,7 +316,7 @@ def _release_identity_from_dto(dto: ArtistReleaseUpsertDTO) -> Tuple[str, ...]:
     )
 
 
-def _release_fingerprint_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, ...]:
+def _release_fingerprint_from_snapshot(snapshot: ReleaseSnapshot) -> tuple[str, ...]:
     return (
         _clean_text(snapshot.title).casefold(),
         _normalised_date(snapshot.release_date),
@@ -325,7 +326,7 @@ def _release_fingerprint_from_snapshot(snapshot: ReleaseSnapshot) -> Tuple[str, 
     )
 
 
-def _release_fingerprint_from_dto(dto: ArtistReleaseUpsertDTO) -> Tuple[str, ...]:
+def _release_fingerprint_from_dto(dto: ArtistReleaseUpsertDTO) -> tuple[str, ...]:
     return (
         _clean_text(dto.title).casefold(),
         _normalised_date(dto.release_date),

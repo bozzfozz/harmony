@@ -2,28 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 import csv
+from dataclasses import dataclass
+from datetime import datetime
 import hashlib
+from io import StringIO
 import json
 import math
 import re
-import uuid
-from dataclasses import dataclass
-from datetime import datetime
-from io import StringIO
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
 )
 from urllib.parse import urlparse
+import uuid
 
 from sqlalchemy import func, select
 
@@ -65,8 +58,8 @@ class NormalizedTrack:
     item_id: int
     artist: str
     title: str
-    album: Optional[str]
-    duration_sec: Optional[int]
+    album: str | None
+    duration_sec: int | None
     raw_line: str
 
 
@@ -81,7 +74,7 @@ class IngestAccepted:
 class IngestSkipped:
     playlists: int
     tracks: int
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -90,7 +83,7 @@ class IngestSubmission:
     job_id: str
     accepted: IngestAccepted
     skipped: IngestSkipped
-    error: Optional[str]
+    error: str | None
 
 
 @dataclass(slots=True)
@@ -109,11 +102,11 @@ class JobStatus:
     counts: JobCounts
     accepted: IngestAccepted
     skipped: IngestSkipped
-    error: Optional[str]
+    error: str | None
     queued_tracks: int
     failed_tracks: int
     skipped_tracks: int
-    skip_reason: Optional[str]
+    skip_reason: str | None
 
 
 @dataclass(slots=True)
@@ -122,8 +115,8 @@ class PlaylistEnqueueResult:
 
     accepted_ids: list[str]
     duplicate_ids: list[str]
-    error: Optional[str] = None
-    job_id: Optional[str] = None
+    error: str | None = None
+    job_id: str | None = None
 
 
 SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
@@ -137,8 +130,8 @@ class FreeIngestService:
         *,
         config: AppConfig,
         soulseek_client: SoulseekClient,
-        sync_worker: "SyncWorker | None",
-        session_runner: "SessionRunner | None" = None,
+        sync_worker: SyncWorker | None,
+        session_runner: SessionRunner | None = None,
     ) -> None:
         self._config = config
         self._soulseek = soulseek_client
@@ -150,7 +143,7 @@ class FreeIngestService:
         *,
         playlist_links: Sequence[str] | None = None,
         tracks: Sequence[str] | None = None,
-        batch_hint: Optional[int] = None,
+        batch_hint: int | None = None,
     ) -> IngestSubmission:
         playlist_links = playlist_links or []
         tracks = tracks or []
@@ -174,7 +167,7 @@ class FreeIngestService:
 
         accepted_playlists = list(normalised_links)
         accepted_tracks = list(normalised_tracks)
-        job_error: Optional[str] = None
+        job_error: str | None = None
 
         has_capacity = await self._has_capacity()
         if not has_capacity and (accepted_playlists or accepted_tracks):
@@ -192,7 +185,10 @@ class FreeIngestService:
             )
         elif skip_reason:
             logger.info(
-                "event=ingest_skipped source=FREE job_id=%s reason=%s skipped_playlists=%s skipped_tracks=%s",
+                (
+                    "event=ingest_skipped source=FREE job_id=%s reason=%s "
+                    "skipped_playlists=%s skipped_tracks=%s"
+                ),
                 job_id,
                 skip_reason,
                 skipped_playlists,
@@ -433,13 +429,13 @@ class FreeIngestService:
 
     def _normalise_playlists(
         self, playlist_links: Sequence[str]
-    ) -> Tuple[List[Tuple[str, str]], int, Optional[str]]:
+    ) -> tuple[list[tuple[str, str]], int, str | None]:
         max_playlists = self._config.free_ingest.max_playlists
-        accepted: List[Tuple[str, str]] = []
-        invalid: List[InvalidPlaylistLink] = []
+        accepted: list[tuple[str, str]] = []
+        invalid: list[InvalidPlaylistLink] = []
         seen_ids: set[str] = set()
         skipped = 0
-        skip_reason: Optional[str] = None
+        skip_reason: str | None = None
 
         for raw in playlist_links:
             text = (raw or "").strip()
@@ -471,7 +467,7 @@ class FreeIngestService:
         return accepted, skipped, skip_reason
 
     @staticmethod
-    def _validate_playlist_link(url: str) -> Tuple[str, str]:
+    def _validate_playlist_link(url: str) -> tuple[str, str]:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"}:
             raise ValueError("INVALID_SCHEME")
@@ -494,14 +490,14 @@ class FreeIngestService:
 
     def _normalise_tracks(
         self, tracks: Sequence[str]
-    ) -> Tuple[List[NormalizedTrack], int, Optional[str]]:
+    ) -> tuple[list[NormalizedTrack], int, str | None]:
         if not tracks:
             return [], 0, None
 
         max_tracks = self._config.free_ingest.max_tracks
-        accepted: List[NormalizedTrack] = []
+        accepted: list[NormalizedTrack] = []
         skipped = 0
-        skip_reason: Optional[str] = None
+        skip_reason: str | None = None
         seen_hashes: set[str] = set()
         limited_tracks = list(tracks[:max_tracks])
 
@@ -541,7 +537,7 @@ class FreeIngestService:
 
         return accepted, skipped, skip_reason
 
-    def _parse_track_line(self, line: str) -> Tuple[str, str, Optional[str], Optional[int]] | None:
+    def _parse_track_line(self, line: str) -> tuple[str, str, str | None, int | None] | None:
         duration = self._extract_duration(line)
         cleaned = line
         if duration is not None:
@@ -567,7 +563,7 @@ class FreeIngestService:
         return artist, title, album, duration
 
     @staticmethod
-    def _extract_duration(text: str) -> Optional[int]:
+    def _extract_duration(text: str) -> int | None:
         match = _DURATION_PATTERN.search(text)
         if not match:
             return None
@@ -613,7 +609,7 @@ class FreeIngestService:
         self,
         *,
         job_id: str,
-        playlists: Sequence[Tuple[str, str]],
+        playlists: Sequence[tuple[str, str]],
         tracks: Sequence[NormalizedTrack],
         skipped_playlists: int,
         skipped_tracks: int,
@@ -737,7 +733,10 @@ class FreeIngestService:
 
         await self._update_job_state(job_id, final_state, error=stored_error)
         logger.info(
-            "event=ingest_completed source=FREE job_id=%s state=%s queued=%s failed=%s skipped=%s skip_reason=%s",
+            (
+                "event=ingest_completed source=FREE job_id=%s state=%s queued=%s "
+                "failed=%s skipped=%s skip_reason=%s"
+            ),
             job_id,
             final_state.value,
             queued_tracks,
@@ -749,7 +748,7 @@ class FreeIngestService:
     @staticmethod
     def _split_error_and_skip_reason(
         job_state: str, stored_error: str | None
-    ) -> tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         if stored_error is None:
             return None, None
 
@@ -757,8 +756,8 @@ class FreeIngestService:
         if not text:
             return None, None
 
-        skip_reason: Optional[str] = None
-        message: Optional[str] = text
+        skip_reason: str | None = None
+        message: str | None = text
 
         if "||skip_reason=" in text:
             base, _, skip = text.partition("||skip_reason=")
@@ -779,7 +778,7 @@ class FreeIngestService:
         tracks: Sequence[NormalizedTrack],
         *,
         batch_size: int,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         if not tracks:
             return 0, 0
 
@@ -821,9 +820,9 @@ class FreeIngestService:
 
     async def _enqueue_track(self, job_id: str, track: NormalizedTrack) -> bool:
         queries = self._generate_search_queries(track)
-        username: Optional[str] = None
-        candidate: Optional[Dict[str, Any]] = None
-        query_used: Optional[str] = None
+        username: str | None = None
+        candidate: dict[str, Any] | None = None
+        query_used: str | None = None
 
         for query in queries:
             if not query:
@@ -878,7 +877,7 @@ class FreeIngestService:
         job_id: str,
         track: NormalizedTrack,
         username: str,
-        file_info: Dict[str, Any],
+        file_info: dict[str, Any],
         priority: int,
         query: str,
     ) -> int:
@@ -917,8 +916,8 @@ class FreeIngestService:
         return await self._run_session(_create)
 
     @staticmethod
-    def _generate_search_queries(track: NormalizedTrack) -> List[str]:
-        queries: List[str] = []
+    def _generate_search_queries(track: NormalizedTrack) -> list[str]:
+        queries: list[str] = []
         parts = [track.title, track.artist, track.album]
         primary = " ".join(part for part in parts if part)
         if primary:
@@ -940,13 +939,13 @@ class FreeIngestService:
     @staticmethod
     def _select_candidate(
         payload: Any,
-    ) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+    ) -> tuple[str | None, dict[str, Any] | None]:
         if not isinstance(payload, dict):
             return None, None
         candidates = payload.get("results")
         if not isinstance(candidates, list):
             candidates = []
-        best: tuple[int, int, int, str, Dict[str, Any]] | None = None
+        best: tuple[int, int, int, str, dict[str, Any]] | None = None
         for entry in candidates:
             if not isinstance(entry, dict):
                 continue
@@ -1014,7 +1013,7 @@ class FreeIngestService:
         for start in range(0, len(items), size):
             yield items[start : start + size]
 
-    def _resolve_batch_size(self, batch_hint: Optional[int]) -> int:
+    def _resolve_batch_size(self, batch_hint: int | None) -> int:
         base = max(1, self._config.ingest.batch_size)
         ceiling = max(base, self._config.free_ingest.batch_size)
         if batch_hint is None:
@@ -1031,7 +1030,7 @@ class FreeIngestService:
     # Parsing utilities ----------------------------------------------------
 
     @staticmethod
-    def parse_tracks_from_file(content: bytes, filename: str) -> List[str]:
+    def parse_tracks_from_file(content: bytes, filename: str) -> list[str]:
         suffix = filename.lower().rsplit(".", 1)
         extension = suffix[-1] if len(suffix) == 2 else ""
         text = content.decode("utf-8", errors="ignore")
