@@ -21,6 +21,10 @@ upstream dependency checks.
   - Executes configured dependency probes listed via the `HEALTH_DEPS` environment
     variable (e.g. `spotify`, `slskd`).
   - Reports aggregated status in the `status` field (`ok`, `degraded`, `down`).
+  - For `slskd`, the probe prefers `SLSKD_BASE_URL`/`SLSKD_URL` and derives host/port
+    from the configured URL. When no base URL is present, it falls back to
+    `SLSKD_HOST` and `SLSKD_PORT`. Missing both forms yields a configuration
+    failure with a clear warning in the readiness payload.
 - **Verbose mode:** Append `?verbose=1` to include per-check timing, error messages and
   dependency outcomes.
 - **Example:**
