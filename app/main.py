@@ -35,7 +35,6 @@ from app.logging_events import log_event
 from app.middleware import install_middleware
 from app.oauth import get_oauth_store, startup_check_oauth_store
 from app.oauth_callback.app import app_oauth_callback
-from app.ops.selfcheck import run_startup_guards
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
@@ -509,7 +508,6 @@ async def _stop_background_workers(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
-    run_startup_guards()
     _configure_application(config)
 
     _apply_security_dependencies(app, config.security)

@@ -153,8 +153,18 @@ def main(argv: List[str]) -> None:
     print(f"[entrypoint] resolved APP_PORT={port}")
     python_exec = sys.executable or "python"
     python_version = sys.version.split()[0]
-    base_command = [python_exec, "-m", "uvicorn", APP_MODULE, "--host", APP_HOST, "--port", str(port)]
+    base_command = [
+        python_exec,
+        "-m",
+        "uvicorn",
+        APP_MODULE,
+        "--host",
+        APP_HOST,
+        "--port",
+        str(port),
+    ]
     command = base_command + extras
+    cwd = os.getcwd()
 
     print(f"[entrypoint] python executable: {python_exec}")
     print(f"[entrypoint] python version: {python_version}")
@@ -164,6 +174,10 @@ def main(argv: List[str]) -> None:
     if extras:
         rendered = " ".join(shlex.quote(arg) for arg in extras)
         print(f"[entrypoint] uvicorn extra args: {rendered}")
+    print(
+        "[entrypoint] runtime summary host=%s port=%s module=%s python=%s cwd=%s"
+        % (APP_HOST, port, APP_MODULE, python_version, cwd)
+    )
     print(
         f"[entrypoint] starting uvicorn for {APP_MODULE} on {APP_HOST}:{port} (live={LIVE_PATH})"
     )

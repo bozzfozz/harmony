@@ -21,7 +21,7 @@ scenario.
 
 ## Operational checks
 
-- Startup guards use `app.ops.selfcheck.aggregate_ready()` to validate
+- Startup guards (triggered via `/api/health/ready` or `python -m app.ops.selfcheck --assert-startup`) use `app.ops.selfcheck.aggregate_ready()` to validate
   environment variables, directories and database reachability. Dedicated tests
   assert the behaviour of these checks across failure modes (missing env, bad
   DSNs, unwritable directories).

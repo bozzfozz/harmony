@@ -24,7 +24,6 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-DEFAULT_CLIENT_HOST=${SMOKE_HOST:-127.0.0.1}
 if [[ -n "${SMOKE_SERVER_HOST:-}" ]]; then
   SERVER_HOST=${SMOKE_SERVER_HOST}
 elif [[ -n "${SMOKE_HOST:-}" ]]; then
@@ -33,7 +32,7 @@ else
   SERVER_HOST=0.0.0.0
 fi
 
-CLIENT_HOST=${SMOKE_CLIENT_HOST:-$DEFAULT_CLIENT_HOST}
+CLIENT_HOST=127.0.0.1
 readarray -t RUNTIME_VALUES < <($PYTHON_BIN <<'PY'
 from app.config import load_runtime_env, resolve_app_port
 
@@ -67,7 +66,8 @@ fi
 export APP_PORT="$PORT"
 export SMOKE_PATH="$PATH_SUFFIX"
 
-echo "Smoke test targeting http://${CLIENT_HOST}:${PORT}${PATH_SUFFIX} (server bind ${SERVER_HOST})" >&2
+TARGET_URL="http://${CLIENT_HOST}:${PORT}${PATH_SUFFIX}"
+echo "Smoke test targeting ${TARGET_URL} (server bind ${SERVER_HOST})" >&2
 TMP_DIR="$ROOT_DIR/.tmp"
 mkdir -p "$TMP_DIR"
 DB_FILE="$TMP_DIR/smoke.db"
@@ -126,11 +126,11 @@ dump_container_diagnostics() {
   echo "--- docker logs (last 200 lines) ---" >&2
   docker logs --tail=200 "$container" >&2 || true
   echo "--- docker process list ---" >&2
-  docker exec "$container" ps -ef >&2 || true
+  docker exec "$container" sh -c 'ps -ef || true' >&2 || true
   echo "--- docker listening sockets ---" >&2
-  docker exec "$container" sh -c 'ss -ltnp || netstat -ltnp' >&2 || true
-  echo "--- docker environment (sorted) ---" >&2
-  docker exec "$container" sh -c 'printenv | sort' >&2 || true
+  docker exec "$container" sh -c 'ss -ltnp || netstat -ltnp || true' >&2 || true
+  echo "--- docker environment (APP_PORT/PORT) ---" >&2
+  docker exec "$container" sh -c 'printenv | sort | sed -n "s/^\(APP_PORT\|PORT\)=.*/&/p"' >&2 || true
 }
 
 $PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
@@ -153,7 +153,7 @@ while (( LISTEN_RETRIES > 0 )); do
 done
 
 RETRIES=30
-until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
+until curl --fail --silent --show-error "$TARGET_URL" >/dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
   if [[ $RETRIES -le 0 ]]; then
     echo "Backend failed to become ready. Logs:" >&2
@@ -161,10 +161,11 @@ until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}
     dump_local_diagnostics
     exit 1
   fi
-  sleep 1
+  sleep 2
   if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
     echo "Backend process terminated unexpectedly. Logs:" >&2
     dump_smoke_log
+    dump_local_diagnostics
     exit 1
   fi
 done
@@ -193,7 +194,7 @@ if command -v docker >/dev/null 2>&1; then
         docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
         exit 1
       fi
-      sleep 1
+      sleep 2
     done
     echo "Docker smoke check passed for $IMAGE."
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true

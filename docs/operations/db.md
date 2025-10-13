@@ -10,9 +10,9 @@ Dieses Runbook dokumentiert, wie Harmony seine SQLite-Datenbank verwaltet und wi
 
 ## Startup & Health
 
-- Der Startup-Guard (`app.ops.selfcheck.run_startup_guards`) prüft, ob das Verzeichnis der Datenbank existiert und beschreibbar ist. Bei Fehlern wird der Prozess mit einem passenden Exit-Code beendet.
+- Der optionale Startup-Guard (`app.ops.selfcheck.run_startup_guards`) prüft, ob das Verzeichnis der Datenbank existiert und beschreibbar ist. Die Anwendung startet unabhängig vom Ergebnis und meldet Probleme ausschließlich über `/api/health/ready` bzw. den Guard-CLI-Exitcode.
 - `/api/health/ready` zeigt den Status des Datenbank-Files (`exists`, `writable`, verwendeter Pfad) an. Das Endpoint-JSON enthält keine Postgres-Migrationsinformationen mehr.
-- Für CI und Diagnose steht `python -m app.ops.selfcheck --assert-startup` zur Verfügung. Der Befehl nutzt dieselben Checks wie der Health-Endpunkt.
+- Für CI und Diagnose steht `python -m app.ops.selfcheck --assert-startup` zur Verfügung. Der Befehl nutzt dieselben Checks wie der Health-Endpunkt und kann Deployments optional hart stoppen.
 
 ## Backup & Restore
 
@@ -25,7 +25,7 @@ Dieses Runbook dokumentiert, wie Harmony seine SQLite-Datenbank verwaltet und wi
 
 - **VACUUM/Analyse:** Bei großen Löschoperationen `sqlite3 harmony.db 'VACUUM;'` ausführen, um Speicherplatz freizugeben.
 - **Integritätscheck:** `sqlite3 harmony.db 'PRAGMA integrity_check;'` sollte `ok` zurückgeben.
-- **Dateirechte:** Der Service-User benötigt Schreibrechte auf das Verzeichnis, das `DATABASE_URL` referenziert. Der Startup-Guard meldet `Database file is not writable`, falls das nicht erfüllt ist.
+- **Dateirechte:** Der Service-User benötigt Schreibrechte auf das Verzeichnis, das `DATABASE_URL` referenziert. `/api/health/ready` bzw. `run_startup_guards` melden `Database file is not writable`, falls das nicht erfüllt ist.
 - **Log-Metriken:** Fehlgeschlagene Zugriffe tauchen als `startup.failed`- oder `database.bootstrap`-Events im Log auf. Zusätzlich meldet `/api/health/ready` `status=fail` bei fehlenden Schreibrechten.
 
 ## Troubleshooting
