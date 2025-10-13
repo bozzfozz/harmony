@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.db import session_scope
-from app.dependencies import get_db, get_soulseek_client
+from app.config import AppConfig
+from app.dependencies import get_app_config, get_db, get_soulseek_client
 from app.errors import DependencyError
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -34,6 +35,11 @@ from app.schemas import (
     StatusResponse,
 )
 from app.utils import artwork_utils
+from app.utils.path_safety import (
+    allowed_download_roots,
+    ensure_within_roots,
+    normalise_download_path,
+)
 from app.workers.sync_worker import SyncWorker
 
 
@@ -116,6 +122,7 @@ async def soulseek_search(
 async def soulseek_download(
     payload: SoulseekDownloadRequest,
     request: Request,
+    config: AppConfig = Depends(get_app_config),
     session: Session = Depends(get_db),
     client: SoulseekClient = Depends(get_soulseek_client),
 ) -> SoulseekDownloadResponse:
@@ -124,12 +131,23 @@ async def soulseek_download(
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided for download")
 
+    allowed_roots = allowed_download_roots(config)
     created_downloads: list[dict[str, Any]] = []
     job_files: list[dict[str, Any]] = []
     try:
         for file_info in payload.files:
+            raw_filename = file_info.resolved_filename
+            try:
+                resolved_path = normalise_download_path(raw_filename, allowed_roots=allowed_roots)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid filename: must stay within the downloads directory",
+                ) from exc
+
             file_payload = file_info.to_payload()
-            filename = str(file_payload.get("filename") or "unknown")
+            filename = str(resolved_path)
+            file_payload["filename"] = filename
             download = Download(
                 filename=filename,
                 state="queued",
@@ -178,6 +196,9 @@ async def soulseek_download(
                 }
             )
         session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as exc:  # pragma: no cover - defensive
         session.rollback()
         logger.error("Failed to persist download request: %s", exc)
@@ -212,6 +233,7 @@ async def soulseek_download(
 def soulseek_download_lyrics(
     download_id: int,
     request: Request,
+    config: AppConfig = Depends(get_app_config),
     session: Session = Depends(get_db),
 ) -> Response:
     """Return the generated LRC lyrics for a completed download."""
@@ -224,8 +246,15 @@ def soulseek_download_lyrics(
         raise HTTPException(status_code=404, detail="Download not found")
 
     status = (download.lyrics_status or "").lower()
+    allowed_roots = allowed_download_roots(config)
     if download.has_lyrics and download.lyrics_path:
-        lyrics_path = Path(download.lyrics_path)
+        try:
+            lyrics_path = ensure_within_roots(download.lyrics_path, allowed_roots=allowed_roots)
+        except ValueError as exc:
+            logger.warning(
+                "Download %s has lyrics path outside allowed roots", download_id
+            )
+            raise HTTPException(status_code=400, detail="Invalid lyrics path") from exc
         if not lyrics_path.exists():
             raise HTTPException(status_code=404, detail="Lyrics file not found")
     else:
@@ -235,7 +264,7 @@ def soulseek_download_lyrics(
             raise HTTPException(status_code=502, detail="Lyrics generation failed")
         raise HTTPException(status_code=404, detail="Lyrics file not available")
 
-    lyrics_path = Path(download.lyrics_path)
+    lyrics_path = ensure_within_roots(download.lyrics_path, allowed_roots=allowed_roots)
     if not lyrics_path.exists():
         raise HTTPException(status_code=404, detail="Lyrics file not found")
 
@@ -253,6 +282,7 @@ async def refresh_download_lyrics(
     download_id: int,
     request: Request,
     session: Session = Depends(get_db),
+    config: AppConfig = Depends(get_app_config),
 ) -> JSONResponse:
     """Force a new lyrics lookup for the given download."""
 
@@ -270,11 +300,17 @@ async def refresh_download_lyrics(
     if not download.filename:
         raise HTTPException(status_code=400, detail="Download has no filename")
 
+    allowed_roots = allowed_download_roots(config)
+    try:
+        resolved_path = ensure_within_roots(download.filename, allowed_roots=allowed_roots)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid download path") from exc
+
     track_info = _build_track_info(download)
-    track_info.setdefault("filename", download.filename)
+    track_info.setdefault("filename", str(resolved_path))
     track_info.setdefault("download_id", download.id)
 
-    await worker.enqueue(download.id, download.filename, track_info)
+    await worker.enqueue(download.id, str(resolved_path), track_info)
 
     download.lyrics_status = "pending"
     download.has_lyrics = False
@@ -307,6 +343,7 @@ async def refresh_download_metadata(
     download_id: int,
     request: Request,
     session: Session = Depends(get_db),
+    config: AppConfig = Depends(get_app_config),
 ) -> JSONResponse:
     """Trigger a metadata refresh for the given download."""
 
@@ -321,7 +358,11 @@ async def refresh_download_metadata(
     if not download.filename:
         raise HTTPException(status_code=400, detail="Download has no filename")
 
-    audio_path = Path(download.filename)
+    allowed_roots = allowed_download_roots(config)
+    try:
+        audio_path = ensure_within_roots(download.filename, allowed_roots=allowed_roots)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid download path") from exc
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
@@ -434,6 +475,7 @@ def soulseek_download_artwork(
     download_id: int,
     request: Request,
     session: Session = Depends(get_db),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     """Return the stored artwork as an image file."""
 
@@ -447,7 +489,11 @@ def soulseek_download_artwork(
     if not download.has_artwork or not download.artwork_path:
         raise HTTPException(status_code=404, detail="Artwork not available")
 
-    artwork_path = Path(download.artwork_path)
+    allowed_roots = allowed_download_roots(config)
+    try:
+        artwork_path = ensure_within_roots(download.artwork_path, allowed_roots=allowed_roots)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid artwork path") from exc
     if not artwork_path.exists():
         raise HTTPException(status_code=404, detail="Artwork file not found")
 
@@ -460,6 +506,7 @@ async def soulseek_refresh_artwork(
     download_id: int,
     request: Request,
     session: Session = Depends(get_db),
+    config: AppConfig = Depends(get_app_config),
 ) -> JSONResponse:
     """Force an artwork refresh for a completed download."""
 
@@ -470,7 +517,14 @@ async def soulseek_refresh_artwork(
     if download is None:
         raise HTTPException(status_code=404, detail="Download not found")
 
-    audio_path = Path(download.filename)
+    if not download.filename:
+        raise HTTPException(status_code=400, detail="Download has no filename")
+
+    allowed_roots = allowed_download_roots(config)
+    try:
+        audio_path = ensure_within_roots(download.filename, allowed_roots=allowed_roots)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid download path") from exc
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 

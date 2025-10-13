@@ -42,6 +42,7 @@ from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
+from app.utils.path_safety import allowed_download_roots
 from app.utils.settings_store import ensure_default_settings
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
@@ -321,6 +322,7 @@ async def _start_orchestrator_workers(
     }
 
     hdm_config = settings.hdm
+    allowed_roots = allowed_download_roots(config)
     logger.info(
         "HDM configuration loaded",
         extra={
@@ -339,6 +341,7 @@ async def _start_orchestrator_workers(
             spotify_client=spotify_client,
             soulseek_client=soulseek_client,
             config=config.artwork,
+            allowed_roots=allowed_roots,
         )
         await state.artwork_worker.start()
         worker_status["artwork"] = True
@@ -346,12 +349,18 @@ async def _start_orchestrator_workers(
 
     state.lyrics_worker = None
     if enable_lyrics:
-        state.lyrics_worker = LyricsWorker(spotify_client=spotify_client)
+        state.lyrics_worker = LyricsWorker(
+            spotify_client=spotify_client,
+            allowed_roots=allowed_roots,
+        )
         await state.lyrics_worker.start()
         worker_status["lyrics"] = True
     orchestrator_status["enabled_jobs"]["lyrics"] = bool(state.lyrics_worker)
 
-    state.rich_metadata_worker = MetadataWorker(spotify_client=spotify_client)
+    state.rich_metadata_worker = MetadataWorker(
+        spotify_client=spotify_client,
+        allowed_roots=allowed_roots,
+    )
     await state.rich_metadata_worker.start()
     worker_status["metadata"] = True
 

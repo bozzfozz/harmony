@@ -24,6 +24,7 @@ from app.db import session_scope
 from app.logging import get_logger
 from app.models import Download
 from app.utils import artwork_utils
+from app.utils.path_safety import ensure_within_roots
 
 logger = get_logger(__name__)
 
@@ -75,6 +76,7 @@ class ArtworkWorker:
         config: ArtworkConfig | None = None,
         post_processing_hooks: Sequence[PostProcessingHook] | None = None,
         post_processing_enabled: bool | None = None,
+        allowed_roots: Sequence[Path] | None = None,
     ) -> None:
         self._spotify = spotify_client
         self._soulseek = soulseek_client
@@ -122,6 +124,15 @@ class ArtworkWorker:
         self._queue: asyncio.Queue[ArtworkJob | None] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
         self._running = False
+        roots = [Path(path) for path in allowed_roots] if allowed_roots else []
+        self._allowed_roots: tuple[Path, ...] = tuple(
+            root.expanduser().resolve(strict=False) for root in roots
+        )
+
+    def _ensure_allowed_path(self, path: Path | str) -> Path:
+        if not self._allowed_roots:
+            return Path(path)
+        return ensure_within_roots(path, allowed_roots=self._allowed_roots)
 
     async def start(self) -> None:
         if self._running:
@@ -291,13 +302,16 @@ class ArtworkWorker:
         job: ArtworkJob,
         download: DownloadContext | None,
     ) -> ArtworkProcessingResult:
-        audio_path = Path(job.file_path)
+        audio_path = self._ensure_allowed_path(job.file_path)
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
         existing_artwork_path: Path | None = None
         if download and download.artwork_path:
-            existing_artwork_path = Path(download.artwork_path)
+            try:
+                existing_artwork_path = self._ensure_allowed_path(download.artwork_path)
+            except ValueError:
+                existing_artwork_path = None
 
         existing_info = await asyncio.to_thread(artwork_utils.extract_embed_info, audio_path)
         has_existing = existing_info is not None
