@@ -83,6 +83,14 @@ Reihenfolge ist strikt:
   - `frontend/importmap.json` und `frontend/static/importmap.json` enthalten ausschließlich HTTPS-URLs mit festen Versions-Pins (`@x.y.z`). `latest`, relative CDN-Pfade oder unversionierte Bundler sind verboten.
   - `scripts/dev/supply_guard.sh` prüft Import-Maps und stellt sicher, dass keine Node-/npm-/pnpm-Artefakte eingecheckt sind. Vor jedem Commit muss der Guard grün laufen.
   - Offline-Betrieb erfolgt über `scripts/dev/vendor_frontend.sh`; das Skript darf committed werden, erzeugte Artefakte (`frontend/static/vendor/*`) nur wenn ausdrücklich benötigt.
+- **FOSS-Only (lokal)**
+  - **Allow-Lizenzen** (OSI/FSF): MIT, BSD-2/3, Apache-2.0, MPL-2.0, ISC, CC0, Unlicense, Python-2.0, GPL/LGPL/AGPL.
+  - **Block-Lizenzen**: SSPL-1.0, BUSL-1.1, Elastic 2.0, Redis SA, Confluent Community, Polyform-*, proprietäre/kommerzielle EULAs.
+  - **Registries**: Nur Standard-Quellen (`https://pypi.org`, `https://registry.npmjs.org`, `https://crates.io`, Maven Central, NuGet, Go Proxy). Private Registries, Token-Auth und Vendor-spezifische Mirrors sind verboten.
+  - **SaaS/SDKs**: Proprietäre Agents/SDKs nur, wenn ein frei nutzbares Tier verfügbar und standardmäßig deaktiviert ist. Andernfalls entfernen.
+  - **Guard-Skript**: `scripts/dev/foss_guard.sh` erzeugt `reports/foss_guard_summary.md`. `make foss-scan` läuft im WARN-Modus (Exit 0, Verstöße als Report). `make foss-enforce` setzt `FOSS_STRICT=true` und bricht bei Blockern/Unknown mit Exit 12 ab.
+  - **Reporting**: Zusammenfassung enthält Paket, Version, Lizenz, Quelle, Bewertung (`allow|warn|block`). Unknown-Lizenzen gelten im Strict-Modus als Blocker.
+  - **Vor Merge**: `make foss-scan` ist Pflicht. Verstöße beheben oder schriftliche Maintainer-Freigabe dokumentieren.
 - **Auto-Repair First (verbindlich)**
   - Reihenfolge aller Reparaturversuche: **SCAN → DECIDE → FIX → VERIFY → RE-RUN**, maximal 3 Iterationen pro Kategorie. Jeder Schritt wird im Reason-Trace dokumentiert.
   - Lokal (`SUPPLY_MODE=WARN` oder `TOOLCHAIN_STRICT=false`) gilt: niemals mit Exit≠0 abbrechen. Stattdessen Fix-Versuch oder WARN-Summary mit nächstbestem Workaround. Einzige Blocker bleiben Off-Registry-Funde und Sicherheitsrisiken Klasse P0.
