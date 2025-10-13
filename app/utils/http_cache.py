@@ -80,9 +80,13 @@ def is_request_not_modified(
     if etag:
         if_none_match = request.headers.get("if-none-match")
         if if_none_match:
-            candidates = {token.strip() for token in if_none_match.split(",") if token.strip()}
-            if etag in candidates:
-                return True
+            normalized_etag = etag.strip()
+            for raw_token in if_none_match.split(","):
+                token = _normalize_etag_token(raw_token)
+                if token is None:
+                    continue
+                if token == "*" or token == normalized_etag:
+                    return True
 
     if last_modified is not None:
         header_value = request.headers.get("if-modified-since")
@@ -93,6 +97,17 @@ def is_request_not_modified(
                     return True
 
     return False
+
+
+def _normalize_etag_token(token: str) -> str | None:
+    candidate = token.strip()
+    if not candidate:
+        return None
+    if candidate == "*":
+        return candidate
+    if candidate[:2].lower() == "w/":
+        candidate = candidate[2:].strip()
+    return candidate
 
 
 def _ensure_utc(value: datetime | None) -> datetime:
