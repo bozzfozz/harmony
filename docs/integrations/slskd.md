@@ -11,7 +11,7 @@ upstream service.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `SLSKD_BASE_URL` | `http://localhost:5030` | Base URL of the slskd service. Legacy `SLSKD_URL` is still honoured. |
+| `SLSKD_BASE_URL` | `http://localhost:5030` | Base URL of the slskd service. When omitted, provide `SLSKD_HOST` and `SLSKD_PORT`; the readiness checks and adapter honour both forms (legacy `SLSKD_URL` remains supported). |
 | `SLSKD_API_KEY` | _(required)_ | Mandatory API key presented via the `X-API-Key` header. |
 | `SLSKD_TIMEOUT_MS` | `8_000` | Hard timeout for upstream requests in milliseconds. |
 | `SLSKD_RETRY_MAX` | `3` | Number of retry attempts on timeouts/5xx/429 responses. |

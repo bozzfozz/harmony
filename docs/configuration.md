@@ -115,10 +115,10 @@ apply to the single service; optional features are disabled by default.
 | Variable | Default | Example | Notes |
 | --- | --- | --- | --- |
 | `INTEGRATIONS_ENABLED` | `spotify,slskd` | `spotify,slskd` | Comma-separated list of active providers. |
-| `SLSKD_BASE_URL` | `http://localhost:5030` | `http://slskd.local:5030` | Base URL for the slskd daemon. |
-| `SLSKD_URL` | _(legacy)_ | `http://slskd.local:5030` | Legacy override; prefer `SLSKD_BASE_URL`. |
-| `SLSKD_HOST` | _(legacy)_ | `slskd.local` | Legacy host override. |
-| `SLSKD_PORT` | _(legacy)_ | `5030` | Legacy port override. |
+| `SLSKD_BASE_URL` | `http://localhost:5030` | `http://slskd.local:5030` | Preferred configuration for the slskd daemon. If set, readiness derives connectivity from this value. |
+| `SLSKD_URL` | _(legacy)_ | `http://slskd.local:5030` | Legacy alias for `SLSKD_BASE_URL`; supported for backwards compatibility. |
+| `SLSKD_HOST` | _(legacy)_ | `slskd.local` | Legacy host override. Provide both host and port when the base URL is not available. |
+| `SLSKD_PORT` | _(legacy)_ | `5030` | Legacy port override used together with `SLSKD_HOST`. |
 | `SLSKD_API_KEY` | _(empty)_ | `slskd-secret` | API key for slskd. |
 | `SLSKD_TIMEOUT_MS` | `8000` | `12000` | Timeout for slskd HTTP calls. |
 | `SLSKD_RETRY_MAX` | `3` | `5` | Retry attempts for slskd requests. |

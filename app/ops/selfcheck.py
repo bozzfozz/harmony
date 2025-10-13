@@ -11,6 +11,7 @@ from pathlib import Path
 import socket
 import time
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from sqlalchemy.engine import make_url
@@ -32,17 +33,19 @@ EX_OSERR = getattr(os, "EX_OSERR", 71)
 EX_UNAVAILABLE = getattr(os, "EX_UNAVAILABLE", 69)
 EX_SOFTWARE = getattr(os, "EX_SOFTWARE", 70)
 
+_SLSKD_BASE_URL_KEYS = ("SLSKD_BASE_URL", "SLSKD_URL")
+
 _REQUIRED_ENV_BASE = (
     "SPOTIFY_CLIENT_ID",
     "SPOTIFY_CLIENT_SECRET",
     "OAUTH_SPLIT_MODE",
     "DOWNLOADS_DIR",
     "MUSIC_DIR",
-    "SLSKD_HOST",
-    "SLSKD_PORT",
 )
 
 _OPTIONAL_ENV_KEYS = ("UMASK", "PUID", "PGID")
+
+_DEFAULT_PORT_BY_SCHEME = {"http": 80, "https": 443}
 
 
 def _resolve_profile(env: Mapping[str, Any]) -> str:
@@ -233,7 +236,24 @@ def aggregate_ready(
     checks: dict[str, Any] = {}
     issues: list[ReadyIssue] = []
 
-    env_check = check_env_required(_REQUIRED_ENV_BASE, env)
+    base_url_key: str | None = None
+    base_url_value: str | None = None
+    for candidate in _SLSKD_BASE_URL_KEYS:
+        raw_value = env.get(candidate)
+        if _has_value(raw_value):
+            base_url_key = candidate
+            base_url_value = str(raw_value).strip()
+            break
+
+    required_env_keys = list(_REQUIRED_ENV_BASE)
+    if base_url_key is None:
+        required_env_keys.extend(["SLSKD_HOST", "SLSKD_PORT"])
+
+    env_check = check_env_required(required_env_keys, env)
+    env_check["soulseekd"] = {
+        "mode": "base_url" if base_url_key else "host_port",
+        "key": base_url_key,
+    }
     checks["env"] = env_check
 
     missing_keys = set(env_check["missing"])
@@ -370,14 +390,24 @@ def aggregate_ready(
 
     checks["paths"] = paths
 
-    host = (env.get("SLSKD_HOST") or "").strip()
+    host_value = (env.get("SLSKD_HOST") or "").strip()
     port_value = (env.get("SLSKD_PORT") or "").strip()
-    soulseekd: dict[str, Any] = {"host": host or None, "port": None, "reachable": False}
-    try:
-        port = int(port_value)
-        soulseekd["port"] = port
-    except ValueError:
-        if port_value:
+    soulseekd: dict[str, Any] = {
+        "host": None,
+        "port": None,
+        "reachable": False,
+        "base_url": base_url_value or None,
+        "base_url_key": base_url_key,
+        "configured_host": host_value or None,
+        "configured_port": port_value or None,
+        "source": None,
+    }
+
+    port: int | None = None
+    if port_value:
+        try:
+            port = int(port_value)
+        except ValueError:
             issues.append(
                 ReadyIssue(
                     component="soulseekd",
@@ -386,19 +416,84 @@ def aggregate_ready(
                     details={"value": port_value},
                 )
             )
-        port = None
-    if host and port is not None:
-        reachable = check_tcp_reachable(host, port)
+
+    resolved_host: str | None = None
+    resolved_port: int | None = None
+    source: str | None = None
+
+    if host_value and port is not None:
+        resolved_host = host_value
+        resolved_port = port
+        source = "host_port"
+    else:
+        if base_url_value:
+            parsed = urlparse(base_url_value)
+            parsed_host = parsed.hostname
+            parsed_port = parsed.port
+            scheme = parsed.scheme.lower()
+
+            if not parsed_host:
+                issues.append(
+                    ReadyIssue(
+                        component="soulseekd",
+                        message=f"{base_url_key or 'SLSKD_BASE_URL'} must include a hostname",
+                        exit_code=EX_CONFIG,
+                        details={"value": base_url_value},
+                    )
+                )
+            else:
+                resolved_host = parsed_host
+
+            if parsed_port is not None:
+                resolved_port = parsed_port
+            else:
+                default_port = _DEFAULT_PORT_BY_SCHEME.get(scheme)
+                if default_port is not None:
+                    resolved_port = default_port
+                elif parsed_host is not None:
+                    issues.append(
+                        ReadyIssue(
+                            component="soulseekd",
+                            message=(
+                                f"{base_url_key or 'SLSKD_BASE_URL'} must include an explicit port"
+                            ),
+                            exit_code=EX_CONFIG,
+                            details={"value": base_url_value},
+                        )
+                    )
+
+            if resolved_host and resolved_port is not None:
+                source = "base_url"
+
+    if resolved_host and resolved_port is not None:
+        soulseekd["host"] = resolved_host
+        soulseekd["port"] = resolved_port
+        soulseekd["source"] = source
+        reachable = check_tcp_reachable(resolved_host, resolved_port)
         soulseekd["reachable"] = reachable
         if not reachable:
             issues.append(
                 ReadyIssue(
                     component="soulseekd",
-                    message=f"Unable to reach Soulseekd at {host}:{port}",
+                    message=f"Unable to reach Soulseekd at {resolved_host}:{resolved_port}",
                     exit_code=EX_UNAVAILABLE,
-                    details={"host": host, "port": port},
+                    details={"host": resolved_host, "port": resolved_port},
                 )
             )
+    else:
+        issues.append(
+            ReadyIssue(
+                component="soulseekd",
+                message="Soulseekd base URL or host/port must be configured",
+                exit_code=EX_CONFIG,
+                details={
+                    "base_url_key": base_url_key,
+                    "base_url": base_url_value,
+                    "host": host_value or None,
+                    "port": port_value or None,
+                },
+            )
+        )
     checks["soulseekd"] = soulseekd
 
     profile = _resolve_profile(env)

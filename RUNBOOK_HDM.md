@@ -39,7 +39,8 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
      `HARMONY_API_KEY`, `OAUTH_STATE_DIR` bei Split-Mode).
    - `71 (EX_OSERR)`: Verzeichnisse (`DOWNLOADS_DIR`, `MUSIC_DIR`, ggf.
      `OAUTH_STATE_DIR`) existieren nicht oder sind nicht beschreibbar.
-   - `69 (EX_UNAVAILABLE)`: abhängige Dienste nicht erreichbar (`SLSKD_HOST`,
+   - `69 (EX_UNAVAILABLE)`: abhängige Dienste nicht erreichbar (`SLSKD_BASE_URL`
+     bzw. `SLSKD_HOST`/`SLSKD_PORT`,
      Datenbank bei `HEALTH_READY_REQUIRE_DB=true`).
    - `70 (EX_SOFTWARE)`: interne Fehlkonfiguration (z. B. ungültige Ports oder
      fehlerhafte Booleans).
