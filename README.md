@@ -133,7 +133,6 @@ Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
 docker run -d \
   --name harmony-flow-002 \
   -p 8080:8080 \
-  -p 8888:8888 \
   -e HARMONY_API_KEYS=change-me \
   -e SPOTIFY_CLIENT_ID=your-client-id \
   -e SPOTIFY_CLIENT_SECRET=your-client-secret \
@@ -164,7 +163,7 @@ Steuerung:
 
 ## Unified Docker Image
 
-Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört standardmäßig auf Port `8080` – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
+Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört auf `APP_PORT` (Default `8080`) – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
 
 ### Quickstart (`docker run`)
 
@@ -182,6 +181,8 @@ docker run -d \
 > ℹ️ SQLite ist die Standard-Datenbank. Das Volume `/data` enthält `harmony.db`.
 > Setze `DB_RESET=1`, um den Datenbankfile beim Start neu anzulegen.
 
+> 🔀 **Port anpassen:** Setze `-e APP_PORT=<port>` und passe das Mapping zu `-p <port>:<port>` an, wenn `8080` bereits belegt ist. Der Container bindet stets an `0.0.0.0:${APP_PORT}`.
+
 ### Datenbank & Storage
 
 - **SQLite:** Produktions-Container schreiben nach `/data/harmony.db`. Entwicklungsprofile nutzen `./harmony.db`; Tests verwenden eine In-Memory-Instanz.
@@ -195,6 +196,8 @@ Im Repository liegt ein vorkonfiguriertes [`compose.yaml`](compose.yaml), das ge
 docker compose up -d
 open http://localhost:8080
 ```
+
+Setze optional `APP_PORT` in `.env` oder per `docker compose run -e APP_PORT=<port>`; der Compose-Port-Mapping nutzt denselben Wert für Host und Container.
 
 Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) bereit. Das Override aktiviert den lokalen Build (`build: .`), setzt `uvicorn --reload` und bindet `./app` in den Container ein.
 
@@ -537,7 +540,7 @@ Die vendorten Dateien liegen unter `frontend/static/vendor/`. Committe sie nur, 
 - **Import-Map-Drift:** `make supply-guard` meldet ungepinnte oder unsichere URLs. Passe `frontend/importmap.json` an.
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
 - **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
-- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Passe `SMOKE_PATH` bei Bedarf an und prüfe die Logdatei bei Fehlschlägen.
+- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Port und Pfad liest das Skript aus `APP_PORT` bzw. `SMOKE_PATH` (inklusive `.env`-Fallback). Prüfe `.tmp/smoke.log` bei Fehlschlägen.
 
 ## Datenbank-Migrationen
 
@@ -589,7 +592,7 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `127.0.0.1:8080` und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
+Der Server liest die Laufzeitkonfiguration aus `.env`. Standardmäßig bindet die API an `0.0.0.0:${APP_PORT}` (Default `8080`) und lässt Requests ohne API-Key durch (`FEATURE_REQUIRE_AUTH=false`, `FEATURE_RATE_LIMITING=false`). Aktiviere Authentifizierung und Rate-Limits explizit, bevor du den Dienst über Loopback hinaus erreichbar machst. Verwende lokale Schlüssel und Secrets ausschließlich über `.env` oder einen Secret-Store – niemals eingecheckt in das Repository.
 
 ### Docker
 
@@ -624,14 +627,15 @@ services:
     env_file:
       - ./.env
     environment:
+      APP_PORT: 8080
       HARMONY_API_KEYS: change-me
-      ALLOWED_ORIGINS: http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:${APP_PORT:-8080}
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     volumes:
       - harmony-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/api/health/ready"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -664,8 +668,7 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 | --- | --- | --- | --- | --- |
 | `HARMONY_LOG_LEVEL` | string | `INFO` | Globale Log-Stufe (`DEBUG`, `INFO`, …). | — |
 | `APP_ENV` | string | `dev` | Beschreibt die laufende Umgebung (`dev`, `staging`, `prod`). | — |
-| `HOST` | string | `127.0.0.1` | Bind-Adresse für Uvicorn/Hypercorn – standardmäßig nur lokal erreichbar. | — |
-| `PORT` | int | `8080` | TCP-Port der API-Instanz. | — |
+| `APP_PORT` | int | `8080` | TCP-Port der API-Instanz (Container bindet an `0.0.0.0:<port>`). | — |
 | `HARMONY_DISABLE_WORKERS` | bool (`0/1`) | `false` | `true` deaktiviert alle Hintergrund-Worker (Tests/Demos). | — |
 | `API_BASE_PATH` | string | `/api/v1` | Präfix für alle öffentlichen API-Routen inkl. OpenAPI & Docs. | — |
 | `FEATURE_ENABLE_LEGACY_ROUTES` | bool | `false` | Aktiviert unversionierte Legacy-Routen – nur für Migrationsphasen. | — |
@@ -749,8 +752,8 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 
 ###### Docker OAuth Fix (Remote Access)
 
-- **Haupt-Redirect:** `http://127.0.0.1:8888/callback`. Die Docker-Compose-Templates veröffentlichen Port `8888` zusätzlich zum
-  API-Port.
+- **Haupt-Redirect:** `http://127.0.0.1:8888/callback`. Der API-Container exponiert ausschließlich `APP_PORT` (Default `8080`);
+  leite den Callback-Port bei Bedarf separat (z. B. über einen SSH-Tunnel oder Proxy) weiter.
 - **Host-Anpassung im Browser:** Läuft Harmony auf einem entfernten Host, lässt sich der Spotify-Callback abschließen, indem du
   in der Adresszeile `127.0.0.1` durch die reale Server-Adresse ersetzt, z. B.
   `http://127.0.0.1:8888/callback?code=XYZ&state=ABC` → `http://192.168.1.5:8888/callback?code=XYZ&state=ABC`.

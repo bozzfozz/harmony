@@ -18,6 +18,8 @@ from app.utils.priority import parse_priority_map
 
 logger = get_logger(__name__)
 
+DEFAULT_APP_PORT = 8080
+
 
 _RUNTIME_ENV_CACHE: dict[str, str] | None = None
 
@@ -87,6 +89,18 @@ def _env_value(env: Mapping[str, Any], key: str) -> Optional[str]:
     if value is None:
         return None
     return str(value)
+
+
+def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
+    """Return the configured application port constrained to valid TCP ranges."""
+
+    runtime_env: Mapping[str, Any] = env or get_runtime_env()
+    return _bounded_int(
+        runtime_env.get("APP_PORT"),
+        default=DEFAULT_APP_PORT,
+        minimum=1,
+        maximum=65535,
+    )
 
 
 @dataclass(slots=True)

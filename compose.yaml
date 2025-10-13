@@ -6,6 +6,7 @@ services:
     env_file:
       - ./.env
     environment:
+      APP_PORT: "${APP_PORT:-8080}"
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       UMASK: "${UMASK:-007}"
@@ -20,12 +21,12 @@ services:
       MAX_RETRIES: "${DOWNLOAD_MAX_RETRIES:-5}"
       SLSKD_BASE_URL: "${SLSKD_BASE_URL:-http://slskd.local:5030}"
       HARMONY_API_KEYS: "${HARMONY_API_KEYS:-change-me}"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:8080}"
-      PUBLIC_BACKEND_URL: "${PUBLIC_BACKEND_URL:-http://localhost:8080}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:${APP_PORT:-8080}}"
+      PUBLIC_BACKEND_URL: "${PUBLIC_BACKEND_URL:-http://localhost:${APP_PORT:-8080}}"
       PUBLIC_SENTRY_DSN: "${PUBLIC_SENTRY_DSN:-}"
       PUBLIC_FEATURE_FLAGS: "${PUBLIC_FEATURE_FLAGS:-{}}"
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     volumes:
       - harmony-data:/data
       - type: bind
@@ -38,7 +39,7 @@ services:
         source: /srv/harmony/runtime/oauth_state
         target: /data/runtime/oauth_state
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/api/health/ready"]
       interval: 30s
       timeout: 5s
       retries: 3
