@@ -203,7 +203,7 @@ open http://localhost:8080
 
 Setze optional `APP_PORT` in `.env` oder per `docker compose run -e APP_PORT=<port>`; der Compose-Port-Mapping nutzt denselben Wert für Host und Container.
 
-Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) bereit. Das Override aktiviert den lokalen Build (`build: .`), setzt `uvicorn --reload` und bindet `./app` in den Container ein.
+Für Entwicklungszyklen steht [`compose.override.yaml`](compose.override.yaml) bereit. Das Override aktiviert den lokalen Build (`build: .`), setzt `UVICORN_EXTRA_ARGS=--reload --reload-dir /app/app` und bindet `./app` in den Container ein.
 
 ### Relevante Umgebungsvariablen
 
@@ -659,7 +659,7 @@ volumes:
     driver: local
 ```
 
-[`compose.override.yaml`](compose.override.yaml) aktiviert bei Bedarf Hot-Reloading (`uvicorn --reload`) und einen lokalen Build. Zusätzliche Secrets können über `env_file` oder Compose-Profile eingebunden werden.
+[`compose.override.yaml`](compose.override.yaml) aktiviert bei Bedarf Hot-Reloading (`UVICORN_EXTRA_ARGS=--reload --reload-dir /app/app`) und einen lokalen Build. Zusätzliche Secrets können über `env_file` oder Compose-Profile eingebunden werden.
 
 Harmony benötigt keine zusätzlichen Services – die SQLite-Datenbank liegt standardmäßig unter `/data/harmony.db`. Mountest du ein Host-Verzeichnis nach `/data`, bleiben Konfigurationen und Verlaufsdaten dauerhaft erhalten. Weitere Betriebsdetails findest du im [SQLite-Runbook](docs/operations/db.md).
 

@@ -23,26 +23,19 @@ def test_resolve_app_port_clamps_invalid_values() -> None:
     assert resolve_app_port({"APP_PORT": "not-a-port"}) == DEFAULT_APP_PORT
 
 
-def test_resolve_app_port_supports_legacy_port_alias() -> None:
-    """Legacy `PORT` values are treated as APP_PORT when unset."""
-
-    assert resolve_app_port({"PORT": "9091"}) == 9091
-
-
-def test_resolve_app_port_supports_uvicorn_alias() -> None:
-    """Legacy uvicorn-specific aliases are accepted when APP_PORT is absent."""
-
-    assert resolve_app_port({"UVICORN_PORT": "8123"}) == 8123
-
-
-def test_resolve_app_port_rejects_conflicting_alias() -> None:
-    """Setting APP_PORT alongside a conflicting alias raises an error."""
+@pytest.mark.parametrize(
+    "alias_name",
+    ["PORT", "UVICORN_PORT", "SERVICE_PORT", "WEB_PORT", "FRONTEND_PORT"],
+)
+def test_resolve_app_port_rejects_legacy_aliases(alias_name: str) -> None:
+    """Legacy aliases trigger a configuration error to enforce APP_PORT-only setup."""
 
     with pytest.raises(ValueError):
-        resolve_app_port({"APP_PORT": "8080", "PORT": "9090"})
+        resolve_app_port({alias_name: "9091"})
 
 
-def test_resolve_app_port_invalid_alias_value_falls_back() -> None:
-    """Legacy aliases with invalid values fall back to the default."""
+def test_resolve_app_port_rejects_alias_even_with_matching_value() -> None:
+    """Legacy aliases remain unsupported even if they mirror APP_PORT."""
 
-    assert resolve_app_port({"PORT": "invalid"}) == DEFAULT_APP_PORT
+    with pytest.raises(ValueError):
+        resolve_app_port({"APP_PORT": "8080", "PORT": "8080"})

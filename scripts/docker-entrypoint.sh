@@ -79,7 +79,7 @@ from typing import List
 from app.config import resolve_app_port
 
 
-APP_HOST = os.environ.get("APP_HOST", "0.0.0.0")
+APP_HOST = "0.0.0.0"
 APP_MODULE = os.environ.get("APP_MODULE", "app.main:app")
 LIVE_PATH = os.environ.get("APP_LIVE_PATH", "/live")
 _MODULE_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_.]*$")
@@ -152,10 +152,12 @@ def main(argv: List[str]) -> None:
     port = _resolve_port()
     print(f"[entrypoint] resolved APP_PORT={port}")
     python_exec = sys.executable or "python"
+    python_version = sys.version.split()[0]
     base_command = [python_exec, "-m", "uvicorn", APP_MODULE, "--host", APP_HOST, "--port", str(port)]
     command = base_command + extras
 
     print(f"[entrypoint] python executable: {python_exec}")
+    print(f"[entrypoint] python version: {python_version}")
     python_path = os.environ.get("PYTHONPATH")
     if python_path:
         print(f"[entrypoint] PYTHONPATH={python_path}")
