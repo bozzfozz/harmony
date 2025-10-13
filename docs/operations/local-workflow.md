@@ -54,6 +54,7 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 ### `make smoke`
 - **Server startet nicht:** Kontrolliere `.tmp/smoke.log` und stelle sicher, dass `DATABASE_URL` auf eine schreibbare SQLite-Datei zeigt.
 - **Port belegt:** Setze `APP_PORT=<frei>` (z. B. via `.env`) und starte den Smoke-Test erneut.
+- **Legacy-Ports entfernt:** Variablen wie `PORT`, `UVICORN_PORT` oder `WEB_PORT` greifen nicht mehr. Passe ausschließlich `APP_PORT` an, sonst schlägt der Start fehl.
 - **Docker-Sektion:** Setze `SMOKE_UNIFIED_IMAGE` auf einen vorhandenen Tag, wenn du die optionale Container-Prüfung ausführen möchtest.
 
 ## Nachweise im PR

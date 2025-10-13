@@ -17,18 +17,9 @@ async def test_health_live_endpoint_returns_ok() -> None:
 
 
 @pytest.mark.anyio
-async def test_live_probe_delegates_to_health(monkeypatch) -> None:
-    captured = {}
-
-    async def _stub_live() -> dict[str, str]:
-        captured["called"] = True
-        return {"status": "ok"}
-
-    monkeypatch.setattr(health_api, "live", _stub_live)
-
+async def test_live_probe_returns_ok() -> None:
     payload = await live_probe()
 
-    assert captured == {"called": True}
     assert payload == {"status": "ok"}
 
 

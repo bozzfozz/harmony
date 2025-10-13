@@ -4,7 +4,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     POETRY_VIRTUALENVS_CREATE=false \
     PIP_NO_CACHE_DIR=1 \
-    APP_PORT=8080
+    APP_PORT=8080 \
+    APP_HOST=0.0.0.0 \
+    APP_MODULE=app.main:app
 
 WORKDIR /app
 
@@ -23,4 +25,4 @@ RUN chmod +x scripts/docker-entrypoint.sh
 EXPOSE 8080
 
 ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app"]
+CMD []
