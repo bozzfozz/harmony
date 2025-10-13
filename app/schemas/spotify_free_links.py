@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Literal, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,8 +16,8 @@ class FreeLinksRequest(BaseModel):
         default=None, description="Collection of Spotify playlist links"
     )
 
-    def _collect_urls(self) -> List[str]:
-        values: List[str] = []
+    def _collect_urls(self) -> list[str]:
+        values: list[str] = []
         if self.url is not None:
             values.append(self.url)
         if self.urls is not None:
@@ -38,5 +39,5 @@ class SkippedPlaylist(BaseModel):
 
 
 class FreeLinksResponse(BaseModel):
-    accepted: List[AcceptedPlaylist] = Field(default_factory=list)
-    skipped: List[SkippedPlaylist] = Field(default_factory=list)
+    accepted: list[AcceptedPlaylist] = Field(default_factory=list)
+    skipped: list[SkippedPlaylist] = Field(default_factory=list)

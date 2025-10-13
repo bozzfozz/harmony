@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from dataclasses import dataclass
 import random
 import time
 import uuid
-from collections import deque
-from dataclasses import dataclass
 
 from app.logging import get_logger
 

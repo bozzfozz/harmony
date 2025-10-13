@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     Column,
@@ -16,7 +16,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     text,
@@ -28,7 +27,7 @@ from app.db import Base
 def _utcnow() -> datetime:
     """Return a timezone-aware UTC timestamp for ORM defaults."""
 
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class User(Base):
@@ -101,7 +100,7 @@ class Download(Base):
     last_error = Column(Text, nullable=True)
 
     @property
-    def job_id(self) -> Optional[str]:
+    def job_id(self) -> str | None:
         payload = self.request_payload or {}
         job_identifier = payload.get("job_id")
         if job_identifier is None:
@@ -109,7 +108,7 @@ class Download(Base):
         return str(job_identifier)
 
     @job_id.setter
-    def job_id(self, value: Optional[str]) -> None:
+    def job_id(self, value: str | None) -> None:
         payload = dict(self.request_payload or {})
         if value is None:
             payload.pop("job_id", None)

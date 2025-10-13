@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Union
 
 __all__ = ["make_idempotency_key"]
 
-_Part = Union[str, bytes]
+_Part = str | bytes
 
 
 def _normalise_part(part: _Part) -> bytes:

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from functools import lru_cache
 import re
 import unicodedata
-from functools import lru_cache
-from typing import Iterable
 
 try:  # pragma: no cover - optional dependency
     from unidecode import unidecode

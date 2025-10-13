@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -55,8 +55,8 @@ async def trigger_manual_sync(
     sources = ["spotify", "soulseek"]
     record_activity("sync", "sync_started", details={"mode": "manual", "sources": sources})
 
-    results: Dict[str, str] = {}
-    errors: Dict[str, str] = {}
+    results: dict[str, str] = {}
+    errors: dict[str, str] = {}
 
     if playlist_worker is not None:
         try:
@@ -71,7 +71,7 @@ async def trigger_manual_sync(
     errors["library_scan"] = "Library scan disabled"
     errors["auto_sync"] = "AutoSync worker disabled"
 
-    response: Dict[str, Any] = {"message": "Sync triggered", "results": results}
+    response: dict[str, Any] = {"message": "Sync triggered", "results": results}
     if errors:
         response["errors"] = errors
 

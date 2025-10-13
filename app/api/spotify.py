@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass
 import re
 import secrets
 import time
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -71,7 +72,7 @@ logger = get_logger(__name__)
 
 
 class PlaylistTracksPayload(BaseModel):
-    uris: List[str]
+    uris: list[str]
 
 
 class PlaylistReorderPayload(BaseModel):
@@ -80,7 +81,7 @@ class PlaylistReorderPayload(BaseModel):
 
 
 class TrackIdsPayload(BaseModel):
-    ids: List[str]
+    ids: list[str]
 
 
 class SpotifyStatusResponse(BaseModel):
@@ -349,13 +350,13 @@ def get_top_artists(
 
 @core_router.get("/recommendations", response_model=RecommendationsResponse)
 def get_recommendations(
-    seed_tracks: Optional[str] = Query(None),
-    seed_artists: Optional[str] = Query(None),
-    seed_genres: Optional[str] = Query(None),
+    seed_tracks: str | None = Query(None),
+    seed_artists: str | None = Query(None),
+    seed_genres: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> RecommendationsResponse:
-    def _split(value: Optional[str]) -> Optional[list[str]]:
+    def _split(value: str | None) -> list[str] | None:
         if value is None:
             return None
         result = [item.strip() for item in value.split(",") if item.strip()]
@@ -466,7 +467,7 @@ async def get_backfill_job(
 class FreeIngestRequest(BaseModel):
     playlist_links: list[str] = Field(default_factory=list)
     tracks: list[str] = Field(default_factory=list)
-    batch_hint: Optional[int] = Field(default=None, ge=1, le=10_000)
+    batch_hint: int | None = Field(default=None, ge=1, le=10_000)
 
     @field_validator("playlist_links", mode="before")
     @classmethod
@@ -496,15 +497,15 @@ class SubmissionAccepted(BaseModel):
 class SubmissionSkipped(BaseModel):
     playlists: int
     tracks: int
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class SubmissionResponse(BaseModel):
     ok: bool
-    job_id: Optional[str]
+    job_id: str | None
     accepted: SubmissionAccepted
     skipped: SubmissionSkipped
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 class JobCountsModel(BaseModel):
@@ -521,17 +522,17 @@ class JobStatusModel(BaseModel):
     counts: JobCountsModel
     accepted: SubmissionAccepted
     skipped: SubmissionSkipped
-    error: Optional[str] = None
+    error: str | None = None
     queued_tracks: int = 0
     failed_tracks: int = 0
     skipped_tracks: int = 0
-    skip_reason: Optional[str] = None
+    skip_reason: str | None = None
 
 
 class JobResponse(BaseModel):
     ok: bool
     job: JobStatusModel
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
@@ -545,7 +546,7 @@ def _build_submission_response(result: IngestSubmission) -> SubmissionResponse:
         tracks=result.accepted.tracks,
         batches=result.accepted.batches,
     )
-    error_payload: Optional[Dict[str, Any]] = None
+    error_payload: dict[str, Any] | None = None
     if result.error:
         code = "PARTIAL_SUCCESS" if result.error == "partial" else result.error.upper()
         error_payload = {"code": code, "message": result.error}
@@ -660,7 +661,7 @@ async def get_free_ingest_job(
     return JobResponse(ok=True, job=payload, error=None)
 
 
-def _parse_multipart_file(content_type: str, body: bytes) -> Tuple[str, bytes]:
+def _parse_multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:
     if "multipart/form-data" not in content_type.lower():
         raise ValueError("expected multipart/form-data request")
     boundary_match = re.search(r"boundary=([^;]+)", content_type, flags=re.IGNORECASE)
@@ -669,8 +670,8 @@ def _parse_multipart_file(content_type: str, body: bytes) -> Tuple[str, bytes]:
     boundary = boundary_match.group(1).strip().strip('"')
     if not boundary:
         raise ValueError("invalid multipart boundary")
-    delimiter = f"--{boundary}".encode("utf-8")
-    closing = f"--{boundary}--".encode("utf-8")
+    delimiter = f"--{boundary}".encode()
+    closing = f"--{boundary}--".encode()
     sections = body.split(delimiter)
     for section in sections:
         if not section or section.startswith(b"--"):
@@ -710,10 +711,10 @@ class NormalizedTrack(BaseModel):
     kind: str = Field(default="track")
     artist: str
     title: str
-    album: Optional[str] = None
-    release_year: Optional[int] = None
-    spotify_track_id: Optional[str] = None
-    spotify_album_id: Optional[str] = None
+    album: str | None = None
+    release_year: int | None = None
+    spotify_track_id: str | None = None
+    spotify_album_id: str | None = None
     query: str
 
     @field_validator("source", mode="before")
@@ -749,16 +750,16 @@ class NormalizedTrack(BaseModel):
 
 
 class ParseRequest(BaseModel):
-    lines: List[str] = Field(default_factory=list)
-    file_token: Optional[str] = None
+    lines: list[str] = Field(default_factory=list)
+    file_token: str | None = None
 
 
 class ParseResponse(BaseModel):
-    items: List[NormalizedTrack]
+    items: list[NormalizedTrack]
 
 
 class EnqueueRequest(BaseModel):
-    items: List[NormalizedTrack]
+    items: list[NormalizedTrack]
 
 
 class EnqueueResponse(BaseModel):
@@ -779,10 +780,10 @@ class UploadResponse(BaseModel):
 class _ParsedLine:
     artist: str
     title: str
-    album: Optional[str]
-    year: Optional[int]
-    spotify_track_id: Optional[str]
-    spotify_album_id: Optional[str]
+    album: str | None
+    year: int | None
+    spotify_track_id: str | None
+    spotify_album_id: str | None
 
 
 class _FreeImportFileStore:
@@ -798,7 +799,7 @@ class _FreeImportFileStore:
         self._cleanup()
         return token
 
-    def load(self, token: str) -> Optional[str]:
+    def load(self, token: str) -> str | None:
         self._cleanup()
         entry = self._entries.get(token)
         if entry is None:
@@ -824,7 +825,7 @@ def _get_file_store(request: Request) -> _FreeImportFileStore:
     return store
 
 
-def _split_lines(content: str) -> List[str]:
+def _split_lines(content: str) -> list[str]:
     return [line.strip() for line in content.replace("\r", "").split("\n")]
 
 
@@ -865,7 +866,7 @@ def _extract_spotify_tokens(text: str) -> tuple[str, str, str, str]:
     return track_id, album_id, playlist_id, " ".join(cleaned.split())
 
 
-def _parse_year(candidate: str) -> Optional[int]:
+def _parse_year(candidate: str) -> int | None:
     stripped = candidate.strip()
     if not stripped:
         return None
@@ -877,7 +878,7 @@ def _parse_year(candidate: str) -> Optional[int]:
     return year
 
 
-def _parse_metadata(text: str) -> Tuple[_ParsedLine, Optional[str]]:
+def _parse_metadata(text: str) -> tuple[_ParsedLine, str | None]:
     if not text:
         return _ParsedLine("", "", None, None, None, None), "Missing track details"
     segments = [segment.strip() for segment in text.split("|")]
@@ -891,7 +892,7 @@ def _parse_metadata(text: str) -> Tuple[_ParsedLine, Optional[str]]:
         )
     artist, title = parts[0].strip(), parts[1].strip()
     album = remainder[0].strip() if remainder else None
-    year: Optional[int] = None
+    year: int | None = None
     if len(remainder) >= 2:
         try:
             year = _parse_metadata_year_candidate(remainder[1])
@@ -917,7 +918,7 @@ def _parse_metadata(text: str) -> Tuple[_ParsedLine, Optional[str]]:
     return _ParsedLine(artist, title, album or None, year, None, None), None
 
 
-def _parse_metadata_year_candidate(value: str) -> Optional[int]:
+def _parse_metadata_year_candidate(value: str) -> int | None:
     candidate = value.strip()
     if not candidate:
         return None
@@ -927,7 +928,7 @@ def _parse_metadata_year_candidate(value: str) -> Optional[int]:
         raise ValueError(str(exc))
 
 
-def _build_query(artist: str, title: str, album: Optional[str], year: Optional[int]) -> str:
+def _build_query(artist: str, title: str, album: str | None, year: int | None) -> str:
     parts = [title, artist]
     if album:
         parts.append(album)
@@ -936,8 +937,8 @@ def _build_query(artist: str, title: str, album: Optional[str], year: Optional[i
     return " ".join(part for part in parts if part)
 
 
-def _generate_search_queries(track: NormalizedTrack) -> List[str]:
-    queries: List[str] = []
+def _generate_search_queries(track: NormalizedTrack) -> list[str]:
+    queries: list[str] = []
     primary = _build_query(track.artist, track.title, track.album, track.release_year)
     if primary:
         queries.append(primary)
@@ -956,13 +957,13 @@ def _generate_search_queries(track: NormalizedTrack) -> List[str]:
     return queries
 
 
-def _select_candidate(payload: Any) -> tuple[Optional[str], Optional[Dict[str, Any]]]:
+def _select_candidate(payload: Any) -> tuple[str | None, dict[str, Any] | None]:
     if not isinstance(payload, dict):
         return None, None
     candidates = payload.get("results")
     if not isinstance(candidates, list):
         candidates = []
-    best: tuple[int, int, int, str, Dict[str, Any]] | None = None
+    best: tuple[int, int, int, str, dict[str, Any]] | None = None
     for entry in candidates:
         if not isinstance(entry, dict):
             continue
@@ -1009,7 +1010,7 @@ def _create_download_record(
     *,
     track: NormalizedTrack,
     username: str,
-    file_info: Dict[str, Any],
+    file_info: dict[str, Any],
     priority: int,
     query: str,
 ) -> int:
@@ -1038,7 +1039,7 @@ def _create_download_record(
         return download.id
 
 
-def _ensure_worker(request: Request) -> Optional[SyncWorker]:
+def _ensure_worker(request: Request) -> SyncWorker | None:
     worker = getattr(request.app.state, "sync_worker", None)
     return worker if isinstance(worker, SyncWorker) else None
 
@@ -1074,7 +1075,7 @@ async def parse_import_lines(
     config: AppConfig = Depends(get_app_config),
 ) -> ParseResponse:
     store = _get_file_store(request)
-    combined_lines: List[str] = []
+    combined_lines: list[str] = []
     if payload.lines:
         combined_lines.extend(payload.lines)
     if payload.file_token:
@@ -1087,8 +1088,8 @@ async def parse_import_lines(
     if len(combined_lines) > config.spotify.free_import_max_lines:
         raise ValidationAppError("Too many lines submitted")
 
-    items: List[NormalizedTrack] = []
-    errors: List[Dict[str, Any]] = []
+    items: list[NormalizedTrack] = []
+    errors: list[dict[str, Any]] = []
     for index, raw_line in enumerate(combined_lines, start=1):
         line = raw_line.strip()
         if not line:
@@ -1099,7 +1100,10 @@ async def parse_import_lines(
             errors.append(
                 {
                     "line": index,
-                    "message": "Playlist URLs cannot be expanded in FREE mode. Provide the track list instead.",
+                    "message": (
+                        "Playlist URLs cannot be expanded in FREE mode. Provide "
+                        "the track list instead."
+                    ),
                 }
             )
             continue
@@ -1159,7 +1163,7 @@ async def enqueue_tracks(
     worker = _ensure_worker(request)
     queued = 0
     skipped = 0
-    seen: set[tuple[str, str, str, Optional[int]]] = set()
+    seen: set[tuple[str, str, str, int | None]] = set()
 
     for track in payload.items:
         key = (
@@ -1173,9 +1177,9 @@ async def enqueue_tracks(
             continue
         seen.add(key)
         search_queries = _generate_search_queries(track)
-        username: Optional[str] = None
-        candidate: Optional[Dict[str, Any]] = None
-        query_used: Optional[str] = None
+        username: str | None = None
+        candidate: dict[str, Any] | None = None
+        query_used: str | None = None
         for query in search_queries:
             if not query:
                 continue

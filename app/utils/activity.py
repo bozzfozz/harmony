@@ -3,21 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 from collections import OrderedDict, deque
+from collections.abc import Iterable, MutableMapping
 from dataclasses import asdict, dataclass, field, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
 from typing import (
     TYPE_CHECKING,
     Any,
-    Deque,
-    Dict,
-    Iterable,
-    List,
     Literal,
-    MutableMapping,
-    Optional,
-    Tuple,
 )
 
 from sqlalchemy import func
@@ -43,9 +38,9 @@ def _timestamp_to_utc_isoformat(value: datetime) -> str:
     """Return a UTC-normalised ISO 8601 representation ending with Z."""
 
     if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
-        normalised = value.replace(tzinfo=timezone.utc)
+        normalised = value.replace(tzinfo=UTC)
     else:
-        normalised = value.astimezone(timezone.utc)
+        normalised = value.astimezone(UTC)
     iso_value = normalised.isoformat()
     if iso_value.endswith("+00:00"):
         return f"{iso_value[:-6]}Z"
@@ -61,10 +56,10 @@ class ActivityEntry:
     status: str
     details: MutableMapping[str, object] = field(default_factory=dict)
 
-    def as_dict(self) -> Dict[str, object]:
+    def as_dict(self) -> dict[str, object]:
         """Return a serialisable representation of the entry."""
 
-        payload: Dict[str, object] = {
+        payload: dict[str, object] = {
             "timestamp": _timestamp_to_utc_isoformat(self.timestamp),
             "type": self.type,
             "status": self.status,
@@ -74,7 +69,7 @@ class ActivityEntry:
         return payload
 
 
-_PageCacheEntry = Tuple[Tuple["ActivityEntry", ...], int]
+_PageCacheEntry = tuple[tuple["ActivityEntry", ...], int]
 
 
 class ActivityManager:
@@ -84,12 +79,14 @@ class ActivityManager:
         if max_entries <= 0:
             raise ValueError("max_entries must be positive")
         self._max_entries = max_entries
-        self._entries: Deque[ActivityEntry] = deque(maxlen=max_entries)
+        self._entries: deque[ActivityEntry] = deque(maxlen=max_entries)
         self._lock = Lock()
         self._cache_initialized = False
-        self._page_cache: "OrderedDict[Tuple[int, int, Optional[str], Optional[str]], _PageCacheEntry]" = OrderedDict()
+        self._page_cache: OrderedDict[tuple[int, int, str | None, str | None], _PageCacheEntry] = (
+            OrderedDict()
+        )
         self._page_cache_limit = max(1, page_cache_limit)
-        self._response_cache: "ResponseCache | None" = None
+        self._response_cache: ResponseCache | None = None
         self._response_cache_paths: tuple[str, ...] = ()
 
     def _entry_from_event(self, event: ActivityEvent) -> ActivityEntry:
@@ -133,9 +130,9 @@ class ActivityManager:
         *,
         limit: int,
         offset: int,
-        type_filter: Optional[str],
-        status_filter: Optional[str],
-    ) -> Tuple[int, int, Optional[str], Optional[str]]:
+        type_filter: str | None,
+        status_filter: str | None,
+    ) -> tuple[int, int, str | None, str | None]:
         return (limit, offset, type_filter, status_filter)
 
     def record(
@@ -143,8 +140,8 @@ class ActivityManager:
         *,
         action_type: str,
         status: str,
-        timestamp: Optional[datetime] = None,
-        details: Optional[MutableMapping[str, object]] = None,
+        timestamp: datetime | None = None,
+        details: MutableMapping[str, object] | None = None,
     ) -> ActivityEntry:
         """Append a new entry to the feed, persist it and return it."""
 
@@ -170,7 +167,7 @@ class ActivityManager:
         self._invalidate_response_cache()
         return entry
 
-    def list(self) -> List[Dict[str, object]]:
+    def list(self) -> builtins.list[dict[str, object]]:
         """Return a copy of the cached entries in newest-first order."""
 
         self._ensure_cache()
@@ -182,9 +179,9 @@ class ActivityManager:
         *,
         limit: int = 50,
         offset: int = 0,
-        type_filter: Optional[str] = None,
-        status_filter: Optional[str] = None,
-    ) -> tuple[List[Dict[str, object]], int]:
+        type_filter: str | None = None,
+        status_filter: str | None = None,
+    ) -> tuple[builtins.list[dict[str, object]], int]:
         """Return entries directly from the database with paging/filter support."""
 
         filters = []
@@ -255,7 +252,7 @@ class ActivityManager:
 
     def configure_response_cache(
         self,
-        cache: "ResponseCache | None",
+        cache: ResponseCache | None,
         *,
         paths: Iterable[str] | None = None,
     ) -> None:
@@ -305,23 +302,23 @@ class ActivityManager:
                 seen.add(path)
         return tuple(ordered)
 
-    def serialise_event(self, event: ActivityEvent) -> Dict[str, object]:
+    def serialise_event(self, event: ActivityEvent) -> dict[str, object]:
         """Return the API representation for a stored activity event."""
 
         return self._entry_from_event(event).as_dict()
 
 
 def _serialise_details(
-    details: Optional[MutableMapping[str, object]] | None,
+    details: MutableMapping[str, object] | None | None,
 ) -> MutableMapping[str, object]:
     """Normalise detail payloads so they can be stored as JSON."""
 
     def _convert(value: Any) -> Any:
-        if value is None or isinstance(value, (str, int, float, bool)):
+        if value is None or isinstance(value, str | int | float | bool):
             return value
         if isinstance(value, dict):
             return {str(key): _convert(val) for key, val in value.items()}
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [_convert(item) for item in value]
         if isinstance(value, set):
             return sorted(_convert(item) for item in value)
@@ -346,9 +343,9 @@ def record_activity(
     action_type: str,
     status: str,
     *,
-    timestamp: Optional[datetime] = None,
-    details: Optional[MutableMapping[str, object]] = None,
-) -> Dict[str, object]:
+    timestamp: datetime | None = None,
+    details: MutableMapping[str, object] | None = None,
+) -> dict[str, object]:
     """Record an activity and return its serialised representation."""
 
     entry = activity_manager.record(
@@ -372,7 +369,7 @@ def _normalise_timestamp(value: datetime) -> datetime:
     """Ensure timestamps stored in worker events are naive UTC values."""
 
     if value.tzinfo is not None:
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.astimezone(UTC).replace(tzinfo=None)
     return value
 
 
@@ -380,13 +377,13 @@ def record_worker_event(
     worker: str,
     status: WorkerActivityStatus,
     *,
-    timestamp: Optional[datetime] = None,
-    details: Optional[MutableMapping[str, object]] = None,
-) -> Dict[str, object]:
+    timestamp: datetime | None = None,
+    details: MutableMapping[str, object] | None = None,
+) -> dict[str, object]:
     """Persist a worker lifecycle/health event in the activity feed."""
 
     event_time = _normalise_timestamp(timestamp or datetime.utcnow())
-    payload: Dict[str, object] = {"worker": worker}
+    payload: dict[str, object] = {"worker": worker}
     if details:
         payload.update(dict(details))
     payload.setdefault("timestamp", event_time)
@@ -396,8 +393,8 @@ def record_worker_event(
 def record_worker_started(
     worker: str,
     *,
-    timestamp: Optional[datetime] = None,
-) -> Dict[str, object]:
+    timestamp: datetime | None = None,
+) -> dict[str, object]:
     """Record a worker start or restart event depending on prior status."""
 
     _, stored_status = read_worker_status(worker)
@@ -405,7 +402,7 @@ def record_worker_started(
     status: WorkerActivityStatus = (
         WORKER_RESTARTED if previous in {WORKER_STOPPED, WORKER_STALE} else WORKER_STARTED
     )
-    extra: Dict[str, object] = {}
+    extra: dict[str, object] = {}
     if status == WORKER_RESTARTED and previous:
         extra["previous_status"] = previous
     return record_worker_event(worker, status, timestamp=timestamp, details=extra)
@@ -414,12 +411,12 @@ def record_worker_started(
 def record_worker_restarted(
     worker: str,
     *,
-    timestamp: Optional[datetime] = None,
-    reason: Optional[str] = None,
-) -> Dict[str, object]:
+    timestamp: datetime | None = None,
+    reason: str | None = None,
+) -> dict[str, object]:
     """Explicitly record a worker restart event with optional reason."""
 
-    extra: Dict[str, object] = {}
+    extra: dict[str, object] = {}
     if reason:
         extra["reason"] = reason
     return record_worker_event(worker, WORKER_RESTARTED, timestamp=timestamp, details=extra)
@@ -428,12 +425,12 @@ def record_worker_restarted(
 def record_worker_stopped(
     worker: str,
     *,
-    timestamp: Optional[datetime] = None,
-    reason: Optional[str] = None,
-) -> Dict[str, object]:
+    timestamp: datetime | None = None,
+    reason: str | None = None,
+) -> dict[str, object]:
     """Record a worker shutdown event in the activity feed."""
 
-    extra: Dict[str, object] = {}
+    extra: dict[str, object] = {}
     if reason:
         extra["reason"] = reason
     return record_worker_event(worker, WORKER_STOPPED, timestamp=timestamp, details=extra)
@@ -442,14 +439,14 @@ def record_worker_stopped(
 def record_worker_stale(
     worker: str,
     *,
-    last_seen: Optional[str],
+    last_seen: str | None,
     threshold_seconds: float,
-    elapsed_seconds: Optional[float] = None,
-    timestamp: Optional[datetime] = None,
-) -> Dict[str, object]:
+    elapsed_seconds: float | None = None,
+    timestamp: datetime | None = None,
+) -> dict[str, object]:
     """Record that a worker missed its heartbeat threshold."""
 
-    extra: Dict[str, object] = {"threshold_seconds": float(threshold_seconds)}
+    extra: dict[str, object] = {"threshold_seconds": float(threshold_seconds)}
     if last_seen:
         extra["last_seen"] = last_seen
     if elapsed_seconds is not None:

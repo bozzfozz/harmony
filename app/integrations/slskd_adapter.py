@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+import re
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+import unicodedata
 from urllib.parse import urlparse
 
 import httpx
@@ -54,7 +55,7 @@ def _coerce_int(value: Any) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     if isinstance(value, str):
         cleaned = value.strip()
@@ -69,7 +70,7 @@ def _coerce_int(value: Any) -> int | None:
 def _coerce_float(value: Any) -> float | None:
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
@@ -247,7 +248,7 @@ def _extract_metadata(entry: Mapping[str, Any]) -> Mapping[str, Any]:
     if year is not None:
         metadata["year"] = year
     genres_field = entry.get("genres")
-    if isinstance(genres_field, (list, tuple)):
+    if isinstance(genres_field, list | tuple):
         metadata["genres"] = [str(item) for item in genres_field if item]
     genre = _coerce_str(entry.get("genre"))
     if genre:
@@ -494,7 +495,7 @@ class SlskdAdapter(TrackProvider):
         }
 
         genres = metadata.get("genres")
-        if isinstance(genres, (list, tuple)):
+        if isinstance(genres, list | tuple):
             payload["genres"] = [str(item) for item in genres if item]
         elif genres:
             payload["genres"] = [str(genres)]

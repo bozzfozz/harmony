@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 import re
 import time
-from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Awaitable, Callable, Deque, Dict, Literal, Optional
+from typing import Literal
 from urllib.parse import urlparse, urlunparse
 
-import httpx
 from fastapi import status
+import httpx
 
 from app.config import get_env
 from app.errors import DependencyError, RateLimitedError, ValidationAppError
@@ -33,7 +34,7 @@ class SecretValidationSettings:
     slskd_base_url: str
 
     @classmethod
-    def from_env(cls) -> "SecretValidationSettings":
+    def from_env(cls) -> SecretValidationSettings:
         timeout_ms = _as_int(get_env("SECRET_VALIDATE_TIMEOUT_MS"), default=800)
         max_per_min = _as_int(get_env("SECRET_VALIDATE_MAX_PER_MIN"), default=3)
         base_url = (get_env("SLSKD_BASE_URL") or "").strip() or "http://localhost:5030"
@@ -51,8 +52,8 @@ class SecretValidationDetails:
     mode: ValidationMode
     valid: bool
     at: datetime
-    reason: Optional[str] = None
-    note: Optional[str] = None
+    reason: str | None = None
+    note: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -79,7 +80,7 @@ class SecretValidationResult:
         }
 
 
-ProviderValidator = Callable[[str], tuple[bool, Optional[str]]]
+ProviderValidator = Callable[[str], tuple[bool, str | None]]
 
 
 @dataclass(slots=True)
@@ -89,12 +90,12 @@ class ProviderDescriptor:
     name: str
     format_validator: ProviderValidator
     live_validator: Callable[
-        ["SecretValidationService", str, SecretStore],
+        [SecretValidationService, str, SecretStore],
         Awaitable[SecretValidationDetails],
     ]
 
 
-def _as_int(raw: Optional[str], *, default: int) -> int:
+def _as_int(raw: str | None, *, default: int) -> int:
     if raw is None:
         return default
     try:
@@ -104,10 +105,10 @@ def _as_int(raw: Optional[str], *, default: int) -> int:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-def _slskd_format(value: str) -> tuple[bool, Optional[str]]:
+def _slskd_format(value: str) -> tuple[bool, str | None]:
     normalized = value.strip()
     if not normalized:
         return False, "secret missing"
@@ -118,7 +119,7 @@ def _slskd_format(value: str) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def _spotify_secret_format(value: str) -> tuple[bool, Optional[str]]:
+def _spotify_secret_format(value: str) -> tuple[bool, str | None]:
     normalized = value.strip()
     if not normalized:
         return False, "secret missing"
@@ -132,7 +133,7 @@ def _spotify_secret_format(value: str) -> tuple[bool, Optional[str]]:
 class SecretValidationService:
     """Service executing live secret checks with deterministic fallbacks."""
 
-    _PROVIDERS: Dict[str, ProviderDescriptor] = {
+    _PROVIDERS: dict[str, ProviderDescriptor] = {
         "slskd_api_key": ProviderDescriptor(
             name="slskd_api_key",
             format_validator=_slskd_format,
@@ -155,10 +156,10 @@ class SecretValidationService:
         self._settings = settings or SecretValidationSettings.from_env()
         self._client_factory = client_factory or self._default_client_factory
         self._monotonic = monotonic or time.monotonic
-        self._request_history: Dict[str, Deque[float]] = {
+        self._request_history: dict[str, deque[float]] = {
             provider: deque() for provider in self._PROVIDERS
         }
-        self._locks: Dict[str, asyncio.Lock] = {
+        self._locks: dict[str, asyncio.Lock] = {
             provider: asyncio.Lock() for provider in self._PROVIDERS
         }
 
@@ -167,7 +168,7 @@ class SecretValidationService:
         provider: str,
         *,
         store: SecretStore,
-        override: Optional[str] = None,
+        override: str | None = None,
     ) -> SecretValidationResult:
         descriptor = self._PROVIDERS.get(provider)
         if descriptor is None:

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Iterable, Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, ContextManager, Dict, Iterable, Mapping, Optional
+from typing import Any
 
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -25,7 +27,7 @@ class MetadataJob:
     audio_path: Path
     payload: Mapping[str, Any]
     request_payload: Mapping[str, Any]
-    result: asyncio.Future[Dict[str, Any]]
+    result: asyncio.Future[dict[str, Any]]
 
 
 class MetadataWorker:
@@ -66,9 +68,9 @@ class MetadataWorker:
         *,
         payload: Mapping[str, Any] | None = None,
         request_payload: Mapping[str, Any] | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         loop = asyncio.get_running_loop()
-        future: asyncio.Future[Dict[str, Any]] = loop.create_future()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
         job = MetadataJob(
             download_id=download_id,
             audio_path=audio_path,
@@ -110,7 +112,7 @@ class MetadataWorker:
             finally:
                 self._queue.task_done()
 
-    async def _process_job(self, job: MetadataJob) -> Dict[str, Any]:
+    async def _process_job(self, job: MetadataJob) -> dict[str, Any]:
         metadata = await self._collect_metadata(job)
 
         try:
@@ -127,8 +129,8 @@ class MetadataWorker:
         self._persist_metadata(job.download_id, metadata)
         return metadata
 
-    async def _collect_metadata(self, job: MetadataJob) -> Dict[str, Any]:
-        metadata: Dict[str, Any] = {}
+    async def _collect_metadata(self, job: MetadataJob) -> dict[str, Any]:
+        metadata: dict[str, Any] = {}
         metadata.update(self._extract_metadata_from_payload(job.request_payload))
         metadata.update(self._extract_metadata_from_payload(job.payload))
 
@@ -173,14 +175,14 @@ class MetadataWorker:
     @staticmethod
     def _extract_metadata_from_payload(
         payload: Mapping[str, Any] | None,
-    ) -> Dict[str, str]:
-        metadata: Dict[str, str] = {}
+    ) -> dict[str, str]:
+        metadata: dict[str, str] = {}
         if not isinstance(payload, Mapping):
             return metadata
         keys = ("genre", "composer", "producer", "isrc", "artwork_url", "copyright")
         for key in keys:
             value = payload.get(key)
-            if isinstance(value, (str, int, float)):
+            if isinstance(value, str | int | float):
                 text = str(value).strip()
                 if text:
                     metadata[key] = text
@@ -192,7 +194,7 @@ class MetadataWorker:
         return metadata
 
     @staticmethod
-    def _extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
+    def _extract_spotify_id(payload: Mapping[str, Any] | None) -> str | None:
         if not isinstance(payload, Mapping):
             return None
         keys = (
@@ -225,7 +227,7 @@ class MetadataUpdateWorker:
         self,
         metadata_worker: MetadataWorker | None = None,
         *,
-        session_factory: Callable[[], ContextManager[Any]] = session_scope,
+        session_factory: Callable[[], AbstractContextManager[Any]] = session_scope,
         matching_worker: Any | None = None,
     ) -> None:
         self._metadata_worker = metadata_worker
@@ -236,7 +238,7 @@ class MetadataUpdateWorker:
         self._job_task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
-    async def start(self) -> Dict[str, Any]:
+    async def start(self) -> dict[str, Any]:
         """Start (or return) the current metadata refresh job status."""
 
         if self._metadata_worker is None:
@@ -247,7 +249,7 @@ class MetadataUpdateWorker:
                 return self._snapshot_locked()
 
         jobs = await asyncio.to_thread(self._collect_jobs)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if not jobs:
             async with self._status_lock:
@@ -288,7 +290,7 @@ class MetadataUpdateWorker:
 
         return await self.status()
 
-    async def stop(self) -> Dict[str, Any]:
+    async def stop(self) -> dict[str, Any]:
         """Request the active job to stop and return the latest status."""
 
         task: asyncio.Task[None] | None
@@ -305,7 +307,7 @@ class MetadataUpdateWorker:
         await task
         return await self.status()
 
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> dict[str, Any]:
         """Return a snapshot of the current worker state."""
 
         async with self._status_lock:
@@ -324,7 +326,7 @@ class MetadataUpdateWorker:
             logger.debug("Unable to inspect matching queue: %s", exc)
             return 0
 
-    def _snapshot_locked(self) -> Dict[str, Any]:
+    def _snapshot_locked(self) -> dict[str, Any]:
         data = dict(self._status)
         data["started_at"] = self._format_dt(data.get("started_at"))
         data["completed_at"] = self._format_dt(data.get("completed_at"))
@@ -360,7 +362,7 @@ class MetadataUpdateWorker:
                     await self._update_status(
                         status="stopped",
                         phase="Stop requested",
-                        completed_at=datetime.now(timezone.utc),
+                        completed_at=datetime.now(UTC),
                         current_download_id=None,
                     )
                     return
@@ -397,7 +399,7 @@ class MetadataUpdateWorker:
             await self._update_status(
                 status="completed",
                 phase="Refresh complete",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 current_download_id=None,
             )
         except Exception as exc:  # pragma: no cover - defensive logging
@@ -406,7 +408,7 @@ class MetadataUpdateWorker:
                 status="failed",
                 phase="Job failed",
                 error=str(exc),
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 current_download_id=None,
             )
         finally:
@@ -426,8 +428,8 @@ class MetadataUpdateWorker:
         return Path(candidate)
 
     @staticmethod
-    def _build_payload(record: Download) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {}
+    def _build_payload(record: Download) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
         for field_name in (
             "genre",
             "composer",
@@ -442,10 +444,10 @@ class MetadataUpdateWorker:
         return payload
 
     @staticmethod
-    def _format_dt(value: Any) -> Optional[str]:
+    def _format_dt(value: Any) -> str | None:
         if isinstance(value, datetime):
             if value.tzinfo is None:
-                value = value.replace(tzinfo=timezone.utc)
+                value = value.replace(tzinfo=UTC)
             return value.isoformat()
         return None
 

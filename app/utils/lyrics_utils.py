@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import base64
-import re
-import zlib
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+import re
+from typing import Any
+import zlib
 
 import httpx
 
@@ -23,7 +24,7 @@ SPOTIFY_CLIENT: Any | None = None
 MUSIXMATCH_ENDPOINT = "https://api.musixmatch.com/ws/1.1/matcher.subtitle.get"
 
 
-def fetch_spotify_lyrics(track_id: str) -> Optional[Dict[str, Any]]:
+def fetch_spotify_lyrics(track_id: str) -> dict[str, Any] | None:
     """Return lyric information for a Spotify track if available."""
 
     if not track_id:
@@ -43,7 +44,7 @@ def fetch_spotify_lyrics(track_id: str) -> Optional[Dict[str, Any]]:
     if not isinstance(payload, Mapping):
         return None
 
-    lyrics_payload: Dict[str, Any] = {}
+    lyrics_payload: dict[str, Any] = {}
     metadata = _extract_track_metadata(payload)
     if metadata:
         lyrics_payload.update(metadata)
@@ -62,7 +63,7 @@ def fetch_spotify_lyrics(track_id: str) -> Optional[Dict[str, Any]]:
     return lyrics_payload
 
 
-def convert_to_lrc(lyrics_data: Dict[str, Any]) -> str:
+def convert_to_lrc(lyrics_data: dict[str, Any]) -> str:
     """Convert lyric metadata into an LRC formatted string."""
 
     if not isinstance(lyrics_data, Mapping):
@@ -114,7 +115,7 @@ def save_lrc_file(path: Path, lrc: str) -> None:
 
 async def fetch_musixmatch_subtitles(
     track_info: Mapping[str, Any],
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Attempt to retrieve synchronised lyrics from the Musixmatch API."""
 
     api_key = get_env("MUSIXMATCH_API_KEY")
@@ -175,8 +176,8 @@ async def fetch_musixmatch_subtitles(
     }
 
 
-def _extract_track_metadata(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    metadata: Dict[str, Any] = {}
+def _extract_track_metadata(payload: Mapping[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
     metadata["title"] = _coerce_text(
         payload.get("name") or payload.get("title") or payload.get("track")
     )
@@ -210,7 +211,7 @@ def _extract_plain_lyrics(payload: Mapping[str, Any]) -> str:
     return ""
 
 
-def _extract_sync_lyrics(payload: Mapping[str, Any]) -> List[Tuple[float, str]]:
+def _extract_sync_lyrics(payload: Mapping[str, Any]) -> list[tuple[float, str]]:
     for key in (
         "sync_lyrics",
         "syncLyrics",
@@ -252,7 +253,7 @@ def _coerce_text(value: Any, fallback: str = "") -> str:
     if isinstance(value, str):
         text = value.strip()
         return text or fallback
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     return fallback
 
@@ -264,11 +265,11 @@ def _normalise_plain_lines(lyrics: str) -> Iterable[str]:
             yield cleaned
 
 
-def _normalise_sync_lines(data: Any) -> List[Tuple[float, str]]:
+def _normalise_sync_lines(data: Any) -> list[tuple[float, str]]:
     if isinstance(data, str):
         return _parse_lrc_payload(data)
 
-    entries: List[Tuple[float, str]] = []
+    entries: list[tuple[float, str]] = []
     if isinstance(data, Mapping):
         sequence = data.get("lines")
     else:
@@ -276,7 +277,7 @@ def _normalise_sync_lines(data: Any) -> List[Tuple[float, str]]:
 
     if isinstance(sequence, Sequence):
         for item in sequence:
-            timestamp: Optional[float] = None
+            timestamp: float | None = None
             text = ""
             if isinstance(item, Mapping):
                 text = _coerce_text(item.get("text") or item.get("line") or item.get("lyrics"))
@@ -295,9 +296,9 @@ def _normalise_sync_lines(data: Any) -> List[Tuple[float, str]]:
     return entries
 
 
-def _parse_lrc_payload(lrc: str) -> List[Tuple[float, str]]:
+def _parse_lrc_payload(lrc: str) -> list[tuple[float, str]]:
     pattern = re.compile(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\](.*)")
-    lines: List[Tuple[float, str]] = []
+    lines: list[tuple[float, str]] = []
     for raw_line in lrc.splitlines():
         match = pattern.match(raw_line.strip())
         if not match:
@@ -312,10 +313,10 @@ def _parse_lrc_payload(lrc: str) -> List[Tuple[float, str]]:
     return lines
 
 
-def _coerce_timestamp(value: Any) -> Optional[float]:
+def _coerce_timestamp(value: Any) -> float | None:
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         seconds = float(value)
         if seconds > 1000:  # treat as milliseconds
             seconds /= 1000.0

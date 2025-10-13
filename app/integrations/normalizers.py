@@ -37,7 +37,7 @@ def _coerce_int(value: Any) -> int | None:
         return None
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     if isinstance(value, str):
         cleaned = value.strip()
@@ -52,7 +52,7 @@ def _coerce_int(value: Any) -> int | None:
 def _coerce_float(value: Any) -> float | None:
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
@@ -69,7 +69,7 @@ def _extract_mapping(obj: Any) -> Mapping[str, Any] | None:
 
 
 def _iter_sequence(obj: Any) -> Iterable[Any]:
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return obj
     if obj is None:
         return ()
@@ -528,7 +528,7 @@ def normalize_slskd_candidate(
     if year is not None:
         metadata["year"] = year
     genres_field = payload.get("genres")
-    if isinstance(genres_field, (list, tuple)):
+    if isinstance(genres_field, list | tuple):
         genres = [str(item) for item in genres_field if _coerce_str(item)]
         if genres:
             metadata["genres"] = genres

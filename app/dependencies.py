@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import hmac
+from collections.abc import Awaitable, Callable, Generator
 from functools import lru_cache
+import hmac
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generator
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, Request, status
 from sqlalchemy.orm import Session
@@ -38,7 +39,7 @@ _oauth_service_lock = Lock()
 logger = get_logger(__name__)
 
 
-@lru_cache()
+@lru_cache
 def get_app_config() -> AppConfig:
     return load_config()
 
@@ -89,7 +90,7 @@ def set_oauth_store_instance(store: OAuthTransactionStore | None) -> None:
         _oauth_store_checked = store is not None
 
 
-@lru_cache()
+@lru_cache
 def get_spotify_client() -> SpotifyClient | None:
     config = get_app_config().spotify
     credentials = (
@@ -114,22 +115,22 @@ def get_spotify_client() -> SpotifyClient | None:
         return None
 
 
-@lru_cache()
+@lru_cache
 def get_soulseek_client() -> SoulseekClient:
     return SoulseekClient(get_app_config().soulseek)
 
 
-@lru_cache()
+@lru_cache
 def get_transfers_api() -> TransfersApi:
     return TransfersApi(get_soulseek_client())
 
 
-@lru_cache()
+@lru_cache
 def get_provider_registry() -> ProviderRegistry:
     return ProviderRegistry(config=get_app_config())
 
 
-@lru_cache()
+@lru_cache
 def get_provider_gateway() -> ProviderGateway:
     registry = get_provider_registry()
     registry.initialise()
@@ -138,7 +139,7 @@ def get_provider_gateway() -> ProviderGateway:
     return ProviderGateway(providers=providers, config=config)
 
 
-@lru_cache()
+@lru_cache
 def get_integration_service() -> IntegrationService:
     if _integration_service_override is not None:
         return _integration_service_override
@@ -151,7 +152,7 @@ def set_integration_service_override(service: IntegrationService | None) -> None
     get_integration_service.cache_clear()
 
 
-@lru_cache()
+@lru_cache
 def get_matching_engine() -> MusicMatchingEngine:
     return MusicMatchingEngine()
 
@@ -179,7 +180,7 @@ if TYPE_CHECKING:  # pragma: no cover - import hints only for static analysis
     from app.hdm.runtime import HdmRuntime
 
 
-def get_hdm_runtime(request: Request) -> "HdmRuntime":
+def get_hdm_runtime(request: Request) -> HdmRuntime:
     from app.hdm.runtime import HdmRuntime
 
     runtime = getattr(request.app.state, "hdm_runtime", None)
@@ -188,17 +189,17 @@ def get_hdm_runtime(request: Request) -> "HdmRuntime":
     return runtime
 
 
-def get_hdm_orchestrator(request: Request) -> "HdmOrchestrator":
+def get_hdm_orchestrator(request: Request) -> HdmOrchestrator:
     runtime = get_hdm_runtime(request)
     return runtime.orchestrator
 
 
-@lru_cache()
+@lru_cache
 def get_watchlist_service() -> WatchlistService:
     return WatchlistService()
 
 
-@lru_cache()
+@lru_cache
 def get_artist_service() -> ArtistService:
     return ArtistService()
 
@@ -254,7 +255,9 @@ def require_api_key(request: Request, *, force: bool = False) -> None:
 
     if not security.api_keys:
         logger.warning(
-            "API key authentication enabled but no keys configured",  # pragma: no cover - logging string
+            (
+                "API key authentication enabled but no keys configured"
+            ),  # pragma: no cover - logging string
             extra={
                 "event": "auth.misconfigured",
                 "path": request.url.path,

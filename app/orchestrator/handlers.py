@@ -3,25 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
-import random
-import statistics
-import time
+from collections.abc import Awaitable, Callable, Iterable, Mapping, MutableMapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timedelta
+import inspect
 from pathlib import Path
+import random
+import statistics
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
-    Callable,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    Optional,
     Protocol,
-    Sequence,
 )
 
 from sqlalchemy import Select, select
@@ -482,7 +476,7 @@ async def handle_matching(
         )
     if (
         not isinstance(candidates, Sequence)
-        or isinstance(candidates, (str, bytes))
+        or isinstance(candidates, str | bytes)
         or not candidates
     ):
         raise MatchingJobError(
@@ -931,7 +925,7 @@ async def _fetch_artist_candidates(
             ),
             deps.spotify_timeout_ms,
         )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         log_event(
             logger,
             "artist.fetch",
@@ -984,7 +978,7 @@ async def _fetch_artist_candidates(
                 asyncio.to_thread(deps.spotify_client.get_album_tracks, album_id),
                 deps.spotify_timeout_ms,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             log_event(
                 logger,
                 "artist.fetch",
@@ -1229,7 +1223,7 @@ async def _persist_candidates(
                 deps.soulseek_client.search(query),
                 deps.search_timeout_ms,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             log_event(
                 logger,
                 "artist.enqueue",
@@ -2471,7 +2465,7 @@ async def handle_sync_retry_success(
         )
 
 
-def extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> Optional[int]:
+def extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> int | None:
     for payload in payloads:
         if not isinstance(payload, Mapping):
             continue
@@ -2489,7 +2483,7 @@ def update_ingest_item_state(
     item_id: int,
     state: IngestItemState | str,
     *,
-    error: Optional[str],
+    error: str | None,
 ) -> None:
     with session_scope() as session:
         item = session.get(IngestItem, item_id)
@@ -2500,7 +2494,7 @@ def update_ingest_item_state(
         session.add(item)
 
 
-def extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
+def extract_spotify_id(payload: Mapping[str, Any] | None) -> str | None:
     if not isinstance(payload, Mapping):
         return None
     keys = (
@@ -2528,7 +2522,7 @@ def extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
 
 def extract_spotify_album_id(
     *payloads: Mapping[str, Any] | None,
-) -> Optional[str]:
+) -> str | None:
     for payload in payloads:
         if not isinstance(payload, Mapping):
             continue
@@ -2554,7 +2548,7 @@ def extract_spotify_album_id(
 
 def resolve_download_path(
     *payloads: Mapping[str, Any] | None,
-) -> Optional[str]:
+) -> str | None:
     for payload in payloads:
         if not isinstance(payload, Mapping):
             continue
@@ -2572,11 +2566,11 @@ def resolve_download_path(
     return None
 
 
-def _normalise_metadata_value(value: Any) -> Optional[str]:
+def _normalise_metadata_value(value: Any) -> str | None:
     if isinstance(value, str):
         text = value.strip()
         return text or None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         text = str(value).strip()
         return text or None
     if isinstance(value, Mapping):
@@ -2592,7 +2586,7 @@ def _normalise_metadata_value(value: Any) -> Optional[str]:
 def resolve_text(
     keys: Iterable[str],
     *payloads: Mapping[str, Any] | None,
-) -> Optional[str]:
+) -> str | None:
     for payload in payloads:
         if not isinstance(payload, Mapping):
             continue
@@ -2617,7 +2611,7 @@ def extract_basic_metadata(payload: Mapping[str, Any] | None) -> dict[str, str]:
     keys = ("genre", "composer", "producer", "isrc", "copyright", "artwork_url")
     for key in keys:
         value = payload.get(key)
-        if isinstance(value, (str, int, float)):
+        if isinstance(value, str | int | float):
             text = str(value).strip()
             if text:
                 metadata[key] = text
@@ -2708,7 +2702,7 @@ async def fanout_download_completion(
                         payload_copy: dict[str, Any] = dict(record.request_payload or {})
                         nested_metadata: dict[str, Any] = dict(payload_copy.get("metadata") or {})
                         for key, value in metadata.items():
-                            if isinstance(value, (str, int, float)):
+                            if isinstance(value, str | int | float):
                                 text = str(value).strip()
                                 if text and key not in nested_metadata:
                                     nested_metadata[key] = text
@@ -2813,7 +2807,7 @@ async def fanout_download_completion(
 
 
 async def enqueue_spotify_backfill(
-    service: "SpotifyDomainService",
+    service: SpotifyDomainService,
     *,
     max_items: int | None,
     expand_playlists: bool,
@@ -2829,20 +2823,20 @@ async def enqueue_spotify_backfill(
 
 
 def get_spotify_backfill_status(
-    service: "SpotifyDomainService", job_id: str
-) -> Optional[BackfillJobStatus]:
+    service: SpotifyDomainService, job_id: str
+) -> BackfillJobStatus | None:
     """Return the current status for the given Spotify backfill job."""
 
     return service.get_backfill_status(job_id)
 
 
 async def enqueue_spotify_free_import(
-    service: "SpotifyDomainService",
+    service: SpotifyDomainService,
     *,
     playlist_links: Sequence[str] | None,
     tracks: Sequence[str] | None,
     batch_hint: int | None,
-) -> "IngestSubmission":
+) -> IngestSubmission:
     """Schedule a Spotify FREE import job via the domain service."""
 
     return await service._submit_free_import(  # pragma: no cover - exercised via service tests
@@ -2852,9 +2846,7 @@ async def enqueue_spotify_free_import(
     )
 
 
-def get_spotify_free_import_job(
-    service: "SpotifyDomainService", job_id: str
-) -> Optional["JobStatus"]:
+def get_spotify_free_import_job(service: SpotifyDomainService, job_id: str) -> JobStatus | None:
     """Fetch the current state for a Spotify FREE import job."""
 
     return service.get_free_ingest_job(job_id)

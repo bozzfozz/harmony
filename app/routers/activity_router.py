@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import csv
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
-from typing import Any, Dict, Literal
+import json
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, Response
@@ -31,7 +31,7 @@ def list_activity(
     offset: int = Query(0, ge=0),
     type_filter: str | None = Query(None, alias="type"),
     status_filter: str | None = Query(None, alias="status"),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return the most recent activity entries from persistent storage."""
 
     items, total_count = activity_manager.fetch(
@@ -58,7 +58,7 @@ def _normalise_timestamp(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is not None:
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.astimezone(UTC).replace(tzinfo=None)
     return value
 
 
@@ -98,7 +98,7 @@ def _query_events(
         return list(query.all())
 
 
-def _serialise_csv(events: list[ActivityEvent], payload: list[Dict[str, Any]]) -> str:
+def _serialise_csv(events: list[ActivityEvent], payload: list[dict[str, Any]]) -> str:
     """Return CSV content for exported activity events."""
 
     buffer = StringIO()

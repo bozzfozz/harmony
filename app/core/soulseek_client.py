@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 from collections import deque
+from collections.abc import Sequence
+import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+import time
+from typing import Any
 
 import aiohttp
 
@@ -40,7 +41,7 @@ class SoulseekClient:
     def __init__(
         self,
         config: SoulseekConfig,
-        session: Optional[aiohttp.ClientSession] = None,
+        session: aiohttp.ClientSession | None = None,
     ) -> None:
         self._config = config
         self._session = session
@@ -61,7 +62,7 @@ class SoulseekClient:
         base = self._config.base_url.rstrip("/")
         return f"{base}/api/v0/{path.lstrip('/')}"
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self._config.api_key:
             headers["X-API-Key"] = self._config.api_key
@@ -86,7 +87,7 @@ class SoulseekClient:
         return int(round(jitter))
 
     @staticmethod
-    def _should_retry(error: "SoulseekClientError") -> bool:
+    def _should_retry(error: SoulseekClientError) -> bool:
         status = error.status_code
         if status is None:
             return True
@@ -174,17 +175,17 @@ class SoulseekClient:
         self,
         query: str,
         *,
-        min_bitrate: Optional[int] = None,
+        min_bitrate: int | None = None,
         format_priority: Sequence[str] | None = None,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"searchText": query, "filterResponses": True}
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"searchText": query, "filterResponses": True}
         if min_bitrate is not None:
             payload["minBitrate"] = int(min_bitrate)
         if format_priority:
             payload["preferredFormats"] = list(format_priority)
         return await self._request("POST", "searches", json=payload)
 
-    async def download(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def download(self, payload: dict[str, Any]) -> dict[str, Any]:
         username = payload.get("username")
         if not username:
             raise ValueError("username is required for download requests")
@@ -193,16 +194,16 @@ class SoulseekClient:
             raise ValueError("files must be a non-empty list")
         return await self._request("POST", f"transfers/downloads/{username}", json=downloads)
 
-    async def get_download_status(self) -> Dict[str, Any]:
+    async def get_download_status(self) -> dict[str, Any]:
         return await self._request("GET", "transfers/downloads")
 
-    async def cancel_download(self, download_id: str) -> Dict[str, Any]:
+    async def cancel_download(self, download_id: str) -> dict[str, Any]:
         return await self._request("DELETE", f"transfers/downloads/{download_id}")
 
-    async def get_download(self, download_id: str) -> Dict[str, Any]:
+    async def get_download(self, download_id: str) -> dict[str, Any]:
         return await self._request("GET", f"transfers/downloads/{download_id}")
 
-    async def get_all_downloads(self) -> List[Dict[str, Any]]:
+    async def get_all_downloads(self) -> list[dict[str, Any]]:
         result = await self._request("GET", "transfers/downloads/all")
         if isinstance(result, list):
             return result
@@ -211,13 +212,13 @@ class SoulseekClient:
             return payload if isinstance(payload, list) else [payload]
         return [result]
 
-    async def remove_completed_downloads(self) -> Dict[str, Any]:
+    async def remove_completed_downloads(self) -> dict[str, Any]:
         return await self._request("DELETE", "transfers/downloads/completed")
 
-    async def get_queue_position(self, download_id: str) -> Dict[str, Any]:
+    async def get_queue_position(self, download_id: str) -> dict[str, Any]:
         return await self._request("GET", f"transfers/downloads/{download_id}/queue")
 
-    async def get_download_metadata(self, download_id: str) -> Dict[str, Any]:
+    async def get_download_metadata(self, download_id: str) -> dict[str, Any]:
         try:
             payload = await self.get_download(download_id)
         except Exception as exc:  # pragma: no cover - defensive logging
@@ -227,14 +228,14 @@ class SoulseekClient:
         metadata = payload.get("metadata") if isinstance(payload, dict) else None
         if not isinstance(metadata, dict):
             return {}
-        normalised: Dict[str, Any] = {}
+        normalised: dict[str, Any] = {}
         for key, value in metadata.items():
             if value in {None, ""}:
                 continue
             normalised[str(key)] = value
         return normalised
 
-    async def enqueue(self, username: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def enqueue(self, username: str, files: list[dict[str, Any]]) -> dict[str, Any]:
         if not username:
             raise ValueError("username is required for enqueue requests")
         if not isinstance(files, list) or not files:
@@ -242,13 +243,13 @@ class SoulseekClient:
         payload = {"username": username, "files": files}
         return await self._request("POST", "transfers/enqueue", json=payload)
 
-    async def cancel_upload(self, upload_id: str) -> Dict[str, Any]:
+    async def cancel_upload(self, upload_id: str) -> dict[str, Any]:
         return await self._request("DELETE", f"transfers/uploads/{upload_id}")
 
-    async def get_upload(self, upload_id: str) -> Dict[str, Any]:
+    async def get_upload(self, upload_id: str) -> dict[str, Any]:
         return await self._request("GET", f"transfers/uploads/{upload_id}")
 
-    async def get_uploads(self) -> List[Dict[str, Any]]:
+    async def get_uploads(self) -> list[dict[str, Any]]:
         result = await self._request("GET", "transfers/uploads")
         if isinstance(result, list):
             return result
@@ -257,7 +258,7 @@ class SoulseekClient:
             return payload if isinstance(payload, list) else [payload]
         return [result]
 
-    async def get_all_uploads(self) -> List[Dict[str, Any]]:
+    async def get_all_uploads(self) -> list[dict[str, Any]]:
         result = await self._request("GET", "transfers/uploads/all")
         if isinstance(result, list):
             return result
@@ -266,35 +267,35 @@ class SoulseekClient:
             return payload if isinstance(payload, list) else [payload]
         return [result]
 
-    async def remove_completed_uploads(self) -> Dict[str, Any]:
+    async def remove_completed_uploads(self) -> dict[str, Any]:
         return await self._request("DELETE", "transfers/uploads/completed")
 
-    async def user_address(self, username: str) -> Dict[str, Any]:
+    async def user_address(self, username: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/address")
 
-    async def user_browse(self, username: str) -> Dict[str, Any]:
+    async def user_browse(self, username: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/browse")
 
-    async def user_browsing_status(self, username: str) -> Dict[str, Any]:
+    async def user_browsing_status(self, username: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/browsing-status")
 
-    async def user_directory(self, username: str, path: str) -> Dict[str, Any]:
+    async def user_directory(self, username: str, path: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/directory", params={"path": path})
 
-    async def user_info(self, username: str) -> Dict[str, Any]:
+    async def user_info(self, username: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/info")
 
-    async def user_status(self, username: str) -> Dict[str, Any]:
+    async def user_status(self, username: str) -> dict[str, Any]:
         return await self._request("GET", f"users/{username}/status")
 
     @staticmethod
-    def _normalise_username(value: Optional[str]) -> Optional[str]:
+    def _normalise_username(value: str | None) -> str | None:
         if value is None:
             return None
         stripped = str(value).strip()
         return stripped or None
 
-    def normalise_search_results(self, payload: Any) -> List[Dict[str, Any]]:
+    def normalise_search_results(self, payload: Any) -> list[dict[str, Any]]:
         """Flatten the raw search payload returned by slskd."""
 
         if payload is None:
@@ -313,7 +314,7 @@ class SoulseekClient:
         else:
             entries = []
 
-        normalised: list[Dict[str, Any]] = []
+        normalised: list[dict[str, Any]] = []
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
@@ -328,7 +329,7 @@ class SoulseekClient:
         return normalised
 
     @staticmethod
-    def _normalise_file(username: Optional[str], file_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_file(username: str | None, file_info: dict[str, Any]) -> dict[str, Any]:
         identifier = (
             file_info.get("id")
             or file_info.get("token")
@@ -350,8 +351,8 @@ class SoulseekClient:
         album_title = str(album) if album else None
 
         bitrate_value = file_info.get("bitrate")
-        bitrate: Optional[int] = None
-        if isinstance(bitrate_value, (int, float)):
+        bitrate: int | None = None
+        if isinstance(bitrate_value, int | float):
             bitrate = int(bitrate_value)
         elif isinstance(bitrate_value, str) and bitrate_value.isdigit():
             bitrate = int(bitrate_value)
@@ -376,14 +377,14 @@ class SoulseekClient:
         duration_value = (
             file_info.get("duration_ms") or file_info.get("duration") or file_info.get("length")
         )
-        duration_ms: Optional[int] = None
-        if isinstance(duration_value, (int, float)):
+        duration_ms: int | None = None
+        if isinstance(duration_value, int | float):
             duration_ms = int(duration_value)
         elif isinstance(duration_value, str) and duration_value.isdigit():
             duration_ms = int(duration_value)
 
         year_value = file_info.get("year") or file_info.get("date")
-        year: Optional[int] = None
+        year: int | None = None
         if isinstance(year_value, int):
             year = year_value
         elif isinstance(year_value, str) and year_value.isdigit():
@@ -398,7 +399,7 @@ class SoulseekClient:
             genres = []
 
         size_value = file_info.get("size")
-        if isinstance(size_value, (int, float)):
+        if isinstance(size_value, int | float):
             size = int(size_value)
         elif isinstance(size_value, str) and size_value.isdigit():
             size = int(size_value)

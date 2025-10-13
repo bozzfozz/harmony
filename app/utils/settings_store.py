@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Mapping, Optional
 
 from sqlalchemy import select
 
@@ -31,7 +31,7 @@ def write_setting(key: str, value: str) -> None:
             setting.updated_at = now
 
 
-def read_setting(key: str) -> Optional[str]:
+def read_setting(key: str) -> str | None:
     """Return the stored value for ``key`` if present."""
 
     with session_scope() as session:

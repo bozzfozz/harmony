@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, MutableMapping
 import csv
 import io
-from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional
+from typing import Any
 
 from app.errors import ValidationAppError
 from app.models import Download
 from app.schemas import DownloadEntryResponse
 
-STATUS_FILTERS: Dict[str, set[str]] = {
+STATUS_FILTERS: dict[str, set[str]] = {
     "running": {"running", "downloading"},
     "in_progress": {"running", "downloading"},
     "queued": {"queued"},
@@ -55,10 +56,10 @@ def resolve_status_filter(value: str) -> set[str]:
     return states
 
 
-def _coerce_int(value: Any) -> Optional[int]:
+def _coerce_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     if isinstance(value, str):
         try:
@@ -71,7 +72,7 @@ def _coerce_int(value: Any) -> Optional[int]:
 def _is_truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return value != 0
     if isinstance(value, str):
         normalised = value.strip().lower()
@@ -94,11 +95,11 @@ def determine_priority(file_info: MutableMapping[str, Any]) -> int:
     return 0
 
 
-def coerce_priority(value: Any) -> Optional[int]:
+def coerce_priority(value: Any) -> int | None:
     return _coerce_int(value)
 
 
-def serialise_download(download: Download) -> Dict[str, Any]:
+def serialise_download(download: Download) -> dict[str, Any]:
     response = DownloadEntryResponse.model_validate(download).model_dump()
     response["username"] = download.username
     response["priority"] = download.priority

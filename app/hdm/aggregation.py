@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Iterable
+from datetime import UTC, datetime
+import math
+from typing import Any
 
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -149,7 +150,7 @@ class _BatchState:
     batch_id: str
     requested_by: str
     items_total: int
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     pending_items: int = field(init=False)
     retries: int = 0
@@ -236,7 +237,7 @@ class DownloadBatchAggregator:
                 events=(
                     ItemEvent(
                         name="duplicate.skipped",
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         meta={"reason": reason},
                     ),
                 ),
@@ -278,7 +279,7 @@ class DownloadBatchAggregator:
             events.append(
                 ItemEvent(
                     name="failure.retry",
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     meta={
                         "attempt": attempt,
                         "retry_after_seconds": retry_after,
@@ -322,7 +323,7 @@ class DownloadBatchAggregator:
     ) -> None:
         event_list = list(events)
         names = {event.name for event in event_list}
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if "download.completed" not in names:
             event_list.append(
                 ItemEvent(
@@ -402,7 +403,7 @@ class DownloadBatchAggregator:
                 events=(
                     ItemEvent(
                         name="download.failed",
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         meta={"error": str(error), "attempts": attempts},
                     ),
                 ),
@@ -437,7 +438,7 @@ class DownloadBatchAggregator:
     async def _finalise(self, state: _BatchState) -> None:
         if state.summary is not None:
             return
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         durations = list(state.durations)
         p95 = _percentile(durations, 0.95)
         p99 = _percentile(durations, 0.99)

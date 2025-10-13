@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, ClassVar, Dict, Optional, Self
+from typing import Any, ClassVar, Self
 from urllib.parse import urlparse
 
 from pydantic import (
@@ -22,7 +22,7 @@ from pydantic_core import core_schema
 class _ValidatedString(str):
     """Base helper implementing Pydantic v2 hooks for string wrappers."""
 
-    _json_schema_extra: ClassVar[Dict[str, Any]] = {"type": "string"}
+    _json_schema_extra: ClassVar[dict[str, Any]] = {"type": "string"}
 
     @classmethod
     def __get_pydantic_core_schema__(
@@ -46,13 +46,13 @@ class _ValidatedString(str):
 class ID(_ValidatedString):
     """Identifier exposed via the public API."""
 
-    _json_schema_extra: ClassVar[Dict[str, Any]] = {"type": "string", "title": "ID"}
+    _json_schema_extra: ClassVar[dict[str, Any]] = {"type": "string", "title": "ID"}
 
     @classmethod
-    def validate(cls, value: Any) -> "ID":
+    def validate(cls, value: Any) -> ID:
         if isinstance(value, cls):
             return value
-        if isinstance(value, (bytes, bytearray)):
+        if isinstance(value, bytes | bytearray):
             value = value.decode()
         if not isinstance(value, str):
             raise TypeError("identifier must be a string")
@@ -65,17 +65,17 @@ class ID(_ValidatedString):
 class URI(_ValidatedString):
     """Simple URI wrapper performing light validation."""
 
-    _json_schema_extra: ClassVar[Dict[str, Any]] = {
+    _json_schema_extra: ClassVar[dict[str, Any]] = {
         "type": "string",
         "format": "uri",
         "title": "URI",
     }
 
     @classmethod
-    def validate(cls, value: Any) -> "URI":
+    def validate(cls, value: Any) -> URI:
         if isinstance(value, cls):
             return value
-        if isinstance(value, (bytes, bytearray)):
+        if isinstance(value, bytes | bytearray):
             value = value.decode()
         if not isinstance(value, str):
             raise TypeError("uri must be a string")
@@ -91,21 +91,21 @@ class URI(_ValidatedString):
 class ISODateTime(_ValidatedString):
     """Datetime serialised to ISO8601 string."""
 
-    _json_schema_extra: ClassVar[Dict[str, Any]] = {
+    _json_schema_extra: ClassVar[dict[str, Any]] = {
         "type": "string",
         "format": "date-time",
         "title": "ISODateTime",
     }
 
     @classmethod
-    def validate(cls, value: Any) -> "ISODateTime":
+    def validate(cls, value: Any) -> ISODateTime:
         if isinstance(value, cls):
             return value
         if isinstance(value, datetime):
             if value.tzinfo is None:
-                value = value.replace(tzinfo=timezone.utc)
+                value = value.replace(tzinfo=UTC)
             return cls(value.isoformat())
-        if isinstance(value, (bytes, bytearray)):
+        if isinstance(value, bytes | bytearray):
             value = value.decode()
         if not isinstance(value, str):
             raise TypeError("datetime must be string or datetime")
@@ -118,7 +118,7 @@ class ISODateTime(_ValidatedString):
         except ValueError as exc:  # pragma: no cover - defensive
             raise ValueError("invalid ISO 8601 datetime") from exc
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         return cls(parsed.isoformat())
 
 
@@ -153,10 +153,8 @@ class ProblemDetail(BaseModel):
 
     code: str
     message: str
-    details: Optional[Dict[str, Any]] = None
-    timestamp: ISODateTime = Field(
-        default_factory=lambda: ISODateTime.validate(datetime.now(timezone.utc))
-    )
+    details: dict[str, Any] | None = None
+    timestamp: ISODateTime = Field(default_factory=lambda: ISODateTime.validate(datetime.now(UTC)))
 
     @field_validator("code", "message")
     @classmethod
@@ -168,7 +166,7 @@ class ProblemDetail(BaseModel):
 
     @field_validator("details", mode="before")
     @classmethod
-    def _normalise_details(cls, value: Any) -> Optional[Dict[str, Any]]:
+    def _normalise_details(cls, value: Any) -> dict[str, Any] | None:
         if value is None:
             return None
         if isinstance(value, dict):

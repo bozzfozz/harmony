@@ -3,21 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import random
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import random
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
 )
 
 from sqlalchemy.orm import Session
@@ -29,6 +21,7 @@ from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
+    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
     extract_basic_metadata,
     extract_ingest_item_id,
     extract_spotify_album_id,
@@ -41,9 +34,6 @@ from app.orchestrator.handlers import (
     resolve_text,
     truncate_error,
     update_ingest_item_state,
-)
-from app.orchestrator.handlers import (
-    calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
 )
 from app.services.retry_policy_provider import RetryPolicy, get_retry_policy_provider
 from app.utils.activity import (
@@ -72,11 +62,11 @@ from app.workers.persistence import (
 enqueue = enqueue_async
 
 AsyncEnqueue = Callable[[str, Mapping[str, Any]], Awaitable[QueueJobDTO]]
-AsyncFetchReady = Callable[[str], Awaitable[List[QueueJobDTO]]]
-AsyncLease = Callable[[int, str, Optional[int]], Awaitable[QueueJobDTO | None]]
-AsyncComplete = Callable[[int, str, Optional[Mapping[str, Any]]], Awaitable[bool]]
+AsyncFetchReady = Callable[[str], Awaitable[list[QueueJobDTO]]]
+AsyncLease = Callable[[int, str, int | None], Awaitable[QueueJobDTO | None]]
+AsyncComplete = Callable[[int, str, Mapping[str, Any] | None], Awaitable[bool]]
 AsyncFail = Callable[
-    [int, str, Optional[str], Optional[int], Optional[datetime], Optional[str]],
+    [int, str, str | None, int | None, datetime | None, str | None],
     Awaitable[bool],
 ]
 AsyncRelease = Callable[[str], Awaitable[None]]
@@ -186,8 +176,8 @@ class SyncWorker:
         soulseek_client: SoulseekClient,
         *,
         base_poll_interval: float = 2.0,
-        idle_poll_interval: Optional[float] = None,
-        concurrency: Optional[int] = None,
+        idle_poll_interval: float | None = None,
+        concurrency: int | None = None,
         metadata_worker: MetadataWorker | None = None,
         artwork_worker: ArtworkWorker | None = None,
         lyrics_worker: LyricsWorker | None = None,
@@ -203,12 +193,12 @@ class SyncWorker:
         self._artwork = artwork_worker
         self._lyrics = lyrics_worker
         self._job_type = "sync"
-        self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[QueueJobDTO]]] = (
+        self._queue: asyncio.PriorityQueue[tuple[int, int, QueueJobDTO | None]] = (
             asyncio.PriorityQueue()
         )
         self._enqueue_sequence = 0
         self._manager_task: asyncio.Task | None = None
-        self._worker_tasks: List[asyncio.Task] = []
+        self._worker_tasks: list[asyncio.Task] = []
         self._poll_task: asyncio.Task | None = None
         self._running = asyncio.Event()
         self._stop_event = asyncio.Event()
@@ -216,7 +206,7 @@ class SyncWorker:
         self._idle_poll_interval = idle_poll_interval or DEFAULT_IDLE_POLL
         self._current_poll_interval = base_poll_interval
         self._concurrency = max(1, concurrency or self._resolve_concurrency())
-        self._cancelled_downloads: Set[int] = set()
+        self._cancelled_downloads: set[int] = set()
         self._cancel_lock = asyncio.Lock()
         self._music_dir = Path(get_env("MUSIC_DIR") or "./music").expanduser()
         self._retry_provider = get_retry_policy_provider()
@@ -263,11 +253,11 @@ class SyncWorker:
         self._retry_config = self._retry_provider.get_retry_policy("sync")
 
     @staticmethod
-    def _extract_file_priority(file_info: Dict[str, Any]) -> int:
+    def _extract_file_priority(file_info: dict[str, Any]) -> int:
         return SyncWorker._coerce_priority(file_info.get("priority"))
 
     @property
-    def queue(self) -> asyncio.PriorityQueue[Tuple[int, int, Optional[QueueJobDTO]]]:
+    def queue(self) -> asyncio.PriorityQueue[tuple[int, int, QueueJobDTO | None]]:
         return self._queue
 
     def is_running(self) -> bool:
@@ -308,7 +298,7 @@ class SyncWorker:
             finally:
                 self._manager_task = None
 
-    async def enqueue(self, job: Dict[str, Any]) -> None:
+    async def enqueue(self, job: dict[str, Any]) -> None:
         """Submit a download job for processing."""
 
         record = await self._enqueue_job(self._job_type, job)
@@ -432,9 +422,7 @@ class SyncWorker:
             finally:
                 self._queue.task_done()
 
-    async def _maybe_take_preempting_job(
-        self, current_priority: int
-    ) -> Optional[_PriorityQueueEntry]:
+    async def _maybe_take_preempting_job(self, current_priority: int) -> _PriorityQueueEntry | None:
         await asyncio.sleep(0)
         candidate = self._peek_higher_priority_entry(current_priority)
         if candidate is None:
@@ -487,7 +475,7 @@ class SyncWorker:
             self._current_poll_interval = interval
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _execute_job(self, job: QueueJobDTO, priority: int) -> bool:
@@ -617,9 +605,7 @@ class SyncWorker:
         )
         return True
 
-    async def _wait_for_higher_priority(
-        self, current_priority: int
-    ) -> Optional[_PriorityQueueEntry]:
+    async def _wait_for_higher_priority(self, current_priority: int) -> _PriorityQueueEntry | None:
         candidate = self._peek_higher_priority_entry(current_priority)
         if candidate is not None:
             return candidate
@@ -633,12 +619,12 @@ class SyncWorker:
             await asyncio.wait_for(
                 self._priority_event.wait(), timeout=self._priority_reorder_window
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return self._peek_higher_priority_entry(current_priority)
 
         return self._peek_higher_priority_entry(current_priority)
 
-    def _peek_queue_entry(self) -> Optional[_PriorityQueueEntry]:
+    def _peek_queue_entry(self) -> _PriorityQueueEntry | None:
         if self._queue.empty():
             return None
         try:
@@ -649,7 +635,7 @@ class SyncWorker:
             return None
         return _PriorityQueueEntry(queue_priority, sequence, job)
 
-    def _peek_higher_priority_entry(self, current_priority: int) -> Optional[_PriorityQueueEntry]:
+    def _peek_higher_priority_entry(self, current_priority: int) -> _PriorityQueueEntry | None:
         candidate = self._peek_queue_entry()
         if candidate is None:
             return None
@@ -688,14 +674,14 @@ class SyncWorker:
             next_priority,
         )
 
-    async def _process_job(self, job: Dict[str, Any]) -> None:
+    async def _process_job(self, job: dict[str, Any]) -> None:
         username = job.get("username")
         files = job.get("files", [])
         if not username or not files:
             logger.warning("Invalid download job received: %s", job)
             return
 
-        filtered_files: List[Dict[str, Any]] = []
+        filtered_files: list[dict[str, Any]] = []
         async with self._cancel_lock:
             for file_info in files:
                 identifier = file_info.get("download_id") or file_info.get("id")
@@ -725,14 +711,14 @@ class SyncWorker:
 
     async def _handle_download_failure(
         self,
-        job: Dict[str, Any],
-        files: List[Dict[str, Any]],
+        job: dict[str, Any],
+        files: list[dict[str, Any]],
         error: Exception | str,
     ) -> None:
         deps = self._build_handler_deps()
         await handle_sync_download_failure(job, files, deps, error)
 
-    async def _handle_retry_success(self, files: Iterable[Dict[str, Any]]) -> None:
+    async def _handle_retry_success(self, files: Iterable[dict[str, Any]]) -> None:
         deps = self._build_handler_deps()
         await handle_sync_retry_success(files, deps)
 
@@ -745,7 +731,7 @@ class SyncWorker:
             logger.warning("Unable to obtain Soulseek download status: %s", exc)
             return False
 
-        downloads: Iterable[Dict[str, Any]]
+        downloads: Iterable[dict[str, Any]]
         if isinstance(response, dict):
             downloads = response.get("downloads", []) or []
         elif isinstance(response, list):
@@ -757,15 +743,15 @@ class SyncWorker:
         async with self._cancel_lock:
             pending_cancels = set(self._cancelled_downloads)
 
-        to_cancel: List[int] = []
-        completed_downloads: List[Tuple[int, Dict[str, Any]]] = []
+        to_cancel: list[int] = []
+        completed_downloads: list[tuple[int, dict[str, Any]]] = []
 
         def _update_progress(
             session: Session,
-        ) -> tuple[bool, List[int], List[Tuple[int, Dict[str, Any]]]]:
+        ) -> tuple[bool, list[int], list[tuple[int, dict[str, Any]]]]:
             active_flag = False
-            to_cancel_local: List[int] = []
-            completed_local: List[Tuple[int, Dict[str, Any]]] = []
+            to_cancel_local: list[int] = []
+            completed_local: list[tuple[int, dict[str, Any]]] = []
 
             for payload in downloads:
                 download_id = payload.get("download_id") or payload.get("id")
@@ -845,12 +831,12 @@ class SyncWorker:
     def _record_heartbeat(self) -> None:
         record_worker_heartbeat("sync")
 
-    async def _handle_download_completion(self, download_id: int, payload: Dict[str, Any]) -> None:
+    async def _handle_download_completion(self, download_id: int, payload: dict[str, Any]) -> None:
         deps = self._build_handler_deps()
         await fanout_download_completion(download_id, payload, deps)
 
     @staticmethod
-    def _extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> Optional[int]:
+    def _extract_ingest_item_id(*payloads: Mapping[str, Any] | None) -> int | None:
         return extract_ingest_item_id(*payloads)
 
     @staticmethod
@@ -858,32 +844,32 @@ class SyncWorker:
         item_id: int,
         state: IngestItemState | str,
         *,
-        error: Optional[str],
+        error: str | None,
     ) -> None:
         update_ingest_item_state(item_id, state, error=error)
 
     @staticmethod
-    def _extract_spotify_id(payload: Mapping[str, Any] | None) -> Optional[str]:
+    def _extract_spotify_id(payload: Mapping[str, Any] | None) -> str | None:
         return extract_spotify_id(payload)
 
     @staticmethod
     def _extract_spotify_album_id(
         *payloads: Mapping[str, Any] | None,
-    ) -> Optional[str]:
+    ) -> str | None:
         return extract_spotify_album_id(*payloads)
 
     @staticmethod
     def _resolve_download_path(
         *payloads: Mapping[str, Any] | None,
-    ) -> Optional[str]:
+    ) -> str | None:
         return resolve_download_path(*payloads)
 
     @staticmethod
-    def _normalise_metadata_value(value: Any) -> Optional[str]:
+    def _normalise_metadata_value(value: Any) -> str | None:
         if isinstance(value, str):
             text = value.strip()
             return text or None
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             text = str(value).strip()
             return text or None
         if isinstance(value, Mapping):
@@ -899,9 +885,9 @@ class SyncWorker:
     def _resolve_text(
         keys: Iterable[str],
         *payloads: Mapping[str, Any] | None,
-    ) -> Optional[str]:
+    ) -> str | None:
         return resolve_text(keys, *payloads)
 
     @staticmethod
-    def _extract_basic_metadata(payload: Mapping[str, Any] | None) -> Dict[str, str]:
+    def _extract_basic_metadata(payload: Mapping[str, Any] | None) -> dict[str, str]:
         return extract_basic_metadata(payload)

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
@@ -16,14 +17,14 @@ class SearchQuery(BaseModel):
 
     query: str = Field(..., description="Free-text search query")
     type: str = Field(default="mixed", description="Result type filter")
-    sources: List[SourceEnum] = Field(
+    sources: list[SourceEnum] = Field(
         default_factory=lambda: [SourceEnum.SPOTIFY, SourceEnum.SOULSEEK]
     )
-    genre: Optional[str] = None
-    year_from: Optional[int] = Field(default=None, ge=1900, le=2099)
-    year_to: Optional[int] = Field(default=None, ge=1900, le=2099)
-    min_bitrate: Optional[int] = Field(default=None, ge=0)
-    format_priority: Optional[List[str]] = None
+    genre: str | None = None
+    year_from: int | None = Field(default=None, ge=1900, le=2099)
+    year_to: int | None = Field(default=None, ge=1900, le=2099)
+    min_bitrate: int | None = Field(default=None, ge=0)
+    format_priority: list[str] | None = None
     limit: int = Field(default=25, ge=1)
     offset: int = Field(default=0, ge=0)
 
@@ -37,7 +38,7 @@ class SearchQuery(BaseModel):
 
     @field_validator("sources", mode="before")
     @classmethod
-    def _normalise_sources(cls, value: Optional[Sequence[str]]) -> List[SourceEnum]:
+    def _normalise_sources(cls, value: Sequence[str] | None) -> list[SourceEnum]:
         if value in (None, "", []):
             return [SourceEnum.SPOTIFY, SourceEnum.SOULSEEK]
         normalised: list[SourceEnum] = []
@@ -55,7 +56,7 @@ class SearchQuery(BaseModel):
 
     @field_validator("genre")
     @classmethod
-    def _strip_optional(cls, value: Optional[str]) -> Optional[str]:
+    def _strip_optional(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
@@ -63,7 +64,7 @@ class SearchQuery(BaseModel):
 
     @field_validator("format_priority", mode="before")
     @classmethod
-    def _normalise_formats(cls, value: Optional[Sequence[str]]) -> Optional[List[str]]:
+    def _normalise_formats(cls, value: Sequence[str] | None) -> list[str] | None:
         if value in (None, ""):
             return None
         formatted: list[str] = []
@@ -77,7 +78,7 @@ class SearchQuery(BaseModel):
 
     @field_validator("year_to")
     @classmethod
-    def _validate_year_range(cls, value: Optional[int], info: ValidationInfo) -> Optional[int]:
+    def _validate_year_range(cls, value: int | None, info: ValidationInfo) -> int | None:
         year_from = info.data.get("year_from") if info.data else None
         if year_from is not None and value is not None and year_from > value:
             raise ValueError("year_from must be less than or equal to year_to")
@@ -93,17 +94,17 @@ class SearchItem(BaseModel):
     id: str
     source: SourceEnum
     title: str
-    artist: Optional[str] = None
-    album: Optional[str] = None
-    year: Optional[int] = None
-    genres: List[str] = Field(default_factory=list)
-    bitrate: Optional[int] = None
-    score: Optional[float] = Field(default=None, ge=0.0)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    artist: str | None = None
+    album: str | None = None
+    year: int | None = None
+    genres: list[str] = Field(default_factory=list)
+    bitrate: int | None = None
+    score: float | None = Field(default=None, ge=0.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("metadata", mode="before")
     @classmethod
-    def _ensure_metadata(cls, value: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    def _ensure_metadata(cls, value: Mapping[str, Any] | None) -> dict[str, Any]:
         if value is None:
             return {}
         return dict(value)
@@ -114,11 +115,11 @@ class SearchResponse(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    items: List[SearchItem]
+    items: list[SearchItem]
     paging: Paging
-    sources: List[SourceEnum]
+    sources: list[SourceEnum]
     status: str = Field(default="ok")
-    failures: Dict[str, str] = Field(default_factory=dict)
+    failures: dict[str, str] = Field(default_factory=dict)
 
 
 __all__ = ["SearchItem", "SearchQuery", "SearchResponse"]

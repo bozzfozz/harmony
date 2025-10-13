@@ -1,7 +1,8 @@
-import os
-import sys
 from collections.abc import Iterator
+import importlib
+import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -9,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.config import override_runtime_env
-from app.db import reset_engine_for_tests
+override_runtime_env = importlib.import_module("app.config").override_runtime_env
+reset_engine_for_tests = importlib.import_module("app.db").reset_engine_for_tests
 
 
 @pytest.fixture(autouse=True)

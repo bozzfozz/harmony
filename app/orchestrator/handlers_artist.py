@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+import json
 from time import perf_counter
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any
 
 from app.config import get_env
 from app.dependencies import get_app_config
@@ -52,7 +53,7 @@ def _coerce_bool(value: object, default: bool = False) -> bool:
         return default
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return bool(value)
     if isinstance(value, str):
         lowered = value.strip().lower()
@@ -278,7 +279,7 @@ def _resolve_providers(
     fallback_source: str,
 ) -> tuple[str, ...]:
     requested = payload.get("providers")
-    if isinstance(requested, Sequence) and not isinstance(requested, (str, bytes)):
+    if isinstance(requested, Sequence) and not isinstance(requested, str | bytes):
         cleaned: list[str] = []
         for value in requested:
             text = str(value).strip()
@@ -317,9 +318,9 @@ def _is_retryable_error(error: ProviderGatewayError) -> bool:
     return isinstance(
         error,
         (
-            ProviderGatewayTimeoutError,
-            ProviderGatewayRateLimitedError,
-            ProviderGatewayDependencyError,
+            ProviderGatewayTimeoutError
+            | ProviderGatewayRateLimitedError
+            | ProviderGatewayDependencyError
         ),
     )
 
@@ -327,7 +328,7 @@ def _is_retryable_error(error: ProviderGatewayError) -> bool:
 def _normalise_alias_sequence(values: object | None) -> tuple[str, ...]:
     if values is None:
         return ()
-    if isinstance(values, (str, bytes)):
+    if isinstance(values, str | bytes):
         candidates = [values]
     elif isinstance(values, Mapping):
         candidates = list(values.values())

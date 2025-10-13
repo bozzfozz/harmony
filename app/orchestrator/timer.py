@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Sequence
 import contextlib
-import inspect
-import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
+import inspect
+import time
 
 from app.config import WatchlistTimerConfig, WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
@@ -133,7 +132,7 @@ class WatchlistTimer:
         timeout = self._shutdown_grace if self._shutdown_grace > 0 else 0.0
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task

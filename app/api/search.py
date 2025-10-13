@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 import sys
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 
-import app.logging_events as logging_events
 from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_integration_service, get_matching_engine
@@ -18,6 +18,7 @@ from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
+import app.logging_events as logging_events
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -85,11 +86,11 @@ class Candidate:
     provider: str
     title: str
     artists: list[str]
-    album: Optional[str]
-    year: Optional[int]
+    album: str | None
+    year: int | None
     genres: list[str]
-    bitrate: Optional[int]
-    audio_format: Optional[str]
+    bitrate: int | None
+    audio_format: str | None
     provider_track: ProviderTrack
     track_metadata: Mapping[str, Any]
     album_metadata: Mapping[str, Any]
@@ -97,7 +98,7 @@ class Candidate:
     candidate_metadata: Mapping[str, Any] = field(default_factory=dict)
 
     @property
-    def primary_artist(self) -> Optional[str]:
+    def primary_artist(self) -> str | None:
         return self.artists[0] if self.artists else None
 
 
@@ -208,9 +209,9 @@ async def smart_search(
 
 def _collect_candidates(
     response: ProviderGatewaySearchResponse,
-) -> tuple[list[Candidate], Dict[SourceLiteral, str]]:
+) -> tuple[list[Candidate], dict[SourceLiteral, str]]:
     aggregated: list[Candidate] = []
-    failures: Dict[SourceLiteral, str] = {}
+    failures: dict[SourceLiteral, str] = {}
     for result in response.results:
         source = PROVIDER_TO_SOURCE.get(result.provider.lower())
         if source is None:
@@ -357,7 +358,7 @@ def _candidate_identifier(
     return identifier or f"{source}:{normalize_text(title) if title else 'unknown'}"
 
 
-def _extract_year(*sources: Mapping[str, Any] | None) -> Optional[int]:
+def _extract_year(*sources: Mapping[str, Any] | None) -> int | None:
     for mapping in sources:
         if not mapping:
             continue
@@ -381,7 +382,7 @@ def _extract_genres(*sources: Mapping[str, Any] | None) -> list[str]:
         if not mapping:
             continue
         raw = mapping.get("genres")
-        if isinstance(raw, (list, tuple)):
+        if isinstance(raw, list | tuple):
             genres.extend(str(item) for item in raw if item)
         elif raw:
             genres.append(str(raw))
@@ -417,7 +418,7 @@ def _apply_filters(candidates: Iterable[Candidate], request: SearchRequest) -> l
     return filtered
 
 
-def _genre_matches(genres: Sequence[str], genre_filter: Optional[str]) -> bool:
+def _genre_matches(genres: Sequence[str], genre_filter: str | None) -> bool:
     if not genre_filter:
         return True
     for genre in genres:
@@ -485,14 +486,14 @@ def _score_and_sort(
     return [item for item, *_ in sortable]
 
 
-def _normalise_format(value: Any) -> Optional[str]:
+def _normalise_format(value: Any) -> str | None:
     if not value:
         return None
     text = str(value).strip()
     return text.upper() or None
 
 
-def _parse_year(value: Any) -> Optional[int]:
+def _parse_year(value: Any) -> int | None:
     if not value:
         return None
     text = str(value)
@@ -503,10 +504,10 @@ def _parse_year(value: Any) -> Optional[int]:
     return None
 
 
-def _coerce_int(value: Any) -> Optional[int]:
+def _coerce_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     if isinstance(value, str) and value.isdigit():
         return int(value)

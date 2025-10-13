@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime, timedelta
 import errno
 import json
 import os
+from pathlib import Path
 import stat
 import tempfile
-from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .transactions import (
     OAuthTransactionStore,
@@ -41,7 +41,7 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
             raise ValueError("OAuth transaction TTL must be positive")
         self._ttl = ttl
         self._hash_code_verifier = hash_code_verifier
-        self._now = now_fn or (lambda: datetime.now(timezone.utc))
+        self._now = now_fn or (lambda: datetime.now(UTC))
         self._base_dir = Path(base_dir).resolve()
         self._pending_dir = self._base_dir / "pending"
         self._consumed_dir = self._base_dir / "consumed"
@@ -131,8 +131,8 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
                 )
             raise
         record = self._read_record(consumed_path)
-        issued_at = datetime.fromtimestamp(record["iat"], tz=timezone.utc)
-        expires_at = datetime.fromtimestamp(record["exp"], tz=timezone.utc)
+        issued_at = datetime.fromtimestamp(record["iat"], tz=UTC)
+        expires_at = datetime.fromtimestamp(record["exp"], tz=UTC)
         if self._hash_code_verifier:
             raise TransactionStoreError("code verifier is not stored when hashing is enabled")
         if self._now() >= expires_at:
@@ -166,7 +166,7 @@ class FsOAuthTransactionStore(OAuthTransactionStore):
         removed = 0
         for entry in self._pending_dir.glob("*.json"):
             record = self._read_record(entry)
-            expires_at = datetime.fromtimestamp(record["exp"], tz=timezone.utc)
+            expires_at = datetime.fromtimestamp(record["exp"], tz=UTC)
             if moment >= expires_at:
                 entry.unlink(missing_ok=True)
                 removed += 1

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
@@ -84,7 +85,7 @@ def get_env(name: str, default: str | None = None) -> str | None:
     return env.get(name, default)
 
 
-def _env_value(env: Mapping[str, Any], key: str) -> Optional[str]:
+def _env_value(env: Mapping[str, Any], key: str) -> str | None:
     value = env.get(key)
     if value is None:
         return None
@@ -105,9 +106,9 @@ def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
 
 @dataclass(slots=True)
 class SpotifyConfig:
-    client_id: Optional[str]
-    client_secret: Optional[str]
-    redirect_uri: Optional[str]
+    client_id: str | None
+    client_secret: str | None
+    redirect_uri: str | None
     scope: str
     free_import_max_lines: int
     free_import_max_file_bytes: int
@@ -124,7 +125,7 @@ class OAuthConfig:
     redirect_uri: str
     manual_callback_enabled: bool
     session_ttl_minutes: int
-    public_host_hint: Optional[str]
+    public_host_hint: str | None
     public_base: str
     split_mode: bool
     state_dir: str
@@ -135,7 +136,7 @@ class OAuthConfig:
 @dataclass(slots=True)
 class SoulseekConfig:
     base_url: str
-    api_key: Optional[str]
+    api_key: str | None
     timeout_ms: int
     retry_max: int
     retry_backoff_base_ms: int
@@ -156,7 +157,7 @@ class HdmConfig:
     move_template: str
 
     @classmethod
-    def from_env(cls, env: Mapping[str, Any]) -> "HdmConfig":
+    def from_env(cls, env: Mapping[str, Any]) -> HdmConfig:
         return cls(
             downloads_dir=str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR),
             music_dir=str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR),
@@ -305,7 +306,7 @@ class ExternalCallPolicy:
     jitter_pct: float
 
     @classmethod
-    def from_env(cls, env: Mapping[str, Any]) -> "ExternalCallPolicy":
+    def from_env(cls, env: Mapping[str, Any]) -> ExternalCallPolicy:
         timeout_ms = _bounded_int(
             env.get("EXTERNAL_TIMEOUT_MS"),
             default=DEFAULT_EXTERNAL_TIMEOUT_MS,
@@ -345,7 +346,7 @@ class WatchlistTimerConfig:
     interval_s: float
 
     @classmethod
-    def from_env(cls, env: Mapping[str, Any]) -> "WatchlistTimerConfig":
+    def from_env(cls, env: Mapping[str, Any]) -> WatchlistTimerConfig:
         enabled = _as_bool(
             (str(env.get("WATCHLIST_TIMER_ENABLED")) if "WATCHLIST_TIMER_ENABLED" in env else None),
             default=DEFAULT_WATCHLIST_TIMER_ENABLED,
@@ -383,7 +384,7 @@ class OrchestratorConfig:
         }
 
     @classmethod
-    def from_env(cls, env: Mapping[str, Any]) -> "OrchestratorConfig":
+    def from_env(cls, env: Mapping[str, Any]) -> OrchestratorConfig:
         workers_enabled = _as_bool(
             str(env.get("WORKERS_ENABLED")) if "WORKERS_ENABLED" in env else None,
             default=DEFAULT_ORCHESTRATOR_WORKERS_ENABLED,
@@ -527,7 +528,7 @@ class AppConfig:
     features: FeatureFlags
     artist_sync: ArtistSyncConfig
     integrations: IntegrationsConfig
-    security: "SecurityConfig"
+    security: SecurityConfig
     middleware: MiddlewareConfig
     api_base_path: str
     health: HealthConfig
@@ -713,10 +714,10 @@ class Settings:
     watchlist_timer: WatchlistTimerConfig
     hdm: HdmConfig
     provider_profiles: dict[str, ProviderProfile]
-    retry_policy: "RetryPolicyConfig"
+    retry_policy: RetryPolicyConfig
 
     @classmethod
-    def load(cls, env: Mapping[str, Any] | None = None) -> "Settings":
+    def load(cls, env: Mapping[str, Any] | None = None) -> Settings:
         env_map: dict[str, Any] = dict(env or get_runtime_env())
         orchestrator = OrchestratorConfig.from_env(env_map)
         external = ExternalCallPolicy.from_env(env_map)
@@ -860,13 +861,13 @@ DEFAULT_RETRY_JITTER_PCT = 0.2
 DEFAULT_RETRY_POLICY_RELOAD_S = 10.0
 
 
-def _as_bool(value: Optional[str], *, default: bool = False) -> bool:
+def _as_bool(value: str | None, *, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _as_int(value: Optional[str], *, default: int) -> int:
+def _as_int(value: str | None, *, default: int) -> int:
     if value is None:
         return default
     try:
@@ -897,7 +898,7 @@ def _bounded_int(
     return resolved
 
 
-def _parse_list(value: Optional[str]) -> list[str]:
+def _parse_list(value: str | None) -> list[str]:
     if value is None:
         return []
     candidates = value.replace("\n", ",").split(",")
@@ -929,7 +930,7 @@ _SQLITE_ALLOWED_PREFIXES = (
 )
 
 
-def _normalise_sqlite_database_url(candidate: Optional[str], *, default_hint: str) -> str:
+def _normalise_sqlite_database_url(candidate: str | None, *, default_hint: str) -> str:
     from app.errors import ValidationAppError
 
     value = (candidate or "").strip()
@@ -951,7 +952,10 @@ def _normalise_sqlite_database_url(candidate: Optional[str], *, default_hint: st
     driver = url.drivername.lower()
     if not any(driver.startswith(prefix) for prefix in _SQLITE_ALLOWED_PREFIXES):
         raise ValidationAppError(
-            "DATABASE_URL must use a sqlite+aiosqlite:/// or sqlite+pysqlite:/// connection string.",
+            (
+                "DATABASE_URL must use a sqlite+aiosqlite:/// or sqlite+pysqlite:/// "
+                "connection string."
+            ),
             meta={"field": "DATABASE_URL"},
         )
 
@@ -966,7 +970,7 @@ def _default_database_url_for_profile(profile: str) -> str:
     return DEFAULT_DB_URL_DEV
 
 
-def _resolve_database_url(env: Mapping[str, Any], explicit: Optional[str]) -> str:
+def _resolve_database_url(env: Mapping[str, Any], explicit: str | None) -> str:
     profile, _flags = _resolve_environment_profile(env)
     default_url = _default_database_url_for_profile(profile)
     if explicit is not None:
@@ -1044,7 +1048,7 @@ def _parse_optional_float(
     return resolved
 
 
-def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
+def _parse_enabled_providers(value: str | None) -> tuple[str, ...]:
     if not value:
         return ("spotify", "slskd")
     items = [entry.strip().lower() for entry in value.replace("\n", ",").split(",")]
@@ -1059,7 +1063,7 @@ def _parse_enabled_providers(value: Optional[str]) -> tuple[str, ...]:
     return tuple(deduplicated or ("spotify", "slskd"))
 
 
-def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:
+def _parse_dependency_names(value: str | None) -> tuple[str, ...]:
     if not value:
         return ()
     items = [entry.strip().lower() for entry in value.replace("\n", ",").split(",")]
@@ -1074,7 +1078,7 @@ def _parse_dependency_names(value: Optional[str]) -> tuple[str, ...]:
     return tuple(deduplicated)
 
 
-def _parse_provider_timeouts(env: Mapping[str, Optional[str]]) -> dict[str, int]:
+def _parse_provider_timeouts(env: Mapping[str, str | None]) -> dict[str, int]:
     defaults: dict[str, int] = {
         "spotify": 15000,
         "slskd": DEFAULT_SLSKD_TIMEOUT_MS,
@@ -1346,7 +1350,7 @@ def _normalise_prefix(value: str) -> str:
     return cleaned
 
 
-def _normalise_base_path(value: Optional[str]) -> str:
+def _normalise_base_path(value: str | None) -> str:
     candidate = value if value is not None else DEFAULT_API_BASE_PATH
     normalized = _normalise_prefix(candidate)
     if normalized == "":
@@ -1363,7 +1367,7 @@ def _compose_allowlist_entry(base_path: str, suffix: str) -> str:
     return f"{base_path}{normalized_suffix}"
 
 
-def _as_float(value: Optional[str], *, default: float) -> float:
+def _as_float(value: str | None, *, default: float) -> float:
     if value is None:
         return default
     try:
@@ -1429,9 +1433,9 @@ def load_matching_config(env: Mapping[str, Any] | None = None) -> MatchingConfig
 def _load_settings_from_db(
     keys: Iterable[str],
     *,
-    database_url: Optional[str] = None,
+    database_url: str | None = None,
     env: Mapping[str, Any] | None = None,
-) -> dict[str, Optional[str]]:
+) -> dict[str, str | None]:
     """Fetch selected settings from the database."""
 
     runtime_env = env or get_runtime_env()
@@ -1443,7 +1447,7 @@ def _load_settings_from_db(
     except SQLAlchemyError:
         return {}
 
-    settings: dict[str, Optional[str]] = {}
+    settings: dict[str, str | None] = {}
     try:
         with engine.connect() as connection:
             for key in keys:
@@ -1469,9 +1473,9 @@ def _load_settings_from_db(
 def get_setting(
     key: str,
     *,
-    database_url: Optional[str] = None,
+    database_url: str | None = None,
     env: Mapping[str, Any] | None = None,
-) -> Optional[str]:
+) -> str | None:
     """Return a single setting value from the database if available."""
 
     settings = _load_settings_from_db([key], database_url=database_url, env=env)
@@ -1481,16 +1485,16 @@ def get_setting(
 def _resolve_setting(
     key: str,
     *,
-    db_settings: Mapping[str, Optional[str]],
-    fallback: Optional[str],
-) -> Optional[str]:
+    db_settings: Mapping[str, str | None],
+    fallback: str | None,
+) -> str | None:
     if key in db_settings:
         value = db_settings[key]
         return fallback if value is None else value
     return fallback
 
 
-def _legacy_slskd_url(env: Mapping[str, Any]) -> Optional[str]:
+def _legacy_slskd_url(env: Mapping[str, Any]) -> str | None:
     host = (_env_value(env, "SLSKD_HOST") or "").strip()
     port = (_env_value(env, "SLSKD_PORT") or "").strip()
 
@@ -2172,7 +2176,7 @@ def is_feature_enabled(
     name: str,
     *,
     config: AppConfig | None = None,
-    database_url: Optional[str] = None,
+    database_url: str | None = None,
 ) -> bool:
     """Return the enabled state for the requested feature flag."""
 

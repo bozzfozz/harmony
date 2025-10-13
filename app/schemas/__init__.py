@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -17,41 +17,41 @@ from pydantic import (
 
 class StatusResponse(BaseModel):
     status: str
-    artist_count: Optional[int] = None
-    album_count: Optional[int] = None
-    track_count: Optional[int] = None
-    last_scan: Optional[datetime] = None
-    connections: Optional[Dict[str, str]] = None
+    artist_count: int | None = None
+    album_count: int | None = None
+    track_count: int | None = None
+    last_scan: datetime | None = None
+    connections: dict[str, str] | None = None
 
 
 class ServiceHealthResponse(BaseModel):
     service: str
     status: Literal["ok", "fail", "disabled"]
-    missing: List[str] = Field(default_factory=list)
-    optional_missing: List[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    optional_missing: list[str] = Field(default_factory=list)
 
 
 class SpotifySearchResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
 
 
 class FollowedArtistsResponse(BaseModel):
-    artists: List[Dict[str, Any]]
+    artists: list[dict[str, Any]]
 
 
 class ArtistReleasesResponse(BaseModel):
     artist_id: str
-    releases: List[Dict[str, Any]]
+    releases: list[dict[str, Any]]
 
 
 class DiscographyAlbum(BaseModel):
-    album: Dict[str, Any]
-    tracks: List[Dict[str, Any]] = Field(default_factory=list)
+    album: dict[str, Any]
+    tracks: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DiscographyResponse(BaseModel):
     artist_id: str
-    albums: List[DiscographyAlbum] = Field(default_factory=list)
+    albums: list[DiscographyAlbum] = Field(default_factory=list)
 
 
 class PlaylistEntry(BaseModel):
@@ -64,34 +64,34 @@ class PlaylistEntry(BaseModel):
 
 
 class PlaylistResponse(BaseModel):
-    playlists: List[PlaylistEntry]
+    playlists: list[PlaylistEntry]
 
 
 class TrackDetailResponse(BaseModel):
-    track: Dict[str, Any]
+    track: dict[str, Any]
 
 
 class AudioFeaturesResponse(BaseModel):
-    audio_features: Union[Dict[str, Any], List[Dict[str, Any]]]
+    audio_features: dict[str, Any] | list[dict[str, Any]]
 
 
 class PlaylistItemsResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
     total: int
 
 
 class SavedTracksResponse(BaseModel):
-    items: List[Dict[str, Any]]
+    items: list[dict[str, Any]]
     total: int
 
 
 class UserProfileResponse(BaseModel):
-    profile: Dict[str, Any]
+    profile: dict[str, Any]
 
 
 class RecommendationsResponse(BaseModel):
-    tracks: List[Dict[str, Any]]
-    seeds: List[Dict[str, Any]]
+    tracks: list[dict[str, Any]]
+    seeds: list[dict[str, Any]]
 
 
 class SoulseekSearchRequest(BaseModel):
@@ -101,16 +101,14 @@ class SoulseekSearchRequest(BaseModel):
 class DownloadFileRequest(BaseModel):
     """Input payload for an individual download request."""
 
-    filename: Optional[str] = Field(
+    filename: str | None = Field(
         None, description="Resolved filename that should be stored for the download"
     )
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None, description="Original filename reported by the client (fallback field)"
     )
-    priority: Optional[int] = Field(
-        None, description="Explicit priority override for this download"
-    )
-    source: Optional[str] = Field(
+    priority: int | None = Field(None, description="Explicit priority override for this download")
+    source: str | None = Field(
         None, description="Origin of the download request, e.g. spotify_saved"
     )
 
@@ -118,14 +116,14 @@ class DownloadFileRequest(BaseModel):
 
     @field_validator("filename", "name")
     @classmethod
-    def _normalise_filename(cls, value: Optional[str]) -> Optional[str]:
+    def _normalise_filename(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
         return stripped or None
 
     @model_validator(mode="after")
-    def _ensure_identifier(self) -> "DownloadFileRequest":
+    def _ensure_identifier(self) -> DownloadFileRequest:
         if self.filename or self.name:
             return self
         raise ValueError("filename or name must be provided")
@@ -134,7 +132,7 @@ class DownloadFileRequest(BaseModel):
     def resolved_filename(self) -> str:
         return self.filename or self.name or "unknown"
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         payload = self.model_dump(by_alias=True, exclude_none=True)
         payload.setdefault("filename", self.resolved_filename)
         return payload
@@ -142,7 +140,7 @@ class DownloadFileRequest(BaseModel):
 
 class SoulseekDownloadRequest(BaseModel):
     username: str = Field(..., description="Soulseek username hosting the files")
-    files: List[DownloadFileRequest] = Field(..., description="List of files to download")
+    files: list[DownloadFileRequest] = Field(..., description="List of files to download")
 
     @field_validator("username")
     @classmethod
@@ -156,17 +154,17 @@ class SoulseekDownloadRequest(BaseModel):
 class HdmItemRequest(BaseModel):
     artist: str = Field(..., description="Artist name for the requested download")
     title: str = Field(..., description="Track title for the requested download")
-    album: Optional[str] = Field(None, description="Album name associated with the track")
-    isrc: Optional[str] = Field(None, description="ISRC identifier if available")
-    duration_seconds: Optional[float] = Field(
+    album: str | None = Field(None, description="Album name associated with the track")
+    isrc: str | None = Field(None, description="ISRC identifier if available")
+    duration_seconds: float | None = Field(
         None, ge=0.0, description="Expected track duration in seconds"
     )
-    bitrate: Optional[int] = Field(None, ge=0, description="Expected bitrate in kbps")
-    priority: Optional[int] = Field(None, ge=0, description="Priority override for the item")
-    dedupe_key: Optional[str] = Field(
+    bitrate: int | None = Field(None, ge=0, description="Expected bitrate in kbps")
+    priority: int | None = Field(None, ge=0, description="Priority override for the item")
+    dedupe_key: str | None = Field(
         None, description="Optional idempotency key for the individual item"
     )
-    requested_by: Optional[str] = Field(
+    requested_by: str | None = Field(
         None, description="Requesting user if different from the batch requester"
     )
 
@@ -181,14 +179,14 @@ class HdmItemRequest(BaseModel):
 
 class HdmBatchRequest(BaseModel):
     requested_by: str = Field(..., description="Identifier for the requesting user")
-    items: List[HdmItemRequest] = Field(
+    items: list[HdmItemRequest] = Field(
         ..., min_length=1, description="Items to submit to the Harmony Download Manager"
     )
-    batch_id: Optional[str] = Field(None, description="Optional client supplied batch identifier")
-    priority: Optional[int] = Field(
+    batch_id: str | None = Field(None, description="Optional client supplied batch identifier")
+    priority: int | None = Field(
         None, ge=0, description="Priority to apply to all items if provided"
     )
-    dedupe_key: Optional[str] = Field(None, description="Optional idempotency key for the batch")
+    dedupe_key: str | None = Field(None, description="Optional idempotency key for the batch")
 
     @field_validator("requested_by")
     @classmethod
@@ -213,7 +211,7 @@ DownloadFlowSubmissionResponse = HdmSubmissionResponse
 
 class DiscographyDownloadRequest(BaseModel):
     artist_id: str
-    artist_name: Optional[str] = None
+    artist_name: str | None = None
 
 
 class DiscographyJobResponse(BaseModel):
@@ -224,15 +222,15 @@ class DiscographyJobResponse(BaseModel):
 class SoulseekSearchResponse(BaseModel):
     """Response payload for Soulseek search results."""
 
-    results: List[Any]
-    raw: Optional[Dict[str, Any]] = None
+    results: list[Any]
+    raw: dict[str, Any] | None = None
 
 
 class SoulseekDownloadResponse(BaseModel):
     """Response payload when a Soulseek download is queued."""
 
     status: str
-    detail: Optional[Dict[str, Any]] = None
+    detail: dict[str, Any] | None = None
 
 
 _CANONICAL_DOWNLOAD_STATE_MAP = {
@@ -252,7 +250,7 @@ def _canonical_download_state(value: str | None) -> str:
     return _CANONICAL_DOWNLOAD_STATE_MAP.get(normalized, normalized or "pending")
 
 
-def _default_retryable_states() -> List[str]:
+def _default_retryable_states() -> list[str]:
     allowed_db_states = set(_CANONICAL_DOWNLOAD_STATE_MAP.keys()) - set(
         _REQUEUE_PROHIBITED_DB_STATES
     )
@@ -263,7 +261,7 @@ def _default_retryable_states() -> List[str]:
 SOULSEEK_RETRYABLE_STATES: tuple[str, ...] = tuple(_default_retryable_states())
 
 
-def _retryable_states_default() -> List[str]:
+def _retryable_states_default() -> list[str]:
     return list(SOULSEEK_RETRYABLE_STATES)
 
 
@@ -275,24 +273,24 @@ class SoulseekDownloadEntry(BaseModel):
     created_at: datetime
     updated_at: datetime
     priority: int = 0
-    organized_path: Optional[str] = None
-    genre: Optional[str] = None
-    composer: Optional[str] = None
-    producer: Optional[str] = None
-    isrc: Optional[str] = None
-    copyright: Optional[str] = None
-    artwork_url: Optional[str] = None
-    artwork_path: Optional[str] = None
-    artwork_status: Optional[str] = None
-    has_artwork: Optional[bool] = None
-    spotify_track_id: Optional[str] = None
-    spotify_album_id: Optional[str] = None
-    lyrics_status: Optional[str] = None
-    lyrics_path: Optional[str] = None
-    has_lyrics: Optional[bool] = None
+    organized_path: str | None = None
+    genre: str | None = None
+    composer: str | None = None
+    producer: str | None = None
+    isrc: str | None = None
+    copyright: str | None = None
+    artwork_url: str | None = None
+    artwork_path: str | None = None
+    artwork_status: str | None = None
+    has_artwork: bool | None = None
+    spotify_track_id: str | None = None
+    spotify_album_id: str | None = None
+    lyrics_status: str | None = None
+    lyrics_path: str | None = None
+    has_lyrics: bool | None = None
     retry_count: int = 0
-    next_retry_at: Optional[datetime] = None
-    last_error: Optional[str] = None
+    next_retry_at: datetime | None = None
+    last_error: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -302,8 +300,8 @@ class SoulseekDownloadEntry(BaseModel):
 
 
 class SoulseekDownloadStatus(BaseModel):
-    downloads: List[SoulseekDownloadEntry]
-    retryable_states: List[str] = Field(default_factory=_retryable_states_default)
+    downloads: list[SoulseekDownloadEntry]
+    retryable_states: list[str] = Field(default_factory=_retryable_states_default)
 
 
 class DownloadEntryResponse(BaseModel):
@@ -315,26 +313,26 @@ class DownloadEntryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     priority: int = 0
-    username: Optional[str] = None
-    organized_path: Optional[str] = None
-    genre: Optional[str] = None
-    composer: Optional[str] = None
-    producer: Optional[str] = None
-    isrc: Optional[str] = None
-    copyright: Optional[str] = None
-    artwork_url: Optional[str] = None
-    artwork_path: Optional[str] = None
-    artwork_status: Optional[str] = None
-    has_artwork: Optional[bool] = None
-    spotify_track_id: Optional[str] = None
-    spotify_album_id: Optional[str] = None
-    lyrics_status: Optional[str] = None
-    lyrics_path: Optional[str] = None
-    has_lyrics: Optional[bool] = None
+    username: str | None = None
+    organized_path: str | None = None
+    genre: str | None = None
+    composer: str | None = None
+    producer: str | None = None
+    isrc: str | None = None
+    copyright: str | None = None
+    artwork_url: str | None = None
+    artwork_path: str | None = None
+    artwork_status: str | None = None
+    has_artwork: bool | None = None
+    spotify_track_id: str | None = None
+    spotify_album_id: str | None = None
+    lyrics_status: str | None = None
+    lyrics_path: str | None = None
+    has_lyrics: bool | None = None
     db_state: str = Field(alias="state", exclude=True)
     retry_count: int = 0
-    next_retry_at: Optional[datetime] = None
-    last_error: Optional[str] = None
+    next_retry_at: datetime | None = None
+    last_error: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -352,7 +350,7 @@ class DownloadEntryResponse(BaseModel):
 
 
 class DownloadListResponse(BaseModel):
-    downloads: List[DownloadEntryResponse]
+    downloads: list[DownloadEntryResponse]
 
 
 class SoulseekCancelResponse(BaseModel):
@@ -362,11 +360,11 @@ class SoulseekCancelResponse(BaseModel):
 class DownloadMetadataResponse(BaseModel):
     id: int
     filename: str
-    genre: Optional[str] = None
-    composer: Optional[str] = None
-    producer: Optional[str] = None
-    isrc: Optional[str] = None
-    copyright: Optional[str] = None
+    genre: str | None = None
+    composer: str | None = None
+    producer: str | None = None
+    isrc: str | None = None
+    copyright: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -376,36 +374,36 @@ class DownloadPriorityUpdate(BaseModel):
 
 
 class MatchingRequest(BaseModel):
-    spotify_track: Dict[str, Any]
-    candidates: List[Dict[str, Any]]
+    spotify_track: dict[str, Any]
+    candidates: list[dict[str, Any]]
 
 
 class MatchingResponse(BaseModel):
-    best_match: Optional[Dict[str, Any]]
+    best_match: dict[str, Any] | None
     confidence: float
 
 
 class SettingsPayload(BaseModel):
     key: str
-    value: Optional[str]
+    value: str | None
 
 
 class SettingsResponse(BaseModel):
-    settings: Dict[str, Optional[str]]
+    settings: dict[str, str | None]
     updated_at: datetime
 
 
 class SettingsHistoryEntry(BaseModel):
     key: str
-    old_value: Optional[str]
-    new_value: Optional[str]
+    old_value: str | None
+    new_value: str | None
     changed_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class SettingsHistoryResponse(BaseModel):
-    history: List[SettingsHistoryEntry]
+    history: list[SettingsHistoryEntry]
 
 
 class ArtistPreferenceEntry(BaseModel):
@@ -415,8 +413,8 @@ class ArtistPreferenceEntry(BaseModel):
 
 
 class ArtistPreferencesPayload(BaseModel):
-    preferences: List[ArtistPreferenceEntry] = Field(default_factory=list)
+    preferences: list[ArtistPreferenceEntry] = Field(default_factory=list)
 
 
 class ArtistPreferencesResponse(BaseModel):
-    preferences: List[ArtistPreferenceEntry]
+    preferences: list[ArtistPreferenceEntry]

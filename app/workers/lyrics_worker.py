@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+import inspect
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -22,22 +23,20 @@ from app.utils.lyrics_utils import convert_to_lrc, fetch_spotify_lyrics, save_lr
 
 logger = get_logger(__name__)
 
-LyricsPayload = Dict[str, Any]
-LyricsProvider = Callable[
-    [Dict[str, Any]], Awaitable[Optional[LyricsPayload]] | Optional[LyricsPayload]
-]
+LyricsPayload = dict[str, Any]
+LyricsProvider = Callable[[dict[str, Any]], Awaitable[LyricsPayload | None] | LyricsPayload | None]
 
 
 @dataclass(slots=True)
 class LyricsJob:
-    download_id: Optional[int]
+    download_id: int | None
     file_path: str
-    track_info: Dict[str, Any]
+    track_info: dict[str, Any]
 
 
 async def default_fallback_provider(
     track_info: Mapping[str, Any],
-) -> Optional[LyricsPayload]:
+) -> LyricsPayload | None:
     """Fetch lyrics from Musixmatch or the public lyrics.ovh API."""
 
     musixmatch_payload = await lyrics_utils.fetch_musixmatch_subtitles(track_info)
@@ -89,7 +88,7 @@ class LyricsWorker:
         self._spotify = spotify_client
         lyrics_utils.SPOTIFY_CLIENT = spotify_client
         self._fallback = fallback_provider or default_fallback_provider
-        self._queue: asyncio.Queue[Optional[LyricsJob]] = asyncio.Queue()
+        self._queue: asyncio.Queue[LyricsJob | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
         self._running = False
 
@@ -114,7 +113,7 @@ class LyricsWorker:
         self,
         download_id: int | None,
         file_path: str,
-        track_info: Dict[str, Any],
+        track_info: dict[str, Any],
     ) -> None:
         job = LyricsJob(download_id=download_id, file_path=file_path, track_info=dict(track_info))
         if not self._running:
@@ -164,14 +163,14 @@ class LyricsWorker:
         if not lyrics_payload:
             raise ValueError("Lyrics provider returned no content")
 
-        combined: Dict[str, Any] = dict(job.track_info)
+        combined: dict[str, Any] = dict(job.track_info)
         combined.update(lyrics_payload)
 
         lrc_content = convert_to_lrc(combined)
         save_lrc_file(target, lrc_content)
         return target
 
-    async def _obtain_lyrics(self, track_info: Dict[str, Any]) -> Optional[LyricsPayload]:
+    async def _obtain_lyrics(self, track_info: dict[str, Any]) -> LyricsPayload | None:
         track_id = self._extract_spotify_id(track_info)
         if track_id:
             spotify_payload = await asyncio.to_thread(fetch_spotify_lyrics, track_id)
@@ -202,7 +201,7 @@ class LyricsWorker:
         await run_session(_apply)
 
     @staticmethod
-    def _extract_spotify_id(track_info: Mapping[str, Any]) -> Optional[str]:
+    def _extract_spotify_id(track_info: Mapping[str, Any]) -> str | None:
         keys = (
             "spotify_track_id",
             "spotifyTrackId",

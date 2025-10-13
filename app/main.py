@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+import inspect
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse
@@ -17,8 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
-from app.api import health as health_api
-from app.api import router_registry
+from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
 from app.config import AppConfig, SecurityConfig, get_env, settings
@@ -36,10 +35,10 @@ from app.logging_events import log_event
 from app.middleware import install_middleware
 from app.oauth import get_oauth_store, startup_check_oauth_store
 from app.oauth_callback.app import app_oauth_callback
+from app.ops.selfcheck import run_startup_guards
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
-from app.ops.selfcheck import run_startup_guards
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
@@ -50,7 +49,7 @@ from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
 
 logger = get_logger(__name__)
-_APP_START_TIME = datetime.now(timezone.utc)
+_APP_START_TIME = datetime.now(UTC)
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:

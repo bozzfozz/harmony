@@ -1,6 +1,6 @@
+from pathlib import Path
 import socketserver
 import threading
-from pathlib import Path
 
 from app.db import init_db, reset_engine_for_tests
 from app.ops.selfcheck import aggregate_ready

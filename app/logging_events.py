@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Mapping
+import time
 from typing import Any
 
 _JSON_PRIMITIVES = (str, int, float, bool, type(None))
@@ -34,7 +34,7 @@ def _validate_json_payload(value: Any, *, path: str) -> None:
                 raise TypeError(f"Keys in '{path}' must be strings")
             _validate_json_payload(nested, path=f"{path}.{key}")
         return
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         for index, nested in enumerate(value):
             _validate_json_payload(nested, path=f"{path}[{index}]")
         return

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime, timezone
+from collections.abc import Mapping, MutableMapping
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from enum import Enum
-from typing import Any, Mapping, MutableMapping
+import logging
+from typing import Any
 from uuid import uuid4
 
 from fastapi import status
@@ -185,8 +186,8 @@ def _parse_retry_after(value: str | None) -> int | None:
     except (TypeError, ValueError):
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    delta = parsed - datetime.now(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    delta = parsed - datetime.now(UTC)
     milliseconds = int(delta.total_seconds() * 1000)
     return max(0, milliseconds)
 

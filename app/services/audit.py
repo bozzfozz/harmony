@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Mapping, Sequence
+import json
+from typing import Any
 
 from sqlalchemy import Select, select
 
@@ -12,7 +13,7 @@ from app.models import ArtistAuditRecord
 
 
 def _normalise_scalar(value: Any) -> Any:
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, str | int | float | bool) or value is None:
         return value
     if isinstance(value, datetime):
         return value.replace(tzinfo=None).isoformat()

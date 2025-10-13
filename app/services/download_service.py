@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
+from typing import Any
 
 from fastapi import status
 from sqlalchemy.orm import Session
@@ -67,14 +68,14 @@ class DownloadSummary:
     state: str
     progress: float
     priority: int
-    username: Optional[str]
-    request_payload: Optional[Dict[str, Any]] = None
+    username: str | None
+    request_payload: dict[str, Any] | None = None
 
 
 @dataclass
 class QueueDownloadsResult:
-    downloads: List[DownloadSummary]
-    job_files: List[Dict[str, Any]]
+    downloads: list[DownloadSummary]
+    job_files: list[dict[str, Any]]
     job_priority: int
 
 
@@ -82,16 +83,16 @@ class QueueDownloadsResult:
 class RetryPreparation:
     original: DownloadSummary
     filename: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     priority: int
 
 
 @dataclass
 class RetryPersistenceResult:
     download: DownloadSummary
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     filename: str
-    username: Optional[str]
+    username: str | None
 
 
 SessionRunner = Callable[[SessionCallable[Any]], Awaitable[Any]]
@@ -118,9 +119,9 @@ class DownloadService:
         self,
         *,
         include_all: bool,
-        status_filter: Optional[str] = None,
-        created_from: Optional[datetime] = None,
-        created_to: Optional[datetime] = None,
+        status_filter: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ) -> Any:
         query = self._session.query(Download)
         if status_filter:
@@ -140,10 +141,10 @@ class DownloadService:
         self,
         *,
         include_all: bool,
-        status_filter: Optional[str],
+        status_filter: str | None,
         limit: int,
         offset: int,
-    ) -> List[Download]:
+    ) -> list[Download]:
         try:
             query = self._build_download_query(include_all=include_all, status_filter=status_filter)
             return query.offset(offset).limit(limit).all()
@@ -197,7 +198,7 @@ class DownloadService:
         payload: SoulseekDownloadRequest,
         *,
         worker: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not payload.files:
             logger.warning("Download request without files rejected")
             raise ValidationAppError("No files supplied")
@@ -270,12 +271,12 @@ class DownloadService:
             for download in result.downloads
         ]
 
-        response: Dict[str, Any] = {"status": "queued", "downloads": download_payload}
+        response: dict[str, Any] = {"status": "queued", "downloads": download_payload}
         if result.downloads:
             response["download_id"] = result.downloads[0].id
         return response
 
-    async def cancel_download(self, download_id: int) -> Dict[str, Any]:
+    async def cancel_download(self, download_id: int) -> dict[str, Any]:
         download = await self._run_session(
             lambda session: _get_download_summary(session, download_id)
         )
@@ -316,9 +317,9 @@ class DownloadService:
     def export_downloads(
         self,
         *,
-        status_filter: Optional[str],
-        created_from: Optional[datetime],
-        created_to: Optional[datetime],
+        status_filter: str | None,
+        created_from: datetime | None,
+        created_to: datetime | None,
         format: str,
     ) -> ResponsePayload:
         try:
@@ -343,7 +344,7 @@ class DownloadService:
             "media_type": "application/json",
         }
 
-    async def retry_download(self, download_id: int) -> Dict[str, Any]:
+    async def retry_download(self, download_id: int) -> dict[str, Any]:
         original = await self._run_session(lambda session: _prepare_retry(session, download_id))
 
         try:
@@ -407,15 +408,15 @@ class DownloadService:
         return {"status": "queued", "download_id": persistence.download.id}
 
 
-ResponsePayload = Dict[str, Any]
+ResponsePayload = dict[str, Any]
 
 
 def _queue_downloads_with_session(
     session: Session, payload: SoulseekDownloadRequest
 ) -> QueueDownloadsResult:
-    download_summaries: List[DownloadSummary] = []
-    job_files: List[Dict[str, Any]] = []
-    job_priorities: List[int] = []
+    download_summaries: list[DownloadSummary] = []
+    job_files: list[dict[str, Any]] = []
+    job_priorities: list[int] = []
 
     try:
         for file_info in payload.files:

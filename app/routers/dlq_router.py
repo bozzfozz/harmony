@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import hashlib
-from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -50,7 +50,7 @@ def _normalise_datetime(value: datetime | None) -> datetime | None:
         return None
     if value.tzinfo is None:
         return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _parse_ids(raw_ids: list[str], *, limit: int) -> list[int]:
@@ -90,7 +90,7 @@ class DLQItemPayload(BaseModel):
     id: str
     entity: Literal["download"]
     reason: str
-    message: Optional[str] = None
+    message: str | None = None
     created_at: datetime
     updated_at: datetime
     retry_count: int
@@ -108,7 +108,7 @@ class DLQListData(BaseModel):
 class DLQResponseEnvelope(BaseModel):
     ok: bool
     data: DLQListData
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 class DLQRequeueRequest(BaseModel):
@@ -128,16 +128,16 @@ class DLQRequeueData(BaseModel):
 class DLQRequeueEnvelope(BaseModel):
     ok: bool
     data: DLQRequeueData
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 class DLQPurgeRequest(BaseModel):
-    ids: Optional[list[str]] = None
-    older_than: Optional[datetime] = None
-    reason: Optional[str] = None
+    ids: list[str] | None = None
+    older_than: datetime | None = None
+    reason: str | None = None
 
     @model_validator(mode="after")
-    def _validate_choice(self) -> "DLQPurgeRequest":
+    def _validate_choice(self) -> DLQPurgeRequest:
         if self.ids and self.older_than:
             raise ValueError("ids and older_than cannot be combined")
         if not self.ids and self.older_than is None:
@@ -152,19 +152,19 @@ class DLQPurgeData(BaseModel):
 class DLQPurgeEnvelope(BaseModel):
     ok: bool
     data: DLQPurgeData
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 class DLQStatsData(BaseModel):
     total: int
-    by_reason: Dict[str, int]
+    by_reason: dict[str, int]
     last_24h: int
 
 
 class DLQStatsEnvelope(BaseModel):
     ok: bool
     data: DLQStatsData
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 @router.get("", response_model=DLQResponseEnvelope)
@@ -174,9 +174,9 @@ def list_dlq(
     page_size: int = Query(_PAGE_SIZE_DEFAULT, ge=1, le=_PAGE_SIZE_MAX),
     order_by: Literal["created_at", "updated_at"] = Query("created_at"),
     order_dir: Literal["asc", "desc"] = Query("desc"),
-    reason: Optional[str] = Query(None),
-    created_from: Optional[datetime] = Query(None, alias="from"),
-    created_to: Optional[datetime] = Query(None, alias="to"),
+    reason: str | None = Query(None),
+    created_from: datetime | None = Query(None, alias="from"),
+    created_to: datetime | None = Query(None, alias="to"),
     session: Session = Depends(get_db),
 ) -> DLQResponseEnvelope:
     service = _build_service(request)

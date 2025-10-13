@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, List
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -35,15 +35,15 @@ class ArtistOut(BaseModel):
     source: str
     source_id: str | None = None
     name: str
-    genres: List[str] = Field(default_factory=list)
-    images: List[str] = Field(default_factory=list)
+    genres: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
     popularity: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     version: str
     etag: str
     updated_at: datetime
     created_at: datetime
-    releases: List[ReleaseOut] = Field(default_factory=list)
+    releases: list[ReleaseOut] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,7 +79,7 @@ class WatchlistItemOut(BaseModel):
 class WatchlistPageOut(BaseModel):
     """Paginated watchlist response."""
 
-    items: List[WatchlistItemOut] = Field(default_factory=list)
+    items: list[WatchlistItemOut] = Field(default_factory=list)
     total: int
     limit: int
     offset: int

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Awaitable, Callable, Mapping, Sequence, TypeVar
+from typing import TypeVar
 
 from app.config import ExternalCallPolicy, ProviderProfile, settings
 from app.integrations.contracts import (
@@ -43,7 +44,7 @@ class ProviderRetryPolicy:
     jitter_pct: float
 
     @classmethod
-    def from_external(cls, policy: ExternalCallPolicy) -> "ProviderRetryPolicy":
+    def from_external(cls, policy: ExternalCallPolicy) -> ProviderRetryPolicy:
         """Create a retry policy from the shared external call policy."""
 
         return cls(
@@ -72,7 +73,7 @@ class ProviderGatewayConfig:
         max_concurrency: int,
         external_policy: ExternalCallPolicy | None = None,
         provider_profiles: Mapping[str, ProviderProfile] | None = None,
-    ) -> "ProviderGatewayConfig":
+    ) -> ProviderGatewayConfig:
         """Create a gateway configuration backed by centralised settings."""
 
         external = external_policy or settings.external
@@ -408,9 +409,9 @@ class ProviderGateway:
         return isinstance(
             error,
             (
-                ProviderGatewayTimeoutError,
-                ProviderGatewayRateLimitedError,
-                ProviderGatewayDependencyError,
+                ProviderGatewayTimeoutError
+                | ProviderGatewayRateLimitedError
+                | ProviderGatewayDependencyError
             ),
         )
 
@@ -446,9 +447,9 @@ class ProviderGateway:
                 isinstance(
                     error,
                     (
-                        ProviderGatewayDependencyError,
-                        ProviderGatewayValidationError,
-                        ProviderGatewayNotFoundError,
+                        ProviderGatewayDependencyError
+                        | ProviderGatewayValidationError
+                        | ProviderGatewayNotFoundError
                     ),
                 )
                 and error.status_code is not None

@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from typing import Iterable, List
 
 TARGET_DIRS: tuple[Path, ...] = (
     Path(".github/workflows"),
@@ -25,8 +25,8 @@ class Violation:
     line_content: str
 
 
-def find_violations(base_dirs: Iterable[Path]) -> List[Violation]:
-    violations: List[Violation] = []
+def find_violations(base_dirs: Iterable[Path]) -> list[Violation]:
+    violations: list[Violation] = []
     for base_dir in base_dirs:
         if not base_dir.exists():
             continue

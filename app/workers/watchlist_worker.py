@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import time
 from dataclasses import dataclass
 from datetime import datetime
+import time
 
 from app.config import WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
@@ -87,7 +87,7 @@ class WatchlistWorker:
                     asyncio.shield(task),
                     timeout=self._config.shutdown_grace_ms / 1000.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
@@ -118,7 +118,7 @@ class WatchlistWorker:
                     break
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=self._interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
         except asyncio.CancelledError:  # pragma: no cover - lifecycle management
             raise

@@ -77,7 +77,7 @@ async def stop_metadata_update(request: Request) -> dict[str, object]:
     return payload
 
 
-def _resolve_worker(request: Request) -> "MetadataUpdateWorker":
+def _resolve_worker(request: Request) -> MetadataUpdateWorker:
     worker = getattr(request.app.state, "metadata_update_worker", None)
     if worker is None:
         raise HTTPException(

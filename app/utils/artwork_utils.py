@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 import importlib.util
 import mimetypes
 import os
+from pathlib import Path
 import re
 import tempfile
-from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -44,7 +45,7 @@ def _select_picture(pictures: Sequence[Any]) -> Any | None:
     return pictures[0] if pictures else None
 
 
-def _detect_image_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+def _detect_image_dimensions(image_data: bytes) -> tuple[int | None, int | None]:
     if not image_data:
         return None, None
     if image_data.startswith(b"\x89PNG\r\n\x1a\n") and len(image_data) >= 24:
@@ -58,7 +59,7 @@ def _detect_image_dimensions(image_data: bytes) -> tuple[Optional[int], Optional
     return None, None
 
 
-def _parse_jpeg_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+def _parse_jpeg_dimensions(image_data: bytes) -> tuple[int | None, int | None]:
     index = 2
     length = len(image_data)
     while index + 1 < length:
@@ -102,7 +103,7 @@ def _parse_jpeg_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[i
     return None, None
 
 
-def _parse_webp_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[int]]:
+def _parse_webp_dimensions(image_data: bytes) -> tuple[int | None, int | None]:
     if len(image_data) < 30:
         return None, None
     chunk_type = image_data[12:16]
@@ -124,7 +125,7 @@ def _parse_webp_dimensions(image_data: bytes) -> tuple[Optional[int], Optional[i
     return None, None
 
 
-def extract_embed_info(audio_path: Path) -> Optional[dict[str, int | str]]:
+def extract_embed_info(audio_path: Path) -> dict[str, int | str] | None:
     """Return information about the embedded artwork for ``audio_path``."""
 
     audio_path = Path(audio_path)
@@ -176,7 +177,7 @@ def is_low_res(
     return size_bytes < max(1, int(min_bytes))
 
 
-def _extract_flac_picture(audio_path: Path) -> Optional[dict[str, int | str]]:
+def _extract_flac_picture(audio_path: Path) -> dict[str, int | str] | None:
     try:
         from mutagen.flac import FLAC
     except ImportError:  # pragma: no cover - handled by caller
@@ -209,7 +210,7 @@ def _extract_flac_picture(audio_path: Path) -> Optional[dict[str, int | str]]:
     }
 
 
-def _extract_mp4_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
+def _extract_mp4_cover(audio_path: Path) -> dict[str, int | str] | None:
     try:
         from mutagen.mp4 import MP4, MP4Cover
     except ImportError:  # pragma: no cover - handled by caller
@@ -239,7 +240,7 @@ def _extract_mp4_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
     }
 
 
-def _extract_id3_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
+def _extract_id3_cover(audio_path: Path) -> dict[str, int | str] | None:
     try:
         from mutagen.id3 import APIC, ID3, ID3NoHeaderError
     except ImportError:  # pragma: no cover - handled by caller
@@ -253,7 +254,7 @@ def _extract_id3_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
         logger.debug("Failed to load ID3 tags for artwork inspection: %s", exc)
         return None
 
-    frame: Optional[APIC] = None
+    frame: APIC | None = None
     for value in tags.values():
         if isinstance(value, APIC):
             frame = value
@@ -273,7 +274,7 @@ def _extract_id3_cover(audio_path: Path) -> Optional[dict[str, int | str]]:
     }
 
 
-def fetch_spotify_artwork(album_id: str) -> Optional[str]:
+def fetch_spotify_artwork(album_id: str) -> str | None:
     """Return the best available Spotify artwork URL for ``album_id``."""
 
     album_id = (album_id or "").strip()
@@ -374,7 +375,7 @@ def fetch_caa_artwork(
     album: str,
     *,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Optional[str]:
+) -> str | None:
     """Resolve a Cover Art Archive URL for the given artist/album via MusicBrainz."""
 
     artist = (artist or "").strip()
@@ -500,7 +501,7 @@ def allowed_remote_host(
     return False
 
 
-def infer_spotify_album_id(download: Download) -> Optional[str]:
+def infer_spotify_album_id(download: Download) -> str | None:
     """Best-effort inference of a Spotify album identifier for a download."""
 
     if download.spotify_album_id:
@@ -619,10 +620,10 @@ def _embed_id3_artwork(audio_path: Path, image_data: bytes, mime_type: str) -> N
     tags.save(audio_path)
 
 
-def _pick_best_image(images: Any) -> Optional[str]:
+def _pick_best_image(images: Any) -> str | None:
     if not isinstance(images, list):
         return None
-    best_url: Optional[str] = None
+    best_url: str | None = None
     best_score = -1
     for entry in images:
         if not isinstance(entry, Mapping):
@@ -639,7 +640,7 @@ def _pick_best_image(images: Any) -> Optional[str]:
     return best_url
 
 
-def _extract_album_identifier(payload: Mapping[str, Any]) -> Optional[str]:
+def _extract_album_identifier(payload: Mapping[str, Any]) -> str | None:
     for key in ("spotify_album_id", "album_id", "id", "spotifyId", "spotify_id"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
@@ -654,7 +655,7 @@ def _extract_album_identifier(payload: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
-def _extract_spotify_track_id(payload: Mapping[str, Any]) -> Optional[str]:
+def _extract_spotify_track_id(payload: Mapping[str, Any]) -> str | None:
     for key in (
         "spotify_track_id",
         "spotify_id",
@@ -695,7 +696,7 @@ def _extract_release_groups(payload: Mapping[str, Any]) -> list[Mapping[str, Any
     return []
 
 
-def _extract_release_group_id(payload: Mapping[str, Any]) -> Optional[str]:
+def _extract_release_group_id(payload: Mapping[str, Any]) -> str | None:
     for key in ("id", "mbid"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():

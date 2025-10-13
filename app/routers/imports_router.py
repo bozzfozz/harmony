@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 import uuid
-from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
@@ -80,7 +80,7 @@ async def create_free_import(
         raise ValidationAppError("no valid playlist links in payload")
 
     session_id = _generate_id("sess")
-    batch_records: List[ImportBatch] = []
+    batch_records: list[ImportBatch] = []
 
     for playlist in parse_result.accepted:
         batch_records.append(
@@ -91,7 +91,7 @@ async def create_free_import(
             )
         )
 
-    totals_payload: Dict[str, Any] = {
+    totals_payload: dict[str, Any] = {
         "provided": parse_result.total_links,
         "accepted": len(parse_result.accepted),
         "rejected": len(parse_result.rejected),

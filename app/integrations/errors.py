@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Callable, Mapping, MutableMapping, Type
 
 from app.errors import (
     DependencyError,
@@ -72,7 +72,7 @@ def _internal_error(provider: str, error: ProviderGatewayError) -> InternalServe
     return InternalServerError(f"Failed to process {provider} search results.")
 
 
-_ERROR_MAP: Mapping[Type[ProviderGatewayError], _ErrorMapping] = {
+_ERROR_MAP: Mapping[type[ProviderGatewayError], _ErrorMapping] = {
     ProviderGatewayValidationError: _ErrorMapping(factory=_validation_error),
     ProviderGatewayRateLimitedError: _ErrorMapping(factory=_rate_limited_error),
     ProviderGatewayNotFoundError: _ErrorMapping(factory=_not_found_error),

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from dataclasses import dataclass, field
 import json
 import os
+from pathlib import Path
 import socket
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy.engine import make_url
@@ -248,10 +249,11 @@ def aggregate_ready(
     if missing_keys:
         env_check["missing"] = sorted(missing_keys)
         env_check["status"] = "fail"
+        missing_list = ", ".join(sorted(missing_keys))
         issues.append(
             ReadyIssue(
                 component="env",
-                message=f"Missing required environment variables: {', '.join(sorted(missing_keys))}",
+                message=f"Missing required environment variables: {missing_list}",
                 exit_code=EX_CONFIG,
                 details={"missing": sorted(missing_keys)},
             )
@@ -340,11 +342,14 @@ def aggregate_ready(
                     )
                 )
             elif oauth_state_info.get("same_filesystem") is False:
-                # The OAuth state directory must share a filesystem with the downloads directory for atomic moves.
+                # The OAuth state directory must share a filesystem with the downloads
+                # directory for atomic moves.
                 issues.append(
                     ReadyIssue(
                         component="oauth",
-                        message="OAUTH_STATE_DIR must reside on the same filesystem as DOWNLOADS_DIR",
+                        message=(
+                            "OAUTH_STATE_DIR must reside on the same filesystem as DOWNLOADS_DIR"
+                        ),
                         exit_code=EX_SOFTWARE,
                         details=oauth_state_info,
                     )

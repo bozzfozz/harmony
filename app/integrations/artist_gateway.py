@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Sequence
 
 from app.integrations.contracts import ProviderArtist, ProviderRelease
 from app.integrations.provider_gateway import (
@@ -135,9 +135,9 @@ class ArtistGateway:
         return isinstance(
             error,
             (
-                ProviderGatewayTimeoutError,
-                ProviderGatewayRateLimitedError,
-                ProviderGatewayDependencyError,
+                ProviderGatewayTimeoutError
+                | ProviderGatewayRateLimitedError
+                | ProviderGatewayDependencyError
             ),
         )
 

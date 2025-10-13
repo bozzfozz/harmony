@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Dict, Mapping
+from collections.abc import Mapping
 
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
@@ -21,8 +21,8 @@ class ProviderRegistry:
 
     def __init__(self, *, config: AppConfig) -> None:
         self._config = config
-        self._providers: Dict[str, TrackProvider] = {}
-        self._policies: Dict[str, ProviderRetryPolicy] = {}
+        self._providers: dict[str, TrackProvider] = {}
+        self._policies: dict[str, ProviderRetryPolicy] = {}
         self._initialised = False
 
     @property

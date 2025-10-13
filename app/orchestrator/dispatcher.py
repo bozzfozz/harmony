@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Mapping
 import contextlib
+from dataclasses import dataclass
 import random
 import time
-from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.config import ExternalCallPolicy, OrchestratorConfig, settings
@@ -43,14 +43,14 @@ _ARTIST_SYNC_JOB_TYPE = "artist_sync"
 
 
 def default_handlers(
-    sync_deps: "SyncHandlerDeps",
+    sync_deps: SyncHandlerDeps,
     *,
-    matching_deps: "MatchingHandlerDeps" | None = None,
-    retry_deps: "RetryHandlerDeps" | None = None,
-    watchlist_deps: "WatchlistHandlerDeps" | None = None,
-    artist_refresh_deps: "ArtistRefreshHandlerDeps" | None = None,
-    artist_delta_deps: "ArtistDeltaHandlerDeps" | None = None,
-    artist_sync_deps: "ArtistSyncHandlerDeps" | None = None,
+    matching_deps: MatchingHandlerDeps | None = None,
+    retry_deps: RetryHandlerDeps | None = None,
+    watchlist_deps: WatchlistHandlerDeps | None = None,
+    artist_refresh_deps: ArtistRefreshHandlerDeps | None = None,
+    artist_delta_deps: ArtistDeltaHandlerDeps | None = None,
+    artist_sync_deps: ArtistSyncHandlerDeps | None = None,
 ) -> dict[str, JobHandler]:
     """Return the default orchestrator handler mapping."""
 
@@ -446,7 +446,7 @@ class Dispatcher:
             try:
                 await asyncio.wait_for(stop_signal.wait(), timeout=interval)
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 ok = self._persistence.heartbeat(
                     job.id,
                     job_type=job.type,

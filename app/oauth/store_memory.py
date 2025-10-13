@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime, timedelta
 from threading import Lock
-from typing import Any, Callable
+from typing import Any
 
 from .transactions import (
     OAuthTransactionStore,
@@ -31,7 +31,7 @@ class MemoryOAuthTransactionStore(OAuthTransactionStore):
         if ttl <= timedelta(0):
             raise ValueError("OAuth transaction TTL must be positive")
         self._ttl = ttl
-        self._now = now_fn or (lambda: datetime.now(timezone.utc))
+        self._now = now_fn or (lambda: datetime.now(UTC))
         self._pending: dict[str, Transaction] = {}
         self._consumed: set[str] = set()
         self._lock = Lock()

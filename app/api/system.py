@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
 import inspect
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Literal, Mapping, Optional, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -52,12 +53,12 @@ psutil = _psutil  # type: ignore
 logger = get_logger(__name__)
 router = APIRouter()
 
-_START_TIME = datetime.now(timezone.utc)
+_START_TIME = datetime.now(UTC)
 QueueValue = Any
 
 
 class SecretValidationRequest(BaseModel):
-    value: Optional[str] = Field(
+    value: str | None = Field(
         default=None,
         description="Optional override secret value used only for validation.",
         max_length=256,
@@ -68,8 +69,8 @@ class SecretValidatedPayload(BaseModel):
     mode: Literal["live", "format"]
     valid: bool
     at: datetime
-    reason: Optional[str] = None
-    note: Optional[str] = None
+    reason: str | None = None
+    note: str | None = None
 
 
 class SecretValidationPayload(BaseModel):
@@ -80,7 +81,7 @@ class SecretValidationPayload(BaseModel):
 class SecretValidationEnvelope(BaseModel):
     ok: bool
     data: SecretValidationPayload
-    error: Optional[Dict[str, Any]] = None
+    error: dict[str, Any] | None = None
 
 
 _DEFAULT_SECRET_VALIDATION_SERVICE = SecretValidationService(
@@ -103,7 +104,7 @@ def _get_secret_validation_service(request: Request) -> SecretValidationService:
 
 
 @router.get("/health", tags=["System"])
-async def get_health(request: Request) -> Dict[str, Any]:
+async def get_health(request: Request) -> dict[str, Any]:
     """Return liveness information without external I/O."""
 
     service = _get_health_service(request)
@@ -130,7 +131,7 @@ async def get_health(request: Request) -> Dict[str, Any]:
 
 
 @router.get("/ready", tags=["System"])
-async def get_readiness(request: Request) -> Dict[str, Any]:
+async def get_readiness(request: Request) -> dict[str, Any]:
     """Check database connectivity and configured dependencies."""
 
     service = _get_health_service(request)
@@ -209,7 +210,7 @@ async def get_metrics() -> Response:
 async def validate_secret(
     provider: str,
     request: Request,
-    payload: Optional[SecretValidationRequest] = None,
+    payload: SecretValidationRequest | None = None,
     session: Session = Depends(get_db),
 ) -> SecretValidationEnvelope:
     service = _get_secret_validation_service(request)
@@ -230,11 +231,11 @@ async def validate_secret(
 
 @dataclass(frozen=True)
 class WorkerDescriptor:
-    attr: Optional[str]
-    queue_fetcher: Optional[Callable[[Request], QueueValue]] = None
-    queue_literal: Optional[QueueValue] = None
-    orchestrator_component: Optional[str] = None
-    orchestrator_job: Optional[str] = None
+    attr: str | None
+    queue_fetcher: Callable[[Request], QueueValue] | None = None
+    queue_literal: QueueValue | None = None
+    orchestrator_component: str | None = None
+    orchestrator_job: str | None = None
 
 
 def _sync_queue_size(_: Request) -> int:
@@ -262,7 +263,7 @@ def _matching_queue_size(_: Request) -> int:
     return int(count or 0)
 
 
-_WORKERS: Dict[str, WorkerDescriptor] = {
+_WORKERS: dict[str, WorkerDescriptor] = {
     "sync": WorkerDescriptor(attr="sync_worker", queue_fetcher=_sync_queue_size),
     "matching": WorkerDescriptor(attr="matching_worker", queue_fetcher=_matching_queue_size),
     "playlist": WorkerDescriptor(attr="playlist_worker", queue_literal="n/a"),
@@ -285,15 +286,15 @@ _WORKERS: Dict[str, WorkerDescriptor] = {
 }
 
 
-def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -> Dict[str, Any]:
+def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -> dict[str, Any]:
     stored_last_seen, stored_status = read_worker_status(name)
     last_seen_dt = parse_timestamp(stored_last_seen)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     status = resolve_status(stored_status, last_seen_dt, now=now)
     stored_status_normalized = (stored_status or "").lower() if stored_status else ""
 
     if status == WORKER_STALE and stored_status_normalized != WORKER_STALE:
-        elapsed: Optional[float] = None
+        elapsed: float | None = None
         if last_seen_dt is not None:
             elapsed = (now - last_seen_dt).total_seconds()
         record_worker_stale(
@@ -305,7 +306,7 @@ def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -
         )
         mark_worker_status(name, WORKER_STALE)
 
-    payload: Dict[str, Any] = {"status": status}
+    payload: dict[str, Any] = {"status": status}
     payload["last_seen"] = stored_last_seen
 
     queue_value: QueueValue | None = None
@@ -341,13 +342,13 @@ def _worker_payload(name: str, descriptor: WorkerDescriptor, request: Request) -
 
 
 @router.get("/status", tags=["System"])
-async def get_status(request: Request) -> Dict[str, Any]:
+async def get_status(request: Request) -> dict[str, Any]:
     """Return general application status data for the dashboard."""
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start_time = getattr(request.app.state, "start_time", _START_TIME)
     if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=timezone.utc)
+        start_time = start_time.replace(tzinfo=UTC)
     uptime_seconds = (now - start_time).total_seconds()
     workers = {
         name: _worker_payload(name, descriptor, request) for name, descriptor in _WORKERS.items()
@@ -433,7 +434,7 @@ def _resolve_psutil(request: Request | None = None):
 
 
 @router.get("/system/stats", tags=["System"])
-async def get_system_stats(request: Request) -> Dict[str, Any]:
+async def get_system_stats(request: Request) -> dict[str, Any]:
     """Return system statistics such as CPU, memory and disk usage."""
 
     current_psutil = _resolve_psutil(request)

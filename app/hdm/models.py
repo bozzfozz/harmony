@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 
 class ItemState(str, Enum):
@@ -72,7 +73,7 @@ class DownloadItem:
     duration_seconds: float | None = None
     bitrate: int | None = None
     index: int | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(slots=True)
@@ -166,5 +167,5 @@ class DownloadWorkItem:
     ) -> None:
         """Append a pipeline event with sensible defaults."""
 
-        event_ts = timestamp or datetime.now(timezone.utc)
+        event_ts = timestamp or datetime.now(UTC)
         self.events.append(ItemEvent(name=name, timestamp=event_ts, meta=meta))

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Any, Iterable
+from typing import Any
 
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
@@ -207,7 +208,7 @@ class PlaylistSyncWorker:
         self,
         items: list[dict[str, Any]],
         timestamp: datetime,
-        cache_invalidator: "PlaylistCacheInvalidator | None",
+        cache_invalidator: PlaylistCacheInvalidator | None,
     ) -> int:
         processed = 0
         updated_ids: list[str] = []
@@ -283,7 +284,7 @@ class PlaylistSyncWorker:
 
         return target
 
-    def _build_cache_invalidator(self) -> "PlaylistCacheInvalidator | None":
+    def _build_cache_invalidator(self) -> PlaylistCacheInvalidator | None:
         if self._response_cache is None:
             return None
 
@@ -313,7 +314,7 @@ class PlaylistSyncWorker:
                 track_count = int(total)
             except (TypeError, ValueError):
                 track_count = 0
-        elif isinstance(tracks, Iterable) and not isinstance(tracks, (str, bytes)):
+        elif isinstance(tracks, Iterable) and not isinstance(tracks, str | bytes):
             track_count = sum(1 for _ in tracks)
         else:
             try:
