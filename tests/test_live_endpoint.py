@@ -20,7 +20,7 @@ async def test_health_live_endpoint_returns_ok() -> None:
 async def test_live_probe_returns_ok() -> None:
     payload = await live_probe()
 
-    assert payload == {"status": "ok"}
+    assert payload == {"status": "ok", "version": app.version}
 
 
 def test_live_route_registered_without_prefix() -> None:

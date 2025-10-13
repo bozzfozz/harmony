@@ -757,7 +757,8 @@ async def root() -> dict[str, str]:
 async def live_probe() -> dict[str, str]:
     """Expose a top-level liveness probe independent of other routers."""
 
-    return {"status": "ok"}
+    version = getattr(app, "version", "unknown")
+    return {"status": "ok", "version": version}
 
 
 _versioned_router = APIRouter()
