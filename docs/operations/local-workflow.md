@@ -6,7 +6,7 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 
 | Kommando                  | Script                              | Zweck |
 | ------------------------- | ----------------------------------- | ----- |
-| `make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff, Pytest, pip-check-reqs) sowie Schreibrechte auf `/data/downloads` und `/data/music`. |
+| `make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline-tolerant) aus und verifiziert `/data/downloads` & `/data/music` mit Schreib-/Lesetest. |
 | `make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
 | `make lint`               | `scripts/dev/lint_py.sh`            | Ruft `ruff check --output-format=concise .` auf. |
 | `make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
@@ -35,9 +35,10 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 ## Troubleshooting
 
 ### `make doctor`
-- **Fehlende Tools:** Installiere Python ≥ 3.10, Ruff, Pytest sowie `pip-check-reqs`.
-- **pip-check-reqs fehlt:** `pip install pip-check-reqs`
-- **Write-Permissions:** Erstelle `/data/downloads` und `/data/music` und setze Schreibrechte für deinen Benutzer.
+- **Fehlende Tools:** Installiere Python ≥ 3.10, Ruff und Pytest.
+- **Security-Audit offline:** Ohne Internetzugang meldet `pip-audit` ein WARN und der Lauf bleibt grün.
+- **Directory-Probleme:** Das Skript legt `DOWNLOADS_DIR`/`MUSIC_DIR` automatisch an. Prüfe Mounts und Berechtigungen, falls der Schreib-/Lesetest scheitert.
+- **Optionale Requirement-Guards:** Setze `DOCTOR_PIP_REQS=1`, wenn `pip-missing-reqs`/`pip-extra-reqs` zwingend geprüft werden sollen.
 
 ### `make dep-sync`
 - **Missing Dependencies:** Passe `requirements*.txt` an und wiederhole den Lauf.

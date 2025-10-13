@@ -102,9 +102,19 @@ Alle weiteren Variablen sowie Defaults sind in den Tabellen unter
   - `app/services/secret_store.py` persistiert Secrets (`write` benötigt).
   - `app/routers/spotify_router.py` und `app/routers/settings_router.py`
     veröffentlichen die OAuth- und Status-Endpunkte.
-- **Laufzeitverzeichnisse:**
-  - `/data/` im Container speichert Downloads (`/data/downloads`) sowie die
-    normalisierte Musikbibliothek (`/data/music`).
+
+#### Laufzeitverzeichnisse
+
+| Variable | Default | Beschreibung |
+| --- | --- | --- |
+| `DOWNLOADS_DIR` | `/data/downloads` | Temporäre Ablage eingehender Dateien. Wird beim Start angelegt und auf Schreib-/Leserechte geprüft. |
+| `MUSIC_DIR` | `/data/music` | Zielpfad für normalisierte Bibliothekseinträge. |
+
+- Der Docker-Entrypoint erstellt beide Pfade bei jedem Start, setzt optional `PUID`/`PGID` und berücksichtigt `UMASK`.
+- `make doctor` wiederholt die Prüfungen und legt fehlende Verzeichnisse automatisch an. Der Check schreibt, liest und entfernt eine Probe-Datei, um Berechtigungen zu verifizieren.
+- In air-gapped Umgebungen meldet `make doctor` Sicherheits-Scans (`pip-audit`) als „WARN (offline)“, bricht aber nicht ab.
+
+- **Weitere Pfade:**
   - `reports/` enthält Coverage-, JUnit- sowie DLQ-/Backfill-Logs und sollte als
     Persistenz-Ziel gemountet werden, wenn Analysen hostübergreifend benötigt
     werden.
@@ -194,7 +204,7 @@ docker run -d \
 
 ### `compose.yaml`
 
-Im Repository liegt ein vorkonfiguriertes [`compose.yaml`](compose.yaml), das genau einen Service (`harmony`) startet. Die Healthcheck-Definition prüft `GET http://localhost:8080/api/health/ready`; `docker compose up -d` genügt für lokale Tests.
+Im Repository liegt ein vorkonfiguriertes [`compose.yaml`](compose.yaml), das genau einen Service (`harmony`) startet. Die Healthcheck-Definition prüft `GET http://localhost:8080/live`; `docker compose up -d` genügt für lokale Tests.
 
 ```bash
 docker compose up -d
@@ -421,7 +431,7 @@ Eine vollständige Beschreibung des Watchlist→Timer→Sync→API-Flows inklusi
 | --- | --- | --- | --- |
 | Spotify OAuth | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Müssen gesetzt und nicht leer sein. | Secrets ausschließlich aus Secret-Store oder `.env` beziehen. |
 | OAuth-State (Split-Modus) | `OAUTH_SPLIT_MODE`, `OAUTH_STATE_DIR` | `OAUTH_SPLIT_MODE` akzeptiert nur `true`/`false`. Bei `true` muss `OAUTH_STATE_DIR` existieren, beschreibbar sein und auf demselben Dateisystem wie `DOWNLOADS_DIR` liegen. | Ohne Split-Modus bleibt `OAUTH_STATE_DIR` optional. |
-| Volumes/Pfade | `DOWNLOADS_DIR`, `MUSIC_DIR` | Verzeichnisse müssen vor dem Start existieren, beschreibbar sein und genügend Speicherplatz besitzen. | Der Ready-Check testet Schreibrechte (Create → fsync → unlink). |
+| Volumes/Pfade | `DOWNLOADS_DIR`, `MUSIC_DIR` | Der Entrypoint legt Standardpfade automatisch an und übernimmt optional `PUID`/`PGID`. Gemountete Verzeichnisse müssen beschreibbar sein und ausreichend Speicher bieten. | Der Ready-Check sowie `make doctor` prüfen Schreibrechte (Create → read → unlink). |
 | Soulseekd | `SLSKD_HOST`, `SLSKD_PORT` | TCP-Reachability muss gegeben sein (`3 × 1 s` Timeout). | Ports außerhalb des Containers freigeben; Fehler melden `start.guard`-Logs. |
 | API-Schutz | `HARMONY_API_KEY` **oder** `HARMONY_API_KEYS` | Mindestens ein Key muss konfiguriert sein. | Mehrere Keys via CSV (`HARMONY_API_KEYS`) möglich. |
 
@@ -445,7 +455,7 @@ Nach ausgeschöpftem Retry-Budget setzt der Worker einen persistenten Cooldown p
 | --- | --- | --- |
 | `WATCHLIST_DB_IO_MODE` | `thread` | Schaltet zwischen Thread-Offloading und einem nativen Async-DAO. |
 | `WATCHLIST_MAX_CONCURRENCY` | `3` | Maximale Anzahl paralleler Künstler, die pro Tick verarbeitet werden. |
-| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | `8000` | Timeout für Spotify-Aufrufe (Alben & Tracks). |
+| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | `8_000` | Timeout für Spotify-Aufrufe (Alben & Tracks). |
 | `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS` | `12000` | Timeout für jede Soulseek-Suche. |
 | `WATCHLIST_RETRY_MAX` | `3` | Maximale Versuche pro Tick und Künstler. |
 | `WATCHLIST_BACKOFF_BASE_MS` | `250` | Basiswert für exponentiellen Backoff (mit ±20 % Jitter, gedeckelt bei 5 s). |
@@ -499,7 +509,7 @@ Der Artwork-Worker lauscht auf abgeschlossene Downloads und lädt das zugehörig
 
 ## File Organization
 
-Nach Abschluss eines Downloads verschiebt Harmony die Audiodatei automatisch in eine saubere, konsistente Verzeichnisstruktur unterhalb des Musik-Ordners (`MUSIC_DIR`, Standard: `./music`). Der endgültige Pfad folgt dem Muster `music/<Artist>/<Album>/<TrackNumber - Title>.<ext>`. Namen werden vor dem Verschieben normalisiert (Sonderzeichen, Slashes und doppelte Leerzeichen werden entfernt), sodass alle Betriebssysteme den Pfad zuverlässig verarbeiten.
+Nach Abschluss eines Downloads verschiebt Harmony die Audiodatei automatisch in eine saubere, konsistente Verzeichnisstruktur unterhalb des Musik-Ordners (`MUSIC_DIR`, Standard: `/data/music`). Der endgültige Pfad folgt dem Muster `music/<Artist>/<Album>/<TrackNumber - Title>.<ext>`. Namen werden vor dem Verschieben normalisiert (Sonderzeichen, Slashes und doppelte Leerzeichen werden entfernt), sodass alle Betriebssysteme den Pfad zuverlässig verarbeiten.
 
 - Ist kein Album in den Metadaten hinterlegt, versucht Harmony den Namen aus dem Dateinamen zu erraten. Gelingt dies nicht, landet der Track im Ordner `<Unknown Album>`.
 - Fehlt die Tracknummer, wird die Datei nur anhand des Titels benannt.
@@ -542,6 +552,7 @@ Die vendorten Dateien liegen unter `frontend/static/vendor/`. Committe sie nur, 
 
 ### Fehlerbilder & Behebung
 
+- **make doctor:** Verifiziert Tooling (`python`, `ruff`, `pytest`), führt `pip check` aus und meldet `pip-audit` in Offline-Umgebungen als WARN. Setze `DOCTOR_PIP_REQS=1`, falls du zusätzlich `pip-missing-reqs`/`pip-extra-reqs` erzwingen möchtest.
 - **Dependency-Drift (Python):** `scripts/dev/dep_sync_py.sh` listet fehlende oder ungenutzte Pakete. Aktualisiere `requirements*.txt` entsprechend und wiederhole den Lauf.
 - **Import-Map-Drift:** `make supply-guard` meldet ungepinnte oder unsichere URLs. Passe `frontend/importmap.json` an.
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
@@ -648,7 +659,7 @@ services:
       #   source: /srv/media/music
       #   target: /data/music
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/api/health/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/live"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -733,7 +744,7 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 | `SLSKD_API_KEY` | string | _(leer)_ | API-Key für slskd. | 🔒 |
 | `SPOTIFY_TIMEOUT_MS` | int | `15000` | Timeout für Spotify-API-Aufrufe. | — |
 | `PLEX_TIMEOUT_MS` | int | `15000` | Timeout für Plex-Integrationen (archiviert). | — |
-| `SLSKD_TIMEOUT_MS` | int | `8000` | Timeout für slskd-Anfragen. | — |
+| `SLSKD_TIMEOUT_MS` | int | `8_000` | Timeout für slskd-Anfragen. | — |
 | `SLSKD_RETRY_MAX` | int | `3` | Neuversuche pro slskd-Request. | — |
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | int | `250` | Basis für exponentielles Backoff bei slskd. | — |
 | `SLSKD_JITTER_PCT` | int | `20` | Zufälliger ±Jitter (in %) für das Backoff pro Versuch. | — |
@@ -780,7 +791,7 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 - `SLSKD_API_KEY` **muss** konfiguriert werden und wird per `X-API-Key` Header übertragen.
 - `SLSKD_JITTER_PCT` steuert den ±Jitter für das exponentielle Backoff (Default ±20 %).
 - Zeitkritische Pfade verwenden `SLSKD_TIMEOUT_MS` sowie die Retry-Parameter `SLSKD_RETRY_MAX`/`SLSKD_RETRY_BACKOFF_BASE_MS`.
-  Bei hohen Latenzen empfiehlt sich ein Timeout ≥ 8000 ms sowie ein konservatives Retry-Limit.
+  Bei hohen Latenzen empfiehlt sich ein Timeout ≥ 8 000 ms sowie ein konservatives Retry-Limit.
 
 #### Artwork & Lyrics
 
@@ -816,7 +827,7 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 | `INGEST_MAX_PENDING_JOBS` | int | `100` | Backpressure-Grenze für offene Ingest-Jobs. | — |
 | `BACKFILL_MAX_ITEMS` | int | `2000` | Maximale Items pro Backfill-Lauf. | — |
 | `BACKFILL_CACHE_TTL_SEC` | int | `604800` | TTL (Sekunden) für den Spotify-Suche-Cache. | — |
-| `SEARCH_TIMEOUT_MS` | int | `8000` | Timeout für `/search`. | — |
+| `SEARCH_TIMEOUT_MS` | int | `8_000` | Timeout für `/search`. | — |
 | `SEARCH_MAX_LIMIT` | int | `100` | Maximale Treffer pro Seite. | — |
 
 #### Worker, Queueing & Storage
@@ -826,9 +837,9 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 | `WATCHLIST_INTERVAL` | int | `86400` | Wartezeit in Sekunden zwischen zwei Watchlist-Runs. | — |
 | `WATCHLIST_MAX_CONCURRENCY` | int | `3` | Parallele Artists pro Tick (1–10). | — |
 | `WATCHLIST_MAX_PER_TICK` | int | `20` | Bearbeitete Artists pro Tick. | — |
-| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | int | `8000` | Timeout für Spotify-Aufrufe in der Watchlist. | — |
+| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | int | `8_000` | Timeout für Spotify-Aufrufe in der Watchlist. | — |
 | `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS` | int | `12000` | Timeout für Soulseek-Suchen (Alias `WATCHLIST_SEARCH_TIMEOUT_MS`). | — |
-| `WATCHLIST_TICK_BUDGET_MS` | int | `8000` | Budget pro Verarbeitungsschritt. | — |
+| `WATCHLIST_TICK_BUDGET_MS` | int | `8_000` | Budget pro Verarbeitungsschritt. | — |
 | `WATCHLIST_BACKOFF_BASE_MS` | int | `250` | Basiswert für den Backoff bei Fehlern. | — |
 | `WATCHLIST_RETRY_MAX` | int | `3` | Retries pro Tick vor Eskalation. | — |
 | `WATCHLIST_RETRY_BUDGET_PER_ARTIST` | int | `6` | Gesamtretry-Budget pro Artist innerhalb des Cooldowns (Fallback, wenn kein Artist-Override gesetzt ist). | — |
@@ -866,7 +877,7 @@ Der Workflow [`.github/workflows/autopush.yml`](.github/workflows/autopush.yml) 
 | `DLQ_PAGE_SIZE_MAX` | int | `100` | Obergrenze für `page_size`. | — |
 | `DLQ_REQUEUE_LIMIT` | int | `500` | Limit für Bulk-Requeue. | — |
 | `DLQ_PURGE_LIMIT` | int | `1000` | Limit für Bulk-Purge. | — |
-| `MUSIC_DIR` | path | `./music` | Zielpfad für organisierte Downloads. | — |
+| `MUSIC_DIR` | path | `/data/music` | Zielpfad für organisierte Downloads. | — |
 
 > **Retry-Provider:** `RetryPolicyProvider` lädt die Backoff-Parameter (`RETRY_*`) zur Laufzeit aus der Umgebung, cached sie für `RETRY_POLICY_RELOAD_S` Sekunden (Default 10 s) und unterstützt Job-spezifische Overrides (`RETRY_SYNC_MAX_ATTEMPTS`, `RETRY_MATCHING_BASE_SECONDS`, …). `get_retry_policy(<job_type>)` liefert Snapshots für Orchestrator/Worker, `SyncWorker.refresh_retry_policy()` invalidiert den Cache ohne Neustart.
 
@@ -918,7 +929,7 @@ Eine kuratierte Übersicht der Worker-Defaults, Environment-Variablen und Beispi
 | --- | --- | --- | --- | --- |
 | `VITE_API_BASE_URL` | string | `http://127.0.0.1:8080` | Basis-URL des Backends ohne Pfadanteil. | — |
 | `VITE_API_BASE_PATH` | string | _(leer)_ | Optionales Präfix für alle REST-Aufrufe (z. B. `/api`). | — |
-| `VITE_API_TIMEOUT_MS` | int | `8000` | Timeout (in Millisekunden) für HTTP-Requests des Frontends. | — |
+| `VITE_API_TIMEOUT_MS` | int | `8_000` | Timeout (in Millisekunden) für HTTP-Requests des Frontends. | — |
 | `VITE_USE_OPENAPI_CLIENT` | bool | `false` | Aktiviert den optionalen OpenAPI-Client (falls generiert). | — |
 | `VITE_REQUIRE_AUTH` | bool | `false` | Blockt Frontend-Requests ohne API-Key. | — |
 | `VITE_AUTH_HEADER_MODE` | `x-api-key`\|`bearer` | `x-api-key` | Wählt den HTTP-Header für den Key. | — |

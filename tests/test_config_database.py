@@ -35,7 +35,7 @@ def test_default_database_url_for_test(monkeypatch):
 
 
 def test_database_url_rejects_non_sqlite(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://localhost:5432/harmony")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://localhost:4444/harmony")
     override_runtime_env(None)
     with pytest.raises(ValidationAppError):
         load_config()

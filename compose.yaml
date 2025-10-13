@@ -39,7 +39,7 @@ services:
         source: /srv/harmony/runtime/oauth_state
         target: /data/runtime/oauth_state
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/api/health/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/live"]
       interval: 30s
       timeout: 5s
       retries: 3

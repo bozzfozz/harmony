@@ -1,20 +1,33 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
 status=0
 
-check_command() {
-  local cmd=$1
-  local hint=$2
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[missing] $cmd — $hint" >&2
-    status=1
-  else
-    echo "[ok] $cmd"
-  fi
+log_pass() {
+  printf '[PASS] %s\n' "$1"
+}
+
+log_warn() {
+  printf '[WARN] %s\n' "$1"
+}
+
+log_fail() {
+  status=1
+  printf '[FAIL] %s\n' "$1"
+}
+
+print_detail() {
+  printf '%s\n' "$1" | sed 's/^/       /'
+}
+
+to_bool() {
+  case "$1" in
+    1|true|TRUE|True|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 resolve_python() {
@@ -23,41 +36,151 @@ resolve_python() {
   elif command -v python3 >/dev/null 2>&1; then
     echo python3
   else
-    echo "" 
+    echo ""
   fi
 }
 
 PYTHON_BIN=$(resolve_python)
 if [[ -z "$PYTHON_BIN" ]]; then
-  echo "[missing] python — install Python 3.10+." >&2
-  status=1
+  log_fail "python interpreter missing (install Python 3.10+)"
 else
-  echo "[ok] $PYTHON_BIN"
+  version=$($PYTHON_BIN --version 2>&1 || true)
+  log_pass "python available via ${PYTHON_BIN} (${version})"
 fi
 
-check_command ruff "install via 'pip install ruff'"
-check_command pytest "install via 'pip install pytest'"
-check_command pip-missing-reqs "install via 'pip install pip-check-reqs'"
-check_command pip-extra-reqs "install via 'pip install pip-check-reqs'"
+if command -v ruff >/dev/null 2>&1; then
+  log_pass "ruff available"
+else
+  log_fail "ruff missing (install via 'pip install ruff')"
+fi
 
-required_dirs=(/data/downloads /data/music)
-for path in "${required_dirs[@]}"; do
+if command -v pytest >/dev/null 2>&1; then
+  log_pass "pytest available"
+else
+  log_fail "pytest missing (install via 'pip install pytest')"
+fi
+
+check_directory() {
+  local env_key=$1
+  local fallback=$2
+  local label=$3
+
+  local raw_path="${!env_key:-$fallback}"
+  if [[ -z "$raw_path" ]]; then
+    log_fail "$label path not configured"
+    return
+  fi
+
+  local path="$raw_path"
+  if [[ "$path" == ~* ]]; then
+    path="${path/#\~/$HOME}"
+  fi
+
+  if ! mkdir -p "$path" 2>/dev/null; then
+    log_fail "$label directory not creatable ($path)"
+    return
+  fi
+
   if [[ ! -d "$path" ]]; then
-    echo "[missing] directory $path — create it and ensure the current user has write permissions." >&2
-    status=1
-    continue
+    log_fail "$label path is not a directory ($path)"
+    return
   fi
-  if [[ ! -w "$path" ]]; then
-    echo "[denied] directory $path — grant write access to the current user." >&2
-    status=1
+
+  if [[ ! -w "$path" || ! -x "$path" ]]; then
+    log_fail "$label directory is not writable/executable ($path)"
+    return
+  fi
+
+  local probe
+  if ! probe=$(mktemp "$path/.doctor-probe.XXXXXX" 2>/dev/null); then
+    log_fail "$label unable to create probe file ($path)"
+    return
+  fi
+
+  if ! printf 'doctor-probe' >"$probe" 2>/dev/null; then
+    rm -f "$probe" >/dev/null 2>&1 || true
+    log_fail "$label unable to write probe file ($path)"
+    return
+  fi
+
+  if ! cat "$probe" >/dev/null 2>&1; then
+    rm -f "$probe" >/dev/null 2>&1 || true
+    log_fail "$label unable to read probe file ($path)"
+    return
+  fi
+
+  if ! rm -f "$probe" >/dev/null 2>&1; then
+    log_fail "$label unable to clean probe file ($path)"
+    return
+  fi
+
+  log_pass "$label directory ready ($path)"
+}
+
+check_directory DOWNLOADS_DIR /data/downloads "downloads"
+check_directory MUSIC_DIR /data/music "music"
+
+if [[ -n "$PYTHON_BIN" ]]; then
+  if output=$($PYTHON_BIN -m pip check 2>&1); then
+    log_pass "pip check"
   else
-    echo "[ok] directory $path writable"
+    log_fail "pip check"
+    print_detail "$output"
   fi
-done
+else
+  log_warn "pip check skipped (python missing)"
+fi
+
+if command -v pip-audit >/dev/null 2>&1; then
+  if audit_output=$(pip-audit --disable-progress-bar 2>&1); then
+    log_pass "pip-audit"
+  else
+    if printf '%s' "$audit_output" | grep -qiE 'network|connection|timed out|temporary failure|Name or service not known|offline'; then
+      log_warn "pip-audit skipped (offline)"
+      print_detail "$audit_output"
+    else
+      log_fail "pip-audit reported issues"
+      print_detail "$audit_output"
+    fi
+  fi
+else
+  log_warn "pip-audit not installed; skipping security audit"
+fi
+
+if to_bool "${DOCTOR_PIP_REQS:-}"; then
+  if command -v pip-missing-reqs >/dev/null 2>&1; then
+    if output=$(pip-missing-reqs app tests 2>&1); then
+      log_pass "pip-missing-reqs"
+    else
+      log_fail "pip-missing-reqs reported issues"
+      print_detail "$output"
+    fi
+  else
+    log_fail "pip-missing-reqs missing (required because DOCTOR_PIP_REQS=1)"
+  fi
+
+  if command -v pip-extra-reqs >/dev/null 2>&1; then
+    if output=$(pip-extra-reqs --requirements-file requirements.txt app tests 2>&1); then
+      log_pass "pip-extra-reqs"
+    else
+      log_fail "pip-extra-reqs reported issues"
+      print_detail "$output"
+    fi
+  else
+    log_fail "pip-extra-reqs missing (required because DOCTOR_PIP_REQS=1)"
+  fi
+else
+  if command -v pip-missing-reqs >/dev/null 2>&1 && command -v pip-extra-reqs >/dev/null 2>&1; then
+    log_warn "Requirement guard tooling detected but disabled (set DOCTOR_PIP_REQS=1 to enforce)"
+  else
+    log_warn "Requirement guard tooling not installed; set DOCTOR_PIP_REQS=1 to enforce"
+  fi
+fi
 
 if [[ $status -ne 0 ]]; then
-  echo "Doctor checks failed. Resolve the issues above." >&2
-  exit 1
+  echo "Doctor checks detected blocking issues." >&2
+else
+  echo "Doctor checks completed successfully."
 fi
 
-echo "All doctor checks passed."
+exit "$status"

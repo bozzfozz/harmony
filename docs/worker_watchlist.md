@@ -41,9 +41,9 @@ The worker is controlled through the following environment variables:
 |----------|---------|-------------|
 | `WATCHLIST_MAX_CONCURRENCY` | `4` | Maximum number of artists processed concurrently per tick. |
 | `WATCHLIST_MAX_PER_TICK` | `20` | Maximum number of artists fetched from the database per tick. |
-| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | `8000` | Timeout applied to Spotify artist and album lookups. |
+| `WATCHLIST_SPOTIFY_TIMEOUT_MS` | `8_000` | Timeout applied to Spotify artist and album lookups. |
 | `WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS` | `12000` | Timeout applied to every Soulseek search. |
-| `WATCHLIST_TICK_BUDGET_MS` | `8000` | Global deadline for a tick. Artists that would exceed the budget are skipped. |
+| `WATCHLIST_TICK_BUDGET_MS` | `8_000` | Global deadline for a tick. Artists that would exceed the budget are skipped. |
 | `WATCHLIST_BACKOFF_BASE_MS` | `250` | Base delay for exponential backoff after dependency failures. |
 | `WATCHLIST_RETRY_MAX` | `3` | Maximum number of attempts per artist within a single tick. |
 | `WATCHLIST_JITTER_PCT` | `0.2` | Percentage of jitter applied to the calculated backoff delay. |

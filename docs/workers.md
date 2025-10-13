@@ -79,7 +79,7 @@ Die Komponenten werden aus `app/orchestrator/bootstrap.py` heraus initialisiert.
 | Variable | Default | Wirkung | Hinweise |
 | --- | ---: | --- | --- |
 | `PROVIDER_MAX_CONCURRENCY` | `4` | Maximale Parallelität für Integrationen. | Sollte zu Provider-Limits passen. |
-| `SLSKD_TIMEOUT_MS` | `8000` | Timeout (ms) für Soulseek-Requests. | Bei instabilen Netzen erhöhen. |
+| `SLSKD_TIMEOUT_MS` | `8_000` | Timeout (ms) für Soulseek-Requests. | Bei instabilen Netzen erhöhen. |
 | `SLSKD_RETRY_MAX` | `3` | Retries für Soulseek-Anfragen. | | 
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | Basis-Delay für Soulseek-Retries. | |
 | `SLSKD_JITTER_PCT` | `20.0` | Zufallsjitter (±20 %) für Soulseek-Retries. | |
@@ -124,7 +124,7 @@ WATCHLIST_BACKOFF_BASE_MS=250
 WATCHLIST_JITTER_PCT=0.2
 WORKER_VISIBILITY_TIMEOUT_S=60
 PROVIDER_MAX_CONCURRENCY=4
-SLSKD_TIMEOUT_MS=8000
+SLSKD_TIMEOUT_MS=8_000
 SLSKD_RETRY_MAX=3
 SLSKD_RETRY_BACKOFF_BASE_MS=250
 SLSKD_JITTER_PCT=20.0

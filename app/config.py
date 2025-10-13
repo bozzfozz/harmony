@@ -2115,6 +2115,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         _compose_allowlist_entry(api_base_path, suffix) for suffix in DEFAULT_ALLOWLIST_SUFFIXES
     ]
     default_allowlist.append("/api/health/ready")
+    default_allowlist.append("/live")
     allowlist_override_entries = [
         _normalise_prefix(entry) for entry in _parse_list(_env_value(env, "AUTH_ALLOWLIST"))
     ]
