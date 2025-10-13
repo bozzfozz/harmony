@@ -99,24 +99,51 @@ def _env_value(env: Mapping[str, Any], key: str) -> str | None:
     return str(value)
 
 
-def _ensure_no_legacy_port_alias(env: Mapping[str, Any]) -> None:
+def _legacy_port_aliases(env: Mapping[str, Any]) -> list[tuple[str, str]]:
+    aliases: list[tuple[str, str]] = []
     for candidate in _LEGACY_APP_PORT_ENV_VARS:
         value = _env_value(env, candidate)
-        if value not in (None, ""):
-            message = (
-                "Legacy port variable detected: "
-                f"{candidate}={value!r}. Configure APP_PORT exclusively."
-            )
-            logger.error(message)
-            raise ValueError(message)
+        if value is None:
+            continue
+        stripped = value.strip()
+        if not stripped:
+            continue
+        aliases.append((candidate, stripped))
+    return aliases
 
 
 def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
     """Return the configured application port constrained to valid TCP ranges."""
 
     runtime_env: Mapping[str, Any] = env or get_runtime_env()
-    _ensure_no_legacy_port_alias(runtime_env)
+    aliases = _legacy_port_aliases(runtime_env)
     raw_value = _env_value(runtime_env, "APP_PORT")
+    source_name = "APP_PORT"
+
+    if raw_value is not None:
+        stripped = raw_value.strip()
+        if not stripped:
+            raw_value = None
+        else:
+            raw_value = stripped
+
+    if raw_value is None and aliases:
+        alias_name, alias_value = aliases[0]
+        source_name = alias_name
+        raw_value = alias_value
+        logger.warning(
+            "Legacy port alias %s=%r detected without APP_PORT; using alias value. "
+            "Configure APP_PORT to silence this warning.",
+            alias_name,
+            alias_value,
+        )
+    elif raw_value is not None and aliases:
+        alias_rendered = ", ".join(f"{name}={value!r}" for name, value in aliases)
+        logger.info(
+            "Ignoring legacy port aliases %s because APP_PORT=%r is set.",
+            alias_rendered,
+            raw_value,
+        )
     port = _bounded_int(
         raw_value,
         default=DEFAULT_APP_PORT,
@@ -124,20 +151,16 @@ def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
         maximum=65535,
     )
 
-    value_text = str(raw_value).strip() if raw_value is not None else ""
-    if raw_value is not None and not value_text:
-        raw_value = None
-
     if raw_value is None:
         return port
 
     try:
-        numeric = int(value_text)
+        numeric = int(str(raw_value))
     except (TypeError, ValueError):
         logger.warning(
             "Invalid APP_PORT value %r from %s; falling back to default %s.",
             raw_value,
-            "APP_PORT",
+            source_name,
             DEFAULT_APP_PORT,
         )
         return port
@@ -146,7 +169,7 @@ def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
         logger.warning(
             "APP_PORT value %r from %s outside allowed range; clamped to %s.",
             raw_value,
-            "APP_PORT",
+            source_name,
             port,
         )
 

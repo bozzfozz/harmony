@@ -27,15 +27,19 @@ def test_resolve_app_port_clamps_invalid_values() -> None:
     "alias_name",
     ["PORT", "UVICORN_PORT", "SERVICE_PORT", "WEB_PORT", "FRONTEND_PORT"],
 )
-def test_resolve_app_port_rejects_legacy_aliases(alias_name: str) -> None:
-    """Legacy aliases trigger a configuration error to enforce APP_PORT-only setup."""
+def test_resolve_app_port_accepts_legacy_aliases(alias_name: str) -> None:
+    """Legacy aliases are normalised when APP_PORT is unset."""
 
-    with pytest.raises(ValueError):
-        resolve_app_port({alias_name: "9091"})
+    assert resolve_app_port({alias_name: "9091"}) == 9091
 
 
-def test_resolve_app_port_rejects_alias_even_with_matching_value() -> None:
-    """Legacy aliases remain unsupported even if they mirror APP_PORT."""
+def test_resolve_app_port_prefers_app_port_over_alias() -> None:
+    """APP_PORT remains authoritative when aliases are present."""
 
-    with pytest.raises(ValueError):
-        resolve_app_port({"APP_PORT": "8080", "PORT": "8080"})
+    assert resolve_app_port({"APP_PORT": "8088", "PORT": "9092"}) == 8088
+
+
+def test_resolve_app_port_ignores_empty_aliases() -> None:
+    """Blank alias values are treated as absent."""
+
+    assert resolve_app_port({"PORT": "   ", "APP_PORT": "9000"}) == 9000
