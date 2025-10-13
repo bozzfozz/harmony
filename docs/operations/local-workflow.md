@@ -15,7 +15,7 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Stellt sicher, dass keine Paketmanager-Artefakte vorhanden sind und Import-Maps gepinnt bleiben. |
 | `make vendor-frontend`    | `scripts/dev/vendor_frontend.sh`    | Lädt CDN-Module in `frontend/static/vendor/` und rewritet Import-Maps für Offline-Betrieb. |
 | `make vendor-frontend-reset` | `scripts/dev/vendor_frontend.sh --reset` | Entfernt lokale Vendor-Dateien und stellt den CDN-Modus wieder her. |
-| `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt standardmäßig `/live` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
+| `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge. |
 
 ## Ablauf vor jedem Merge
@@ -52,10 +52,10 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 - **Unerwünschte Änderungen:** Nutze `make vendor-frontend-reset`, um den Ausgangszustand wiederherzustellen.
 
 ### `make smoke`
-- **Server startet nicht:** Kontrolliere `.tmp/smoke.log` und stelle sicher, dass `DATABASE_URL` auf eine schreibbare SQLite-Datei zeigt.
+- **Server startet nicht:** Kontrolliere `.tmp/smoke.log` (wird automatisch ausgegeben) und stelle sicher, dass `DATABASE_URL` auf eine schreibbare SQLite-Datei zeigt.
 - **Port belegt:** Setze `APP_PORT=<frei>` (z. B. via `.env`) und starte den Smoke-Test erneut.
 - **Legacy-Ports entfernt:** Variablen wie `PORT`, `UVICORN_PORT` oder `WEB_PORT` greifen nicht mehr. Passe ausschließlich `APP_PORT` an, sonst schlägt der Start fehl.
-- **Docker-Sektion:** Setze `SMOKE_UNIFIED_IMAGE` auf einen vorhandenen Tag, wenn du die optionale Container-Prüfung ausführen möchtest.
+- **Docker-Sektion:** Setze `SMOKE_UNIFIED_IMAGE` auf einen vorhandenen Tag, wenn du die optionale Container-Prüfung ausführen möchtest. Bei Fehlern werden automatisch `docker logs`, `docker exec … ps`, `ss/netstat` sowie die relevanten Port-Variablen ausgegeben.
 
 ## Nachweise im PR
 
