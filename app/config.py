@@ -27,7 +27,6 @@ _LEGACY_APP_PORT_ENV_VARS: tuple[str, ...] = (
     "WEB_PORT",
     "FRONTEND_PORT",
 )
-_LEGACY_APP_PORT_LOGGED: set[str] = set()
 
 
 _RUNTIME_ENV_CACHE: dict[str, str] | None = None
@@ -100,53 +99,24 @@ def _env_value(env: Mapping[str, Any], key: str) -> str | None:
     return str(value)
 
 
-def _resolve_app_port_source(env: Mapping[str, Any]) -> tuple[Any | None, str | None]:
-    explicit = env.get("APP_PORT")
-    alias_name: str | None = None
-    alias_value: Any = None
+def _ensure_no_legacy_port_alias(env: Mapping[str, Any]) -> None:
     for candidate in _LEGACY_APP_PORT_ENV_VARS:
-        value = env.get(candidate)
+        value = _env_value(env, candidate)
         if value not in (None, ""):
-            alias_name = candidate
-            alias_value = value
-            break
-
-    explicit_value = (explicit or "").strip() if isinstance(explicit, str) else explicit
-    alias_text = (alias_value or "").strip() if isinstance(alias_value, str) else alias_value
-
-    if explicit_value not in (None, ""):
-        if (
-            alias_name is not None
-            and alias_text not in (None, "")
-            and str(alias_text) != str(explicit_value)
-        ):
             message = (
-                "Conflicting port configuration detected: "
-                f"APP_PORT={explicit!r} and {alias_name}={alias_value!r}. "
-                "Remove legacy port variables and configure APP_PORT only."
+                "Legacy port variable detected: "
+                f"{candidate}={value!r}. Configure APP_PORT exclusively."
             )
             logger.error(message)
             raise ValueError(message)
-        return explicit, "APP_PORT"
-
-    if alias_name is not None and alias_text not in (None, ""):
-        if alias_name not in _LEGACY_APP_PORT_LOGGED:
-            logger.info(
-                "Using legacy port variable %s as APP_PORT source.",
-                alias_name,
-                extra={"event": "config.port.alias", "alias": alias_name},
-            )
-            _LEGACY_APP_PORT_LOGGED.add(alias_name)
-        return alias_value, alias_name
-
-    return None, None
 
 
 def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
     """Return the configured application port constrained to valid TCP ranges."""
 
     runtime_env: Mapping[str, Any] = env or get_runtime_env()
-    raw_value, source = _resolve_app_port_source(runtime_env)
+    _ensure_no_legacy_port_alias(runtime_env)
+    raw_value = _env_value(runtime_env, "APP_PORT")
     port = _bounded_int(
         raw_value,
         default=DEFAULT_APP_PORT,
@@ -167,7 +137,7 @@ def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
         logger.warning(
             "Invalid APP_PORT value %r from %s; falling back to default %s.",
             raw_value,
-            source or "runtime environment",
+            "APP_PORT",
             DEFAULT_APP_PORT,
         )
         return port
@@ -176,7 +146,7 @@ def resolve_app_port(env: Mapping[str, Any] | None = None) -> int:
         logger.warning(
             "APP_PORT value %r from %s outside allowed range; clamped to %s.",
             raw_value,
-            source or "runtime environment",
+            "APP_PORT",
             port,
         )
 

@@ -1,8 +1,8 @@
 services:
   harmony:
     build: .
-    command: ["uvicorn", "app.main:app", "--reload"]
     environment:
+      UVICORN_EXTRA_ARGS: "${UVICORN_EXTRA_ARGS:---reload --reload-dir /app/app}"
       APP_PORT: "${APP_PORT:-8080}"
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
