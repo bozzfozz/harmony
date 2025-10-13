@@ -28,15 +28,16 @@ def safe_loads(data: str | bytes | bytearray) -> Any:
     """Parse JSON data strictly, rejecting blank inputs."""
 
     if isinstance(data, bytes | bytearray):
-        text = data.decode("utf-8")
-    elif isinstance(data, str):
-        text = data
-    else:
-        raise TypeError("data must be str or bytes")
-    stripped = text.strip()
-    if not stripped:
-        raise ValueError("data must not be empty")
-    return json.loads(stripped)
+        buffer = bytes(data) if isinstance(data, bytearray) else data
+        if not buffer.strip():
+            raise ValueError("data must not be empty")
+        return json.loads(buffer)
+    if isinstance(data, str):
+        stripped = data.strip()
+        if not stripped:
+            raise ValueError("data must not be empty")
+        return json.loads(stripped)
+    raise TypeError("data must be str or bytes")
 
 
 def try_parse_json_or_none(data: str | bytes | bytearray | None) -> Any | None:
