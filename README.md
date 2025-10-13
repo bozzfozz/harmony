@@ -543,7 +543,7 @@ Die vendorten Dateien liegen unter `frontend/static/vendor/`. Committe sie nur, 
 - **Import-Map-Drift:** `make supply-guard` meldet ungepinnte oder unsichere URLs. Passe `frontend/importmap.json` an.
 - **Format/Lint:** `scripts/dev/fmt.sh` übernimmt Formatierung und Import-Sortierung via Ruff; `scripts/dev/lint_py.sh` prüft `ruff check`.
 - **Tests:** `scripts/dev/test_py.sh` nutzt SQLite unter `.tmp/test.db`. Bereinige Testdaten und prüfe markierte Fehler im Output.
-- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Port und Pfad liest das Skript aus `APP_PORT` bzw. `SMOKE_PATH` (inklusive `.env`-Fallback). Prüfe `.tmp/smoke.log` bei Fehlschlägen.
+- **Smoke:** `scripts/dev/smoke_unified.sh` startet `uvicorn` lokal, schreibt Logs nach `.tmp/smoke.log` und pingt standardmäßig `/live`. Port und Pfad liest das Skript aus `APP_PORT` bzw. `SMOKE_PATH` (inklusive `.env`-Fallback). Bei Fehlern werden Prozess-Snapshot und offene Sockets ausgegeben; prüfe zusätzlich `.tmp/smoke.log`.
 
 ## Datenbank-Migrationen
 

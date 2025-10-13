@@ -108,19 +108,20 @@ def _strip_host_port(argv: List[str], offset: int) -> List[str]:
 def _resolve_command(argv: List[str]) -> List[str]:
     port = resolve_app_port()
     os.environ["APP_PORT"] = str(port)
+    print(f"[entrypoint] APP_PORT resolved to {port}")
     needs_binding, offset = _needs_uvicorn_binding(argv)
     if not needs_binding:
         return argv
     sanitized = _strip_host_port(argv, offset)
     sanitized.extend(["--host", APP_HOST, "--port", str(port)])
-    print(f"Enforcing uvicorn bind on {APP_HOST}:{port}")
+    print(f"[entrypoint] Enforcing uvicorn bind on {APP_HOST}:{port}")
     return sanitized
 
 
 command = _resolve_command(sys.argv[1:])
 if not command:
     command = ["uvicorn", "app.main:app", "--host", APP_HOST, "--port", os.environ["APP_PORT"]]
-    print("Defaulting to uvicorn app.main:app")
+    print("[entrypoint] Defaulting to uvicorn app.main:app")
 
 os.execvp(command[0], command)
 PYTHON
