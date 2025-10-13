@@ -163,7 +163,7 @@ Steuerung:
 
 ## Unified Docker Image
 
-Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört auf `APP_PORT` (Default `8080`) – `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
+Harmony wird als einziges Container-Image ausgeliefert, das Backend und vorgerendertes Frontend gemeinsam betreibt. Die Runtime hört auf `APP_PORT` (Default `8080`) – `GET /live` liefert einen schnellen 200er ohne externe Abhängigkeiten, `GET /` liefert die SPA-Shell, `GET /api/health/ready` meldet `{ "status": "ok" }`, sobald Datenbank und Integrationen bereitstehen.
 
 ### Quickstart (`docker run`)
 
@@ -182,6 +182,8 @@ docker run -d \
 > Setze `DB_RESET=1`, um den Datenbankfile beim Start neu anzulegen.
 
 > 🔀 **Port anpassen:** Setze `-e APP_PORT=<port>` und passe das Mapping zu `-p <port>:<port>` an, wenn `8080` bereits belegt ist. Der Container bindet stets an `0.0.0.0:${APP_PORT}`.
+
+> ✅ **Smoke-Test:** `curl -fsS http://127.0.0.1:8080/live` liefert `{ "status": "ok" }`. In den Logs erscheint `listening on 0.0.0.0:8080 path=/live`, sobald der Server bindet.
 
 ### Datenbank & Storage
 

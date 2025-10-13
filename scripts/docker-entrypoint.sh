@@ -16,10 +16,22 @@ case "${DATABASE_URL}" in
 esac
 
 python3 <<'PYTHON'
+from __future__ import annotations
+
 import os
+import sys
 from pathlib import Path
 
 from sqlalchemy.engine import make_url
+
+
+def _fail(message: str, *, details: dict[str, str] | None = None) -> None:
+    meta = ""
+    if details:
+        meta = " " + ", ".join(f"{key}={value}" for key, value in details.items())
+    print(f"[startup] {message}{meta}", file=sys.stderr)
+    sys.exit(1)
+
 
 url = make_url(os.environ["DATABASE_URL"])
 path = url.database
@@ -27,7 +39,32 @@ if path and path != ":memory:":
     resolved = Path(path)
     if not resolved.is_absolute():
         resolved = (Path.cwd() / resolved).resolve()
-    resolved.parent.mkdir(parents=True, exist_ok=True)
+    parent = resolved.parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        _fail(
+            "Unable to create database parent directory",
+            details={"path": str(parent), "error": str(exc)},
+        )
+    if not parent.is_dir():
+        _fail("Database parent path is not a directory", details={"path": str(parent)})
+    if not os.access(parent, os.W_OK | os.X_OK):
+        _fail(
+            "Database parent directory is not writable",
+            details={"path": str(parent)},
+        )
+    try:
+        if resolved.exists():
+            with open(resolved, "ab"):
+                pass
+        else:
+            resolved.touch(exist_ok=True)
+    except OSError as exc:
+        _fail(
+            "Unable to create or access sqlite database file",
+            details={"path": str(resolved), "error": str(exc)},
+        )
 PYTHON
 
 exec python3 - "$@" <<'PYTHON'

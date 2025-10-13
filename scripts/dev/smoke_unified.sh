@@ -98,6 +98,21 @@ trap cleanup EXIT
 $PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
 SERVER_PID=$!
 
+LISTEN_MARKER="listening on 0.0.0.0:${PORT} path=/live"
+LISTEN_RETRIES=60
+while (( LISTEN_RETRIES > 0 )); do
+  if grep -Fq "$LISTEN_MARKER" "$SMOKE_LOG" 2>/dev/null; then
+    break
+  fi
+  if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
+    echo "Backend process terminated before binding. Logs:" >&2
+    cat "$SMOKE_LOG" >&2
+    exit 1
+  fi
+  sleep 1
+  LISTEN_RETRIES=$((LISTEN_RETRIES - 1))
+done
+
 RETRIES=30
 until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
