@@ -623,17 +623,24 @@ Das Repository bringt ein [`compose.yaml`](compose.yaml) mit, das den Service `h
 services:
   harmony:
     image: ghcr.io/bozzfozz/harmony:latest
-    depends_on:
     env_file:
       - ./.env
     environment:
       APP_PORT: 8080
+      DATABASE_URL: sqlite+aiosqlite:///data/harmony.db
       HARMONY_API_KEYS: change-me
       ALLOWED_ORIGINS: http://localhost:${APP_PORT:-8080}
     ports:
       - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     volumes:
       - harmony-data:/data
+      # Optional: mount media directories to persist downloads and the music library
+      # - type: bind
+      #   source: /srv/media/downloads
+      #   target: /data/downloads
+      # - type: bind
+      #   source: /srv/media/music
+      #   target: /data/music
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/api/health/ready"]
       interval: 30s
@@ -641,17 +648,14 @@ services:
       retries: 3
       start_period: 10s
 
-    environment:
-    ports:
-      - "5432:5432"
-    volumes:
-
 volumes:
   harmony-data:
-  harmony-pg-data:
+    driver: local
 ```
 
 [`compose.override.yaml`](compose.override.yaml) aktiviert bei Bedarf Hot-Reloading (`uvicorn --reload`) und einen lokalen Build. Zusätzliche Secrets können über `env_file` oder Compose-Profile eingebunden werden.
+
+Harmony benötigt keine zusätzlichen Services – die SQLite-Datenbank liegt standardmäßig unter `/data/harmony.db`. Mountest du ein Host-Verzeichnis nach `/data`, bleiben Konfigurationen und Verlaufsdaten dauerhaft erhalten. Weitere Betriebsdetails findest du im [SQLite-Runbook](docs/operations/db.md).
 
 ### GitHub Actions
 
