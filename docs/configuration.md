@@ -121,6 +121,7 @@ apply to the single service; optional features are disabled by default.
 | `SLSKD_PORT` | _(legacy)_ | `5030` | Legacy port override used together with `SLSKD_HOST`. |
 | `SLSKD_API_KEY` | _(empty)_ | `slskd-secret` | API key for slskd. |
 | `SLSKD_TIMEOUT_MS` | `8000` | `12000` | Timeout for slskd HTTP calls. |
+| `SLSKD_TIMEOUT_SEC` | `300` | `120` | Overrides the HDM slskd client timeout in seconds; falls back to `SLSKD_TIMEOUT_MS` when unset. |
 | `SLSKD_RETRY_MAX` | `3` | `5` | Retry attempts for slskd requests. |
 | `SLSKD_RETRY_BACKOFF_BASE_MS` | `250` | `500` | Base backoff delay for retries (milliseconds). |
 | `SLSKD_JITTER_PCT` | `20` | `30` | Percent jitter applied to slskd backoff. |

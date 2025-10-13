@@ -253,17 +253,38 @@ class HdmConfig:
                 default=DEFAULT_DOWNLOAD_MAX_RETRIES,
                 minimum=1,
             ),
-            slskd_timeout_seconds=_bounded_int(
-                env.get("SLSDK_TIMEOUT_SEC"),
-                default=DEFAULT_SLSDK_TIMEOUT_SEC,
-                minimum=1,
-            ),
+            slskd_timeout_seconds=_resolve_slskd_timeout_seconds(env),
             move_template=str(env.get("MOVE_TEMPLATE") or DEFAULT_MOVE_TEMPLATE),
         )
 
 
 # Backward compatibility alias (remove in v1.2.0)
 DownloadFlowConfig = HdmConfig
+
+
+def _resolve_slskd_timeout_seconds(env: Mapping[str, Any]) -> int:
+    seconds_value = env.get("SLSKD_TIMEOUT_SEC")
+    if seconds_value is None:
+        seconds_value = env.get("SLSDK_TIMEOUT_SEC")
+    if seconds_value is not None:
+        return _bounded_int(
+            seconds_value,
+            default=DEFAULT_SLSKD_TIMEOUT_SEC,
+            minimum=1,
+        )
+
+    timeout_ms_value = env.get("SLSKD_TIMEOUT_MS")
+    if timeout_ms_value is not None:
+        timeout_ms = _coerce_int(timeout_ms_value, default=0)
+        if timeout_ms > 0:
+            seconds = max(1, (timeout_ms + 999) // 1000)
+            return _bounded_int(
+                seconds,
+                default=DEFAULT_SLSKD_TIMEOUT_SEC,
+                minimum=1,
+            )
+
+    return DEFAULT_SLSKD_TIMEOUT_SEC
 
 
 @dataclass(slots=True)
@@ -906,7 +927,7 @@ DEFAULT_DOWNLOAD_WORKER_CONCURRENCY = 4
 DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS = 2_000
 DEFAULT_SIZE_STABLE_SECONDS = 30
 DEFAULT_DOWNLOAD_MAX_RETRIES = 5
-DEFAULT_SLSDK_TIMEOUT_SEC = 300
+DEFAULT_SLSKD_TIMEOUT_SEC = 300
 DEFAULT_MOVE_TEMPLATE = "/data/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
 
 DEFAULT_WATCHLIST_TIMER_ENABLED = True
