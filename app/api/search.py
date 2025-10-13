@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Request, status
 from app.config import get_env
 from app.core.matching_engine import MusicMatchingEngine
 from app.dependencies import get_integration_service, get_matching_engine
-from app.errors import DependencyError
+from app.errors import AppError, DependencyError, ErrorCode
 from app.integrations.base import TrackCandidate
 from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
@@ -26,7 +26,9 @@ from app.schemas_search import (
     SearchResponse,
     SourceLiteral,
 )
+from app.schemas.errors import ApiError
 from app.services.integration_service import IntegrationService
+from app.services.errors import ServiceError
 from app.utils.normalize import (
     boost_for_bitrate,
     boost_for_format,
@@ -74,6 +76,28 @@ SOURCE_TO_PROVIDER: dict[SourceLiteral, str] = {
 PROVIDER_TO_SOURCE: dict[str, SourceLiteral] = {
     value: key for key, value in SOURCE_TO_PROVIDER.items()
 }
+
+
+_ERROR_STATUS_BY_CODE: dict[ErrorCode, int] = {
+    ErrorCode.VALIDATION_ERROR: status.HTTP_400_BAD_REQUEST,
+    ErrorCode.NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
+    ErrorCode.DEPENDENCY_ERROR: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+}
+
+
+def _app_error_from_api_error(api_error: ApiError) -> AppError:
+    code = ErrorCode(api_error.error.code)
+    status_code = _ERROR_STATUS_BY_CODE.get(code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+    details = api_error.error.details
+    meta = dict(details) if isinstance(details, dict) else details
+    return AppError(
+        api_error.error.message,
+        code=code,
+        http_status=status_code,
+        meta=meta,
+    )
 
 
 @dataclass(slots=True)
@@ -155,6 +179,8 @@ async def smart_search(
     started = time.perf_counter()
     try:
         gateway_response = await service.search_providers(provider_names, search_query)
+    except ServiceError as exc:
+        raise _app_error_from_api_error(exc.api_error) from exc
     except DependencyError as exc:
         logger.error("Requested provider not available", exc_info=exc)
         raise
