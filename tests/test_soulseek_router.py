@@ -144,11 +144,15 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
     with session_scope() as session:
         stored = session.query(Download).one()
         assert Path(stored.filename) == expected_path
+        stored_payload = dict(stored.request_payload or {})
 
     sync_worker: _StubSyncWorker = soulseek_client.app.state.sync_worker
     assert sync_worker.jobs
     job_payload = sync_worker.jobs[0]
-    assert job_payload["files"][0]["filename"] == str(expected_path)
+    job_file = job_payload["files"][0]
+    assert job_file["filename"] == "album/song.mp3"
+    file_metadata = stored_payload.get("file") if isinstance(stored_payload, dict) else None
+    assert file_metadata and file_metadata.get("local_path") == str(expected_path)
 
 
 def test_lyrics_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> None:

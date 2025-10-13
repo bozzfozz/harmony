@@ -146,10 +146,9 @@ async def soulseek_download(
                 ) from exc
 
             file_payload = file_info.to_payload()
-            filename = str(resolved_path)
-            file_payload["filename"] = filename
+            local_path = str(resolved_path)
             download = Download(
-                filename=filename,
+                filename=local_path,
                 state="queued",
                 progress=0.0,
                 username=payload.username,
@@ -160,14 +159,16 @@ async def soulseek_download(
             session.add(download)
             session.flush()
 
-            payload_copy = dict(file_payload)
-            payload_copy["download_id"] = download.id
+            job_payload = dict(file_payload)
+            job_payload["download_id"] = download.id
 
             priority_value = file_info.priority if file_info.priority is not None else 0
 
+            job_payload.setdefault("priority", priority_value)
+
             download.priority = priority_value
             download.request_payload = {
-                "file": dict(payload_copy),
+                "file": {**job_payload, "local_path": local_path},
                 "username": payload.username,
                 "priority": priority_value,
             }
@@ -175,13 +176,12 @@ async def soulseek_download(
             download.last_error = None
             session.add(download)
 
-            payload_copy.setdefault("priority", priority_value)
-            job_files.append(payload_copy)
+            job_files.append(job_payload)
 
             created_downloads.append(
                 {
                     "id": download.id,
-                    "filename": filename,
+                    "filename": local_path,
                     "state": download.state,
                     "progress": download.progress,
                     "genre": download.genre,
