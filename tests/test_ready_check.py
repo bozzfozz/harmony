@@ -30,7 +30,11 @@ class _Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
     ],
 )
 def test_ready_reports_database_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variant: str, expected_source: str, base_url_key: str | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    variant: str,
+    expected_source: str,
+    base_url_key: str | None,
 ) -> None:
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"

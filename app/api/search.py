@@ -19,6 +19,7 @@ from app.integrations.contracts import ProviderTrack, SearchQuery
 from app.integrations.provider_gateway import ProviderGatewaySearchResponse
 from app.logging import get_logger
 import app.logging_events as logging_events
+from app.schemas.errors import ApiError
 from app.schemas_search import (
     ItemTypeLiteral,
     SearchItem,
@@ -26,9 +27,8 @@ from app.schemas_search import (
     SearchResponse,
     SourceLiteral,
 )
-from app.schemas.errors import ApiError
-from app.services.integration_service import IntegrationService
 from app.services.errors import ServiceError
+from app.services.integration_service import IntegrationService
 from app.utils.normalize import (
     boost_for_bitrate,
     boost_for_format,
