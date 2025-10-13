@@ -95,6 +95,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+dump_local_diagnostics() {
+  echo "--- process snapshot ---" >&2
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    ps -p "$SERVER_PID" -o pid,ppid,stat,etime,args >&2 || true
+  else
+    ps -eo pid,ppid,stat,etime,args | head -n 5 >&2 || true
+  fi
+  echo "--- listening sockets ---" >&2
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnp >&2 || true
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -tlnp >&2 || true
+  else
+    echo "ss/netstat not available" >&2
+  fi
+}
+
 $PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
 SERVER_PID=$!
 
@@ -107,6 +124,7 @@ while (( LISTEN_RETRIES > 0 )); do
   if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
     echo "Backend process terminated before binding. Logs:" >&2
     cat "$SMOKE_LOG" >&2
+    dump_local_diagnostics
     exit 1
   fi
   sleep 1
@@ -119,6 +137,7 @@ until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}
   if [[ $RETRIES -le 0 ]]; then
     echo "Backend failed to become ready. Logs:" >&2
     cat "$SMOKE_LOG" >&2
+    dump_local_diagnostics
     exit 1
   fi
   sleep 1
