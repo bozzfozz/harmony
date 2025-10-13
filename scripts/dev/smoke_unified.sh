@@ -24,7 +24,16 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-HOST=${SMOKE_HOST:-127.0.0.1}
+DEFAULT_CLIENT_HOST=${SMOKE_HOST:-127.0.0.1}
+if [[ -n "${SMOKE_SERVER_HOST:-}" ]]; then
+  SERVER_HOST=${SMOKE_SERVER_HOST}
+elif [[ -n "${SMOKE_HOST:-}" ]]; then
+  SERVER_HOST=${SMOKE_HOST}
+else
+  SERVER_HOST=0.0.0.0
+fi
+
+CLIENT_HOST=${SMOKE_CLIENT_HOST:-$DEFAULT_CLIENT_HOST}
 readarray -t RUNTIME_VALUES < <($PYTHON_BIN <<'PY'
 from app.config import load_runtime_env, resolve_app_port
 
@@ -58,7 +67,7 @@ fi
 export APP_PORT="$PORT"
 export SMOKE_PATH="$PATH_SUFFIX"
 
-echo "Smoke test targeting http://${HOST}:${PORT}${PATH_SUFFIX}" >&2
+echo "Smoke test targeting http://${CLIENT_HOST}:${PORT}${PATH_SUFFIX} (server bind ${SERVER_HOST})" >&2
 TMP_DIR="$ROOT_DIR/.tmp"
 mkdir -p "$TMP_DIR"
 DB_FILE="$TMP_DIR/smoke.db"
@@ -86,11 +95,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-$PYTHON_BIN -m uvicorn app.main:app --host "$HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
+$PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
 SERVER_PID=$!
 
 RETRIES=30
-until curl --fail --silent --show-error "http://$HOST:$PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
+until curl --fail --silent --show-error "http://$CLIENT_HOST:$PORT${PATH_SUFFIX}" >/dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
   if [[ $RETRIES -le 0 ]]; then
     echo "Backend failed to become ready. Logs:" >&2
