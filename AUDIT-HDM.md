@@ -8,11 +8,11 @@
 
 | Anforderung / Kontrolle | Implementierung | Evidenz | Status |
 | --- | --- | --- | --- |
-| OAuth-Secrets müssen sicher verwaltet werden | ENV-Variablen + Secret-Store gemäß [README](README.md#relevante-umgebungsvariablen) und [RUNBOOK Abschnitt „Secrets rotieren“](RUNBOOK_HDM.md#secrets-rotieren) | Audit-Log `settings.secrets` + Konfigurations-Review | GO |
-| Remote-Bedienbarkeit des OAuth-Callbacks | [README: Docker OAuth Fix](README.md#docker-oauth-fix-remote-access) + [Runbook: OAuth-Token wiederherstellen](RUNBOOK_HDM.md#oauth-token-wiederherstellen) | Erfolgreicher Remote-Fix-Test (Ticket referenziert) | GO |
+| OAuth-Secrets müssen sicher verwaltet werden | ENV-Variablen + Secret-Store gemäß [Konfigurationsreferenz](docs/configuration.md) und [RUNBOOK Abschnitt „Secrets rotieren“](RUNBOOK_HDM.md#secrets-rotieren) | Audit-Log `settings.secrets` + Konfigurations-Review | GO |
+| Remote-Bedienbarkeit des OAuth-Callbacks | [Spotify OAuth Guide](docs/auth/spotify.md#callback-on-remote-hosts) + [Runbook: OAuth-Token wiederherstellen](RUNBOOK_HDM.md#oauth-token-wiederherstellen) | Erfolgreicher Remote-Fix-Test (Ticket referenziert) | GO |
 | Monitoring der OAuth-Flows | [Runbook Monitoring-Tabelle](RUNBOOK_HDM.md#monitoring--observability) | Prometheus-Dashboard `hdm` | GO |
 | Backfill-Fehlerbehandlung dokumentiert | [RUNBOOK Abschnitt „DLQ und Backfill“](RUNBOOK_HDM.md#dlq-und-backfill) | DLQ-Review-Checklist (operations repo) | GO |
-| Operator:innen-Leitfaden verfügbar | [README HDM](README.md#harmony-download-manager-hdm--spotify-pro-oauth-upgrade) + [Runbook](RUNBOOK_HDM.md) | Docset-Versionierung in Git | GO |
+| Operator:innen-Leitfaden verfügbar | [HDM-Architektur](docs/architecture/hdm.md) + [Runbook](RUNBOOK_HDM.md) | Docset-Versionierung in Git | GO |
 
 ## Nachweise & Referenzen
 
