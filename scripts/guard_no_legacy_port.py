@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail the build if legacy :8000 references remain in critical paths."""
+"""Fail the build if legacy port references remain in critical paths."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ TARGET_DIRS: tuple[Path, ...] = (
     Path("scripts"),
     Path("docs"),
 )
-LEGACY_TOKEN = ":8000"
+LEGACY_PORTS: tuple[int, ...] = (8 * 1000, 5 * 1000 + 432)
+LEGACY_TOKENS: tuple[str, ...] = tuple(f":{port}" for port in LEGACY_PORTS)
 EXIT_CODE_LEGACY = 4
 SELF_PATH = Path(__file__).resolve()
 
@@ -43,7 +44,7 @@ def find_violations(base_dirs: Iterable[Path]) -> list[Violation]:
             except UnicodeDecodeError:
                 continue
             for line_number, line in enumerate(text.splitlines(), start=1):
-                if LEGACY_TOKEN in line:
+                if any(token in line for token in LEGACY_TOKENS):
                     violations.append(
                         Violation(
                             path=candidate,
@@ -57,17 +58,18 @@ def find_violations(base_dirs: Iterable[Path]) -> list[Violation]:
 def main() -> int:
     violations = find_violations(TARGET_DIRS)
     if not violations:
-        print("No legacy :8000 references found in guarded paths.")
+        print("No legacy port references found in guarded paths.")
         return 0
 
-    print("Legacy :8000 references detected:", file=sys.stderr)
+    joined_tokens = ", ".join(LEGACY_TOKENS)
+    print(f"Legacy port references detected ({joined_tokens}):", file=sys.stderr)
     for violation in violations:
         print(
             f"  {violation.path}:{violation.line_number}: {violation.line_content}",
             file=sys.stderr,
         )
     print(
-        "Failing guard: replace :8000 with the canonical port before retrying.",
+        "Failing guard: replace legacy ports with the canonical configuration before retrying.",
         file=sys.stderr,
     )
     return EXIT_CODE_LEGACY

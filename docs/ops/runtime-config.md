@@ -26,7 +26,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ### Auth & CORS
 
 - `FEATURE_REQUIRE_AUTH=true` bindet die API-Key-Dependency global ein. Setze den Flag nur für lokale Testläufe auf `false`.
-- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/health/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut. `/api/health/ready` wird unabhängig vom API-Basispfad freigestellt.
+- Die Allowlist wird aus Defaults (`/health`, `/ready`, `/health/ready`, `/docs`, `/redoc`, `/openapi.json`) plus `AUTH_ALLOWLIST` aufgebaut. `/live` sowie `/api/health/ready` werden unabhängig vom API-Basispfad freigestellt.
 - `ALLOWED_ORIGINS` akzeptiert CSV oder Zeilen. Ein leerer Wert blockt sämtliche Browser-Anfragen.
 
 ### Caching
@@ -46,7 +46,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 - Standardmäßig nutzt Harmony SQLite (`sqlite+aiosqlite:///`). Produktionsprofile schreiben nach `/data/harmony.db`; Entwicklungsprofile nach `./harmony.db`. Tests verwenden eine In-Memory-Instanz.
 - Setze `DB_RESET=1`, um den Datenbankfile beim Start zu löschen und das Schema frisch zu bootstrappen. Ohne das Flag bleibt der bestehende Inhalt erhalten.
-- Prüfe, dass das über `DATABASE_URL` adressierte Verzeichnis existiert und beschreibbar ist (Health-Check `/api/health/ready`). Bei Container-Deployments sollte ein Volume `/data` gemountet werden.
+- Prüfe, dass das über `DATABASE_URL` adressierte Verzeichnis existiert und beschreibbar ist (Readiness-Check `/api/health/ready`). Bei Container-Deployments sollte ein Volume `/data` gemountet werden.
 - SQLite serialisiert Schreibzugriffe. Hohe Parallelität in Worker-Jobs lässt sich durch kleinere Batches (`WATCHLIST_*`, `RETRY_*`) und Warteschlangensteuerung kompensieren.
 - Backups bestehen aus einem Kopieren der `.db`-Datei. Stoppe die Applikation oder setze `DB_RESET=0`, bevor du Snapshots ziehst, um Konsistenz zu gewährleisten.
 
@@ -60,7 +60,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 ## Änderungs-Workflow
 
 1. Passe `.env` (oder Secret-Store) an und starte den Service neu.
-2. Prüfe über `/api/v1/ready`, ob die Anwendung neue Einstellungen geladen hat.
+2. Prüfe über `/live` (Liveness) und `/api/v1/ready`, ob die Anwendung neue Einstellungen geladen hat.
 3. Bei Spotify/slskd-Änderungen zusätzlich `/settings` aktualisieren, damit DB-Backups konsistent bleiben.
 4. Halte Änderungen im CHANGELOG fest, insbesondere bei Flags mit Sicherheitsauswirkungen.
 

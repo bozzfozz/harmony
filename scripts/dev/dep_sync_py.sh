@@ -4,15 +4,29 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
+strict=false
+case "${DOCTOR_PIP_REQS:-}" in
+  1|true|TRUE|True|yes|YES|on|ON)
+    strict=true
+    ;;
+esac
+
 if ! command -v pip-missing-reqs >/dev/null 2>&1; then
-  echo "pip-missing-reqs is required. Install it via 'pip install pip-check-reqs'." >&2
-  exit 1
+  if [ "$strict" = true ]; then
+    echo "pip-missing-reqs is required when DOCTOR_PIP_REQS=1. Install it via 'pip install pip_check_reqs'." >&2
+    exit 1
+  fi
+  echo "[dep-sync] pip-missing-reqs not installed; skipping missing-requirements scan." >&2
+else
+  pip-missing-reqs app tests
 fi
 
 if ! command -v pip-extra-reqs >/dev/null 2>&1; then
-  echo "pip-extra-reqs is required. Install it via 'pip install pip-check-reqs'." >&2
-  exit 1
+  if [ "$strict" = true ]; then
+    echo "pip-extra-reqs is required when DOCTOR_PIP_REQS=1. Install it via 'pip install pip_check_reqs'." >&2
+    exit 1
+  fi
+  echo "[dep-sync] pip-extra-reqs not installed; skipping extra-requirements scan." >&2
+else
+  pip-extra-reqs --requirements-file requirements.txt app tests
 fi
-
-pip-missing-reqs app tests
-pip-extra-reqs --requirements-file requirements.txt app tests

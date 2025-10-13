@@ -1,6 +1,13 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
+if [ -n "${UMASK:-}" ]; then
+  if ! umask "$UMASK" 2>/dev/null; then
+    echo "Error: Invalid UMASK value '$UMASK'." >&2
+    exit 1
+  fi
+fi
+
 if [ -z "${DATABASE_URL:-}" ]; then
   export DATABASE_URL="sqlite+aiosqlite:///data/harmony.db"
   echo "DATABASE_URL not provided; using ${DATABASE_URL}."
@@ -24,6 +31,8 @@ from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
+from app.config import DEFAULT_DOWNLOADS_DIR, DEFAULT_MUSIC_DIR
+
 
 def _fail(message: str, *, details: dict[str, str] | None = None) -> None:
     meta = ""
@@ -32,6 +41,115 @@ def _fail(message: str, *, details: dict[str, str] | None = None) -> None:
     print(f"[startup] {message}{meta}", file=sys.stderr)
     sys.exit(1)
 
+
+def _parse_owner(value: str | None, *, kind: str, fallback: int) -> int:
+    if value is None or value == "":
+        return fallback
+    try:
+        candidate = int(value, 10)
+    except ValueError as exc:  # pragma: no cover - config validation at runtime
+        _fail(f"Invalid {kind} value", details={"value": value, "error": str(exc)})
+    if candidate < 0:
+        _fail(f"Invalid {kind} value", details={"value": value, "error": "must be non-negative"})
+    return candidate
+
+
+def _parse_umask(value: str | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        resolved = int(value, 8)
+    except ValueError as exc:  # pragma: no cover - config validation at runtime
+        _fail("Invalid UMASK value", details={"value": value, "error": str(exc)})
+    if resolved < 0:
+        _fail("Invalid UMASK value", details={"value": value, "error": "must be >= 0"})
+    return resolved
+
+
+def _ensure_directory(
+    raw_path: str,
+    *,
+    name: str,
+    uid: int,
+    gid: int,
+    umask_value: int | None,
+) -> Path:
+    candidate = Path(raw_path).expanduser()
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        _fail(
+            f"Unable to create {name} directory",
+            details={"path": str(candidate), "error": str(exc)},
+        )
+    if not candidate.is_dir():
+        _fail(f"{name} path is not a directory", details={"path": str(candidate)})
+    resolved = candidate.resolve()
+    if (uid, gid) != (os.getuid(), os.getgid()):
+        try:
+            os.chown(resolved, uid, gid)
+        except PermissionError as exc:
+            _fail(
+                f"Unable to change ownership for {name} directory",
+                details={"path": str(resolved), "error": str(exc)},
+            )
+        except OSError as exc:
+            _fail(
+                f"Unable to change ownership for {name} directory",
+                details={"path": str(resolved), "error": str(exc)},
+            )
+    if umask_value is not None:
+        desired_mode = 0o777 & ~umask_value
+        try:
+            resolved.chmod(desired_mode)
+        except OSError as exc:
+            _fail(
+                f"Unable to apply permissions for {name} directory",
+                details={
+                    "path": str(resolved),
+                    "mode": oct(desired_mode),
+                    "error": str(exc),
+                },
+            )
+    probe = resolved / ".harmony-startup-probe"
+    try:
+        with open(probe, "w", encoding="utf-8") as handle:
+            handle.write("ok")
+        with open(probe, "r", encoding="utf-8") as handle:
+            handle.read()
+    except OSError as exc:
+        _fail(
+            f"Unable to verify read/write access for {name} directory",
+            details={"path": str(resolved), "error": str(exc)},
+        )
+    finally:
+        try:
+            probe.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            _fail(
+                f"Unable to clean startup probe for {name} directory",
+                details={"path": str(resolved), "error": str(exc)},
+            )
+    return resolved
+
+
+umask_value = _parse_umask(os.environ.get("UMASK"))
+target_uid = _parse_owner(os.environ.get("PUID"), kind="PUID", fallback=os.getuid())
+target_gid = _parse_owner(os.environ.get("PGID"), kind="PGID", fallback=os.getgid())
+
+directories = {
+    "downloads": os.environ.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR,
+    "music": os.environ.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR,
+}
+
+for label, raw in directories.items():
+    ensured = _ensure_directory(raw, name=f"{label}", uid=target_uid, gid=target_gid, umask_value=umask_value)
+    print(
+        "[startup] ensured %s directory path=%s owner=%s:%s"
+        % (label, ensured, target_uid, target_gid)
+    )
 
 url = make_url(os.environ["DATABASE_URL"])
 path = url.database

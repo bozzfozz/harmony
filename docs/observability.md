@@ -4,21 +4,15 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 
 ## Health
 
-### `GET /api/v1/health`
-- **Purpose:** Liveness probe without external I/O.
+### `GET /live`
+- **Purpose:** Minimal liveness probe without external I/O.
 - **Response:**
   ```json
   {
-    "ok": true,
-    "data": {
-      "status": "up",
-      "version": "1.4.0",
-      "uptime_s": 123.4
-    },
-    "error": null
+    "status": "ok"
   }
   ```
-- **Notes:** Returns instantly and reports the process uptime and application version.
+- **Notes:** Always returns `200 OK` once the process binds to `0.0.0.0:8080`. The same payload is exposed via `/api/health/live` for API clients.
 
 ### `GET /api/v1/ready`
 - **Purpose:** Readiness probe checking the database connection and configured downstream integrations.
@@ -94,7 +88,7 @@ A typical log record looks like:
   "event": "api.request",
   "component": "api",
   "method": "GET",
-  "path": "/api/v1/health",
+  "path": "/live",
   "status": "ok",
   "status_code": 200,
   "duration_ms": 2.14,

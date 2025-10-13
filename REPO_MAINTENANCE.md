@@ -6,7 +6,7 @@ Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beit
 
 | Pflichtlauf | Zweck |
 | ------------ | ----- |
-| `make doctor` | Stellt sicher, dass alle benötigten Tools vorhanden sind (Python, Ruff, Pytest, pip-check-reqs) und `/data/downloads`/`/data/music` beschreibbar sind. |
+| `make doctor` | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline freundlich) aus und verifiziert `/data/downloads` & `/data/music` via Schreib-/Lesetest. |
 | `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
 | `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
