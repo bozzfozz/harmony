@@ -94,7 +94,7 @@ jobs:
           trap 'docker stop hsmoke >/dev/null 2>&1 || true' EXIT
 
           image="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci-smoke-${{ github.run_id }}"
-          docker run -d --rm -p 127.0.0.1:${APP_PORT}:${APP_PORT} --name hsmoke "$image"
+          docker run -d --rm -p ${APP_PORT}:${APP_PORT} --name hsmoke "$image"
 
           tries=0
           max_tries=30
