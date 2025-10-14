@@ -393,6 +393,7 @@ class SpotifyClient:
         album_id: str,
         *,
         limit: int = 50,
+        market: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return all tracks for the given Spotify album."""
 
@@ -402,27 +403,41 @@ class SpotifyClient:
         tracks: list[dict[str, Any]] = []
         offset = 0
         while True:
-            response = self._execute(
-                self._client.album_tracks,
-                album_id,
-                limit=limit,
-                offset=offset,
-            )
+            params: dict[str, Any] = {"limit": limit, "offset": offset}
+            if market:
+                params["market"] = market
+            response = self._execute(self._client.album_tracks, album_id, **params)
+
+            items: list[dict[str, Any]] = []
+            total: int | None = None
+            has_next = True
+
             if isinstance(response, dict):
-                items = response.get("items")
-                if isinstance(items, list):
-                    tracks.extend(item for item in items if isinstance(item, dict))
-                else:
-                    items = []
-                if not response.get("next") or not items:
-                    break
+                raw_items = response.get("items")
+                if isinstance(raw_items, list):
+                    items = [item for item in raw_items if isinstance(item, dict)]
+                raw_total = response.get("total")
+                if isinstance(raw_total, (int, float)):
+                    total = int(raw_total)
+                has_next = bool(response.get("next"))
             elif isinstance(response, list):
-                tracks.extend(item for item in response if isinstance(item, dict))
-                if len(response) < limit:
-                    break
+                items = [item for item in response if isinstance(item, dict)]
+                has_next = len(response) >= limit
             else:
                 break
+
+            tracks.extend(items)
+
+            if not items:
+                break
+
             offset += limit
+
+            if total is not None and offset >= total:
+                break
+
+            if not has_next:
+                break
         return tracks
 
     def remove_tracks_from_playlist(
@@ -494,40 +509,6 @@ class SpotifyClient:
             params["market"] = market
         return self._execute(self._client.artist_top_tracks, artist_id, **params)
 
-    def get_album_tracks(  # noqa: F811
-        self, album_id: str, *, market: str | None = None
-    ) -> dict[str, Any]:
-        """Return all tracks for a Spotify album."""
-
-        limit = 50
-        offset = 0
-        collected: list[dict[str, Any]] = []
-        last_response: dict[str, Any] | None = None
-
-        while True:
-            params: dict[str, Any] = {"limit": limit, "offset": offset}
-            if market:
-                params["market"] = market
-            response = self._execute(self._client.album_tracks, album_id, **params)
-            last_response = response
-            items = response.get("items") if isinstance(response, dict) else []
-            if not isinstance(items, list):
-                items = []
-            collected.extend(item for item in items if isinstance(item, dict))
-            if len(items) < limit:
-                break
-            total = response.get("total") if isinstance(response, dict) else None
-            offset += limit
-            if total is not None and offset >= int(total):
-                break
-
-        total_tracks = (
-            last_response.get("total")
-            if isinstance(last_response, dict) and "total" in last_response
-            else len(collected)
-        )
-        return {"items": collected, "total": total_tracks}
-
     def get_artist_discography(self, artist_id: str) -> dict[str, Any]:
         """Fetch the complete discography for an artist including tracks."""
 
@@ -554,8 +535,8 @@ class SpotifyClient:
                 if not album_id or album_id in seen_album_ids:
                     continue
                 seen_album_ids.add(album_id)
-                tracks_response = self.get_album_tracks(str(album_id))
-                albums.append({"album": album, "tracks": tracks_response.get("items", [])})
+                track_items = self.get_album_tracks(str(album_id))
+                albums.append({"album": album, "tracks": track_items})
             if len(items) < limit:
                 break
             total = response.get("total") if isinstance(response, dict) else None
