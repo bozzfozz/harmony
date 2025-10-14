@@ -160,12 +160,11 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 - Das Guard-Skript `scripts/audit_wiring.py` blockiert Commits mit neuen `test_flow*`-Artefakten oder Referenzen. Analysieren Sie bei
   einem roten Gate die Job-Ausgabe und bereinigen Sie die gemeldeten Dateien.
 
-### Frontend-Import-Map & Vendoring
+### Frontend-Assets
 
-1. **Import-Map prüfen:** Stelle sicher, dass [`frontend/importmap.json`](frontend/importmap.json) nur HTTPS-Quellen mit festen Versions-Pins (`@x.y.z`) enthält. `make supply-guard` validiert dies automatisch.
-2. **Offline-Betrieb vorbereiten:** Führe `scripts/dev/vendor_frontend.sh` aus, um alle Import-Map-Quellen in `frontend/static/vendor/` zu spiegeln. Das Skript rewritet `frontend/static/importmap.json` auf lokale Pfade.
-3. **CDN-Modus wiederherstellen:** Verwende `scripts/dev/vendor_frontend.sh --reset`, um die Import-Map zurück auf CDN-URLs zu setzen und die lokalen Kopien zu verwerfen.
-4. **Commit:** Vendorisierte Artefakte nur einchecken, wenn explizit gefordert (z. B. für Offline-Deployments). Andernfalls reicht es, die Import-Map anzupassen und das Skript bei Bedarf lokal auszuführen.
+1. **Struktur prüfen:** Die statischen Seiten liegen unter [`frontend-static/`](../../../frontend-static). `make supply-guard` verifiziert, dass die Kern-Dateien vorhanden sind.
+2. **Offline-Betrieb:** Es ist kein Vendoring mehr erforderlich; die HTML/JS/CSS-Dateien werden direkt ausgeliefert. Halte lokale Kopien synchron mit `main`.
+3. **Änderungen committen:** Versioniere nur tatsächliche Quelländerungen (HTML, CSS, JS). Zusätzliche Build-Artefakte sind nicht erforderlich.
 
 ## Eskalation
 

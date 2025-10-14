@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en" data-api-base="/api/v1">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Harmony Downloads</title>
+    <link rel="stylesheet" href="/static/assets/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <header class="site-header" role="banner">
+      <div class="brand" role="presentation">
+        <img src="/static/assets/harmony-logo.svg" alt="" aria-hidden="true" />
+        <span class="brand__title">Harmony</span>
+      </div>
+      <nav aria-label="Primary">
+        <ul class="site-nav">
+          <li><a href="/">Dashboard</a></li>
+          <li><a href="/spotify">Spotify</a></li>
+          <li><a href="/downloads" aria-current="page">Downloads</a></li>
+          <li><a href="/settings">Settings</a></li>
+          <li><a href="/health">Health</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main id="main" class="main-content" tabindex="-1">
+      <section class="section">
+        <header class="section__header">
+          <h1 class="section__title">Harmony Download Manager</h1>
+          <p class="section__subtitle">Monitor the queue, review pending items, and submit new download batches.</p>
+        </header>
+        <div class="panel" id="queue-summary" aria-live="polite">
+          <h2 class="panel__title">Queue summary</h2>
+          <dl class="key-value" data-field="metrics"></dl>
+          <div class="panel__actions">
+            <button type="button" class="button button--secondary" id="refresh-queue">Refresh queue</button>
+          </div>
+          <div class="alert" role="status" data-field="message"></div>
+        </div>
+        <div class="panel" id="queued-downloads">
+          <h2 class="panel__title">Queued items</h2>
+          <div class="table-container" role="region" aria-live="polite" aria-busy="false">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">Filename</th>
+                  <th scope="col">Priority</th>
+                  <th scope="col">Updated</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="queued-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel" id="new-batch">
+          <h2 class="panel__title">Submit new batch</h2>
+          <p>Provide at least one track with artist and title. Optional fields improve matching quality.</p>
+          <form id="batch-form">
+            <div class="form-field">
+              <label>
+                <span>Requested by</span>
+                <input type="text" name="requested_by" required autocomplete="off" />
+              </label>
+            </div>
+            <fieldset class="form-field">
+              <legend>Track details</legend>
+              <div class="field-grid">
+                <label>
+                  <span>Artist</span>
+                  <input type="text" name="artist" required autocomplete="off" />
+                </label>
+                <label>
+                  <span>Title</span>
+                  <input type="text" name="title" required autocomplete="off" />
+                </label>
+                <label>
+                  <span>Album</span>
+                  <input type="text" name="album" autocomplete="off" />
+                </label>
+                <label>
+                  <span>ISRC</span>
+                  <input type="text" name="isrc" autocomplete="off" />
+                </label>
+                <label>
+                  <span>Priority</span>
+                  <input type="number" name="priority" min="0" step="1" />
+                </label>
+              </div>
+            </fieldset>
+            <div class="form-actions">
+              <button type="submit" class="button">Submit batch</button>
+              <button type="reset" class="button button--secondary">Reset</button>
+            </div>
+          </form>
+          <output class="status-output" id="batch-status" role="status"></output>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer" role="contentinfo">
+      <p>HDM controls reflect queued items reported by the Harmony API.</p>
+    </footer>
+    <script type="module" src="/static/js/pages/downloads.js"></script>
+  </body>
+</html>

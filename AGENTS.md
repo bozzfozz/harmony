@@ -79,10 +79,10 @@ Reihenfolge ist strikt:
   - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind **nicht erlaubt**.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Frontend Supply-Chain (verbindlich)**
-  - Das Frontend besteht aus statischen ES-Modulen unter `frontend/static/` und nutzt ausschließlich Import-Maps.
-  - `frontend/importmap.json` und `frontend/static/importmap.json` enthalten ausschließlich HTTPS-URLs mit festen Versions-Pins (`@x.y.z`). `latest`, relative CDN-Pfade oder unversionierte Bundler sind verboten.
-  - `scripts/dev/supply_guard.sh` prüft Import-Maps und stellt sicher, dass keine Node-/npm-/pnpm-Artefakte eingecheckt sind. Vor jedem Commit muss der Guard grün laufen.
-  - Offline-Betrieb erfolgt über `scripts/dev/vendor_frontend.sh`; das Skript darf committed werden, erzeugte Artefakte (`frontend/static/vendor/*`) nur wenn ausdrücklich benötigt.
+  - Das Frontend besteht aus statischen ES-Modulen unter `frontend-static/`.
+  - CDN-Ressourcen in HTML-Dateien müssen feste Versions-Pins und SRI-Hashes besitzen; `latest`, relative CDN-Pfade oder unversionierte Bundler sind verboten.
+  - `scripts/dev/supply_guard.sh` stellt sicher, dass keine Node-/npm-/pnpm-Artefakte eingecheckt sind und dass die Kern-Dateien im statischen Bundle existieren. Vor jedem Commit muss der Guard grün laufen.
+  - `scripts/dev/vendor_frontend.sh` dient nur noch der Dokumentation und führt keine Vendoring-Schritte aus.
 - **FOSS-Only (lokal)**
   - **Allow-Lizenzen** (OSI/FSF): MIT, BSD-2/3, Apache-2.0, MPL-2.0, ISC, CC0, Unlicense, Python-2.0, GPL/LGPL/AGPL.
   - **Block-Lizenzen**: SSPL-1.0, BUSL-1.1, Elastic 2.0, Redis SA, Confluent Community, Polyform-*, proprietäre/kommerzielle EULAs.
@@ -376,7 +376,7 @@ Fokus-Pfade (nicht exklusiv):
 
 **SCOPE_MODE = frontend**
 Fokus-Pfade (nicht exklusiv):
-- `frontend/static/**`, `frontend/importmap.json`, `frontend/vendor/**`
+- `frontend-static/**`
 - `reports/**`, `docs/**`
 - Tooling: `scripts/dev/vendor_frontend.sh`, Import-Maps, CDN/Vendoring-Doku
 
