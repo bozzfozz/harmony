@@ -5,7 +5,9 @@ ENV PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_CREATE=false \
     PIP_NO_CACHE_DIR=1 \
     APP_PORT=8080 \
-    APP_MODULE=app.main:app
+    APP_MODULE=app.main:app \
+    PUID=1000 \
+    PGID=1000
 
 WORKDIR /app
 

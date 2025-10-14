@@ -7,8 +7,8 @@ services:
       - ./.env
     environment:
       APP_PORT: "${APP_PORT:-8080}"
-      PUID: "${PUID:-1000}"
-      PGID: "${PGID:-1000}"
+      PUID: "1000"
+      PGID: "1000"
       UMASK: "${UMASK:-007}"
       OAUTH_SPLIT_MODE: "${OAUTH_SPLIT_MODE:-false}"
       OAUTH_STATE_DIR: /data/runtime/oauth_state
