@@ -44,3 +44,10 @@ def _test_environment(tmp_path: Path) -> Iterator[None]:
         reset_engine_for_tests()
         override_runtime_env(None)
         os.environ.pop("DB_RESET", None)
+
+
+@pytest.fixture()
+def idempotency_db_path(tmp_path: Path) -> Path:
+    path = tmp_path / "state" / "idempotency.db"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path

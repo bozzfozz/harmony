@@ -10,7 +10,11 @@ from app.integrations.slskd_client import SlskdHttpClient
 
 from .completion import CompletionEventBus, DownloadCompletionMonitor
 from .dedup import DeduplicationManager
-from .idempotency import IdempotencyStore, InMemoryIdempotencyStore
+from .idempotency import (
+    IdempotencyStore,
+    InMemoryIdempotencyStore,
+    SQLiteIdempotencyStore,
+)
 from .move import AtomicFileMover
 from .orchestrator import HdmOrchestrator
 from .pipeline import DownloadPipeline
@@ -72,7 +76,11 @@ def build_hdm_runtime(config: HdmConfig, soulseek: SoulseekConfig) -> HdmRuntime
         status_poll_interval=1.0,
     )
 
-    idempotency_store: IdempotencyStore = InMemoryIdempotencyStore()
+    if config.idempotency_backend == "sqlite":
+        sqlite_path = Path(config.idempotency_sqlite_path).expanduser()
+        idempotency_store = SQLiteIdempotencyStore(sqlite_path)
+    else:
+        idempotency_store = InMemoryIdempotencyStore()
     orchestrator = HdmOrchestrator(
         pipeline=pipeline,
         idempotency_store=idempotency_store,

@@ -198,6 +198,8 @@ apply to the single service; optional features are disabled by default.
 | `WATCHLIST_CONCURRENCY` | _(empty)_ | `3` | Alias for max concurrency (legacy). |
 | `WATCHLIST_MAX_PER_TICK` | _(empty)_ | `20` | Upper bound for enqueued artists per timer tick. |
 | `WATCHLIST_TICK_BUDGET_MS` | _(empty)_ | `5000` | Processing budget per timer iteration. |
+| `IDEMPOTENCY_BACKEND` | `sqlite` | `memory` | Selects the HDM idempotency store backend (`sqlite` or `memory`). |
+| `IDEMPOTENCY_SQLITE_PATH` | `<downloads_dir>/.harmony/idempotency.db` | `/data/downloads/.harmony/idempotency.db` | Path to the SQLite idempotency database when using the `sqlite` backend. |
 | `WATCHLIST_RETRY_MAX` | _(empty)_ | `3` | Retry attempts per timer cycle. |
 | `WATCHLIST_BACKOFF_MAX_TRIES` | _(empty)_ | `5` | Limit before switching to cooldown handling. |
 | `WATCHLIST_BACKOFF_BASE_MS` | _(empty)_ | `250` | Base backoff duration (milliseconds). |

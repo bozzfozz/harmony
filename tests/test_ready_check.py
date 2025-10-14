@@ -98,3 +98,87 @@ def test_ready_reports_database_file(
         server.server_close()
         thread.join(timeout=1)
         reset_engine_for_tests()
+
+
+def _base_ready_env(
+    *, downloads_dir: Path, music_dir: Path, idempotency_path: Path
+) -> dict[str, str]:
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    music_dir.mkdir(parents=True, exist_ok=True)
+    idempotency_path.parent.mkdir(parents=True, exist_ok=True)
+    database_path = downloads_dir / "ready.db"
+    database_path.touch()
+    return {
+        "SPOTIFY_CLIENT_ID": "client",
+        "SPOTIFY_CLIENT_SECRET": "secret",
+        "OAUTH_SPLIT_MODE": "false",
+        "DOWNLOADS_DIR": str(downloads_dir),
+        "MUSIC_DIR": str(music_dir),
+        "OAUTH_STATE_DIR": str(downloads_dir / "oauth"),
+        "HARMONY_API_KEY": "ready-key",
+        "SLSKD_HOST": "127.0.0.1",
+        "SLSKD_PORT": "5030",
+        "DATABASE_URL": f"sqlite+aiosqlite:///{database_path}",
+        "IDEMPOTENCY_SQLITE_PATH": str(idempotency_path),
+    }
+
+
+def test_ready_reports_idempotency_sqlite(tmp_path: Path) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+    server = _Server(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        runtime_env["SLSKD_BASE_URL"] = f"http://{host}:{port}"
+        runtime_env.pop("SLSKD_HOST", None)
+        runtime_env.pop("SLSKD_PORT", None)
+        report = aggregate_ready(runtime_env=runtime_env)
+        assert report.ok
+        idempotency_check = report.checks["idempotency"]
+        assert idempotency_check["status"] == "ok"
+        assert idempotency_check["backend"] == "sqlite"
+        assert idempotency_check["path"] == str(idempotency_db)
+        assert idempotency_check.get("inserted") is True
+        assert idempotency_db.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+
+def test_ready_reports_invalid_idempotency_backend(tmp_path: Path) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+    runtime_env["IDEMPOTENCY_BACKEND"] = "bogus"
+    server = _Server(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        runtime_env["SLSKD_BASE_URL"] = f"http://{host}:{port}"
+        runtime_env.pop("SLSKD_HOST", None)
+        runtime_env.pop("SLSKD_PORT", None)
+        report = aggregate_ready(runtime_env=runtime_env)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+    assert report.ok is False
+    idempotency_issue = next(
+        issue for issue in report.issues if issue.component == "idempotency"
+    )
+    assert "Invalid idempotency configuration" in idempotency_issue.message

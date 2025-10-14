@@ -1,0 +1,87 @@
+import asyncio
+from pathlib import Path
+import sqlite3
+from uuid import uuid4
+
+import pytest
+
+from app.hdm.idempotency import SQLiteIdempotencyStore
+from app.hdm.models import DownloadItem
+
+
+def _make_item(*, batch: str = "batch", dedupe: str | None = None) -> DownloadItem:
+    key = dedupe or uuid4().hex
+    return DownloadItem(
+        batch_id=batch,
+        item_id=uuid4().hex,
+        artist="Artist",
+        title="Title",
+        album=None,
+        isrc=None,
+        requested_by="tester",
+        priority=0,
+        dedupe_key=key,
+        index=0,
+    )
+
+
+@pytest.mark.asyncio()
+async def test_sqlite_store_handles_reserve_and_release(idempotency_db_path: Path) -> None:
+    store = SQLiteIdempotencyStore(idempotency_db_path)
+    item = _make_item(dedupe="same-key")
+
+    reservation = await store.reserve(item)
+    assert reservation.acquired is True
+    assert reservation.already_processed is False
+
+    duplicate = await store.reserve(item)
+    assert duplicate.acquired is False
+    assert duplicate.already_processed is False
+    assert duplicate.reason == "in_progress"
+
+    await store.release(item, success=False)
+
+    reservation_again = await store.reserve(item)
+    assert reservation_again.acquired is True
+
+    await store.release(item, success=True)
+
+    final_attempt = await store.reserve(item)
+    assert final_attempt.acquired is False
+    assert final_attempt.already_processed is True
+    assert final_attempt.reason == "already_completed"
+
+
+@pytest.mark.asyncio()
+async def test_sqlite_store_retries_when_database_locked(idempotency_db_path: Path) -> None:
+    store = SQLiteIdempotencyStore(
+        idempotency_db_path,
+        max_attempts=5,
+        retry_base_seconds=0.01,
+        retry_multiplier=2.0,
+    )
+
+    warm_item = _make_item()
+    await store.reserve(warm_item)
+    await store.release(warm_item, success=False)
+
+    connection = sqlite3.connect(idempotency_db_path)
+    connection.execute("BEGIN EXCLUSIVE")
+
+    async def _release_later() -> None:
+        try:
+            await asyncio.sleep(0.05)
+            connection.commit()
+        finally:
+            connection.close()
+
+    release_task = asyncio.create_task(_release_later())
+    item = _make_item(dedupe="locked-key")
+    reservation = None
+    try:
+        reservation = await store.reserve(item)
+        assert reservation.acquired is True
+    finally:
+        await release_task
+        if reservation is not None and reservation.acquired:
+            await store.release(item, success=False)
