@@ -5,8 +5,11 @@ post-processing into a single automation-friendly music hub. The unified contain
 exposes the API on **port 8080** and stores all state in SQLite.
 
 > **Frontend status:** The legacy static bundle has been removed. A new server-side
-> rendered UI (FastAPI + Jinja2 + HTMX) will be introduced in a follow-up task, so the
-> repository is currently backend-only and requires no Node.js toolchain.
+> rendered UI (FastAPI + Jinja2 + HTMX) is planned under `/ui`; implementation follows the
+> published specifications. See [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the
+> sitemap & HTMX contracts, [`docs/operations/security.md`](docs/operations/security.md) for
+> session/role details, and [`docs/ui/csp.md`](docs/ui/csp.md) for CSP guidance. No Node.js
+> toolchain is required.
 
 ## Highlights
 
@@ -41,6 +44,8 @@ docker run -d \
   library.
 - Verify the deployment with `curl -fsS http://127.0.0.1:8080/live` and
   `curl -fsS "http://127.0.0.1:8080/api/health/ready?verbose=1"`.
+  The versioned system endpoints live under `/api/v1/...`; see
+  [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the UI wiring overview.
 
 A compose example with the same defaults lives in
 [`docs/install/docker.md`](docs/install/docker.md).
@@ -63,6 +68,9 @@ All other knobs are documented in [`docs/configuration.md`](docs/configuration.m
 - `GET /live` → returns `{ "status": "ok" }` without touching external dependencies.
 - `GET /api/health/ready` → performs SQLite and integration checks. Use `?verbose=1` to
   inspect individual probes.
+- `GET /api/v1/status` → reports uptime, worker state and connection summaries for the UI dashboard.
+- `GET /api/v1/health` → returns the backend liveness payload under the versioned `/api/v1` base path.
+- `GET /api/v1/metrics` → exposes the Prometheus scrape endpoint.
 
 Details and CLI self-check instructions live in [`docs/health.md`](docs/health.md).
 
