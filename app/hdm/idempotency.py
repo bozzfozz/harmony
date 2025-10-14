@@ -207,9 +207,7 @@ class SQLiteIdempotencyStore(IdempotencyStore):
             except (sqlite3.OperationalError, AioSqliteOperationalError) as exc:
                 last_error = exc
                 message = str(exc).lower()
-                should_retry = any(
-                    fragment in message for fragment in _RETRYABLE_ERROR_FRAGMENTS
-                )
+                should_retry = any(fragment in message for fragment in _RETRYABLE_ERROR_FRAGMENTS)
                 if should_retry and attempt < self._max_attempts:
                     logger.debug(
                         "SQLite idempotency store busy; retrying",
@@ -251,11 +249,17 @@ class SQLiteIdempotencyStore(IdempotencyStore):
             if self._initialised:
                 return
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            connection = await aiosqlite.connect(str(self._path))
+            connection: aiosqlite.Connection | None = None
             try:
+                connection = await aiosqlite.connect(str(self._path))
                 await connection.execute("PRAGMA journal_mode=WAL")
                 await connection.execute(SQLITE_CREATE_TABLE)
                 await connection.commit()
+            except Exception:
+                # Ensure `_initialised` remains ``False`` so subsequent attempts retry.
+                raise
+            else:
+                self._initialised = True
             finally:
-                await connection.close()
-            self._initialised = True
+                if connection is not None:
+                    await connection.close()

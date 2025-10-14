@@ -4,6 +4,7 @@ import sqlite3
 import types
 from uuid import uuid4
 
+import aiosqlite
 import pytest
 
 from app.hdm.idempotency import SQLiteIdempotencyStore
@@ -116,3 +117,36 @@ async def test_sqlite_store_retries_when_database_busy(idempotency_db_path: Path
     assert reservation.acquired is True
 
     await store.release(item, success=False)
+
+
+@pytest.mark.asyncio()
+async def test_sqlite_store_initialisation_failure_keeps_retrying(
+    monkeypatch: pytest.MonkeyPatch, idempotency_db_path: Path
+) -> None:
+    store = SQLiteIdempotencyStore(idempotency_db_path)
+    attempts = 0
+    real_connect = aiosqlite.connect
+
+    async def flaky_connect(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise sqlite3.OperationalError("disk I/O error")
+        return await real_connect(*args, **kwargs)
+
+    monkeypatch.setattr("app.hdm.idempotency.aiosqlite.connect", flaky_connect)
+
+    failing_item = _make_item(dedupe="init-failure")
+    with pytest.raises(sqlite3.OperationalError):
+        await store.reserve(failing_item)
+
+    assert store._initialised is False  # noqa: SLF001 - verifying retry guard
+
+    successful_item = _make_item(dedupe="init-success")
+    reservation = await store.reserve(successful_item)
+
+    assert attempts >= 2
+    assert reservation.acquired is True
+    assert store._initialised is True
+
+    await store.release(successful_item, success=False)
