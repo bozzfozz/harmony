@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
+import inspect
 import time
 from typing import Any
 
@@ -40,7 +41,13 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             handler = self._lookup_exception_handler(request, error)
             if handler is None:
                 raise exc
-            response = await handler(request, error)
+            result = handler(request, error)
+            response = await result if inspect.isawaitable(result) else result
+            if not isinstance(response, Response):
+                raise TypeError(
+                    "Exception handler returned non-Response value of type"
+                    f" {type(response)!r}"
+                )
             status_code = response.status_code
             return response
         finally:
@@ -81,7 +88,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
 
     def _lookup_exception_handler(
         self, request: Request, exc: BaseException
-    ) -> Callable[[Request, BaseException], Awaitable[Response]] | None:
+    ) -> Callable[[Request, BaseException], Any] | None:
         handlers = getattr(request.app, "exception_handlers", {})
         for cls in type(exc).__mro__:
             handler = handlers.get(cls)
