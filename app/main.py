@@ -14,7 +14,6 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
 from app.api import health as health_api, router_registry
@@ -148,7 +147,7 @@ _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
 
 _FRONTEND_DIST_ENV_VAR = "FRONTEND_DIST"
-_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "static"
+_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend-static"
 _frontend_dist_override = get_env(_FRONTEND_DIST_ENV_VAR)
 if _frontend_dist_override:
     FRONTEND_DIST = Path(_frontend_dist_override).expanduser().resolve()
@@ -700,7 +699,6 @@ set_oauth_service_instance(app.state.oauth_service)
 app_oauth_callback.state.oauth_service = app.state.oauth_service
 app_oauth_callback.state.oauth_transaction_store = _oauth_store
 
-_previous_http_exception_handler = app.exception_handlers.get(StarletteHTTPException)
 if _FRONTEND_INDEX_PATH.is_file():
     logger.info("Serving frontend assets from %s", FRONTEND_DIST)
     app.mount(
@@ -709,31 +707,30 @@ if _FRONTEND_INDEX_PATH.is_file():
         name="frontend-static",
     )
 
-    async def _frontend_index() -> Response:
-        return FileResponse(_FRONTEND_INDEX_PATH)
+    def _make_frontend_handler(file_path: Path) -> Callable[[], Response]:
+        async def _serve() -> Response:
+            return FileResponse(file_path)
 
-    app.add_api_route(
-        "/",
-        _frontend_index,
-        include_in_schema=False,
-        methods=["GET"],
-    )
+        return _serve
 
-    async def _frontend_fallback(request: Request, exc: StarletteHTTPException) -> Response:
-        path = request.url.path
-        if (
-            exc.status_code == 404
-            and request.method.upper() == "GET"
-            and _accepts_html(request)
-            and not _is_api_path(path)
-            and path not in {_docs_url, _redoc_url, _openapi_url}
-        ):
-            return FileResponse(_FRONTEND_INDEX_PATH)
-        if _previous_http_exception_handler is not None:
-            return await _previous_http_exception_handler(request, exc)
-        raise exc
+    _frontend_pages: dict[str, Path] = {
+        "/": _FRONTEND_INDEX_PATH,
+        "/spotify": FRONTEND_DIST / "spotify.html",
+        "/downloads": FRONTEND_DIST / "downloads.html",
+        "/settings": FRONTEND_DIST / "settings.html",
+        "/health": FRONTEND_DIST / "health.html",
+    }
 
-    app.add_exception_handler(StarletteHTTPException, _frontend_fallback)
+    for route, file_path in _frontend_pages.items():
+        if not file_path.is_file():
+            logger.warning("Frontend page missing at %s", file_path)
+            continue
+        app.add_api_route(
+            route,
+            _make_frontend_handler(file_path),
+            include_in_schema=False,
+            methods=["GET"],
+        )
 else:
     logger.info("Frontend assets not found at %s; skipping static mount", FRONTEND_DIST)
 

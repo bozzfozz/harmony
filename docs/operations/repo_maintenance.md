@@ -41,7 +41,7 @@ pre-commit run --hook-stage push
 2. `make all` und optionale Security-Scans erneut ausführen.
 3. Artefakte erstellen:
    - Python: `python -m build`
-   - Frontend: statische Assets (`frontend/static/**`) und ggf. `scripts/dev/vendor_frontend.sh` für Offline-Betrieb
+   - Frontend: statische Assets (`frontend-static/**`)
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership
