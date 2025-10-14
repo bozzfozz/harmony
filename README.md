@@ -5,8 +5,11 @@ post-processing into a single automation-friendly music hub. The unified contain
 exposes the API on **port 8080** and stores all state in SQLite.
 
 > **Frontend status:** The legacy static bundle has been removed. A new server-side
-> rendered UI (FastAPI + Jinja2 + HTMX) will be introduced in a follow-up task, so the
-> repository is currently backend-only and requires no Node.js toolchain.
+> rendered UI (FastAPI + Jinja2 + HTMX) is planned under `/ui`; implementation follows the
+> published specifications. See [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the
+> sitemap & HTMX contracts, [`docs/operations/security.md`](docs/operations/security.md) for
+> session/role details, and [`docs/ui/csp.md`](docs/ui/csp.md) for CSP guidance. No Node.js
+> toolchain is required.
 
 ## Highlights
 
