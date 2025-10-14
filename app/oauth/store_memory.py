@@ -74,9 +74,9 @@ class MemoryOAuthTransactionStore(OAuthTransactionStore):
             ttl_seconds=ttl_seconds,
         )
         with self._lock:
-            if state in self._consumed:
-                raise TransactionUsedError(state)
             self._purge_expired(reference=transaction.issued_at)
+            if state in self._pending or state in self._consumed:
+                raise TransactionUsedError(state)
             self._pending[state] = transaction
 
     def consume(self, state: str) -> Transaction:
