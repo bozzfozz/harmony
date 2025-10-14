@@ -23,6 +23,8 @@ class _ValidatedString(str):
     """Base helper implementing Pydantic v2 hooks for string wrappers."""
 
     _json_schema_extra: ClassVar[dict[str, Any]] = {"type": "string"}
+    _type_error_message: ClassVar[str] = "value must be a string"
+    _empty_error_message: ClassVar[str] = "value must not be empty"
 
     @classmethod
     def __get_pydantic_core_schema__(
@@ -40,26 +42,39 @@ class _ValidatedString(str):
 
     @classmethod
     def validate(cls, value: Any) -> Self:
-        raise NotImplementedError
+        if isinstance(value, cls):
+            return value
+        candidate = cls._coerce(value)
+        normalized = cls._normalize(candidate)
+        validated = cls._validate(normalized)
+        return cls(validated)
+
+    @classmethod
+    def _coerce(cls, value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes | bytearray):
+            return value.decode()
+        raise TypeError(cls._type_error_message)
+
+    @classmethod
+    def _normalize(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(cls._empty_error_message)
+        return normalized
+
+    @classmethod
+    def _validate(cls, value: str) -> str:
+        return value
 
 
 class ID(_ValidatedString):
     """Identifier exposed via the public API."""
 
     _json_schema_extra: ClassVar[dict[str, Any]] = {"type": "string", "title": "ID"}
-
-    @classmethod
-    def validate(cls, value: Any) -> ID:
-        if isinstance(value, cls):
-            return value
-        if isinstance(value, bytes | bytearray):
-            value = value.decode()
-        if not isinstance(value, str):
-            raise TypeError("identifier must be a string")
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("identifier must not be empty")
-        return cls(stripped)
+    _type_error_message: ClassVar[str] = "identifier must be a string"
+    _empty_error_message: ClassVar[str] = "identifier must not be empty"
 
 
 class URI(_ValidatedString):
@@ -70,22 +85,15 @@ class URI(_ValidatedString):
         "format": "uri",
         "title": "URI",
     }
+    _type_error_message: ClassVar[str] = "uri must be a string"
+    _empty_error_message: ClassVar[str] = "uri must not be empty"
 
     @classmethod
-    def validate(cls, value: Any) -> URI:
-        if isinstance(value, cls):
-            return value
-        if isinstance(value, bytes | bytearray):
-            value = value.decode()
-        if not isinstance(value, str):
-            raise TypeError("uri must be a string")
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("uri must not be empty")
-        parsed = urlparse(stripped)
+    def _validate(cls, value: str) -> str:
+        parsed = urlparse(value)
         if not parsed.scheme or not parsed.netloc:
             raise ValueError("uri must include scheme and host")
-        return cls(stripped)
+        return value
 
 
 class ISODateTime(_ValidatedString):
@@ -96,30 +104,27 @@ class ISODateTime(_ValidatedString):
         "format": "date-time",
         "title": "ISODateTime",
     }
+    _type_error_message: ClassVar[str] = "datetime must be string or datetime"
+    _empty_error_message: ClassVar[str] = "datetime must not be empty"
 
     @classmethod
-    def validate(cls, value: Any) -> ISODateTime:
-        if isinstance(value, cls):
-            return value
+    def _coerce(cls, value: Any) -> str:
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=UTC)
-            return cls(value.isoformat())
-        if isinstance(value, bytes | bytearray):
-            value = value.decode()
-        if not isinstance(value, str):
-            raise TypeError("datetime must be string or datetime")
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("datetime must not be empty")
-        candidate = stripped.replace("Z", "+00:00")
+            return value.isoformat()
+        return super()._coerce(value)
+
+    @classmethod
+    def _validate(cls, value: str) -> str:
+        candidate = value.replace("Z", "+00:00")
         try:
             parsed = datetime.fromisoformat(candidate)
         except ValueError as exc:  # pragma: no cover - defensive
             raise ValueError("invalid ISO 8601 datetime") from exc
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
-        return cls(parsed.isoformat())
+        return parsed.isoformat()
 
 
 class SourceEnum(str, Enum):
