@@ -178,7 +178,5 @@ def test_ready_reports_invalid_idempotency_backend(tmp_path: Path) -> None:
         server.server_close()
         thread.join(timeout=1)
     assert report.ok is False
-    idempotency_issue = next(
-        issue for issue in report.issues if issue.component == "idempotency"
-    )
+    idempotency_issue = next(issue for issue in report.issues if issue.component == "idempotency")
     assert "Invalid idempotency configuration" in idempotency_issue.message
