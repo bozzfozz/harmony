@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+os.environ.setdefault("SLSKD_API_KEY", "test-key")
+os.environ.setdefault("HARMONY_DISABLE_WORKERS", "true")
+
 override_runtime_env = importlib.import_module("app.config").override_runtime_env
 reset_engine_for_tests = importlib.import_module("app.db").reset_engine_for_tests
 
@@ -34,6 +37,7 @@ def _test_environment(tmp_path: Path) -> Iterator[None]:
     os.environ.setdefault("OAUTH_STATE_DIR", str(oauth_state_dir))
     os.environ.setdefault("SLSKD_HOST", "127.0.0.1")
     os.environ.setdefault("SLSKD_PORT", "5030")
+    os.environ.setdefault("SLSKD_API_KEY", "test-key")
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path}"
 
     override_runtime_env(None)

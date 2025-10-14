@@ -37,6 +37,7 @@ from app.oauth_callback.app import app_oauth_callback
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
+from app.schemas.system import EnvironmentResponse
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
@@ -669,6 +670,10 @@ app = FastAPI(
 
 _apply_security_dependencies(app, _config_snapshot.security)
 app.state.openapi_config = deepcopy(_config_snapshot)
+app.state.api_base_path = _API_BASE_PATH
+app.state.frontend_index_path = None
+app.state.frontend_routes = tuple()
+app.state.frontend_dist = FRONTEND_DIST
 
 app.state.start_time = _APP_START_TIME
 app.state.orchestrator_status = _initial_orchestrator_status(
@@ -699,8 +704,62 @@ set_oauth_service_instance(app.state.oauth_service)
 app_oauth_callback.state.oauth_service = app.state.oauth_service
 app_oauth_callback.state.oauth_transaction_store = _oauth_store
 
+
+@app.get("/env", response_model=EnvironmentResponse, tags=["System"])
+async def environment_info() -> EnvironmentResponse:
+    config_snapshot = getattr(app.state, "openapi_config", None) or get_app_config()
+    environment = config_snapshot.environment
+    workers = environment.workers
+    features = config_snapshot.features
+    orchestrator_config = settings.orchestrator
+    watchlist_timer_config = settings.watchlist_timer
+
+    return EnvironmentResponse(
+        api_base_path=config_snapshot.api_base_path,
+        feature_flags={
+            "enable_artwork": features.enable_artwork,
+            "enable_lyrics": features.enable_lyrics,
+            "enable_legacy_routes": features.enable_legacy_routes,
+            "enable_artist_cache_invalidation": features.enable_artist_cache_invalidation,
+            "enable_admin_api": features.enable_admin_api,
+        },
+        environment={
+            "profile": environment.profile,
+            "is_dev": environment.is_dev,
+            "is_test": environment.is_test,
+            "is_staging": environment.is_staging,
+            "is_prod": environment.is_prod,
+            "workers": {
+                "disable_workers": workers.disable_workers,
+                "enabled_override": workers.enabled_override,
+                "enabled_raw": workers.enabled_raw,
+                "visibility_timeout_s": workers.visibility_timeout_s,
+                "watchlist_interval_s": workers.watchlist_interval_s,
+                "watchlist_timer_enabled": workers.watchlist_timer_enabled,
+            },
+        },
+        orchestrator={
+            "workers_enabled": orchestrator_config.workers_enabled,
+            "global_concurrency": orchestrator_config.global_concurrency,
+            "visibility_timeout_s": orchestrator_config.visibility_timeout_s,
+            "poll_interval_ms": orchestrator_config.poll_interval_ms,
+            "poll_interval_max_ms": orchestrator_config.poll_interval_max_ms,
+            "priority_map": dict(orchestrator_config.priority_map),
+        },
+        watchlist_timer={
+            "enabled": watchlist_timer_config.enabled,
+            "interval_s": watchlist_timer_config.interval_s,
+        },
+        build={
+            "version": app.version,
+            "started_at": _APP_START_TIME.isoformat(),
+        },
+    )
+
+
 if _FRONTEND_INDEX_PATH.is_file():
     logger.info("Serving frontend assets from %s", FRONTEND_DIST)
+    app.state.frontend_index_path = _FRONTEND_INDEX_PATH
     app.mount(
         "/static",
         StaticFiles(directory=FRONTEND_DIST, html=False),
@@ -713,15 +772,26 @@ if _FRONTEND_INDEX_PATH.is_file():
 
         return _serve
 
-    _frontend_pages: dict[str, Path] = {
+    html_files = sorted(FRONTEND_DIST.glob("*.html"))
+    frontend_routes: dict[str, Path] = {
         "/": _FRONTEND_INDEX_PATH,
-        "/spotify": FRONTEND_DIST / "spotify.html",
-        "/downloads": FRONTEND_DIST / "downloads.html",
-        "/settings": FRONTEND_DIST / "settings.html",
-        "/health": FRONTEND_DIST / "health.html",
+        "/index.html": _FRONTEND_INDEX_PATH,
     }
+    for file_path in html_files:
+        if not file_path.is_file():
+            logger.warning("Frontend page missing at %s", file_path)
+            continue
+        frontend_routes[f"/{file_path.name}"] = file_path
+        stem = file_path.stem
+        if stem and stem != "index":
+            frontend_routes.setdefault(f"/{stem}", file_path)
 
-    for route, file_path in _frontend_pages.items():
+    existing_paths = {route.path for route in app.router.routes}
+    registered_routes: list[str] = []
+    for route, file_path in frontend_routes.items():
+        if route in existing_paths:
+            logger.debug("Skipping frontend route %s; path already registered", route)
+            continue
         if not file_path.is_file():
             logger.warning("Frontend page missing at %s", file_path)
             continue
@@ -731,8 +801,15 @@ if _FRONTEND_INDEX_PATH.is_file():
             include_in_schema=False,
             methods=["GET"],
         )
+        existing_paths.add(route)
+        registered_routes.append(route)
+    app.state.frontend_routes = tuple(sorted(frontend_routes.keys()))
+    logger.info(
+        "Registered frontend routes", extra={"event": "frontend.routes", "routes": registered_routes}
+    )
 else:
     logger.info("Frontend assets not found at %s; skipping static mount", FRONTEND_DIST)
+    app.state.frontend_routes = tuple()
 
 _response_cache = getattr(app.state, "response_cache", None)
 _activity_paths = {

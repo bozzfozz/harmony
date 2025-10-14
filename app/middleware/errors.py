@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.errors import (
@@ -28,6 +29,37 @@ except NameError:  # pragma: no cover - compatibility branch
 
 
 _logger = get_logger(__name__)
+
+
+def _request_accepts_html(request: Request) -> bool:
+    accept = request.headers.get("accept")
+    if not accept:
+        return True
+    accept_lower = accept.lower()
+    return "text/html" in accept_lower or "*/*" in accept_lower
+
+
+def _request_targets_api(request: Request) -> bool:
+    base_path = getattr(request.app.state, "api_base_path", "")
+    if not base_path:
+        return False
+    base = str(base_path).rstrip("/")
+    if not base:
+        return False
+    if not base.startswith("/"):
+        base = f"/{base}"
+    path = request.url.path
+    return path == base or path.startswith(f"{base}/")
+
+
+def _frontend_index_path(request: Request) -> Path | None:
+    candidate = getattr(request.app.state, "frontend_index_path", None)
+    if isinstance(candidate, Path):
+        return candidate if candidate.is_file() else None
+    if isinstance(candidate, str):
+        resolved = Path(candidate)
+        return resolved if resolved.is_file() else None
+    return None
 
 
 def _format_validation_field(raw_loc: list[Any]) -> str:
@@ -65,11 +97,19 @@ async def _render_http_exception(
     status_code: int,
     detail: Any,
     headers: Mapping[str, str] | None,
-) -> JSONResponse:
+) -> Response:
     effective_status = status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
     header_map = dict(headers or {})
 
     if effective_status == status.HTTP_404_NOT_FOUND:
+        if (
+            request.method.upper() == "GET"
+            and not _request_targets_api(request)
+            and _request_accepts_html(request)
+        ):
+            index_path = _frontend_index_path(request)
+            if index_path is not None:
+                return FileResponse(index_path)
         message = _extract_detail_message(detail, "Resource not found.")
         return to_response(
             message=message,
@@ -172,7 +212,7 @@ async def _handle_request_validation(request: Request, exc: RequestValidationErr
     )
 
 
-async def _handle_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
+async def _handle_http_exception(request: Request, exc: HTTPException) -> Response:
     return await _render_http_exception(
         request,
         status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -183,7 +223,7 @@ async def _handle_http_exception(request: Request, exc: HTTPException) -> JSONRe
 
 async def _handle_starlette_http_exception(
     request: Request, exc: StarletteHTTPException
-) -> JSONResponse:
+) -> Response:
     return await _render_http_exception(
         request,
         status_code=exc.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR,
