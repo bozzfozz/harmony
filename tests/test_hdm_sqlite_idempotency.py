@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 import sqlite3
+import types
 from uuid import uuid4
 
 import pytest
@@ -85,3 +86,33 @@ async def test_sqlite_store_retries_when_database_locked(idempotency_db_path: Pa
         await release_task
         if reservation is not None and reservation.acquired:
             await store.release(item, success=False)
+
+
+@pytest.mark.asyncio()
+async def test_sqlite_store_retries_when_database_busy(idempotency_db_path: Path) -> None:
+    store = SQLiteIdempotencyStore(
+        idempotency_db_path,
+        max_attempts=3,
+        retry_base_seconds=0.0,
+        retry_multiplier=1.0,
+    )
+
+    attempts = 0
+    real_connect = store._connect
+
+    async def flaky_connect(self: SQLiteIdempotencyStore):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise sqlite3.OperationalError("database is busy")
+        return await real_connect()
+
+    store._connect = types.MethodType(flaky_connect, store)
+
+    item = _make_item(dedupe="busy-key")
+    reservation = await store.reserve(item)
+
+    assert attempts == 2
+    assert reservation.acquired is True
+
+    await store.release(item, success=False)
