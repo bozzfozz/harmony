@@ -79,8 +79,8 @@ templates/
 ### Dashboard (/ui)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
-| Systemstatus laden | GET `/api/v1/system/status` | `hx-trigger="load, every 30s"` | `#hx-dashboard-status`, `hx-swap="innerHTML"` | Anzeige Warn-Banner bei `status != ok`【F:app/api/system.py†L344-L368】 |
-| Dienste-Health | GET `/api/v1/system/health` | `hx-trigger="load, every 60s"` | `#hx-service-health`, `hx-swap="innerHTML"` | Fehlermeldungsliste bei `ok=false`【F:app/api/system.py†L106-L191】 |
+| Systemstatus laden | GET `/api/v1/status` | `hx-trigger="load, every 30s"` | `#hx-dashboard-status`, `hx-swap="innerHTML"` | Anzeige Warn-Banner bei `status != ok`【F:app/api/system.py†L344-L368】 |
+| Dienste-Health | GET `/api/v1/health` | `hx-trigger="load, every 60s"` | `#hx-service-health`, `hx-swap="innerHTML"` | Fehlermeldungsliste bei `ok=false`【F:app/api/system.py†L106-L191】 |
 | Orchestrator manuell starten | POST `/api/v1/sync/sync` | Button `hx-post`, `hx-confirm` | Toast via `hx-swap-oob`, aktualisiert Jobs-Karten | 503 ⇒ Modal mit fehlenden Credentials【F:app/routers/sync_router.py†L26-L106】 |
 
 ### Spotify (/ui/spotify)
@@ -142,8 +142,8 @@ templates/
 |-------------|------------|---------|---------------|------------|
 | Liveness/Readiness | GET `/api/health/live`, `/api/health/ready` | Buttons/Auto-Check | Ergebnis-Panel | 503 ⇒ Warnhinweis |【F:app/api/health.py†L10-L27】
 | Integrationen-Status | GET `/api/v1/integrations` | `load`, Refresh-Button | `#hx-integrations` | Fehler ⇒ Alert |【F:app/routers/integrations.py†L34-L47】
-| Secrets-Validierung | POST `/api/v1/system/secrets/{provider}/validate` | Formular (nur `admin`) | Ergebnis-Karte | Fehlerdetails im Formular |【F:app/api/system.py†L204-L220】
-| Metrics-Link | GET `/api/v1/system/metrics` | Standard-Link (öffnet neuen Tab) | — | 5xx ⇒ Hinweis |
+| Secrets-Validierung | POST `/api/v1/secrets/{provider}/validate` | Formular (nur `admin`) | Ergebnis-Karte | Fehlerdetails im Formular |【F:app/api/system.py†L204-L220】
+| Metrics-Link | GET `/api/v1/metrics` | Standard-Link (öffnet neuen Tab) | — | 5xx ⇒ Hinweis |
 | Spotify/Soulseek Health | GET `/api/v1/health/spotify`, `/api/v1/health/soulseek` | `load`, `hx-trigger="every 60s"` | Badges | Status ≠ ok ⇒ Rot |【F:app/routers/health_router.py†L15-L33】
 
 ### Imports (/ui/imports)

@@ -28,7 +28,7 @@ Die aktuelle Harmony-Codebasis stellt umfangreiche Verwaltungs-Endpunkte bereit,
 
 ### Aktivität & Monitoring
 - Aktivitätsfeed (`GET /api/v1/activity`) und Exporte (`/api/v1/activity/export`).【F:app/routers/activity_router.py†L25-L157】
-- Systemstatus & Health: `/api/v1/system/status|health|ready|metrics|secrets/{provider}/validate` bündeln Uptime, Abhängigkeits- und Secrets-Checks.【F:app/api/system.py†L106-L220】【F:app/api/system.py†L344-L368】
+- Systemstatus & Health: `/api/v1/status`, `/api/v1/health`, `/api/v1/ready`, `/api/v1/metrics` und `/api/v1/secrets/{provider}/validate` bündeln Uptime, Abhängigkeits- und Secrets-Checks.【F:app/api/system.py†L106-L220】【F:app/api/system.py†L344-L368】
 - Spezifische Service-Health-Badges: `/api/v1/health/spotify`, `/api/v1/health/soulseek`.【F:app/routers/health_router.py†L15-L33】
 - Allgemeine Liveness/Readiness unter `/api/health/live|ready` für Infrastruktur-Monitoring.【F:app/api/health.py†L10-L27】
 
@@ -39,7 +39,7 @@ Die aktuelle Harmony-Codebasis stellt umfangreiche Verwaltungs-Endpunkte bereit,
 ## Wiring-Matrix (API ↔ UI)
 | Geplante UI-Komponente | Verknüpfte Endpunkte | Zweck |
 |------------------------|----------------------|-------|
-| Dashboard KPI-Karten | `/api/v1/system/status`, `/api/v1/system/health` | Laufzeitstatus & abhängige Dienste visualisieren.【F:app/api/system.py†L106-L191】【F:app/api/system.py†L344-L368】 |
+| Dashboard KPI-Karten | `/api/v1/status`, `/api/v1/health` | Laufzeitstatus & abhängige Dienste visualisieren.【F:app/api/system.py†L106-L191】【F:app/api/system.py†L344-L368】 |
 | Spotify-Verbindungsmodul | `/api/v1/spotify/status`, `/api/v1/oauth/start`, `/api/v1/oauth/manual` | Auth-Status anzeigen & OAuth-Flows durchführen.【F:app/api/spotify.py†L113-L162】【F:app/api/oauth_public.py†L22-L62】 |
 | Suchresultat-Liste | `POST /api/v1/search`, `POST /api/v1/download`, `POST /api/v1/soulseek/search` | Kandidaten anzeigen, Downloads triggern, Soulseek-Ansicht liefern.【F:app/api/search.py†L158-L209】【F:app/routers/download_router.py†L163-L190】【F:app/routers/soulseek_router.py†L75-L118】 |
 | Download-Tabelle | `/api/v1/downloads`, `/api/v1/download/{id}/priority`, `/api/v1/download/{id}/retry` | Queue verwalten, Prioritäten ändern, Retries auslösen.【F:app/routers/download_router.py†L45-L240】 |
@@ -47,7 +47,7 @@ Die aktuelle Harmony-Codebasis stellt umfangreiche Verwaltungs-Endpunkte bereit,
 | Watchlist-Grid | `/api/v1/watchlist`, `/api/v1/watchlist/{artist}` Varianten | Künstler priorisieren, pausieren, löschen.【F:app/api/watchlist.py†L56-L227】 |
 | Aktivitätsfeed | `/api/v1/activity`, `/api/v1/activity/export` | Event-Stream anzeigen und exportieren.【F:app/routers/activity_router.py†L25-L157】 |
 | Settings-Formulare | `/api/v1/settings`, `/api/v1/settings/history`, `/api/v1/settings/artist-preferences` | Konfiguration verwalten & Audits nachvollziehen.【F:app/routers/settings_router.py†L39-L151】 |
-| Systemdiagnostik | `/api/health/live`, `/api/health/ready`, `/api/v1/integrations`, `/api/v1/system/secrets/{provider}/validate` | Betriebsdiagnosen & Secrets-Checks bereitstellen.【F:app/api/health.py†L10-L27】【F:app/routers/integrations.py†L34-L47】【F:app/api/system.py†L204-L220】 |
+| Systemdiagnostik | `/api/health/live`, `/api/health/ready`, `/api/v1/integrations`, `/api/v1/secrets/{provider}/validate` | Betriebsdiagnosen & Secrets-Checks bereitstellen.【F:app/api/health.py†L10-L27】【F:app/routers/integrations.py†L34-L47】【F:app/api/system.py†L204-L220】 |
 | Imports-Feedback | `POST /api/v1/imports/free` | Ergebnisse der Playlist-Link-Verarbeitung anzeigen.【F:app/routers/imports_router.py†L34-L140】 |
 
 ## Risiken & Blocker
