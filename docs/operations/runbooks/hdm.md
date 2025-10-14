@@ -162,9 +162,7 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 ### Frontend-Assets
 
-1. **Struktur prüfen:** Die statischen Seiten liegen unter [`frontend-static/`](../../../frontend-static). `make supply-guard` verifiziert, dass die Kern-Dateien vorhanden sind.
-2. **Offline-Betrieb:** Es ist kein Vendoring mehr erforderlich; die HTML/JS/CSS-Dateien werden direkt ausgeliefert. Halte lokale Kopien synchron mit `main`.
-3. **Änderungen committen:** Versioniere nur tatsächliche Quelländerungen (HTML, CSS, JS). Zusätzliche Build-Artefakte sind nicht erforderlich.
+Das frühere statische Frontend wurde entfernt. Der Runbook-Fokus liegt auf API und Hintergrunddiensten, bis das neue SSR-Interface verfügbar ist.
 
 ## Eskalation
 

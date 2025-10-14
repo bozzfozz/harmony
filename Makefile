@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 .PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit
-.PHONY: supply-guard supply-guard-verbose supply-guard-warn vendor-frontend vendor-frontend-reset
+.PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
 fmt:
@@ -58,12 +58,6 @@ supply-guard-verbose:
 
 supply-guard-warn:
 	@TOOLCHAIN_STRICT=false SUPPLY_MODE=WARN bash scripts/dev/supply_guard.sh
-
-vendor-frontend:
-	./scripts/dev/vendor_frontend.sh
-
-vendor-frontend-reset:
-	./scripts/dev/vendor_frontend.sh --reset
 
 foss-scan:
 	@bash scripts/dev/foss_guard.sh

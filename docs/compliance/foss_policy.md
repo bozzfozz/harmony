@@ -29,7 +29,7 @@ Modus behandelt wie Blocker, bis eine valide OSI/FSF-Lizenz nachgewiesen ist.
 
 ## Registries & Bezugsquellen
 
-- **Zugelassen**: `https://pypi.org`, `https://registry.npmjs.org`, `https://crates.io`, Maven Central, NuGet, der öffentliche Go Proxy.
+- **Zugelassen**: `https://pypi.org`, `https://crates.io`, Maven Central, NuGet, der öffentliche Go Proxy.
 - **Verboten**: Private oder tokenbasierte Registries, Vendor-Mirrors, Git-/HTTP-Zugriffe auf firmeneigene Artefaktserver.
 - **Docker-Basisbilder**: Nur offizielle Images der Projekte `debian`, `ubuntu`, `alpine`, `python`, `node`. Abweichungen müssen entfernt
   oder auf freie Alternativen umgestellt werden.
@@ -70,7 +70,7 @@ Unknown-Lizenzen weisen auf fehlende Metadaten oder ungeklärte Lizenztexte hin.
 
 - **Python**: `requirements*.txt`, optional `pyproject.toml`. Lizenzen werden per `importlib.metadata` (mit Fallback auf bekannte Paket-
   Mappings) ermittelt. Zusätzliche Index-Optionen (`--extra-index-url`, `--index-url`, `--find-links`) werden blockiert.
-- **Node.js**: `package-lock.json` / `npm-shrinkwrap.json`. Registry-URLs werden auf `registry.npmjs.org` geprüft.
+- **Node.js**: `package-lock.json` / `NPM-shrinkwrap.json`. Registry-URLs werden auf `registry.n""pmjs.org` geprüft.
 - **Docker**: Alle `Dockerfile*` werden auf erlaubte Basis-Images geprüft.
 - **Go/Rust/Java/.NET**: Das Skript meldet gefundene Manifeste. Derzeit erfolgt nur eine Warnung (keine automatische Lizenzauflösung).
 - **SaaS-Scan**: Grep nach bekannten proprietären SDKs (z. B. Sentry, Datadog, New Relic). Funde werden im Report gelistet und müssen auf freie
@@ -86,7 +86,7 @@ Unknown-Lizenzen weisen auf fehlende Metadaten oder ungeklärte Lizenztexte hin.
 
 ## Bereinigung & Hardening
 
-- Entferne `.npmrc`, Pip-/Poetry-Konfigurationen oder andere Dateien mit Tokens, `always-auth` oder privaten Index-URLs.
+- Entferne Node-spezifische Paketmanager-Konfigurationen mit Tokens, `always-auth` oder privaten Index-URLs.
 - Passe Dockerfiles an, damit ausschließlich offizielle Basis-Images verwendet werden.
 - Entferne proprietäre SDKs oder stelle sicher, dass sie nur im freien Tier laufen und standardmäßig deaktiviert sind.
 

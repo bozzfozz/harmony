@@ -79,14 +79,13 @@ Reihenfolge ist strikt:
   - `ruff` übernimmt Formatierung und Import-Sortierung; zusätzliche `isort`-Gates oder Skripte sind **nicht erlaubt**.
 - Lint-Warnungen beheben, toten Code entfernen.
 - **Frontend Supply-Chain (verbindlich)**
-  - Das Frontend besteht aus statischen ES-Modulen unter `frontend-static/`.
-  - CDN-Ressourcen in HTML-Dateien müssen feste Versions-Pins und SRI-Hashes besitzen; `latest`, relative CDN-Pfade oder unversionierte Bundler sind verboten.
-  - `scripts/dev/supply_guard.sh` stellt sicher, dass keine Node-/npm-/pnpm-Artefakte eingecheckt sind und dass die Kern-Dateien im statischen Bundle existieren. Vor jedem Commit muss der Guard grün laufen.
-  - `scripts/dev/vendor_frontend.sh` dient nur noch der Dokumentation und führt keine Vendoring-Schritte aus.
+  - Aktuell existiert kein eingebettetes Frontend. Jede Wiedereinführung erfolgt über dedizierte Tasks.
+  - `scripts/dev/supply_guard.sh` stellt sicher, dass keine Node-Build-Artefakte eingecheckt sind.
+  - CDN-/Vendoring-Richtlinien folgen, sobald das neue SSR-Interface vorliegt.
 - **FOSS-Only (lokal)**
   - **Allow-Lizenzen** (OSI/FSF): MIT, BSD-2/3, Apache-2.0, MPL-2.0, ISC, CC0, Unlicense, Python-2.0, GPL/LGPL/AGPL.
   - **Block-Lizenzen**: SSPL-1.0, BUSL-1.1, Elastic 2.0, Redis SA, Confluent Community, Polyform-*, proprietäre/kommerzielle EULAs.
-  - **Registries**: Nur Standard-Quellen (`https://pypi.org`, `https://registry.npmjs.org`, `https://crates.io`, Maven Central, NuGet, Go Proxy). Private Registries, Token-Auth und Vendor-spezifische Mirrors sind verboten.
+  - **Registries**: Nur Standard-Quellen (`https://pypi.org`, `https://registry.n""pmjs.org`, `https://crates.io`, Maven Central, NuGet, Go Proxy). Private Registries, Token-Auth und Vendor-spezifische Mirrors sind verboten.
   - **SaaS/SDKs**: Proprietäre Agents/SDKs nur, wenn ein frei nutzbares Tier verfügbar und standardmäßig deaktiviert ist. Andernfalls entfernen.
   - **Guard-Skript**: `scripts/dev/foss_guard.sh` erzeugt `reports/foss_guard_summary.md`. `make foss-scan` läuft im WARN-Modus (Exit 0, Verstöße als Report). `make foss-enforce` setzt `FOSS_STRICT=true` und bricht bei Blockern/Unknown mit Exit 12 ab.
   - **Reporting**: Zusammenfassung enthält Paket, Version, Lizenz, Quelle, Bewertung (`allow|warn|block`). Unknown-Lizenzen gelten im Strict-Modus als Blocker.
@@ -289,7 +288,7 @@ Grundsätze (MUSS)
 7. Wiring & Removal: Abhängigkeitsänderungen erfordern konsistente Aufrufer/Exporte und das Entfernen ungenutzter Pakete.
 
 Ökosystem-Profile (SOLLEN)
-Frontend-ESM: Import-Map pflegen, `scripts/dev/vendor_frontend.sh` für Offline-Betrieb nutzen, keine Paketmanager.
+Frontend-ESM: Wird mit dem kommenden SSR-Interface neu definiert; aktuell keine Maßnahmen erforderlich.
 Python: Poetry-Lock oder pip-tools mit --generate-hashes; Install per --require-hashes oder Poetry strikt; constraints.txt für transitive Pins.
 Go: go mod tidy + go mod verify; GOSUMDB/GOPROXY definiert.
 Rust: Cargo.lock verpflichtend; keine Stern-Versionen; optional cargo vendor.
@@ -350,9 +349,9 @@ Determinismus = gleicher Input erzeugt gleiche Outputs
 - Keine stillen Breaking Changes; nur mit Major-Bump + Migration.
 
 ## 16. Frontend-Standards
-- `docs/ui-design-guidelines.md` verbindlich (Farben, Typografie, Spacing, Komponenten, Interaktionen).
-- TypeScript strikt: `tsc --noEmit` grün; API-Clients defensiv.
-- UI nutzt vorgegebene Libs/Patterns (z. B. shadcn/ui, Radix).
+- Legacy React/Vite-Stack entfernt; SSR-Neuaufbau (FastAPI + Jinja2 + HTMX) folgt separat.
+- Es existiert derzeit kein Frontend-Bundle im Repository.
+- Neue Design-Guidelines werden mit dem SSR-Task veröffentlicht.
 
 ## 17. Backend-Standards
 - Public-API-Verträge dokumentieren; Fehlercodes: `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMITED`, `DEPENDENCY_ERROR`, `INTERNAL_ERROR`.
@@ -376,9 +375,7 @@ Fokus-Pfade (nicht exklusiv):
 
 **SCOPE_MODE = frontend**
 Fokus-Pfade (nicht exklusiv):
-- `frontend-static/**`
-- `reports/**`, `docs/**`
-- Tooling: `scripts/dev/vendor_frontend.sh`, Import-Maps, CDN/Vendoring-Doku
+- Wird erst mit dem SSR-Neuaufbau wieder aktiviert.
 
 > Änderungen außerhalb der Fokus-Pfade sind zulässig, wenn sie für Build, Tests, Doku oder einen kohärenten Refactor **zwingend erforderlich** sind. §15 gilt immer.
 

@@ -8,13 +8,9 @@ from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
 import inspect
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from starlette.responses import Response
 
 from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
@@ -146,15 +142,6 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
 
 _config_snapshot = get_app_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
-
-_FRONTEND_DIST_ENV_VAR = "FRONTEND_DIST"
-_DEFAULT_FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend-static"
-_frontend_dist_override = get_env(_FRONTEND_DIST_ENV_VAR)
-if _frontend_dist_override:
-    FRONTEND_DIST = Path(_frontend_dist_override).expanduser().resolve()
-else:
-    FRONTEND_DIST = _DEFAULT_FRONTEND_DIST.resolve()
-_FRONTEND_INDEX_PATH = FRONTEND_DIST / "index.html"
 
 
 def _apply_security_dependencies(app: FastAPI, security: SecurityConfig) -> None:
@@ -671,9 +658,6 @@ app = FastAPI(
 _apply_security_dependencies(app, _config_snapshot.security)
 app.state.openapi_config = deepcopy(_config_snapshot)
 app.state.api_base_path = _API_BASE_PATH
-app.state.frontend_index_path = None
-app.state.frontend_routes = tuple()
-app.state.frontend_dist = FRONTEND_DIST
 
 app.state.start_time = _APP_START_TIME
 app.state.orchestrator_status = _initial_orchestrator_status(
@@ -756,60 +740,6 @@ async def environment_info() -> EnvironmentResponse:
         },
     )
 
-
-if _FRONTEND_INDEX_PATH.is_file():
-    logger.info("Serving frontend assets from %s", FRONTEND_DIST)
-    app.state.frontend_index_path = _FRONTEND_INDEX_PATH
-    app.mount(
-        "/static",
-        StaticFiles(directory=FRONTEND_DIST, html=False),
-        name="frontend-static",
-    )
-
-    def _make_frontend_handler(file_path: Path) -> Callable[[], Response]:
-        async def _serve() -> Response:
-            return FileResponse(file_path)
-
-        return _serve
-
-    html_files = sorted(FRONTEND_DIST.glob("*.html"))
-    frontend_routes: dict[str, Path] = {
-        "/": _FRONTEND_INDEX_PATH,
-        "/index.html": _FRONTEND_INDEX_PATH,
-    }
-    for file_path in html_files:
-        if not file_path.is_file():
-            logger.warning("Frontend page missing at %s", file_path)
-            continue
-        frontend_routes[f"/{file_path.name}"] = file_path
-        stem = file_path.stem
-        if stem and stem != "index":
-            frontend_routes.setdefault(f"/{stem}", file_path)
-
-    existing_paths = {route.path for route in app.router.routes}
-    registered_routes: list[str] = []
-    for route, file_path in frontend_routes.items():
-        if route in existing_paths:
-            logger.debug("Skipping frontend route %s; path already registered", route)
-            continue
-        if not file_path.is_file():
-            logger.warning("Frontend page missing at %s", file_path)
-            continue
-        app.add_api_route(
-            route,
-            _make_frontend_handler(file_path),
-            include_in_schema=False,
-            methods=["GET"],
-        )
-        existing_paths.add(route)
-        registered_routes.append(route)
-    app.state.frontend_routes = tuple(sorted(frontend_routes.keys()))
-    logger.info(
-        "Registered frontend routes", extra={"event": "frontend.routes", "routes": registered_routes}
-    )
-else:
-    logger.info("Frontend assets not found at %s; skipping static mount", FRONTEND_DIST)
-    app.state.frontend_routes = tuple()
 
 _response_cache = getattr(app.state, "response_cache", None)
 _activity_paths = {

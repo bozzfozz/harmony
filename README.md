@@ -2,7 +2,11 @@
 
 Harmony is a FastAPI backend that unifies Spotify metadata, Soulseek downloads and local
 post-processing into a single automation-friendly music hub. The unified container
-serves the API and static web UI on **port 8080** and stores all state in SQLite.
+exposes the API on **port 8080** and stores all state in SQLite.
+
+> **Frontend status:** The legacy static bundle has been removed. A new server-side
+> rendered UI (FastAPI + Jinja2 + HTMX) will be introduced in a follow-up task, so the
+> repository is currently backend-only and requires no Node.js toolchain.
 
 ## Highlights
 
@@ -27,7 +31,6 @@ docker run -d \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
   -e ALLOWED_ORIGINS=http://localhost:8080 \
-  -e PUBLIC_BACKEND_URL=http://localhost:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
   ghcr.io/bozzfozz/harmony:latest
@@ -50,7 +53,6 @@ Only a few environment variables are required for a local deployment:
 | --- | --- | --- |
 | `HARMONY_API_KEYS` | Comma-separated API keys accepted by the gateway. | `secret-local-key` |
 | `ALLOWED_ORIGINS` | CORS allowlist for the browser UI. | `http://localhost:8080` |
-| `PUBLIC_BACKEND_URL` | Base URL the frontend uses for API calls. | `http://localhost:8080` |
 | `DOWNLOADS_DIR` | Workspace for HDM downloads. | `/data/downloads` |
 | `MUSIC_DIR` | Target library for organised media. | `/data/music` |
 

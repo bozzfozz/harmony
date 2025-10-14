@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.errors import (
@@ -52,16 +51,6 @@ def _request_targets_api(request: Request) -> bool:
     return path == base or path.startswith(f"{base}/")
 
 
-def _frontend_index_path(request: Request) -> Path | None:
-    candidate = getattr(request.app.state, "frontend_index_path", None)
-    if isinstance(candidate, Path):
-        return candidate if candidate.is_file() else None
-    if isinstance(candidate, str):
-        resolved = Path(candidate)
-        return resolved if resolved.is_file() else None
-    return None
-
-
 def _format_validation_field(raw_loc: list[Any]) -> str:
     location: list[str] = [str(part) for part in raw_loc]
     if location and location[0] in {"body", "query", "path", "header", "cookie"}:
@@ -102,14 +91,6 @@ async def _render_http_exception(
     header_map = dict(headers or {})
 
     if effective_status == status.HTTP_404_NOT_FOUND:
-        if (
-            request.method.upper() == "GET"
-            and not _request_targets_api(request)
-            and _request_accepts_html(request)
-        ):
-            index_path = _frontend_index_path(request)
-            if index_path is not None:
-                return FileResponse(index_path)
         message = _extract_detail_message(detail, "Resource not found.")
         return to_response(
             message=message,

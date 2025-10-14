@@ -1,8 +1,8 @@
 # Docker Installation Guide
 
-Harmony ships as a single container image that exposes both the FastAPI backend and the
-static web UI on **port 8080**. SQLite is the only supported database; the container
-creates and maintains `harmony.db` inside the `/data` volume.
+Harmony ships as a single container image that exposes the FastAPI backend on
+**port 8080**. SQLite is the only supported database; the container creates and
+maintains `harmony.db` inside the `/data` volume.
 
 ## Prerequisites
 
@@ -21,7 +21,6 @@ docker run -d \
   -p 8080:8080 \
   -e HARMONY_API_KEYS=change-me \
   -e ALLOWED_ORIGINS=http://localhost:8080 \
-  -e PUBLIC_BACKEND_URL=http://localhost:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
   ghcr.io/bozzfozz/harmony:latest
@@ -29,8 +28,8 @@ docker run -d \
 
 - `HARMONY_API_KEYS` accepts a comma-separated list. Replace `change-me` with an actual
   secret before exposing the service.
-- `ALLOWED_ORIGINS` and `PUBLIC_BACKEND_URL` should point to the public base URL that
-  the frontend uses to call the API.
+- `ALLOWED_ORIGINS` should point to the public base URL that browser clients use to
+  call the API.
 - Harmony creates missing directories on start-up and keeps the SQLite database at
   `/data/harmony.db`.
 
@@ -46,17 +45,16 @@ Both commands must return HTTP 200. The ready endpoint prints dependency details
 
 ## Using docker compose
 
-The repository includes a single-service [`compose.yaml`](../../compose.yaml) matching
-the runtime defaults.
+The repository includes a single-service [`compose.yaml`](../../compose.yaml)
+matching the runtime defaults.
 
 ```bash
 docker compose up -d
-open http://localhost:8080
 ```
 
 Key options:
 
-- `ports: "8080:8080"` exposes the API/UI on the host.
+- `ports: "8080:8080"` exposes the API on the host.
 - `volumes` mount `/data/downloads` and `/data/music` from the host for persistence.
 - `OAUTH_SPLIT_MODE=true` requires a shared mount at `/data/runtime/oauth_state` and
   should be combined with the same UID/GID across all participating containers.

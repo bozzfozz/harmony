@@ -33,7 +33,7 @@ pre-commit run --hook-stage push
 ## Manuelle Nightly-/Security-Checks
 
 - Führe `pip-audit -r requirements.txt` bei Bedarf lokal aus und dokumentiere die Ergebnisse im PR.
-- Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und erfasse zusätzlich die Import-Map-Quellen für Frontend-Module.
+- Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
 
 ## Release Checklist
 
@@ -41,7 +41,6 @@ pre-commit run --hook-stage push
 2. `make all` und optionale Security-Scans erneut ausführen.
 3. Artefakte erstellen:
    - Python: `python -m build`
-   - Frontend: statische Assets (`frontend-static/**`)
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership
