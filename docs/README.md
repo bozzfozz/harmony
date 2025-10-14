@@ -37,7 +37,6 @@ subsystems.
 ## Development Workflow
 - [docs/process/changes_review.md](process/changes_review.md) – historical change review outcomes.
 - [docs/task-template.md](task-template.md) – template for new engineering tasks.
-- [ToDo.md](../ToDo.md) – backlog of technical follow-ups and risks.
 
 ## Testing & Quality
 - [docs/testing.md](testing.md) – testing strategy and suites.
