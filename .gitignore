@@ -8,7 +8,6 @@ __pycache__/
 data/*.db
 dist/
 build/
-node_modules/
 coverage*/
 reports/*
 !reports/auto_repair_summary.md

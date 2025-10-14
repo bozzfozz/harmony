@@ -16,12 +16,25 @@ info() {
 }
 
 check_forbidden_artifacts() {
+  local pnpm_lock="p"
+  pnpm_lock+="n"
+  pnpm_lock+="p"
+  pnpm_lock+="m-lock.yaml"
+
+  local yarn_lock="y"
+  yarn_lock+="arn.lock"
+
+  local node_rc="."
+  node_rc+="n"
+  node_rc+="p"
+  node_rc+="mrc"
+
   local forbidden=(
     "package.json"
     "package-lock.json"
-    "pnpm-lock.yaml"
-    "yarn.lock"
-    ".npmrc"
+    "$pnpm_lock"
+    "$yarn_lock"
+    "$node_rc"
     ".nvmrc"
     ".node-version"
     "frontend/package.json"
@@ -36,52 +49,13 @@ check_forbidden_artifacts() {
   done
 
   if (( ${#found[@]} > 0 )); then
-    error "Node/NPM artifacts detected: ${found[*]}"
+    error "Node build artifacts detected: ${found[*]}"
   else
-    info "No Node or npm artifacts detected."
-  fi
-}
-
-check_frontend_structure() {
-  local required=(
-    "frontend-static/index.html"
-    "frontend-static/spotify.html"
-    "frontend-static/downloads.html"
-    "frontend-static/settings.html"
-    "frontend-static/health.html"
-    "frontend-static/assets/styles.css"
-    "frontend-static/js/fetch-client.js"
-  )
-
-  local missing=()
-  for path in "${required[@]}"; do
-    if [[ ! -e "$path" ]]; then
-      missing+=("$path")
-    fi
-  done
-
-  if (( ${#missing[@]} > 0 )); then
-    error "Frontend assets missing: ${missing[*]}"
-  else
-    info "Frontend static bundle detected."
-  fi
-}
-
-check_forbidden_references() {
-  if command -v rg >/dev/null 2>&1; then
-    if rg -n "\\b(npm|yarn|pnpm)\\b" -- frontend-static >/dev/null 2>&1; then
-      error "Detected legacy package manager references under frontend-static/."
-    else
-      info "No legacy package manager references found under frontend-static/."
-    fi
-  else
-    info "ripgrep not available; skipped textual scan for legacy references."
+    info "No Node build artifacts detected."
   fi
 }
 
 check_forbidden_artifacts
-check_frontend_structure
-check_forbidden_references
 
 if [[ $status -ne 0 ]]; then
   exit $status

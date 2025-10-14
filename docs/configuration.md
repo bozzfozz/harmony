@@ -5,8 +5,8 @@ Harmony reads configuration from environment variables with precedence
 should be injected through the environment or a secret manager—never committed to the
 repository.
 
-The unified container bundles the backend, workers and the web UI. All variables below
-apply to the single service; optional features are disabled by default.
+The unified container bundles the backend and workers. All variables below apply to the
+single service; optional features are disabled by default.
 
 ## Identifier & timestamp formats
 
@@ -37,9 +37,6 @@ configuration payloads. They follow the rules below:
 | `API_BASE_PATH` | `/api/v1` | `/api/v1` | Prefix for public API routes. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | `X-Correlation-ID` | Header name used to inject request IDs. |
 | `SMOKE_PATH` | `/live` | `/live` | Path used by smoke tests and entrypoint checks. |
-| `PUBLIC_BACKEND_URL` | _(empty)_ | `http://localhost:8080` | Base URL that the frontend uses for API calls. |
-| `PUBLIC_FEATURE_FLAGS` | `{}` | `{"beta": true}` | JSON string consumed by the frontend. |
-| `PUBLIC_SENTRY_DSN` | _(empty)_ | `https://example@o0.ingest.sentry.io/1` | Optional DSN forwarded to the web UI. |
 | `DOWNLOADS_DIR` | `/data/downloads` | `/data/downloads` | Temporary workspace for HDM downloads; must be writable. |
 | `MUSIC_DIR` | `/data/music` | `/data/music` | Final destination for tagged tracks; must be writable. |
 | `ARTWORK_DIR` | `./artwork` | `/data/artwork` | Storage for downloaded artwork when the feature is enabled. |

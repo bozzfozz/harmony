@@ -14,8 +14,8 @@ subsystems.
 - [docs/architecture/hdm.md](architecture/hdm.md) – Harmony Download Manager internals.
 - [docs/architecture](architecture/) – component diagrams and reference flows.
 - [docs/backend-guidelines.md](backend-guidelines.md) – backend coding standards.
-- [docs/design-guidelines.md](design-guidelines.md) & [docs/ui-design-guidelines.md](ui-design-guidelines.md) – product and UI principles.
-- [docs/frontend](frontend/) – static assets and import-map conventions.
+- [docs/design-guidelines.md](design-guidelines.md) – product principles.
+- SSR UI guidelines will ship with the upcoming FastAPI + Jinja2 + HTMX rewrite.
 
 ## Operations & Maintenance
 - [HDM runbook](operations/runbooks/hdm.md) – operational procedures, recovery steps and checklists.

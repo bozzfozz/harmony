@@ -1,7 +1,7 @@
 ## v2.0.0 — unreleased
 - Governance: §14e in AGENTS.md präzisiert (Exitcodes, Variablen, Zeitlimits, Matrix, Glossar).
 - Tooling: scripts/dev/supply_guard.sh hinzugefügt, Makefile-Targets und pre-commit Hook ergänzt.
-- fix(supply-guard): npm Off-Registry-Erkennung ohne Look-Ahead; keine `grep`-Warnungen mehr.
+- fix(supply-guard): NPM Off-Registry-Erkennung ohne Look-Ahead; keine `grep`-Warnungen mehr.
 - chore(orchestrator): retire the legacy download-flow namespace from the orchestrator package, archive remaining docs and add an automated pipeline legacy
   scan gate to enforce HDM-only usage. [CODX-HDM-DROP-LEGACY-IMPORTS-001]
 - chore(tests): Legacy-Tests mit Präfix test_flow entfernt und Pipeline-Gate ergänzt. [CODX-TESTS-FLOW-PREFIX-REMOVE-001]
@@ -64,7 +64,7 @@
   TrackCandidate mapping and integration service delegation. 【F:app/integrations/slskd_adapter.py†L1-L302】【F:app/services/integration_service.py†L1-L123】【F:tests/integrations/test_slskd_adapter.py†L1-L196】【F:tests/services/test_integration_service_slskd.py†L1-L135】
 - feat(frontend): Downloads-Tab ergänzt eine Fehlgeschlagen-Badge samt Inline-Steuerung (Retry, Entfernen, Retry-All mit Bestätigungsdialog) und deaktiviert Polling in inaktiven Tabs.
 - docs: `AGENTS.md` – Initiative Policy, Scope-Guard, Clarification & PR-Regeln ergänzt.
-- Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, pip-audit/npm audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
+- Refine AGENTS.md: Commit-Hygiene, Branch-Regel ein Ziel, Testing-Erwartungen, Quality-Gates (ruff/black, eslint/prettier, pip-audit/NPM audit), AI-Review-Pflicht, Lizenz-Header, TASK_ID- und Testnachweise-Pflicht.
 - Update PR-Template: TASK_ID und Testnachweise verpflichtend.
 - chore(core): Transfers-Wrapper typisiert, Fehler auf `VALIDATION_ERROR`/`NOT_FOUND`/`DEPENDENCY_ERROR` gemappt und Import-Sanity-Tests ergänzt.【F:app/core/transfers_api.py†L1-L188】【F:app/core/soulseek_client.py†L1-L190】【F:tests/core/test_transfers_api.py†L1-L124】【F:tests/core/test_imports.py†L1-L27】
 

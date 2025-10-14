@@ -7,8 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     APP_PORT=8080 \
     APP_MODULE=app.main:app \
     PUID=1000 \
-    PGID=1000 \
-    FRONTEND_DIST=/app/frontend-static
+    PGID=1000
 
 WORKDIR /app
 

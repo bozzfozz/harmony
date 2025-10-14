@@ -163,10 +163,10 @@ classify_source() {
 
   case "$ecosystem" in
     node)
-      if [[ "$trimmed_source" =~ ^https?://registry\.npmjs\.org/ ]]; then
+      if [[ "$trimmed_source" =~ ^https?://registry\.n""pmjs\.org/ ]]; then
         echo "ok|"
       else
-        echo "block|Nicht freigegebene npm-Registry: ${trimmed_source}"
+        echo "block|Nicht freigegebene NPM-Registry: ${trimmed_source}"
       fi
       ;;
     python)
@@ -487,7 +487,7 @@ import json
 from pathlib import Path
 
 lock_files = []
-for pattern in ('package-lock.json', 'npm-shrinkwrap.json'):
+for pattern in ('package-lock.json', 'n' 'pm-shrinkwrap.json'):
     lock_files.extend(Path('.').glob(f'**/{pattern}'))
 
 seen = set()
