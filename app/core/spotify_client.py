@@ -417,7 +417,7 @@ class SpotifyClient:
                 if isinstance(raw_items, list):
                     items = [item for item in raw_items if isinstance(item, dict)]
                 raw_total = response.get("total")
-                if isinstance(raw_total, (int, float)):
+                if isinstance(raw_total, int | float):
                     total = int(raw_total)
                 has_next = bool(response.get("next"))
             elif isinstance(response, list):

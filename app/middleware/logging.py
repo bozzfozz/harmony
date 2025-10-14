@@ -45,8 +45,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             response = await result if inspect.isawaitable(result) else result
             if not isinstance(response, Response):
                 raise TypeError(
-                    "Exception handler returned non-Response value of type"
-                    f" {type(response)!r}"
+                    f"Exception handler returned non-Response value of type {type(response)!r}"
                 )
             status_code = response.status_code
             return response

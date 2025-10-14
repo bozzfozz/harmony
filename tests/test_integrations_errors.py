@@ -76,7 +76,9 @@ from app.integrations.provider_gateway import (
         ),
     ],
 )
-def test_error_mapping(gateway_error, expected_type, expected_message, expected_meta, expected_headers):
+def test_error_mapping(
+    gateway_error, expected_type, expected_message, expected_meta, expected_headers
+):
     app_error = to_application_error("Spotify", gateway_error)
 
     assert isinstance(app_error, expected_type)

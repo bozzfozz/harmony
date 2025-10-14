@@ -15,7 +15,9 @@ def test_api_logging_middleware_handles_sync_exception_handlers() -> None:
     app = FastAPI()
 
     @app.exception_handler(_CustomError)
-    def _handle_custom(_: Request, exc: _CustomError) -> JSONResponse:  # pragma: no cover - invoked via test client
+    def _handle_custom(
+        _: Request, exc: _CustomError
+    ) -> JSONResponse:  # pragma: no cover - invoked via test client
         return JSONResponse({"message": "boom", "exc": exc.__class__.__name__}, status_code=418)
 
     @app.get("/boom")
