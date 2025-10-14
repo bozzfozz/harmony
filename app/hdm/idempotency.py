@@ -44,7 +44,7 @@ WHERE key = ?
 
 SQLITE_DELETE = "DELETE FROM idempotency_keys WHERE key = ?"
 
-_LOCK_ERROR_FRAGMENT = "locked"
+_RETRYABLE_ERROR_FRAGMENTS: tuple[str, ...] = ("locked", "busy")
 
 _T = TypeVar("_T")
 
@@ -207,13 +207,17 @@ class SQLiteIdempotencyStore(IdempotencyStore):
             except (sqlite3.OperationalError, AioSqliteOperationalError) as exc:
                 last_error = exc
                 message = str(exc).lower()
-                if _LOCK_ERROR_FRAGMENT in message and attempt < self._max_attempts:
+                should_retry = any(
+                    fragment in message for fragment in _RETRYABLE_ERROR_FRAGMENTS
+                )
+                if should_retry and attempt < self._max_attempts:
                     logger.debug(
                         "SQLite idempotency store busy; retrying",
                         extra={
                             "event": "hdm.idempotency.retry",
                             "attempt": attempt,
                             "path": str(self._path),
+                            "error": message,
                         },
                     )
                     await asyncio.sleep(delay)
