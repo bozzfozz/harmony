@@ -32,7 +32,7 @@ pre-commit run --hook-stage push
 
 ## Manuelle Nightly-/Security-Checks
 
-- Führe `pip-audit -r requirements.txt` bei Bedarf lokal aus. Dokumentiere Ergebnisse im PR oder in `ToDo.md`.
+- Führe `pip-audit -r requirements.txt` bei Bedarf lokal aus und dokumentiere die Ergebnisse im PR.
 - Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und erfasse zusätzlich die Import-Map-Quellen für Frontend-Module.
 
 ## Release Checklist

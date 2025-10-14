@@ -90,7 +90,6 @@ DUE: <YYYY-MM-DD>
 - [ ] Scope eingehalten, keine verbotenen Dateien
 - [ ] Tests + Lint + Typen grün (oder begründete Ausnahme)
 - [ ] OpenAPI/Doku synchron
-- [ ] ToDo.md aktualisiert (Nachweis verlinkt)
 - [ ] Rollback-Plan dokumentiert
 
 ## 14) Hinweise für Codex (Operational)
