@@ -96,16 +96,16 @@ templates/
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
 | Aggregierte Suche | POST `/api/v1/search` | Form Submit (Enter/Click) | `#hx-search-results`, `hx-swap="innerHTML"`, `hx-push-url` für Query | 422/503 ⇒ Fehlerbanner |【F:app/api/search.py†L158-L209】
-| Download anfordern | POST `/api/v1/download/download` | Button in Ergebnisliste (`hx-post`, JSON body) | `hx-swap-oob` Queue-Zähler, Erfolgsmeldung | 400/502 ⇒ Inline-Error |【F:app/routers/download_router.py†L163-L190】
+| Download anfordern | POST `/api/v1/download` | Button in Ergebnisliste (`hx-post`, JSON body) | `hx-swap-oob` Queue-Zähler, Erfolgsmeldung | 400/502 ⇒ Inline-Error |【F:app/routers/download_router.py†L163-L190】
 | Soulseek-Suche | POST `/api/v1/soulseek/search` | Tab „Soulseek“ `hx-post` | `#hx-soulseek-results` | 502 ⇒ Alert |【F:app/routers/soulseek_router.py†L75-L118】
 
 ### Downloads (/ui/downloads)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
-| Liste laden/paginieren | GET `/api/v1/download/downloads` | `load`, `hx-trigger="every 15s"`, Paginierungslinks (`hx-get`) | `#hx-downloads-table`, `innerHTML` | 5xx ⇒ Fehlertable mit Retry |【F:app/routers/download_router.py†L45-L118】
-| Priorität ändern | PATCH `/api/v1/download/download/{id}/priority` | Inline-Form (`hx-patch`) | Zeilen-Fragment `hx-swap="outerHTML"` | 409 ⇒ Hinweis-Toast |【F:app/routers/download_router.py†L143-L160】
-| Retry & Cancel | POST `/api/v1/download/download/{id}/retry`, DELETE `/api/v1/download/download/{id}` | Button `hx-post` / `hx-delete` mit Confirm | Row ersetzt; `hx-swap-oob` für KPIs | Fehler ⇒ Modal mit Details |【F:app/routers/download_router.py†L175-L240】
-| Export | GET `/api/v1/download/downloads/export` | Link (klassisch) → Datei-Download | — | 400 ⇒ Fehlerdialog |【F:app/routers/download_router.py†L192-L223】
+| Liste laden/paginieren | GET `/api/v1/downloads` | `load`, `hx-trigger="every 15s"`, Paginierungslinks (`hx-get`) | `#hx-downloads-table`, `innerHTML` | 5xx ⇒ Fehlertable mit Retry |【F:app/routers/download_router.py†L45-L118】
+| Priorität ändern | PATCH `/api/v1/download/{id}/priority` | Inline-Form (`hx-patch`) | Zeilen-Fragment `hx-swap="outerHTML"` | 409 ⇒ Hinweis-Toast |【F:app/routers/download_router.py†L143-L160】
+| Retry & Cancel | POST `/api/v1/download/{id}/retry`, DELETE `/api/v1/download/{id}` | Button `hx-post` / `hx-delete` mit Confirm | Row ersetzt; `hx-swap-oob` für KPIs | Fehler ⇒ Modal mit Details |【F:app/routers/download_router.py†L175-L240】
+| Export | GET `/api/v1/downloads/export` | Link (klassisch) → Datei-Download | — | 400 ⇒ Fehlerdialog |【F:app/routers/download_router.py†L192-L223】
 
 ### Jobs & Warteschlangen (/ui/jobs)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
