@@ -217,6 +217,10 @@ class SoulseekConfig:
     max_results: int
 
 
+_SUPPORTED_IDEMPOTENCY_BACKENDS = {"memory", "sqlite"}
+DEFAULT_IDEMPOTENCY_BACKEND = "sqlite"
+
+
 @dataclass(slots=True)
 class HdmConfig:
     downloads_dir: str
@@ -227,8 +231,15 @@ class HdmConfig:
     max_retries: int
     slskd_timeout_seconds: int
     move_template: str
-    idempotency_backend: str
-    idempotency_sqlite_path: str
+    idempotency_backend: str = DEFAULT_IDEMPOTENCY_BACKEND
+    idempotency_sqlite_path: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.idempotency_backend:
+            self.idempotency_backend = DEFAULT_IDEMPOTENCY_BACKEND
+        if not self.idempotency_sqlite_path:
+            base = Path(self.downloads_dir).expanduser()
+            self.idempotency_sqlite_path = str(base / ".harmony" / "idempotency.db")
 
     @classmethod
     def from_env(cls, env: Mapping[str, Any]) -> HdmConfig:
@@ -293,10 +304,6 @@ def _resolve_slskd_timeout_seconds(env: Mapping[str, Any]) -> int:
             )
 
     return DEFAULT_SLSKD_TIMEOUT_SEC
-
-
-_SUPPORTED_IDEMPOTENCY_BACKENDS = {"memory", "sqlite"}
-DEFAULT_IDEMPOTENCY_BACKEND = "sqlite"
 
 
 def _parse_idempotency_backend(raw_value: Any) -> str:
