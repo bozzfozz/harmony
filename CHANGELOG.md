@@ -55,7 +55,7 @@
 - chore(ci): reset GitHub Actions to a two-lane pipeline with backend (ruff, black, isort, mypy, bandit, pytest coverage) and conditional frontend gating; skip database-specific markers by default while exposing coverage and junit artifacts.【F:.github/workflows/ci.yml†L1-L97】
 - chore(ci): add nightly dependency and secret scans at 01:00 Europe/Berlin with CycloneDX SBOM exports and 7-day report retention.【F:.github/workflows/nightly.yml†L1-L103】
 - chore(ci): introduce tag-triggered release automation that publishes Python distributions and optional frontend bundles as GitHub release assets.【F:.github/workflows/release.yml†L1-L72】
-- docs: capture required checks, database opt-in policy, and operational expectations in `REPO_MAINTENANCE.md`.【F:REPO_MAINTENANCE.md†L1-L74】
+- docs: capture required checks, database opt-in policy, and operational expectations in `docs/operations/repo_maintenance.md`.【F:docs/operations/repo_maintenance.md†L1-L74】
 - perf(worker): entblockt den Watchlist-Worker mit konfigurierbarem DB-I/O,
   strikten Spotify-/Soulseek-Timeouts, begrenzter Parallelität und
   exponentiellem Retry-Backoff; aktualisierte Tests und Dokumentation

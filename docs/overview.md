@@ -32,4 +32,4 @@ persists all state in a single SQLite database that ships inside the container i
 Further architectural diagrams and contracts live under
 [`docs/architecture/`](architecture/). HDM-specific internals are documented in
 [`docs/architecture/hdm.md`](architecture/hdm.md) and operational procedures are
-covered in [`RUNBOOK_HDM.md`](../RUNBOOK_HDM.md).
+covered in [HDM runbook](operations/runbooks/hdm.md).

@@ -29,5 +29,5 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
 - Capture the output of `/api/health/ready?verbose=1` and include it when escalating
   incidents.
 
-For HDM-specific runbooks see [`RUNBOOK_HDM.md`](../RUNBOOK_HDM.md). For Spotify-specific
+For HDM-specific runbooks see [HDM runbook](operations/runbooks/hdm.md). For Spotify-specific
 advice consult [`docs/auth/spotify.md`](auth/spotify.md).
