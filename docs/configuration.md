@@ -8,6 +8,19 @@ repository.
 The unified container bundles the backend, workers and the web UI. All variables below
 apply to the single service; optional features are disabled by default.
 
+## Identifier & timestamp formats
+
+Harmony surfaces several strongly typed string fields through the API and
+configuration payloads. They follow the rules below:
+
+- **`ID`** – accepts strings or byte sequences, strips surrounding whitespace and
+  rejects empty values. The canonical representation is the trimmed string.
+- **`URI`** – accepts strings or byte sequences, strips whitespace and requires a
+  scheme and host component.
+- **`ISODateTime`** – accepts strings, byte sequences or `datetime` instances.
+  Inputs are normalised to timezone-aware ISO 8601 strings with a `+00:00`
+  suffix. Values without a timezone are assumed to be UTC.
+
 ## Core Runtime
 
 | Variable | Default | Example | Notes |
