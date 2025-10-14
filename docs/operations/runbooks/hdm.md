@@ -3,8 +3,8 @@
 Dieser Runbook richtet sich an Operator:innen, die den HDM-End-to-End-Fluss
 bereitstellen, überwachen und im Fehlerfall
 wiederherstellen müssen. Ein architektonischer Überblick steht in
-[„Harmony Download Manager (HDM)“](docs/architecture/hdm.md).
-Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
+[„Harmony Download Manager (HDM)“](../../architecture/hdm.md).
+Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
 
 ## Betriebsziele
 
@@ -14,14 +14,14 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
 - Der OAuth-State-Store bleibt unter 50 offenen Transaktionen (`/metrics` →
   `oauth_transactions_active`).
 - Recovery-Schritte müssen remote durchführbar sein (siehe
-  [Spotify OAuth Guide](docs/auth/spotify.md#callback-on-remote-hosts)).
+  [Spotify OAuth Guide](../../auth/spotify.md#callback-on-remote-hosts)).
 
 ## Vorbereitungen
 
 1. **Zugänge:** Spotify Developer Console (Client-ID/Secret), API-Key für Harmony,
    Zugang zum Container-Host.
 2. **Umgebung:** Stellen Sie sicher, dass die Variablen aus der
-   [Konfigurationsreferenz](docs/configuration.md)
+   [Konfigurationsreferenz](../../configuration.md)
    gesetzt sind. Geheimnisse niemals ins Repo schreiben.
 3. **Verzeichnisse:**
    - `/data` (Downloads & Musik) — Schreibrechte `uid=1000` bzw. `chmod 775`.
@@ -89,7 +89,7 @@ Der Audit-Status ist in [AUDIT-HDM.md](AUDIT-HDM.md) dokumentiert.
 | `backfill.jobs.queued` | Orchestrator-Metrik (Logs) | kurzfristige Peaks ok, < 200 langfristig |
 
 Weitere Details zu Logging-Konventionen stehen in
-[docs/observability.md](docs/observability.md).
+[../../observability.md](../../observability.md).
 
 ## Häufige Störungen & Behebung
 
@@ -102,7 +102,7 @@ Weitere Details zu Logging-Konventionen stehen in
 
 1. Führen Sie erneut `POST /api/v1/spotify/pro/oauth/start` aus.
 2. Sollte der Callback nicht ankommen, verwenden Sie den
-   [Spotify OAuth Guide](docs/auth/spotify.md#callback-on-remote-hosts) und senden Sie die
+   [Spotify OAuth Guide](../../auth/spotify.md#callback-on-remote-hosts) und senden Sie die
    komplette Redirect-URL an `POST /api/v1/oauth/manual`.
 3. Prüfen Sie die Metrik `oauth.exchange.success`. Bei Erfolg setzt das Backend
    `authorized: true`.
@@ -174,5 +174,5 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 - **Vendor:** Spotify Support (Dashboard → _Contact Us_ → „Production Outage“).
 
 Alle Eskalationen sollten in der zentralen Incident-Dokumentation referenziert
-werden. Aktualisieren Sie `AUDIT-HDM.md`, sobald neue Kontrollen eingeführt
+werden. Aktualisieren Sie [HDM Audit](../../compliance/hdm_audit.md), sobald neue Kontrollen eingeführt
 werden.

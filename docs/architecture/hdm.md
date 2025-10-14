@@ -53,7 +53,7 @@ no separate services are required.
 
 ## Related Documents
 
-- [RUNBOOK_HDM.md](../../RUNBOOK_HDM.md) – Operational procedures and recovery steps.
-- [AUDIT-HDM.md](../../AUDIT-HDM.md) – Compliance and traceability evidence.
+- [HDM Runbook](../operations/runbooks/hdm.md) – Operational procedures and recovery steps.
+- [HDM Audit](../compliance/hdm_audit.md) – Compliance and traceability evidence.
 - [docs/auth/spotify.md](../auth/spotify.md) – Spotify OAuth configuration required for
   PRO mode.
