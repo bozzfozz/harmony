@@ -4,6 +4,7 @@
 
 {% block header_actions %}
   <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
     <button type="submit">{{ strings.button_label("logout") }}</button>
   </form>
 {% endblock %}

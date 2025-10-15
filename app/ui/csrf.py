@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import secrets
 from typing import Final
+from urllib.parse import parse_qs
 
 from fastapi import Depends, HTTPException, Request, Response, status
 
@@ -18,6 +19,7 @@ logger = get_logger(__name__)
 
 _CSRF_COOKIE: Final[str] = "csrftoken"
 _HEADER_NAME: Final[str] = "X-CSRF-Token"
+_FORM_FIELD: Final[str] = "csrftoken"
 
 
 @dataclass(slots=True)
@@ -94,14 +96,36 @@ def clear_csrf_cookie(response: Response) -> None:
     )
 
 
-def enforce_csrf(
+async def _extract_form_token(request: Request) -> str | None:
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" not in content_type:
+        return None
+    raw_body = await request.body()
+    if not raw_body:
+        return None
+    try:
+        decoded = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    parsed = parse_qs(decoded, keep_blank_values=True)
+    values = parsed.get(_FORM_FIELD)
+    if not values:
+        return None
+    token = values[0]
+    return token or None
+
+
+async def enforce_csrf(
     request: Request,
     session: UiSession = Depends(require_session),
     manager: CsrfManager = Depends(get_csrf_manager),
 ) -> None:
-    header_token = request.headers.get(_HEADER_NAME)
     cookie_token = request.cookies.get(_CSRF_COOKIE)
-    if not header_token or not cookie_token:
+    candidate_token = request.headers.get(_HEADER_NAME)
+    if candidate_token is None:
+        candidate_token = await _extract_form_token(request)
+
+    if not candidate_token or not cookie_token:
         log_event(
             logger,
             "ui.csrf",
@@ -114,7 +138,8 @@ def enforce_csrf(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Missing CSRF token.",
         )
-    if header_token != cookie_token or not manager.validate(session, header_token):
+
+    if candidate_token != cookie_token or not manager.validate(session, candidate_token):
         log_event(
             logger,
             "ui.csrf",
