@@ -1,0 +1,32 @@
+/* Harmony UI base styles */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  background-color: #0f1115;
+  color: #f4f6fb;
+  line-height: 1.5;
+}
+
+a {
+  color: #4ea8de;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.table th,
+.table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}

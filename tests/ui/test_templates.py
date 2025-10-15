@@ -13,6 +13,7 @@ from app.ui.context import (
     build_watchlist_fragment_context,
 )
 from app.ui.router import templates
+from app.ui.services import WatchlistRow
 from app.ui.session import UiFeatures, UiSession
 
 
@@ -102,8 +103,16 @@ def test_activity_fragment_template_uses_table_macro() -> None:
 def test_watchlist_fragment_template_renders_rows() -> None:
     request = _make_request("/ui/watchlist/table")
     entries = [
-        {"artist_key": "spotify:artist:1", "priority": 1, "state_key": "watchlist.state.active"},
-        {"artist_key": "spotify:artist:2", "priority": 2, "state_key": "watchlist.state.paused"},
+        WatchlistRow(
+            artist_key="spotify:artist:1",
+            priority=1,
+            state_key="watchlist.state.active",
+        ),
+        WatchlistRow(
+            artist_key="spotify:artist:2",
+            priority=2,
+            state_key="watchlist.state.paused",
+        ),
     ]
     context = build_watchlist_fragment_context(request, entries=entries)
     template = templates.get_template("partials/watchlist_table.j2")

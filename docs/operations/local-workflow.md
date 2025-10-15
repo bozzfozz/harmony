@@ -7,6 +7,8 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | Kommando                  | Script                              | Zweck |
 | ------------------------- | ----------------------------------- | ----- |
 | `make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline-tolerant) aus und verifiziert `/data/downloads` & `/data/music` mit Schreib-/Lesetest. |
+| `make ui-guard`           | `scripts/dev/ui_guard.sh`           | Durchsucht UI-Templates und statische Assets nach Platzhaltern, verbietet direkte HTMX-Aufrufe auf `/api/...` und prüft, dass die verpflichtenden Dateien unter `app/ui/static/` existieren. |
+| `make ui-smoke`           | `scripts/dev/ui_smoke_local.sh`     | Startet die FastAPI-App lokal, ruft `/live`, `/ui` sowie exemplarische Fragmente auf und bricht ab, wenn die HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
 | `make lint`               | `scripts/dev/lint_py.sh`            | Ruft `ruff check --output-format=concise .` auf. |
 | `make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
@@ -19,15 +21,17 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 ## Ablauf vor jedem Merge
 
 1. **Tooling prüfen:** `make doctor`
-2. **Hooks installieren:**
+2. **UI-Guards laufen lassen:** `make ui-guard`
+3. **UI-Smoketest:** `make ui-smoke`
+4. **Hooks installieren:**
    ```bash
    pre-commit install
    pre-commit install --hook-type pre-push
    pre-commit run --all-files
    ```
-3. **Kompletter Gate-Lauf:** `make all`
-4. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
-5. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
+5. **Kompletter Gate-Lauf:** `make all`
+6. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
+7. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
 
 ## Troubleshooting
 
@@ -56,3 +60,5 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 - Konsolenausschnitte jedes `make all`-Schrittes (mindestens die letzten 5–10 Zeilen pro Kommando).
 - Aktualisierte Wiring-/Removal-Reports im PR-Body.
 - Hinweise auf besondere Overrides (z. B. alternative Ports, deaktivierte Worker) in den PR-Notizen.
+- **UI-Guard:** Verweist die Fehlermeldung auf einen Platzhalter oder `hx-*` Aufruf? Entferne den entsprechenden String aus den Templates. Stelle sicher, dass `app/ui/static/css/app.css`, `app/ui/static/js/htmx.min.js` und `app/ui/static/icons.svg` nicht leer sind.
+- **UI-Smoketest:** Schlägt der Test wegen fehlender HTML-Content-Types oder Platzhaltertext fehl, kontrolliere die gerenderten Templates und starte den Test erneut. Bei Startproblemen zeigt `.tmp/ui-smoke.log` die Backend-Logs.

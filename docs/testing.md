@@ -29,6 +29,19 @@ scenario.
   Unit tests confirm that dependency probes and database pings are aggregated
   without relying on migrations.
 
+## UI verification
+
+- `tests/ui/` deckt jede veröffentlichte `/ui`-Seite sowie alle Fragmente ab.
+  Die Tests prüfen `text/html` Content-Types, rollenbasierte Zugriffe und
+  CSRF-Abbrüche wenn Tokens fehlen.
+- `scripts/dev/ui_guard.sh` verhindert Platzhalter in Templates, verbietet
+  HTMX-Calls auf `/api/...` und stellt sicher, dass die statischen Assets unter
+  `app/ui/static/` vorhanden sind.
+- `scripts/dev/ui_smoke_local.sh` fährt die App lokal hoch, authentifiziert sich
+  per `/ui/login` und ruft `/live`, `/ui` sowie exemplarische Fragmente auf. Der
+  Lauf bricht ab, sobald HTML-Antworten Platzhalter enthalten oder nicht als
+  `text/html` ausgeliefert werden.
+
 ## Running the suite
 
 Execute the full backend suite locally via:
