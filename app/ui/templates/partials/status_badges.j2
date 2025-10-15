@@ -1,0 +1,14 @@
+{% import "partials/_strings.j2" as strings %}
+
+{% macro render_badge(badge) -%}
+  <span class="status-badge status-badge--{{ badge.variant }}"
+        {% if badge.test_id %}data-test="{{ badge.test_id }}"{% endif %}>
+    {{ strings.status_badge_label(badge.label_key) }}
+  </span>
+{%- endmacro %}
+
+{% macro render_badges(badges) -%}
+  {% for badge in badges %}
+    {{ render_badge(badge) }}
+  {% endfor %}
+{%- endmacro %}

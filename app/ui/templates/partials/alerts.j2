@@ -1,0 +1,9 @@
+{% macro render_alerts(alerts) -%}
+  {% if alerts %}
+    <div class="alerts">
+      {% for alert in alerts %}
+        <p role="alert" class="alert alert--{{ alert.level }}">{{ alert.text }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+{%- endmacro %}

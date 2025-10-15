@@ -1,0 +1,10 @@
+{% import "partials/_strings.j2" as strings %}
+
+{% macro render_modals(modals) -%}
+  {% for modal in modals %}
+    <dialog id="{{ modal.identifier }}" data-role="modal">
+      <h2>{{ strings.modal_title(modal.title_key) }}</h2>
+      <div class="modal-body">{{ modal.body | safe }}</div>
+    </dialog>
+  {% endfor %}
+{%- endmacro %}
