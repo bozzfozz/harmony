@@ -20,6 +20,20 @@
     <h3>{{ strings.dashboard_features_heading() }}</h3>
     {{ tables.render_table(features_table) }}
   </section>
+  <section>
+    <h3>{{ strings.dashboard_activity_heading() }}</h3>
+    {% set activity_url = '/ui/activity/table' %}
+    {% if request and request.scope and request.scope.get('router') %}
+      {% set activity_url = request.url_for('activity_table') %}
+    {% endif %}
+    <div id="hx-activity-table"
+         hx-get="{{ activity_url }}"
+         hx-trigger="load, every 60s"
+         hx-target="#hx-activity-table"
+         hx-swap="outerHTML">
+      <p>{{ strings.loading_placeholder() }}</p>
+    </div>
+  </section>
   {% if actions %}
     <section>
       <h3>{{ strings.dashboard_actions_heading() }}</h3>
