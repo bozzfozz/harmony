@@ -1,27 +1,3 @@
-{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
 
-<div id="hx-watchlist-table" class="table-fragment" data-count="{{ count }}">
-  {% if entries %}
-    <table>
-      <caption>{{ strings.caption("watchlist.table.caption") }}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{{ strings.table_header("watchlist.artist") }}</th>
-          <th scope="col">{{ strings.table_header("watchlist.priority") }}</th>
-          <th scope="col">{{ strings.table_header("watchlist.state") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in entries %}
-          <tr>
-            <td>{{ entry["artist_key"] }}</td>
-            <td>{{ entry["priority"] }}</td>
-            <td>{{ strings.table_cell(entry["state_key"]) }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="empty-state">{{ strings.watchlist_empty_state() }}</p>
-  {% endif %}
-</div>
+{{ tables.render_table_fragment(fragment) }}

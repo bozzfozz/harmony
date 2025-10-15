@@ -6,7 +6,12 @@ from typing import Any
 from jinja2 import Template
 from starlette.requests import Request
 
-from app.ui.context import build_dashboard_page_context, build_login_page_context
+from app.ui.context import (
+    build_activity_fragment_context,
+    build_dashboard_page_context,
+    build_login_page_context,
+    build_watchlist_fragment_context,
+)
 from app.ui.router import templates
 from app.ui.session import UiFeatures, UiSession
 
@@ -65,6 +70,49 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "admin-action" in html
     assert "Welcome" in html
     assert "Current role: Admin" in html
+    assert "hx-get=\"/ui/activity/table\"" in html
+    assert "hx-trigger=\"load, every 60s\"" in html
+    assert "hx-target=\"#hx-activity-table\"" in html
+
+
+def test_activity_fragment_template_uses_table_macro() -> None:
+    request = _make_request("/ui/activity/table")
+    items = [
+        {"timestamp": "2024-01-01T00:00:00Z", "type": "test", "status": "ok", "details": {"foo": "bar"}}
+    ]
+    context = build_activity_fragment_context(
+        request,
+        items=items,
+        limit=25,
+        offset=0,
+        total_count=1,
+        type_filter=None,
+        status_filter=None,
+    )
+    template = templates.get_template("partials/activity_table.j2")
+    html = template.render(**context)
+
+    assert "id=\"hx-activity-table\"" in html
+    assert "data-total=\"1\"" in html
+    assert "<table id=\"activity-table\"" in html
+    assert "foo" in html
+    assert 'class="pagination"' not in html
+
+
+def test_watchlist_fragment_template_renders_rows() -> None:
+    request = _make_request("/ui/watchlist/table")
+    entries = [
+        {"artist_key": "spotify:artist:1", "priority": 1, "state_key": "watchlist.state.active"},
+        {"artist_key": "spotify:artist:2", "priority": 2, "state_key": "watchlist.state.paused"},
+    ]
+    context = build_watchlist_fragment_context(request, entries=entries)
+    template = templates.get_template("partials/watchlist_table.j2")
+    html = template.render(**context)
+
+    assert "id=\"hx-watchlist-table\"" in html
+    assert "data-count=\"2\"" in html
+    assert "spotify:artist:1" in html
+    assert "Paused" in html
 
 
 def test_pass_context_globals_receive_runtime_context_mapping() -> None:
