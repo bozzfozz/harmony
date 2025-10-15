@@ -32,3 +32,39 @@
     </tbody>
   </table>
 {%- endmacro %}
+
+{% macro render_table_fragment(fragment) -%}
+  <div id="{{ fragment.identifier }}"
+       class="table-fragment"
+       {%- for key, value in fragment.data_attributes.items() %}
+         data-{{ key }}="{{ value }}"
+       {%- endfor %}>
+    {% if fragment.table.rows %}
+      {{ render_table(fragment.table) }}
+    {% else %}
+      <p class="empty-state">{{ strings.empty_state(fragment.empty_state_key) }}</p>
+    {% endif %}
+    {% if fragment.pagination and (fragment.pagination.previous_url or fragment.pagination.next_url) %}
+      {% set pagination = fragment.pagination %}
+      <nav class="pagination"
+           aria-label="{{ strings.pagination_label(pagination.label_key) }}">
+        {% if pagination.previous_url %}
+          <button type="button"
+                  hx-get="{{ pagination.previous_url }}"
+                  hx-target="{{ pagination.target }}"
+                  hx-swap="{{ pagination.swap }}">
+            {{ strings.pagination_prev() }}
+          </button>
+        {% endif %}
+        {% if pagination.next_url %}
+          <button type="button"
+                  hx-get="{{ pagination.next_url }}"
+                  hx-target="{{ pagination.target }}"
+                  hx-swap="{{ pagination.swap }}">
+            {{ strings.pagination_next() }}
+          </button>
+        {% endif %}
+      </nav>
+    {% endif %}
+  </div>
+{%- endmacro %}

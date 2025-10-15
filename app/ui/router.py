@@ -1,24 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode
-
-import json
-from collections.abc import Mapping, Sequence
 from typing import Any
+from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 
 from app.dependencies import get_watchlist_service
 from app.errors import AppError
-from pydantic import ValidationError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.schemas.watchlist import WatchlistEntryCreate
+from app.services.watchlist_service import WatchlistEntry, WatchlistService
 from app.ui.context import (
+    build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_watchlist_fragment_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
 from app.ui.session import (
@@ -30,8 +32,6 @@ from app.ui.session import (
     require_session,
 )
 from app.utils.activity import activity_manager
-from app.schemas.watchlist import WatchlistEntryCreate
-from app.services.watchlist_service import WatchlistEntry, WatchlistService
 
 logger = get_logger(__name__)
 
@@ -62,56 +62,6 @@ def _render_alert_fragment(
         status_code=status_code,
     )
 
-def _format_activity_rows(items: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    for item in items:
-        details = item.get("details")
-        if isinstance(details, Mapping):
-            details_text = json.dumps(details, ensure_ascii=False, sort_keys=True)
-        elif details is None:
-            details_text = ""
-        else:
-            details_text = str(details)
-        rows.append(
-            {
-                "timestamp": str(item.get("timestamp", "")),
-                "type": str(item.get("type", "")),
-                "status": str(item.get("status", "")),
-                "details": details_text,
-            }
-        )
-    return rows
-
-
-def _build_activity_pagination(
-    request: Request,
-    *,
-    limit: int,
-    offset: int,
-    total_count: int,
-    type_filter: str | None,
-    status_filter: str | None,
-) -> dict[str, str | None]:
-    prev_offset = offset - limit if offset > 0 else None
-    next_offset = offset + limit if offset + limit < total_count else None
-    base_url = request.url_for("activity_table")
-
-    filters: list[tuple[str, str]] = []
-    if type_filter:
-        filters.append(("type", type_filter))
-    if status_filter:
-        filters.append(("status", status_filter))
-
-    def _url(new_offset: int | None) -> str | None:
-        if new_offset is None:
-            return None
-        query = [("limit", str(limit)), ("offset", str(max(new_offset, 0)))]
-        query.extend(filters)
-        return f"{base_url}?{urlencode(query)}"
-
-    return {"prev_url": _url(prev_offset), "next_url": _url(next_offset)}
-
-
 def _format_watchlist_entries(entries: Sequence[WatchlistEntry]) -> list[dict[str, Any]]:
     formatted: list[dict[str, Any]] = []
     for entry in entries:
@@ -124,26 +74,6 @@ def _format_watchlist_entries(entries: Sequence[WatchlistEntry]) -> list[dict[st
             }
         )
     return formatted
-
-
-def _render_watchlist_table(
-    request: Request,
-    entries: Sequence[WatchlistEntry],
-    *,
-    status_code: int = status.HTTP_200_OK,
-) -> Response:
-    formatted = _format_watchlist_entries(entries)
-    context = {
-        "request": request,
-        "entries": formatted,
-        "count": len(formatted),
-    }
-    return templates.TemplateResponse(
-        request,
-        "partials/watchlist_table.j2",
-        context,
-        status_code=status_code,
-    )
 
 
 @router.get("/login", include_in_schema=False)
@@ -279,30 +209,22 @@ async def activity_table(
             "Unable to load activity entries.",
         )
 
-    rows = _format_activity_rows(items)
-    pagination = _build_activity_pagination(
+    context = build_activity_fragment_context(
         request,
+        items=items,
         limit=limit,
         offset=offset,
         total_count=total_count,
         type_filter=type_filter,
         status_filter=status_filter,
     )
-    context = {
-        "request": request,
-        "rows": rows,
-        "total_count": total_count,
-        "limit": limit,
-        "offset": offset,
-        "pagination": pagination,
-    }
     log_event(
         logger,
         "ui.fragment.activity",
         component="ui.router",
         status="success",
         role=session.role,
-        count=len(rows),
+        count=len(context["fragment"].table.rows),
     )
     return templates.TemplateResponse(
         request,
@@ -333,15 +255,23 @@ async def watchlist_table(
             "Unable to load watchlist entries.",
         )
 
+    context = build_watchlist_fragment_context(
+        request,
+        entries=_format_watchlist_entries(entries),
+    )
     log_event(
         logger,
         "ui.fragment.watchlist",
         component="ui.router",
         status="success",
         role=session.role,
-        count=len(entries),
+        count=len(context["fragment"].table.rows),
     )
-    return _render_watchlist_table(request, entries)
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_table.j2",
+        context,
+    )
 
 
 @router.post(
@@ -408,12 +338,20 @@ async def watchlist_create(
         )
 
     entries = service.list_entries()
+    context = build_watchlist_fragment_context(
+        request,
+        entries=_format_watchlist_entries(entries),
+    )
     log_event(
         logger,
         "ui.fragment.watchlist",
         component="ui.router",
         status="success",
         role=session.role,
-        count=len(entries),
+        count=len(context["fragment"].table.rows),
     )
-    return _render_watchlist_table(request, entries)
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_table.j2",
+        context,
+    )

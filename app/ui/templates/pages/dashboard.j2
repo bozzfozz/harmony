@@ -23,16 +23,12 @@
   </section>
   <section>
     <h3>{{ strings.dashboard_activity_heading() }}</h3>
-    {% set activity_url = '/ui/activity/table' %}
-    {% if request and request.scope and request.scope.get('router') %}
-      {% set activity_url = request.url_for('activity_table') %}
-    {% endif %}
-    <div id="hx-activity-table"
-         hx-get="{{ activity_url }}"
-         hx-trigger="load, every 60s"
-         hx-target="#hx-activity-table"
-         hx-swap="outerHTML">
-      <p>{{ strings.loading_placeholder() }}</p>
+    <div id="{{ activity_fragment.identifier }}"
+         hx-get="{{ activity_fragment.url }}"
+         hx-trigger="{{ activity_fragment.trigger }}"
+         hx-target="{{ activity_fragment.target }}"
+         hx-swap="{{ activity_fragment.swap }}">
+      <p>{{ strings.fragment_loading(activity_fragment.loading_key) }}</p>
     </div>
   </section>
   {% if actions %}

@@ -127,6 +127,24 @@
 
 {% macro watchlist_empty_state() %}No artists are tracked on the watchlist.{% endmacro %}
 
+{% macro fragment_loading(key) -%}
+  {%- if key == "loading" -%}
+    {{ loading_placeholder() }}
+  {%- else -%}
+    {{ loading_placeholder() }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro empty_state(key) -%}
+  {%- if key == "activity" -%}
+    {{ activity_empty_state() }}
+  {%- elif key == "watchlist" -%}
+    {{ watchlist_empty_state() }}
+  {%- else -%}
+    {{ key }}
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro pagination_label(key) -%}
   {%- set labels = {
     "activity": "Activity pagination",
