@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
+from jinja2 import Template
 from starlette.requests import Request
 
 from app.ui.context import build_dashboard_page_context, build_login_page_context
@@ -63,3 +65,21 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "admin-action" in html
     assert "Welcome" in html
     assert "Current role: Admin" in html
+
+
+def test_pass_context_globals_receive_runtime_context_mapping() -> None:
+    assert "url_for" in templates.env.globals
+
+    class DummyRequest:
+        def url_for(self, name: str, **path_params: Any) -> str:
+            parts = [name]
+            if path_params:
+                parts.extend(
+                    f"{key}-{value}" for key, value in sorted(path_params.items())
+                )
+            return "/".join(parts)
+
+    template = Template(templates.env, "<inline>", "{{ url_for('dashboard', item_id=7) }}")
+    html = template.render(request=DummyRequest())
+
+    assert html == "dashboard/item_id-7"

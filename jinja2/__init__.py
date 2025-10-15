@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
 import re
 from typing import Any
@@ -20,7 +21,13 @@ class SafeString(str):
 
 
 def pass_context(function: Callable[..., Any]) -> Callable[..., Any]:
-    return function
+    @wraps(function)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return function(*args, **kwargs)
+
+    setattr(wrapper, "_jinja_pass_context", True)
+    setattr(wrapper, "_jinja_original", function)
+    return wrapper
 
 
 def contextfunction(function: Callable[..., Any]) -> Callable[..., Any]:
@@ -64,11 +71,33 @@ class RuntimeContext:
     def set(self, name: str, value: Any) -> None:
         self._frames[-1][name] = value
 
+    def as_mapping(self) -> dict[str, Any]:
+        mapping: dict[str, Any] = {}
+        for frame in self._frames:
+            mapping.update(frame)
+        return mapping
+
+    def _bind_value(self, value: Any) -> Any:
+        if getattr(value, "_jinja_pass_context_bound", False):
+            return value
+        if getattr(value, "_jinja_pass_context", False):
+            original = getattr(value, "_jinja_original", value)
+
+            @wraps(original)
+            def bound(*args: Any, **kwargs: Any) -> Any:
+                return original(self.as_mapping(), *args, **kwargs)
+
+            setattr(bound, "_jinja_pass_context_bound", True)
+            return bound
+        return value
+
     def resolve(self, expression: str) -> Any:
         namespace: dict[str, Any] = {}
         for frame in self._frames:
-            namespace.update(frame)
-        namespace.update(self._env.globals)
+            for key, value in frame.items():
+                namespace[key] = self._bind_value(value)
+        for key, value in self._env.globals.items():
+            namespace[key] = self._bind_value(value)
         try:
             return eval(expression, {"__builtins__": {}}, namespace)
         except NameError as exc:  # pragma: no cover - defensive
