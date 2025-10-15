@@ -594,7 +594,11 @@ async def watchlist_priority_update(
     )
 
 
-@router.post("/search/results", include_in_schema=False)
+@router.post(
+    "/search/results",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
 async def search_results(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
