@@ -5,6 +5,7 @@ import threading
 import pytest
 
 from app.db import init_db, reset_engine_for_tests
+from app.ops import selfcheck_ui
 from app.ops.selfcheck import aggregate_ready
 
 
@@ -180,3 +181,80 @@ def test_ready_reports_invalid_idempotency_backend(tmp_path: Path) -> None:
     assert report.ok is False
     idempotency_issue = next(issue for issue in report.issues if issue.component == "idempotency")
     assert "Invalid idempotency configuration" in idempotency_issue.message
+
+
+def _create_ui_root(base_dir: Path) -> Path:
+    templates_root = base_dir / "templates"
+    static_root = base_dir / "static"
+    for relative in selfcheck_ui.REQUIRED_TEMPLATE_FILES:
+        target = templates_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("template", encoding="utf-8")
+    for relative in selfcheck_ui.REQUIRED_STATIC_ASSETS:
+        target = static_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("asset", encoding="utf-8")
+    return base_dir
+
+
+@pytest.mark.parametrize(
+    ("missing", "category"),
+    [
+        pytest.param("pages/login.j2", "templates", id="missing-template"),
+        pytest.param("css/app.css", "static", id="missing-static"),
+    ],
+)
+def test_ready_reports_missing_ui_assets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    missing: str,
+    category: str,
+) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+
+    server = _Server(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    ui_root = _create_ui_root(tmp_path / "ui")
+
+    try:
+        host, port = server.server_address
+        runtime_env["SLSKD_HOST"] = host
+        runtime_env["SLSKD_PORT"] = str(port)
+
+        if category == "templates":
+            target = ui_root / "templates" / missing
+        else:
+            target = ui_root / "static" / missing
+        if target.exists():
+            target.unlink()
+
+        monkeypatch.setattr(selfcheck_ui, "UI_ROOT", ui_root)
+
+        report = aggregate_ready(runtime_env=runtime_env)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+    assert report.ok is False
+    ui_check = report.checks["ui"]
+    assert ui_check["status"] == "fail"
+    if category == "templates":
+        assert missing in ui_check["templates"]["missing"]
+    else:
+        assert missing in ui_check["static"]["missing"]
+
+    ui_issue = next(issue for issue in report.issues if issue.component == "ui")
+    issue_details = ui_issue.details
+    if category == "templates":
+        assert missing in issue_details["templates"]["missing"]
+    else:
+        assert missing in issue_details["static"]["missing"]

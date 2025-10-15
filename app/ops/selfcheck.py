@@ -27,6 +27,7 @@ from app.config import (
 )
 from app.hdm.idempotency import SQLITE_CREATE_TABLE, SQLITE_DELETE, SQLITE_INSERT
 from app.logging import get_logger
+from app.ops.selfcheck_ui import probe_ui_artifacts
 
 logger = get_logger(__name__)
 
@@ -655,6 +656,18 @@ def aggregate_ready(
             idempotency["status"] = "ok"
             idempotency["mode"] = "memory"
     checks["idempotency"] = idempotency
+
+    ui_ok, ui_details = probe_ui_artifacts()
+    checks["ui"] = ui_details
+    if not ui_ok:
+        issues.append(
+            ReadyIssue(
+                component="ui",
+                message="UI templates or static assets are missing",
+                exit_code=EX_SOFTWARE,
+                details=dict(ui_details),
+            )
+        )
 
     status = "ok" if not issues else "fail"
     return ReadyReport(status=status, checks=checks, issues=issues)
