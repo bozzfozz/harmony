@@ -42,6 +42,16 @@ def _extract_csrf_token(html: str) -> str:
     return match.group(1)
 
 
+def _csrf_headers(client: TestClient) -> dict[str, str]:
+    dashboard = client.get("/ui/", headers={"Cookie": _cookies_header(client)})
+    _assert_html_response(dashboard)
+    token = _extract_csrf_token(dashboard.text)
+    return {
+        "Cookie": _cookies_header(client),
+        "X-CSRF-Token": token,
+    }
+
+
 class _RecordingDownloadsService:
     def __init__(self, page: DownloadPage) -> None:
         page.items = list(page.items)
@@ -228,17 +238,10 @@ def test_watchlist_create_success(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
-            headers = {"Cookie": _cookies_header(client)}
-            dashboard = client.get("/ui/", headers=headers)
-            _assert_html_response(dashboard)
-            csrf_token = _extract_csrf_token(dashboard.text)
             submission = client.post(
                 "/ui/watchlist",
                 data={"artist_key": "spotify:artist:42", "priority": "2"},
-                headers={
-                    "Cookie": _cookies_header(client),
-                    "X-CSRF-Token": csrf_token,
-                },
+                headers=_csrf_headers(client),
             )
             _assert_html_response(submission)
             html = submission.text
@@ -277,14 +280,10 @@ def test_watchlist_priority_success(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
-            headers = {"Cookie": _cookies_header(client)}
-            dashboard = client.get("/ui/", headers=headers)
-            _assert_html_response(dashboard)
-            csrf_token = _extract_csrf_token(dashboard.text)
             response = client.post(
                 "/ui/watchlist/spotify:artist:10/priority",
                 data={"priority": "7"},
-                headers={"Cookie": _cookies_header(client), "X-CSRF-Token": csrf_token},
+                headers=_csrf_headers(client),
             )
             _assert_html_response(response)
             assert "spotify:artist:10" in response.text
@@ -417,17 +416,10 @@ def test_download_priority_success(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
-            dashboard = client.get("/ui/", headers={"Cookie": _cookies_header(client)})
-            _assert_html_response(dashboard)
-            csrf_token = _extract_csrf_token(dashboard.text)
-            headers = {
-                "Cookie": _cookies_header(client),
-                "X-CSRF-Token": csrf_token,
-            }
             response = client.post(
                 "/ui/downloads/7/priority",
                 data={"priority": "9"},
-                headers=headers,
+                headers=_csrf_headers(client),
             )
             _assert_html_response(response)
             html = response.text
@@ -489,7 +481,7 @@ def test_search_results_success(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
-            headers = {"Cookie": _cookies_header(client)}
+            headers = _csrf_headers(client)
             response = client.post(
                 "/ui/search/results",
                 data={"query": "Example", "limit": "25", "sources": ["spotify"]},
@@ -504,11 +496,22 @@ def test_search_results_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_search_ui_service, None)
 
 
+def test_search_results_requires_csrf(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        response = client.post(
+            "/ui/search/results",
+            data={"query": "Example"},
+            headers={"Cookie": _cookies_header(client)},
+        )
+        assert response.status_code == 403
+
+
 def test_search_results_requires_feature(monkeypatch) -> None:
     extra_env = {"UI_FEATURE_SOULSEEK": "false"}
     with _create_client(monkeypatch, extra_env=extra_env) as client:
         _login(client)
-        headers = {"Cookie": _cookies_header(client)}
+        headers = _csrf_headers(client)
         response = client.post(
             "/ui/search/results",
             data={"query": "Example"},
@@ -525,7 +528,7 @@ def test_search_results_app_error(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
-            headers = {"Cookie": _cookies_header(client)}
+            headers = _csrf_headers(client)
             response = client.post(
                 "/ui/search/results",
                 data={"query": "Example"},
