@@ -39,6 +39,7 @@ from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.path_safety import allowed_download_roots
+from app.ui.router import router as ui_router
 from app.utils.settings_store import ensure_default_settings
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
@@ -505,8 +506,12 @@ async def _stop_background_workers(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
     _configure_application(config)
+    app.state.config_snapshot = config
 
     _apply_security_dependencies(app, config.security)
+    for attribute in ("ui_session_manager", "ui_csrf_manager"):
+        if hasattr(app.state, attribute):
+            delattr(app.state, attribute)
 
     response_cache = getattr(app.state, "response_cache", None)
     if response_cache is not None:
@@ -657,6 +662,7 @@ app = FastAPI(
 
 _apply_security_dependencies(app, _config_snapshot.security)
 app.state.openapi_config = deepcopy(_config_snapshot)
+app.state.config_snapshot = _config_snapshot
 app.state.api_base_path = _API_BASE_PATH
 
 app.state.start_time = _APP_START_TIME
@@ -783,6 +789,7 @@ app.add_api_route(
 )
 
 app.include_router(health_api.router)
+app.include_router(ui_router)
 
 maybe_register_admin_routes(app, config=_config_snapshot)
 
