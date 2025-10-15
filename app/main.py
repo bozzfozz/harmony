@@ -30,6 +30,7 @@ from app.logging_events import log_event
 from app.middleware import install_middleware
 from app.oauth import get_oauth_store, startup_check_oauth_store
 from app.oauth_callback.app import app_oauth_callback
+from app.ops.selfcheck_ui import probe_ui_artifacts
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
@@ -138,6 +139,30 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
     }
     for job in jobs:
         probes[f"orchestrator:job:{job}"] = _orchestrator_component_probe(job)
+    return probes
+
+
+def _ui_dependency_probe() -> DependencyStatus:
+    ok, details = probe_ui_artifacts()
+    if ok:
+        return DependencyStatus(ok=True, status="up")
+
+    templates_missing = details.get("templates", {}).get("missing", [])
+    static_missing = details.get("static", {}).get("missing", [])
+    logger.warning(
+        "UI assets readiness probe failed",
+        extra={
+            "event": "ui.assets.probe",
+            "templates_missing": templates_missing,
+            "static_missing": static_missing,
+        },
+    )
+    return DependencyStatus(ok=False, status="degraded")
+
+
+def _build_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
+    probes = dict(_build_orchestrator_dependency_probes())
+    probes["ui:assets"] = _ui_dependency_probe
     return probes
 
 
@@ -675,7 +700,7 @@ app.state.health_service = HealthService(
     version=app.version,
     config=_config_snapshot.health,
     session_factory=get_session,
-    dependency_probes=_build_orchestrator_dependency_probes(),
+    dependency_probes=_build_dependency_probes(),
 )
 app.state.secret_validation_service = SecretValidationService()
 
