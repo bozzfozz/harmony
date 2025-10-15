@@ -4,6 +4,8 @@
   {%- set titles = {
     "login": "Login",
     "dashboard": "Dashboard",
+    "activity": "Activity",
+    "watchlist": "Watchlist",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -16,6 +18,8 @@
   {%- set headings = {
     "login": "Sign in",
     "dashboard": "Welcome",
+    "activity": "Recent activity",
+    "watchlist": "Watchlist",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -62,6 +66,13 @@
   {%- set labels = {
     "dashboard.features.name": "Feature",
     "dashboard.features.status": "Status",
+    "activity.timestamp": "Timestamp",
+    "activity.type": "Type",
+    "activity.status": "Status",
+    "activity.details": "Details",
+    "watchlist.artist": "Artist",
+    "watchlist.priority": "Priority",
+    "watchlist.state": "State",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -69,6 +80,8 @@
 {% macro caption(key) -%}
   {%- set labels = {
     "dashboard.features.caption": "Available features",
+    "activity.table.caption": "Recent system activity",
+    "watchlist.table.caption": "Tracked artists",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -79,6 +92,8 @@
     "feature.soulseek": "Soulseek tools",
     "feature.dlq": "DLQ tools",
     "feature.imports": "Imports",
+    "watchlist.state.active": "Active",
+    "watchlist.state.paused": "Paused",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -103,6 +118,28 @@
 {% macro dashboard_features_heading() %}Feature availability{% endmacro %}
 
 {% macro dashboard_actions_heading() %}Available actions{% endmacro %}
+
+{% macro dashboard_activity_heading() %}Recent activity{% endmacro %}
+
+{% macro loading_placeholder() %}Loading…{% endmacro %}
+
+{% macro activity_empty_state() %}No recent activity recorded yet.{% endmacro %}
+
+{% macro watchlist_empty_state() %}No artists are tracked on the watchlist.{% endmacro %}
+
+{% macro pagination_label(key) -%}
+  {%- set labels = {
+    "activity": "Activity pagination",
+    "watchlist": "Watchlist pagination",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro pagination_prev() %}Previous{% endmacro %}
+
+{% macro pagination_next() %}Next{% endmacro %}
+
+{% macro fragment_error_default() %}The requested data could not be loaded. Please try again.{% endmacro %}
 
 {% macro login_description() %}Use your Harmony API key to access the operator console.{% endmacro %}
 
