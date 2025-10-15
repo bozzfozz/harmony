@@ -30,5 +30,26 @@
     {% block modals %}
       {{ modals.render_modals(layout.modals) }}
     {% endblock %}
+    {% block scripts %}
+      <script>
+        (function () {
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          if (!meta) {
+            return;
+          }
+          var token = meta.getAttribute('content');
+          if (!token) {
+            return;
+          }
+          document.body.dataset.csrfToken = token;
+          document.addEventListener('htmx:configRequest', function (event) {
+            if (!event.detail || !event.detail.headers) {
+              return;
+            }
+            event.detail.headers['X-CSRF-Token'] = token;
+          });
+        })();
+      </script>
+    {% endblock %}
   </body>
 </html>

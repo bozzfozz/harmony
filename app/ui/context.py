@@ -198,6 +198,7 @@ def build_dashboard_page_context(
         "session": session,
         "features_table": features_table,
         "actions": tuple(actions),
+        "csrf_token": csrf_token,
     }
 
 

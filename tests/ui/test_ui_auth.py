@@ -10,6 +10,8 @@ from app.dependencies import get_app_config
 from app.main import app
 from app.ui.session import fingerprint_api_key
 
+_CSRF_META_PATTERN = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
+
 
 def _create_client(monkeypatch, extra_env: dict[str, str] | None = None) -> TestClient:
     monkeypatch.setenv("HARMONY_API_KEYS", "primary-key")
@@ -46,12 +48,13 @@ def test_login_success(monkeypatch) -> None:
         assert dashboard.status_code == 200
         body = dashboard.text
         assert 'data-role="operator"' in body
-        dashboard_token = dashboard.cookies.get("csrftoken")
-        assert dashboard_token
-        dashboard_token = dashboard_token.replace('"', "")
-        meta_match = re.search(r'<meta name="csrf-token" content="([^"]*)"', body)
-        assert meta_match is not None
-        assert dashboard_token in meta_match.group(1)
+    dashboard_token = dashboard.cookies.get("csrftoken")
+    assert dashboard_token
+    dashboard_token = dashboard_token.replace('"', "")
+    meta_token = _CSRF_META_PATTERN.search(body)
+    assert meta_token is not None
+    assert dashboard_token in meta_token.group(1)
+    assert 'name="csrftoken"' in body
 
 
 def test_login_failure(monkeypatch) -> None:
@@ -100,3 +103,27 @@ def test_csrf_enforcement(monkeypatch) -> None:
         )
         assert allowed.status_code == 303
         assert allowed.headers["location"] == "/ui/login"
+
+
+def test_logout_form_token(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert login.status_code == 303
+        cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+        dashboard = client.get("/ui/", headers={"Cookie": cookie_header})
+        assert dashboard.status_code == 200
+        token_cookie = client.cookies.get("csrftoken")
+        assert token_cookie
+        html = dashboard.text
+        meta_token = _CSRF_META_PATTERN.search(html)
+        assert meta_token is not None
+        token = meta_token.group(1)
+        cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+        submission = client.post(
+            "/ui/logout",
+            data={"csrftoken": token},
+            headers={"Cookie": cookie_header},
+            follow_redirects=False,
+        )
+        assert submission.status_code == 303
+        assert submission.headers["location"] == "/ui/login"
