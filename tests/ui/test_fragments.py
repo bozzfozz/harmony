@@ -15,13 +15,16 @@ from app.ui.services import (
     OrchestratorJob,
     SearchResult,
     SearchResultsPage,
+    WatchlistRow,
+    WatchlistTable,
     get_downloads_ui_service,
     get_search_ui_service,
+    get_watchlist_ui_service,
 )
 from app.utils.activity import activity_manager
 
 from app.main import app
-from tests.ui.test_ui_auth import _create_client
+from tests.ui.test_ui_auth import _assert_html_response, _create_client
 
 
 def _cookies_header(client: TestClient) -> str:
@@ -102,6 +105,54 @@ class _StubSearchService:
         return self._result
 
 
+class _StubWatchlistService:
+    def __init__(self, entries: Sequence[WatchlistRow] | None = None) -> None:
+        self.entries = list(entries or (
+            WatchlistRow(
+                artist_key="spotify:artist:stub",
+                priority=1,
+                state_key="watchlist.state.active",
+            ),
+        ))
+        self.updated: list[tuple[str, int]] = []
+        self.created: list[str] = []
+
+    def list_entries(self, request) -> WatchlistTable:  # type: ignore[override]
+        return WatchlistTable(entries=tuple(self.entries))
+
+    def create_entry(
+        self,
+        request,
+        *,
+        artist_key: str,
+        priority: int | None = None,
+    ) -> WatchlistTable:
+        row = WatchlistRow(
+            artist_key=artist_key,
+            priority=priority if priority is not None else 0,
+            state_key="watchlist.state.active",
+        )
+        self.entries.insert(0, row)
+        self.created.append(artist_key)
+        return WatchlistTable(entries=tuple(self.entries))
+
+    def update_priority(
+        self,
+        request,
+        *,
+        artist_key: str,
+        priority: int,
+    ) -> WatchlistTable:
+        self.updated.append((artist_key, priority))
+        row = WatchlistRow(
+            artist_key=artist_key,
+            priority=priority,
+            state_key="watchlist.state.active",
+        )
+        self.entries = [row] + [entry for entry in self.entries if entry.artist_key != artist_key]
+        return WatchlistTable(entries=tuple(self.entries))
+
+
 def test_activity_fragment_requires_session(monkeypatch) -> None:
     with _create_client(monkeypatch) as client:
         response = client.get("/ui/activity/table")
@@ -114,7 +165,7 @@ def test_activity_fragment_renders_table(monkeypatch) -> None:
         activity_manager.record(action_type="test", status="ok")
         headers = {"Cookie": _cookies_header(client)}
         response = client.get("/ui/activity/table", headers=headers)
-        assert response.status_code == 200
+        _assert_html_response(response)
         body = response.text
         assert "<table" in body
         assert "data-total" in body
@@ -128,6 +179,34 @@ def test_watchlist_fragment_enforces_role(monkeypatch) -> None:
         headers = {"Cookie": _cookies_header(client)}
         response = client.get("/ui/watchlist/table", headers=headers)
         assert response.status_code == 403
+
+
+def test_watchlist_fragment_success(monkeypatch) -> None:
+    stub = _StubWatchlistService(
+        entries=(
+            WatchlistRow(
+                artist_key="spotify:artist:1",
+                priority=1,
+                state_key="watchlist.state.active",
+            ),
+            WatchlistRow(
+                artist_key="spotify:artist:2",
+                priority=2,
+                state_key="watchlist.state.paused",
+            ),
+        ),
+    )
+    app.dependency_overrides[get_watchlist_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/watchlist/table", headers=headers)
+            _assert_html_response(response)
+            assert "hx-watchlist-table" in response.text
+            assert "spotify:artist:1" in response.text
+    finally:
+        app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
 
 def test_watchlist_create_requires_csrf(monkeypatch) -> None:
@@ -144,28 +223,75 @@ def test_watchlist_create_requires_csrf(monkeypatch) -> None:
 
 
 def test_watchlist_create_success(monkeypatch) -> None:
+    stub = _StubWatchlistService()
+    app.dependency_overrides[get_watchlist_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            dashboard = client.get("/ui/", headers=headers)
+            _assert_html_response(dashboard)
+            csrf_token = _extract_csrf_token(dashboard.text)
+            submission = client.post(
+                "/ui/watchlist",
+                data={"artist_key": "spotify:artist:42", "priority": "2"},
+                headers={
+                    "Cookie": _cookies_header(client),
+                    "X-CSRF-Token": csrf_token,
+                },
+            )
+            _assert_html_response(submission)
+            html = submission.text
+            assert "spotify:artist:42" in html
+            assert "<table" in html
+            assert "data-count" in html
+            assert stub.created == ["spotify:artist:42"]
+    finally:
+        app.dependency_overrides.pop(get_watchlist_ui_service, None)
+
+
+def test_watchlist_priority_requires_csrf(monkeypatch) -> None:
     WatchlistService().reset()
     with _create_client(monkeypatch) as client:
         _login(client)
         headers = {"Cookie": _cookies_header(client)}
-        dashboard = client.get("/ui/", headers=headers)
-        assert dashboard.status_code == 200
-        csrf_token = _extract_csrf_token(dashboard.text)
-        token_cookie = client.cookies.get("csrftoken")
-        assert token_cookie is not None
-        submission = client.post(
-            "/ui/watchlist",
-            data={"artist_key": "spotify:artist:42", "priority": "2"},
-            headers={
-                "Cookie": _cookies_header(client),
-                "X-CSRF-Token": csrf_token,
-            },
+        response = client.post(
+            "/ui/watchlist/spotify:artist:1/priority",
+            data={"priority": "5"},
+            headers=headers,
         )
-        assert submission.status_code == 200
-        html = submission.text
-        assert "spotify:artist:42" in html
-        assert "<table" in html
-        assert "data-count" in html
+        assert response.status_code == 403
+
+
+def test_watchlist_priority_success(monkeypatch) -> None:
+    stub = _StubWatchlistService(
+        entries=(
+            WatchlistRow(
+                artist_key="spotify:artist:10",
+                priority=1,
+                state_key="watchlist.state.active",
+            ),
+        ),
+    )
+    app.dependency_overrides[get_watchlist_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            dashboard = client.get("/ui/", headers=headers)
+            _assert_html_response(dashboard)
+            csrf_token = _extract_csrf_token(dashboard.text)
+            response = client.post(
+                "/ui/watchlist/spotify:artist:10/priority",
+                data={"priority": "7"},
+                headers={"Cookie": _cookies_header(client), "X-CSRF-Token": csrf_token},
+            )
+            _assert_html_response(response)
+            assert "spotify:artist:10" in response.text
+            assert "7" in response.text
+            assert stub.updated == [("spotify:artist:10", 7)]
+    finally:
+        app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
 
 def test_downloads_fragment_success(monkeypatch) -> None:
@@ -194,12 +320,22 @@ def test_downloads_fragment_success(monkeypatch) -> None:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/downloads/table", headers=headers)
-            assert response.status_code == 200
+            _assert_html_response(response)
             body = response.text
             assert "example.mp3" in body
             assert "hx-downloads-table" in body
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_downloads_fragment_requires_feature(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_DLQ": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/downloads/table", headers=headers)
+        assert response.status_code == 404
+        assert response.headers.get("content-type", "").startswith("application/json")
 
 
 def test_downloads_fragment_error(monkeypatch) -> None:
@@ -216,7 +352,7 @@ def test_downloads_fragment_error(monkeypatch) -> None:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/downloads/table", headers=headers)
-            assert response.status_code == 503
+            _assert_html_response(response, status_code=503)
             assert "broken" in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
@@ -282,6 +418,7 @@ def test_download_priority_success(monkeypatch) -> None:
         with _create_client(monkeypatch) as client:
             _login(client)
             dashboard = client.get("/ui/", headers={"Cookie": _cookies_header(client)})
+            _assert_html_response(dashboard)
             csrf_token = _extract_csrf_token(dashboard.text)
             headers = {
                 "Cookie": _cookies_header(client),
@@ -292,7 +429,7 @@ def test_download_priority_success(monkeypatch) -> None:
                 data={"priority": "9"},
                 headers=headers,
             )
-            assert response.status_code == 200
+            _assert_html_response(response)
             html = response.text
             assert "song.mp3" in html
             assert "9" in html
@@ -314,10 +451,20 @@ def test_jobs_fragment_success(monkeypatch) -> None:
         _login(client)
         headers = {"Cookie": _cookies_header(client)}
         response = client.get("/ui/jobs/table", headers=headers)
-        assert response.status_code == 200
+        _assert_html_response(response)
         body = response.text
         assert "sync" in body
         assert "retry" in body
+
+
+def test_jobs_fragment_requires_feature(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_DLQ": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/jobs/table", headers=headers)
+        assert response.status_code == 404
+        assert response.headers.get("content-type", "").startswith("application/json")
 
 
 def test_search_results_success(monkeypatch) -> None:
@@ -348,13 +495,27 @@ def test_search_results_success(monkeypatch) -> None:
                 data={"query": "Example", "limit": "25", "sources": ["spotify"]},
                 headers=headers,
             )
-            assert response.status_code == 200
+            _assert_html_response(response)
             body = response.text
             assert "Example" in body
             assert "spotify" in body
             assert stub.calls == [("Example", 25, ("spotify",))]
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
+
+
+def test_search_results_requires_feature(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_SOULSEEK": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.post(
+            "/ui/search/results",
+            data={"query": "Example"},
+            headers=headers,
+        )
+        assert response.status_code == 404
+        assert response.headers.get("content-type", "").startswith("application/json")
 
 
 def test_search_results_app_error(monkeypatch) -> None:
@@ -370,7 +531,7 @@ def test_search_results_app_error(monkeypatch) -> None:
                 data={"query": "Example"},
                 headers=headers,
             )
-            assert response.status_code == 502
+            _assert_html_response(response, status_code=502)
             assert "search failed" in response.text
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)

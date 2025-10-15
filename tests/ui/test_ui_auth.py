@@ -5,6 +5,12 @@ import re
 
 from fastapi.testclient import TestClient
 
+
+def _assert_html_response(response, status_code: int = 200) -> None:
+    assert response.status_code == status_code
+    content_type = response.headers.get("content-type", "")
+    assert "text/html" in content_type
+
 from app.config import override_runtime_env
 from app.dependencies import get_app_config
 from app.main import app
@@ -32,6 +38,20 @@ def _create_client(monkeypatch, extra_env: dict[str, str] | None = None) -> Test
     return TestClient(app)
 
 
+def test_login_page_renders_html(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        response = client.get("/ui/login")
+        _assert_html_response(response)
+        assert "Harmony Operator Console" in response.text
+
+
+def test_dashboard_requires_session(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        response = client.get("/ui/")
+        assert response.status_code == 401
+        assert response.headers.get("content-type", "").startswith("application/json")
+
+
 def test_login_success(monkeypatch) -> None:
     with _create_client(monkeypatch) as client:
         assert client.app.state.config_snapshot.security.api_keys
@@ -45,7 +65,7 @@ def test_login_success(monkeypatch) -> None:
 
         cookie_header = f"ui_session={session_cookie}; csrftoken={csrf_cookie}"
         dashboard = client.get("/ui/", headers={"Cookie": cookie_header})
-        assert dashboard.status_code == 200
+        _assert_html_response(dashboard)
         body = dashboard.text
         assert 'data-role="operator"' in body
     dashboard_token = dashboard.cookies.get("csrftoken")
@@ -63,6 +83,7 @@ def test_login_failure(monkeypatch) -> None:
         assert response.status_code == 400
         assert "Login failed" in response.text
         assert response.cookies.get("ui_session") is None
+        _assert_html_response(response, status_code=400)
 
 
 def test_role_gating(monkeypatch) -> None:
@@ -73,7 +94,7 @@ def test_role_gating(monkeypatch) -> None:
         assert login.status_code == 303
         cookie_header = "; ".join(f"{name}={value}" for name, value in login.cookies.items())
         page = client.get("/ui/", headers={"Cookie": cookie_header})
-        assert page.status_code == 200
+        _assert_html_response(page)
         html = page.text
         assert "operator-action" not in html
         assert "admin-action" not in html
@@ -111,7 +132,7 @@ def test_logout_form_token(monkeypatch) -> None:
         assert login.status_code == 303
         cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
         dashboard = client.get("/ui/", headers={"Cookie": cookie_header})
-        assert dashboard.status_code == 200
+        _assert_html_response(dashboard)
         token_cookie = client.cookies.get("csrftoken")
         assert token_cookie
         html = dashboard.text

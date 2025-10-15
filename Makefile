@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -19,10 +19,16 @@ dep-sync:
 	./scripts/dev/dep_sync_py.sh
 
 smoke:
-	./scripts/dev/smoke_unified.sh
+        ./scripts/dev/smoke_unified.sh
 
 doctor:
-	./scripts/dev/doctor.sh
+        ./scripts/dev/doctor.sh
+
+ui-guard:
+        ./scripts/dev/ui_guard.sh
+
+ui-smoke:
+        ./scripts/dev/ui_smoke_local.sh
 
 all:
 	@set -euo pipefail; \
