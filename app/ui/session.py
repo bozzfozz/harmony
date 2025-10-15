@@ -277,6 +277,19 @@ def require_role(required: RoleName):
     return dependency
 
 
+def require_feature(feature: Literal["spotify", "soulseek", "dlq", "imports"]):
+    async def dependency(request: Request) -> UiSession:
+        session = await require_session(request)
+        if not getattr(session.features, feature, False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The requested UI feature is disabled.",
+            )
+        return session
+
+    return dependency
+
+
 def attach_session_cookie(
     response: Response, session: UiSession, manager: UiSessionManager
 ) -> None:
@@ -310,5 +323,6 @@ __all__ = [
     "fingerprint_api_key",
     "get_session_manager",
     "require_role",
+    "require_feature",
     "require_session",
 ]

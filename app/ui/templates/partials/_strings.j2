@@ -73,6 +73,21 @@
     "watchlist.artist": "Artist",
     "watchlist.priority": "Priority",
     "watchlist.state": "State",
+    "downloads.id": "ID",
+    "downloads.filename": "Filename",
+    "downloads.status": "Status",
+    "downloads.progress": "Progress",
+    "downloads.priority": "Priority",
+    "downloads.user": "User",
+    "downloads.updated": "Updated",
+    "jobs.name": "Job",
+    "jobs.status": "Status",
+    "jobs.enabled": "Enabled",
+    "search.title": "Title",
+    "search.artist": "Artist",
+    "search.source": "Source",
+    "search.score": "Score",
+    "search.bitrate": "Bitrate",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -82,6 +97,9 @@
     "dashboard.features.caption": "Available features",
     "activity.table.caption": "Recent system activity",
     "watchlist.table.caption": "Tracked artists",
+    "downloads.table.caption": "Download queue",
+    "jobs.table.caption": "Orchestrator jobs",
+    "search.results.caption": "Search results",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -140,6 +158,12 @@
     {{ activity_empty_state() }}
   {%- elif key == "watchlist" -%}
     {{ watchlist_empty_state() }}
+  {%- elif key == "downloads" -%}
+    No downloads are currently queued.
+  {%- elif key == "jobs" -%}
+    No orchestrator jobs reported yet.
+  {%- elif key == "search" -%}
+    No matching results found.
   {%- else -%}
     {{ key }}
   {%- endif -%}
@@ -149,6 +173,9 @@
   {%- set labels = {
     "activity": "Activity pagination",
     "watchlist": "Watchlist pagination",
+    "downloads": "Downloads pagination",
+    "search": "Search pagination",
+    "jobs": "Jobs pagination",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}

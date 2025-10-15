@@ -8,6 +8,12 @@ from urllib.parse import urlencode
 
 from fastapi import Request
 
+from app.ui.services import (
+    DownloadPage,
+    OrchestratorJob,
+    SearchResultsPage,
+    WatchlistRow,
+)
 from app.ui.session import UiFeatures, UiSession
 
 AlertLevel = Literal["info", "success", "warning", "error"]
@@ -356,20 +362,16 @@ def build_activity_fragment_context(
 def build_watchlist_fragment_context(
     request: Request,
     *,
-    entries: Sequence[Mapping[str, Any]],
+    entries: Sequence[WatchlistRow],
 ) -> Mapping[str, Any]:
     rows: list[TableRow] = []
     for entry in entries:
-        artist = str(entry.get("artist_key", ""))
-        priority_value = entry.get("priority")
-        priority = "" if priority_value is None else str(priority_value)
-        state_key = str(entry.get("state_key", "watchlist.state.active"))
         rows.append(
             TableRow(
                 cells=(
-                    TableCell(text=artist),
-                    TableCell(text=priority),
-                    TableCell(text_key=state_key),
+                    TableCell(text=entry.artist_key),
+                    TableCell(text=str(entry.priority)),
+                    TableCell(text_key=entry.state_key),
                 )
             )
         )
@@ -390,6 +392,214 @@ def build_watchlist_fragment_context(
         table=table,
         empty_state_key="watchlist",
         data_attributes={"count": str(len(rows))},
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_downloads_fragment_context(
+    request: Request,
+    *,
+    page: DownloadPage,
+    status_filter: str | None = None,
+    include_all: bool = False,
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for entry in page.items:
+        progress = ""
+        if entry.progress is not None:
+            progress = f"{entry.progress * 100:.0f}%"
+        updated_at = entry.updated_at.isoformat() if entry.updated_at else ""
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=str(entry.identifier)),
+                    TableCell(text=entry.filename),
+                    TableCell(text=entry.status),
+                    TableCell(text=progress),
+                    TableCell(text=str(entry.priority)),
+                    TableCell(text=entry.username or ""),
+                    TableCell(text=updated_at),
+                )
+            )
+        )
+
+    table = TableDefinition(
+        identifier="downloads-table",
+        column_keys=(
+            "downloads.id",
+            "downloads.filename",
+            "downloads.status",
+            "downloads.progress",
+            "downloads.priority",
+            "downloads.user",
+            "downloads.updated",
+        ),
+        rows=tuple(rows),
+        caption_key="downloads.table.caption",
+    )
+
+    try:
+        base_url = request.url_for("downloads_table")
+    except Exception:  # pragma: no cover - fallback for tests without routing context
+        base_url = "/ui/downloads/table"
+
+    def _build_url(offset: int | None) -> str | None:
+        if offset is None or offset < 0:
+            return None
+        query: list[tuple[str, str]] = [("limit", str(page.limit)), ("offset", str(offset))]
+        if include_all:
+            query.append(("all", "1"))
+        if status_filter:
+            query.append(("status", status_filter))
+        return f"{base_url}?{urlencode(query)}"
+
+    previous_url = _build_url(page.offset - page.limit) if page.has_previous else None
+    next_offset = page.offset + page.limit if page.has_next else None
+    next_url = _build_url(next_offset) if next_offset is not None else None
+
+    data_attributes = {
+        "count": str(len(rows)),
+        "limit": str(page.limit),
+        "offset": str(page.offset),
+    }
+    if include_all:
+        data_attributes["scope"] = "all"
+    if status_filter:
+        data_attributes["status"] = status_filter
+
+    pagination = PaginationContext(
+        label_key="downloads",
+        target="#hx-downloads-table",
+        previous_url=previous_url,
+        next_url=next_url,
+    )
+
+    fragment = TableFragment(
+        identifier="hx-downloads-table",
+        table=table,
+        empty_state_key="downloads",
+        data_attributes=data_attributes,
+        pagination=pagination if previous_url or next_url else None,
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_jobs_fragment_context(
+    request: Request,
+    *,
+    jobs: Sequence[OrchestratorJob],
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for job in jobs:
+        badge = StatusBadge(
+            label_key="status.enabled" if job.enabled else "status.disabled",
+            variant="success" if job.enabled else "muted",
+        )
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=job.name),
+                    TableCell(text=job.status),
+                    TableCell(badge=badge),
+                )
+            )
+        )
+
+    table = TableDefinition(
+        identifier="jobs-table",
+        column_keys=("jobs.name", "jobs.status", "jobs.enabled"),
+        rows=tuple(rows),
+        caption_key="jobs.table.caption",
+    )
+
+    fragment = TableFragment(
+        identifier="hx-jobs-table",
+        table=table,
+        empty_state_key="jobs",
+        data_attributes={"count": str(len(rows))},
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_search_results_context(
+    request: Request,
+    *,
+    page: SearchResultsPage,
+    query: str,
+    sources: Sequence[str],
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for item in page.items:
+        score = f"{item.score * 100:.0f}%"
+        bitrate = f"{item.bitrate} kbps" if item.bitrate else ""
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=item.title),
+                    TableCell(text=item.artist or ""),
+                    TableCell(text=item.source),
+                    TableCell(text=score),
+                    TableCell(text=bitrate),
+                )
+            )
+        )
+
+    table = TableDefinition(
+        identifier="search-results-table",
+        column_keys=(
+            "search.title",
+            "search.artist",
+            "search.source",
+            "search.score",
+            "search.bitrate",
+        ),
+        rows=tuple(rows),
+        caption_key="search.results.caption",
+    )
+
+    try:
+        base_url = request.url_for("search_results")
+    except Exception:  # pragma: no cover - fallback for tests
+        base_url = "/ui/search/results"
+
+    def _make_query(offset: int | None) -> str | None:
+        if offset is None or offset < 0:
+            return None
+        query_params: list[tuple[str, str]] = [
+            ("query", query),
+            ("limit", str(page.limit)),
+            ("offset", str(offset)),
+        ]
+        for source in sources:
+            query_params.append(("sources", source))
+        return f"{base_url}?{urlencode(query_params)}"
+
+    has_previous = page.offset > 0
+    previous_offset = page.offset - page.limit if has_previous else None
+    next_offset = page.offset + page.limit
+    has_next = next_offset < page.total
+
+    pagination = PaginationContext(
+        label_key="search",
+        target="#hx-search-results",
+        previous_url=_make_query(previous_offset) if has_previous else None,
+        next_url=_make_query(next_offset) if has_next else None,
+    )
+
+    fragment = TableFragment(
+        identifier="hx-search-results",
+        table=table,
+        empty_state_key="search",
+        data_attributes={
+            "total": str(page.total),
+            "limit": str(page.limit),
+            "offset": str(page.offset),
+            "query": query,
+        },
+        pagination=pagination if pagination.previous_url or pagination.next_url else None,
     )
 
     return {"request": request, "fragment": fragment}
@@ -445,5 +655,8 @@ __all__ = [
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",
+    "build_downloads_fragment_context",
+    "build_jobs_fragment_context",
+    "build_search_results_context",
     "build_watchlist_fragment_context",
 ]
