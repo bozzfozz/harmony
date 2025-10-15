@@ -1,0 +1,114 @@
+{% macro app_name() %}Harmony Operator Console{% endmacro %}
+
+{% macro page_title(page_id) -%}
+  {%- set titles = {
+    "login": "Login",
+    "dashboard": "Dashboard",
+  } -%}
+  {%- if page_id in titles -%}
+    {{ titles[page_id] }} · {{ app_name() }}
+  {%- else -%}
+    {{ page_id }} · {{ app_name() }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro section_heading(page_id) -%}
+  {%- set headings = {
+    "login": "Sign in",
+    "dashboard": "Welcome",
+  } -%}
+  {%- if page_id in headings -%}
+    {{ headings[page_id] }}
+  {%- else -%}
+    {{ page_id }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro nav_label(key) -%}
+  {%- set labels = {
+    "nav.home": "Home",
+    "nav.operations": "Operations",
+    "nav.admin": "Admin",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro form_label(key) -%}
+  {%- set labels = {
+    "login.api_key": "API key",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro button_label(key) -%}
+  {%- set labels = {
+    "login.submit": "Login",
+    "logout": "Logout",
+    "dashboard.action.operator": "Operator action",
+    "dashboard.action.admin": "Admin action",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro status_badge_label(key) -%}
+  {%- set labels = {
+    "status.enabled": "Enabled",
+    "status.disabled": "Disabled",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro table_header(key) -%}
+  {%- set labels = {
+    "dashboard.features.name": "Feature",
+    "dashboard.features.status": "Status",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro caption(key) -%}
+  {%- set labels = {
+    "dashboard.features.caption": "Available features",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro table_cell(key) -%}
+  {%- set labels = {
+    "feature.spotify": "Spotify tools",
+    "feature.soulseek": "Soulseek tools",
+    "feature.dlq": "DLQ tools",
+    "feature.imports": "Imports",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro role_name(role) -%}
+  {%- set labels = {
+    "read_only": "Read only",
+    "operator": "Operator",
+    "admin": "Admin",
+  } -%}
+  {%- if role in labels -%}
+    {{ labels[role] }}
+  {%- else -%}
+    {{ role }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro dashboard_role_label(role) -%}
+  Current role: {{ role_name(role) }}
+{%- endmacro %}
+
+{% macro dashboard_features_heading() %}Feature availability{% endmacro %}
+
+{% macro dashboard_actions_heading() %}Available actions{% endmacro %}
+
+{% macro login_description() %}Use your Harmony API key to access the operator console.{% endmacro %}
+
+{% macro modal_title(key) -%}
+  {%- set labels = {
+    "confirm": "Confirm",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}

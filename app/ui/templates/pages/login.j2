@@ -1,0 +1,16 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/forms.j2" as forms %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section>
+    <p>{{ strings.login_description() }}</p>
+    {{ forms.render_form(form) }}
+  </section>
+{% endblock %}

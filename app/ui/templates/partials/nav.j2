@@ -1,0 +1,15 @@
+{% import "partials/_strings.j2" as strings %}
+
+{% macro render_primary_nav(items) -%}
+  {% if items %}
+    <nav aria-label="Primary">
+      {% for item in items %}
+        <a href="{{ item.href }}"
+           {% if item.test_id %}data-test="{{ item.test_id }}"{% endif %}
+           class="primary-nav__link{% if item.active %} is-active{% endif %}">
+          {{ strings.nav_label(item.label_key) }}
+        </a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+{%- endmacro %}

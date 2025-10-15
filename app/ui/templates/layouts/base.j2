@@ -1,0 +1,34 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts %}
+{% import "partials/modals.j2" as modals %}
+{% import "partials/nav.j2" as nav %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ strings.page_title(layout.page_id) }}</title>
+    {% block head_extras -%}
+      {% for meta in layout.head_meta %}
+        <meta name="{{ meta.name }}" content="{{ meta.content }}" />
+      {% endfor %}
+    {%- endblock %}
+  </head>
+  <body data-role="{{ layout.role or 'anonymous' }}">
+    <header>
+      <h1>{{ strings.app_name() }}</h1>
+      {% if layout.navigation.primary %}
+        {{ nav.render_primary_nav(layout.navigation.primary) }}
+      {% endif %}
+      {% block header_actions %}{% endblock %}
+    </header>
+    {{ alerts.render_alerts(layout.alerts) }}
+    <main>
+      {% block page_header %}{% endblock %}
+      {% block main %}{% endblock %}
+    </main>
+    {% block modals %}
+      {{ modals.render_modals(layout.modals) }}
+    {% endblock %}
+  </body>
+</html>

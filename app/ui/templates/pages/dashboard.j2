@@ -1,0 +1,33 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p id="session-role" data-role="{{ session.role }}">{{ strings.dashboard_role_label(session.role) }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section>
+    <h3>{{ strings.dashboard_features_heading() }}</h3>
+    {{ tables.render_table(features_table) }}
+  </section>
+  {% if actions %}
+    <section>
+      <h3>{{ strings.dashboard_actions_heading() }}</h3>
+      <div class="dashboard-actions">
+        {% for action in actions %}
+          <button id="{{ action.identifier }}" type="button">{{ strings.button_label(action.label_key) }}</button>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

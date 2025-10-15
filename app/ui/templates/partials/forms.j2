@@ -1,0 +1,15 @@
+{% import "partials/_strings.j2" as strings %}
+
+{% macro render_form(form) -%}
+  <form id="{{ form.identifier }}" method="{{ form.method }}" action="{{ form.action }}">
+    {% for field in form.fields %}
+      <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+      <input type="{{ field.input_type }}"
+             name="{{ field.name }}"
+             id="{{ field.name }}"
+             {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %}
+             {% if field.required %}required{% endif %} />
+    {% endfor %}
+    <button type="submit">{{ strings.button_label(form.submit_label_key) }}</button>
+  </form>
+{%- endmacro %}

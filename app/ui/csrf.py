@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+from dataclasses import dataclass
 import hashlib
 import hmac
 import secrets
-from dataclasses import dataclass
 from typing import Final
 
 from fastapi import Depends, HTTPException, Request, Response, status
@@ -26,9 +26,11 @@ class CsrfManager:
 
     def issue(self, session: UiSession) -> str:
         nonce = secrets.token_urlsafe(24)
-        payload = f"{session.identifier}:{nonce}".encode("utf-8")
+        payload = f"{session.identifier}:{nonce}".encode()
         signature = hmac.new(self.secret, payload, hashlib.sha256).digest()
-        token = f"{base64.urlsafe_b64encode(payload).decode()}.{base64.urlsafe_b64encode(signature).decode()}"
+        encoded_payload = base64.urlsafe_b64encode(payload).decode()
+        encoded_signature = base64.urlsafe_b64encode(signature).decode()
+        token = f"{encoded_payload}.{encoded_signature}"
         return token
 
     def validate(self, session: UiSession, token: str) -> bool:
@@ -65,16 +67,22 @@ def get_csrf_manager(request: Request) -> CsrfManager:
     return manager
 
 
-def attach_csrf_cookie(response: Response, session: UiSession, manager: CsrfManager) -> str:
-    token = manager.issue(session)
+def attach_csrf_cookie(
+    response: Response,
+    session: UiSession,
+    manager: CsrfManager,
+    *,
+    token: str | None = None,
+) -> str:
+    issued_token = token or manager.issue(session)
     response.set_cookie(
         _CSRF_COOKIE,
-        token,
+        issued_token,
         httponly=False,
         secure=True,
         samesite="lax",
     )
-    return token
+    return issued_token
 
 
 def clear_csrf_cookie(response: Response) -> None:
