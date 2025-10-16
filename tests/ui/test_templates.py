@@ -7,6 +7,17 @@ from jinja2 import Template
 from starlette.requests import Request
 
 from app.ui.context import (
+    AlertMessage,
+    LayoutContext,
+    MetaTag,
+    NavItem,
+    NavigationContext,
+    PaginationContext,
+    StatusBadge,
+    TableCell,
+    TableDefinition,
+    TableFragment,
+    TableRow,
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
@@ -27,6 +38,11 @@ def _make_request(path: str) -> Request:
     return Request(scope)
 
 
+def _render_inline(source: str, **context: Any) -> str:
+    template = Template(templates.env, "<inline>", source)
+    return template.render(**context)
+
+
 def test_login_template_renders_error_and_form() -> None:
     request = _make_request("/ui/login")
     context = build_login_page_context(request, error="Invalid key")
@@ -34,6 +50,7 @@ def test_login_template_renders_error_and_form() -> None:
     html = template.render(**context)
 
     assert "Harmony Operator Console" in html
+    assert "<!DOCTYPE html>" in html
     assert "Invalid key" in html
     assert "id=\"login-form\"" in html
     assert "data-role=\"anonymous\"" in html
@@ -74,6 +91,34 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "hx-get=\"/ui/activity/table\"" in html
     assert "hx-trigger=\"load, every 60s\"" in html
     assert "hx-target=\"#hx-activity-table\"" in html
+
+
+def test_base_layout_renders_navigation_and_alerts() -> None:
+    request = _make_request("/ui")
+    layout = LayoutContext(
+        page_id="dashboard",
+        role="operator",
+        navigation=NavigationContext(
+            primary=(
+                NavItem(
+                    label_key="nav.home",
+                    href="/ui",
+                    active=True,
+                    test_id="nav-home",
+                ),
+            )
+        ),
+        alerts=(AlertMessage(level="warning", text="Check status"),),
+        head_meta=(MetaTag(name="csrf-token", content="token"),),
+    )
+    template = templates.get_template("layouts/base.j2")
+    html = template.render(request=request, layout=layout)
+
+    assert "<nav aria-label=\"Primary\">" in html
+    assert "data-test=\"nav-home\"" in html
+    assert "alert alert--warning" in html
+    assert "Check status" in html
+    assert "<meta name=\"csrf-token\" content=\"token\" />" in html
 
 
 def test_activity_fragment_template_uses_table_macro() -> None:
@@ -124,6 +169,51 @@ def test_watchlist_fragment_template_renders_rows() -> None:
     assert "Paused" in html
 
 
+def test_table_fragment_renders_badge_and_pagination() -> None:
+    table = TableDefinition(
+        identifier="test-table",
+        column_keys=("dashboard.features.name", "dashboard.features.status"),
+        rows=(
+            TableRow(
+                cells=(
+                    TableCell(text_key="feature.spotify"),
+                    TableCell(
+                        badge=StatusBadge(
+                            label_key="status.enabled",
+                            variant="success",
+                        )
+                    ),
+                )
+            ),
+        ),
+        caption_key="dashboard.features.caption",
+    )
+    fragment = TableFragment(
+        identifier="hx-test-table",
+        table=table,
+        empty_state_key="dashboard",
+        data_attributes={"count": "1"},
+        pagination=PaginationContext(
+            label_key="watchlist",
+            target="#hx-test-table",
+            previous_url="/prev",
+            next_url="/next",
+        ),
+    )
+    html = _render_inline(
+        "{% import 'partials/tables.j2' as tables %}"
+        "{{ tables.render_table_fragment(fragment) }}",
+        fragment=fragment,
+    )
+
+    assert "id=\"hx-test-table\"" in html
+    assert "data-count=\"1\"" in html
+    assert "status-badge--success" in html
+    assert "aria-label=\"Watchlist pagination\"" in html
+    assert "hx-get=\"/prev\"" in html
+    assert "hx-get=\"/next\"" in html
+
+
 def test_pass_context_globals_receive_runtime_context_mapping() -> None:
     assert "url_for" in templates.env.globals
 
@@ -136,7 +226,9 @@ def test_pass_context_globals_receive_runtime_context_mapping() -> None:
                 )
             return "/".join(parts)
 
-    template = Template(templates.env, "<inline>", "{{ url_for('dashboard', item_id=7) }}")
-    html = template.render(request=DummyRequest())
+    html = _render_inline(
+        "{{ url_for('dashboard', item_id=7) }}",
+        request=DummyRequest(),
+    )
 
     assert html == "dashboard/item_id-7"
