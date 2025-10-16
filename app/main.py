@@ -149,12 +149,16 @@ def _ui_dependency_probe() -> DependencyStatus:
 
     templates_missing = details.get("templates", {}).get("missing", [])
     static_missing = details.get("static", {}).get("missing", [])
+    templates_unreadable = details.get("templates", {}).get("unreadable", [])
+    static_unreadable = details.get("static", {}).get("unreadable", [])
     logger.warning(
         "UI assets readiness probe failed",
         extra={
             "event": "ui.assets.probe",
             "templates_missing": templates_missing,
             "static_missing": static_missing,
+            "templates_unreadable": templates_unreadable,
+            "static_unreadable": static_unreadable,
         },
     )
     return DependencyStatus(ok=False, status="degraded")

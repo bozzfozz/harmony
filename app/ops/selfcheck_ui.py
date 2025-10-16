@@ -51,17 +51,30 @@ def _probe_required_files(
 ) -> dict[str, Any]:
     entries: dict[str, dict[str, Any]] = {}
     missing: list[str] = []
+    unreadable: list[str] = []
+    empty: list[str] = []
     root_exists = root.exists()
 
     for relative in required:
         file_path = root / relative
         exists = root_exists and file_path.is_file()
         size: int | None = None
+        readable = False
+        error: str | None = None
+
         if exists:
             try:
-                size = file_path.stat().st_size
-            except OSError:
-                size = None
+                stat_result = file_path.stat()
+                size = stat_result.st_size
+            except OSError as exc:
+                error = str(exc)
+            else:
+                try:
+                    with file_path.open("rb") as handle:
+                        handle.read(1)
+                    readable = True
+                except OSError as exc:
+                    error = str(exc)
 
         non_empty = bool(size) if size is not None else False
         entry: dict[str, Any] = {
@@ -69,11 +82,17 @@ def _probe_required_files(
             "exists": exists,
             "size": size,
             "non_empty": non_empty,
+            "readable": readable,
+            "error": error,
         }
         entries[relative] = entry
 
-        if not exists or (require_non_empty and not non_empty):
+        if not exists:
             missing.append(relative)
+        elif not readable:
+            unreadable.append(relative)
+        elif require_non_empty and not non_empty:
+            empty.append(relative)
 
     return {
         "root": str(root),
@@ -81,6 +100,8 @@ def _probe_required_files(
         "required": list(required),
         "files": entries,
         "missing": missing,
+        "unreadable": unreadable,
+        "empty": empty,
     }
 
 
@@ -94,7 +115,9 @@ def probe_ui_artifacts(base_path: Path | None = None) -> tuple[bool, dict[str, A
     templates = _probe_required_files(templates_root, REQUIRED_TEMPLATE_FILES)
     static = _probe_required_files(static_root, REQUIRED_STATIC_ASSETS)
 
-    ok = not templates["missing"] and not static["missing"]
+    template_failures = templates["missing"] or templates["unreadable"] or templates["empty"]
+    static_failures = static["missing"] or static["unreadable"] or static["empty"]
+    ok = not template_failures and not static_failures
     status = "ok" if ok else "fail"
     details: dict[str, Any] = {
         "status": status,

@@ -41,6 +41,7 @@ from app.utils.worker_health import (
     read_worker_status,
     resolve_status,
 )
+from app.ops.selfcheck import aggregate_ready
 
 try:  # pragma: no cover - import guarded for environments without psutil
     import psutil as _psutil  # type: ignore
@@ -358,13 +359,21 @@ async def get_status(request: Request) -> dict[str, Any]:
         service_health = evaluate_all_service_health(session)
         connections = {name: result.status for name, result in service_health.items()}
 
-    logger.debug("Reporting system status: uptime=%s seconds", uptime_seconds)
+    ready_report = aggregate_ready()
+    overall_status = "ok" if ready_report.ok else "degraded"
+
+    logger.debug(
+        "Reporting system status: uptime=%s seconds",
+        uptime_seconds,
+        extra={"readiness_status": ready_report.status},
+    )
     return {
-        "status": "ok",
+        "status": overall_status,
         "version": getattr(request.app, "version", "unknown"),
         "uptime_seconds": round(uptime_seconds, 2),
         "workers": workers,
         "connections": connections,
+        "readiness": ready_report.to_dict(verbose=True),
     }
 
 

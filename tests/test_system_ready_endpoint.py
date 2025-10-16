@@ -1,9 +1,12 @@
+from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.system import router as system_router
+from app.ops.selfcheck import ReadyIssue, ReadyReport
 from app.services.health import ReadinessResult
 
 
@@ -89,3 +92,50 @@ def test_ready_handler_has_no_migrations_reference() -> None:
     key = '"' + "migrations" + '"'
     assert attribute not in contents
     assert key not in contents
+
+
+def test_system_status_reports_readiness_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = ReadinessResult(
+        ok=True,
+        database="up",
+        dependencies={"ui:assets": "down"},
+    )
+    service = StubHealthService(result)
+
+    failure_report = ReadyReport(
+        status="fail",
+        checks={"ui": {"status": "fail"}},
+        issues=[
+            ReadyIssue(
+                component="ui",
+                message="templates missing",
+                exit_code=70,
+                details={
+                    "templates": {"missing": ["pages/dashboard.j2"], "unreadable": [], "empty": []},
+                    "static": {"missing": [], "unreadable": [], "empty": []},
+                },
+            )
+        ],
+    )
+
+    monkeypatch.setattr("app.api.system.aggregate_ready", lambda: failure_report)
+    monkeypatch.setattr("app.api.system._WORKERS", {})
+
+    @contextmanager
+    def _session_scope_stub():
+        yield object()
+
+    monkeypatch.setattr("app.api.system.session_scope", _session_scope_stub)
+    monkeypatch.setattr("app.api.system.evaluate_all_service_health", lambda session: {})
+
+    app = _create_app(service)
+    client = TestClient(app)
+
+    response = client.get("/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "degraded"
+    readiness = payload["readiness"]
+    assert readiness["status"] == "fail"
+    issues = readiness["issues"]
+    assert any(issue["component"] == "ui" for issue in issues)
