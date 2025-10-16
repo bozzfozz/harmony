@@ -21,6 +21,9 @@ upstream dependency checks.
   - Executes an idempotency probe using the configured backend. For the default
     SQLite store the probe performs a lightweight reserve/release cycle against
     `<downloads_dir>/.harmony/idempotency.db` (or `IDEMPOTENCY_SQLITE_PATH`).
+  - Confirms all mandatory Jinja templates and static assets under `app/ui/`
+    exist, are readable and non-empty. Missing or unreadable files mark the
+    readiness report as degraded and block `/ready` responses.
   - Executes configured dependency probes listed via the `HEALTH_DEPS` environment
     variable (e.g. `spotify`, `slskd`).
   - Reports aggregated status in the `status` field (`ok`, `degraded`, `down`).
@@ -38,6 +41,10 @@ upstream dependency checks.
 
 - **Exit signals:** A non-200 response indicates the container should not receive
   traffic yet. Check structured logs (`health.ready`) for the failing dependency.
+
+The `/api/system/status` dashboard endpoint calls the same self-checks to surface
+readiness regressions. When UI assets go missing the endpoint responds with
+`"status": "degraded"` and embeds the readiness diagnostics for operators.
 
 ## Self-check CLI
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 import socketserver
 import threading
 
@@ -247,10 +248,14 @@ def test_ready_reports_missing_ui_assets(
     assert report.ok is False
     ui_check = report.checks["ui"]
     assert ui_check["status"] == "fail"
+    templates_info = ui_check["templates"]
+    static_info = ui_check["static"]
+    assert not templates_info["unreadable"]
+    assert not static_info["unreadable"]
     if category == "templates":
-        assert missing in ui_check["templates"]["missing"]
+        assert missing in templates_info["missing"]
     else:
-        assert missing in ui_check["static"]["missing"]
+        assert missing in static_info["missing"]
 
     ui_issue = next(issue for issue in report.issues if issue.component == "ui")
     issue_details = ui_issue.details
@@ -258,3 +263,51 @@ def test_ready_reports_missing_ui_assets(
         assert missing in issue_details["templates"]["missing"]
     else:
         assert missing in issue_details["static"]["missing"]
+
+
+def test_ready_reports_unreadable_ui_asset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+
+    server = _Server(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    ui_root = _create_ui_root(tmp_path / "ui")
+
+    target_relative = selfcheck_ui.REQUIRED_TEMPLATE_FILES[0]
+    target = ui_root / "templates" / target_relative
+
+    original_open = Path.open
+
+    def _blocked_open(self: Path, *args: Any, **kwargs: Any):
+        if self == target:
+            raise PermissionError("denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", _blocked_open)
+
+    try:
+        host, port = server.server_address
+        runtime_env["SLSKD_HOST"] = host
+        runtime_env["SLSKD_PORT"] = str(port)
+
+        monkeypatch.setattr(selfcheck_ui, "UI_ROOT", ui_root)
+
+        report = aggregate_ready(runtime_env=runtime_env)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+    assert report.ok is False
+    ui_check = report.checks["ui"]
+    assert target_relative in ui_check["templates"]["unreadable"]
+
+    ui_issue = next(issue for issue in report.issues if issue.component == "ui")
+    assert target_relative in ui_issue.details["templates"]["unreadable"]
