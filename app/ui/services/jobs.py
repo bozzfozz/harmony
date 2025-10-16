@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from fastapi import Request, status
 
@@ -40,7 +40,9 @@ class JobsUiService:
         data = payload.get("data", {})
         orchestrator = data.get("orchestrator", {}) if isinstance(data, dict) else {}
         jobs = orchestrator.get("jobs", {}) if isinstance(orchestrator, dict) else {}
-        enabled_jobs = orchestrator.get("enabled_jobs", {}) if isinstance(orchestrator, dict) else {}
+        enabled_jobs = (
+            orchestrator.get("enabled_jobs", {}) if isinstance(orchestrator, dict) else {}
+        )
 
         rows: list[OrchestratorJob] = []
         for name, status_text in sorted(jobs.items()):
@@ -57,4 +59,10 @@ class JobsUiService:
         return tuple(rows)
 
 
-__all__ = ["JobsUiService", "OrchestratorJob"]
+def get_jobs_ui_service() -> JobsUiService:
+    """FastAPI dependency providing the jobs UI service."""
+
+    return JobsUiService()
+
+
+__all__ = ["JobsUiService", "OrchestratorJob", "get_jobs_ui_service"]

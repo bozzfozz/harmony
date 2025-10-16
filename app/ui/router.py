@@ -16,13 +16,25 @@ from app.ui.context import (
     AlertMessage,
     build_activity_fragment_context,
     build_dashboard_page_context,
-    build_login_page_context,
     build_downloads_fragment_context,
     build_jobs_fragment_context,
+    build_login_page_context,
     build_search_results_context,
     build_watchlist_fragment_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
+from app.ui.services import (
+    ActivityUiService,
+    DownloadsUiService,
+    JobsUiService,
+    SearchUiService,
+    WatchlistUiService,
+    get_activity_ui_service,
+    get_downloads_ui_service,
+    get_jobs_ui_service,
+    get_search_ui_service,
+    get_watchlist_ui_service,
+)
 from app.ui.session import (
     UiSession,
     attach_session_cookie,
@@ -31,16 +43,6 @@ from app.ui.session import (
     require_role,
     require_session,
 )
-from app.ui.services import (
-    DownloadsUiService,
-    JobsUiService,
-    SearchUiService,
-    WatchlistUiService,
-    get_downloads_ui_service,
-    get_search_ui_service,
-    get_watchlist_ui_service,
-)
-from app.utils.activity import activity_manager
 
 logger = get_logger(__name__)
 
@@ -66,6 +68,7 @@ def _render_alert_fragment(
         context,
         status_code=status_code,
     )
+
 
 @router.get("/login", include_in_schema=False)
 async def login_form(request: Request) -> Response:
@@ -178,13 +181,28 @@ async def activity_table(
     type_filter: str | None = Query(None, alias="type"),
     status_filter: str | None = Query(None, alias="status"),
     session: UiSession = Depends(require_session),
+    service: ActivityUiService = Depends(get_activity_ui_service),
 ) -> Response:
     try:
-        items, total_count = activity_manager.fetch(
+        page = service.list_activity(
             limit=limit,
             offset=offset,
             type_filter=type_filter,
             status_filter=status_filter,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.activity",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
         )
     except Exception:
         logger.exception("ui.fragment.activity", extra={"limit": limit, "offset": offset})
@@ -194,6 +212,7 @@ async def activity_table(
             component="ui.router",
             status="error",
             role=session.role,
+            error="unexpected",
         )
         return _render_alert_fragment(
             request,
@@ -202,12 +221,12 @@ async def activity_table(
 
     context = build_activity_fragment_context(
         request,
-        items=items,
-        limit=limit,
-        offset=offset,
-        total_count=total_count,
-        type_filter=type_filter,
-        status_filter=status_filter,
+        items=page.items,
+        limit=page.limit,
+        offset=page.offset,
+        total_count=page.total_count,
+        type_filter=page.type_filter,
+        status_filter=page.status_filter,
     )
     log_event(
         logger,
@@ -413,6 +432,7 @@ async def downloads_priority_update(
 async def jobs_table(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
+    service: JobsUiService = Depends(get_jobs_ui_service),
 ) -> Response:
     if not session.features.dlq:
         raise HTTPException(
@@ -420,7 +440,6 @@ async def jobs_table(
             detail="The requested UI feature is disabled.",
         )
 
-    service = JobsUiService()
     try:
         jobs = await service.list_jobs(request)
     except AppError as exc:
@@ -491,7 +510,7 @@ async def watchlist_table(
         return _render_alert_fragment(
             request,
             "Unable to load watchlist entries.",
-    )
+        )
 
     context = build_watchlist_fragment_context(
         request,

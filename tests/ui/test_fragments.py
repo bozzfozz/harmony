@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from dataclasses import replace
+import re
 
 from fastapi.testclient import TestClient
 
 from app.errors import AppError, ErrorCode
+from app.main import app
 from app.services.watchlist_service import WatchlistService
-from app.ui.session import fingerprint_api_key
 from app.ui.services import (
+    ActivityPage,
     DownloadPage,
     DownloadRow,
     OrchestratorJob,
@@ -17,13 +18,13 @@ from app.ui.services import (
     SearchResultsPage,
     WatchlistRow,
     WatchlistTable,
+    get_activity_ui_service,
     get_downloads_ui_service,
     get_search_ui_service,
     get_watchlist_ui_service,
 )
+from app.ui.session import fingerprint_api_key
 from app.utils.activity import activity_manager
-
-from app.main import app
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
 
 
@@ -50,6 +51,34 @@ def _csrf_headers(client: TestClient) -> dict[str, str]:
         "Cookie": _cookies_header(client),
         "X-CSRF-Token": token,
     }
+
+
+class _StubActivityService:
+    def __init__(self, page: ActivityPage | None = None) -> None:
+        default_page = ActivityPage(
+            items=(),
+            limit=50,
+            offset=0,
+            total_count=0,
+            type_filter=None,
+            status_filter=None,
+        )
+        self.page = page or default_page
+        self.exception: Exception | None = None
+        self.calls: list[tuple[int, int, str | None, str | None]] = []
+
+    def list_activity(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        type_filter: str | None,
+        status_filter: str | None,
+    ) -> ActivityPage:
+        self.calls.append((limit, offset, type_filter, status_filter))
+        if self.exception:
+            raise self.exception
+        return self.page
 
 
 class _RecordingDownloadsService:
@@ -117,13 +146,16 @@ class _StubSearchService:
 
 class _StubWatchlistService:
     def __init__(self, entries: Sequence[WatchlistRow] | None = None) -> None:
-        self.entries = list(entries or (
-            WatchlistRow(
-                artist_key="spotify:artist:stub",
-                priority=1,
-                state_key="watchlist.state.active",
-            ),
-        ))
+        self.entries = list(
+            entries
+            or (
+                WatchlistRow(
+                    artist_key="spotify:artist:stub",
+                    priority=1,
+                    state_key="watchlist.state.active",
+                ),
+            )
+        )
         self.updated: list[tuple[str, int]] = []
         self.created: list[str] = []
 
@@ -179,6 +211,25 @@ def test_activity_fragment_renders_table(monkeypatch) -> None:
         body = response.text
         assert "<table" in body
         assert "data-total" in body
+
+
+def test_activity_fragment_app_error(monkeypatch) -> None:
+    stub = _StubActivityService()
+    stub.exception = AppError(
+        "activity unavailable",
+        code=ErrorCode.DEPENDENCY_ERROR,
+        http_status=502,
+    )
+    app.dependency_overrides[get_activity_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/activity/table", headers=headers)
+            _assert_html_response(response, status_code=502)
+            assert "activity unavailable" in response.text
+    finally:
+        app.dependency_overrides.pop(get_activity_ui_service, None)
 
 
 def test_watchlist_fragment_enforces_role(monkeypatch) -> None:
