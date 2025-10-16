@@ -53,6 +53,17 @@ def _csrf_headers(client: TestClient) -> dict[str, str]:
     }
 
 
+def _assert_json_error(response, *, status_code: int) -> None:
+    assert response.status_code == status_code
+    content_type = response.headers.get("content-type", "")
+    assert content_type.startswith("application/json"), content_type
+
+
+def _read_only_env() -> dict[str, str]:
+    fingerprint = fingerprint_api_key("primary-key")
+    return {"UI_ROLE_OVERRIDES": f"{fingerprint}:read_only"}
+
+
 class _StubActivityService:
     def __init__(self, page: ActivityPage | None = None) -> None:
         default_page = ActivityPage(
@@ -239,7 +250,23 @@ def test_watchlist_fragment_enforces_role(monkeypatch) -> None:
         _login(client)
         headers = {"Cookie": _cookies_header(client)}
         response = client.get("/ui/watchlist/table", headers=headers)
-        assert response.status_code == 403
+        _assert_json_error(response, status_code=403)
+
+
+def test_downloads_fragment_forbidden_for_read_only(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/downloads/table", headers=headers)
+        _assert_json_error(response, status_code=403)
+
+
+def test_jobs_fragment_forbidden_for_read_only(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/jobs/table", headers=headers)
+        _assert_json_error(response, status_code=403)
 
 
 def test_watchlist_fragment_success(monkeypatch) -> None:
@@ -304,6 +331,18 @@ def test_watchlist_create_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
 
+def test_watchlist_create_forbidden_for_read_only(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/watchlist",
+            data={"artist_key": "spotify:artist:blocked"},
+            headers=headers,
+        )
+        _assert_json_error(response, status_code=403)
+
+
 def test_watchlist_priority_requires_csrf(monkeypatch) -> None:
     WatchlistService().reset()
     with _create_client(monkeypatch) as client:
@@ -342,6 +381,18 @@ def test_watchlist_priority_success(monkeypatch) -> None:
             assert stub.updated == [("spotify:artist:10", 7)]
     finally:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
+
+
+def test_watchlist_priority_forbidden_for_read_only(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/watchlist/spotify:artist:1/priority",
+            data={"priority": "3"},
+            headers=headers,
+        )
+        _assert_json_error(response, status_code=403)
 
 
 def test_downloads_fragment_success(monkeypatch) -> None:
@@ -439,6 +490,41 @@ def test_download_priority_requires_csrf(monkeypatch) -> None:
                 headers=headers,
             )
             assert response.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_download_priority_forbidden_for_read_only(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=9,
+                filename="song.flac",
+                status="queued",
+                progress=None,
+                priority=1,
+                username=None,
+                created_at=None,
+                updated_at=None,
+            )
+        ],
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/downloads/9/priority",
+                data={"priority": "4"},
+                headers=headers,
+            )
+            _assert_json_error(response, status_code=403)
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -570,6 +656,18 @@ def test_search_results_requires_feature(monkeypatch) -> None:
         )
         assert response.status_code == 404
         assert response.headers.get("content-type", "").startswith("application/json")
+
+
+def test_search_results_forbidden_for_read_only(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/search/results",
+            data={"query": "blocked"},
+            headers=headers,
+        )
+        _assert_json_error(response, status_code=403)
 
 
 def test_search_results_app_error(monkeypatch) -> None:
