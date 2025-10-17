@@ -6,6 +6,7 @@
     "dashboard": "Dashboard",
     "activity": "Activity",
     "watchlist": "Watchlist",
+    "spotify": "Spotify",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -20,6 +21,7 @@
     "dashboard": "Welcome",
     "activity": "Recent activity",
     "watchlist": "Watchlist",
+    "spotify": "Spotify integration",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -31,6 +33,7 @@
 {% macro nav_label(key) -%}
   {%- set labels = {
     "nav.home": "Home",
+    "nav.spotify": "Spotify",
     "nav.operations": "Operations",
     "nav.admin": "Admin",
   } -%}
@@ -40,6 +43,8 @@
 {% macro form_label(key) -%}
   {%- set labels = {
     "login.api_key": "API key",
+    "spotify.manual.redirect": "Redirect URL",
+    "spotify.backfill.max_items": "Max items",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -50,6 +55,9 @@
     "logout": "Logout",
     "dashboard.action.operator": "Operator action",
     "dashboard.action.admin": "Admin action",
+    "spotify.connect": "Connect",
+    "spotify.manual.submit": "Complete manually",
+    "spotify.backfill.run": "Start backfill",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -58,6 +66,9 @@
   {%- set labels = {
     "status.enabled": "Enabled",
     "status.disabled": "Disabled",
+    "spotify.status.connected": "Connected",
+    "spotify.status.unauthenticated": "Authentication required",
+    "spotify.status.unconfigured": "Not configured",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -88,6 +99,9 @@
     "search.source": "Source",
     "search.score": "Score",
     "search.bitrate": "Bitrate",
+    "spotify.playlists.name": "Playlist",
+    "spotify.playlists.tracks": "Tracks",
+    "spotify.playlists.updated": "Updated",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -100,6 +114,7 @@
     "downloads.table.caption": "Download queue",
     "jobs.table.caption": "Orchestrator jobs",
     "search.results.caption": "Search results",
+    "spotify.playlists.caption": "Tracked Spotify playlists",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -112,6 +127,9 @@
     "feature.imports": "Imports",
     "watchlist.state.active": "Active",
     "watchlist.state.paused": "Paused",
+    "spotify.status.connected": "Connected",
+    "spotify.status.unauthenticated": "Authentication required",
+    "spotify.status.unconfigured": "Not configured",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -164,6 +182,8 @@
     No orchestrator jobs reported yet.
   {%- elif key == "search" -%}
     No matching results found.
+  {%- elif key == "spotify.playlists" -%}
+    No playlists are currently cached from Spotify.
   {%- else -%}
     {{ key }}
   {%- endif -%}
@@ -176,9 +196,92 @@
     "downloads": "Downloads pagination",
     "search": "Search pagination",
     "jobs": "Jobs pagination",
+    "spotify.playlists": "Spotify playlists pagination",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
+
+{% macro spotify_status_hint(status) -%}
+  {%- if status == "connected" -%}
+    Spotify API access is active. You can manage playlists and backfill jobs.
+  {%- elif status == "unauthenticated" -%}
+    Authentication is required. Use the Connect button or manual completion form.
+  {%- else -%}
+    Provide Spotify credentials in the settings before connecting.
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_manual_hint(oauth, status) -%}
+  {%- if oauth.manual_enabled -%}
+    Manual completion is enabled. Paste the full redirect URL from Spotify to finish the flow.
+  {%- elif status.pro_available -%}
+    Manual completion is disabled. Use the Connect button to authenticate through Spotify.
+  {%- else -%}
+    Manual completion is unavailable until Spotify credentials are configured.
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_backfill_hint() -%}
+  Trigger a Spotify enrichment job for pending FREE ingest items. Requires a valid Spotify session.
+{%- endmacro %}
+
+{% macro spotify_manual_host_hint(host) -%}
+  Ensure the public host is reachable at {{ host }} before starting manual completion.
+{%- endmacro %}
+
+{% macro spotify_manual_redirect_label() %}Redirect URI{% endmacro %}
+
+{% macro spotify_manual_active_label() %}Active manual sessions{% endmacro %}
+
+{% macro spotify_manual_ttl_label() %}Manual session timeout{% endmacro %}
+
+{% macro spotify_manual_ttl(value) -%}
+  {%- if value and value > 0 -%}
+    {{ value }} seconds
+  {%- else -%}
+    No active manual sessions
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_backfill_expand_label() %}Expand playlists after enrichment{% endmacro %}
+
+{% macro spotify_backfill_latest_heading() %}Latest job{% endmacro %}
+
+{% macro spotify_backfill_field_label(key) -%}
+  {%- set labels = {
+    "id": "Job ID",
+    "state": "State",
+    "requested": "Requested",
+    "processed": "Processed",
+    "matched": "Matched",
+    "cache_hits": "Cache hits",
+    "cache_misses": "Cache misses",
+    "expanded_playlists": "Expanded playlists",
+    "expanded_tracks": "Expanded tracks",
+    "duration": "Duration",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_backfill_unknown_state() %}unknown{% endmacro %}
+
+{% macro spotify_backfill_duration(value) -%}
+  {%- if value -%}
+    {{ value }} ms
+  {%- else -%}
+    —
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_backfill_empty_state() %}No backfill job has been recorded yet.{% endmacro %}
+
+{% macro spotify_page_intro() %}Manage the Spotify connection, cached playlists, and backfill jobs.{% endmacro %}
+
+{% macro spotify_status_heading() %}Connection status{% endmacro %}
+
+{% macro spotify_playlists_heading() %}Cached playlists{% endmacro %}
+
+{% macro spotify_backfill_heading() %}Backfill jobs{% endmacro %}
 
 {% macro pagination_prev() %}Previous{% endmacro %}
 

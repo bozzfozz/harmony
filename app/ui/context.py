@@ -12,6 +12,11 @@ from app.ui.services import (
     DownloadPage,
     OrchestratorJob,
     SearchResultsPage,
+    SpotifyBackfillSnapshot,
+    SpotifyManualResult,
+    SpotifyOAuthHealth,
+    SpotifyPlaylistRow,
+    SpotifyStatus,
     WatchlistRow,
 )
 from app.ui.session import UiFeatures, UiSession
@@ -186,25 +191,58 @@ def build_login_page_context(request: Request, *, error: str | None = None) -> M
     }
 
 
+def _build_primary_navigation(session: UiSession, *, active: str) -> NavigationContext:
+    items: list[NavItem] = [
+        NavItem(
+            label_key="nav.home",
+            href="/ui",
+            active=active == "home",
+            test_id="nav-home",
+        )
+    ]
+
+    if session.features.spotify:
+        items.append(
+            NavItem(
+                label_key="nav.spotify",
+                href="/ui/spotify",
+                active=active == "spotify",
+                test_id="nav-spotify",
+            )
+        )
+
+    if session.allows("operator"):
+        items.append(
+            NavItem(
+                label_key="nav.operations",
+                href="/ui/operations",
+                active=active == "operations",
+                test_id="nav-operator",
+            )
+        )
+
+    if session.allows("admin"):
+        items.append(
+            NavItem(
+                label_key="nav.admin",
+                href="/ui/admin",
+                active=active == "admin",
+                test_id="nav-admin",
+            )
+        )
+
+    return NavigationContext(primary=tuple(items))
+
+
 def build_dashboard_page_context(
     request: Request,
     *,
     session: UiSession,
     csrf_token: str,
 ) -> Mapping[str, Any]:
-    navigation_items: list[NavItem] = [
-        NavItem(label_key="nav.home", href="/ui", active=True, test_id="nav-home"),
-    ]
     actions: list[ActionButton] = []
 
     if session.allows("operator"):
-        navigation_items.append(
-            NavItem(
-                label_key="nav.operations",
-                href="/ui/operations",
-                test_id="nav-operator",
-            )
-        )
         actions.append(
             ActionButton(
                 identifier="operator-action",
@@ -213,13 +251,6 @@ def build_dashboard_page_context(
         )
 
     if session.allows("admin"):
-        navigation_items.append(
-            NavItem(
-                label_key="nav.admin",
-                href="/ui/admin",
-                test_id="nav-admin",
-            )
-        )
         actions.append(
             ActionButton(
                 identifier="admin-action",
@@ -230,7 +261,7 @@ def build_dashboard_page_context(
     layout = LayoutContext(
         page_id="dashboard",
         role=session.role,
-        navigation=NavigationContext(primary=tuple(navigation_items)),
+        navigation=_build_primary_navigation(session, active="home"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
     )
 
@@ -357,6 +388,175 @@ def build_activity_fragment_context(
     )
 
     return {"request": request, "fragment": fragment}
+
+
+def build_spotify_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="spotify",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="spotify"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    try:
+        status_url = request.url_for("spotify_status_fragment")
+    except Exception:
+        status_url = "/ui/spotify/status"
+    status_fragment = AsyncFragment(
+        identifier="hx-spotify-status",
+        url=status_url,
+        target="#hx-spotify-status",
+        poll_interval_seconds=60,
+        swap="innerHTML",
+    )
+
+    try:
+        playlists_url = request.url_for("spotify_playlists_fragment")
+    except Exception:
+        playlists_url = "/ui/spotify/playlists"
+    playlists_fragment = AsyncFragment(
+        identifier="hx-spotify-playlists",
+        url=playlists_url,
+        target="#hx-spotify-playlists",
+        swap="innerHTML",
+    )
+
+    try:
+        backfill_url = request.url_for("spotify_backfill_fragment")
+    except Exception:
+        backfill_url = "/ui/spotify/backfill"
+    backfill_fragment = AsyncFragment(
+        identifier="hx-spotify-backfill",
+        url=backfill_url,
+        target="#hx-spotify-backfill",
+        poll_interval_seconds=30,
+        swap="innerHTML",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "status_fragment": status_fragment,
+        "playlists_fragment": playlists_fragment,
+        "backfill_fragment": backfill_fragment,
+    }
+
+
+def build_spotify_status_context(
+    request: Request,
+    *,
+    status: SpotifyStatus,
+    oauth: SpotifyOAuthHealth,
+    manual_form: FormDefinition,
+    csrf_token: str,
+    manual_result: SpotifyManualResult | None = None,
+) -> Mapping[str, Any]:
+    alerts: list[AlertMessage] = []
+    if manual_result is not None:
+        if manual_result.ok:
+            alerts.append(AlertMessage(level="success", text=manual_result.message))
+        else:
+            alerts.append(AlertMessage(level="error", text=manual_result.message))
+
+    badges: list[StatusBadge] = []
+    badges.append(
+        StatusBadge(
+            label_key="status.enabled" if status.free_available else "status.disabled",
+            variant="success" if status.free_available else "muted",
+            test_id="spotify-status-free",
+        )
+    )
+    badges.append(
+        StatusBadge(
+            label_key="status.enabled" if status.pro_available else "status.disabled",
+            variant="success" if status.pro_available else "muted",
+            test_id="spotify-status-pro",
+        )
+    )
+    badges.append(
+        StatusBadge(
+            label_key="status.enabled" if status.authenticated else "status.disabled",
+            variant="success" if status.authenticated else "danger",
+            test_id="spotify-status-auth",
+        )
+    )
+
+    status_label_key = f"spotify.status.{status.status}" if status.status else "spotify.status.unconfigured"
+
+    return {
+        "request": request,
+        "status": status,
+        "oauth": oauth,
+        "badges": tuple(badges),
+        "alert_messages": tuple(alerts),
+        "manual_form": manual_form,
+        "csrf_token": csrf_token,
+        "status_label_key": status_label_key,
+    }
+
+
+def build_spotify_playlists_context(
+    request: Request,
+    *,
+    playlists: Sequence[SpotifyPlaylistRow],
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for playlist in playlists:
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=playlist.name),
+                    TableCell(text=str(playlist.track_count)),
+                    TableCell(text=playlist.updated_at.isoformat()),
+                ),
+                test_id=f"spotify-playlist-{playlist.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="spotify-playlists-table",
+        column_keys=(
+            "spotify.playlists.name",
+            "spotify.playlists.tracks",
+            "spotify.playlists.updated",
+        ),
+        rows=tuple(rows),
+        caption_key="spotify.playlists.caption",
+    )
+
+    fragment = TableFragment(
+        identifier="hx-spotify-playlists",
+        table=table,
+        empty_state_key="spotify.playlists",
+        data_attributes={"count": str(len(rows))},
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_spotify_backfill_context(
+    request: Request,
+    *,
+    snapshot: SpotifyBackfillSnapshot,
+    alert: AlertMessage | None = None,
+) -> Mapping[str, Any]:
+    alert_messages: tuple[AlertMessage, ...]
+    if alert is None:
+        alert_messages = tuple()
+    else:
+        alert_messages = (alert,)
+    return {
+        "request": request,
+        "snapshot": snapshot,
+        "alert_messages": alert_messages,
+    }
 
 
 def build_watchlist_fragment_context(
@@ -652,6 +852,10 @@ __all__ = [
     "TableCell",
     "TableDefinition",
     "TableRow",
+    "build_spotify_backfill_context",
+    "build_spotify_page_context",
+    "build_spotify_playlists_context",
+    "build_spotify_status_context",
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",
