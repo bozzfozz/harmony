@@ -28,7 +28,17 @@
             {% set form = cell.form %}
             <form method="{{ form.method }}"
                   action="{{ form.action }}"
-                  hx-post="{{ form.action }}"
+                  {% if form.hx_method == "get" %}
+                    hx-get="{{ form.action }}"
+                  {% elif form.hx_method == "put" %}
+                    hx-put="{{ form.action }}"
+                  {% elif form.hx_method == "patch" %}
+                    hx-patch="{{ form.action }}"
+                  {% elif form.hx_method == "delete" %}
+                    hx-delete="{{ form.action }}"
+                  {% else %}
+                    hx-post="{{ form.action }}"
+                  {% endif %}
                   {% if form.hx_target %}hx-target="{{ form.hx_target }}"{% endif %}
                   hx-swap="{{ form.hx_swap }}">
               {% for name, value in form.hidden_fields.items() %}
