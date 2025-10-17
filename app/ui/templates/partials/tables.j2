@@ -2,7 +2,7 @@
 {% import "partials/status_badges.j2" as badges %}
 
 {% macro render_table(table) -%}
-  <table id="{{ table.identifier }}">
+  <table id="{{ table.identifier }}" class="table">
     {% if table.caption_key %}
       <caption>{{ strings.caption(table.caption_key) }}</caption>
     {% endif %}

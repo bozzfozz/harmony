@@ -11,8 +11,8 @@ from app.ui.context import (
     FormDefinition,
     LayoutContext,
     MetaTag,
-    NavItem,
     NavigationContext,
+    NavItem,
     PaginationContext,
     StatusBadge,
     TableCell,
@@ -128,6 +128,8 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-get="/ui/spotify/status"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
+    assert 'class="async-fragment"' in html
+    assert 'aria-live="polite"' in html
 
 
 def test_base_layout_renders_navigation_and_alerts() -> None:
@@ -183,6 +185,7 @@ def test_activity_fragment_template_uses_table_macro() -> None:
     assert 'id="hx-activity-table"' in html
     assert 'data-total="1"' in html
     assert '<table id="activity-table"' in html
+    assert 'class="table"' in html
     assert "foo" in html
     assert 'class="pagination"' not in html
 
@@ -302,6 +305,7 @@ def test_spotify_playlists_partial_renders_table() -> None:
     html = template.render(**context)
 
     assert 'id="hx-spotify-playlists"' in html
+    assert 'class="table"' in html
     assert "Daily Mix" in html
     assert 'data-count="1"' in html
 
