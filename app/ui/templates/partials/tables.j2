@@ -65,6 +65,7 @@
         {% if pagination.previous_url %}
           <button type="button"
                   hx-get="{{ pagination.previous_url }}"
+                  hx-push-url="{{ pagination.previous_url }}"
                   hx-target="{{ pagination.target }}"
                   hx-swap="{{ pagination.swap }}">
             {{ strings.pagination_prev() }}
@@ -73,6 +74,7 @@
         {% if pagination.next_url %}
           <button type="button"
                   hx-get="{{ pagination.next_url }}"
+                  hx-push-url="{{ pagination.next_url }}"
                   hx-target="{{ pagination.target }}"
                   hx-swap="{{ pagination.swap }}">
             {{ strings.pagination_next() }}
