@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from app.ui.context import (
     AlertMessage,
+    AsyncFragment,
     FormDefinition,
     LayoutContext,
     MetaTag,
@@ -56,6 +57,27 @@ def _make_request(path: str) -> Request:
 def _render_inline(source: str, **context: Any) -> str:
     template = Template(templates.env, "<inline>", source)
     return template.render(**context)
+
+
+def test_async_fragment_trigger_without_polling() -> None:
+    fragment = AsyncFragment(
+        identifier="hx-test",
+        url="/test",
+        target="#hx-test",
+    )
+
+    assert fragment.trigger == "load"
+
+
+def test_async_fragment_trigger_with_polling() -> None:
+    fragment = AsyncFragment(
+        identifier="hx-test",
+        url="/test",
+        target="#hx-test",
+        poll_interval_seconds=45,
+    )
+
+    assert fragment.trigger == "load, every 45s"
 
 
 def test_login_template_renders_error_and_form() -> None:
@@ -133,6 +155,20 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
+    assert 'hx-target="#hx-spotify-status"' in html
+    assert 'hx-target="#hx-spotify-playlists"' in html
+    assert 'hx-target="#hx-spotify-artists"' in html
+    assert 'hx-target="#hx-spotify-backfill"' in html
+    assert 'hx-trigger="load, every 60s"' in html
+    assert 'hx-trigger="load, every 30s"' in html
+    assert html.count('hx-trigger="load"') >= 2
+    assert 'hx-swap="innerHTML"' in html
+    assert 'role="status"' in html
+    assert html.count('role="region"') >= 3
+    assert 'data-fragment="spotify-status"' in html
+    assert 'data-fragment="spotify-playlists"' in html
+    assert 'data-fragment="spotify-artists"' in html
+    assert 'data-fragment="spotify-backfill"' in html
     assert 'class="async-fragment"' in html
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
