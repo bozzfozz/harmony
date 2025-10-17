@@ -16,34 +16,49 @@
 {% endblock %}
 
 {% block main %}
-  <section>
-    <h3>{{ strings.spotify_status_heading() }}</h3>
+  <section class="page-section page-section--card" aria-labelledby="{{ status_fragment.identifier }}-heading">
+    <h3 id="{{ status_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_status_heading() }}</h3>
     <div id="{{ status_fragment.identifier }}"
+         class="async-fragment"
+         role="status"
+         aria-live="polite"
+         aria-labelledby="{{ status_fragment.identifier }}-heading"
+         data-fragment="spotify-status"
          hx-get="{{ status_fragment.url }}"
          hx-trigger="{{ status_fragment.trigger }}"
          hx-target="{{ status_fragment.target }}"
          hx-swap="{{ status_fragment.swap }}">
-      <p>{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
     </div>
   </section>
-  <section>
-    <h3>{{ strings.spotify_playlists_heading() }}</h3>
+  <section class="page-section page-section--card" aria-labelledby="{{ playlists_fragment.identifier }}-heading">
+    <h3 id="{{ playlists_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_playlists_heading() }}</h3>
     <div id="{{ playlists_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ playlists_fragment.identifier }}-heading"
+         data-fragment="spotify-playlists"
          hx-get="{{ playlists_fragment.url }}"
          hx-trigger="{{ playlists_fragment.trigger }}"
          hx-target="{{ playlists_fragment.target }}"
          hx-swap="{{ playlists_fragment.swap }}">
-      <p>{{ strings.fragment_loading(playlists_fragment.loading_key) }}</p>
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(playlists_fragment.loading_key) }}</p>
     </div>
   </section>
-  <section>
-    <h3>{{ strings.spotify_backfill_heading() }}</h3>
+  <section class="page-section page-section--card" aria-labelledby="{{ backfill_fragment.identifier }}-heading">
+    <h3 id="{{ backfill_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_backfill_heading() }}</h3>
     <div id="{{ backfill_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ backfill_fragment.identifier }}-heading"
+         data-fragment="spotify-backfill"
          hx-get="{{ backfill_fragment.url }}"
          hx-trigger="{{ backfill_fragment.trigger }}"
          hx-target="{{ backfill_fragment.target }}"
          hx-swap="{{ backfill_fragment.swap }}">
-      <p>{{ strings.fragment_loading(backfill_fragment.loading_key) }}</p>
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(backfill_fragment.loading_key) }}</p>
     </div>
   </section>
 {% endblock %}
