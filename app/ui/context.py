@@ -25,6 +25,8 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifyRecommendationRow,
+    SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
@@ -615,6 +617,18 @@ def build_spotify_page_context(
     )
 
     try:
+        recommendations_url = request.url_for("spotify_recommendations_fragment")
+    except Exception:
+        recommendations_url = "/ui/spotify/recommendations"
+    recommendations_fragment = AsyncFragment(
+        identifier="hx-spotify-recommendations",
+        url=recommendations_url,
+        target="#hx-spotify-recommendations",
+        swap="innerHTML",
+        loading_key="spotify.recommendations",
+    )
+
+    try:
         saved_url = request.url_for("spotify_saved_tracks_fragment")
     except Exception:
         saved_url = "/ui/spotify/saved"
@@ -672,6 +686,7 @@ def build_spotify_page_context(
         "account_fragment": account_fragment,
         "top_tracks_fragment": top_tracks_fragment,
         "top_artists_fragment": top_artists_fragment,
+        "recommendations_fragment": recommendations_fragment,
         "saved_fragment": saved_fragment,
         "playlists_fragment": playlists_fragment,
         "artists_fragment": artists_fragment,
@@ -1650,6 +1665,71 @@ def build_spotify_saved_tracks_context(
     }
 
 
+def build_spotify_recommendations_context(
+    request: Request,
+    *,
+    csrf_token: str,
+    rows: Sequence[SpotifyRecommendationRow] = (),
+    seeds: Sequence[SpotifyRecommendationSeed] = (),
+    form_values: Mapping[str, str] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+    alerts: Sequence[AlertMessage] | None = None,
+) -> Mapping[str, Any]:
+    values = dict(form_values or {})
+    defaults = {
+        "seed_artists": values.get("seed_artists", ""),
+        "seed_tracks": values.get("seed_tracks", ""),
+        "seed_genres": values.get("seed_genres", ""),
+        "limit": values.get("limit", "20"),
+    }
+    errors = {key: value for key, value in (form_errors or {}).items() if value}
+
+    table_rows: list[TableRow] = []
+    for row in rows:
+        table_rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=row.name, test_id=f"spotify-reco-track-{row.identifier}"),
+                    TableCell(text=", ".join(row.artists)),
+                    TableCell(text=row.album or "—"),
+                ),
+                test_id=f"spotify-recommendation-{row.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="spotify-recommendations-table",
+        column_keys=(
+            "spotify.recommendations.track",
+            "spotify.recommendations.artists",
+            "spotify.recommendations.album",
+        ),
+        rows=tuple(table_rows),
+        caption_key="spotify.recommendations.caption",
+    )
+
+    data_attributes = {
+        "count": str(len(table_rows)),
+    }
+
+    fragment = TableFragment(
+        identifier="hx-spotify-recommendations",
+        table=table,
+        empty_state_key="spotify.recommendations",
+        data_attributes=data_attributes,
+    )
+
+    return {
+        "request": request,
+        "csrf_token": csrf_token,
+        "form_defaults": defaults,
+        "form_errors": errors,
+        "alerts": tuple(alerts or ()),
+        "fragment": fragment,
+        "seeds": tuple(seeds),
+    }
+
+
 def build_spotify_artists_context(
     request: Request,
     *,
@@ -2055,6 +2135,7 @@ __all__ = [
     "build_spotify_artists_context",
     "build_spotify_page_context",
     "build_spotify_playlists_context",
+    "build_spotify_recommendations_context",
     "build_spotify_saved_tracks_context",
     "build_spotify_top_artists_context",
     "build_spotify_top_tracks_context",

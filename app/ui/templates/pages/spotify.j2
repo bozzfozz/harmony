@@ -76,6 +76,22 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(top_artists_fragment.loading_key) }}</p>
     </div>
   </section>
+  <section class="page-section page-section--card" aria-labelledby="{{ recommendations_fragment.identifier }}-heading">
+    <h3 id="{{ recommendations_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_recommendations_heading() }}</h3>
+    <p class="page-section__description">{{ strings.spotify_recommendations_description() }}</p>
+    <div id="{{ recommendations_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ recommendations_fragment.identifier }}-heading"
+         data-fragment="spotify-recommendations"
+         hx-get="{{ recommendations_fragment.url }}"
+         hx-trigger="{{ recommendations_fragment.trigger }}"
+         hx-target="{{ recommendations_fragment.target }}"
+         hx-swap="{{ recommendations_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(recommendations_fragment.loading_key) }}</p>
+    </div>
+  </section>
   <section class="page-section page-section--card" aria-labelledby="{{ saved_fragment.identifier }}-heading">
     <h3 id="{{ saved_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_saved_tracks_heading() }}</h3>
     <div id="{{ saved_fragment.identifier }}"

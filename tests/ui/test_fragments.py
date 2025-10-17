@@ -33,6 +33,8 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifyRecommendationRow,
+    SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
@@ -236,6 +238,28 @@ class _StubSpotifyService:
                 rank=1,
             ),
         )
+        self.recommendation_rows: Sequence[SpotifyRecommendationRow] = (
+            SpotifyRecommendationRow(
+                identifier="track-reco-1",
+                name="Recommended Track",
+                artists=("Reco Artist",),
+                album="Reco Album",
+                preview_url=None,
+            ),
+        )
+        self.recommendation_seeds: Sequence[SpotifyRecommendationSeed] = (
+            SpotifyRecommendationSeed(
+                seed_type="artist",
+                identifier="artist-seed-1",
+                initial_pool_size=50,
+                after_filtering_size=40,
+                after_relinking_size=30,
+            ),
+        )
+        self.recommendations_calls: list[
+            tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], int]
+        ] = []
+        self.recommendations_exception: Exception | None = None
         self.saved_tracks_rows: list[SpotifySavedTrackRow] = [
             SpotifySavedTrackRow(
                 identifier="track-1",
@@ -310,6 +334,26 @@ class _StubSpotifyService:
         if isinstance(self.top_artists_rows, Exception):
             raise self.top_artists_rows
         return tuple(self.top_artists_rows)
+
+    def recommendations(
+        self,
+        *,
+        seed_tracks: Sequence[str] | None = None,
+        seed_artists: Sequence[str] | None = None,
+        seed_genres: Sequence[str] | None = None,
+        limit: int = 20,
+    ) -> tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]]:
+        self.recommendations_calls.append(
+            (
+                tuple(seed_tracks or ()),
+                tuple(seed_artists or ()),
+                tuple(seed_genres or ()),
+                limit,
+            )
+        )
+        if self.recommendations_exception:
+            raise self.recommendations_exception
+        return tuple(self.recommendation_rows), tuple(self.recommendation_seeds)
 
     def list_saved_tracks(
         self, *, limit: int, offset: int
@@ -1700,6 +1744,102 @@ def test_spotify_top_artists_fragment_returns_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=500)
             assert "Unable to load Spotify top artists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_fragment_renders_form(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.get(
+                "/ui/spotify/recommendations",
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "spotify-recommendations-form" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "seed_tracks": "track-1",
+                    "seed_artists": "artist-1",
+                    "seed_genres": "rock",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "Recommended Track" in response.text
+            assert "spotify-recommendation-seed-artist-artist-seed-1" in response.text
+            assert "<strong>Artist:</strong>" in response.text
+            assert "artist-seed-1" in response.text
+            assert stub.recommendations_calls == [(("track-1",), ("artist-1",), ("rock",), 10)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_handles_validation_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "seed_tracks": " ",
+                    "seed_artists": "",
+                    "seed_genres": "",
+                    "limit": "20",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "Provide at least one seed value." in response.text
+            assert stub.recommendations_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_handles_service_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.recommendations_exception = ValueError("Invalid seeds")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "seed_tracks": "track-1",
+                    "seed_artists": "",
+                    "seed_genres": "",
+                    "limit": "5",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "Invalid seeds" in response.text
+            assert stub.recommendations_calls == [(("track-1",), (), (), 5)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

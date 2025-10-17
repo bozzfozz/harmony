@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import json
 import re
 from pathlib import Path
@@ -41,6 +41,7 @@ from app.ui.context import (
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
+    build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
@@ -56,6 +57,8 @@ from app.ui.services import (
     SearchUiService,
     SoulseekUiService,
     SpotifyUiService,
+    SpotifyRecommendationRow,
+    SpotifyRecommendationSeed,
     WatchlistUiService,
     get_activity_ui_service,
     get_downloads_ui_service,
@@ -80,6 +83,17 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/ui", tags=["UI"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+
+ParsedRecommendationsForm = tuple[
+    Mapping[str, str],
+    Sequence[str],
+    Sequence[str],
+    Sequence[str],
+    Mapping[str, str],
+    Sequence[AlertMessage],
+    int,
+    bool,
+]
 
 
 def _render_alert_fragment(
@@ -107,6 +121,442 @@ def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[s
         return token, False
     issued = manager.issue(session)
     return issued, True
+
+
+def _split_seed_ids(raw_value: str) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for entry in re.split(r"[\s,]+", raw_value.strip()):
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        lowered = candidate.lower()
+        if lowered in seen:
+            continue
+        cleaned.append(candidate)
+        seen.add(lowered)
+    return cleaned
+
+
+def _split_seed_genres(raw_value: str) -> list[str]:
+    entries: list[str] = []
+    seen: set[str] = set()
+    normalised = raw_value.replace("\r", "\n")
+    for part in normalised.split("\n"):
+        for chunk in part.split(","):
+            candidate = chunk.strip()
+            if not candidate:
+                continue
+            lowered = candidate.lower()
+            if lowered in seen:
+                continue
+            entries.append(candidate)
+            seen.add(lowered)
+    return entries
+
+
+def _render_recommendations_response(
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    *,
+    issued: bool,
+    rows: Sequence[SpotifyRecommendationRow] = (),
+    seeds: Sequence[SpotifyRecommendationSeed] = (),
+    form_values: Mapping[str, str] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+    alerts: Sequence[AlertMessage] | None = None,
+    status_code: int = status.HTTP_200_OK,
+) -> Response:
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token=csrf_token,
+        rows=rows,
+        seeds=seeds,
+        form_values=form_values,
+        form_errors=form_errors,
+        alerts=alerts,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_recommendations.j2",
+        context,
+        status_code=status_code,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+def _parse_recommendations_form(
+    form: Mapping[str, object]
+) -> tuple[
+    dict[str, str],
+    list[str],
+    list[str],
+    list[str],
+    dict[str, str],
+    list[AlertMessage],
+    int,
+    bool,
+]:
+    form_values = {
+        "seed_artists": str(form.get("seed_artists") or "").strip(),
+        "seed_tracks": str(form.get("seed_tracks") or "").strip(),
+        "seed_genres": str(form.get("seed_genres") or "").strip(),
+        "limit": str(form.get("limit") or "").strip(),
+    }
+    errors: dict[str, str] = {}
+    alerts: list[AlertMessage] = []
+
+    limit_value = 20
+    limit_raw = form_values["limit"]
+    if limit_raw:
+        try:
+            limit_value = int(limit_raw)
+        except (TypeError, ValueError):
+            errors["limit"] = "Enter a number between 1 and 100."
+    if "limit" not in errors and not 1 <= limit_value <= 100:
+        errors["limit"] = "Enter a number between 1 and 100."
+
+    artist_seeds = _split_seed_ids(form_values["seed_artists"])
+    track_seeds = _split_seed_ids(form_values["seed_tracks"])
+    genre_seeds = _split_seed_genres(form_values["seed_genres"])
+
+    total_seeds = len(artist_seeds) + len(track_seeds) + len(genre_seeds)
+    general_error = False
+    if total_seeds == 0:
+        alerts.append(AlertMessage(level="error", text="Provide at least one seed value."))
+        general_error = True
+    elif total_seeds > 5:
+        alerts.append(AlertMessage(level="error", text="Specify no more than five seeds in total."))
+        general_error = True
+
+    return (
+        form_values,
+        artist_seeds,
+        track_seeds,
+        genre_seeds,
+        errors,
+        alerts,
+        limit_value,
+        general_error,
+    )
+
+
+def _recommendations_value_error_response(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    alerts: Sequence[AlertMessage],
+    form_values: Mapping[str, str],
+    message: str,
+) -> Response:
+    combined_alerts = list(alerts)
+    combined_alerts.append(AlertMessage(level="error", text=message))
+    log_event(
+        logger,
+        "ui.fragment.spotify.recommendations",
+        component="ui.router",
+        status="error",
+        role=session.role,
+        error="validation",
+    )
+    return _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+        form_values=form_values,
+        alerts=combined_alerts,
+        status_code=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _recommendations_app_error_response(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    form_values: Mapping[str, str],
+    alerts: Sequence[AlertMessage],
+    error_code: str,
+    status_code: int,
+) -> Response:
+    log_event(
+        logger,
+        "ui.fragment.spotify.recommendations",
+        component="ui.router",
+        status="error",
+        role=session.role,
+        error=error_code,
+    )
+    return _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+        form_values=form_values,
+        alerts=alerts,
+        status_code=status_code,
+    )
+
+
+def _recommendations_unexpected_response(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    form_values: Mapping[str, str],
+) -> Response:
+    logger.exception("ui.fragment.spotify.recommendations")
+    log_event(
+        logger,
+        "ui.fragment.spotify.recommendations",
+        component="ui.router",
+        status="error",
+        role=session.role,
+        error="unexpected",
+    )
+    fallback_alerts = [
+        AlertMessage(
+            level="error",
+            text="Unable to fetch Spotify recommendations.",
+        )
+    ]
+    return _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+        form_values=form_values,
+        alerts=fallback_alerts,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+
+
+def _execute_recommendations_request(
+    *,
+    service: SpotifyUiService,
+    artist_seeds: Sequence[str],
+    track_seeds: Sequence[str],
+    genre_seeds: Sequence[str],
+    limit_value: int,
+    alerts: Sequence[AlertMessage],
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    form_values: Mapping[str, str],
+) -> tuple[tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None, Response | None]:
+    base_args = {
+        "request": request,
+        "session": session,
+        "csrf_manager": csrf_manager,
+        "csrf_token": csrf_token,
+        "issued": issued,
+    }
+    try:
+        rows, seeds = service.recommendations(
+            seed_tracks=track_seeds,
+            seed_artists=artist_seeds,
+            seed_genres=genre_seeds,
+            limit=limit_value,
+        )
+        return (rows, seeds), None
+    except ValueError as exc:
+        return None, _recommendations_value_error_response(
+            **base_args,
+            alerts=alerts,
+            form_values=form_values,
+            message=str(exc) or "Unable to fetch Spotify recommendations.",
+        )
+    except AppError as exc:
+        return None, _recommendations_app_error_response(
+            **base_args,
+            form_values=form_values,
+            alerts=[AlertMessage(level="error", text=exc.message)],
+            error_code=exc.code,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        return None, _recommendations_unexpected_response(
+            **base_args,
+            form_values=form_values,
+        )
+
+
+def _build_recommendation_form_values(
+    *,
+    artist_seeds: Sequence[str],
+    track_seeds: Sequence[str],
+    genre_seeds: Sequence[str],
+    limit_value: int,
+) -> Mapping[str, str]:
+    return {
+        "seed_artists": ", ".join(artist_seeds),
+        "seed_tracks": ", ".join(track_seeds),
+        "seed_genres": ", ".join(genre_seeds),
+        "limit": str(limit_value),
+    }
+
+
+def _finalize_recommendations_success(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    rows: Sequence[SpotifyRecommendationRow],
+    seeds: Sequence[SpotifyRecommendationSeed],
+    form_values: Mapping[str, str],
+) -> Response:
+    response = _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+        rows=rows,
+        seeds=seeds,
+        form_values=form_values,
+    )
+    log_event(
+        logger,
+        "ui.fragment.spotify.recommendations",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(rows),
+    )
+    return response
+
+
+def _fetch_recommendation_rows(
+    *,
+    request: Request,
+    session: UiSession,
+    service: SpotifyUiService,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    parsed_form: ParsedRecommendationsForm,
+) -> tuple[Mapping[str, str], tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None, Response | None]:
+    (
+        _form_values,
+        artist_seeds,
+        track_seeds,
+        genre_seeds,
+        _errors,
+        alerts,
+        limit_value,
+        _general_error,
+    ) = parsed_form
+    normalised_values = _build_recommendation_form_values(
+        artist_seeds=artist_seeds,
+        track_seeds=track_seeds,
+        genre_seeds=genre_seeds,
+        limit_value=limit_value,
+    )
+    result, error_response = _execute_recommendations_request(
+        service=service,
+        artist_seeds=artist_seeds,
+        track_seeds=track_seeds,
+        genre_seeds=genre_seeds,
+        limit_value=limit_value,
+        alerts=alerts,
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        form_values=normalised_values,
+    )
+    return normalised_values, result, error_response
+
+
+def _process_recommendations_submission(
+    *,
+    request: Request,
+    session: UiSession,
+    service: SpotifyUiService,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    parsed_form: ParsedRecommendationsForm,
+) -> Response:
+    (form_values, artist_seeds, track_seeds, genre_seeds, errors, alerts, limit_value, general_error) = parsed_form
+    if errors or general_error:
+        return _render_recommendations_response(
+            request,
+            session,
+            csrf_manager,
+            csrf_token,
+            issued=issued,
+            form_values=form_values,
+            form_errors=errors,
+            alerts=alerts,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    normalised_values, result, error_response = _fetch_recommendation_rows(
+        request=request,
+        session=session,
+        service=service,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        parsed_form=parsed_form,
+    )
+    if error_response is not None:
+        return error_response
+    rows, seeds = result
+
+    return _finalize_recommendations_success(
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        rows=rows,
+        seeds=seeds,
+        form_values=normalised_values,
+    )
+
+
+async def _read_recommendations_form(request: Request) -> Mapping[str, str]:
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+
+    def _first(name: str) -> str:
+        entries = values.get(name)
+        if entries:
+            return entries[0]
+        return ""
+
+    return {
+        "seed_artists": _first("seed_artists"),
+        "seed_tracks": _first("seed_tracks"),
+        "seed_genres": _first("seed_genres"),
+        "limit": _first("limit"),
+    }
 
 
 async def _render_search_results_fragment(
@@ -1431,6 +1881,81 @@ async def spotify_playlists_fragment(
         request,
         "partials/spotify_playlists.j2",
         context,
+    )
+
+
+@router.get(
+    "/spotify/recommendations",
+    include_in_schema=False,
+    name="spotify_recommendations_fragment",
+)
+async def spotify_recommendations_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    response = _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+    )
+    log_event(
+        logger,
+        "ui.fragment.spotify.recommendations",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=0,
+    )
+    return response
+
+
+@router.post(
+    "/spotify/recommendations",
+    include_in_schema=False,
+    name="spotify_recommendations_submit",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_recommendations_submit(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    form = await _read_recommendations_form(request)
+    (
+        form_values,
+        artist_seeds,
+        track_seeds,
+        genre_seeds,
+        errors,
+        alerts,
+        limit_value,
+        general_error,
+    ) = _parse_recommendations_form(form)
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    return _process_recommendations_submission(
+        request=request,
+        session=session,
+        service=service,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        parsed_form=(
+            form_values,
+            artist_seeds,
+            track_seeds,
+            genre_seeds,
+            errors,
+            alerts,
+            limit_value,
+            general_error,
+        ),
     )
 
 

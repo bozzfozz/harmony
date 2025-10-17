@@ -30,6 +30,7 @@ from app.ui.context import (
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
+    build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
@@ -44,6 +45,8 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifyRecommendationRow,
+    SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
@@ -164,6 +167,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-get="/ui/spotify/account"' in html
     assert 'hx-get="/ui/spotify/top/tracks"' in html
     assert 'hx-get="/ui/spotify/top/artists"' in html
+    assert 'hx-get="/ui/spotify/recommendations"' in html
     assert 'hx-get="/ui/spotify/saved"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
@@ -172,6 +176,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-target="#hx-spotify-account"' in html
     assert 'hx-target="#hx-spotify-top-tracks"' in html
     assert 'hx-target="#hx-spotify-top-artists"' in html
+    assert 'hx-target="#hx-spotify-recommendations"' in html
     assert 'hx-target="#hx-spotify-saved"' in html
     assert 'hx-target="#hx-spotify-playlists"' in html
     assert 'hx-target="#hx-spotify-artists"' in html
@@ -186,6 +191,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'data-fragment="spotify-account"' in html
     assert 'data-fragment="spotify-top-tracks"' in html
     assert 'data-fragment="spotify-top-artists"' in html
+    assert 'data-fragment="spotify-recommendations"' in html
     assert 'data-fragment="spotify-saved-tracks"' in html
     assert 'data-fragment="spotify-playlists"' in html
     assert 'data-fragment="spotify-artists"' in html
@@ -196,6 +202,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "Loading Spotify account details…" in html
     assert "Loading top Spotify tracks…" in html
     assert "Loading top Spotify artists…" in html
+    assert "Preparing Spotify recommendations…" in html
     assert "Loading saved Spotify tracks…" in html
     assert "Loading cached Spotify playlists…" in html
     assert "Loading followed Spotify artists…" in html
@@ -248,6 +255,64 @@ def test_spotify_top_artists_partial_renders_table() -> None:
     assert "Artist One" in html
     assert "543,210" in html
     assert "rock, indie" in html
+    assert 'data-count="1"' in html
+
+
+def test_spotify_recommendations_partial_renders_form_and_results() -> None:
+    request = _make_request("/ui/spotify/recommendations")
+    rows = (
+        SpotifyRecommendationRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One", "Artist Two"),
+            album="Album Name",
+            preview_url=None,
+        ),
+    )
+    seeds = (
+        SpotifyRecommendationSeed(
+            seed_type="artist",
+            identifier="artist-9",
+            initial_pool_size=120,
+            after_filtering_size=80,
+            after_relinking_size=60,
+        ),
+    )
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf-token",
+        rows=rows,
+        seeds=seeds,
+        form_values={
+            "seed_tracks": "track-123",
+            "seed_artists": "artist-1",
+            "seed_genres": "rock, jazz",
+            "limit": "150",
+        },
+        form_errors={"limit": "Enter a number between 1 and 100."},
+        alerts=(AlertMessage(level="warning", text="Example warning"),),
+    )
+    template = templates.get_template("partials/spotify_recommendations.j2")
+    html = template.render(**context)
+
+    assert 'id="spotify-recommendations-form"' in html
+    assert 'hx-post="/ui/spotify/recommendations"' in html
+    assert 'name="csrftoken" value="csrf-token"' in html
+    assert 'name="seed_tracks"' in html and 'value="track-123"' in html
+    assert 'name="seed_artists"' in html and 'value="artist-1"' in html
+    assert 'name="seed_genres"' in html
+    assert "rock, jazz" in html
+    assert "Enter a number between 1 and 100." in html
+    assert "Example warning" in html
+    assert "Fetch recommendations" in html
+    assert "Seed summary" in html
+    assert "spotify-recommendation-seed-artist-artist-9" in html
+    assert "<strong>Artist:</strong>" in html
+    assert ">\n            artist-9" in html
+    assert "pool 120" in html and "filtered 80" in html and "relinked 60" in html
+    assert "Track One" in html
+    assert "Artist One, Artist Two" in html
+    assert "Album Name" in html
     assert 'data-count="1"' in html
 
 

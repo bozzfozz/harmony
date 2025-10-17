@@ -104,6 +104,39 @@ class SpotifyTopArtistRow:
 
 
 @dataclass(slots=True)
+class SpotifyRecommendationSeed:
+    seed_type: str
+    identifier: str
+    initial_pool_size: int | None
+    after_filtering_size: int | None
+    after_relinking_size: int | None
+
+    @property
+    def size_summary(self) -> str:
+        parts: list[str] = []
+        if self.initial_pool_size is not None:
+            parts.append(f"pool {self.initial_pool_size}")
+        if self.after_filtering_size is not None:
+            parts.append(f"filtered {self.after_filtering_size}")
+        if self.after_relinking_size is not None:
+            parts.append(f"relinked {self.after_relinking_size}")
+        return " → ".join(parts)
+
+    @property
+    def has_size_summary(self) -> bool:
+        return bool(self.size_summary)
+
+
+@dataclass(slots=True)
+class SpotifyRecommendationRow:
+    identifier: str
+    name: str
+    artists: tuple[str, ...]
+    album: str | None
+    preview_url: str | None
+
+
+@dataclass(slots=True)
 class SpotifyBackfillSnapshot:
     csrf_token: str
     can_run: bool
@@ -360,6 +393,140 @@ class SpotifyUiService:
         self._spotify.remove_saved_tracks(cleaned)
         logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
         return len(cleaned)
+
+    @staticmethod
+    def _clean_seed_values(values: Sequence[str]) -> tuple[str, ...]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            candidate = str(value or "").strip()
+            if not candidate:
+                continue
+            key = candidate.lower()
+            if key in seen:
+                continue
+            cleaned.append(candidate)
+            seen.add(key)
+        return tuple(cleaned)
+
+    @staticmethod
+    def _normalise_recommendation_rows(entries: object) -> tuple[SpotifyRecommendationRow, ...]:
+        if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+            return ()
+        rows: list[SpotifyRecommendationRow] = []
+        for entry in entries:
+            if not isinstance(entry, Mapping):
+                continue
+            identifier = str(entry.get("id") or "").strip()
+            name = str(entry.get("name") or "").strip()
+            if not identifier or not name:
+                continue
+            artists_payload = entry.get("artists")
+            artist_names: list[str] = []
+            if isinstance(artists_payload, Sequence) and not isinstance(
+                artists_payload, (str, bytes)
+            ):
+                for artist_entry in artists_payload:
+                    if isinstance(artist_entry, Mapping):
+                        artist_name_raw = artist_entry.get("name")
+                    else:
+                        artist_name_raw = artist_entry
+                    if isinstance(artist_name_raw, str):
+                        artist_name = artist_name_raw.strip()
+                        if artist_name:
+                            artist_names.append(artist_name)
+            album: str | None = None
+            album_payload = entry.get("album")
+            if isinstance(album_payload, Mapping):
+                album_name_raw = album_payload.get("name")
+                if isinstance(album_name_raw, str):
+                    album_candidate = album_name_raw.strip()
+                    album = album_candidate or None
+            preview_raw = entry.get("preview_url")
+            preview_url = None
+            if isinstance(preview_raw, str):
+                preview_candidate = preview_raw.strip()
+                preview_url = preview_candidate or None
+            rows.append(
+                SpotifyRecommendationRow(
+                    identifier=identifier,
+                    name=name,
+                    artists=tuple(artist_names),
+                    album=album,
+                    preview_url=preview_url,
+                )
+            )
+        return tuple(rows)
+
+    @staticmethod
+    def _normalise_recommendation_seeds(entries: object) -> tuple[SpotifyRecommendationSeed, ...]:
+        if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+            return ()
+        seeds: list[SpotifyRecommendationSeed] = []
+        for entry in entries:
+            if not isinstance(entry, Mapping):
+                continue
+            seed_type = str(entry.get("type") or "").strip().lower()
+            identifier = str(entry.get("id") or "").strip()
+            if not seed_type or not identifier:
+                continue
+
+            def _coerce_int(value: object) -> int | None:
+                if value in (None, ""):
+                    return None
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
+            seeds.append(
+                SpotifyRecommendationSeed(
+                    seed_type=seed_type,
+                    identifier=identifier,
+                    initial_pool_size=_coerce_int(entry.get("initialPoolSize")),
+                    after_filtering_size=_coerce_int(entry.get("afterFilteringSize")),
+                    after_relinking_size=_coerce_int(entry.get("afterRelinkingSize")),
+                )
+            )
+        return tuple(seeds)
+
+    def recommendations(
+        self,
+        *,
+        seed_tracks: Sequence[str] | None = None,
+        seed_artists: Sequence[str] | None = None,
+        seed_genres: Sequence[str] | None = None,
+        limit: int = 20,
+    ) -> tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]]:
+        page_limit = max(1, min(int(limit), 100))
+        cleaned_tracks = self._clean_seed_values(seed_tracks or ())
+        cleaned_artists = self._clean_seed_values(seed_artists or ())
+        cleaned_genres = self._clean_seed_values(seed_genres or ())
+        payload = self._spotify.get_recommendations(
+            seed_tracks=cleaned_tracks or None,
+            seed_artists=cleaned_artists or None,
+            seed_genres=cleaned_genres or None,
+            limit=page_limit,
+        )
+
+        rows = self._normalise_recommendation_rows(
+            payload.get("tracks") if isinstance(payload, Mapping) else []
+        )
+        seeds = self._normalise_recommendation_seeds(
+            payload.get("seeds") if isinstance(payload, Mapping) else []
+        )
+
+        logger.debug(
+            "spotify.ui.recommendations",
+            extra={
+                "count": len(rows),
+                "limit": page_limit,
+                "seed_tracks": len(cleaned_tracks),
+                "seed_artists": len(cleaned_artists),
+                "seed_genres": len(cleaned_genres),
+            },
+        )
+        return tuple(rows), tuple(seeds)
 
     def account(self) -> SpotifyAccountSummary | None:
         profile = self._spotify.get_current_user()
@@ -656,6 +823,8 @@ def get_spotify_ui_service(
 
 __all__ = [
     "SpotifyAccountSummary",
+    "SpotifyRecommendationRow",
+    "SpotifyRecommendationSeed",
     "SpotifyBackfillSnapshot",
     "SpotifyArtistRow",
     "SpotifySavedTrackRow",
