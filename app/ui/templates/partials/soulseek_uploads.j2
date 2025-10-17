@@ -1,0 +1,29 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
+
+<div class="table-controls">
+  <div class="table-controls__group">
+    <button type="button"
+            hx-get="{{ active_url }}"
+            hx-target="#hx-soulseek-uploads"
+            hx-swap="outerHTML"
+            {% if not include_all %}disabled{% endif %}>
+      {{ strings.button_label("soulseek.uploads.show_active") }}
+    </button>
+    <button type="button"
+            hx-get="{{ all_url }}"
+            hx-target="#hx-soulseek-uploads"
+            hx-swap="outerHTML"
+            {% if include_all %}disabled{% endif %}>
+      {{ strings.button_label("soulseek.uploads.show_all") }}
+    </button>
+  </div>
+  <button type="button"
+          hx-get="{{ refresh_url }}"
+          hx-target="#hx-soulseek-uploads"
+          hx-swap="outerHTML">
+    {{ strings.button_label("soulseek.uploads.refresh") }}
+  </button>
+</div>
+
+{{ tables.render_table_fragment(fragment) }}

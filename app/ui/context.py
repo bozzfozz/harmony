@@ -16,6 +16,7 @@ from app.ui.services import (
     DownloadPage,
     OrchestratorJob,
     SearchResultsPage,
+    SoulseekUploadRow,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
@@ -809,6 +810,40 @@ def _boolean_badge(
     )
 
 
+def _format_percentage(value: float | None) -> str:
+    if value is None:
+        return ""
+    clamped = max(0.0, min(value, 1.0))
+    return f"{clamped * 100.0:.0f}%"
+
+
+def _format_transfer_size(size: int | None) -> str:
+    if size is None or size < 0:
+        return ""
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    value = float(size)
+    for index, unit in enumerate(units):
+        if value < 1024.0 or index == len(units) - 1:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return ""
+
+
+def _format_transfer_speed(speed: float | None) -> str:
+    if speed is None or speed < 0:
+        return ""
+    value = float(speed)
+    if value < 1024.0:
+        return f"{value:.0f} B/s"
+    value /= 1024.0
+    if value < 1024.0:
+        return f"{value:.1f} KiB/s"
+    value /= 1024.0
+    return f"{value:.1f} MiB/s"
+
+
 def build_soulseek_config_context(
     request: Request,
     *,
@@ -917,6 +952,97 @@ def build_soulseek_config_context(
     return {
         "request": request,
         "table": table,
+    }
+
+
+def build_soulseek_uploads_context(
+    request: Request,
+    *,
+    uploads: Sequence[SoulseekUploadRow],
+    csrf_token: str,
+    include_all: bool,
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    cancel_url = _safe_url_for(
+        request,
+        "soulseek_upload_cancel",
+        "/ui/soulseek/uploads/cancel",
+    )
+    target = "#hx-soulseek-uploads"
+    for upload in uploads:
+        hidden_fields = {
+            "csrftoken": csrf_token,
+            "upload_id": upload.identifier,
+        }
+        if include_all:
+            hidden_fields["scope"] = "all"
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=upload.identifier),
+                    TableCell(text=upload.username or ""),
+                    TableCell(text=upload.filename),
+                    TableCell(text=upload.status),
+                    TableCell(text=_format_percentage(upload.progress)),
+                    TableCell(text=_format_transfer_size(upload.size_bytes)),
+                    TableCell(text=_format_transfer_speed(upload.speed_bps)),
+                    TableCell(
+                        form=TableCellForm(
+                            action=cancel_url,
+                            method="post",
+                            submit_label_key="soulseek.uploads.cancel",
+                            hidden_fields=hidden_fields,
+                            hx_target=target,
+                            hx_swap="outerHTML",
+                        )
+                    ),
+                ),
+                test_id=f"soulseek-upload-{upload.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="soulseek-uploads-table",
+        column_keys=(
+            "soulseek.uploads.id",
+            "soulseek.uploads.user",
+            "soulseek.uploads.filename",
+            "soulseek.uploads.status",
+            "soulseek.uploads.progress",
+            "soulseek.uploads.size",
+            "soulseek.uploads.speed",
+            "soulseek.uploads.actions",
+        ),
+        rows=tuple(rows),
+        caption_key="soulseek.uploads.caption",
+    )
+
+    base_url = _safe_url_for(
+        request,
+        "soulseek_uploads_fragment",
+        "/ui/soulseek/uploads",
+    )
+    refresh_url = f"{base_url}?all=1" if include_all else base_url
+
+    fragment = TableFragment(
+        identifier="hx-soulseek-uploads",
+        table=table,
+        empty_state_key="soulseek.uploads",
+        data_attributes={
+            "count": str(len(rows)),
+            "scope": "all" if include_all else "active",
+            "refresh-url": refresh_url,
+        },
+    )
+
+    return {
+        "request": request,
+        "fragment": fragment,
+        "csrf_token": csrf_token,
+        "include_all": include_all,
+        "refresh_url": refresh_url,
+        "active_url": base_url,
+        "all_url": f"{base_url}?all=1",
     }
 
 
@@ -1425,6 +1551,7 @@ __all__ = [
     "build_soulseek_page_context",
     "build_soulseek_status_context",
     "build_soulseek_config_context",
+    "build_soulseek_uploads_context",
     "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",
