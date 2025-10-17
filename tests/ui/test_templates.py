@@ -23,6 +23,7 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_soulseek_page_context,
     build_search_page_context,
     build_spotify_artists_context,
     build_spotify_backfill_context,
@@ -177,6 +178,46 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "Fetching Spotify backfill status…" in html
 
 
+def test_soulseek_page_template_renders_fragments() -> None:
+    request = _make_request("/ui/soulseek")
+    features = UiFeatures(spotify=False, soulseek=True, dlq=True, imports=False)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-soulseek",
+        role="operator",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_soulseek_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-soulseek",
+    )
+    template = templates.get_template("pages/soulseek.j2")
+    html = template.render(**context)
+
+    assert 'meta name="csrf-token" content="csrf-soulseek"' in html
+    assert 'href="/ui/soulseek"' in html
+    assert 'data-test="nav-soulseek"' in html
+    assert 'hx-get="/ui/soulseek/status"' in html
+    assert 'hx-get="/ui/soulseek/configuration"' in html
+    assert 'hx-get="/ui/soulseek/uploads"' in html
+    assert 'hx-get="/ui/soulseek/downloads"' in html
+    assert 'hx-trigger="load, every 60s"' in html
+    assert html.count('hx-trigger="load, every 30s"') == 2
+    assert html.count('hx-trigger="load"') >= 1
+    assert 'data-fragment="soulseek-status"' in html
+    assert 'data-fragment="soulseek-configuration"' in html
+    assert 'data-fragment="soulseek-uploads"' in html
+    assert 'data-fragment="soulseek-downloads"' in html
+    assert "Checking Soulseek connection…" in html
+    assert "Loading Soulseek configuration…" in html
+    assert "Loading active Soulseek uploads…" in html
+    assert "Loading active Soulseek downloads…" in html
+
+
 def test_search_page_template_renders_form_and_queue() -> None:
     request = _make_request("/ui/search")
     features = UiFeatures(spotify=False, soulseek=True, dlq=True, imports=False)
@@ -198,6 +239,7 @@ def test_search_page_template_renders_form_and_queue() -> None:
     html = template.render(**context)
 
     assert 'meta name="csrf-token" content="csrf-search"' in html
+    assert 'href="/ui/soulseek"' in html
     assert 'data-test="nav-soulseek"' in html
     assert 'hx-post="/ui/search/results"' in html
     assert 'hx-push-url="/ui/search/results"' in html
@@ -220,7 +262,7 @@ def test_search_page_template_hides_queue_when_dlq_disabled() -> None:
     features = UiFeatures(spotify=False, soulseek=True, dlq=False, imports=False)
     now = datetime.now(tz=UTC)
     session = UiSession(
-        identifier="session-search", 
+        identifier="session-search",
         role="operator",
         features=features,
         fingerprint="fp",

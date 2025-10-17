@@ -1,0 +1,82 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.soulseek_page_intro() }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section class="page-section page-section--card" aria-labelledby="{{ status_fragment.identifier }}-heading">
+    <h3 id="{{ status_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_status_heading() }}</h3>
+    <div id="{{ status_fragment.identifier }}"
+         class="async-fragment"
+         role="status"
+         aria-live="polite"
+         aria-labelledby="{{ status_fragment.identifier }}-heading"
+         data-fragment="soulseek-status"
+         hx-get="{{ status_fragment.url }}"
+         hx-trigger="{{ status_fragment.trigger }}"
+         hx-target="{{ status_fragment.target }}"
+         hx-swap="{{ status_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ configuration_fragment.identifier }}-heading">
+    <h3 id="{{ configuration_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_configuration_heading() }}</h3>
+    <div id="{{ configuration_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ configuration_fragment.identifier }}-heading"
+         data-fragment="soulseek-configuration"
+         hx-get="{{ configuration_fragment.url }}"
+         hx-trigger="{{ configuration_fragment.trigger }}"
+         hx-target="{{ configuration_fragment.target }}"
+         hx-swap="{{ configuration_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(configuration_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ uploads_fragment.identifier }}-heading">
+    <h3 id="{{ uploads_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_uploads_heading() }}</h3>
+    <div id="{{ uploads_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ uploads_fragment.identifier }}-heading"
+         data-fragment="soulseek-uploads"
+         hx-get="{{ uploads_fragment.url }}"
+         hx-trigger="{{ uploads_fragment.trigger }}"
+         hx-target="{{ uploads_fragment.target }}"
+         hx-swap="{{ uploads_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(uploads_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ downloads_fragment.identifier }}-heading">
+    <h3 id="{{ downloads_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_downloads_heading() }}</h3>
+    <div id="{{ downloads_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ downloads_fragment.identifier }}-heading"
+         data-fragment="soulseek-downloads"
+         hx-get="{{ downloads_fragment.url }}"
+         hx-trigger="{{ downloads_fragment.trigger }}"
+         hx-target="{{ downloads_fragment.target }}"
+         hx-swap="{{ downloads_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(downloads_fragment.loading_key) }}</p>
+    </div>
+  </section>
+{% endblock %}

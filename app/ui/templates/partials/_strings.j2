@@ -8,6 +8,7 @@
     "watchlist": "Watchlist",
     "spotify": "Spotify",
     "search": "Soulseek search",
+    "soulseek": "Soulseek",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -24,6 +25,7 @@
     "watchlist": "Watchlist",
     "spotify": "Spotify integration",
     "search": "Soulseek search",
+    "soulseek": "Soulseek integration",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -202,6 +204,14 @@
     Waiting for search results…
   {%- elif key == "search.queue" -%}
     Loading the Soulseek queue…
+  {%- elif key == "soulseek.status" -%}
+    Checking Soulseek connection…
+  {%- elif key == "soulseek.configuration" -%}
+    Loading Soulseek configuration…
+  {%- elif key == "soulseek.uploads" -%}
+    Loading active Soulseek uploads…
+  {%- elif key == "soulseek.downloads" -%}
+    Loading active Soulseek downloads…
   {%- else -%}
     {{ loading_placeholder() }}
   {%- endif -%}
@@ -345,6 +355,16 @@
 {% macro search_queue_heading() %}Download queue{% endmacro %}
 
 {% macro search_queue_description() %}The queue refreshes automatically while this page remains open.{% endmacro %}
+
+{% macro soulseek_page_intro() %}Monitor the Soulseek integration and manage transfer activity.{% endmacro %}
+
+{% macro soulseek_status_heading() %}Connection status{% endmacro %}
+
+{% macro soulseek_configuration_heading() %}Configuration{% endmacro %}
+
+{% macro soulseek_uploads_heading() %}Active uploads{% endmacro %}
+
+{% macro soulseek_downloads_heading() %}Active downloads{% endmacro %}
 
 {% macro modal_title(key) -%}
   {%- set labels = {

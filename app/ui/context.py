@@ -308,8 +308,8 @@ def _build_primary_navigation(session: UiSession, *, active: str) -> NavigationC
         items.append(
             NavItem(
                 label_key="nav.soulseek",
-                href="/ui/search",
-                active=active == "search",
+                href="/ui/soulseek",
+                active=active in {"soulseek", "search"},
                 test_id="nav-soulseek",
             )
         )
@@ -577,7 +577,7 @@ def build_search_page_context(
     layout = LayoutContext(
         page_id="search",
         role=session.role,
-        navigation=_build_primary_navigation(session, active="search"),
+        navigation=_build_primary_navigation(session, active="soulseek"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
     )
 
@@ -612,6 +612,68 @@ def build_search_page_context(
         "search_form": search_form,
         "results_fragment": results_fragment,
         "queue_fragment": queue_fragment,
+    }
+
+
+def build_soulseek_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="soulseek",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="soulseek"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    status_url = _safe_url_for(request, "soulseek_status_fragment", "/ui/soulseek/status")
+    status_fragment = AsyncFragment(
+        identifier="hx-soulseek-status",
+        url=status_url,
+        target="#hx-soulseek-status",
+        poll_interval_seconds=60,
+        loading_key="soulseek.status",
+    )
+
+    configuration_url = _safe_url_for(
+        request, "soulseek_configuration_fragment", "/ui/soulseek/configuration"
+    )
+    configuration_fragment = AsyncFragment(
+        identifier="hx-soulseek-configuration",
+        url=configuration_url,
+        target="#hx-soulseek-configuration",
+        loading_key="soulseek.configuration",
+    )
+
+    uploads_url = _safe_url_for(request, "soulseek_uploads_fragment", "/ui/soulseek/uploads")
+    uploads_fragment = AsyncFragment(
+        identifier="hx-soulseek-uploads",
+        url=uploads_url,
+        target="#hx-soulseek-uploads",
+        poll_interval_seconds=30,
+        loading_key="soulseek.uploads",
+    )
+
+    downloads_url = _safe_url_for(request, "soulseek_downloads_fragment", "/ui/soulseek/downloads")
+    downloads_fragment = AsyncFragment(
+        identifier="hx-soulseek-downloads",
+        url=downloads_url,
+        target="#hx-soulseek-downloads",
+        poll_interval_seconds=30,
+        loading_key="soulseek.downloads",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "status_fragment": status_fragment,
+        "configuration_fragment": configuration_fragment,
+        "uploads_fragment": uploads_fragment,
+        "downloads_fragment": downloads_fragment,
     }
 
 
@@ -1117,6 +1179,7 @@ __all__ = [
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",
+    "build_soulseek_page_context",
     "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",
