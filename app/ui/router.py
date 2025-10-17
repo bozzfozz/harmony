@@ -42,6 +42,8 @@ from app.ui.context import (
     build_spotify_page_context,
     build_spotify_playlists_context,
     build_spotify_saved_tracks_context,
+    build_spotify_top_artists_context,
+    build_spotify_top_tracks_context,
     build_spotify_status_context,
     build_watchlist_fragment_context,
 )
@@ -1282,6 +1284,68 @@ async def spotify_account_fragment(
         count=len(context["fields"]),
     )
     return response
+
+
+@router.get("/spotify/top/tracks", include_in_schema=False, name="spotify_top_tracks_fragment")
+async def spotify_top_tracks_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        tracks = service.top_tracks()
+    except Exception:
+        logger.exception("ui.fragment.spotify.top_tracks")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify top tracks.",
+        )
+
+    context = build_spotify_top_tracks_context(request, tracks=tracks)
+    log_event(
+        logger,
+        "ui.fragment.spotify.top_tracks",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/spotify_top_tracks.j2",
+        context,
+    )
+
+
+@router.get("/spotify/top/artists", include_in_schema=False, name="spotify_top_artists_fragment")
+async def spotify_top_artists_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        artists = service.top_artists()
+    except Exception:
+        logger.exception("ui.fragment.spotify.top_artists")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify top artists.",
+        )
+
+    context = build_spotify_top_artists_context(request, artists=artists)
+    log_event(
+        logger,
+        "ui.fragment.spotify.top_artists",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/spotify_top_artists.j2",
+        context,
+    )
 
 
 @router.get("/spotify/backfill", include_in_schema=False, name="spotify_backfill_fragment")

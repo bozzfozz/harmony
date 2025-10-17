@@ -46,6 +46,36 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(account_fragment.loading_key) }}</p>
     </div>
   </section>
+  <section class="page-section page-section--card" aria-labelledby="{{ top_tracks_fragment.identifier }}-heading">
+    <h3 id="{{ top_tracks_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_top_tracks_heading() }}</h3>
+    <div id="{{ top_tracks_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ top_tracks_fragment.identifier }}-heading"
+         data-fragment="spotify-top-tracks"
+         hx-get="{{ top_tracks_fragment.url }}"
+         hx-trigger="{{ top_tracks_fragment.trigger }}"
+         hx-target="{{ top_tracks_fragment.target }}"
+         hx-swap="{{ top_tracks_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(top_tracks_fragment.loading_key) }}</p>
+    </div>
+  </section>
+  <section class="page-section page-section--card" aria-labelledby="{{ top_artists_fragment.identifier }}-heading">
+    <h3 id="{{ top_artists_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_top_artists_heading() }}</h3>
+    <div id="{{ top_artists_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ top_artists_fragment.identifier }}-heading"
+         data-fragment="spotify-top-artists"
+         hx-get="{{ top_artists_fragment.url }}"
+         hx-trigger="{{ top_artists_fragment.trigger }}"
+         hx-target="{{ top_artists_fragment.target }}"
+         hx-swap="{{ top_artists_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(top_artists_fragment.loading_key) }}</p>
+    </div>
+  </section>
   <section class="page-section page-section--card" aria-labelledby="{{ saved_fragment.identifier }}-heading">
     <h3 id="{{ saved_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_saved_tracks_heading() }}</h3>
     <div id="{{ saved_fragment.identifier }}"

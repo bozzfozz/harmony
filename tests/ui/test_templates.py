@@ -31,6 +31,8 @@ from app.ui.context import (
     build_spotify_page_context,
     build_spotify_playlists_context,
     build_spotify_saved_tracks_context,
+    build_spotify_top_artists_context,
+    build_spotify_top_tracks_context,
     build_spotify_status_context,
     build_watchlist_fragment_context,
 )
@@ -43,6 +45,8 @@ from app.ui.services import (
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
     SpotifySavedTrackRow,
+    SpotifyTopArtistRow,
+    SpotifyTopTrackRow,
     SpotifyStatus,
     WatchlistRow,
 )
@@ -158,24 +162,30 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "nav-spotify" in html
     assert 'hx-get="/ui/spotify/status"' in html
     assert 'hx-get="/ui/spotify/account"' in html
+    assert 'hx-get="/ui/spotify/top/tracks"' in html
+    assert 'hx-get="/ui/spotify/top/artists"' in html
     assert 'hx-get="/ui/spotify/saved"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'hx-target="#hx-spotify-status"' in html
     assert 'hx-target="#hx-spotify-account"' in html
+    assert 'hx-target="#hx-spotify-top-tracks"' in html
+    assert 'hx-target="#hx-spotify-top-artists"' in html
     assert 'hx-target="#hx-spotify-saved"' in html
     assert 'hx-target="#hx-spotify-playlists"' in html
     assert 'hx-target="#hx-spotify-artists"' in html
     assert 'hx-target="#hx-spotify-backfill"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert 'hx-trigger="load, every 30s"' in html
-    assert html.count('hx-trigger="load"') >= 2
+    assert html.count('hx-trigger="load"') >= 4
     assert 'hx-swap="innerHTML"' in html
     assert 'role="status"' in html
-    assert html.count('role="region"') >= 5
+    assert html.count('role="region"') >= 7
     assert 'data-fragment="spotify-status"' in html
     assert 'data-fragment="spotify-account"' in html
+    assert 'data-fragment="spotify-top-tracks"' in html
+    assert 'data-fragment="spotify-top-artists"' in html
     assert 'data-fragment="spotify-saved-tracks"' in html
     assert 'data-fragment="spotify-playlists"' in html
     assert 'data-fragment="spotify-artists"' in html
@@ -184,10 +194,61 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
     assert "Loading Spotify account details…" in html
+    assert "Loading top Spotify tracks…" in html
+    assert "Loading top Spotify artists…" in html
     assert "Loading saved Spotify tracks…" in html
     assert "Loading cached Spotify playlists…" in html
     assert "Loading followed Spotify artists…" in html
     assert "Fetching Spotify backfill status…" in html
+
+
+def test_spotify_top_tracks_partial_renders_table() -> None:
+    request = _make_request("/ui/spotify/top/tracks")
+    tracks = [
+        SpotifyTopTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One", "Artist Two"),
+            album="Album One",
+            popularity=95,
+            duration_ms=183000,
+            rank=1,
+        )
+    ]
+    context = build_spotify_top_tracks_context(request, tracks=tracks)
+    template = templates.get_template("partials/spotify_top_tracks.j2")
+    html = template.render(**context)
+
+    assert 'id="hx-spotify-top-tracks"' in html
+    assert 'class="table"' in html
+    assert "Track One" in html
+    assert "Artist One, Artist Two" in html
+    assert "3:03" in html
+    assert 'data-count="1"' in html
+
+
+def test_spotify_top_artists_partial_renders_table() -> None:
+    request = _make_request("/ui/spotify/top/artists")
+    artists = [
+        SpotifyTopArtistRow(
+            identifier="artist-1",
+            name="Artist One",
+            followers=543210,
+            popularity=99,
+            genres=("rock", "indie"),
+            rank=1,
+        )
+    ]
+    context = build_spotify_top_artists_context(request, artists=artists)
+    template = templates.get_template("partials/spotify_top_artists.j2")
+    html = template.render(**context)
+
+    assert 'id="hx-spotify-top-artists"' in html
+    assert 'class="table"' in html
+    assert "Artist One" in html
+    assert "543,210" in html
+    assert "rock, indie" in html
+    assert 'data-count="1"' in html
 
 
 def test_spotify_account_fragment_template_renders_summary() -> None:
