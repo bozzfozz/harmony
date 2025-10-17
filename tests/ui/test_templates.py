@@ -22,6 +22,7 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_search_page_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
@@ -133,6 +134,36 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "Checking Spotify connection…" in html
     assert "Loading cached Spotify playlists…" in html
     assert "Fetching Spotify backfill status…" in html
+
+
+def test_search_page_template_renders_form_and_queue() -> None:
+    request = _make_request("/ui/search")
+    features = UiFeatures(spotify=False, soulseek=True, dlq=True, imports=False)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-search",
+        role="operator",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_search_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-search",
+    )
+    template = templates.get_template("pages/search.j2")
+    html = template.render(**context)
+
+    assert 'meta name="csrf-token" content="csrf-search"' in html
+    assert 'data-test="nav-soulseek"' in html
+    assert 'hx-post="/ui/search/results"' in html
+    assert 'hx-target="#hx-search-results"' in html
+    assert 'id="hx-search-results"' in html
+    assert 'hx-get="/ui/downloads/table?limit=20"' in html
+    assert 'hx-trigger="load, every 30s"' in html
+    assert 'hx-target="#hx-search-queue"' in html
 
 
 def test_base_layout_renders_navigation_and_alerts() -> None:

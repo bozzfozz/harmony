@@ -1,0 +1,70 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.search_page_intro() }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section class="page-section page-section--card" aria-labelledby="search-form-heading">
+    <h3 id="search-form-heading" class="page-section__title">{{ strings.search_form_heading() }}</h3>
+    <p class="page-section__description">{{ strings.search_form_description() }}</p>
+    <form id="{{ search_form.identifier }}"
+          method="{{ search_form.method }}"
+          action="{{ search_form.action }}"
+          hx-post="{{ results_fragment.url }}"
+          hx-target="{{ results_fragment.target }}"
+          hx-swap="{{ results_fragment.swap }}">
+      <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+      {% for field in search_form.fields %}
+        <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+        <input type="{{ field.input_type }}"
+               name="{{ field.name }}"
+               id="{{ field.name }}"
+               {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %}
+               {% if field.required %}required{% endif %}
+               {% if field.name == "limit" %}min="1" max="100" value="25"{% endif %} />
+      {% endfor %}
+      <button type="submit">{{ strings.button_label(search_form.submit_label_key) }}</button>
+    </form>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ results_fragment.identifier }}-heading">
+    <h3 id="{{ results_fragment.identifier }}-heading" class="page-section__title">{{ strings.search_results_heading() }}</h3>
+    <div id="{{ results_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ results_fragment.identifier }}-heading"
+         data-fragment="search-results">
+      <p class="async-fragment__placeholder">{{ strings.search_results_placeholder() }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ queue_fragment.identifier }}-heading">
+    <h3 id="{{ queue_fragment.identifier }}-heading" class="page-section__title">{{ strings.search_queue_heading() }}</h3>
+    <p class="page-section__description">{{ strings.search_queue_description() }}</p>
+    <div id="{{ queue_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ queue_fragment.identifier }}-heading"
+         data-fragment="search-queue"
+         hx-get="{{ queue_fragment.url }}"
+         hx-trigger="{{ queue_fragment.trigger }}"
+         hx-target="{{ queue_fragment.target }}"
+         hx-swap="{{ queue_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(queue_fragment.loading_key) }}</p>
+    </div>
+  </section>
+{% endblock %}

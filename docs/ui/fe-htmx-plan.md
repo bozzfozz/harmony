@@ -99,6 +99,8 @@ templates/
 | Download anfordern | POST `/api/v1/download` | Button in Ergebnisliste (`hx-post`, JSON body) | `hx-swap-oob` Queue-Zähler, Erfolgsmeldung | 400/502 ⇒ Inline-Error |【F:app/routers/download_router.py†L163-L190】
 | Soulseek-Suche | POST `/api/v1/soulseek/search` | Tab „Soulseek“ `hx-post` | `#hx-soulseek-results` | 502 ⇒ Alert |【F:app/routers/soulseek_router.py†L75-L118】
 
+Die HTML-Ansicht `/ui/search` sendet das Formular via `hx-post="/ui/search/results"` und aktualisiert die Download-Queue über `hx-get="/ui/downloads/table"` mit einem Polling-Intervall von 30 Sekunden im Fragment `#hx-search-queue`.
+
 ### Downloads (/ui/downloads)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
