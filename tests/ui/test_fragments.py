@@ -9,9 +9,12 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.api.search import DEFAULT_SOURCES
+from app.config import SecurityConfig, SoulseekConfig
 from app.dependencies import get_download_service
 from app.errors import AppError, ErrorCode
+from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.main import app
+from app.schemas import StatusResponse
 from app.services.watchlist_service import WatchlistService
 from app.ui.services import (
     ActivityPage,
@@ -32,6 +35,7 @@ from app.ui.services import (
     get_activity_ui_service,
     get_downloads_ui_service,
     get_search_ui_service,
+    get_soulseek_ui_service,
     get_spotify_ui_service,
     get_watchlist_ui_service,
 )
@@ -323,6 +327,135 @@ class _StubWatchlistService:
         )
         self.entries = [row] + [entry for entry in self.entries if entry.artist_key != artist_key]
         return WatchlistTable(entries=tuple(self.entries))
+
+
+class _StubSoulseekUiService:
+    def __init__(self) -> None:
+        self.connection = StatusResponse(status="connected")
+        self.health = IntegrationHealth(
+            overall="ok",
+            providers=(
+                ProviderHealth(
+                    provider="soulseek",
+                    status="ok",
+                    details={"latency": "120ms"},
+                ),
+            ),
+        )
+        self.config = SoulseekConfig(
+            base_url="http://localhost:5030",
+            api_key="token",
+            timeout_ms=8000,
+            retry_max=3,
+            retry_backoff_base_ms=250,
+            retry_jitter_pct=20.0,
+            preferred_formats=("flac", "mp3"),
+            max_results=50,
+        )
+        self.security = SecurityConfig(
+            profile="default",
+            api_keys=("primary-key",),
+            allowlist=(),
+            allowed_origins=(),
+            _require_auth_default=False,
+            _rate_limiting_default=True,
+        )
+        self.status_exception: Exception | None = None
+        self.health_exception: Exception | None = None
+        self.config_exception: Exception | None = None
+
+    async def status(self) -> StatusResponse:
+        if self.status_exception:
+            raise self.status_exception
+        return self.connection
+
+    async def integration_health(self) -> IntegrationHealth:
+        if self.health_exception:
+            raise self.health_exception
+        return self.health
+
+    def soulseek_config(self) -> SoulseekConfig:
+        if self.config_exception:
+            raise self.config_exception
+        return self.config
+
+    def security_config(self) -> SecurityConfig:
+        if self.config_exception:
+            raise self.config_exception
+        return self.security
+
+
+def test_soulseek_status_fragment_renders_badges(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/status",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "Daemon connectivity" in response.text
+            assert "Integration health" in response.text
+            assert 'data-test="soulseek-provider-soulseek"' in response.text
+            assert "latency" in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_status_fragment_handles_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.status_exception = RuntimeError("boom")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/status",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Soulseek status." in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_config_fragment_renders_table(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/config",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "Soulseek configuration" in response.text
+            assert 'data-test="soulseek-config-base-url"' in response.text
+            assert "http://localhost:5030" in response.text
+            assert "Enabled" in response.text
+            assert "token" not in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_config_fragment_handles_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.config_exception = RuntimeError("fail")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/config",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Soulseek configuration." in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
 
 def test_activity_fragment_requires_session(monkeypatch) -> None:

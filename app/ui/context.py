@@ -9,6 +9,9 @@ from urllib.parse import urlencode
 from fastapi import Request
 
 from app.api.search import DEFAULT_SOURCES
+from app.config import SecurityConfig, SoulseekConfig
+from app.integrations.health import IntegrationHealth
+from app.schemas import StatusResponse
 from app.ui.services import (
     DownloadPage,
     OrchestratorJob,
@@ -192,6 +195,46 @@ _SEARCH_SOURCE_LABELS: dict[str, str] = {
     "spotify": "search.sources.spotify",
     "soulseek": "search.sources.soulseek",
 }
+
+
+def _normalise_status(value: str) -> str:
+    return value.strip().lower() if value else ""
+
+
+def _status_badge(
+    *,
+    status: str,
+    test_id: str,
+    success_label: str,
+    degraded_label: str,
+    down_label: str,
+    unknown_label: str,
+    degrade_is_warning: bool = True,
+) -> StatusBadge:
+    normalised = _normalise_status(status)
+    if normalised in {"connected", "ok", "online"}:
+        return StatusBadge(label_key=success_label, variant="success", test_id=test_id)
+    if normalised in {"disconnected", "down", "failed", "error"}:
+        return StatusBadge(label_key=down_label, variant="danger", test_id=test_id)
+    if normalised == "degraded":
+        variant: StatusVariant = "danger" if degrade_is_warning else "muted"
+        return StatusBadge(label_key=degraded_label, variant=variant, test_id=test_id)
+    return StatusBadge(label_key=unknown_label, variant="muted", test_id=test_id)
+
+
+def _format_health_details(details: Mapping[str, Any]) -> str:
+    if not details:
+        return ""
+    rendered: list[str] = []
+    for key, value in details.items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            rendered.append(f"{key}: {value}")
+            continue
+        try:
+            rendered.append(f"{key}: {json.dumps(value, sort_keys=True)}")
+        except TypeError:
+            rendered.append(f"{key}: {value}")
+    return ", ".join(rendered)
 
 
 def _safe_url_for(request: Request, name: str, fallback: str) -> str:
@@ -674,6 +717,206 @@ def build_soulseek_page_context(
         "configuration_fragment": configuration_fragment,
         "uploads_fragment": uploads_fragment,
         "downloads_fragment": downloads_fragment,
+    }
+
+
+def build_soulseek_status_context(
+    request: Request,
+    *,
+    status: StatusResponse,
+    health: IntegrationHealth,
+) -> Mapping[str, Any]:
+    connection_badge = _status_badge(
+        status=status.status,
+        test_id="soulseek-status-connection",
+        success_label="soulseek.status.connected",
+        degraded_label="soulseek.status.degraded",
+        down_label="soulseek.status.disconnected",
+        unknown_label="soulseek.status.unknown",
+        degrade_is_warning=False,
+    )
+    integration_badge = _status_badge(
+        status=health.overall,
+        test_id="soulseek-status-integrations",
+        success_label="soulseek.integration.ok",
+        degraded_label="soulseek.integration.degraded",
+        down_label="soulseek.integration.down",
+        unknown_label="soulseek.integration.unknown",
+    )
+
+    provider_rows: list[TableRow] = []
+    for report in sorted(health.providers, key=lambda entry: (entry.provider or "").lower()):
+        provider_name = report.provider or "unknown"
+        provider_badge = _status_badge(
+            status=report.status,
+            test_id=f"soulseek-provider-{provider_name}-status",
+            success_label="soulseek.integration.ok",
+            degraded_label="soulseek.integration.degraded",
+            down_label="soulseek.integration.down",
+            unknown_label="soulseek.integration.unknown",
+        )
+        details_text = _format_health_details(report.details)
+        if details_text:
+            details_cell = TableCell(text=details_text)
+        else:
+            details_cell = TableCell(text_key="soulseek.providers.details.none")
+        provider_rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=provider_name),
+                    TableCell(badge=provider_badge),
+                    details_cell,
+                ),
+                test_id=f"soulseek-provider-{provider_name}",
+            )
+        )
+
+    provider_table = TableDefinition(
+        identifier="soulseek-providers-table",
+        column_keys=(
+            "soulseek.providers.name",
+            "soulseek.providers.status",
+            "soulseek.providers.details",
+        ),
+        rows=tuple(provider_rows),
+        caption_key="soulseek.providers.caption",
+    )
+
+    return {
+        "request": request,
+        "connection_badge": connection_badge,
+        "integration_badge": integration_badge,
+        "provider_table": provider_table,
+    }
+
+
+def _boolean_badge(
+    value: bool,
+    *,
+    test_id: str,
+    highlight_missing: bool = False,
+) -> StatusBadge:
+    if value:
+        return StatusBadge(
+            label_key="status.enabled",
+            variant="success",
+            test_id=test_id,
+        )
+    return StatusBadge(
+        label_key="status.disabled",
+        variant="danger" if highlight_missing else "muted",
+        test_id=test_id,
+    )
+
+
+def build_soulseek_config_context(
+    request: Request,
+    *,
+    soulseek_config: SoulseekConfig,
+    security_config: SecurityConfig,
+) -> Mapping[str, Any]:
+    has_api_key = bool((soulseek_config.api_key or "").strip())
+    if soulseek_config.preferred_formats:
+        preferred_formats = ", ".join(soulseek_config.preferred_formats)
+    else:
+        preferred_formats = "Any"
+
+    rows = [
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.base_url"),
+                TableCell(text=soulseek_config.base_url),
+            ),
+            test_id="soulseek-config-base-url",
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.api_key"),
+                TableCell(
+                    badge=_boolean_badge(
+                        has_api_key,
+                        test_id="soulseek-config-api-key",
+                        highlight_missing=True,
+                    )
+                ),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.timeout"),
+                TableCell(text=f"{soulseek_config.timeout_ms} ms"),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.retry_max"),
+                TableCell(text=str(soulseek_config.retry_max)),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.retry_backoff"),
+                TableCell(text=f"{soulseek_config.retry_backoff_base_ms} ms"),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.retry_jitter"),
+                TableCell(text=f"{soulseek_config.retry_jitter_pct}%"),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.preferred_formats"),
+                TableCell(text=preferred_formats),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.max_results"),
+                TableCell(text=str(soulseek_config.max_results)),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.security_profile"),
+                TableCell(text=security_config.profile),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.require_auth"),
+                TableCell(
+                    badge=_boolean_badge(
+                        security_config.require_auth,
+                        test_id="soulseek-config-require-auth",
+                    )
+                ),
+            ),
+        ),
+        TableRow(
+            cells=(
+                TableCell(text_key="soulseek.config.rate_limiting"),
+                TableCell(
+                    badge=_boolean_badge(
+                        security_config.rate_limiting_enabled,
+                        test_id="soulseek-config-rate-limiting",
+                    )
+                ),
+            ),
+        ),
+    ]
+
+    table = TableDefinition(
+        identifier="soulseek-config-table",
+        column_keys=("soulseek.config.setting", "soulseek.config.value"),
+        rows=tuple(rows),
+        caption_key="soulseek.config.caption",
+    )
+
+    return {
+        "request": request,
+        "table": table,
     }
 
 
@@ -1180,6 +1423,8 @@ __all__ = [
     "build_dashboard_page_context",
     "build_login_page_context",
     "build_soulseek_page_context",
+    "build_soulseek_status_context",
+    "build_soulseek_config_context",
     "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",

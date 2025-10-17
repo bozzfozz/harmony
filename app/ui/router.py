@@ -26,7 +26,9 @@ from app.ui.context import (
     build_downloads_fragment_context,
     build_jobs_fragment_context,
     build_login_page_context,
+    build_soulseek_config_context,
     build_soulseek_page_context,
+    build_soulseek_status_context,
     build_search_page_context,
     build_search_results_context,
     build_spotify_artists_context,
@@ -42,12 +44,14 @@ from app.ui.services import (
     DownloadsUiService,
     JobsUiService,
     SearchUiService,
+    SoulseekUiService,
     SpotifyUiService,
     WatchlistUiService,
     get_activity_ui_service,
     get_downloads_ui_service,
     get_jobs_ui_service,
     get_search_ui_service,
+    get_soulseek_ui_service,
     get_spotify_ui_service,
     get_watchlist_ui_service,
 )
@@ -330,6 +334,96 @@ async def soulseek_page(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
+
+@router.get("/soulseek/status", include_in_schema=False, name="soulseek_status_fragment")
+async def soulseek_status_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    try:
+        connection = await service.status()
+        health = await service.integration_health()
+    except Exception:
+        logger.exception("ui.fragment.soulseek.status")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.status",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load Soulseek status.",
+        )
+
+    context = build_soulseek_status_context(
+        request,
+        status=connection,
+        health=health,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.status",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_status.j2",
+        context,
+    )
+
+
+@router.get(
+    "/soulseek/config",
+    include_in_schema=False,
+    name="soulseek_configuration_fragment",
+)
+async def soulseek_configuration_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    try:
+        soulseek_config = service.soulseek_config()
+        security_config = service.security_config()
+    except Exception:
+        logger.exception("ui.fragment.soulseek.config")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.config",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load Soulseek configuration.",
+        )
+
+    context = build_soulseek_config_context(
+        request,
+        soulseek_config=soulseek_config,
+        security_config=security_config,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.config",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_config.j2",
+        context,
+    )
 
 
 @router.get("/search", include_in_schema=False)

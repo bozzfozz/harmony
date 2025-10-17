@@ -1,0 +1,6 @@
+{% import "partials/tables.j2" as tables %}
+
+{% set config_table = table %}
+{% if config_table %}
+  {{ tables.render_table(config_table) }}
+{% endif %}
