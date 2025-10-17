@@ -28,6 +28,7 @@ from app.ui.services import (
     SearchResultsPage,
     SoulseekUploadRow,
     SpotifyArtistRow,
+    SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
@@ -202,6 +203,13 @@ class _StubSpotifyService:
             active_transactions=0,
             ttl_seconds=300,
         )
+        self.account_summary: SpotifyAccountSummary | None = SpotifyAccountSummary(
+            display_name="Stub User",
+            product="Premium",
+            followers=1200,
+            country="US",
+        )
+        self.account_exception: Exception | None = None
         self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
         self.artists: Sequence[SpotifyArtistRow] | Exception = ()
         self.manual_result = SpotifyManualResult(ok=True, message="Completed")
@@ -248,6 +256,11 @@ class _StubSpotifyService:
         if isinstance(self.artists, Exception):
             raise self.artists
         return tuple(self.artists)
+
+    def account(self) -> SpotifyAccountSummary | None:
+        if self.account_exception:
+            raise self.account_exception
+        return self.account_summary
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         if self.manual_exception:
@@ -1541,6 +1554,47 @@ def test_spotify_status_fragment_hides_manual_form_when_disabled(monkeypatch) ->
             assert "Manual completion is disabled" in response.text
             assert "Ensure the public host is reachable" in response.text
             assert "Redirect URI" not in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_fragment_renders_summary(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.account_summary = SpotifyAccountSummary(
+        display_name="Example User",
+        product="Premium",
+        followers=2500,
+        country="GB",
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/account",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "Example User" in response.text
+            assert "2,500" in response.text
+            assert "Premium" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_fragment_returns_error_on_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.account_exception = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/account",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            assert response.status_code == 500
+            assert "Unable to load Spotify account details." in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

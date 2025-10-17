@@ -36,6 +36,7 @@ from app.ui.context import (
     build_search_page_context,
     build_search_results_context,
     build_spotify_artists_context,
+    build_spotify_account_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
@@ -1243,6 +1244,42 @@ async def activity_table(
         "partials/activity_table.j2",
         context,
     )
+
+
+@router.get("/spotify/account", include_in_schema=False, name="spotify_account_fragment")
+async def spotify_account_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        summary = service.account()
+    except Exception:
+        logger.exception("ui.fragment.spotify.account")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify account details.",
+        )
+
+    context = build_spotify_account_context(request, account=summary)
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_account.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.account",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fields"]),
+    )
+    return response
 
 
 @router.get("/spotify/backfill", include_in_schema=False, name="spotify_backfill_fragment")

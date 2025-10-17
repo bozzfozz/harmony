@@ -254,6 +254,8 @@
     {{ loading_placeholder() }}
   {%- elif key == "spotify.status" -%}
     Checking Spotify connection…
+  {%- elif key == "spotify.account" -%}
+    Loading Spotify account details…
   {%- elif key == "spotify.playlists" -%}
     Loading cached Spotify playlists…
   {%- elif key == "spotify.artists" -%}
@@ -388,9 +390,23 @@
 
 {% macro spotify_backfill_empty_state() %}No backfill job has been recorded yet.{% endmacro %}
 
+{% macro spotify_account_field_label(key) -%}
+  {%- set labels = {
+    "spotify.account.display_name": "Display name",
+    "spotify.account.product": "Product",
+    "spotify.account.followers": "Followers",
+    "spotify.account.country": "Country",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_account_empty_state() %}No Spotify profile information is available.{% endmacro %}
+
 {% macro spotify_page_intro() %}Manage the Spotify connection, followed artists, cached playlists, and backfill jobs.{% endmacro %}
 
 {% macro spotify_status_heading() %}Connection status{% endmacro %}
+
+{% macro spotify_account_heading() %}Account details{% endmacro %}
 
 {% macro spotify_playlists_heading() %}Cached playlists{% endmacro %}
 

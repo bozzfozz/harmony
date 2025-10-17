@@ -8,7 +8,11 @@ from unittest.mock import Mock
 
 from starlette.requests import Request
 
-from app.ui.services.spotify import SpotifyArtistRow, SpotifyUiService
+from app.ui.services.spotify import (
+    SpotifyAccountSummary,
+    SpotifyArtistRow,
+    SpotifyUiService,
+)
 
 
 class _StubOAuthService:
@@ -126,3 +130,63 @@ def test_list_followed_artists_normalizes_payload() -> None:
         ),
     )
     spotify_service.get_followed_artists.assert_called_once_with()
+
+
+def test_account_returns_summary_with_defaults() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_current_user.return_value = {
+        "display_name": "Example User",
+        "id": "example-id",
+        "product": "premium",
+        "followers": {"total": "2500"},
+        "country": "gb",
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    summary = service.account()
+
+    assert summary == SpotifyAccountSummary(
+        display_name="Example User",
+        product="Premium",
+        followers=2500,
+        country="GB",
+    )
+    spotify_service.get_current_user.assert_called_once_with()
+
+
+def test_account_handles_missing_profile() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_current_user.return_value = {
+        "display_name": " ",
+        "id": "user-123",
+        "followers": None,
+        "country": None,
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    summary = service.account()
+
+    assert summary == SpotifyAccountSummary(
+        display_name="user-123",
+        product=None,
+        followers=0,
+        country=None,
+    )
+
+    spotify_service.get_current_user.assert_called_once_with()

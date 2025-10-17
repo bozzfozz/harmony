@@ -49,6 +49,14 @@ class SpotifyManualResult:
 
 
 @dataclass(slots=True)
+class SpotifyAccountSummary:
+    display_name: str
+    product: str | None
+    followers: int
+    country: str | None
+
+
+@dataclass(slots=True)
 class SpotifyPlaylistRow:
     identifier: str
     name: str
@@ -208,6 +216,42 @@ class SpotifyUiService:
         logger.debug("spotify.ui.artists", extra={"count": len(rows)})
         return tuple(rows)
 
+    def account(self) -> SpotifyAccountSummary | None:
+        profile = self._spotify.get_current_user()
+        if not isinstance(profile, Mapping):
+            return None
+
+        display_name_raw = profile.get("display_name")
+        display_name = str(display_name_raw or "").strip()
+        if not display_name:
+            fallback_id = str(profile.get("id") or "").strip()
+            display_name = fallback_id or "Spotify user"
+
+        product_raw = profile.get("product")
+        product_text = str(product_raw or "").strip()
+        product = product_text.replace("_", " ").title() if product_text else None
+
+        followers_payload: Any = profile.get("followers")
+        if isinstance(followers_payload, Mapping):
+            followers_raw = followers_payload.get("total")
+        else:
+            followers_raw = followers_payload
+        try:
+            followers = int(followers_raw or 0)
+        except (TypeError, ValueError):
+            followers = 0
+
+        country_raw = profile.get("country")
+        country_text = str(country_raw or "").strip().upper()
+        country = country_text or None
+
+        return SpotifyAccountSummary(
+            display_name=display_name,
+            product=product,
+            followers=followers,
+            country=country,
+        )
+
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         request_payload = OAuthManualRequest(redirect_url=redirect_url)
         client_ip = self._request.client.host if self._request.client else None
@@ -343,6 +387,7 @@ def get_spotify_ui_service(
 
 
 __all__ = [
+    "SpotifyAccountSummary",
     "SpotifyBackfillSnapshot",
     "SpotifyArtistRow",
     "SpotifyManualResult",
