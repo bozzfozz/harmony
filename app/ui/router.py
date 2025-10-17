@@ -312,8 +312,13 @@ async def spotify_page(
 @router.get("/search", include_in_schema=False)
 async def search_page(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_role("operator")),
 ) -> Response:
+    if not session.features.soulseek:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_search_page_context(
