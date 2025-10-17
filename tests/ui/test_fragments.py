@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.search import DEFAULT_SOURCES
@@ -24,6 +25,7 @@ from app.ui.services import (
     SearchResult,
     SearchResultDownload,
     SearchResultsPage,
+    SoulseekUploadRow,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
@@ -363,6 +365,21 @@ class _StubSoulseekUiService:
         self.status_exception: Exception | None = None
         self.health_exception: Exception | None = None
         self.config_exception: Exception | None = None
+        self.upload_rows: list[SoulseekUploadRow] = [
+            SoulseekUploadRow(
+                identifier="upload-1",
+                filename="example.flac",
+                status="uploading",
+                progress=0.25,
+                size_bytes=1_048_576,
+                speed_bps=2_048.0,
+                username="tester",
+            )
+        ]
+        self.upload_exception: Exception | None = None
+        self.cancel_exception: Exception | None = None
+        self.upload_calls: list[bool] = []
+        self.cancelled: list[str] = []
 
     async def status(self) -> StatusResponse:
         if self.status_exception:
@@ -383,6 +400,17 @@ class _StubSoulseekUiService:
         if self.config_exception:
             raise self.config_exception
         return self.security
+
+    async def uploads(self, *, include_all: bool = False) -> Sequence[SoulseekUploadRow]:
+        if self.upload_exception:
+            raise self.upload_exception
+        self.upload_calls.append(include_all)
+        return tuple(self.upload_rows)
+
+    async def cancel_upload(self, *, upload_id: str) -> None:
+        if self.cancel_exception:
+            raise self.cancel_exception
+        self.cancelled.append(upload_id)
 
 
 def test_soulseek_status_fragment_renders_badges(monkeypatch) -> None:
@@ -454,6 +482,89 @@ def test_soulseek_config_fragment_handles_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=500)
             assert "Unable to load Soulseek configuration." in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_uploads_fragment_success(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.upload_rows = [
+        SoulseekUploadRow(
+            identifier="abc-123",
+            filename="track.flac",
+            status="uploading",
+            progress=0.5,
+            size_bytes=5_242_880,
+            speed_bps=8_192.0,
+            username="dj",
+        )
+    ]
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/uploads",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            body = response.text
+            assert "track.flac" in body
+            assert "50%" in body
+            assert "MiB" in body
+            assert "Cancel upload" in body
+            assert "hx-soulseek-uploads" in body
+            assert stub.upload_calls == [False]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_uploads_fragment_handles_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.upload_exception = HTTPException(status_code=502, detail="boom")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/uploads",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=502)
+            assert "boom" in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_uploads_fragment_requires_feature(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_SOULSEEK": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        response = client.get(
+            "/ui/soulseek/uploads",
+            headers={"Cookie": _cookies_header(client)},
+        )
+        assert response.status_code == 404
+        assert response.headers.get("content-type", "").startswith("application/json")
+
+
+def test_soulseek_upload_cancel_success(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.upload_rows = []
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/uploads/cancel",
+                data={"upload_id": "upload-1"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "No uploads are currently in progress." in response.text
+            assert stub.cancelled == ["upload-1"]
+            assert stub.upload_calls == [False]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 

@@ -10,7 +10,7 @@ from .search import (
     SearchUiService,
     get_search_ui_service,
 )
-from .soulseek import SoulseekUiService, get_soulseek_ui_service
+from .soulseek import SoulseekUiService, SoulseekUploadRow, get_soulseek_ui_service
 from .spotify import (
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
@@ -45,6 +45,7 @@ __all__ = [
     "SearchUiService",
     "get_search_ui_service",
     "SoulseekUiService",
+    "SoulseekUploadRow",
     "get_soulseek_ui_service",
     "SpotifyArtistRow",
     "SpotifyBackfillSnapshot",

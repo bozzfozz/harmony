@@ -29,6 +29,7 @@ from app.ui.context import (
     build_soulseek_config_context,
     build_soulseek_page_context,
     build_soulseek_status_context,
+    build_soulseek_uploads_context,
     build_search_page_context,
     build_search_results_context,
     build_spotify_artists_context,
@@ -424,6 +425,169 @@ async def soulseek_configuration_fragment(
         "partials/soulseek_config.j2",
         context,
     )
+
+
+@router.get(
+    "/soulseek/uploads",
+    include_in_schema=False,
+    name="soulseek_uploads_fragment",
+)
+async def soulseek_uploads_fragment(
+    request: Request,
+    include_all: bool = Query(False, alias="all"),
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    try:
+        uploads = await service.uploads(include_all=include_all)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Unable to load uploads."
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.uploads")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load Soulseek uploads.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_uploads_context(
+        request,
+        uploads=uploads,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.uploads",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        scope="all" if include_all else "active",
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_uploads.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.post(
+    "/soulseek/uploads/cancel",
+    include_in_schema=False,
+    name="soulseek_upload_cancel",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_upload_cancel(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    raw_body = await request.body()
+    try:
+        body = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        body = ""
+    values = parse_qs(body)
+    upload_id = values.get("upload_id", [""])[0].strip()
+    scope_value = values.get("scope", [""])[0].strip().lower()
+    include_all = scope_value in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+
+    if not upload_id:
+        return _render_alert_fragment(
+            request,
+            "Missing upload identifier.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        await service.cancel_upload(upload_id=upload_id)
+        uploads = await service.uploads(include_all=include_all)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to cancel the upload."
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            upload_id=upload_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.uploads.cancel")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            upload_id=upload_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to cancel the upload.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_uploads_context(
+        request,
+        uploads=uploads,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.uploads",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        upload_id=upload_id,
+        scope="all" if include_all else "active",
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_uploads.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.get("/search", include_in_schema=False)

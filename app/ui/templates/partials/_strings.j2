@@ -77,6 +77,10 @@
     "spotify.backfill.run": "Start backfill",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
+    "soulseek.uploads.cancel": "Cancel upload",
+    "soulseek.uploads.refresh": "Refresh",
+    "soulseek.uploads.show_active": "Active uploads",
+    "soulseek.uploads.show_all": "All uploads",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -123,6 +127,14 @@
     "downloads.priority": "Priority",
     "downloads.user": "User",
     "downloads.updated": "Updated",
+    "soulseek.uploads.id": "ID",
+    "soulseek.uploads.user": "User",
+    "soulseek.uploads.filename": "File",
+    "soulseek.uploads.status": "Status",
+    "soulseek.uploads.progress": "Progress",
+    "soulseek.uploads.size": "Size",
+    "soulseek.uploads.speed": "Speed",
+    "soulseek.uploads.actions": "Actions",
     "jobs.name": "Job",
     "jobs.status": "Status",
     "jobs.enabled": "Enabled",
@@ -155,6 +167,7 @@
     "spotify.artists.caption": "Followed Spotify artists",
     "soulseek.providers.caption": "Provider health",
     "soulseek.config.caption": "Soulseek configuration",
+    "soulseek.uploads.caption": "Soulseek uploads",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -251,6 +264,8 @@
     {{ watchlist_empty_state() }}
   {%- elif key == "downloads" -%}
     No downloads are currently queued.
+  {%- elif key == "soulseek.uploads" -%}
+    No uploads are currently in progress.
   {%- elif key == "jobs" -%}
     No orchestrator jobs reported yet.
   {%- elif key == "search" -%}
