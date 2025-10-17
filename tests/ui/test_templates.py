@@ -23,6 +23,7 @@ from app.ui.context import (
     build_dashboard_page_context,
     build_login_page_context,
     build_search_page_context,
+    build_spotify_artists_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
@@ -31,6 +32,7 @@ from app.ui.context import (
 )
 from app.ui.router import templates
 from app.ui.services import (
+    SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
@@ -128,11 +130,13 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "nav-spotify" in html
     assert 'hx-get="/ui/spotify/status"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
+    assert 'hx-get="/ui/spotify/artists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'class="async-fragment"' in html
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
     assert "Loading cached Spotify playlists…" in html
+    assert "Loading followed Spotify artists…" in html
     assert "Fetching Spotify backfill status…" in html
 
 
@@ -344,6 +348,29 @@ def test_spotify_playlists_partial_renders_table() -> None:
     assert 'id="hx-spotify-playlists"' in html
     assert 'class="table"' in html
     assert "Daily Mix" in html
+    assert 'data-count="1"' in html
+
+
+def test_spotify_artists_partial_renders_table() -> None:
+    request = _make_request("/ui/spotify/artists")
+    artists = [
+        SpotifyArtistRow(
+            identifier="artist-1",
+            name="Artist One",
+            followers=123456,
+            popularity=87,
+            genres=("rock", "indie"),
+        )
+    ]
+    context = build_spotify_artists_context(request, artists=artists)
+    template = templates.get_template("partials/spotify_artists.j2")
+    html = template.render(**context)
+
+    assert 'id="hx-spotify-artists"' in html
+    assert 'class="table"' in html
+    assert "Artist One" in html
+    assert "123,456" in html
+    assert "rock, indie" in html
     assert 'data-count="1"' in html
 
 

@@ -10,6 +10,7 @@ from .search import (
     get_search_ui_service,
 )
 from .spotify import (
+    SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
@@ -40,6 +41,7 @@ __all__ = [
     "SearchResultsPage",
     "SearchUiService",
     "get_search_ui_service",
+    "SpotifyArtistRow",
     "SpotifyBackfillSnapshot",
     "SpotifyManualResult",
     "SpotifyOAuthHealth",

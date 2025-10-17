@@ -16,6 +16,7 @@ from app.ui.services import (
     OrchestratorJob,
     SearchResult,
     SearchResultsPage,
+    SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
@@ -178,6 +179,7 @@ class _StubSpotifyService:
             ttl_seconds=300,
         )
         self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
+        self.artists: Sequence[SpotifyArtistRow] | Exception = ()
         self.manual_result = SpotifyManualResult(ok=True, message="Completed")
         self.manual_exception: Exception | None = None
         self.start_url = "https://spotify.example/auth"
@@ -217,6 +219,11 @@ class _StubSpotifyService:
         if isinstance(self.playlists, Exception):
             raise self.playlists
         return tuple(self.playlists)
+
+    def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
+        if isinstance(self.artists, Exception):
+            raise self.artists
+        return tuple(self.artists)
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         if self.manual_exception:
@@ -861,6 +868,49 @@ def test_spotify_playlists_fragment_returns_error_on_failure(monkeypatch) -> Non
             )
             assert response.status_code == 500
             assert "Unable to load Spotify playlists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_artists_fragment_renders_table(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.artists = (
+        SpotifyArtistRow(
+            identifier="artist-1",
+            name="Artist One",
+            followers=1200,
+            popularity=75,
+            genres=("rock", "pop"),
+        ),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/artists",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-artists-table" in response.text
+            assert "Artist One" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_artists_fragment_returns_error_on_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.artists = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/artists",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            assert response.status_code == 500
+            assert "Unable to load Spotify artists." in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

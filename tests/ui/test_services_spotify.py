@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 from starlette.requests import Request
 
-from app.ui.services.spotify import SpotifyUiService
+from app.ui.services.spotify import SpotifyArtistRow, SpotifyUiService
 
 
 class _StubOAuthService:
@@ -87,3 +87,42 @@ def test_oauth_health_keeps_redirect_when_manual_enabled() -> None:
     assert health.public_host_hint is None
     assert health.active_transactions == 0
     assert health.ttl_seconds == 0
+
+
+def test_list_followed_artists_normalizes_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_followed_artists.return_value = [
+        {
+            "id": "artist-1",
+            "name": "Artist One",
+            "followers": {"total": 43210},
+            "popularity": 92,
+            "genres": ["rock", " pop ", ""],
+        },
+        {
+            "id": "",
+            "name": "Missing",
+        },
+    ]
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows = service.list_followed_artists()
+
+    assert rows == (
+        SpotifyArtistRow(
+            identifier="artist-1",
+            name="Artist One",
+            followers=43210,
+            popularity=92,
+            genres=("rock", "pop"),
+        ),
+    )
+    spotify_service.get_followed_artists.assert_called_once_with()

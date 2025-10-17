@@ -12,6 +12,7 @@ from app.ui.services import (
     DownloadPage,
     OrchestratorJob,
     SearchResultsPage,
+    SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
@@ -439,6 +440,18 @@ def build_spotify_page_context(
     )
 
     try:
+        artists_url = request.url_for("spotify_artists_fragment")
+    except Exception:
+        artists_url = "/ui/spotify/artists"
+    artists_fragment = AsyncFragment(
+        identifier="hx-spotify-artists",
+        url=artists_url,
+        target="#hx-spotify-artists",
+        swap="innerHTML",
+        loading_key="spotify.artists",
+    )
+
+    try:
         backfill_url = request.url_for("spotify_backfill_fragment")
     except Exception:
         backfill_url = "/ui/spotify/backfill"
@@ -458,6 +471,7 @@ def build_spotify_page_context(
         "csrf_token": csrf_token,
         "status_fragment": status_fragment,
         "playlists_fragment": playlists_fragment,
+        "artists_fragment": artists_fragment,
         "backfill_fragment": backfill_fragment,
     }
 
@@ -573,7 +587,9 @@ def build_spotify_status_context(
         )
     )
 
-    status_label_key = f"spotify.status.{status.status}" if status.status else "spotify.status.unconfigured"
+    status_label_key = (
+        f"spotify.status.{status.status}" if status.status else "spotify.status.unconfigured"
+    )
 
     return {
         "request": request,
@@ -620,6 +636,48 @@ def build_spotify_playlists_context(
         identifier="hx-spotify-playlists",
         table=table,
         empty_state_key="spotify.playlists",
+        data_attributes={"count": str(len(rows))},
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_spotify_artists_context(
+    request: Request,
+    *,
+    artists: Sequence[SpotifyArtistRow],
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for artist in artists:
+        genres_text = ", ".join(artist.genres)
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=artist.name),
+                    TableCell(text=f"{artist.followers:,}" if artist.followers else "0"),
+                    TableCell(text=str(artist.popularity)),
+                    TableCell(text=genres_text),
+                ),
+                test_id=f"spotify-artist-{artist.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="spotify-artists-table",
+        column_keys=(
+            "spotify.artists.name",
+            "spotify.artists.followers",
+            "spotify.artists.popularity",
+            "spotify.artists.genres",
+        ),
+        rows=tuple(rows),
+        caption_key="spotify.artists.caption",
+    )
+
+    fragment = TableFragment(
+        identifier="hx-spotify-artists",
+        table=table,
+        empty_state_key="spotify.artists",
         data_attributes={"count": str(len(rows))},
     )
 
@@ -938,6 +996,7 @@ __all__ = [
     "TableDefinition",
     "TableRow",
     "build_spotify_backfill_context",
+    "build_spotify_artists_context",
     "build_spotify_page_context",
     "build_spotify_playlists_context",
     "build_spotify_status_context",

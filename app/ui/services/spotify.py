@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
@@ -53,6 +54,15 @@ class SpotifyPlaylistRow:
     name: str
     track_count: int
     updated_at: datetime
+
+
+@dataclass(slots=True)
+class SpotifyArtistRow:
+    identifier: str
+    name: str
+    followers: int
+    popularity: int
+    genres: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -141,6 +151,61 @@ class SpotifyUiService:
             for playlist in playlists
         ]
         logger.debug("spotify.ui.playlists", extra={"count": len(rows)})
+        return tuple(rows)
+
+    def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
+        raw_payload = self._spotify.get_followed_artists()
+        entries: Sequence[Mapping[str, object]]
+        if isinstance(raw_payload, Sequence):
+            entries = [entry for entry in raw_payload if isinstance(entry, Mapping)]
+        else:
+            entries = []
+
+        rows: list[SpotifyArtistRow] = []
+        for entry in entries:
+            identifier_raw = entry.get("id")
+            name_raw = entry.get("name")
+            identifier = str(identifier_raw or "").strip()
+            name = str(name_raw or "").strip()
+            if not identifier or not name:
+                continue
+
+            followers_payload: Any = entry.get("followers")
+            if isinstance(followers_payload, Mapping):
+                followers_value = followers_payload.get("total")
+            else:
+                followers_value = followers_payload
+            try:
+                followers = int(followers_value or 0)
+            except (TypeError, ValueError):
+                followers = 0
+
+            popularity_raw = entry.get("popularity")
+            try:
+                popularity = int(popularity_raw or 0)
+            except (TypeError, ValueError):
+                popularity = 0
+
+            genres_raw = entry.get("genres")
+            genres_list: list[str] = []
+            if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, (str, bytes)):
+                for genre in genres_raw:
+                    if isinstance(genre, str):
+                        cleaned = genre.strip()
+                        if cleaned:
+                            genres_list.append(cleaned)
+
+            rows.append(
+                SpotifyArtistRow(
+                    identifier=identifier,
+                    name=name,
+                    followers=followers,
+                    popularity=popularity,
+                    genres=tuple(genres_list),
+                )
+            )
+
+        logger.debug("spotify.ui.artists", extra={"count": len(rows)})
         return tuple(rows)
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
@@ -279,6 +344,7 @@ def get_spotify_ui_service(
 
 __all__ = [
     "SpotifyBackfillSnapshot",
+    "SpotifyArtistRow",
     "SpotifyManualResult",
     "SpotifyOAuthHealth",
     "SpotifyPlaylistRow",
