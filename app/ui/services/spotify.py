@@ -83,6 +83,27 @@ class SpotifySavedTrackRow:
 
 
 @dataclass(slots=True)
+class SpotifyTopTrackRow:
+    identifier: str
+    name: str
+    artists: tuple[str, ...]
+    album: str | None
+    popularity: int
+    duration_ms: int | None
+    rank: int
+
+
+@dataclass(slots=True)
+class SpotifyTopArtistRow:
+    identifier: str
+    name: str
+    followers: int
+    popularity: int
+    genres: tuple[str, ...]
+    rank: int
+
+
+@dataclass(slots=True)
 class SpotifyBackfillSnapshot:
     csrf_token: str
     can_run: bool
@@ -418,6 +439,129 @@ class SpotifyUiService:
         )
         return job.id
 
+    def top_tracks(self, *, limit: int = 20) -> Sequence[SpotifyTopTrackRow]:
+        page_limit = max(1, min(int(limit), 50))
+        items = self._spotify.get_top_tracks(limit=page_limit)
+        rows: list[SpotifyTopTrackRow] = []
+        if isinstance(items, Sequence):
+            for index, entry in enumerate(items, start=1):
+                if not isinstance(entry, Mapping):
+                    continue
+                identifier_raw = entry.get("id")
+                name_raw = entry.get("name")
+                identifier = str(identifier_raw or "").strip()
+                name = str(name_raw or "").strip()
+                if not identifier or not name:
+                    continue
+
+                artists_payload = entry.get("artists")
+                artist_names: list[str] = []
+                if isinstance(artists_payload, Sequence):
+                    for artist_entry in artists_payload:
+                        if isinstance(artist_entry, Mapping):
+                            artist_name_raw = artist_entry.get("name")
+                        else:
+                            artist_name_raw = artist_entry
+                        if isinstance(artist_name_raw, str):
+                            cleaned_name = artist_name_raw.strip()
+                            if cleaned_name:
+                                artist_names.append(cleaned_name)
+
+                album_payload = entry.get("album")
+                album: str | None = None
+                if isinstance(album_payload, Mapping):
+                    album_name_raw = album_payload.get("name")
+                    if isinstance(album_name_raw, str):
+                        album_candidate = album_name_raw.strip()
+                        album = album_candidate or None
+
+                popularity_raw = entry.get("popularity")
+                try:
+                    popularity = int(popularity_raw or 0)
+                except (TypeError, ValueError):
+                    popularity = 0
+
+                duration_raw = entry.get("duration_ms")
+                try:
+                    duration_ms = int(duration_raw) if duration_raw is not None else None
+                except (TypeError, ValueError):
+                    duration_ms = None
+
+                rows.append(
+                    SpotifyTopTrackRow(
+                        identifier=identifier,
+                        name=name,
+                        artists=tuple(artist_names),
+                        album=album,
+                        popularity=popularity,
+                        duration_ms=duration_ms,
+                        rank=index,
+                    )
+                )
+
+        logger.debug(
+            "spotify.ui.top_tracks",
+            extra={"count": len(rows), "limit": page_limit},
+        )
+        return tuple(rows)
+
+    def top_artists(self, *, limit: int = 20) -> Sequence[SpotifyTopArtistRow]:
+        page_limit = max(1, min(int(limit), 50))
+        items = self._spotify.get_top_artists(limit=page_limit)
+        rows: list[SpotifyTopArtistRow] = []
+        if isinstance(items, Sequence):
+            for index, entry in enumerate(items, start=1):
+                if not isinstance(entry, Mapping):
+                    continue
+                identifier_raw = entry.get("id")
+                name_raw = entry.get("name")
+                identifier = str(identifier_raw or "").strip()
+                name = str(name_raw or "").strip()
+                if not identifier or not name:
+                    continue
+
+                followers_payload: Any = entry.get("followers")
+                if isinstance(followers_payload, Mapping):
+                    followers_raw = followers_payload.get("total")
+                else:
+                    followers_raw = followers_payload
+                try:
+                    followers = int(followers_raw or 0)
+                except (TypeError, ValueError):
+                    followers = 0
+
+                popularity_raw = entry.get("popularity")
+                try:
+                    popularity = int(popularity_raw or 0)
+                except (TypeError, ValueError):
+                    popularity = 0
+
+                genres_raw = entry.get("genres")
+                genres: list[str] = []
+                if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, (str, bytes)):
+                    for genre in genres_raw:
+                        if isinstance(genre, str):
+                            cleaned = genre.strip()
+                            if cleaned:
+                                genres.append(cleaned)
+
+                rows.append(
+                    SpotifyTopArtistRow(
+                        identifier=identifier,
+                        name=name,
+                        followers=followers,
+                        popularity=popularity,
+                        genres=tuple(genres),
+                        rank=index,
+                    )
+                )
+
+        logger.debug(
+            "spotify.ui.top_artists",
+            extra={"count": len(rows), "limit": page_limit},
+        )
+        return tuple(rows)
+
     def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
         if not job_id:
             return None
@@ -516,6 +660,8 @@ __all__ = [
     "SpotifyBackfillSnapshot",
     "SpotifyArtistRow",
     "SpotifySavedTrackRow",
+    "SpotifyTopArtistRow",
+    "SpotifyTopTrackRow",
     "SpotifyManualResult",
     "SpotifyOAuthHealth",
     "SpotifyPlaylistRow",

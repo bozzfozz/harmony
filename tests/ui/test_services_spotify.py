@@ -12,6 +12,8 @@ from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifySavedTrackRow,
+    SpotifyTopArtistRow,
+    SpotifyTopTrackRow,
     SpotifyUiService,
 )
 
@@ -278,6 +280,86 @@ def test_list_saved_tracks_applies_offset() -> None:
     assert len(rows) == 1
     assert rows[0].identifier == "track-2"
     spotify_service.get_saved_tracks.assert_called_once_with(limit=2)
+
+
+def test_top_tracks_normalizes_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_top_tracks.return_value = [
+        {
+            "id": "track-1",
+            "name": "Track One",
+            "artists": [
+                {"name": "Artist One"},
+                " Artist Two ",
+                123,
+            ],
+            "album": {"name": "Album One"},
+            "popularity": "87",
+            "duration_ms": "195000",
+        },
+        {"id": None, "name": ""},
+    ]
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows = service.top_tracks()
+
+    assert rows == (
+        SpotifyTopTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One", "Artist Two"),
+            album="Album One",
+            popularity=87,
+            duration_ms=195000,
+            rank=1,
+        ),
+    )
+    spotify_service.get_top_tracks.assert_called_once_with(limit=20)
+
+
+def test_top_artists_normalizes_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_top_artists.return_value = [
+        {
+            "id": "artist-1",
+            "name": "Artist One",
+            "followers": {"total": "12000"},
+            "popularity": "99",
+            "genres": ["rock", " pop ", 42],
+        },
+        {"id": "", "name": "Unnamed"},
+    ]
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows = service.top_artists()
+
+    assert rows == (
+        SpotifyTopArtistRow(
+            identifier="artist-1",
+            name="Artist One",
+            followers=12000,
+            popularity=99,
+            genres=("rock", "pop"),
+            rank=1,
+        ),
+    )
+    spotify_service.get_top_artists.assert_called_once_with(limit=20)
 
 
 def test_save_tracks_filters_and_returns_count() -> None:

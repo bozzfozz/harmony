@@ -26,6 +26,8 @@ from app.ui.services import (
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
     SpotifySavedTrackRow,
+    SpotifyTopArtistRow,
+    SpotifyTopTrackRow,
     SpotifyStatus,
     WatchlistRow,
 )
@@ -589,6 +591,30 @@ def build_spotify_page_context(
     )
 
     try:
+        top_tracks_url = request.url_for("spotify_top_tracks_fragment")
+    except Exception:
+        top_tracks_url = "/ui/spotify/top/tracks"
+    top_tracks_fragment = AsyncFragment(
+        identifier="hx-spotify-top-tracks",
+        url=top_tracks_url,
+        target="#hx-spotify-top-tracks",
+        swap="innerHTML",
+        loading_key="spotify.top_tracks",
+    )
+
+    try:
+        top_artists_url = request.url_for("spotify_top_artists_fragment")
+    except Exception:
+        top_artists_url = "/ui/spotify/top/artists"
+    top_artists_fragment = AsyncFragment(
+        identifier="hx-spotify-top-artists",
+        url=top_artists_url,
+        target="#hx-spotify-top-artists",
+        swap="innerHTML",
+        loading_key="spotify.top_artists",
+    )
+
+    try:
         saved_url = request.url_for("spotify_saved_tracks_fragment")
     except Exception:
         saved_url = "/ui/spotify/saved"
@@ -644,6 +670,8 @@ def build_spotify_page_context(
         "csrf_token": csrf_token,
         "status_fragment": status_fragment,
         "account_fragment": account_fragment,
+        "top_tracks_fragment": top_tracks_fragment,
+        "top_artists_fragment": top_artists_fragment,
         "saved_fragment": saved_fragment,
         "playlists_fragment": playlists_fragment,
         "artists_fragment": artists_fragment,
@@ -1361,6 +1389,119 @@ def build_spotify_account_context(
     }
 
 
+def _build_spotify_top_context(
+    request: Request,
+    *,
+    fragment_id: str,
+    table_identifier: str,
+    column_keys: Sequence[str],
+    rows: Sequence[TableRow],
+    caption_key: str,
+    empty_state_key: str,
+) -> Mapping[str, Any]:
+    table = TableDefinition(
+        identifier=table_identifier,
+        column_keys=tuple(column_keys),
+        rows=tuple(rows),
+        caption_key=caption_key,
+    )
+
+    fragment = TableFragment(
+        identifier=fragment_id,
+        table=table,
+        empty_state_key=empty_state_key,
+        data_attributes={"count": str(len(rows))},
+    )
+
+    return {"request": request, "fragment": fragment}
+
+
+def build_spotify_top_tracks_context(
+    request: Request,
+    *,
+    tracks: Sequence[SpotifyTopTrackRow],
+) -> Mapping[str, Any]:
+    def _format_duration(duration_ms: int | None) -> str:
+        if duration_ms is None or duration_ms < 0:
+            return ""
+        total_seconds = duration_ms // 1000
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes}:{seconds:02d}"
+
+    rows: list[TableRow] = []
+    for track in tracks:
+        artists_text = ", ".join(track.artists)
+        duration_text = _format_duration(track.duration_ms)
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=str(track.rank)),
+                    TableCell(text=track.name),
+                    TableCell(text=artists_text),
+                    TableCell(text=track.album or ""),
+                    TableCell(text=str(track.popularity)),
+                    TableCell(text=duration_text),
+                ),
+                test_id=f"spotify-top-track-{track.identifier}",
+            )
+        )
+
+    return _build_spotify_top_context(
+        request,
+        fragment_id="hx-spotify-top-tracks",
+        table_identifier="spotify-top-tracks-table",
+        column_keys=(
+            "spotify.top_tracks.rank",
+            "spotify.top_tracks.name",
+            "spotify.top_tracks.artists",
+            "spotify.top_tracks.album",
+            "spotify.top_tracks.popularity",
+            "spotify.top_tracks.duration",
+        ),
+        rows=rows,
+        caption_key="spotify.top_tracks.caption",
+        empty_state_key="spotify.top_tracks",
+    )
+
+
+def build_spotify_top_artists_context(
+    request: Request,
+    *,
+    artists: Sequence[SpotifyTopArtistRow],
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for artist in artists:
+        genres_text = ", ".join(artist.genres)
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=str(artist.rank)),
+                    TableCell(text=artist.name),
+                    TableCell(text=f"{artist.followers:,}" if artist.followers else "0"),
+                    TableCell(text=str(artist.popularity)),
+                    TableCell(text=genres_text),
+                ),
+                test_id=f"spotify-top-artist-{artist.identifier}",
+            )
+        )
+
+    return _build_spotify_top_context(
+        request,
+        fragment_id="hx-spotify-top-artists",
+        table_identifier="spotify-top-artists-table",
+        column_keys=(
+            "spotify.top_artists.rank",
+            "spotify.top_artists.name",
+            "spotify.top_artists.followers",
+            "spotify.top_artists.popularity",
+            "spotify.top_artists.genres",
+        ),
+        rows=rows,
+        caption_key="spotify.top_artists.caption",
+        empty_state_key="spotify.top_artists",
+    )
+
+
 def build_spotify_playlists_context(
     request: Request,
     *,
@@ -1915,6 +2056,8 @@ __all__ = [
     "build_spotify_page_context",
     "build_spotify_playlists_context",
     "build_spotify_saved_tracks_context",
+    "build_spotify_top_artists_context",
+    "build_spotify_top_tracks_context",
     "build_spotify_account_context",
     "build_spotify_status_context",
     "build_activity_fragment_context",
