@@ -24,6 +24,7 @@ from app.ui.services import (
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
+    SpotifyPlaylistItemRow,
     SpotifyPlaylistRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
@@ -1522,14 +1523,42 @@ def build_spotify_playlists_context(
     *,
     playlists: Sequence[SpotifyPlaylistRow],
 ) -> Mapping[str, Any]:
+    default_limit = 25
     rows: list[TableRow] = []
     for playlist in playlists:
+        try:
+            items_url = request.url_for(
+                "spotify_playlist_items_fragment", playlist_id=playlist.identifier
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            items_url = f"/ui/spotify/playlists/{playlist.identifier}/tracks"
+
+        hidden_fields: dict[str, str] = {
+            "limit": str(default_limit),
+            "offset": "0",
+        }
+        if playlist.name:
+            hidden_fields["name"] = playlist.name
+
+        action_form = TableCellForm(
+            action=items_url,
+            method="get",
+            submit_label_key="spotify.playlists.view_tracks",
+            hidden_fields=hidden_fields,
+            hx_target="#spotify-playlist-items",
+            hx_swap="innerHTML",
+            hx_method="get",
+        )
         rows.append(
             TableRow(
                 cells=(
                     TableCell(text=playlist.name),
                     TableCell(text=str(playlist.track_count)),
                     TableCell(text=playlist.updated_at.isoformat()),
+                    TableCell(
+                        form=action_form,
+                        test_id=f"spotify-playlist-view-{playlist.identifier}",
+                    ),
                 ),
                 test_id=f"spotify-playlist-{playlist.identifier}",
             )
@@ -1541,6 +1570,7 @@ def build_spotify_playlists_context(
             "spotify.playlists.name",
             "spotify.playlists.tracks",
             "spotify.playlists.updated",
+            "spotify.playlists.actions",
         ),
         rows=tuple(rows),
         caption_key="spotify.playlists.caption",
@@ -1553,7 +1583,109 @@ def build_spotify_playlists_context(
         data_attributes={"count": str(len(rows))},
     )
 
-    return {"request": request, "fragment": fragment}
+    return {
+        "request": request,
+        "fragment": fragment,
+        "playlist_items_target": "#spotify-playlist-items",
+    }
+
+
+def build_spotify_playlist_items_context(
+    request: Request,
+    *,
+    playlist_id: str,
+    playlist_name: str | None,
+    rows: Sequence[SpotifyPlaylistItemRow],
+    total_count: int,
+    limit: int,
+    offset: int,
+) -> Mapping[str, Any]:
+    table_rows: list[TableRow] = []
+    for row in rows:
+        artists_text = ", ".join(row.artists)
+        added_text = row.added_at.isoformat() if row.added_at else ""
+        track_text = row.name if not row.is_local else f"{row.name} (local)"
+        table_rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=track_text),
+                    TableCell(text=artists_text),
+                    TableCell(text=row.album or ""),
+                    TableCell(text=added_text),
+                    TableCell(text=row.added_by or ""),
+                ),
+                test_id=f"spotify-playlist-item-{row.identifier}",
+            )
+        )
+
+    row_count = len(table_rows)
+
+    table = TableDefinition(
+        identifier="spotify-playlist-items-table",
+        column_keys=(
+            "spotify.playlist_items.track",
+            "spotify.playlist_items.artists",
+            "spotify.playlist_items.album",
+            "spotify.playlist_items.added",
+            "spotify.playlist_items.added_by",
+        ),
+        rows=tuple(table_rows),
+        caption_key="spotify.playlist_items.caption",
+    )
+
+    try:
+        base_url = request.url_for("spotify_playlist_items_fragment", playlist_id=playlist_id)
+    except Exception:  # pragma: no cover - fallback for tests
+        base_url = f"/ui/spotify/playlists/{playlist_id}/tracks"
+
+    pagination: PaginationContext | None = None
+    previous_url: str | None = None
+    next_url: str | None = None
+
+    params: dict[str, Any] = {"limit": limit}
+    if playlist_name:
+        params["name"] = playlist_name
+
+    if offset > 0:
+        prev_params = dict(params)
+        prev_params["offset"] = max(0, offset - limit)
+        previous_url = f"{base_url}?{urlencode(prev_params)}"
+
+    if offset + limit < total_count:
+        next_params = dict(params)
+        next_params["offset"] = offset + limit
+        next_url = f"{base_url}?{urlencode(next_params)}"
+
+    if previous_url or next_url:
+        pagination = PaginationContext(
+            label_key="spotify.playlist_items",
+            target="#spotify-playlist-items",
+            swap="innerHTML",
+            previous_url=previous_url,
+            next_url=next_url,
+        )
+
+    fragment = TableFragment(
+        identifier="hx-spotify-playlist-items",
+        table=table,
+        empty_state_key="spotify.playlist_items",
+        data_attributes={
+            "playlist-id": playlist_id,
+            "count": str(row_count),
+        },
+        pagination=pagination,
+    )
+
+    return {
+        "request": request,
+        "fragment": fragment,
+        "playlist_id": playlist_id,
+        "playlist_name": playlist_name,
+        "page_limit": limit,
+        "page_offset": offset,
+        "total_count": total_count,
+        "row_count": row_count,
+    }
 
 
 def build_spotify_saved_tracks_context(
@@ -2135,6 +2267,7 @@ __all__ = [
     "build_spotify_artists_context",
     "build_spotify_page_context",
     "build_spotify_playlists_context",
+    "build_spotify_playlist_items_context",
     "build_spotify_recommendations_context",
     "build_spotify_saved_tracks_context",
     "build_spotify_top_artists_context",

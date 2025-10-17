@@ -40,6 +40,7 @@ from app.ui.context import (
     build_spotify_account_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
+    build_spotify_playlist_items_context,
     build_spotify_playlists_context,
     build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,
@@ -190,7 +191,7 @@ def _render_recommendations_response(
 
 
 def _parse_recommendations_form(
-    form: Mapping[str, object]
+    form: Mapping[str, object],
 ) -> tuple[
     dict[str, str],
     list[str],
@@ -360,7 +361,10 @@ def _execute_recommendations_request(
     csrf_token: str,
     issued: bool,
     form_values: Mapping[str, str],
-) -> tuple[tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None, Response | None]:
+) -> tuple[
+    tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None,
+    Response | None,
+]:
     base_args = {
         "request": request,
         "session": session,
@@ -454,7 +458,11 @@ def _fetch_recommendation_rows(
     csrf_token: str,
     issued: bool,
     parsed_form: ParsedRecommendationsForm,
-) -> tuple[Mapping[str, str], tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None, Response | None]:
+) -> tuple[
+    Mapping[str, str],
+    tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None,
+    Response | None,
+]:
     (
         _form_values,
         artist_seeds,
@@ -498,7 +506,16 @@ def _process_recommendations_submission(
     issued: bool,
     parsed_form: ParsedRecommendationsForm,
 ) -> Response:
-    (form_values, artist_seeds, track_seeds, genre_seeds, errors, alerts, limit_value, general_error) = parsed_form
+    (
+        form_values,
+        artist_seeds,
+        track_seeds,
+        genre_seeds,
+        errors,
+        alerts,
+        limit_value,
+        general_error,
+    ) = parsed_form
     if errors or general_error:
         return _render_recommendations_response(
             request,
@@ -1880,6 +1897,61 @@ async def spotify_playlists_fragment(
     return templates.TemplateResponse(
         request,
         "partials/spotify_playlists.j2",
+        context,
+    )
+
+
+@router.get(
+    "/spotify/playlists/{playlist_id}/tracks",
+    include_in_schema=False,
+    name="spotify_playlist_items_fragment",
+)
+async def spotify_playlist_items_fragment(
+    request: Request,
+    playlist_id: str,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    playlist_name: str | None = Query(None, alias="name"),
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        rows, total, page_limit, page_offset = service.playlist_items(
+            playlist_id, limit=limit, offset=offset
+        )
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.fragment.spotify.playlist_items")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify playlist tracks.",
+        )
+
+    context = build_spotify_playlist_items_context(
+        request,
+        playlist_id=playlist_id,
+        playlist_name=playlist_name,
+        rows=rows,
+        total_count=total,
+        limit=page_limit,
+        offset=page_offset,
+    )
+    log_event(
+        logger,
+        "ui.fragment.spotify.playlist_items",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/spotify_playlist_items.j2",
         context,
     )
 

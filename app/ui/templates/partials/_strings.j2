@@ -89,6 +89,7 @@
     "spotify.recommendations.submit": "Fetch recommendations",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
+    "spotify.playlists.view_tracks": "View tracks",
     "soulseek.uploads.cancel": "Cancel upload",
     "soulseek.uploads.refresh": "Refresh",
     "soulseek.uploads.show_active": "Active uploads",
@@ -179,6 +180,12 @@
     "spotify.playlists.name": "Playlist",
     "spotify.playlists.tracks": "Tracks",
     "spotify.playlists.updated": "Updated",
+    "spotify.playlists.actions": "Actions",
+    "spotify.playlist_items.track": "Track",
+    "spotify.playlist_items.artists": "Artists",
+    "spotify.playlist_items.album": "Album",
+    "spotify.playlist_items.added": "Added",
+    "spotify.playlist_items.added_by": "Added by",
     "spotify.top_tracks.rank": "Rank",
     "spotify.top_tracks.name": "Track",
     "spotify.top_tracks.artists": "Artists",
@@ -215,6 +222,7 @@
     "jobs.table.caption": "Orchestrator jobs",
     "search.results.caption": "Search results",
     "spotify.playlists.caption": "Tracked Spotify playlists",
+    "spotify.playlist_items.caption": "Cached Spotify playlist tracks",
     "spotify.top_tracks.caption": "Top Spotify tracks",
     "spotify.top_artists.caption": "Top Spotify artists",
     "spotify.saved_tracks.caption": "Saved Spotify tracks",
@@ -297,6 +305,8 @@
     Loading top Spotify tracks…
   {%- elif key == "spotify.playlists" -%}
     Loading cached Spotify playlists…
+  {%- elif key == "spotify.playlist_items" -%}
+    Loading cached Spotify playlist tracks…
   {%- elif key == "spotify.artists" -%}
     Loading followed Spotify artists…
   {%- elif key == "spotify.recommendations" -%}
@@ -339,6 +349,8 @@
     No matching results found.
   {%- elif key == "spotify.playlists" -%}
     No playlists are currently cached from Spotify.
+  {%- elif key == "spotify.playlist_items" -%}
+    No tracks are currently cached for this playlist.
   {%- elif key == "spotify.saved_tracks" -%}
     No Spotify tracks are currently saved to your library.
   {%- elif key == "spotify.artists" -%}
@@ -362,6 +374,7 @@
     "search": "Search pagination",
     "jobs": "Jobs pagination",
     "spotify.playlists": "Spotify playlists pagination",
+    "spotify.playlist_items": "Spotify playlist items pagination",
     "spotify.saved_tracks": "Spotify saved tracks pagination",
     "spotify.artists": "Spotify artists pagination",
   } -%}
@@ -484,6 +497,34 @@
 {% macro spotify_saved_tracks_heading() %}Saved tracks{% endmacro %}
 
 {% macro spotify_playlists_heading() %}Cached playlists{% endmacro %}
+
+{% macro spotify_playlist_items_heading(name) -%}
+  {%- if name -%}
+    Tracks in {{ name }}
+  {%- else -%}
+    Playlist tracks
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_playlist_items_summary(total, limit, offset, count) -%}
+  {%- if count and count > 0 -%}
+    {%- set start = offset + 1 -%}
+    {%- set end = offset + count -%}
+    {%- if total and end > total -%}
+      {%- set end = total -%}
+    {%- endif -%}
+    {%- if total -%}
+      {%- set total_display = total -%}
+    {%- else -%}
+      {%- set total_display = count -%}
+    {%- endif -%}
+    Showing {{ start }}-{{ end }} of {{ total_display }} tracks.
+  {%- else -%}
+    No tracks to display.
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_playlist_items_region_label() %}Playlist tracks list{% endmacro %}
 
 {% macro spotify_artists_heading() %}Followed artists{% endmacro %}
 

@@ -231,9 +231,11 @@ class SpotifyDomainService:
     def list_playlists(self, session: Session) -> Sequence[Playlist]:
         return session.query(Playlist).order_by(Playlist.updated_at.desc()).all()
 
-    def get_playlist_items(self, playlist_id: str, *, limit: int) -> PlaylistItemsResult:
+    def get_playlist_items(
+        self, playlist_id: str, *, limit: int, offset: int = 0
+    ) -> PlaylistItemsResult:
         client = self._require_spotify()
-        payload = client.get_playlist_items(playlist_id, limit=limit)
+        payload = client.get_playlist_items(playlist_id, limit=limit, offset=offset)
         total = payload.get("total") if isinstance(payload, Mapping) else None
         if total is None and isinstance(payload, Mapping):
             tracks_payload = payload.get("tracks")

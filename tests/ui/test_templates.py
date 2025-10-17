@@ -29,6 +29,7 @@ from app.ui.context import (
     build_spotify_account_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
+    build_spotify_playlist_items_context,
     build_spotify_playlists_context,
     build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,
@@ -44,6 +45,7 @@ from app.ui.services import (
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
+    SpotifyPlaylistItemRow,
     SpotifyPlaylistRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
@@ -377,6 +379,62 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert "2023-09-01T10:00:00+00:00" in html
     assert 'data-test="spotify-remove-track-1"' in html
     assert 'hx-delete="/ui/spotify/saved/remove"' in html
+
+
+def test_spotify_playlists_template_includes_actions() -> None:
+    request = _make_request("/ui/spotify")
+    playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Example Playlist",
+            track_count=12,
+            updated_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
+        ),
+    )
+    context = build_spotify_playlists_context(request, playlists=playlists)
+    template = templates.get_template("partials/spotify_playlists.j2")
+    html = template.render(**context)
+
+    assert 'id="spotify-playlists-table"' in html
+    assert 'data-test="spotify-playlist-view-playlist-1"' in html
+    assert 'hx-get="/ui/spotify/playlists/playlist-1/tracks"' in html
+    assert 'name="limit" value="25"' in html
+    assert 'id="spotify-playlist-items"' in html
+    assert 'aria-label="Playlist tracks list"' in html
+
+
+def test_spotify_playlist_items_template_renders_table() -> None:
+    request = _make_request("/ui/spotify")
+    rows = (
+        SpotifyPlaylistItemRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One",),
+            album="Album One",
+            added_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
+            added_by="Curator",
+            is_local=False,
+            metadata={},
+        ),
+    )
+    context = build_spotify_playlist_items_context(
+        request,
+        playlist_id="playlist-1",
+        playlist_name="Example Playlist",
+        rows=rows,
+        total_count=5,
+        limit=25,
+        offset=0,
+    )
+    template = templates.get_template("partials/spotify_playlist_items.j2")
+    html = template.render(**context)
+
+    assert "Tracks in Example Playlist" in html
+    assert "Showing 1-1 of 5 tracks." in html
+    assert 'id="spotify-playlist-items-table"' in html
+    assert "Track One" in html
+    assert "Artist One" in html
+    assert "Curator" in html
 
 
 def test_soulseek_page_template_renders_fragments() -> None:

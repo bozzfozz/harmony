@@ -203,9 +203,12 @@ def list_playlists(
 def get_playlist_items(
     playlist_id: str,
     limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> PlaylistItemsResponse:
-    result: PlaylistItemsResult = service.get_playlist_items(playlist_id, limit=limit)
+    result: PlaylistItemsResult = service.get_playlist_items(
+        playlist_id, limit=limit, offset=offset
+    )
     normalized_items = [asdict(track) for track in result.items]
     return PlaylistItemsResponse(items=normalized_items, total=result.total)
 
