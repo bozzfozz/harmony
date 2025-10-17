@@ -1,0 +1,29 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as badges %}
+{% import "partials/tables.j2" as tables %}
+
+{% set connection = connection_badge %}
+{% set integration = integration_badge %}
+{% set providers_table = provider_table %}
+
+{% if connection or integration %}
+  <div class="status-grid" data-test="soulseek-status-grid">
+    {% if connection %}
+      <div class="status-grid__item" data-test="soulseek-status-connection">
+        <h4>{{ strings.soulseek_connection_label() }}</h4>
+        {{ badges.render_badge(connection) }}
+      </div>
+    {% endif %}
+    {% if integration %}
+      <div class="status-grid__item" data-test="soulseek-status-integrations">
+        <h4>{{ strings.soulseek_integrations_label() }}</h4>
+        {{ badges.render_badge(integration) }}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if providers_table %}
+  <h4 class="status-subheading">{{ strings.soulseek_providers_heading() }}</h4>
+  {{ tables.render_table(providers_table) }}
+{% endif %}

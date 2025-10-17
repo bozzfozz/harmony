@@ -29,6 +29,7 @@
          hx-target="{{ status_fragment.target }}"
          hx-swap="{{ status_fragment.swap }}">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
+      {% include "partials/soulseek_status.j2" with connection_badge=None, integration_badge=None, provider_table=None %}
     </div>
   </section>
 
@@ -45,6 +46,7 @@
          hx-target="{{ configuration_fragment.target }}"
          hx-swap="{{ configuration_fragment.swap }}">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(configuration_fragment.loading_key) }}</p>
+      {% include "partials/soulseek_config.j2" with table=None %}
     </div>
   </section>
 

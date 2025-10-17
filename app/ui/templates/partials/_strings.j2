@@ -85,6 +85,14 @@
   {%- set labels = {
     "status.enabled": "Enabled",
     "status.disabled": "Disabled",
+    "soulseek.status.connected": "Connected",
+    "soulseek.status.degraded": "Limited",
+    "soulseek.status.disconnected": "Disconnected",
+    "soulseek.status.unknown": "Unknown",
+    "soulseek.integration.ok": "Healthy",
+    "soulseek.integration.degraded": "Degraded",
+    "soulseek.integration.down": "Offline",
+    "soulseek.integration.unknown": "Unknown",
     "spotify.status.connected": "Connected",
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
@@ -96,6 +104,11 @@
   {%- set labels = {
     "dashboard.features.name": "Feature",
     "dashboard.features.status": "Status",
+    "soulseek.providers.name": "Provider",
+    "soulseek.providers.status": "Status",
+    "soulseek.providers.details": "Details",
+    "soulseek.config.setting": "Setting",
+    "soulseek.config.value": "Value",
     "activity.timestamp": "Timestamp",
     "activity.type": "Type",
     "activity.status": "Status",
@@ -140,6 +153,8 @@
     "search.results.caption": "Search results",
     "spotify.playlists.caption": "Tracked Spotify playlists",
     "spotify.artists.caption": "Followed Spotify artists",
+    "soulseek.providers.caption": "Provider health",
+    "soulseek.config.caption": "Soulseek configuration",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -150,6 +165,18 @@
     "feature.soulseek": "Soulseek tools",
     "feature.dlq": "DLQ tools",
     "feature.imports": "Imports",
+    "soulseek.providers.details.none": "No additional details",
+    "soulseek.config.base_url": "API base URL",
+    "soulseek.config.api_key": "API key",
+    "soulseek.config.timeout": "Request timeout",
+    "soulseek.config.retry_max": "Retry attempts",
+    "soulseek.config.retry_backoff": "Retry backoff",
+    "soulseek.config.retry_jitter": "Retry jitter",
+    "soulseek.config.preferred_formats": "Preferred formats",
+    "soulseek.config.max_results": "Max results",
+    "soulseek.config.security_profile": "Security profile",
+    "soulseek.config.require_auth": "Authentication required",
+    "soulseek.config.rate_limiting": "Rate limiting",
     "watchlist.state.active": "Active",
     "watchlist.state.paused": "Paused",
     "spotify.status.connected": "Connected",
@@ -359,6 +386,12 @@
 {% macro soulseek_page_intro() %}Monitor the Soulseek integration and manage transfer activity.{% endmacro %}
 
 {% macro soulseek_status_heading() %}Connection status{% endmacro %}
+
+{% macro soulseek_connection_label() %}Daemon connectivity{% endmacro %}
+
+{% macro soulseek_integrations_label() %}Integration health{% endmacro %}
+
+{% macro soulseek_providers_heading() %}Provider diagnostics{% endmacro %}
 
 {% macro soulseek_configuration_heading() %}Configuration{% endmacro %}
 
