@@ -23,6 +23,7 @@
           method="{{ search_form.method }}"
           action="{{ search_form.action }}"
           hx-post="{{ results_fragment.url }}"
+          hx-push-url="{{ results_fragment.url }}"
           hx-target="{{ results_fragment.target }}"
           hx-swap="{{ results_fragment.swap }}">
       <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />

@@ -200,6 +200,7 @@ def test_search_page_template_renders_form_and_queue() -> None:
     assert 'meta name="csrf-token" content="csrf-search"' in html
     assert 'data-test="nav-soulseek"' in html
     assert 'hx-post="/ui/search/results"' in html
+    assert 'hx-push-url="/ui/search/results"' in html
     assert 'hx-target="#hx-search-results"' in html
     assert 'id="hx-search-results"' in html
     assert "<legend>Sources</legend>" in html
@@ -562,6 +563,8 @@ def test_table_fragment_renders_badge_and_pagination() -> None:
     assert 'aria-label="Watchlist pagination"' in html
     assert 'hx-get="/prev"' in html
     assert 'hx-get="/next"' in html
+    assert 'hx-push-url="/prev"' in html
+    assert 'hx-push-url="/next"' in html
 
 
 def test_pass_context_globals_receive_runtime_context_mapping() -> None:
