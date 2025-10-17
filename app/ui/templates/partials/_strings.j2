@@ -48,8 +48,18 @@
     "login.api_key": "API key",
     "search.query": "Search query",
     "search.limit": "Result limit",
+    "search.sources.legend": "Sources",
+    "search.sources.spotify": "Spotify",
+    "search.sources.soulseek": "Soulseek",
     "spotify.manual.redirect": "Redirect URL",
     "spotify.backfill.max_items": "Max items",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro form_help(key) -%}
+  {%- set labels = {
+    "search.sources.description": "Select the providers to include in your search.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}

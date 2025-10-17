@@ -202,6 +202,13 @@ def test_search_page_template_renders_form_and_queue() -> None:
     assert 'hx-post="/ui/search/results"' in html
     assert 'hx-target="#hx-search-results"' in html
     assert 'id="hx-search-results"' in html
+    assert "<legend>Sources</legend>" in html
+    assert 'id="sources-spotify"' in html
+    assert 'data-test="search-source-spotify"' in html
+    assert 'id="sources-soulseek"' in html
+    assert 'data-test="search-source-soulseek"' in html
+    assert 'type="checkbox"' in html
+    assert "Select the providers to include in your search." in html
     assert 'hx-get="/ui/downloads/table?limit=20"' in html
     assert 'hx-trigger="load, every 30s"' in html
     assert 'hx-target="#hx-search-queue"' in html

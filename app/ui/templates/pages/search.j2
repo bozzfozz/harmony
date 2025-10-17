@@ -27,13 +27,35 @@
           hx-swap="{{ results_fragment.swap }}">
       <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
       {% for field in search_form.fields %}
-        <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
-        <input type="{{ field.input_type }}"
-               name="{{ field.name }}"
-               id="{{ field.name }}"
-               {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %}
-               {% if field.required %}required{% endif %}
-               {% if field.name == "limit" %}min="1" max="100" value="25"{% endif %} />
+        <div class="form-field">
+          <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+          <input type="{{ field.input_type }}"
+                 name="{{ field.name }}"
+                 id="{{ field.name }}"
+                 {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %}
+                 {% if field.required %}required{% endif %}
+                 {% if field.name == "limit" %}min="1" max="100" value="25"{% endif %} />
+        </div>
+      {% endfor %}
+      {% for group in search_form.checkbox_groups %}
+        <fieldset class="form-field form-field--checkbox-group"
+                  {% if group.description_key %}aria-describedby="{{ group.name }}-description"{% endif %}>
+          <legend>{{ strings.form_label(group.legend_key) }}</legend>
+          {% if group.description_key %}
+            <p id="{{ group.name }}-description" class="form-field__help">{{ strings.form_help(group.description_key) }}</p>
+          {% endif %}
+          {% for option in group.options %}
+            <div class="form-checkbox">
+              <input type="checkbox"
+                     name="{{ group.name }}"
+                     id="{{ group.name }}-{{ option.value }}"
+                     value="{{ option.value }}"
+                     {% if option.checked %}checked{% endif %}
+                     {% if option.test_id %}data-test="{{ option.test_id }}"{% endif %} />
+              <label for="{{ group.name }}-{{ option.value }}">{{ strings.form_label(option.label_key) }}</label>
+            </div>
+          {% endfor %}
+        </fieldset>
       {% endfor %}
       <button type="submit">{{ strings.button_label(search_form.submit_label_key) }}</button>
     </form>
