@@ -34,6 +34,7 @@ from app.ui.router import templates
 from app.ui.services import (
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
+    SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
     SpotifyStatus,
@@ -330,6 +331,52 @@ def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
     assert "Ensure the public host is reachable" in html
     assert "No active manual sessions" in html
     assert "Redirect URI" not in html
+
+
+def test_spotify_status_partial_renders_default_manual_messages() -> None:
+    request = _make_request("/ui/spotify/status")
+    status = SpotifyStatus(
+        status="unauthenticated",
+        free_available=True,
+        pro_available=True,
+        authenticated=False,
+    )
+    oauth = SpotifyOAuthHealth(
+        manual_enabled=True,
+        redirect_uri=None,
+        public_host_hint=None,
+        active_transactions=0,
+        ttl_seconds=0,
+    )
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    template = templates.get_template("partials/spotify_status.j2")
+
+    success_context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+        manual_result=SpotifyManualResult(ok=True, message=""),
+    )
+    success_html = template.render(**success_context)
+    assert "Spotify authorization completed successfully." in success_html
+
+    failure_context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+        manual_result=SpotifyManualResult(ok=False, message="   "),
+    )
+    failure_html = template.render(**failure_context)
+    assert "Manual completion failed. Check the redirect URL and try again." in failure_html
 
 
 def test_spotify_playlists_partial_renders_table() -> None:
