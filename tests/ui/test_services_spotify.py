@@ -11,6 +11,8 @@ from starlette.requests import Request
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
+    SpotifyRecommendationRow,
+    SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
@@ -276,6 +278,108 @@ def test_list_saved_tracks_applies_offset() -> None:
     assert len(rows) == 1
     assert rows[0].identifier == "track-2"
     spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=1)
+
+
+def test_recommendations_normalizes_rows_and_seeds() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_recommendations.return_value = {
+        "tracks": [
+            {
+                "id": " track-123 ",
+                "name": " Example Track ",
+                "artists": [
+                    {"name": "Artist One"},
+                    {"name": " Artist Two "},
+                    99,
+                ],
+                "album": {"name": " Album Name "},
+                "preview_url": " https://preview.example ",
+            },
+            {
+                "id": "",
+                "name": "Missing",
+            },
+        ],
+        "seeds": [
+            {
+                "type": "ARTIST",
+                "id": " artist-1 ",
+                "initialPoolSize": "100",
+                "afterFilteringSize": 80,
+                "afterRelinkingSize": None,
+            },
+            {
+                "type": "",
+                "id": "ignored",
+            },
+        ],
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, seeds = service.recommendations(
+        seed_tracks=[" track-1 ", "TRACK-1", "track-2"],
+        seed_artists=[" artist-1 ", "ARTIST-1", "artist-2"],
+        seed_genres=["rock", " Rock ", "jazz"],
+        limit=200,
+    )
+
+    assert rows == (
+        SpotifyRecommendationRow(
+            identifier="track-123",
+            name="Example Track",
+            artists=("Artist One", "Artist Two"),
+            album="Album Name",
+            preview_url="https://preview.example",
+        ),
+    )
+    assert seeds == (
+        SpotifyRecommendationSeed(
+            seed_type="artist",
+            identifier="artist-1",
+            initial_pool_size=100,
+            after_filtering_size=80,
+            after_relinking_size=None,
+        ),
+    )
+    spotify_service.get_recommendations.assert_called_once_with(
+        seed_tracks=("track-1", "track-2"),
+        seed_artists=("artist-1", "artist-2"),
+        seed_genres=("rock", "jazz"),
+        limit=100,
+    )
+
+
+def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_recommendations.return_value = {}
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, seeds = service.recommendations(limit=0)
+
+    assert rows == ()
+    assert seeds == ()
+    spotify_service.get_recommendations.assert_called_once_with(
+        seed_tracks=None,
+        seed_artists=None,
+        seed_genres=None,
+        limit=1,
+    )
 
 
 def test_top_tracks_normalizes_payload() -> None:

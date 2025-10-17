@@ -1,0 +1,83 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts_macro %}
+{% import "partials/tables.j2" as tables %}
+
+<div class="spotify-recommendations">
+  <p class="spotify-recommendations__hint">{{ strings.spotify_recommendations_hint() }}</p>
+  {{ alerts_macro.render_alerts(alerts) }}
+  <form id="spotify-recommendations-form"
+        class="spotify-recommendations__form"
+        method="post"
+        action="/ui/spotify/recommendations"
+        hx-post="/ui/spotify/recommendations"
+        hx-target="#hx-spotify-recommendations"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <div class="form-field">
+      <label for="seed-artists">{{ strings.form_label("spotify.recommendations.seed_artists") }}</label>
+      <input type="text"
+             name="seed_artists"
+             id="seed-artists"
+             value="{{ form_defaults.get('seed_artists', '') }}"
+             autocomplete="off"
+             placeholder="{{ strings.form_help("spotify.recommendations.seed_artists") }}" />
+      {% if form_errors.get('seed_artists') %}
+        <p class="form-field__error">{{ form_errors.get('seed_artists') }}</p>
+      {% endif %}
+    </div>
+    <div class="form-field">
+      <label for="seed-tracks">{{ strings.form_label("spotify.recommendations.seed_tracks") }}</label>
+      <input type="text"
+             name="seed_tracks"
+             id="seed-tracks"
+             value="{{ form_defaults.get('seed_tracks', '') }}"
+             autocomplete="off"
+             placeholder="{{ strings.form_help("spotify.recommendations.seed_tracks") }}" />
+      {% if form_errors.get('seed_tracks') %}
+        <p class="form-field__error">{{ form_errors.get('seed_tracks') }}</p>
+      {% endif %}
+    </div>
+    <div class="form-field">
+      <label for="seed-genres">{{ strings.form_label("spotify.recommendations.seed_genres") }}</label>
+      <textarea name="seed_genres"
+                id="seed-genres"
+                rows="3"
+                placeholder="{{ strings.form_help("spotify.recommendations.seed_genres") }}">{{ form_defaults.get('seed_genres', '') }}</textarea>
+      {% if form_errors.get('seed_genres') %}
+        <p class="form-field__error">{{ form_errors.get('seed_genres') }}</p>
+      {% endif %}
+    </div>
+    <div class="form-field">
+      <label for="recommendation-limit">{{ strings.form_label("spotify.recommendations.limit") }}</label>
+      <input type="number"
+             name="limit"
+             id="recommendation-limit"
+             min="1"
+             max="100"
+             value="{{ form_defaults.get('limit', '20') }}" />
+      {% if form_errors.get('limit') %}
+        <p class="form-field__error">{{ form_errors.get('limit') }}</p>
+      {% endif %}
+    </div>
+    <button type="submit">{{ strings.button_label("spotify.recommendations.submit") }}</button>
+  </form>
+
+  {% if seeds %}
+    <section class="spotify-recommendations__seeds">
+      <h4>{{ strings.spotify_recommendations_seed_heading() }}</h4>
+      <ul>
+        {% for seed in seeds %}
+          <li data-test="spotify-recommendation-seed-{{ seed.seed_type }}-{{ seed.identifier }}">
+            <strong>{{ strings.spotify_recommendations_seed_type(seed.seed_type) }}:</strong>
+            {{ seed.identifier }}
+            {% if seed.size_summary %}
+              ({{ seed.size_summary }})
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {{ tables.render_table_fragment(fragment) }}
+</div>

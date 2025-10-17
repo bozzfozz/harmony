@@ -56,6 +56,10 @@
     "spotify.manual.redirect": "Redirect URL",
     "spotify.backfill.max_items": "Max items",
     "spotify.saved.track_ids": "Track IDs",
+    "spotify.recommendations.seed_artists": "Artist seeds",
+    "spotify.recommendations.seed_tracks": "Track seeds",
+    "spotify.recommendations.seed_genres": "Genre seeds",
+    "spotify.recommendations.limit": "Result limit",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -64,6 +68,9 @@
   {%- set labels = {
     "search.sources.description": "Select the providers to include in your search.",
     "spotify.saved.track_ids": "Enter one or more Spotify track IDs separated by commas or spaces.",
+    "spotify.recommendations.seed_artists": "Enter up to five Spotify artist IDs, separated by commas or spaces.",
+    "spotify.recommendations.seed_tracks": "Enter up to five Spotify track IDs, separated by commas or spaces.",
+    "spotify.recommendations.seed_genres": "Provide Spotify genre seeds, separated by commas or new lines.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -79,6 +86,7 @@
     "spotify.backfill.run": "Start backfill",
     "spotify.saved.save": "Save tracks",
     "spotify.saved.remove": "Remove",
+    "spotify.recommendations.submit": "Fetch recommendations",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
     "soulseek.uploads.cancel": "Cancel upload",
@@ -177,6 +185,9 @@
     "spotify.top_tracks.album": "Album",
     "spotify.top_tracks.popularity": "Popularity",
     "spotify.top_tracks.duration": "Duration",
+    "spotify.recommendations.track": "Track",
+    "spotify.recommendations.artists": "Artists",
+    "spotify.recommendations.album": "Album",
     "spotify.saved_tracks.name": "Track",
     "spotify.saved_tracks.artists": "Artists",
     "spotify.saved_tracks.album": "Album",
@@ -208,6 +219,7 @@
     "spotify.top_artists.caption": "Top Spotify artists",
     "spotify.saved_tracks.caption": "Saved Spotify tracks",
     "spotify.artists.caption": "Followed Spotify artists",
+    "spotify.recommendations.caption": "Recommended Spotify tracks",
     "soulseek.providers.caption": "Provider health",
     "soulseek.config.caption": "Soulseek configuration",
     "soulseek.uploads.caption": "Soulseek uploads",
@@ -287,6 +299,8 @@
     Loading cached Spotify playlists…
   {%- elif key == "spotify.artists" -%}
     Loading followed Spotify artists…
+  {%- elif key == "spotify.recommendations" -%}
+    Preparing Spotify recommendations…
   {%- elif key == "spotify.top_artists" -%}
     Loading top Spotify artists…
   {%- elif key == "spotify.backfill" -%}
@@ -333,6 +347,8 @@
     Spotify has not reported any top tracks for your account yet.
   {%- elif key == "spotify.top_artists" -%}
     Spotify has not reported any top artists for your account yet.
+  {%- elif key == "spotify.recommendations" -%}
+    No Spotify recommendations available yet. Submit the form above to fetch suggestions.
   {%- else -%}
     {{ key }}
   {%- endif -%}
@@ -438,7 +454,7 @@
 
 {% macro spotify_account_empty_state() %}No Spotify profile information is available.{% endmacro %}
 
-{% macro spotify_page_intro() %}Manage the Spotify connection, review top tracks and artists, saved tracks, cached playlists, and backfill jobs.{% endmacro %}
+{% macro spotify_page_intro() %}Manage the Spotify connection, review top tracks and artists, saved tracks, cached playlists, recommendations, and backfill jobs.{% endmacro %}
 
 {% macro spotify_status_heading() %}Connection status{% endmacro %}
 
@@ -447,6 +463,23 @@
 {% macro spotify_top_tracks_heading() %}Top tracks{% endmacro %}
 
 {% macro spotify_top_artists_heading() %}Top artists{% endmacro %}
+
+{% macro spotify_recommendations_heading() %}Recommendations{% endmacro %}
+
+{% macro spotify_recommendations_description() %}Generate personalised track suggestions using Spotify seed values.{% endmacro %}
+
+{% macro spotify_recommendations_hint() %}Provide up to five combined artist, track, or genre seeds to fetch Spotify recommendations.{% endmacro %}
+
+{% macro spotify_recommendations_seed_heading() %}Seed summary{% endmacro %}
+
+{% macro spotify_recommendations_seed_type(seed_type) -%}
+  {%- set labels = {
+    "artist": "Artist",
+    "track": "Track",
+    "genre": "Genre",
+  } -%}
+  {{ labels.get(seed_type, seed_type) }}
+{%- endmacro %}
 
 {% macro spotify_saved_tracks_heading() %}Saved tracks{% endmacro %}
 
