@@ -7,6 +7,7 @@
     "activity": "Activity",
     "watchlist": "Watchlist",
     "spotify": "Spotify",
+    "search": "Soulseek search",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -22,6 +23,7 @@
     "activity": "Recent activity",
     "watchlist": "Watchlist",
     "spotify": "Spotify integration",
+    "search": "Soulseek search",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -34,6 +36,7 @@
   {%- set labels = {
     "nav.home": "Home",
     "nav.spotify": "Spotify",
+    "nav.soulseek": "Soulseek",
     "nav.operations": "Operations",
     "nav.admin": "Admin",
   } -%}
@@ -43,6 +46,8 @@
 {% macro form_label(key) -%}
   {%- set labels = {
     "login.api_key": "API key",
+    "search.query": "Search query",
+    "search.limit": "Result limit",
     "spotify.manual.redirect": "Redirect URL",
     "spotify.backfill.max_items": "Max items",
   } -%}
@@ -58,6 +63,7 @@
     "spotify.connect": "Connect",
     "spotify.manual.submit": "Complete manually",
     "spotify.backfill.run": "Start backfill",
+    "search.submit": "Search",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -172,6 +178,10 @@
     Loading cached Spotify playlists…
   {%- elif key == "spotify.backfill" -%}
     Fetching Spotify backfill status…
+  {%- elif key == "search.results" -%}
+    Waiting for search results…
+  {%- elif key == "search.queue" -%}
+    Loading the Soulseek queue…
   {%- else -%}
     {{ loading_placeholder() }}
   {%- endif -%}
@@ -296,6 +306,20 @@
 {% macro fragment_error_default() %}The requested data could not be loaded. Please try again.{% endmacro %}
 
 {% macro login_description() %}Use your Harmony API key to access the operator console.{% endmacro %}
+
+{% macro search_page_intro() %}Run Soulseek searches and monitor the active download queue.{% endmacro %}
+
+{% macro search_form_heading() %}Search Soulseek{% endmacro %}
+
+{% macro search_form_description() %}Enter a query to search across configured music sources.{% endmacro %}
+
+{% macro search_results_heading() %}Results{% endmacro %}
+
+{% macro search_results_placeholder() %}Submit a query to view matching files.{% endmacro %}
+
+{% macro search_queue_heading() %}Download queue{% endmacro %}
+
+{% macro search_queue_description() %}The queue refreshes automatically while this page remains open.{% endmacro %}
 
 {% macro modal_title(key) -%}
   {%- set labels = {

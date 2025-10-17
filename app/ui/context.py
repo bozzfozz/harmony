@@ -211,6 +211,16 @@ def _build_primary_navigation(session: UiSession, *, active: str) -> NavigationC
             )
         )
 
+    if session.features.soulseek:
+        items.append(
+            NavItem(
+                label_key="nav.soulseek",
+                href="/ui/search",
+                active=active == "search",
+                test_id="nav-soulseek",
+            )
+        )
+
     if session.allows("operator"):
         items.append(
             NavItem(
@@ -449,6 +459,78 @@ def build_spotify_page_context(
         "status_fragment": status_fragment,
         "playlists_fragment": playlists_fragment,
         "backfill_fragment": backfill_fragment,
+    }
+
+
+def build_search_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="search",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="search"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    search_form = FormDefinition(
+        identifier="search-form",
+        method="post",
+        action="/ui/search/results",
+        submit_label_key="search.submit",
+        fields=(
+            FormField(
+                name="query",
+                input_type="search",
+                label_key="search.query",
+                autocomplete="off",
+                required=True,
+            ),
+            FormField(
+                name="limit",
+                input_type="number",
+                label_key="search.limit",
+            ),
+        ),
+    )
+
+    try:
+        results_url = request.url_for("search_results")
+    except Exception:  # pragma: no cover - fallback for tests
+        results_url = "/ui/search/results"
+
+    results_fragment = AsyncFragment(
+        identifier="hx-search-results",
+        url=results_url,
+        target="#hx-search-results",
+        swap="innerHTML",
+        loading_key="search.results",
+    )
+
+    try:
+        queue_url = request.url_for("downloads_table")
+    except Exception:  # pragma: no cover - fallback for tests
+        queue_url = "/ui/downloads/table"
+
+    queue_fragment = AsyncFragment(
+        identifier="hx-search-queue",
+        url=f"{queue_url}?limit=20",
+        target="#hx-search-queue",
+        poll_interval_seconds=30,
+        swap="innerHTML",
+        loading_key="search.queue",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "search_form": search_form,
+        "results_fragment": results_fragment,
+        "queue_fragment": queue_fragment,
     }
 
 
@@ -862,6 +944,7 @@ __all__ = [
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",
+    "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",
     "build_search_results_context",
