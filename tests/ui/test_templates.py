@@ -130,6 +130,9 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'class="async-fragment"' in html
     assert 'aria-live="polite"' in html
+    assert "Checking Spotify connection…" in html
+    assert "Loading cached Spotify playlists…" in html
+    assert "Fetching Spotify backfill status…" in html
 
 
 def test_base_layout_renders_navigation_and_alerts() -> None:

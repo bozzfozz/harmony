@@ -413,6 +413,7 @@ def build_spotify_page_context(
         target="#hx-spotify-status",
         poll_interval_seconds=60,
         swap="innerHTML",
+        loading_key="spotify.status",
     )
 
     try:
@@ -424,6 +425,7 @@ def build_spotify_page_context(
         url=playlists_url,
         target="#hx-spotify-playlists",
         swap="innerHTML",
+        loading_key="spotify.playlists",
     )
 
     try:
@@ -436,6 +438,7 @@ def build_spotify_page_context(
         target="#hx-spotify-backfill",
         poll_interval_seconds=30,
         swap="innerHTML",
+        loading_key="spotify.backfill",
     )
 
     return {
