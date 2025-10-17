@@ -5,6 +5,7 @@ from .downloads import DownloadPage, DownloadRow, DownloadsUiService, get_downlo
 from .jobs import JobsUiService, OrchestratorJob, get_jobs_ui_service
 from .search import (
     SearchResult,
+    SearchResultDownload,
     SearchResultsPage,
     SearchUiService,
     get_search_ui_service,
@@ -38,6 +39,7 @@ __all__ = [
     "OrchestratorJob",
     "get_jobs_ui_service",
     "SearchResult",
+    "SearchResultDownload",
     "SearchResultsPage",
     "SearchUiService",
     "get_search_ui_service",

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+import json
 import re
+from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.dependencies import get_download_service
 from app.errors import AppError, ErrorCode
 from app.main import app
 from app.services.watchlist_service import WatchlistService
@@ -15,6 +18,7 @@ from app.ui.services import (
     DownloadRow,
     OrchestratorJob,
     SearchResult,
+    SearchResultDownload,
     SearchResultsPage,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
@@ -22,7 +26,6 @@ from app.ui.services import (
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
     SpotifyStatus,
-    SpotifyUiService,
     WatchlistRow,
     WatchlistTable,
     get_activity_ui_service,
@@ -161,6 +164,18 @@ class _StubSearchService:
         if isinstance(self._result, Exception):
             raise self._result
         self.calls.append((query, limit, offset, tuple(sources or [])))
+        return self._result
+
+
+class _StubQueueDownloadService:
+    def __init__(self, result: dict[str, Any] | Exception) -> None:
+        self._result = result
+        self.calls: list[tuple[Any, Any]] = []
+
+    async def queue_downloads(self, payload, *, worker: Any) -> dict[str, Any]:
+        self.calls.append((payload, worker))
+        if isinstance(self._result, Exception):
+            raise self._result
         return self._result
 
 
@@ -736,6 +751,60 @@ def test_search_results_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_search_ui_service, None)
 
 
+def test_search_results_render_download_action(monkeypatch) -> None:
+    page = SearchResultsPage(
+        items=[
+            SearchResult(
+                identifier="track-3",
+                title="Queue Me",
+                artist="Downloader",
+                source="soulseek",
+                score=0.9,
+                bitrate=256,
+                audio_format="FLAC",
+                download=SearchResultDownload(
+                    username="collector",
+                    files=(
+                        {
+                            "filename": "Downloader - Queue Me.flac",
+                            "download_uri": "magnet:?xt=urn:btih:queue",
+                            "source": "ui-search:soulseek",
+                        },
+                    ),
+                ),
+            )
+        ],
+        total=1,
+        limit=25,
+        offset=0,
+    )
+    stub = _StubSearchService(page)
+    app.dependency_overrides[get_search_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/search/results",
+                data={"query": "Queue", "limit": "25", "sources": ["soulseek"]},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            body = response.text
+            assert (
+                "action=\"/ui/search/download\"" in body
+                or "action=\"http://testserver/ui/search/download\"" in body
+            )
+            assert (
+                "hx-post=\"/ui/search/download\"" in body
+                or "hx-post=\"http://testserver/ui/search/download\"" in body
+            )
+            assert "name=\"files\"" in body
+            assert "Queue download" in body
+    finally:
+        app.dependency_overrides.pop(get_search_ui_service, None)
+
+
 def test_search_results_get_pagination(monkeypatch) -> None:
     page = SearchResultsPage(
         items=[
@@ -811,6 +880,97 @@ def test_search_results_forbidden_for_read_only(monkeypatch) -> None:
             headers=headers,
         )
         _assert_json_error(response, status_code=403)
+
+
+def test_search_download_action_success(monkeypatch) -> None:
+    stub = _StubQueueDownloadService({"status": "queued"})
+    app.dependency_overrides[get_download_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            files_payload = json.dumps(
+                [
+                    {
+                        "filename": "Queued.flac",
+                        "download_uri": "magnet:?xt=urn:btih:queued",
+                        "source": "ui-search:soulseek",
+                    }
+                ]
+            )
+            response = client.post(
+                "/ui/search/download",
+                data={
+                    "identifier": "track-queued",
+                    "username": "collector",
+                    "files": files_payload,
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "Queued download request for Queued.flac" in response.text
+            assert len(stub.calls) == 1
+            payload, worker = stub.calls[0]
+            assert payload.username == "collector"
+            assert payload.files[0].resolved_filename == "Queued.flac"
+            assert worker is None
+    finally:
+        app.dependency_overrides.pop(get_download_service, None)
+
+
+def test_search_download_action_app_error(monkeypatch) -> None:
+    error = AppError("worker unavailable", code=ErrorCode.DEPENDENCY_ERROR, http_status=503)
+    stub = _StubQueueDownloadService(error)
+    app.dependency_overrides[get_download_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            files_payload = json.dumps(
+                [
+                    {
+                        "filename": "Failure.flac",
+                        "download_uri": "magnet:?xt=urn:btih:failure",
+                        "source": "ui-search:soulseek",
+                    }
+                ]
+            )
+            response = client.post(
+                "/ui/search/download",
+                data={
+                    "identifier": "track-fail",
+                    "username": "collector",
+                    "files": files_payload,
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=503)
+            assert "worker unavailable" in response.text
+            assert len(stub.calls) == 1
+    finally:
+        app.dependency_overrides.pop(get_download_service, None)
+
+
+def test_search_download_action_invalid_payload(monkeypatch) -> None:
+    stub = _StubQueueDownloadService({"status": "queued"})
+    app.dependency_overrides[get_download_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/search/download",
+                data={
+                    "identifier": "track-invalid",
+                    "username": "",
+                    "files": "",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert len(stub.calls) == 0
+    finally:
+        app.dependency_overrides.pop(get_download_service, None)
 
 
 def test_search_results_app_error(monkeypatch) -> None:
