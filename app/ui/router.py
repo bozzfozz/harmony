@@ -22,6 +22,7 @@ from app.ui.context import (
     build_login_page_context,
     build_search_page_context,
     build_search_results_context,
+    build_spotify_artists_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
@@ -506,6 +507,36 @@ async def spotify_backfill_fragment(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
+
+@router.get("/spotify/artists", include_in_schema=False, name="spotify_artists_fragment")
+async def spotify_artists_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        artists = service.list_followed_artists()
+    except Exception:
+        logger.exception("ui.fragment.spotify.artists")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify artists.",
+        )
+    context = build_spotify_artists_context(request, artists=artists)
+    log_event(
+        logger,
+        "ui.fragment.spotify.artists",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/spotify_artists.j2",
+        context,
+    )
 
 
 @router.get("/spotify/playlists", include_in_schema=False, name="spotify_playlists_fragment")
