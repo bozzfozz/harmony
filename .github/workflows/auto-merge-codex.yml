@@ -58,4 +58,3 @@ jobs:
 concurrency:
   group: auto-merge-codex-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
-```0
