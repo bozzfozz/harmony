@@ -306,6 +306,7 @@ async def spotify_oauth_manual(
         manual_form=manual_form,
         csrf_token=csrf_token,
         manual_result=result,
+        manual_redirect_url=redirect_url if not result.ok else None,
     )
     response = templates.TemplateResponse(
         request,

@@ -556,6 +556,7 @@ def build_spotify_status_context(
     manual_form: FormDefinition,
     csrf_token: str,
     manual_result: SpotifyManualResult | None = None,
+    manual_redirect_url: str | None = None,
 ) -> Mapping[str, Any]:
     alerts: list[AlertMessage] = []
     if manual_result is not None:
@@ -600,6 +601,7 @@ def build_spotify_status_context(
         "manual_form": manual_form,
         "csrf_token": csrf_token,
         "status_label_key": status_label_key,
+        "manual_redirect_url": manual_redirect_url,
     }
 
 

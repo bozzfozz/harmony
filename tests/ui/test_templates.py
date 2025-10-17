@@ -291,6 +291,7 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert "Authentication is required" in html
     assert "Redirect URI" in html
     assert "Manual session timeout" in html
+    assert 'name="redirect_url" value=' not in html
 
 
 def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
