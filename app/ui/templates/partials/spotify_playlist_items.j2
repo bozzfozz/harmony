@@ -1,0 +1,12 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
+
+<section class="spotify-playlist-items__section">
+  <h4 class="spotify-playlist-items__heading">
+    {{ strings.spotify_playlist_items_heading(playlist_name) }}
+  </h4>
+  <p class="spotify-playlist-items__summary">
+    {{ strings.spotify_playlist_items_summary(total_count, page_limit, page_offset, row_count) }}
+  </p>
+  {{ tables.render_table_fragment(fragment) }}
+</section>

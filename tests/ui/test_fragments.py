@@ -32,6 +32,7 @@ from app.ui.services import (
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
+    SpotifyPlaylistItemRow,
     SpotifyPlaylistRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
@@ -216,6 +217,12 @@ class _StubSpotifyService:
         )
         self.account_exception: Exception | None = None
         self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
+        self.playlist_items_rows: Sequence[SpotifyPlaylistItemRow] | Exception = ()
+        self.playlist_items_total: int = 0
+        self.playlist_items_page_limit: int = 25
+        self.playlist_items_page_offset: int = 0
+        self.playlist_items_calls: list[tuple[str, int, int]] = []
+        self.playlist_items_exception: Exception | None = None
         self.artists: Sequence[SpotifyArtistRow] | Exception = ()
         self.top_tracks_rows: Sequence[SpotifyTopTrackRow] | Exception = (
             SpotifyTopTrackRow(
@@ -317,6 +324,21 @@ class _StubSpotifyService:
         if isinstance(self.playlists, Exception):
             raise self.playlists
         return tuple(self.playlists)
+
+    def playlist_items(
+        self, playlist_id: str, *, limit: int, offset: int
+    ) -> tuple[Sequence[SpotifyPlaylistItemRow], int, int, int]:
+        self.playlist_items_calls.append((playlist_id, limit, offset))
+        if self.playlist_items_exception:
+            raise self.playlist_items_exception
+        if isinstance(self.playlist_items_rows, Exception):
+            raise self.playlist_items_rows
+        return (
+            tuple(self.playlist_items_rows),
+            self.playlist_items_total,
+            self.playlist_items_page_limit,
+            self.playlist_items_page_offset,
+        )
 
     def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
         if isinstance(self.artists, Exception):
@@ -2036,6 +2058,95 @@ def test_spotify_playlists_fragment_returns_error_on_failure(monkeypatch) -> Non
             )
             assert response.status_code == 500
             assert "Unable to load Spotify playlists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_items_fragment_renders_table(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlist_items_rows = (
+        SpotifyPlaylistItemRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One",),
+            album="Album One",
+            added_at=datetime(2023, 9, 1, 12, 0),
+            added_by="Curator",
+            is_local=False,
+            metadata={},
+        ),
+    )
+    stub.playlist_items_total = 5
+    stub.playlist_items_page_limit = 25
+    stub.playlist_items_page_offset = 0
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/playlists/playlist-1/tracks",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-playlist-items-table" in response.text
+            assert "Track One" in response.text
+            assert stub.playlist_items_calls == [("playlist-1", 25, 0)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_items_fragment_forwards_query_bounds(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlist_items_rows = ()
+    stub.playlist_items_total = 0
+    stub.playlist_items_page_limit = 10
+    stub.playlist_items_page_offset = 5
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/playlists/playlist-2/tracks",
+                params={"limit": 10, "offset": 5, "name": "Example"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "No tracks to display." in response.text
+            assert stub.playlist_items_calls == [("playlist-2", 10, 5)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_items_fragment_handles_validation_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlist_items_exception = ValueError("bad request")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/playlists/playlist-3/tracks",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            assert response.status_code == 400
+            assert "bad request" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_items_fragment_returns_error_on_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlist_items_exception = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/playlists/playlist-4/tracks",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            assert response.status_code == 500
+            assert "Unable to load Spotify playlist tracks." in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

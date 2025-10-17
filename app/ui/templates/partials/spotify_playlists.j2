@@ -1,3 +1,12 @@
+{% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
 {{ tables.render_table_fragment(fragment) }}
+
+<div id="spotify-playlist-items"
+     class="spotify-playlist-items"
+     role="region"
+     aria-live="polite"
+     aria-label="{{ strings.spotify_playlist_items_region_label() }}">
+  <p class="async-fragment__placeholder">{{ strings.fragment_loading("spotify.playlist_items") }}</p>
+</div>

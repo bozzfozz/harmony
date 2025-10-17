@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Mapping
 from unittest.mock import Mock
 
+import pytest
 from starlette.requests import Request
 
+from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
+    SpotifyPlaylistItemRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
@@ -278,6 +282,92 @@ def test_list_saved_tracks_applies_offset() -> None:
     assert len(rows) == 1
     assert rows[0].identifier == "track-2"
     spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=1)
+
+
+def test_playlist_items_normalizes_tracks_and_metadata() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    playlist_track = ProviderTrack(
+        name=" Example Track ",
+        provider="spotify",
+        id=" track-1 ",
+        artists=(
+            ProviderArtist(source="spotify", name="Artist One"),
+            ProviderArtist(source="spotify", name=" Artist Two "),
+        ),
+        album=ProviderAlbum(name=" Album Name "),
+        metadata={
+            "playlist_item": {
+                "added_at": "2023-09-01T12:00:00Z",
+                "is_local": True,
+                "added_by": {"display_name": "Curator", "id": "user-1"},
+            }
+        },
+    )
+    spotify_service = Mock()
+    spotify_service.get_playlist_items.return_value = SimpleNamespace(
+        items=(playlist_track,),
+        total=5,
+    )
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, total, page_limit, page_offset = service.playlist_items(
+        " playlist-1 ", limit=150, offset=10
+    )
+
+    assert total == 5
+    assert page_limit == 100
+    assert page_offset == 10
+    assert rows == (
+        SpotifyPlaylistItemRow(
+            identifier="track-1",
+            name="Example Track",
+            artists=("Artist One", "Artist Two"),
+            album="Album Name",
+            added_at=datetime.fromisoformat("2023-09-01T12:00:00+00:00"),
+            added_by="Curator",
+            is_local=True,
+            metadata={
+                "playlist_item": {
+                    "added_at": "2023-09-01T12:00:00+00:00",
+                    "is_local": True,
+                    "added_by": {"display_name": "Curator", "id": "user-1"},
+                }
+            },
+        ),
+    )
+    spotify_service.get_playlist_items.assert_called_once_with("playlist-1", limit=100, offset=10)
+
+
+def test_playlist_items_validates_identifier_and_applies_bounds() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_playlist_items.return_value = SimpleNamespace(items=(), total=0)
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        service.playlist_items("   ", limit=10, offset=0)
+
+    rows, total, page_limit, page_offset = service.playlist_items("playlist-2", limit=0, offset=-5)
+
+    assert rows == ()
+    assert total == 0
+    assert page_limit == 1
+    assert page_offset == 0
+    spotify_service.get_playlist_items.assert_called_once_with("playlist-2", limit=1, offset=0)
 
 
 def test_recommendations_normalizes_rows_and_seeds() -> None:

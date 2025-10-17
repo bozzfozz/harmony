@@ -65,6 +65,18 @@ class SpotifyPlaylistRow:
 
 
 @dataclass(slots=True)
+class SpotifyPlaylistItemRow:
+    identifier: str
+    name: str
+    artists: tuple[str, ...]
+    album: str | None
+    added_at: datetime | None
+    added_by: str | None
+    is_local: bool
+    metadata: Mapping[str, Any]
+
+
+@dataclass(slots=True)
 class SpotifyArtistRow:
     identifier: str
     name: str
@@ -223,6 +235,127 @@ class SpotifyUiService:
         ]
         logger.debug("spotify.ui.playlists", extra={"count": len(rows)})
         return tuple(rows)
+
+    def playlist_items(
+        self,
+        playlist_id: str,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[Sequence[SpotifyPlaylistItemRow], int, int, int]:
+        playlist_key = str(playlist_id or "").strip()
+        if not playlist_key:
+            raise ValueError("A Spotify playlist identifier is required.")
+
+        page_limit = max(1, min(int(limit), 100))
+        page_offset = max(0, int(offset))
+        result = self._spotify.get_playlist_items(
+            playlist_key, limit=page_limit, offset=page_offset
+        )
+
+        rows: list[SpotifyPlaylistItemRow] = []
+        items = getattr(result, "items", ())
+        total_count = int(getattr(result, "total", 0) or 0)
+        for entry in items:
+            identifier = str(getattr(entry, "id", "") or "").strip()
+            name = str(getattr(entry, "name", "") or "").strip()
+            if not identifier or not name:
+                continue
+
+            artist_names: list[str] = []
+            for artist in getattr(entry, "artists", ()):
+                if isinstance(artist, Mapping):
+                    artist_name_raw = artist.get("name")
+                else:
+                    artist_name_raw = getattr(artist, "name", artist)
+                if isinstance(artist_name_raw, str):
+                    artist_name = artist_name_raw.strip()
+                    if artist_name:
+                        artist_names.append(artist_name)
+
+            album_name: str | None = None
+            album = getattr(entry, "album", None)
+            if isinstance(album, Mapping):
+                album_name_raw = album.get("name")
+            else:
+                album_name_raw = getattr(album, "name", None)
+            if isinstance(album_name_raw, str):
+                album_candidate = album_name_raw.strip()
+                if album_candidate:
+                    album_name = album_candidate
+
+            metadata_payload = getattr(entry, "metadata", {})
+            metadata: dict[str, Any]
+            if isinstance(metadata_payload, Mapping):
+                metadata = dict(metadata_payload)
+            else:
+                metadata = {}
+
+            playlist_meta_raw = metadata.get("playlist_item")
+            playlist_meta_source = (
+                playlist_meta_raw if isinstance(playlist_meta_raw, Mapping) else {}
+            )
+
+            playlist_metadata: dict[str, Any] = {}
+            added_at_value = self._parse_timestamp(playlist_meta_source.get("added_at"))
+            if added_at_value:
+                playlist_metadata["added_at"] = added_at_value.isoformat()
+
+            is_local_value = playlist_meta_source.get("is_local")
+            is_local = bool(is_local_value) if isinstance(is_local_value, bool) else False
+            if isinstance(is_local_value, bool):
+                playlist_metadata["is_local"] = is_local_value
+
+            added_by_value: str | None = None
+            added_by_raw = playlist_meta_source.get("added_by")
+            if isinstance(added_by_raw, Mapping):
+                added_by: dict[str, Any] = {}
+                for key in ("id", "type", "uri"):
+                    value = added_by_raw.get(key)
+                    if isinstance(value, str):
+                        candidate = value.strip()
+                        if candidate:
+                            added_by[key] = candidate
+                display_name = added_by_raw.get("display_name")
+                if isinstance(display_name, str) and display_name.strip():
+                    added_by["display_name"] = display_name.strip()
+                    added_by_value = display_name.strip()
+                else:
+                    for key in ("id", "uri"):
+                        candidate = added_by.get(key)
+                        if isinstance(candidate, str) and candidate:
+                            added_by_value = candidate
+                            break
+                if added_by:
+                    playlist_metadata["added_by"] = added_by
+
+            if playlist_metadata:
+                metadata["playlist_item"] = playlist_metadata
+
+            rows.append(
+                SpotifyPlaylistItemRow(
+                    identifier=identifier,
+                    name=name,
+                    artists=tuple(artist_names),
+                    album=album_name,
+                    added_at=added_at_value,
+                    added_by=added_by_value,
+                    is_local=is_local,
+                    metadata=metadata,
+                )
+            )
+
+        logger.debug(
+            "spotify.ui.playlist_items",
+            extra={
+                "playlist_id": playlist_key,
+                "count": len(rows),
+                "limit": page_limit,
+                "offset": page_offset,
+                "total": total_count,
+            },
+        )
+        return tuple(rows), total_count, page_limit, page_offset
 
     def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
         raw_payload = self._spotify.get_followed_artists()
