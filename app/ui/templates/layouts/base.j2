@@ -8,6 +8,7 @@
   <head>
     <meta charset="utf-8" />
     <title>{{ strings.page_title(layout.page_id) }}</title>
+    <link rel="stylesheet" href="/ui/static/css/app.css" />
     {% block head_extras -%}
       {% for meta in layout.head_meta %}
         <meta name="{{ meta.name }}" content="{{ meta.content }}" />
@@ -31,6 +32,7 @@
       {{ modals.render_modals(layout.modals) }}
     {% endblock %}
     {% block scripts %}
+      <script src="/ui/static/js/htmx.min.js" defer></script>
       <script>
         (function () {
           var meta = document.querySelector('meta[name="csrf-token"]');

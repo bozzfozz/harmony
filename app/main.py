@@ -7,10 +7,12 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 import inspect
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 
 from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
@@ -687,6 +689,12 @@ app = FastAPI(
     docs_url=_docs_url,
     redoc_url=_redoc_url,
     openapi_url=_openapi_url,
+)
+
+app.mount(
+    "/ui/static",
+    StaticFiles(directory=Path(__file__).resolve().parent / "ui" / "static"),
+    name="ui-static",
 )
 
 _apply_security_dependencies(app, _config_snapshot.security)
