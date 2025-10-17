@@ -282,6 +282,8 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert "spotify-oauth-start" in html
     assert "spotify-manual-form" in html
     assert 'hx-post="/ui/spotify/oauth/manual"' in html
+    assert 'hx-target="closest .async-fragment"' in html
+    assert 'hx-swap="innerHTML"' in html
     assert "Authentication is required" in html
     assert "Redirect URI" in html
     assert "Manual session timeout" in html
@@ -372,6 +374,8 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
     assert 'value="500"' in html
     assert "job-1" in html
     assert "Expand playlists" in html
+    assert 'hx-target="closest .async-fragment"' in html
+    assert 'hx-swap="innerHTML"' in html
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:
