@@ -101,6 +101,18 @@ def test_role_gating(monkeypatch) -> None:
         assert 'data-role="read_only"' in html
 
 
+def test_search_page_forbidden_for_read_only(monkeypatch) -> None:
+    fingerprint = fingerprint_api_key("primary-key")
+    extra = {"UI_ROLE_OVERRIDES": f"{fingerprint}:read_only"}
+    with _create_client(monkeypatch, extra_env=extra) as client:
+        login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert login.status_code == 303
+        cookie_header = "; ".join(f"{name}={value}" for name, value in login.cookies.items())
+        response = client.get("/ui/search", headers={"Cookie": cookie_header})
+        assert response.status_code == 403
+        assert response.headers.get("content-type", "").startswith("application/json")
+
+
 def test_csrf_enforcement(monkeypatch) -> None:
     with _create_client(monkeypatch) as client:
         login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
