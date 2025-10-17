@@ -1,0 +1,17 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts %}
+
+{{ alerts.render_alerts(alert_messages) }}
+
+<div class="spotify-account" data-has-account="{{ '1' if has_account else '0' }}">
+  {% if has_account %}
+    <dl class="spotify-account__details">
+      {% for field in fields %}
+        <dt class="spotify-account__term">{{ strings.spotify_account_field_label(field.label_key) }}</dt>
+        <dd class="spotify-account__value"{% if field.test_id %} data-test="{{ field.test_id }}"{% endif %}>{{ field.value }}</dd>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="spotify-account__empty">{{ strings.spotify_account_empty_state() }}</p>
+  {% endif %}
+</div>

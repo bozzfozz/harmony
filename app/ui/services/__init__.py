@@ -12,6 +12,7 @@ from .search import (
 )
 from .soulseek import SoulseekUiService, SoulseekUploadRow, get_soulseek_ui_service
 from .spotify import (
+    SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
@@ -48,6 +49,7 @@ __all__ = [
     "SoulseekUploadRow",
     "get_soulseek_ui_service",
     "SpotifyArtistRow",
+    "SpotifyAccountSummary",
     "SpotifyBackfillSnapshot",
     "SpotifyManualResult",
     "SpotifyOAuthHealth",

@@ -19,6 +19,7 @@ from app.ui.services import (
     OrchestratorJob,
     SearchResultsPage,
     SoulseekUploadRow,
+    SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
@@ -65,6 +66,13 @@ class ModalDefinition:
     identifier: str
     title_key: str
     body: str
+
+
+@dataclass(slots=True)
+class DefinitionItem:
+    label_key: str
+    value: str
+    test_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -568,6 +576,18 @@ def build_spotify_page_context(
     )
 
     try:
+        account_url = request.url_for("spotify_account_fragment")
+    except Exception:
+        account_url = "/ui/spotify/account"
+    account_fragment = AsyncFragment(
+        identifier="hx-spotify-account",
+        url=account_url,
+        target="#hx-spotify-account",
+        swap="innerHTML",
+        loading_key="spotify.account",
+    )
+
+    try:
         playlists_url = request.url_for("spotify_playlists_fragment")
     except Exception:
         playlists_url = "/ui/spotify/playlists"
@@ -610,6 +630,7 @@ def build_spotify_page_context(
         "session": session,
         "csrf_token": csrf_token,
         "status_fragment": status_fragment,
+        "account_fragment": account_fragment,
         "playlists_fragment": playlists_fragment,
         "artists_fragment": artists_fragment,
         "backfill_fragment": backfill_fragment,
@@ -1275,6 +1296,57 @@ def build_spotify_status_context(
     }
 
 
+def build_spotify_account_context(
+    request: Request,
+    *,
+    account: SpotifyAccountSummary | None,
+) -> Mapping[str, Any]:
+    alerts: tuple[AlertMessage, ...] = ()
+    if account is None:
+        return {
+            "request": request,
+            "alert_messages": alerts,
+            "has_account": False,
+            "summary": None,
+            "fields": (),
+        }
+
+    product_text = account.product or "—"
+    followers_text = f"{account.followers:,}" if account.followers else "0"
+    country_text = account.country or "—"
+
+    fields: tuple[DefinitionItem, ...] = (
+        DefinitionItem(
+            label_key="spotify.account.display_name",
+            value=account.display_name,
+            test_id="spotify-account-display-name",
+        ),
+        DefinitionItem(
+            label_key="spotify.account.product",
+            value=product_text,
+            test_id="spotify-account-product",
+        ),
+        DefinitionItem(
+            label_key="spotify.account.followers",
+            value=followers_text,
+            test_id="spotify-account-followers",
+        ),
+        DefinitionItem(
+            label_key="spotify.account.country",
+            value=country_text,
+            test_id="spotify-account-country",
+        ),
+    )
+
+    return {
+        "request": request,
+        "alert_messages": alerts,
+        "has_account": True,
+        "summary": account,
+        "fields": fields,
+    }
+
+
 def build_spotify_playlists_context(
     request: Request,
     *,
@@ -1702,6 +1774,7 @@ __all__ = [
     "AlertMessage",
     "CheckboxGroup",
     "CheckboxOption",
+    "DefinitionItem",
     "PaginationContext",
     "FormDefinition",
     "FormField",
@@ -1718,6 +1791,7 @@ __all__ = [
     "build_spotify_artists_context",
     "build_spotify_page_context",
     "build_spotify_playlists_context",
+    "build_spotify_account_context",
     "build_spotify_status_context",
     "build_activity_fragment_context",
     "build_dashboard_page_context",

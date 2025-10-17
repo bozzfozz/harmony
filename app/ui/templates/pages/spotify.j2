@@ -31,6 +31,21 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
     </div>
   </section>
+  <section class="page-section page-section--card" aria-labelledby="{{ account_fragment.identifier }}-heading">
+    <h3 id="{{ account_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_account_heading() }}</h3>
+    <div id="{{ account_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ account_fragment.identifier }}-heading"
+         data-fragment="spotify-account"
+         hx-get="{{ account_fragment.url }}"
+         hx-trigger="{{ account_fragment.trigger }}"
+         hx-target="{{ account_fragment.target }}"
+         hx-swap="{{ account_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(account_fragment.loading_key) }}</p>
+    </div>
+  </section>
   <section class="page-section page-section--card" aria-labelledby="{{ playlists_fragment.identifier }}-heading">
     <h3 id="{{ playlists_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_playlists_heading() }}</h3>
     <div id="{{ playlists_fragment.identifier }}"

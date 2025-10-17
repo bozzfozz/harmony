@@ -26,6 +26,7 @@ from app.ui.context import (
     build_soulseek_page_context,
     build_search_page_context,
     build_spotify_artists_context,
+    build_spotify_account_context,
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
@@ -35,6 +36,7 @@ from app.ui.context import (
 from app.ui.router import templates
 from app.ui.services import (
     SpotifyArtistRow,
+    SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
     SpotifyManualResult,
     SpotifyOAuthHealth,
@@ -153,10 +155,12 @@ def test_spotify_page_template_renders_sections() -> None:
 
     assert "nav-spotify" in html
     assert 'hx-get="/ui/spotify/status"' in html
+    assert 'hx-get="/ui/spotify/account"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'hx-target="#hx-spotify-status"' in html
+    assert 'hx-target="#hx-spotify-account"' in html
     assert 'hx-target="#hx-spotify-playlists"' in html
     assert 'hx-target="#hx-spotify-artists"' in html
     assert 'hx-target="#hx-spotify-backfill"' in html
@@ -165,17 +169,48 @@ def test_spotify_page_template_renders_sections() -> None:
     assert html.count('hx-trigger="load"') >= 2
     assert 'hx-swap="innerHTML"' in html
     assert 'role="status"' in html
-    assert html.count('role="region"') >= 3
+    assert html.count('role="region"') >= 4
     assert 'data-fragment="spotify-status"' in html
+    assert 'data-fragment="spotify-account"' in html
     assert 'data-fragment="spotify-playlists"' in html
     assert 'data-fragment="spotify-artists"' in html
     assert 'data-fragment="spotify-backfill"' in html
     assert 'class="async-fragment"' in html
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
+    assert "Loading Spotify account details…" in html
     assert "Loading cached Spotify playlists…" in html
     assert "Loading followed Spotify artists…" in html
     assert "Fetching Spotify backfill status…" in html
+
+
+def test_spotify_account_fragment_template_renders_summary() -> None:
+    request = _make_request("/ui/spotify")
+    summary = SpotifyAccountSummary(
+        display_name="Example User",
+        product="Premium",
+        followers=2500,
+        country="GB",
+    )
+    context = build_spotify_account_context(request, account=summary)
+    template = templates.get_template("partials/spotify_account.j2")
+    html = template.render(**context)
+
+    assert "Example User" in html
+    assert "Premium" in html
+    assert "2,500" in html
+    assert "GB" in html
+    assert 'data-test="spotify-account-product"' in html
+
+
+def test_spotify_account_fragment_template_handles_missing_profile() -> None:
+    request = _make_request("/ui/spotify")
+    context = build_spotify_account_context(request, account=None)
+    template = templates.get_template("partials/spotify_account.j2")
+    html = template.render(**context)
+
+    assert "No Spotify profile information is available." in html
+    assert 'data-has-account="0"' in html
 
 
 def test_soulseek_page_template_renders_fragments() -> None:
