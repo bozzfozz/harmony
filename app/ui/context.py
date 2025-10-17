@@ -25,6 +25,7 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifySavedTrackRow,
     SpotifyStatus,
     WatchlistRow,
 )
@@ -588,6 +589,18 @@ def build_spotify_page_context(
     )
 
     try:
+        saved_url = request.url_for("spotify_saved_tracks_fragment")
+    except Exception:
+        saved_url = "/ui/spotify/saved"
+    saved_fragment = AsyncFragment(
+        identifier="hx-spotify-saved",
+        url=saved_url,
+        target="#hx-spotify-saved",
+        swap="innerHTML",
+        loading_key="spotify.saved_tracks",
+    )
+
+    try:
         playlists_url = request.url_for("spotify_playlists_fragment")
     except Exception:
         playlists_url = "/ui/spotify/playlists"
@@ -631,6 +644,7 @@ def build_spotify_page_context(
         "csrf_token": csrf_token,
         "status_fragment": status_fragment,
         "account_fragment": account_fragment,
+        "saved_fragment": saved_fragment,
         "playlists_fragment": playlists_fragment,
         "artists_fragment": artists_fragment,
         "backfill_fragment": backfill_fragment,
@@ -1386,6 +1400,115 @@ def build_spotify_playlists_context(
     return {"request": request, "fragment": fragment}
 
 
+def build_spotify_saved_tracks_context(
+    request: Request,
+    *,
+    rows: Sequence[SpotifySavedTrackRow],
+    total_count: int,
+    limit: int,
+    offset: int,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    artists_label = "spotify.saved_tracks.artists"
+    try:
+        remove_url = request.url_for("spotify_saved_tracks_action", action="remove")
+    except Exception:  # pragma: no cover - fallback for tests
+        remove_url = "/ui/spotify/saved/remove"
+
+    try:
+        save_url = request.url_for("spotify_saved_tracks_action", action="save")
+    except Exception:  # pragma: no cover - fallback for tests
+        save_url = "/ui/spotify/saved/save"
+
+    table_rows: list[TableRow] = []
+    for row in rows:
+        artist_text = ", ".join(row.artists)
+        added_text = row.added_at.isoformat() if row.added_at else ""
+        remove_form = TableCellForm(
+            action=remove_url,
+            method="post",
+            submit_label_key="spotify.saved.remove",
+            hidden_fields={
+                "csrftoken": csrf_token,
+                "track_id": row.identifier,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+            hx_target="#hx-spotify-saved",
+            hx_swap="outerHTML",
+            hx_method="delete",
+        )
+        table_rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=row.name),
+                    TableCell(text=artist_text),
+                    TableCell(text=row.album or ""),
+                    TableCell(text=added_text),
+                    TableCell(form=remove_form, test_id=f"spotify-remove-{row.identifier}"),
+                ),
+                test_id=f"spotify-saved-track-{row.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="spotify-saved-tracks-table",
+        column_keys=(
+            "spotify.saved_tracks.name",
+            artists_label,
+            "spotify.saved_tracks.album",
+            "spotify.saved_tracks.added",
+            "spotify.saved_tracks.actions",
+        ),
+        rows=tuple(table_rows),
+        caption_key="spotify.saved_tracks.caption",
+    )
+
+    data_attributes = {
+        "count": str(len(table_rows)),
+        "total": str(total_count),
+        "limit": str(limit),
+        "offset": str(offset),
+    }
+
+    try:
+        base_url = request.url_for("spotify_saved_tracks_fragment")
+    except Exception:  # pragma: no cover - fallback for tests
+        base_url = "/ui/spotify/saved"
+
+    def _page_url(new_offset: int | None) -> str | None:
+        if new_offset is None:
+            return None
+        return f"{base_url}?{urlencode({'limit': limit, 'offset': max(new_offset, 0)})}"
+
+    previous_offset = offset - limit if offset > 0 else None
+    next_offset = offset + limit if offset + limit < total_count else None
+
+    pagination = PaginationContext(
+        label_key="spotify.saved_tracks",
+        target="#hx-spotify-saved",
+        previous_url=_page_url(previous_offset),
+        next_url=_page_url(next_offset),
+    )
+
+    fragment = TableFragment(
+        identifier="hx-spotify-saved",
+        table=table,
+        empty_state_key="spotify.saved_tracks",
+        data_attributes=data_attributes,
+        pagination=pagination,
+    )
+
+    return {
+        "request": request,
+        "fragment": fragment,
+        "save_action_url": save_url,
+        "csrf_token": csrf_token,
+        "page_limit": limit,
+        "page_offset": offset,
+    }
+
+
 def build_spotify_artists_context(
     request: Request,
     *,
@@ -1791,6 +1914,7 @@ __all__ = [
     "build_spotify_artists_context",
     "build_spotify_page_context",
     "build_spotify_playlists_context",
+    "build_spotify_saved_tracks_context",
     "build_spotify_account_context",
     "build_spotify_status_context",
     "build_activity_fragment_context",

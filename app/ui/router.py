@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import json
+import re
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -40,6 +41,7 @@ from app.ui.context import (
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
+    build_spotify_saved_tracks_context,
     build_spotify_status_context,
     build_watchlist_fragment_context,
 )
@@ -1366,6 +1368,194 @@ async def spotify_playlists_fragment(
         "partials/spotify_playlists.j2",
         context,
     )
+
+
+@router.get("/spotify/saved", include_in_schema=False, name="spotify_saved_tracks_fragment")
+async def spotify_saved_tracks_fragment(
+    request: Request,
+    limit: int = Query(25, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.fragment.spotify.saved")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify saved tracks.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=rows,
+        total_count=total,
+        limit=limit,
+        offset=offset,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_saved_tracks.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.saved",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return response
+
+
+@router.api_route(
+    "/spotify/saved/{action}",
+    methods=["POST", "DELETE"],
+    include_in_schema=False,
+    name="spotify_saved_tracks_action",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_saved_tracks_action(
+    request: Request,
+    action: str,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    action_key = action.strip().lower()
+    if action_key not in {"save", "remove"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported action.")
+
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+
+    def _first(key: str) -> str | None:
+        entries = values.get(key)
+        if not entries:
+            query_entries = request.query_params.getlist(key)  # type: ignore[attr-defined]
+        else:
+            query_entries = []
+        source = entries or query_entries
+        if not source:
+            return None
+        return source[0]
+
+    def _coerce_int(
+        raw: str | None, default: int, *, minimum: int, maximum: int | None = None
+    ) -> int:
+        try:
+            value = int(raw) if raw not in (None, "") else default
+        except (TypeError, ValueError):
+            value = default
+        if maximum is None:
+            return max(minimum, value)
+        return max(minimum, min(value, maximum))
+
+    limit = _coerce_int(_first("limit"), 25, minimum=1, maximum=50)
+    offset = _coerce_int(_first("offset"), 0, minimum=0)
+
+    track_values: list[str] = []
+    for key in ("track_id", "track_ids", "track_id[]"):
+        track_values.extend(values.get(key, []))
+    if not track_values:
+        query_values = []
+        for key in ("track_id", "track_ids", "track_id[]"):
+            query_values.extend(request.query_params.getlist(key))
+        track_values.extend(query_values)
+
+    extracted_ids: list[str] = []
+    for candidate in track_values:
+        if not isinstance(candidate, str):
+            continue
+        parts = re.split(r"[\s,]+", candidate)
+        for part in parts:
+            cleaned = part.strip()
+            if cleaned:
+                extracted_ids.append(cleaned)
+
+    try:
+        if action_key == "save":
+            affected = service.save_tracks(extracted_ids)
+            event_name = "ui.spotify.saved.save"
+            failure_message = "Unable to save Spotify tracks."
+        else:
+            affected = service.remove_saved_tracks(extracted_ids)
+            event_name = "ui.spotify.saved.remove"
+            failure_message = "Unable to remove Spotify tracks."
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.spotify.saved.action",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.spotify.saved.action")
+        return _render_alert_fragment(
+            request,
+            failure_message,
+        )
+
+    rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+    if total and offset >= total:
+        offset = max(total - (total % limit or limit), 0)
+        rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=rows,
+        total_count=total,
+        limit=limit,
+        offset=offset,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_saved_tracks.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=affected,
+    )
+    return response
 
 
 @router.get("/spotify/status", include_in_schema=False, name="spotify_status_fragment")

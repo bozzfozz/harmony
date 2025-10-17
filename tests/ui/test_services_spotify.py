@@ -11,6 +11,7 @@ from starlette.requests import Request
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
+    SpotifySavedTrackRow,
     SpotifyUiService,
 )
 
@@ -190,3 +191,128 @@ def test_account_handles_missing_profile() -> None:
     )
 
     spotify_service.get_current_user.assert_called_once_with()
+
+
+def test_list_saved_tracks_normalizes_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_saved_tracks.return_value = {
+        "items": [
+            {
+                "added_at": "2023-09-01T10:00:00Z",
+                "track": {
+                    "id": "track-1",
+                    "name": "Track One",
+                    "artists": [
+                        {"name": "Artist One"},
+                        {"name": " Artist Two "},
+                    ],
+                    "album": {"name": " Album Name "},
+                },
+            },
+            {
+                "added_at": None,
+                "track": {
+                    "id": "track-2",
+                    "name": "Track Two",
+                    "artists": ["Solo"],
+                    "album": {},
+                },
+            },
+        ],
+        "total": 2,
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, total = service.list_saved_tracks(limit=1, offset=0)
+
+    assert total == 2
+    assert rows == (
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One", "Artist Two"),
+            album="Album Name",
+            added_at=rows[0].added_at,
+        ),
+    )
+    assert rows[0].added_at.isoformat() == "2023-09-01T10:00:00+00:00"
+    spotify_service.get_saved_tracks.assert_called_once_with(limit=1)
+
+
+def test_list_saved_tracks_applies_offset() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_saved_tracks.return_value = {
+        "items": [
+            {
+                "added_at": "2023-09-01T10:00:00Z",
+                "track": {"id": "track-1", "name": "Track One", "artists": [], "album": {}},
+            },
+            {
+                "added_at": "2023-09-02T10:00:00Z",
+                "track": {"id": "track-2", "name": "Track Two", "artists": [], "album": {}},
+            },
+        ],
+        "total": 2,
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, total = service.list_saved_tracks(limit=1, offset=1)
+
+    assert total == 2
+    assert len(rows) == 1
+    assert rows[0].identifier == "track-2"
+    spotify_service.get_saved_tracks.assert_called_once_with(limit=2)
+
+
+def test_save_tracks_filters_and_returns_count() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    affected = service.save_tracks([" track-1 ", "track-1", "track-2", " "])
+
+    assert affected == 2
+    spotify_service.save_tracks.assert_called_once_with(("track-1", "track-2"))
+
+
+def test_remove_saved_tracks_requires_identifiers() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    try:
+        service.remove_saved_tracks([" "])
+    except ValueError as exc:
+        assert "identifier" in str(exc)
+    else:  # pragma: no cover - sanity guard
+        assert False, "Expected ValueError"

@@ -74,6 +74,15 @@ class SpotifyArtistRow:
 
 
 @dataclass(slots=True)
+class SpotifySavedTrackRow:
+    identifier: str
+    name: str
+    artists: tuple[str, ...]
+    album: str | None
+    added_at: datetime | None
+
+
+@dataclass(slots=True)
 class SpotifyBackfillSnapshot:
     csrf_token: str
     can_run: bool
@@ -215,6 +224,122 @@ class SpotifyUiService:
 
         logger.debug("spotify.ui.artists", extra={"count": len(rows)})
         return tuple(rows)
+
+    @staticmethod
+    def _parse_timestamp(value: object) -> datetime | None:
+        if not isinstance(value, str):
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        candidate = cleaned.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+
+    def list_saved_tracks(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[Sequence[SpotifySavedTrackRow], int]:
+        page_limit = max(1, min(int(limit), 50))
+        page_offset = max(0, int(offset))
+        request_limit = min(page_limit + page_offset, 200)
+        payload = self._spotify.get_saved_tracks(limit=request_limit)
+        items = payload.get("items") if isinstance(payload, Mapping) else []
+        total_raw = payload.get("total") if isinstance(payload, Mapping) else None
+        total_count = int(total_raw or 0)
+
+        rows: list[SpotifySavedTrackRow] = []
+        if isinstance(items, Sequence):
+            for entry in items[page_offset : page_offset + page_limit]:
+                if not isinstance(entry, Mapping):
+                    continue
+                track_payload = (
+                    entry.get("track") if isinstance(entry.get("track"), Mapping) else None
+                )
+                if not isinstance(track_payload, Mapping):
+                    continue
+                identifier_raw = track_payload.get("id")
+                name_raw = track_payload.get("name")
+                identifier = str(identifier_raw or "").strip()
+                name = str(name_raw or "").strip()
+                if not identifier or not name:
+                    continue
+
+                artists_payload = track_payload.get("artists")
+                artist_names: list[str] = []
+                if isinstance(artists_payload, Sequence):
+                    for artist_entry in artists_payload:
+                        if isinstance(artist_entry, Mapping):
+                            artist_name_raw = artist_entry.get("name")
+                        else:
+                            artist_name_raw = artist_entry
+                        if isinstance(artist_name_raw, str):
+                            artist_name = artist_name_raw.strip()
+                            if artist_name:
+                                artist_names.append(artist_name)
+
+                album_payload = track_payload.get("album")
+                album: str | None = None
+                if isinstance(album_payload, Mapping):
+                    album_name_raw = album_payload.get("name")
+                    if isinstance(album_name_raw, str):
+                        album_candidate = album_name_raw.strip()
+                        album = album_candidate or None
+
+                added_at = self._parse_timestamp(entry.get("added_at"))
+
+                rows.append(
+                    SpotifySavedTrackRow(
+                        identifier=identifier,
+                        name=name,
+                        artists=tuple(artist_names),
+                        album=album,
+                        added_at=added_at,
+                    )
+                )
+
+        logger.debug(
+            "spotify.ui.saved_tracks",
+            extra={
+                "count": len(rows),
+                "limit": page_limit,
+                "offset": page_offset,
+                "total": total_count,
+            },
+        )
+        return tuple(rows), total_count
+
+    @staticmethod
+    def _clean_track_ids(track_ids: Sequence[str]) -> tuple[str, ...]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for track_id in track_ids:
+            value = str(track_id or "").strip()
+            if not value or value in seen:
+                continue
+            cleaned.append(value)
+            seen.add(value)
+        return tuple(cleaned)
+
+    def save_tracks(self, track_ids: Sequence[str]) -> int:
+        cleaned = self._clean_track_ids(track_ids)
+        if not cleaned:
+            raise ValueError("At least one Spotify track identifier is required.")
+        self._spotify.save_tracks(cleaned)
+        logger.info("spotify.ui.saved_tracks.save", extra={"count": len(cleaned)})
+        return len(cleaned)
+
+    def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
+        cleaned = self._clean_track_ids(track_ids)
+        if not cleaned:
+            raise ValueError("At least one Spotify track identifier is required.")
+        self._spotify.remove_saved_tracks(cleaned)
+        logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
+        return len(cleaned)
 
     def account(self) -> SpotifyAccountSummary | None:
         profile = self._spotify.get_current_user()
@@ -390,6 +515,7 @@ __all__ = [
     "SpotifyAccountSummary",
     "SpotifyBackfillSnapshot",
     "SpotifyArtistRow",
+    "SpotifySavedTrackRow",
     "SpotifyManualResult",
     "SpotifyOAuthHealth",
     "SpotifyPlaylistRow",

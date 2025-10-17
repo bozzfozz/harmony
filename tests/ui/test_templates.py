@@ -30,6 +30,7 @@ from app.ui.context import (
     build_spotify_backfill_context,
     build_spotify_page_context,
     build_spotify_playlists_context,
+    build_spotify_saved_tracks_context,
     build_spotify_status_context,
     build_watchlist_fragment_context,
 )
@@ -41,6 +42,7 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifySavedTrackRow,
     SpotifyStatus,
     WatchlistRow,
 )
@@ -156,11 +158,13 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "nav-spotify" in html
     assert 'hx-get="/ui/spotify/status"' in html
     assert 'hx-get="/ui/spotify/account"' in html
+    assert 'hx-get="/ui/spotify/saved"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'hx-target="#hx-spotify-status"' in html
     assert 'hx-target="#hx-spotify-account"' in html
+    assert 'hx-target="#hx-spotify-saved"' in html
     assert 'hx-target="#hx-spotify-playlists"' in html
     assert 'hx-target="#hx-spotify-artists"' in html
     assert 'hx-target="#hx-spotify-backfill"' in html
@@ -169,9 +173,10 @@ def test_spotify_page_template_renders_sections() -> None:
     assert html.count('hx-trigger="load"') >= 2
     assert 'hx-swap="innerHTML"' in html
     assert 'role="status"' in html
-    assert html.count('role="region"') >= 4
+    assert html.count('role="region"') >= 5
     assert 'data-fragment="spotify-status"' in html
     assert 'data-fragment="spotify-account"' in html
+    assert 'data-fragment="spotify-saved-tracks"' in html
     assert 'data-fragment="spotify-playlists"' in html
     assert 'data-fragment="spotify-artists"' in html
     assert 'data-fragment="spotify-backfill"' in html
@@ -179,6 +184,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
     assert "Loading Spotify account details…" in html
+    assert "Loading saved Spotify tracks…" in html
     assert "Loading cached Spotify playlists…" in html
     assert "Loading followed Spotify artists…" in html
     assert "Fetching Spotify backfill status…" in html
@@ -211,6 +217,40 @@ def test_spotify_account_fragment_template_handles_missing_profile() -> None:
 
     assert "No Spotify profile information is available." in html
     assert 'data-has-account="0"' in html
+
+
+def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
+    request = _make_request("/ui/spotify")
+    rows = (
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One", "Artist Two"),
+            album="Album Name",
+            added_at=datetime(2023, 9, 1, 10, 0, tzinfo=UTC),
+        ),
+    )
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=rows,
+        total_count=1,
+        limit=25,
+        offset=0,
+        csrf_token="csrf-token",
+    )
+    template = templates.get_template("partials/spotify_saved_tracks.j2")
+    html = template.render(**context)
+
+    assert 'id="spotify-save-track-form"' in html
+    assert 'hx-post="/ui/spotify/saved/save"' in html
+    assert 'name="csrftoken" value="csrf-token"' in html
+    assert 'data-count="1"' in html
+    assert "Track One" in html
+    assert "Artist One, Artist Two" in html
+    assert "Album Name" in html
+    assert "2023-09-01T10:00:00+00:00" in html
+    assert 'data-test="spotify-remove-track-1"' in html
+    assert 'hx-delete="/ui/spotify/saved/remove"' in html
 
 
 def test_soulseek_page_template_renders_fragments() -> None:

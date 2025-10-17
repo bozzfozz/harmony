@@ -55,6 +55,7 @@
     "search.sources.soulseek": "Soulseek",
     "spotify.manual.redirect": "Redirect URL",
     "spotify.backfill.max_items": "Max items",
+    "spotify.saved.track_ids": "Track IDs",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -62,6 +63,7 @@
 {% macro form_help(key) -%}
   {%- set labels = {
     "search.sources.description": "Select the providers to include in your search.",
+    "spotify.saved.track_ids": "Enter one or more Spotify track IDs separated by commas or spaces.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -75,6 +77,8 @@
     "spotify.connect": "Connect",
     "spotify.manual.submit": "Complete manually",
     "spotify.backfill.run": "Start backfill",
+    "spotify.saved.save": "Save tracks",
+    "spotify.saved.remove": "Remove",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
     "soulseek.uploads.cancel": "Cancel upload",
@@ -167,6 +171,11 @@
     "spotify.playlists.name": "Playlist",
     "spotify.playlists.tracks": "Tracks",
     "spotify.playlists.updated": "Updated",
+    "spotify.saved_tracks.name": "Track",
+    "spotify.saved_tracks.artists": "Artists",
+    "spotify.saved_tracks.album": "Album",
+    "spotify.saved_tracks.added": "Saved",
+    "spotify.saved_tracks.actions": "Actions",
     "spotify.artists.name": "Artist",
     "spotify.artists.followers": "Followers",
     "spotify.artists.popularity": "Popularity",
@@ -184,6 +193,7 @@
     "jobs.table.caption": "Orchestrator jobs",
     "search.results.caption": "Search results",
     "spotify.playlists.caption": "Tracked Spotify playlists",
+    "spotify.saved_tracks.caption": "Saved Spotify tracks",
     "spotify.artists.caption": "Followed Spotify artists",
     "soulseek.providers.caption": "Provider health",
     "soulseek.config.caption": "Soulseek configuration",
@@ -256,6 +266,8 @@
     Checking Spotify connection…
   {%- elif key == "spotify.account" -%}
     Loading Spotify account details…
+  {%- elif key == "spotify.saved_tracks" -%}
+    Loading saved Spotify tracks…
   {%- elif key == "spotify.playlists" -%}
     Loading cached Spotify playlists…
   {%- elif key == "spotify.artists" -%}
@@ -296,6 +308,8 @@
     No matching results found.
   {%- elif key == "spotify.playlists" -%}
     No playlists are currently cached from Spotify.
+  {%- elif key == "spotify.saved_tracks" -%}
+    No Spotify tracks are currently saved to your library.
   {%- elif key == "spotify.artists" -%}
     No Spotify artists are currently followed.
   {%- else -%}
@@ -311,6 +325,7 @@
     "search": "Search pagination",
     "jobs": "Jobs pagination",
     "spotify.playlists": "Spotify playlists pagination",
+    "spotify.saved_tracks": "Spotify saved tracks pagination",
     "spotify.artists": "Spotify artists pagination",
   } -%}
   {{ labels.get(key, key) }}
@@ -402,11 +417,13 @@
 
 {% macro spotify_account_empty_state() %}No Spotify profile information is available.{% endmacro %}
 
-{% macro spotify_page_intro() %}Manage the Spotify connection, followed artists, cached playlists, and backfill jobs.{% endmacro %}
+{% macro spotify_page_intro() %}Manage the Spotify connection, saved tracks, followed artists, cached playlists, and backfill jobs.{% endmacro %}
 
 {% macro spotify_status_heading() %}Connection status{% endmacro %}
 
 {% macro spotify_account_heading() %}Account details{% endmacro %}
+
+{% macro spotify_saved_tracks_heading() %}Saved tracks{% endmacro %}
 
 {% macro spotify_playlists_heading() %}Cached playlists{% endmacro %}
 
