@@ -826,7 +826,7 @@ def test_spotify_status_fragment_hides_manual_form_when_disabled(monkeypatch) ->
     stub = _StubSpotifyService()
     stub._oauth = SpotifyOAuthHealth(
         manual_enabled=False,
-        redirect_uri="http://localhost/callback",
+        redirect_uri=None,
         public_host_hint="https://console.example",
         active_transactions=1,
         ttl_seconds=0,
@@ -843,6 +843,7 @@ def test_spotify_status_fragment_hides_manual_form_when_disabled(monkeypatch) ->
             assert "spotify-manual-form" not in response.text
             assert "Manual completion is disabled" in response.text
             assert "Ensure the public host is reachable" in response.text
+            assert "Redirect URI" not in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

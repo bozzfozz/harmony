@@ -263,7 +263,7 @@ def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
     )
     oauth = SpotifyOAuthHealth(
         manual_enabled=False,
-        redirect_uri="http://localhost/callback",
+        redirect_uri=None,
         public_host_hint="https://console.example",
         active_transactions=2,
         ttl_seconds=0,
@@ -288,6 +288,7 @@ def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
     assert "Manual completion is disabled" in html
     assert "Ensure the public host is reachable" in html
     assert "No active manual sessions" in html
+    assert "Redirect URI" not in html
 
 
 def test_spotify_playlists_partial_renders_table() -> None:
