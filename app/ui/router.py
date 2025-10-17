@@ -11,7 +11,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from app.api.search import DEFAULT_SOURCES
-from app.dependencies import get_download_service
+from app.core.soulseek_client import SoulseekClient
+from app.db import session_scope
+from app.dependencies import get_download_service, get_soulseek_client
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -27,6 +29,7 @@ from app.ui.context import (
     build_jobs_fragment_context,
     build_login_page_context,
     build_soulseek_config_context,
+    build_soulseek_downloads_context,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_uploads_context,
@@ -40,6 +43,7 @@ from app.ui.context import (
     build_watchlist_fragment_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
+from app.routers.soulseek_router import soulseek_cancel, soulseek_requeue_download
 from app.ui.services import (
     ActivityUiService,
     DownloadsUiService,
@@ -490,6 +494,356 @@ async def soulseek_uploads_fragment(
     response = templates.TemplateResponse(
         request,
         "partials/soulseek_uploads.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get(
+    "/soulseek/downloads",
+    include_in_schema=False,
+    name="soulseek_downloads_fragment",
+)
+async def soulseek_downloads_fragment(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    include_all: bool = Query(False, alias="all"),
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+) -> Response:
+    try:
+        page = service.list_downloads(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load Soulseek downloads.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.downloads",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        scope="all" if include_all else "active",
+        limit=limit,
+        offset=offset,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.post(
+    "/soulseek/downloads/{download_id}/requeue",
+    include_in_schema=False,
+    name="soulseek_download_requeue",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_download_requeue(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+) -> Response:
+    raw_body = await request.body()
+    try:
+        body = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        body = ""
+    values = parse_qs(body)
+
+    def _parse_int(value: str | None, *, default: int, minimum: int, maximum: int) -> int:
+        if value is None or not value.strip():
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return max(min(parsed, maximum), minimum)
+
+    limit_value = _parse_int(
+        (values.get("limit", [None])[0] or request.query_params.get("limit")),
+        default=20,
+        minimum=1,
+        maximum=100,
+    )
+    offset_value = _parse_int(
+        (values.get("offset", [None])[0] or request.query_params.get("offset")),
+        default=0,
+        minimum=0,
+        maximum=10_000,
+    )
+    scope_raw = (values.get("scope", [request.query_params.get("scope")])[0] or "").lower()
+    include_all = scope_raw in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+
+    try:
+        with session_scope() as db_session:
+            await soulseek_requeue_download(
+                download_id=download_id,
+                request=request,
+                session=db_session,
+            )
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to requeue download."
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.requeue")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to requeue the download.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.downloads",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        download_id=download_id,
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.api_route(
+    "/soulseek/download/{download_id}",
+    methods=["POST", "DELETE"],
+    include_in_schema=False,
+    name="soulseek_download_cancel",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_download_cancel(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Response:
+    raw_body = await request.body()
+    try:
+        body = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        body = ""
+    values = parse_qs(body)
+
+    def _parse_int(value: str | None, *, default: int, minimum: int, maximum: int) -> int:
+        if value is None or not value.strip():
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return max(min(parsed, maximum), minimum)
+
+    limit_value = _parse_int(
+        (values.get("limit", [None])[0] or request.query_params.get("limit")),
+        default=20,
+        minimum=1,
+        maximum=100,
+    )
+    offset_value = _parse_int(
+        (values.get("offset", [None])[0] or request.query_params.get("offset")),
+        default=0,
+        minimum=0,
+        maximum=10_000,
+    )
+    scope_raw = (values.get("scope", [request.query_params.get("scope")])[0] or "").lower()
+    include_all = scope_raw in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+
+    try:
+        with session_scope() as db_session:
+            await soulseek_cancel(
+                download_id=download_id,
+                session=db_session,
+                client=client,
+            )
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to cancel download."
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.cancel")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to cancel the download.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.downloads",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        download_id=download_id,
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
         context,
     )
     if issued:

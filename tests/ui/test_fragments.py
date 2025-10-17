@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from datetime import datetime
 import json
 import re
 from typing import Any
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
-from app.dependencies import get_download_service
+from app.dependencies import get_download_service, get_soulseek_client
 from app.errors import AppError, ErrorCode
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.main import app
@@ -567,6 +568,207 @@ def test_soulseek_upload_cancel_success(monkeypatch) -> None:
             assert stub.upload_calls == [False]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=42,
+                filename="retry.flac",
+                status="failed",
+                progress=0.5,
+                priority=3,
+                username="dj",
+                created_at=None,
+                updated_at=None,
+                retry_count=2,
+                next_retry_at=datetime(2024, 1, 1, 12, 0, 0),
+                last_error="network timeout",
+                live_queue={"status": "waiting", "eta": "30s"},
+            )
+        ],
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/soulseek/downloads", headers=headers)
+            _assert_html_response(response)
+            html = response.text
+            assert "retry.flac" in html
+            assert "Retries" in html
+            assert "network timeout" in html
+            assert "Active downloads" in html
+            assert "hx-soulseek-downloads" in html
+            assert 'data-scope="active"' in html
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=50, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get(
+                "/ui/soulseek/downloads",
+                params={"all": "1", "limit": "50"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            html = response.text
+            assert "All downloads" in html
+            assert 'data-scope="all"' in html
+            assert "No Soulseek downloads" in html
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_download_requeue_success(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=7,
+                filename="queue.flac",
+                status="failed",
+                progress=0.0,
+                priority=1,
+                username=None,
+                created_at=None,
+                updated_at=None,
+            )
+        ],
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    calls: list[int] = []
+
+    async def _fake_requeue(*, download_id: int, request: Any, session: Any) -> None:  # type: ignore[override]
+        calls.append(download_id)
+
+    monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fake_requeue)
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/downloads/7/requeue",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "all",
+                    "limit": "20",
+                    "offset": "0",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert calls == [7]
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_download_requeue_failure(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+
+    async def _fail_requeue(*, download_id: int, request: Any, session: Any) -> None:  # type: ignore[override]
+        raise HTTPException(status_code=409, detail="conflict")
+
+    monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fail_requeue)
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/downloads/9/requeue",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "active",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response, status_code=409)
+            assert "conflict" in response.text
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_download_cancel_success(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+    calls: list[int] = []
+
+    async def _fake_cancel(*, download_id: int, session: Any, client: Any) -> None:  # type: ignore[override]
+        calls.append(download_id)
+
+    monkeypatch.setattr("app.ui.router.soulseek_cancel", _fake_cancel)
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/download/5",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "active",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert calls == [5]
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_download_cancel_failure(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+
+    async def _fail_cancel(*, download_id: int, session: Any, client: Any) -> None:  # type: ignore[override]
+        raise HTTPException(status_code=404, detail="missing")
+
+    monkeypatch.setattr("app.ui.router.soulseek_cancel", _fail_cancel)
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/download/99",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "active",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response, status_code=404)
+            assert "missing" in response.text
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
 
 
 def test_activity_fragment_requires_session(monkeypatch) -> None:

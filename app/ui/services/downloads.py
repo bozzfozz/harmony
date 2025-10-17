@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
@@ -27,6 +27,10 @@ class DownloadRow:
     username: str | None
     created_at: datetime | None
     updated_at: datetime | None
+    retry_count: int = 0
+    next_retry_at: datetime | None = None
+    last_error: str | None = None
+    live_queue: Mapping[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -117,6 +121,10 @@ class DownloadsUiService:
         progress_value = payload.get("progress")
         progress = float(progress_value) if progress_value is not None else None
 
+        live_metadata = payload.get("live_queue")
+        if not isinstance(live_metadata, Mapping):
+            live_metadata = None
+
         return DownloadRow(
             identifier=int(payload["id"]),
             filename=str(payload.get("filename", "")),
@@ -126,6 +134,10 @@ class DownloadsUiService:
             username=payload.get("username"),
             created_at=payload.get("created_at"),
             updated_at=payload.get("updated_at"),
+            retry_count=int(payload.get("retry_count", 0) or 0),
+            next_retry_at=payload.get("next_retry_at"),
+            last_error=payload.get("last_error"),
+            live_queue=live_metadata,
         )
 
 

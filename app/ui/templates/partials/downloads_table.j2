@@ -1,3 +1,31 @@
+{% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
+
+{% if active_url and all_url and refresh_url %}
+  <div class="table-controls">
+    <div class="table-controls__group">
+      <button type="button"
+              hx-get="{{ active_url }}"
+              hx-target="#hx-soulseek-downloads"
+              hx-swap="outerHTML"
+              {% if not include_all %}disabled{% endif %}>
+        {{ strings.button_label("soulseek.downloads.show_active") }}
+      </button>
+      <button type="button"
+              hx-get="{{ all_url }}"
+              hx-target="#hx-soulseek-downloads"
+              hx-swap="outerHTML"
+              {% if include_all %}disabled{% endif %}>
+        {{ strings.button_label("soulseek.downloads.show_all") }}
+      </button>
+    </div>
+    <button type="button"
+            hx-get="{{ refresh_url }}"
+            hx-target="#hx-soulseek-downloads"
+            hx-swap="outerHTML">
+      {{ strings.button_label("soulseek.downloads.refresh") }}
+    </button>
+  </div>
+{% endif %}
 
 {{ tables.render_table_fragment(fragment) }}

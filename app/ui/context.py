@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 import json
 from typing import Any, Literal
 from urllib.parse import urlencode
@@ -11,9 +12,10 @@ from fastapi import Request
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
 from app.integrations.health import IntegrationHealth
-from app.schemas import StatusResponse
+from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
 from app.ui.services import (
     DownloadPage,
+    DownloadRow,
     OrchestratorJob,
     SearchResultsPage,
     SoulseekUploadRow,
@@ -29,6 +31,7 @@ from app.ui.session import UiFeatures, UiSession
 
 AlertLevel = Literal["info", "success", "warning", "error"]
 ButtonMethod = Literal["get", "post"]
+HxMethod = Literal["get", "post", "put", "patch", "delete"]
 StatusVariant = Literal["success", "danger", "muted"]
 
 
@@ -172,6 +175,7 @@ class TableCellForm:
     hx_target: str | None = None
     hx_swap: str = "innerHTML"
     disabled: bool = False
+    hx_method: HxMethod = "post"
 
 
 @dataclass(slots=True)
@@ -844,6 +848,39 @@ def _format_transfer_speed(speed: float | None) -> str:
     return f"{value:.1f} MiB/s"
 
 
+def _format_datetime(value: datetime | None) -> str:
+    if value is None:
+        return ""
+    trimmed = value.replace(microsecond=0)
+    return trimmed.isoformat(sep=" ")
+
+
+def _summarize_live_metadata(metadata: Mapping[str, Any] | None) -> str:
+    if not metadata:
+        return ""
+    highlights: list[str] = []
+    for key in ("status", "progress", "speed", "eta", "peer"):
+        if key in metadata:
+            highlights.append(f"{key}={metadata[key]}")
+    if not highlights:
+        for index, (key, value) in enumerate(metadata.items()):
+            highlights.append(f"{key}={value}")
+            if index >= 2:
+                break
+    return ", ".join(str(entry) for entry in highlights if entry)
+
+
+def _soulseek_download_status_badge(status: str) -> StatusBadge:
+    normalised = (status or "").strip().lower() or "unknown"
+    label_key = f"soulseek.downloads.status.{normalised}"
+    test_id = f"soulseek-download-status-{normalised}"
+    if normalised in {"queued", "pending", "running", "downloading"}:
+        return StatusBadge(label_key=label_key, variant="success", test_id=test_id)
+    if normalised in set(SOULSEEK_RETRYABLE_STATES) | {"failed", "dead_letter"}:
+        return StatusBadge(label_key=label_key, variant="danger", test_id=test_id)
+    return StatusBadge(label_key=label_key, variant="muted", test_id=test_id)
+
+
 def build_soulseek_config_context(
     request: Request,
     *,
@@ -1043,6 +1080,136 @@ def build_soulseek_uploads_context(
         "refresh_url": refresh_url,
         "active_url": base_url,
         "all_url": f"{base_url}?all=1",
+    }
+
+
+def build_soulseek_downloads_context(
+    request: Request,
+    *,
+    page: DownloadPage,
+    csrf_token: str,
+    include_all: bool,
+) -> Mapping[str, Any]:
+    scope_value = "all" if include_all else "active"
+    retryable_states = set(SOULSEEK_RETRYABLE_STATES)
+    target = "#hx-soulseek-downloads"
+
+    rows: list[TableRow] = []
+    for entry in page.items:
+        try:
+            requeue_url = request.url_for(
+                "soulseek_download_requeue", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            requeue_url = f"/ui/soulseek/downloads/{entry.identifier}/requeue"
+        try:
+            cancel_url = request.url_for(
+                "soulseek_download_cancel", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            cancel_url = f"/ui/soulseek/download/{entry.identifier}"
+
+        hidden_fields = {
+            "csrftoken": csrf_token,
+            "scope": scope_value,
+            "limit": str(page.limit),
+            "offset": str(page.offset),
+        }
+        can_requeue = (entry.status or "").lower() in retryable_states
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(text=str(entry.identifier)),
+                    TableCell(text=entry.filename),
+                    TableCell(badge=_soulseek_download_status_badge(entry.status)),
+                    TableCell(text=_format_percentage(entry.progress)),
+                    TableCell(text=str(entry.priority)),
+                    TableCell(text=entry.username or ""),
+                    TableCell(text=str(entry.retry_count)),
+                    TableCell(text=_format_datetime(entry.next_retry_at)),
+                    TableCell(text=entry.last_error or ""),
+                    TableCell(text=_summarize_live_metadata(entry.live_queue)),
+                    TableCell(
+                        form=TableCellForm(
+                            action=requeue_url,
+                            method="post",
+                            submit_label_key="soulseek.downloads.requeue",
+                            hidden_fields=hidden_fields,
+                            hx_target=target,
+                            hx_swap="outerHTML",
+                            disabled=not can_requeue,
+                        )
+                    ),
+                    TableCell(
+                        form=TableCellForm(
+                            action=cancel_url,
+                            method="post",
+                            submit_label_key="soulseek.downloads.cancel",
+                            hidden_fields=hidden_fields,
+                            hx_target=target,
+                            hx_swap="outerHTML",
+                            hx_method="delete",
+                        )
+                    ),
+                ),
+                test_id=f"soulseek-download-{entry.identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="soulseek-downloads-table",
+        column_keys=(
+            "downloads.id",
+            "downloads.filename",
+            "downloads.status",
+            "downloads.progress",
+            "downloads.priority",
+            "downloads.user",
+            "soulseek.downloads.retry_count",
+            "soulseek.downloads.next_retry",
+            "soulseek.downloads.last_error",
+            "soulseek.downloads.live",
+            "soulseek.downloads.requeue",
+            "soulseek.downloads.cancel",
+        ),
+        rows=tuple(rows),
+        caption_key="downloads.table.caption",
+    )
+
+    base_url = _safe_url_for(
+        request,
+        "soulseek_downloads_fragment",
+        "/ui/soulseek/downloads",
+    )
+
+    def _url_for_scope(all_scope: bool) -> str:
+        query = [("limit", str(page.limit)), ("offset", str(page.offset))]
+        if all_scope:
+            query.append(("all", "1"))
+        return f"{base_url}?{urlencode(query)}"
+
+    refresh_url = _url_for_scope(include_all)
+    fragment = TableFragment(
+        identifier="hx-soulseek-downloads",
+        table=table,
+        empty_state_key="soulseek.downloads",
+        data_attributes={
+            "count": str(len(rows)),
+            "limit": str(page.limit),
+            "offset": str(page.offset),
+            "scope": scope_value,
+            "refresh-url": refresh_url,
+        },
+    )
+
+    return {
+        "request": request,
+        "fragment": fragment,
+        "csrf_token": csrf_token,
+        "include_all": include_all,
+        "refresh_url": refresh_url,
+        "active_url": _url_for_scope(False),
+        "all_url": _url_for_scope(True),
     }
 
 
@@ -1331,7 +1498,14 @@ def build_downloads_fragment_context(
         pagination=pagination if previous_url or next_url else None,
     )
 
-    return {"request": request, "fragment": fragment}
+    return {
+        "request": request,
+        "fragment": fragment,
+        "include_all": include_all,
+        "active_url": None,
+        "all_url": None,
+        "refresh_url": None,
+    }
 
 
 def build_jobs_fragment_context(
@@ -1552,6 +1726,7 @@ __all__ = [
     "build_soulseek_status_context",
     "build_soulseek_config_context",
     "build_soulseek_uploads_context",
+    "build_soulseek_downloads_context",
     "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",

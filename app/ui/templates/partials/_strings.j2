@@ -81,6 +81,11 @@
     "soulseek.uploads.refresh": "Refresh",
     "soulseek.uploads.show_active": "Active uploads",
     "soulseek.uploads.show_all": "All uploads",
+    "soulseek.downloads.requeue": "Requeue",
+    "soulseek.downloads.cancel": "Cancel",
+    "soulseek.downloads.refresh": "Refresh",
+    "soulseek.downloads.show_active": "Active downloads",
+    "soulseek.downloads.show_all": "All downloads",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -100,6 +105,15 @@
     "spotify.status.connected": "Connected",
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
+    "soulseek.downloads.status.queued": "Queued",
+    "soulseek.downloads.status.pending": "Pending",
+    "soulseek.downloads.status.running": "Running",
+    "soulseek.downloads.status.downloading": "Downloading",
+    "soulseek.downloads.status.failed": "Failed",
+    "soulseek.downloads.status.dead_letter": "Dead letter",
+    "soulseek.downloads.status.cancelled": "Cancelled",
+    "soulseek.downloads.status.completed": "Completed",
+    "soulseek.downloads.status.unknown": "Unknown",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -135,6 +149,12 @@
     "soulseek.uploads.size": "Size",
     "soulseek.uploads.speed": "Speed",
     "soulseek.uploads.actions": "Actions",
+    "soulseek.downloads.retry_count": "Retries",
+    "soulseek.downloads.next_retry": "Next retry",
+    "soulseek.downloads.last_error": "Last error",
+    "soulseek.downloads.live": "Live queue",
+    "soulseek.downloads.requeue": "Requeue",
+    "soulseek.downloads.cancel": "Cancel",
     "jobs.name": "Job",
     "jobs.status": "Status",
     "jobs.enabled": "Enabled",
@@ -264,6 +284,8 @@
     {{ watchlist_empty_state() }}
   {%- elif key == "downloads" -%}
     No downloads are currently queued.
+  {%- elif key == "soulseek.downloads" -%}
+    No Soulseek downloads are currently queued.
   {%- elif key == "soulseek.uploads" -%}
     No uploads are currently in progress.
   {%- elif key == "jobs" -%}
