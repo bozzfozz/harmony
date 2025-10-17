@@ -33,6 +33,7 @@ from app.ui.services import (
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistRow,
+    SpotifySavedTrackRow,
     SpotifyStatus,
     WatchlistRow,
     WatchlistTable,
@@ -212,6 +213,17 @@ class _StubSpotifyService:
         self.account_exception: Exception | None = None
         self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
         self.artists: Sequence[SpotifyArtistRow] | Exception = ()
+        self.saved_tracks_rows: list[SpotifySavedTrackRow] = [
+            SpotifySavedTrackRow(
+                identifier="track-1",
+                name="Track One",
+                artists=("Artist One",),
+                album="Album One",
+                added_at=datetime(2023, 9, 1, 12, 0),
+            )
+        ]
+        self.saved_tracks_total: int | None = len(self.saved_tracks_rows)
+        self.saved_tracks_exception: Exception | None = None
         self.manual_result = SpotifyManualResult(ok=True, message="Completed")
         self.manual_exception: Exception | None = None
         self.start_url = "https://spotify.example/auth"
@@ -240,6 +252,11 @@ class _StubSpotifyService:
         self.backfill_snapshot_calls: list[tuple[str, str | None, Mapping[str, object] | None]] = []
         self.backfill_status_calls: list[str | None] = []
         self.run_calls: list[tuple[int | None, bool]] = []
+        self.list_saved_calls: list[tuple[int, int]] = []
+        self.save_calls: list[tuple[str, ...]] = []
+        self.remove_calls: list[tuple[str, ...]] = []
+        self.save_exception: Exception | None = None
+        self.remove_exception: Exception | None = None
 
     def status(self) -> SpotifyStatus:
         return self._status
@@ -256,6 +273,21 @@ class _StubSpotifyService:
         if isinstance(self.artists, Exception):
             raise self.artists
         return tuple(self.artists)
+
+    def list_saved_tracks(
+        self, *, limit: int, offset: int
+    ) -> tuple[Sequence[SpotifySavedTrackRow], int]:
+        self.list_saved_calls.append((limit, offset))
+        if self.saved_tracks_exception:
+            raise self.saved_tracks_exception
+        total = (
+            self.saved_tracks_total
+            if self.saved_tracks_total is not None
+            else len(self.saved_tracks_rows)
+        )
+        start = max(0, min(offset, len(self.saved_tracks_rows)))
+        end = max(start, min(start + max(limit, 0), len(self.saved_tracks_rows)))
+        return tuple(self.saved_tracks_rows[start:end]), total
 
     def account(self) -> SpotifyAccountSummary | None:
         if self.account_exception:
@@ -278,6 +310,36 @@ class _StubSpotifyService:
             raise self.run_backfill_exception
         self.run_calls.append((max_items, expand_playlists))
         return self.run_backfill_job_id
+
+    def save_tracks(self, track_ids: Sequence[str]) -> int:
+        if self.save_exception:
+            raise self.save_exception
+        cleaned = tuple(track_ids)
+        self.save_calls.append(cleaned)
+        for track_id in cleaned:
+            self.saved_tracks_rows.insert(
+                0,
+                SpotifySavedTrackRow(
+                    identifier=track_id,
+                    name=f"Track {track_id}",
+                    artists=tuple(),
+                    album=None,
+                    added_at=None,
+                ),
+            )
+        self.saved_tracks_total = len(self.saved_tracks_rows)
+        return len(cleaned)
+
+    def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
+        if self.remove_exception:
+            raise self.remove_exception
+        cleaned = tuple(track_ids)
+        self.remove_calls.append(cleaned)
+        remaining = [row for row in self.saved_tracks_rows if row.identifier not in cleaned]
+        removed = len(self.saved_tracks_rows) - len(remaining)
+        self.saved_tracks_rows = remaining
+        self.saved_tracks_total = len(self.saved_tracks_rows)
+        return removed
 
     def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
         self.backfill_status_calls.append(job_id)
@@ -1511,6 +1573,47 @@ def test_spotify_status_fragment_renders_forms(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_saved_tracks_fragment_renders_table(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/saved",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-save-track-form" in response.text
+            assert "Track One" in response.text
+            assert "Artist One" in response.text
+            assert "Album One" in response.text
+            assert (
+                'hx-delete="/ui/spotify/saved/remove"' in response.text
+                or 'hx-delete="http://testserver/ui/spotify/saved/remove"' in response.text
+            )
+            assert stub.list_saved_calls == [(25, 0)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_fragment_returns_error_on_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.saved_tracks_exception = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/saved",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Spotify saved tracks." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
 def test_spotify_manual_completion_handles_validation_error(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.manual_result = SpotifyManualResult(ok=False, message="invalid redirect")
@@ -1578,6 +1681,80 @@ def test_spotify_account_fragment_renders_summary(monkeypatch) -> None:
             assert "Example User" in response.text
             assert "2,500" in response.text
             assert "Premium" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_save_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/saved/save",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_ids": "track-99",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "Track track-99" in response.text
+            assert stub.save_calls == [("track-99",)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_remove_handles_value_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.remove_exception = ValueError("At least one Spotify track identifier is required.")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.request(
+                "DELETE",
+                "/ui/spotify/saved/remove",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_id": "",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "At least one Spotify track identifier is required." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_remove_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.request(
+                "DELETE",
+                "/ui/spotify/saved/remove",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_id": "track-1",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "No Spotify tracks are currently saved" in response.text
+            assert stub.remove_calls == [("track-1",)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

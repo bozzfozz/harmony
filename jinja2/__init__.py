@@ -163,6 +163,22 @@ class SetNode(Node):
 
 
 @dataclass(slots=True)
+class IncludeNode(Node):
+    template_name: str
+    assignments: tuple[tuple[str, str], ...] = ()
+
+    def render(self, context: RuntimeContext, blocks: dict[str, BlockNode]) -> str:  # type: ignore[name-defined]
+        template = context.env.get_template(self.template_name)
+        if not self.assignments:
+            return template.render(context.as_mapping())
+        child_context = context.copy()
+        for name, expression in self.assignments:
+            value = context.resolve(expression)
+            child_context.set(name, value)
+        return template.render(child_context.as_mapping())
+
+
+@dataclass(slots=True)
 class ForNode(Node):
     targets: list[str]
     iterable: str
@@ -360,19 +376,19 @@ class Parser:
             if text:
                 tokens.append(("text", text))
             token = match.group(0)
-            strip_left = token.startswith('{%-')
-            strip_right = token.endswith('-%}')
+            strip_left = token.startswith("{%-")
+            strip_right = token.endswith("-%}")
             inner = token[2:-2]
             content = inner.strip()
-            if content.startswith('-'):
+            if content.startswith("-"):
                 content = content[1:].lstrip()
-            if content.endswith('-'):
+            if content.endswith("-"):
                 content = content[:-1].rstrip()
             if strip_left and tokens and tokens[-1][0] == "text":
                 tokens[-1] = ("text", tokens[-1][1].rstrip())
             if strip_right:
                 strip_next_left = True
-            if token.startswith('{{'):
+            if token.startswith("{{"):
                 tokens.append(("var", content))
             else:
                 tokens.append(("stmt", content))
@@ -411,7 +427,7 @@ class Parser:
                 nodes.append(self._parse_variable(value))
             else:
                 if keyword == "extends":
-                    self.parent = self._parse_string_argument(value[len("extends"):].strip())
+                    self.parent = self._parse_string_argument(value[len("extends") :].strip())
                 elif keyword == "import":
                     nodes.append(self._parse_import(value))
                 elif keyword == "macro":
@@ -423,6 +439,8 @@ class Parser:
                     nodes.append(block)
                 elif keyword == "set":
                     nodes.append(self._parse_set(value))
+                elif keyword == "include":
+                    nodes.append(self._parse_include(value))
                 elif keyword == "if":
                     nodes.append(self._parse_if(value))
                 elif keyword == "for":
@@ -463,7 +481,7 @@ class Parser:
         return ImportNode(template_name, alias)
 
     def _parse_macro(self, statement: str) -> Macro:
-        name_and_args = statement[len("macro"):].strip()
+        name_and_args = statement[len("macro") :].strip()
         name, arg_list = self._parse_callable_signature(name_and_args)
         body = self._parse_nodes(stop={"endmacro"})
         end_token = self._advance()
@@ -472,7 +490,7 @@ class Parser:
         return Macro(name, arg_list, body)
 
     def _parse_block(self, statement: str) -> BlockNode:
-        name = statement[len("block"):].strip()
+        name = statement[len("block") :].strip()
         if not name:
             raise TemplateSyntaxError("Block name required")
         body = self._parse_nodes(stop={"endblock"})
@@ -483,7 +501,7 @@ class Parser:
 
     def _parse_if(self, statement: str) -> IfNode:
         branches: list[IfBranch] = []
-        current_test = statement[len("if"):].strip()
+        current_test = statement[len("if") :].strip()
         body = self._parse_nodes(stop={"elif", "else", "endif"})
         branches.append(IfBranch(current_test, body))
         while True:
@@ -491,7 +509,7 @@ class Parser:
             if token[1] == "endif":
                 break
             if token[1].startswith("elif"):
-                test = token[1][len("elif"):].strip()
+                test = token[1][len("elif") :].strip()
                 body = self._parse_nodes(stop={"elif", "else", "endif"})
                 branches.append(IfBranch(test, body))
             elif token[1] == "else":
@@ -506,7 +524,7 @@ class Parser:
         return IfNode(branches)
 
     def _parse_for(self, statement: str) -> ForNode:
-        segment = statement[len("for"):].strip()
+        segment = statement[len("for") :].strip()
         if " in " not in segment:
             raise TemplateSyntaxError("Invalid for-loop syntax")
         target_part, expr = segment.split(" in ", 1)
@@ -518,11 +536,34 @@ class Parser:
         return ForNode(targets, expr.strip(), body)
 
     def _parse_set(self, statement: str) -> SetNode:
-        remainder = statement[len("set"):].strip()
+        remainder = statement[len("set") :].strip()
         if "=" not in remainder:
             raise TemplateSyntaxError("Invalid set syntax")
         target, expr = remainder.split("=", 1)
         return SetNode(target.strip(), expr.strip())
+
+    def _parse_include(self, statement: str) -> IncludeNode:
+        remainder = statement[len("include") :].strip()
+        if not remainder:
+            raise TemplateSyntaxError("Invalid include syntax")
+        if " " in remainder:
+            template_part, extra = remainder.split(" ", 1)
+        else:
+            template_part, extra = remainder, ""
+        template_name = self._parse_string_argument(template_part)
+        assignments: list[tuple[str, str]] = []
+        extra = extra.strip()
+        if extra:
+            if not extra.startswith("with "):
+                raise TemplateSyntaxError("Invalid include syntax")
+            assignment_str = extra[5:].strip()
+            if assignment_str:
+                for assignment in assignment_str.split(","):
+                    name, separator, expression = assignment.partition("=")
+                    if separator != "=":
+                        raise TemplateSyntaxError("Invalid include assignment")
+                    assignments.append((name.strip(), expression.strip()))
+        return IncludeNode(template_name, tuple(assignments))
 
     def _parse_callable_signature(self, spec: str) -> tuple[str, list[str]]:
         if "(" not in spec or not spec.endswith(")"):
