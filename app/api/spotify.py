@@ -294,9 +294,10 @@ def get_multiple_audio_features(
 @core_router.get("/me/tracks", response_model=SavedTracksResponse)
 def get_saved_tracks(
     limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     service: SpotifyDomainService = Depends(_get_spotify_service),
 ) -> SavedTracksResponse:
-    saved = service.get_saved_tracks(limit=limit)
+    saved = service.get_saved_tracks(limit=limit, offset=offset)
     return SavedTracksResponse(items=list(saved["items"]), total=saved["total"])
 
 

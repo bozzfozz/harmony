@@ -244,7 +244,7 @@ def test_list_saved_tracks_normalizes_payload() -> None:
         ),
     )
     assert rows[0].added_at.isoformat() == "2023-09-01T10:00:00+00:00"
-    spotify_service.get_saved_tracks.assert_called_once_with(limit=1)
+    spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=0)
 
 
 def test_list_saved_tracks_applies_offset() -> None:
@@ -253,10 +253,6 @@ def test_list_saved_tracks_applies_offset() -> None:
     spotify_service = Mock()
     spotify_service.get_saved_tracks.return_value = {
         "items": [
-            {
-                "added_at": "2023-09-01T10:00:00Z",
-                "track": {"id": "track-1", "name": "Track One", "artists": [], "album": {}},
-            },
             {
                 "added_at": "2023-09-02T10:00:00Z",
                 "track": {"id": "track-2", "name": "Track Two", "artists": [], "album": {}},
@@ -277,7 +273,7 @@ def test_list_saved_tracks_applies_offset() -> None:
     assert total == 2
     assert len(rows) == 1
     assert rows[0].identifier == "track-2"
-    spotify_service.get_saved_tracks.assert_called_once_with(limit=2)
+    spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=1)
 
 
 def test_save_tracks_filters_and_returns_count() -> None:

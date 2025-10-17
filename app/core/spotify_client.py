@@ -459,8 +459,12 @@ class SpotifyClient:
             insert_before=insert_before,
         )
 
-    def get_saved_tracks(self, limit: int = 20) -> dict[str, Any]:
-        return self._execute(self._client.current_user_saved_tracks, limit=limit)
+    def get_saved_tracks(self, limit: int = 20, offset: int = 0) -> dict[str, Any]:
+        return self._execute(
+            self._client.current_user_saved_tracks,
+            limit=limit,
+            offset=offset,
+        )
 
     def save_tracks(self, track_ids: list[str]) -> dict[str, Any]:
         return self._execute(self._client.current_user_saved_tracks_add, track_ids)

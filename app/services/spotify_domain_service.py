@@ -319,9 +319,9 @@ class SpotifyDomainService:
             return []
         return [item for item in audio_features if isinstance(item, dict)]
 
-    def get_saved_tracks(self, *, limit: int) -> dict[str, Any]:
+    def get_saved_tracks(self, *, limit: int, offset: int = 0) -> dict[str, Any]:
         client = self._require_spotify()
-        saved = client.get_saved_tracks(limit=limit)
+        saved = client.get_saved_tracks(limit=limit, offset=offset)
         items = saved.get("items", []) if isinstance(saved, dict) else []
         total = saved.get("total") if isinstance(saved, dict) else None
         if total is None and isinstance(items, Iterable):
