@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import parse_qs
 
+from collections.abc import Sequence
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -86,6 +88,110 @@ def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[s
         return token, False
     issued = manager.issue(session)
     return issued, True
+
+
+async def _render_search_results_fragment(
+    request: Request,
+    session: UiSession,
+    service: SearchUiService,
+    *,
+    raw_query: str | None,
+    raw_limit: str | int | None,
+    raw_offset: str | int | None,
+    raw_sources: Sequence[str] | None,
+) -> Response:
+    if not session.features.soulseek:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+
+    query = (raw_query or "").strip()
+    if not query:
+        return _render_alert_fragment(
+            request,
+            "Please provide a search query.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def _coerce_int(
+        value: str | int | None, default: int, *, minimum: int, maximum: int | None = None
+    ) -> int:
+        try:
+            coerced = int(value) if value not in (None, "") else default
+        except (TypeError, ValueError):
+            coerced = default
+        if maximum is None:
+            return max(minimum, coerced)
+        return max(minimum, min(coerced, maximum))
+
+    limit_value = _coerce_int(raw_limit, 25, minimum=1, maximum=100)
+    offset_value = _coerce_int(raw_offset, 0, minimum=0)
+
+    sources = tuple(source for source in (raw_sources or ()) if source)
+
+    try:
+        page = await service.search(
+            request,
+            query=query,
+            limit=limit_value,
+            offset=offset_value,
+            sources=sources,
+        )
+    except ValidationError:
+        return _render_alert_fragment(
+            request,
+            "Please provide valid search parameters.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.search",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.search")
+        log_event(
+            logger,
+            "ui.fragment.search",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Search failed due to an unexpected error.",
+        )
+
+    context = build_search_results_context(
+        request,
+        page=page,
+        query=query,
+        sources=sources,
+    )
+    log_event(
+        logger,
+        "ui.fragment.search",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/search_results.j2",
+        context,
+    )
 
 
 @router.get("/login", include_in_schema=False)
@@ -988,95 +1094,42 @@ async def search_results(
     session: UiSession = Depends(require_role("operator")),
     service: SearchUiService = Depends(get_search_ui_service),
 ) -> Response:
-    if not session.features.soulseek:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="The requested UI feature is disabled.",
-        )
-
     raw_body = await request.body()
     try:
         body = raw_body.decode("utf-8")
     except UnicodeDecodeError:
         body = ""
     values = parse_qs(body)
-    query = values.get("query", [""])[0].strip()
-    limit_raw = values.get("limit", [""])[0]
-    sources = [source for source in values.get("sources", []) if source]
-
-    try:
-        limit_value = int(limit_raw) if limit_raw else 25
-    except ValueError:
-        limit_value = 25
-    limit_value = max(1, min(limit_value, 100))
-
-    if not query:
-        return _render_alert_fragment(
-            request,
-            "Please provide a search query.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        page = await service.search(
-            request,
-            query=query,
-            limit=limit_value,
-            sources=sources,
-        )
-    except ValidationError:
-        return _render_alert_fragment(
-            request,
-            "Please provide valid search parameters.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-    except AppError as exc:
-        log_event(
-            logger,
-            "ui.fragment.search",
-            component="ui.router",
-            status="error",
-            role=session.role,
-            error=exc.code,
-        )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
-        )
-    except Exception:
-        logger.exception("ui.fragment.search")
-        log_event(
-            logger,
-            "ui.fragment.search",
-            component="ui.router",
-            status="error",
-            role=session.role,
-            error="unexpected",
-        )
-        return _render_alert_fragment(
-            request,
-            "Search failed due to an unexpected error.",
-        )
-
-    context = build_search_results_context(
+    return await _render_search_results_fragment(
         request,
-        page=page,
-        query=query,
-        sources=sources,
+        session,
+        service,
+        raw_query=values.get("query", [""])[0],
+        raw_limit=values.get("limit", [""])[0],
+        raw_offset=values.get("offset", [""])[0],
+        raw_sources=values.get("sources", []),
     )
-    log_event(
-        logger,
-        "ui.fragment.search",
-        component="ui.router",
-        status="success",
-        role=session.role,
-        count=len(context["fragment"].table.rows),
-    )
-    return templates.TemplateResponse(
+
+
+@router.get("/search/results", include_in_schema=False)
+async def search_results_get(
+    request: Request,
+    query: str = Query(default=""),
+    limit: str = Query(default=""),
+    offset: str = Query(default=""),
+    sources: Sequence[str] | None = Query(default=None),
+    session: UiSession = Depends(require_role("operator")),
+    service: SearchUiService = Depends(get_search_ui_service),
+) -> Response:
+    """Serve search results via GET for HTMX pagination links."""
+    return await _render_search_results_fragment(
         request,
-        "partials/search_results.j2",
-        context,
+        session,
+        service,
+        raw_query=query,
+        raw_limit=limit,
+        raw_offset=offset,
+        raw_sources=sources or (),
     )
 
 

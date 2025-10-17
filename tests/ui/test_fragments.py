@@ -147,7 +147,7 @@ class _RecordingDownloadsService:
 class _StubSearchService:
     def __init__(self, result: SearchResultsPage | Exception) -> None:
         self._result = result
-        self.calls: list[tuple[str, int, Sequence[str]]] = []
+        self.calls: list[tuple[str, int, int, Sequence[str]]] = []
 
     async def search(
         self,
@@ -155,11 +155,12 @@ class _StubSearchService:
         *,
         query: str,
         limit: int,
+        offset: int,
         sources: Sequence[str] | None = None,
     ) -> SearchResultsPage:
         if isinstance(self._result, Exception):
             raise self._result
-        self.calls.append((query, limit, tuple(sources or [])))
+        self.calls.append((query, limit, offset, tuple(sources or [])))
         return self._result
 
 
@@ -730,7 +731,47 @@ def test_search_results_success(monkeypatch) -> None:
             body = response.text
             assert "Example" in body
             assert "spotify" in body
-            assert stub.calls == [("Example", 25, ("spotify",))]
+            assert stub.calls == [("Example", 25, 0, ("spotify",))]
+    finally:
+        app.dependency_overrides.pop(get_search_ui_service, None)
+
+
+def test_search_results_get_pagination(monkeypatch) -> None:
+    page = SearchResultsPage(
+        items=[
+            SearchResult(
+                identifier="track-2",
+                title="Example 2",
+                artist="Artist",
+                source="soulseek",
+                score=0.7,
+                bitrate=256,
+                audio_format="FLAC",
+            )
+        ],
+        total=50,
+        limit=25,
+        offset=25,
+    )
+    stub = _StubSearchService(page)
+    app.dependency_overrides[get_search_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client), "HX-Request": "true"}
+            response = client.get(
+                "/ui/search/results",
+                params={
+                    "query": "Example",
+                    "limit": "25",
+                    "offset": "25",
+                    "sources": ["soulseek"],
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Example 2" in response.text
+            assert stub.calls == [("Example", 25, 25, ("soulseek",))]
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
 

@@ -51,9 +51,15 @@ class SearchUiService:
         *,
         query: str,
         limit: int,
+        offset: int,
         sources: Sequence[str] | None = None,
     ) -> SearchResultsPage:
-        payload = SearchRequest(query=query, limit=limit, sources=list(sources or []))
+        payload = SearchRequest(
+            query=query,
+            limit=limit,
+            offset=offset,
+            sources=list(sources or []),
+        )
         response = await smart_search(
             payload,
             request,
