@@ -825,6 +825,7 @@ def test_spotify_manual_completion_handles_validation_error(monkeypatch) -> None
             _assert_html_response(response)
             assert "invalid redirect" in response.text
             assert stub.manual_calls == ["http://invalid"]
+            assert 'value="http://invalid"' in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

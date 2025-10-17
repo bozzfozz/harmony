@@ -51,7 +51,12 @@
             hx-swap="innerHTML">
         <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
         <label for="redirect_url">{{ strings.form_label("spotify.manual.redirect") }}</label>
-        <input type="text" id="redirect_url" name="redirect_url" required autocomplete="off" />
+        <input type="text"
+               id="redirect_url"
+               name="redirect_url"
+               required
+               autocomplete="off"
+               {% if manual_redirect_url %}value="{{ manual_redirect_url }}"{% endif %} />
         <button type="submit">{{ strings.button_label(manual_form.submit_label_key) }}</button>
       </form>
     {% endif %}
