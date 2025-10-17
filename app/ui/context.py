@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 
 from fastapi import Request
 
+from app.api.search import DEFAULT_SOURCES
 from app.ui.services import (
     DownloadPage,
     OrchestratorJob,
@@ -79,12 +80,29 @@ class FormField:
 
 
 @dataclass(slots=True)
+class CheckboxOption:
+    value: str
+    label_key: str
+    checked: bool = False
+    test_id: str | None = None
+
+
+@dataclass(slots=True)
+class CheckboxGroup:
+    name: str
+    legend_key: str
+    description_key: str | None = None
+    options: Sequence[CheckboxOption] = field(default_factory=tuple)
+
+
+@dataclass(slots=True)
 class FormDefinition:
     identifier: str
     method: ButtonMethod
     action: str
     submit_label_key: str
     fields: Sequence[FormField] = field(default_factory=tuple)
+    checkbox_groups: Sequence[CheckboxGroup] = field(default_factory=tuple)
 
 
 @dataclass(slots=True)
@@ -168,6 +186,68 @@ class AsyncFragment:
         if self.poll_interval_seconds is not None:
             parts.append(f"every {self.poll_interval_seconds}s")
         return ", ".join(parts)
+
+
+_SEARCH_SOURCE_LABELS: dict[str, str] = {
+    "spotify": "search.sources.spotify",
+    "soulseek": "search.sources.soulseek",
+}
+
+
+def _safe_url_for(request: Request, name: str, fallback: str) -> str:
+    try:
+        return request.url_for(name)
+    except Exception:  # pragma: no cover - fallback for tests
+        return fallback
+
+
+def _build_search_form(default_sources: Sequence[str]) -> FormDefinition:
+    default_source_set = {source for source in default_sources}
+    ordered_sources = list(_SEARCH_SOURCE_LABELS.keys())
+    for source in DEFAULT_SOURCES:
+        if source not in ordered_sources:
+            ordered_sources.append(source)
+
+    checkbox_options: list[CheckboxOption] = []
+    for source in ordered_sources:
+        label_key = _SEARCH_SOURCE_LABELS.get(source, f"search.sources.{source}")
+        checkbox_options.append(
+            CheckboxOption(
+                value=source,
+                label_key=label_key,
+                checked=source in default_source_set,
+                test_id=f"search-source-{source}",
+            )
+        )
+
+    sources_group = CheckboxGroup(
+        name="sources",
+        legend_key="search.sources.legend",
+        description_key="search.sources.description",
+        options=tuple(checkbox_options),
+    )
+
+    return FormDefinition(
+        identifier="search-form",
+        method="post",
+        action="/ui/search/results",
+        submit_label_key="search.submit",
+        fields=(
+            FormField(
+                name="query",
+                input_type="search",
+                label_key="search.query",
+                autocomplete="off",
+                required=True,
+            ),
+            FormField(
+                name="limit",
+                input_type="number",
+                label_key="search.limit",
+            ),
+        ),
+        checkbox_groups=(sources_group,),
+    )
 
 
 def build_login_page_context(request: Request, *, error: str | None = None) -> Mapping[str, Any]:
@@ -501,32 +581,9 @@ def build_search_page_context(
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
     )
 
-    search_form = FormDefinition(
-        identifier="search-form",
-        method="post",
-        action="/ui/search/results",
-        submit_label_key="search.submit",
-        fields=(
-            FormField(
-                name="query",
-                input_type="search",
-                label_key="search.query",
-                autocomplete="off",
-                required=True,
-            ),
-            FormField(
-                name="limit",
-                input_type="number",
-                label_key="search.limit",
-            ),
-        ),
-    )
+    search_form = _build_search_form(DEFAULT_SOURCES)
 
-    try:
-        results_url = request.url_for("search_results")
-    except Exception:  # pragma: no cover - fallback for tests
-        results_url = "/ui/search/results"
-
+    results_url = _safe_url_for(request, "search_results", "/ui/search/results")
     results_fragment = AsyncFragment(
         identifier="hx-search-results",
         url=results_url,
@@ -535,11 +592,7 @@ def build_search_page_context(
         loading_key="search.results",
     )
 
-    try:
-        queue_url = request.url_for("downloads_table")
-    except Exception:  # pragma: no cover - fallback for tests
-        queue_url = "/ui/downloads/table"
-
+    queue_url = _safe_url_for(request, "downloads_table", "/ui/downloads/table")
     queue_fragment = AsyncFragment(
         identifier="hx-search-queue",
         url=f"{queue_url}?limit=20",
@@ -957,6 +1010,12 @@ def build_search_results_context(
     except Exception:  # pragma: no cover - fallback for tests
         base_url = "/ui/search/results"
 
+    resolved_sources: tuple[str, ...]
+    if sources:
+        resolved_sources = tuple(dict.fromkeys(sources))
+    else:
+        resolved_sources = DEFAULT_SOURCES
+
     def _make_query(offset: int | None) -> str | None:
         if offset is None or offset < 0:
             return None
@@ -965,7 +1024,7 @@ def build_search_results_context(
             ("limit", str(page.limit)),
             ("offset", str(offset)),
         ]
-        for source in sources:
+        for source in resolved_sources:
             query_params.append(("sources", source))
         return f"{base_url}?{urlencode(query_params)}"
 
@@ -990,6 +1049,7 @@ def build_search_results_context(
             "limit": str(page.limit),
             "offset": str(page.offset),
             "query": query,
+            "sources": ",".join(resolved_sources),
         },
         pagination=pagination if pagination.previous_url or pagination.next_url else None,
     )
@@ -1033,6 +1093,8 @@ __all__ = [
     "ActionButton",
     "AsyncFragment",
     "AlertMessage",
+    "CheckboxGroup",
+    "CheckboxOption",
     "PaginationContext",
     "FormDefinition",
     "FormField",

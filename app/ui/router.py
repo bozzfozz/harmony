@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
+from app.api.search import DEFAULT_SOURCES
 from app.dependencies import get_download_service
 from app.errors import AppError
 from app.logging import get_logger
@@ -131,7 +132,12 @@ async def _render_search_results_fragment(
     limit_value = _coerce_int(raw_limit, 25, minimum=1, maximum=100)
     offset_value = _coerce_int(raw_offset, 0, minimum=0)
 
-    sources = tuple(source for source in (raw_sources or ()) if source)
+    cleaned_sources: list[str] = []
+    for entry in raw_sources or ():
+        normalised = str(entry).strip().lower()
+        if normalised and normalised not in cleaned_sources:
+            cleaned_sources.append(normalised)
+    resolved_sources: tuple[str, ...] = tuple(cleaned_sources) or DEFAULT_SOURCES
 
     try:
         page = await service.search(
@@ -139,7 +145,7 @@ async def _render_search_results_fragment(
             query=query,
             limit=limit_value,
             offset=offset_value,
-            sources=sources,
+            sources=resolved_sources,
         )
     except ValidationError:
         return _render_alert_fragment(
@@ -182,7 +188,7 @@ async def _render_search_results_fragment(
         request,
         page=page,
         query=query,
-        sources=sources,
+        sources=resolved_sources,
         csrf_token=csrf_token,
     )
     log_event(

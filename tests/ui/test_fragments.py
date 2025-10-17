@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.api.search import DEFAULT_SOURCES
 from app.dependencies import get_download_service
 from app.errors import AppError, ErrorCode
 from app.main import app
@@ -746,6 +747,7 @@ def test_search_results_success(monkeypatch) -> None:
             body = response.text
             assert "Example" in body
             assert "spotify" in body
+            assert 'data-sources="spotify"' in body
             assert stub.calls == [("Example", 25, 0, ("spotify",))]
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
@@ -792,14 +794,14 @@ def test_search_results_render_download_action(monkeypatch) -> None:
             _assert_html_response(response)
             body = response.text
             assert (
-                "action=\"/ui/search/download\"" in body
-                or "action=\"http://testserver/ui/search/download\"" in body
+                'action="/ui/search/download"' in body
+                or 'action="http://testserver/ui/search/download"' in body
             )
             assert (
-                "hx-post=\"/ui/search/download\"" in body
-                or "hx-post=\"http://testserver/ui/search/download\"" in body
+                'hx-post="/ui/search/download"' in body
+                or 'hx-post="http://testserver/ui/search/download"' in body
             )
-            assert "name=\"files\"" in body
+            assert 'name="files"' in body
             assert "Queue download" in body
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
@@ -840,7 +842,47 @@ def test_search_results_get_pagination(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert "Example 2" in response.text
+            assert "sources=soulseek" in response.text
+            assert 'data-sources="soulseek"' in response.text
             assert stub.calls == [("Example", 25, 25, ("soulseek",))]
+    finally:
+        app.dependency_overrides.pop(get_search_ui_service, None)
+
+
+def test_search_results_defaults_to_configured_sources(monkeypatch) -> None:
+    page = SearchResultsPage(
+        items=[
+            SearchResult(
+                identifier="track-4",
+                title="Default",
+                artist="Artist",
+                source="spotify",
+                score=0.5,
+                bitrate=192,
+                audio_format="MP3",
+            )
+        ],
+        total=60,
+        limit=25,
+        offset=0,
+    )
+    stub = _StubSearchService(page)
+    app.dependency_overrides[get_search_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.post(
+                "/ui/search/results",
+                data={"query": "Default", "limit": "25"},
+                headers=_csrf_headers(client),
+            )
+            _assert_html_response(response)
+            html = response.text
+            expected_sources = tuple(DEFAULT_SOURCES)
+            assert stub.calls == [("Default", 25, 0, expected_sources)]
+            assert f'data-sources="{",".join(expected_sources)}"' in html
+            for source in expected_sources:
+                assert f"sources={source}" in html
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
 
