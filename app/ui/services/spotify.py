@@ -267,15 +267,14 @@ class SpotifyUiService:
     ) -> tuple[Sequence[SpotifySavedTrackRow], int]:
         page_limit = max(1, min(int(limit), 50))
         page_offset = max(0, int(offset))
-        request_limit = min(page_limit + page_offset, 200)
-        payload = self._spotify.get_saved_tracks(limit=request_limit)
+        payload = self._spotify.get_saved_tracks(limit=page_limit, offset=page_offset)
         items = payload.get("items") if isinstance(payload, Mapping) else []
         total_raw = payload.get("total") if isinstance(payload, Mapping) else None
         total_count = int(total_raw or 0)
 
         rows: list[SpotifySavedTrackRow] = []
         if isinstance(items, Sequence):
-            for entry in items[page_offset : page_offset + page_limit]:
+            for entry in items[:page_limit]:
                 if not isinstance(entry, Mapping):
                     continue
                 track_payload = (
