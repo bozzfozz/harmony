@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 import re
 
@@ -16,11 +16,18 @@ from app.ui.services import (
     OrchestratorJob,
     SearchResult,
     SearchResultsPage,
+    SpotifyBackfillSnapshot,
+    SpotifyManualResult,
+    SpotifyOAuthHealth,
+    SpotifyPlaylistRow,
+    SpotifyStatus,
+    SpotifyUiService,
     WatchlistRow,
     WatchlistTable,
     get_activity_ui_service,
     get_downloads_ui_service,
     get_search_ui_service,
+    get_spotify_ui_service,
     get_watchlist_ui_service,
 )
 from app.ui.session import fingerprint_api_key
@@ -153,6 +160,94 @@ class _StubSearchService:
             raise self._result
         self.calls.append((query, limit, tuple(sources or [])))
         return self._result
+
+
+class _StubSpotifyService:
+    def __init__(self) -> None:
+        self._status = SpotifyStatus(
+            status="connected",
+            free_available=True,
+            pro_available=True,
+            authenticated=True,
+        )
+        self._oauth = SpotifyOAuthHealth(
+            manual_enabled=True,
+            redirect_uri="http://localhost/callback",
+            public_host_hint=None,
+            active_transactions=0,
+            ttl_seconds=300,
+        )
+        self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
+        self.manual_result = SpotifyManualResult(ok=True, message="Completed")
+        self.manual_exception: Exception | None = None
+        self.start_url = "https://spotify.example/auth"
+        self.start_exception: Exception | None = None
+        self.backfill_status_payload: Mapping[str, object] | None = None
+        self.snapshot = SpotifyBackfillSnapshot(
+            csrf_token="token",
+            can_run=True,
+            default_max_items=100,
+            expand_playlists=True,
+            last_job_id="job-1",
+            state="queued",
+            requested=10,
+            processed=0,
+            matched=0,
+            cache_hits=0,
+            cache_misses=0,
+            expanded_playlists=0,
+            expanded_tracks=0,
+            duration_ms=None,
+            error=None,
+        )
+        self.run_backfill_job_id = "job-1"
+        self.run_backfill_exception: Exception | None = None
+        self.manual_calls: list[str] = []
+        self.backfill_snapshot_calls: list[tuple[str, str | None, Mapping[str, object] | None]] = []
+        self.backfill_status_calls: list[str | None] = []
+        self.run_calls: list[tuple[int | None, bool]] = []
+
+    def status(self) -> SpotifyStatus:
+        return self._status
+
+    def oauth_health(self) -> SpotifyOAuthHealth:
+        return self._oauth
+
+    def list_playlists(self) -> Sequence[SpotifyPlaylistRow]:
+        if isinstance(self.playlists, Exception):
+            raise self.playlists
+        return tuple(self.playlists)
+
+    async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
+        if self.manual_exception:
+            raise self.manual_exception
+        self.manual_calls.append(redirect_url)
+        return self.manual_result
+
+    def start_oauth(self) -> str:
+        if self.start_exception:
+            raise self.start_exception
+        return self.start_url
+
+    async def run_backfill(self, *, max_items: int | None, expand_playlists: bool) -> str:
+        if self.run_backfill_exception:
+            raise self.run_backfill_exception
+        self.run_calls.append((max_items, expand_playlists))
+        return self.run_backfill_job_id
+
+    def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
+        self.backfill_status_calls.append(job_id)
+        return self.backfill_status_payload
+
+    def build_backfill_snapshot(
+        self,
+        *,
+        csrf_token: str,
+        job_id: str | None,
+        status_payload: Mapping[str, object] | None,
+    ) -> SpotifyBackfillSnapshot:
+        self.backfill_snapshot_calls.append((csrf_token, job_id, status_payload))
+        return self.snapshot
 
 
 class _StubWatchlistService:
@@ -687,3 +782,117 @@ def test_search_results_app_error(monkeypatch) -> None:
             assert "search failed" in response.text
     finally:
         app.dependency_overrides.pop(get_search_ui_service, None)
+
+
+def test_spotify_status_fragment_renders_forms(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/status",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-oauth-start" in response.text
+            assert "spotify-manual-form" in response.text
+            assert "Redirect URI" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_manual_completion_handles_validation_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.manual_result = SpotifyManualResult(ok=False, message="invalid redirect")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/oauth/manual",
+                data={"redirect_url": "http://invalid"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "invalid redirect" in response.text
+            assert stub.manual_calls == ["http://invalid"]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_status_fragment_hides_manual_form_when_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub._oauth = SpotifyOAuthHealth(
+        manual_enabled=False,
+        redirect_uri="http://localhost/callback",
+        public_host_hint="https://console.example",
+        active_transactions=1,
+        ttl_seconds=0,
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/status",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-manual-form" not in response.text
+            assert "Manual completion is disabled" in response.text
+            assert "Ensure the public host is reachable" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlists_fragment_returns_error_on_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/playlists",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            assert response.status_code == 500
+            assert "Unable to load Spotify playlists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_run_returns_success_alert(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.backfill_status_payload = {
+        "id": "job-1",
+        "state": "queued",
+        "requested": 5,
+        "processed": 0,
+        "matched": 0,
+        "cache_hits": 0,
+        "cache_misses": 0,
+        "expanded_playlists": 0,
+        "expanded_tracks": 0,
+        "duration_ms": None,
+        "error": None,
+        "expand_playlists": True,
+    }
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/run",
+                data={"max_items": "25", "expand_playlists": "1"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Backfill job job-1 enqueued." in response.text
+            assert stub.run_calls == [(25, True)]
+            assert stub.backfill_status_calls[-1] == "job-1"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)

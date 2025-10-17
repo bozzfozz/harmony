@@ -1,0 +1,59 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+{{ alerts.render_alerts(alert_messages) }}
+
+<div class="spotify-status" data-status="{{ status.status }}">
+  <p class="spotify-status__summary">
+    {{ strings.table_cell(status_label_key) }}
+  </p>
+  <p class="spotify-status__hint">{{ strings.spotify_status_hint(status.status) }}</p>
+  <div class="spotify-status__badges">
+    {{ status_badges.render_badges(badges) }}
+  </div>
+  <div class="spotify-status__actions">
+    {% if status.pro_available %}
+      <form id="spotify-oauth-start"
+            method="post"
+            action="/ui/spotify/oauth/start"
+            hx-post="/ui/spotify/oauth/start"
+            hx-target="this"
+            hx-swap="none">
+        <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+        <button type="submit">{{ strings.button_label("spotify.connect") }}</button>
+      </form>
+    {% endif %}
+  </div>
+  <div class="spotify-status__manual">
+    <p>{{ strings.spotify_manual_hint(oauth, status) }}</p>
+    {% if oauth.public_host_hint %}
+      <p class="spotify-status__manual-host">{{ strings.spotify_manual_host_hint(oauth.public_host_hint) }}</p>
+    {% endif %}
+    {% if oauth.redirect_uri %}
+      <p class="spotify-status__manual-redirect">
+        <strong>{{ strings.spotify_manual_redirect_label() }}</strong>
+        <code>{{ oauth.redirect_uri }}</code>
+      </p>
+    {% endif %}
+    <dl class="spotify-status__manual-metrics">
+      <dt>{{ strings.spotify_manual_active_label() }}</dt>
+      <dd>{{ oauth.active_transactions }}</dd>
+      <dt>{{ strings.spotify_manual_ttl_label() }}</dt>
+      <dd>{{ strings.spotify_manual_ttl(oauth.ttl_seconds) }}</dd>
+    </dl>
+    {% if oauth.manual_enabled %}
+      <form id="{{ manual_form.identifier }}"
+            method="{{ manual_form.method }}"
+            action="{{ manual_form.action }}"
+            hx-post="{{ manual_form.action }}"
+            hx-target="#hx-spotify-status"
+            hx-swap="outerHTML">
+        <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+        <label for="redirect_url">{{ strings.form_label("spotify.manual.redirect") }}</label>
+        <input type="text" id="redirect_url" name="redirect_url" required autocomplete="off" />
+        <button type="submit">{{ strings.button_label(manual_form.submit_label_key) }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>

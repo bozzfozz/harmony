@@ -9,6 +9,15 @@ from .search import (
     SearchUiService,
     get_search_ui_service,
 )
+from .spotify import (
+    SpotifyBackfillSnapshot,
+    SpotifyManualResult,
+    SpotifyOAuthHealth,
+    SpotifyPlaylistRow,
+    SpotifyStatus,
+    SpotifyUiService,
+    get_spotify_ui_service,
+)
 from .watchlist import (
     WatchlistRow,
     WatchlistTable,
@@ -31,6 +40,13 @@ __all__ = [
     "SearchResultsPage",
     "SearchUiService",
     "get_search_ui_service",
+    "SpotifyBackfillSnapshot",
+    "SpotifyManualResult",
+    "SpotifyOAuthHealth",
+    "SpotifyPlaylistRow",
+    "SpotifyStatus",
+    "SpotifyUiService",
+    "get_spotify_ui_service",
     "WatchlistRow",
     "WatchlistTable",
     "WatchlistUiService",

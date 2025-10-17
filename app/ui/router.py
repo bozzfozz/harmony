@@ -14,12 +14,17 @@ from app.logging_events import log_event
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.ui.context import (
     AlertMessage,
+    FormDefinition,
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_downloads_fragment_context,
     build_jobs_fragment_context,
     build_login_page_context,
     build_search_results_context,
+    build_spotify_backfill_context,
+    build_spotify_page_context,
+    build_spotify_playlists_context,
+    build_spotify_status_context,
     build_watchlist_fragment_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
@@ -28,11 +33,13 @@ from app.ui.services import (
     DownloadsUiService,
     JobsUiService,
     SearchUiService,
+    SpotifyUiService,
     WatchlistUiService,
     get_activity_ui_service,
     get_downloads_ui_service,
     get_jobs_ui_service,
     get_search_ui_service,
+    get_spotify_ui_service,
     get_watchlist_ui_service,
 )
 from app.ui.session import (
@@ -40,6 +47,7 @@ from app.ui.session import (
     attach_session_cookie,
     clear_session_cookie,
     get_session_manager,
+    require_feature,
     require_role,
     require_session,
 )
@@ -68,6 +76,14 @@ def _render_alert_fragment(
         context,
         status_code=status_code,
     )
+
+
+def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[str, bool]:
+    token = request.cookies.get("csrftoken")
+    if token:
+        return token, False
+    issued = manager.issue(session)
+    return issued, True
 
 
 @router.get("/login", include_in_schema=False)
@@ -148,6 +164,28 @@ async def dashboard(
     return response
 
 
+@router.get("/spotify", include_in_schema=False)
+async def spotify_page(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_spotify_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/spotify.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
 @router.post(
     "/logout",
     include_in_schema=False,
@@ -170,6 +208,184 @@ async def logout(
         role=session.role,
     )
     response.headers.setdefault("HX-Redirect", "/ui/login")
+    return response
+
+
+@router.post(
+    "/spotify/oauth/start",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_oauth_start(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        authorization_url = service.start_oauth()
+    except ValueError as exc:
+        logger.warning("spotify.ui.oauth.start.error", extra={"error": str(exc)})
+        return _render_alert_fragment(
+            request,
+            str(exc) or "Spotify OAuth is currently unavailable.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
+    response.headers.setdefault("HX-Redirect", authorization_url)
+    log_event(
+        logger,
+        "ui.spotify.oauth.start",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return response
+
+
+@router.post(
+    "/spotify/oauth/manual",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_oauth_manual(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+    redirect_url = values.get("redirect_url", [""])[0].strip()
+    if not redirect_url:
+        return _render_alert_fragment(
+            request,
+            "A redirect URL from Spotify is required.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    result = await service.manual_complete(redirect_url=redirect_url)
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    context = build_spotify_status_context(
+        request,
+        status=service.status(),
+        oauth=service.oauth_health(),
+        manual_form=manual_form,
+        csrf_token=csrf_token,
+        manual_result=result,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_status.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.spotify.oauth.manual",
+        component="ui.router",
+        status="success" if result.ok else "error",
+        role=session.role,
+    )
+    return response
+
+
+@router.post(
+    "/spotify/backfill/run",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_backfill_run(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    if not session.features.spotify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="The requested UI feature is disabled."
+        )
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+    max_items_raw = values.get("max_items", [""])[0].strip()
+    expand_playlists = "expand_playlists" in values
+    max_items: int | None
+    if max_items_raw:
+        try:
+            max_items = int(max_items_raw)
+            if max_items < 1:
+                raise ValueError
+        except ValueError:
+            return _render_alert_fragment(
+                request,
+                "Max items must be a positive integer.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        max_items = None
+
+    try:
+        job_id = await service.run_backfill(
+            max_items=max_items,
+            expand_playlists=expand_playlists,
+        )
+    except PermissionError as exc:
+        logger.warning("spotify.ui.backfill.denied", extra={"error": str(exc)})
+        return _render_alert_fragment(
+            request,
+            "Spotify authentication is required before running backfill.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    except Exception:
+        logger.exception("spotify.ui.backfill.error")
+        return _render_alert_fragment(
+            request,
+            "Failed to enqueue the backfill job.",
+        )
+
+    request.app.state.ui_spotify_backfill_job_id = job_id
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    status_payload = service.backfill_status(job_id)
+    snapshot = service.build_backfill_snapshot(
+        csrf_token=csrf_token,
+        job_id=job_id,
+        status_payload=status_payload,
+    )
+    alert = AlertMessage(level="success", text=f"Backfill job {job_id} enqueued.")
+    context = build_spotify_backfill_context(
+        request,
+        snapshot=snapshot,
+        alert=alert,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_backfill.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.spotify.backfill.run",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        job_id=job_id,
+    )
     return response
 
 
@@ -241,6 +457,100 @@ async def activity_table(
         "partials/activity_table.j2",
         context,
     )
+
+
+@router.get("/spotify/backfill", include_in_schema=False, name="spotify_backfill_fragment")
+async def spotify_backfill_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    job_id = getattr(request.app.state, "ui_spotify_backfill_job_id", None)
+    status_payload = service.backfill_status(job_id)
+    snapshot = service.build_backfill_snapshot(
+        csrf_token=csrf_token,
+        job_id=job_id,
+        status_payload=status_payload,
+    )
+    context = build_spotify_backfill_context(request, snapshot=snapshot)
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_backfill.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/spotify/playlists", include_in_schema=False, name="spotify_playlists_fragment")
+async def spotify_playlists_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        playlists = service.list_playlists()
+    except Exception:
+        logger.exception("ui.fragment.spotify.playlists")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify playlists.",
+        )
+    context = build_spotify_playlists_context(request, playlists=playlists)
+    log_event(
+        logger,
+        "ui.fragment.spotify.playlists",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/spotify_playlists.j2",
+        context,
+    )
+
+
+@router.get("/spotify/status", include_in_schema=False, name="spotify_status_fragment")
+async def spotify_status_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    context = build_spotify_status_context(
+        request,
+        status=service.status(),
+        oauth=service.oauth_health(),
+        manual_form=manual_form,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_status.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.status",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return response
 
 
 @router.get("/downloads/table", include_in_schema=False)

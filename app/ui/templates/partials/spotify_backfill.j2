@@ -1,0 +1,55 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts %}
+
+{{ alerts.render_alerts(alert_messages) }}
+
+<div class="spotify-backfill">
+  <p class="spotify-backfill__hint">{{ strings.spotify_backfill_hint() }}</p>
+  <form id="spotify-backfill-form"
+        method="post"
+        action="/ui/spotify/backfill/run"
+        hx-post="/ui/spotify/backfill/run"
+        hx-target="#hx-spotify-backfill"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
+    <label for="max_items">{{ strings.form_label("spotify.backfill.max_items") }}</label>
+    <input type="number" id="max_items" name="max_items" min="1" {% if snapshot.default_max_items %}value="{{ snapshot.default_max_items }}"{% endif %} />
+    <label for="expand_playlists">
+      <input type="checkbox" id="expand_playlists" name="expand_playlists" value="1" {% if snapshot.expand_playlists %}checked{% endif %} />
+      {{ strings.spotify_backfill_expand_label() }}
+    </label>
+    <button type="submit" {% if not snapshot.can_run %}disabled{% endif %}>{{ strings.button_label("spotify.backfill.run") }}</button>
+  </form>
+  {% if snapshot.last_job_id %}
+    <section class="spotify-backfill__status">
+      <h4>{{ strings.spotify_backfill_latest_heading() }}</h4>
+      <dl>
+        <dt>{{ strings.spotify_backfill_field_label("id") }}</dt>
+        <dd>{{ snapshot.last_job_id }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("state") }}</dt>
+        <dd>{{ snapshot.state or strings.spotify_backfill_unknown_state() }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("requested") }}</dt>
+        <dd>{{ snapshot.requested or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("processed") }}</dt>
+        <dd>{{ snapshot.processed or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("matched") }}</dt>
+        <dd>{{ snapshot.matched or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("cache_hits") }}</dt>
+        <dd>{{ snapshot.cache_hits or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("cache_misses") }}</dt>
+        <dd>{{ snapshot.cache_misses or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("expanded_playlists") }}</dt>
+        <dd>{{ snapshot.expanded_playlists or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("expanded_tracks") }}</dt>
+        <dd>{{ snapshot.expanded_tracks or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("duration") }}</dt>
+        <dd>{{ strings.spotify_backfill_duration(snapshot.duration_ms) }}</dd>
+      </dl>
+      {% if snapshot.error %}
+        <p class="spotify-backfill__error">{{ snapshot.error }}</p>
+      {% endif %}
+    </section>
+  {% else %}
+    <p class="spotify-backfill__empty">{{ strings.spotify_backfill_empty_state() }}</p>
+  {% endif %}
+</div>

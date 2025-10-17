@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from app.ui.context import (
     AlertMessage,
+    FormDefinition,
     LayoutContext,
     MetaTag,
     NavItem,
@@ -21,10 +22,20 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_spotify_backfill_context,
+    build_spotify_page_context,
+    build_spotify_playlists_context,
+    build_spotify_status_context,
     build_watchlist_fragment_context,
 )
 from app.ui.router import templates
-from app.ui.services import WatchlistRow
+from app.ui.services import (
+    SpotifyBackfillSnapshot,
+    SpotifyOAuthHealth,
+    SpotifyPlaylistRow,
+    SpotifyStatus,
+    WatchlistRow,
+)
 from app.ui.session import UiFeatures, UiSession
 
 
@@ -52,8 +63,8 @@ def test_login_template_renders_error_and_form() -> None:
     assert "Harmony Operator Console" in html
     assert "<!DOCTYPE html>" in html
     assert "Invalid key" in html
-    assert "id=\"login-form\"" in html
-    assert "data-role=\"anonymous\"" in html
+    assert 'id="login-form"' in html
+    assert 'data-role="anonymous"' in html
     assert "nav-home" not in html
 
 
@@ -77,20 +88,46 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     template = templates.get_template("pages/dashboard.j2")
     html = template.render(**context)
 
-    assert "meta name=\"csrf-token\" content=\"csrf-token-value\"" in html
+    assert 'meta name="csrf-token" content="csrf-token-value"' in html
     assert "nav-home" in html
     assert "nav-operator" in html
     assert "nav-admin" in html
-    assert "id=\"features-table\"" in html
+    assert 'id="features-table"' in html
     assert "status-badge--success" in html
     assert "status-badge--muted" in html
     assert "operator-action" in html
     assert "admin-action" in html
     assert "Welcome" in html
     assert "Current role: Admin" in html
-    assert "hx-get=\"/ui/activity/table\"" in html
-    assert "hx-trigger=\"load, every 60s\"" in html
-    assert "hx-target=\"#hx-activity-table\"" in html
+    assert 'hx-get="/ui/activity/table"' in html
+    assert 'hx-trigger="load, every 60s"' in html
+    assert 'hx-target="#hx-activity-table"' in html
+
+
+def test_spotify_page_template_renders_sections() -> None:
+    request = _make_request("/ui/spotify")
+    features = UiFeatures(spotify=True, soulseek=True, dlq=True, imports=True)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-spotify",
+        role="operator",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_spotify_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-token",
+    )
+    template = templates.get_template("pages/spotify.j2")
+    html = template.render(**context)
+
+    assert "nav-spotify" in html
+    assert 'hx-get="/ui/spotify/status"' in html
+    assert 'hx-get="/ui/spotify/playlists"' in html
+    assert 'hx-get="/ui/spotify/backfill"' in html
 
 
 def test_base_layout_renders_navigation_and_alerts() -> None:
@@ -114,17 +151,22 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     template = templates.get_template("layouts/base.j2")
     html = template.render(request=request, layout=layout)
 
-    assert "<nav aria-label=\"Primary\">" in html
-    assert "data-test=\"nav-home\"" in html
+    assert '<nav aria-label="Primary">' in html
+    assert 'data-test="nav-home"' in html
     assert "alert alert--warning" in html
     assert "Check status" in html
-    assert "<meta name=\"csrf-token\" content=\"token\" />" in html
+    assert '<meta name="csrf-token" content="token" />' in html
 
 
 def test_activity_fragment_template_uses_table_macro() -> None:
     request = _make_request("/ui/activity/table")
     items = [
-        {"timestamp": "2024-01-01T00:00:00Z", "type": "test", "status": "ok", "details": {"foo": "bar"}}
+        {
+            "timestamp": "2024-01-01T00:00:00Z",
+            "type": "test",
+            "status": "ok",
+            "details": {"foo": "bar"},
+        }
     ]
     context = build_activity_fragment_context(
         request,
@@ -138,9 +180,9 @@ def test_activity_fragment_template_uses_table_macro() -> None:
     template = templates.get_template("partials/activity_table.j2")
     html = template.render(**context)
 
-    assert "id=\"hx-activity-table\"" in html
-    assert "data-total=\"1\"" in html
-    assert "<table id=\"activity-table\"" in html
+    assert 'id="hx-activity-table"' in html
+    assert 'data-total="1"' in html
+    assert '<table id="activity-table"' in html
     assert "foo" in html
     assert 'class="pagination"' not in html
 
@@ -163,10 +205,134 @@ def test_watchlist_fragment_template_renders_rows() -> None:
     template = templates.get_template("partials/watchlist_table.j2")
     html = template.render(**context)
 
-    assert "id=\"hx-watchlist-table\"" in html
-    assert "data-count=\"2\"" in html
+    assert 'id="hx-watchlist-table"' in html
+    assert 'data-count="2"' in html
     assert "spotify:artist:1" in html
     assert "Paused" in html
+
+
+def test_spotify_status_partial_renders_forms_and_badges() -> None:
+    request = _make_request("/ui/spotify/status")
+    status = SpotifyStatus(
+        status="unauthenticated",
+        free_available=True,
+        pro_available=True,
+        authenticated=False,
+    )
+    oauth = SpotifyOAuthHealth(
+        manual_enabled=True,
+        redirect_uri="http://localhost/callback",
+        public_host_hint=None,
+        active_transactions=0,
+        ttl_seconds=300,
+    )
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+    )
+    template = templates.get_template("partials/spotify_status.j2")
+    html = template.render(**context)
+
+    assert "spotify-oauth-start" in html
+    assert "spotify-manual-form" in html
+    assert 'hx-post="/ui/spotify/oauth/manual"' in html
+    assert "Authentication is required" in html
+    assert "Redirect URI" in html
+    assert "Manual session timeout" in html
+
+
+def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
+    request = _make_request("/ui/spotify/status")
+    status = SpotifyStatus(
+        status="unauthenticated",
+        free_available=True,
+        pro_available=True,
+        authenticated=False,
+    )
+    oauth = SpotifyOAuthHealth(
+        manual_enabled=False,
+        redirect_uri="http://localhost/callback",
+        public_host_hint="https://console.example",
+        active_transactions=2,
+        ttl_seconds=0,
+    )
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+    )
+    template = templates.get_template("partials/spotify_status.j2")
+    html = template.render(**context)
+
+    assert "spotify-manual-form" not in html
+    assert "Manual completion is disabled" in html
+    assert "Ensure the public host is reachable" in html
+    assert "No active manual sessions" in html
+
+
+def test_spotify_playlists_partial_renders_table() -> None:
+    request = _make_request("/ui/spotify/playlists")
+    playlists = [
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=42,
+            updated_at=datetime.now(tz=UTC),
+        )
+    ]
+    context = build_spotify_playlists_context(request, playlists=playlists)
+    template = templates.get_template("partials/spotify_playlists.j2")
+    html = template.render(**context)
+
+    assert 'id="hx-spotify-playlists"' in html
+    assert "Daily Mix" in html
+    assert 'data-count="1"' in html
+
+
+def test_spotify_backfill_partial_renders_snapshot() -> None:
+    request = _make_request("/ui/spotify/backfill")
+    snapshot = SpotifyBackfillSnapshot(
+        csrf_token="csrf-token",
+        can_run=True,
+        default_max_items=500,
+        expand_playlists=True,
+        last_job_id="job-1",
+        state="running",
+        requested=100,
+        processed=50,
+        matched=25,
+        cache_hits=10,
+        cache_misses=5,
+        expanded_playlists=2,
+        expanded_tracks=10,
+        duration_ms=1234,
+        error=None,
+    )
+    context = build_spotify_backfill_context(request, snapshot=snapshot)
+    template = templates.get_template("partials/spotify_backfill.j2")
+    html = template.render(**context)
+
+    assert "spotify-backfill-form" in html
+    assert 'value="500"' in html
+    assert "job-1" in html
+    assert "Expand playlists" in html
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:
@@ -201,17 +367,16 @@ def test_table_fragment_renders_badge_and_pagination() -> None:
         ),
     )
     html = _render_inline(
-        "{% import 'partials/tables.j2' as tables %}"
-        "{{ tables.render_table_fragment(fragment) }}",
+        "{% import 'partials/tables.j2' as tables %}{{ tables.render_table_fragment(fragment) }}",
         fragment=fragment,
     )
 
-    assert "id=\"hx-test-table\"" in html
-    assert "data-count=\"1\"" in html
+    assert 'id="hx-test-table"' in html
+    assert 'data-count="1"' in html
     assert "status-badge--success" in html
-    assert "aria-label=\"Watchlist pagination\"" in html
-    assert "hx-get=\"/prev\"" in html
-    assert "hx-get=\"/next\"" in html
+    assert 'aria-label="Watchlist pagination"' in html
+    assert 'hx-get="/prev"' in html
+    assert 'hx-get="/next"' in html
 
 
 def test_pass_context_globals_receive_runtime_context_mapping() -> None:
@@ -221,9 +386,7 @@ def test_pass_context_globals_receive_runtime_context_mapping() -> None:
         def url_for(self, name: str, **path_params: Any) -> str:
             parts = [name]
             if path_params:
-                parts.extend(
-                    f"{key}-{value}" for key, value in sorted(path_params.items())
-                )
+                parts.extend(f"{key}-{value}" for key, value in sorted(path_params.items()))
             return "/".join(parts)
 
     html = _render_inline(

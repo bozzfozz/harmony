@@ -1,0 +1,49 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.spotify_page_intro() }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section>
+    <h3>{{ strings.spotify_status_heading() }}</h3>
+    <div id="{{ status_fragment.identifier }}"
+         hx-get="{{ status_fragment.url }}"
+         hx-trigger="{{ status_fragment.trigger }}"
+         hx-target="{{ status_fragment.target }}"
+         hx-swap="{{ status_fragment.swap }}">
+      <p>{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
+    </div>
+  </section>
+  <section>
+    <h3>{{ strings.spotify_playlists_heading() }}</h3>
+    <div id="{{ playlists_fragment.identifier }}"
+         hx-get="{{ playlists_fragment.url }}"
+         hx-trigger="{{ playlists_fragment.trigger }}"
+         hx-target="{{ playlists_fragment.target }}"
+         hx-swap="{{ playlists_fragment.swap }}">
+      <p>{{ strings.fragment_loading(playlists_fragment.loading_key) }}</p>
+    </div>
+  </section>
+  <section>
+    <h3>{{ strings.spotify_backfill_heading() }}</h3>
+    <div id="{{ backfill_fragment.identifier }}"
+         hx-get="{{ backfill_fragment.url }}"
+         hx-trigger="{{ backfill_fragment.trigger }}"
+         hx-target="{{ backfill_fragment.target }}"
+         hx-swap="{{ backfill_fragment.swap }}">
+      <p>{{ strings.fragment_loading(backfill_fragment.loading_key) }}</p>
+    </div>
+  </section>
+{% endblock %}
