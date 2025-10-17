@@ -700,7 +700,12 @@ def test_spotify_playlists_partial_renders_table() -> None:
             updated_at=datetime.now(tz=UTC),
         )
     ]
-    context = build_spotify_playlists_context(request, playlists=playlists)
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        is_authenticated=True,
+    )
     template = templates.get_template("partials/spotify_playlists.j2")
     html = template.render(**context)
 
@@ -708,6 +713,32 @@ def test_spotify_playlists_partial_renders_table() -> None:
     assert 'class="table"' in html
     assert "Daily Mix" in html
     assert 'data-count="1"' in html
+    assert 'name="uris"' in html
+    assert 'hx-post="/ui/spotify/playlists/playlist-1/tracks/add"' in html
+    assert 'hx-post="/ui/spotify/playlists/playlist-1/reorder"' in html
+    assert 'name="range_start"' in html
+
+
+def test_spotify_playlists_partial_disables_forms_when_unauthenticated() -> None:
+    request = _make_request("/ui/spotify/playlists")
+    playlists = [
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=42,
+            updated_at=datetime.now(tz=UTC),
+        )
+    ]
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        is_authenticated=False,
+    )
+    template = templates.get_template("partials/spotify_playlists.j2")
+    html = template.render(**context)
+
+    assert html.count("disabled") >= 3
 
 
 def test_spotify_artists_partial_renders_table() -> None:

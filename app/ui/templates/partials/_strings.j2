@@ -56,6 +56,9 @@
     "spotify.manual.redirect": "Redirect URL",
     "spotify.backfill.max_items": "Max items",
     "spotify.saved.track_ids": "Track IDs",
+    "spotify.playlists.track_uris": "Track URIs",
+    "spotify.playlists.range_start": "Range start",
+    "spotify.playlists.insert_before": "Insert before",
     "spotify.recommendations.seed_artists": "Artist seeds",
     "spotify.recommendations.seed_tracks": "Track seeds",
     "spotify.recommendations.seed_genres": "Genre seeds",
@@ -71,6 +74,7 @@
     "spotify.recommendations.seed_artists": "Enter up to five Spotify artist IDs, separated by commas or spaces.",
     "spotify.recommendations.seed_tracks": "Enter up to five Spotify track IDs, separated by commas or spaces.",
     "spotify.recommendations.seed_genres": "Provide Spotify genre seeds, separated by commas or new lines.",
+    "spotify.playlists.track_uris": "Enter Spotify track URIs separated by spaces, commas, or new lines.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -86,6 +90,9 @@
     "spotify.backfill.run": "Start backfill",
     "spotify.saved.save": "Save tracks",
     "spotify.saved.remove": "Remove",
+    "spotify.playlists.add_tracks": "Add",
+    "spotify.playlists.remove_tracks": "Remove",
+    "spotify.playlists.reorder": "Reorder",
     "spotify.recommendations.submit": "Fetch recommendations",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
@@ -179,6 +186,9 @@
     "spotify.playlists.name": "Playlist",
     "spotify.playlists.tracks": "Tracks",
     "spotify.playlists.updated": "Updated",
+    "spotify.playlists.add_column": "Add tracks",
+    "spotify.playlists.remove_column": "Remove tracks",
+    "spotify.playlists.reorder_column": "Reorder",
     "spotify.top_tracks.rank": "Rank",
     "spotify.top_tracks.name": "Track",
     "spotify.top_tracks.artists": "Artists",
@@ -518,6 +528,15 @@
 {% macro soulseek_connection_label() %}Daemon connectivity{% endmacro %}
 
 {% macro soulseek_integrations_label() %}Integration health{% endmacro %}
+
+{% macro spotify_playlist_error(key) -%}
+  {%- set labels = {
+    "spotify.playlists.error.invalid_uri": "Provide at least one Spotify track URI.",
+    "spotify.playlists.error.modify": "Unable to update the Spotify playlist. Try again shortly.",
+    "spotify.playlists.error.invalid_positions": "Provide both start and target positions for the reorder operation.",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
 
 {% macro soulseek_providers_heading() %}Provider diagnostics{% endmacro %}
 

@@ -180,11 +180,23 @@ class TableFragment:
 
 
 @dataclass(slots=True)
+class TableCellFormField:
+    name: str
+    input_type: str
+    label_key: str | None = None
+    placeholder: str | None = None
+    value: str | None = None
+    required: bool = False
+    attributes: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class TableCellForm:
     action: str
     method: ButtonMethod
     submit_label_key: str
     hidden_fields: Mapping[str, str] = field(default_factory=dict)
+    fields: Sequence[TableCellFormField] = field(default_factory=tuple)
     hx_target: str | None = None
     hx_swap: str = "innerHTML"
     disabled: bool = False
@@ -1521,15 +1533,111 @@ def build_spotify_playlists_context(
     request: Request,
     *,
     playlists: Sequence[SpotifyPlaylistRow],
+    csrf_token: str,
+    is_authenticated: bool,
 ) -> Mapping[str, Any]:
     rows: list[TableRow] = []
+    target = "#hx-spotify-playlists"
     for playlist in playlists:
+        try:
+            add_url = request.url_for(
+                "spotify_playlist_tracks_action",
+                playlist_id=playlist.identifier,
+                action="add",
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            add_url = f"/ui/spotify/playlists/{playlist.identifier}/tracks/add"
+
+        try:
+            remove_url = request.url_for(
+                "spotify_playlist_tracks_action",
+                playlist_id=playlist.identifier,
+                action="remove",
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            remove_url = f"/ui/spotify/playlists/{playlist.identifier}/tracks/remove"
+
+        try:
+            reorder_url = request.url_for(
+                "spotify_playlist_reorder",
+                playlist_id=playlist.identifier,
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            reorder_url = f"/ui/spotify/playlists/{playlist.identifier}/reorder"
+
+        add_form = TableCellForm(
+            action=add_url,
+            method="post",
+            submit_label_key="spotify.playlists.add_tracks",
+            hidden_fields={"csrftoken": csrf_token},
+            fields=(
+                TableCellFormField(
+                    name="uris",
+                    input_type="text",
+                    label_key="spotify.playlists.track_uris",
+                    placeholder="spotify:track:123",
+                    required=True,
+                ),
+            ),
+            hx_target=target,
+            hx_swap="outerHTML",
+            disabled=not is_authenticated,
+        )
+
+        remove_form = TableCellForm(
+            action=remove_url,
+            method="post",
+            submit_label_key="spotify.playlists.remove_tracks",
+            hidden_fields={"csrftoken": csrf_token},
+            fields=(
+                TableCellFormField(
+                    name="uris",
+                    input_type="text",
+                    label_key="spotify.playlists.track_uris",
+                    placeholder="spotify:track:123",
+                    required=True,
+                ),
+            ),
+            hx_target=target,
+            hx_swap="outerHTML",
+            disabled=not is_authenticated,
+        )
+
+        reorder_form = TableCellForm(
+            action=reorder_url,
+            method="post",
+            submit_label_key="spotify.playlists.reorder",
+            hidden_fields={"csrftoken": csrf_token},
+            fields=(
+                TableCellFormField(
+                    name="range_start",
+                    input_type="number",
+                    label_key="spotify.playlists.range_start",
+                    required=True,
+                    attributes={"min": "0", "step": "1"},
+                ),
+                TableCellFormField(
+                    name="insert_before",
+                    input_type="number",
+                    label_key="spotify.playlists.insert_before",
+                    required=True,
+                    attributes={"min": "0", "step": "1"},
+                ),
+            ),
+            hx_target=target,
+            hx_swap="outerHTML",
+            disabled=not is_authenticated,
+        )
+
         rows.append(
             TableRow(
                 cells=(
                     TableCell(text=playlist.name),
                     TableCell(text=str(playlist.track_count)),
                     TableCell(text=playlist.updated_at.isoformat()),
+                    TableCell(form=add_form),
+                    TableCell(form=remove_form),
+                    TableCell(form=reorder_form),
                 ),
                 test_id=f"spotify-playlist-{playlist.identifier}",
             )
@@ -1541,6 +1649,9 @@ def build_spotify_playlists_context(
             "spotify.playlists.name",
             "spotify.playlists.tracks",
             "spotify.playlists.updated",
+            "spotify.playlists.add_column",
+            "spotify.playlists.remove_column",
+            "spotify.playlists.reorder_column",
         ),
         rows=tuple(rows),
         caption_key="spotify.playlists.caption",
@@ -1553,7 +1664,7 @@ def build_spotify_playlists_context(
         data_attributes={"count": str(len(rows))},
     )
 
-    return {"request": request, "fragment": fragment}
+    return {"request": request, "fragment": fragment, "csrf_token": csrf_token}
 
 
 def build_spotify_saved_tracks_context(
@@ -2129,6 +2240,7 @@ __all__ = [
     "StatusBadge",
     "TableCell",
     "TableCellForm",
+    "TableCellFormField",
     "TableDefinition",
     "TableRow",
     "build_spotify_backfill_context",
