@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
+from importlib import import_module
 
 from fastapi import Depends
-from importlib import import_module
 
 from app.dependencies import get_download_service
 from app.logging import get_logger

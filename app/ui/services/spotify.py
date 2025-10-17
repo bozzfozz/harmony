@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Mapping, Sequence
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
