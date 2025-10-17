@@ -560,10 +560,15 @@ def build_spotify_status_context(
 ) -> Mapping[str, Any]:
     alerts: list[AlertMessage] = []
     if manual_result is not None:
+        message = (manual_result.message or "").strip()
         if manual_result.ok:
-            alerts.append(AlertMessage(level="success", text=manual_result.message))
+            if not message:
+                message = "Spotify authorization completed successfully."
+            alerts.append(AlertMessage(level="success", text=message))
         else:
-            alerts.append(AlertMessage(level="error", text=manual_result.message))
+            if not message:
+                message = "Manual completion failed. Check the redirect URL and try again."
+            alerts.append(AlertMessage(level="error", text=message))
 
     badges: list[StatusBadge] = []
     badges.append(
