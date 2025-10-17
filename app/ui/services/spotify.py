@@ -111,8 +111,10 @@ class SpotifyUiService:
     def oauth_health(self) -> SpotifyOAuthHealth:
         info = self._oauth.health()
         manual_enabled = bool(info.get("manual_enabled"))
-        redirect_uri = info.get("redirect_uri") if manual_enabled else info.get("redirect_uri")
-        if not isinstance(redirect_uri, str):
+        redirect_raw = info.get("redirect_uri")
+        if manual_enabled and isinstance(redirect_raw, str):
+            redirect_uri = redirect_raw
+        else:
             redirect_uri = None
         public_host_hint = info.get("public_host_hint")
         if not isinstance(public_host_hint, str):
