@@ -166,6 +166,12 @@
 {% macro fragment_loading(key) -%}
   {%- if key == "loading" -%}
     {{ loading_placeholder() }}
+  {%- elif key == "spotify.status" -%}
+    Checking Spotify connection…
+  {%- elif key == "spotify.playlists" -%}
+    Loading cached Spotify playlists…
+  {%- elif key == "spotify.backfill" -%}
+    Fetching Spotify backfill status…
   {%- else -%}
     {{ loading_placeholder() }}
   {%- endif -%}
