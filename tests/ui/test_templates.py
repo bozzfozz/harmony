@@ -214,6 +214,30 @@ def test_search_page_template_renders_form_and_queue() -> None:
     assert 'hx-target="#hx-search-queue"' in html
 
 
+def test_search_page_template_hides_queue_when_dlq_disabled() -> None:
+    request = _make_request("/ui/search")
+    features = UiFeatures(spotify=False, soulseek=True, dlq=False, imports=False)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-search", 
+        role="operator",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_search_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-search",
+    )
+    template = templates.get_template("pages/search.j2")
+    html = template.render(**context)
+
+    assert 'hx-get="/ui/downloads/table"' not in html
+    assert 'data-fragment="search-queue"' not in html
+
+
 def test_base_layout_renders_navigation_and_alerts() -> None:
     request = _make_request("/ui")
     layout = LayoutContext(

@@ -592,15 +592,17 @@ def build_search_page_context(
         loading_key="search.results",
     )
 
-    queue_url = _safe_url_for(request, "downloads_table", "/ui/downloads/table")
-    queue_fragment = AsyncFragment(
-        identifier="hx-search-queue",
-        url=f"{queue_url}?limit=20",
-        target="#hx-search-queue",
-        poll_interval_seconds=30,
-        swap="innerHTML",
-        loading_key="search.queue",
-    )
+    queue_fragment: AsyncFragment | None = None
+    if session.features.dlq:
+        queue_url = _safe_url_for(request, "downloads_table", "/ui/downloads/table")
+        queue_fragment = AsyncFragment(
+            identifier="hx-search-queue",
+            url=f"{queue_url}?limit=20",
+            target="#hx-search-queue",
+            poll_interval_seconds=30,
+            swap="innerHTML",
+            loading_key="search.queue",
+        )
 
     return {
         "request": request,
