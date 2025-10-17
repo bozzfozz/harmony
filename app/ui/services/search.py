@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Depends, Request
 
@@ -16,6 +17,14 @@ logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
+class SearchResultDownload:
+    """Payload required to queue a download for a search result."""
+
+    username: str
+    files: tuple[Mapping[str, Any], ...]
+
+
+@dataclass(slots=True)
 class SearchResult:
     identifier: str
     title: str
@@ -24,6 +33,7 @@ class SearchResult:
     score: float
     bitrate: int | None
     audio_format: str | None
+    download: SearchResultDownload | None = None
 
 
 @dataclass(slots=True)
@@ -85,6 +95,7 @@ class SearchUiService:
     @staticmethod
     def _to_result(item: SearchItem) -> SearchResult:
         payload = item.model_dump()
+        download = SearchUiService._extract_download_payload(payload)
         return SearchResult(
             identifier=str(payload.get("id", "")),
             title=str(payload.get("title", "")),
@@ -93,7 +104,76 @@ class SearchUiService:
             score=float(payload.get("score", 0.0)),
             bitrate=payload.get("bitrate"),
             audio_format=payload.get("format"),
+            download=download,
         )
+
+    @staticmethod
+    def _extract_download_payload(payload: Mapping[str, Any]) -> SearchResultDownload | None:
+        metadata = payload.get("metadata")
+        if not isinstance(metadata, Mapping):
+            return None
+        candidate = metadata.get("candidate")
+        if not isinstance(candidate, Mapping):
+            return None
+
+        raw_username = candidate.get("username")
+        username = str(raw_username).strip() if raw_username else ""
+        download_uri = candidate.get("download_uri")
+        if not username or not download_uri:
+            return None
+
+        candidate_metadata = candidate.get("metadata")
+        filename: str | None = None
+        if isinstance(candidate_metadata, Mapping):
+            metadata_filename = candidate_metadata.get("filename")
+            if metadata_filename:
+                filename = str(metadata_filename).strip() or None
+
+        if not filename:
+            title = str(candidate.get("title") or "").strip()
+            artist = str(candidate.get("artist") or "").strip()
+            if artist and title:
+                filename = f"{artist} - {title}"
+            elif title:
+                filename = title
+
+        if not filename:
+            fallback = str(payload.get("title") or "").strip()
+            filename = fallback or None
+
+        filename = filename or "download"
+        normalised_source = str(payload.get("source") or "").strip()
+
+        file_payload: dict[str, Any] = {
+            "filename": filename,
+            "name": filename,
+            "download_uri": str(download_uri),
+            "source": f"ui-search:{normalised_source}" if normalised_source else "ui-search",
+        }
+
+        for key in ("format", "bitrate_kbps", "size_bytes", "seeders"):
+            value = candidate.get(key)
+            if value is not None:
+                file_payload[key] = value
+
+        extra_metadata: dict[str, Any] = {
+            "search_identifier": payload.get("id"),
+            "search_source": normalised_source,
+        }
+        title = str(payload.get("title") or "").strip()
+        artist = str(payload.get("artist") or "").strip()
+        if title:
+            extra_metadata["search_title"] = title
+        if artist:
+            extra_metadata["search_artist"] = artist
+        if isinstance(candidate_metadata, Mapping):
+            path_value = candidate_metadata.get("path") or candidate_metadata.get("filename")
+            if path_value:
+                extra_metadata["candidate_path"] = path_value
+
+        file_payload["metadata"] = extra_metadata
+
+        return SearchResultDownload(username=username, files=(file_payload,))
 
 
 def get_search_ui_service(
@@ -104,6 +184,7 @@ def get_search_ui_service(
 
 
 __all__ = [
+    "SearchResultDownload",
     "SearchResult",
     "SearchResultsPage",
     "SearchUiService",

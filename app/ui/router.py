@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+import json
 from pathlib import Path
 from urllib.parse import parse_qs
-
-from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
+from app.dependencies import get_download_service
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.schemas import SoulseekDownloadRequest
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
+from app.services.download_service import DownloadService
 from app.ui.context import (
     AlertMessage,
     FormDefinition,
@@ -173,11 +176,14 @@ async def _render_search_results_fragment(
             "Search failed due to an unexpected error.",
         )
 
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_search_results_context(
         request,
         page=page,
         query=query,
         sources=sources,
+        csrf_token=csrf_token,
     )
     log_event(
         logger,
@@ -187,11 +193,14 @@ async def _render_search_results_fragment(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/search_results.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.get("/login", include_in_schema=False)
@@ -1130,6 +1139,131 @@ async def search_results_get(
         raw_limit=limit,
         raw_offset=offset,
         raw_sources=sources or (),
+    )
+
+
+@router.post(
+    "/search/download",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def search_download_action(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+    download_service: DownloadService = Depends(get_download_service),
+) -> Response:
+    if not session.features.soulseek:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+
+    raw_body = await request.body()
+    try:
+        body = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        body = ""
+    values = parse_qs(body)
+    username = values.get("username", [""])[0].strip()
+    files_raw = values.get("files", [""])[0]
+    identifier = values.get("identifier", [""])[0]
+
+    if not username or not files_raw:
+        return _render_alert_fragment(
+            request,
+            "Missing download selection details.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        decoded_files = json.loads(files_raw)
+    except json.JSONDecodeError:
+        return _render_alert_fragment(
+            request,
+            "Unable to parse the selected download details.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if isinstance(decoded_files, dict):
+        files_data = [dict(decoded_files)]
+    elif isinstance(decoded_files, list):
+        files_data = [dict(item) for item in decoded_files if isinstance(item, dict)]
+    else:
+        files_data = []
+
+    if not files_data:
+        return _render_alert_fragment(
+            request,
+            "No valid download files were provided.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        payload = SoulseekDownloadRequest.model_validate(
+            {"username": username, "files": files_data}
+        )
+    except ValidationError:
+        return _render_alert_fragment(
+            request,
+            "Unable to queue the download request.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    worker = getattr(request.app.state, "sync_worker", None)
+    try:
+        await download_service.queue_downloads(payload, worker=worker)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.search.download",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            identifier=identifier or None,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.search.download")
+        log_event(
+            logger,
+            "ui.fragment.search.download",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            identifier=identifier or None,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to queue the download request.",
+        )
+
+    first_file = payload.files[0]
+    filename = first_file.resolved_filename
+    alert = AlertMessage(
+        level="success",
+        text=f"Queued download request for {filename}.",
+    )
+    context = {"request": request, "alerts": (alert,)}
+    log_event(
+        logger,
+        "ui.fragment.search.download",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        username=payload.username,
+        count=len(payload.files),
+        identifier=identifier or None,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/alerts_fragment.j2",
+        context,
     )
 
 

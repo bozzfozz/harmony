@@ -106,6 +106,7 @@ class TableCell:
     text: str | None = None
     badge: StatusBadge | None = None
     test_id: str | None = None
+    form: "TableCellForm" | None = None
 
 
 @dataclass(slots=True)
@@ -138,6 +139,17 @@ class TableFragment:
     empty_state_key: str
     data_attributes: Mapping[str, str] = field(default_factory=dict)
     pagination: PaginationContext | None = None
+
+
+@dataclass(slots=True)
+class TableCellForm:
+    action: str
+    method: ButtonMethod
+    submit_label_key: str
+    hidden_fields: Mapping[str, str] = field(default_factory=dict)
+    hx_target: str | None = None
+    hx_swap: str = "innerHTML"
+    disabled: bool = False
 
 
 @dataclass(slots=True)
@@ -880,11 +892,39 @@ def build_search_results_context(
     page: SearchResultsPage,
     query: str,
     sources: Sequence[str],
+    csrf_token: str,
 ) -> Mapping[str, Any]:
     rows: list[TableRow] = []
+    try:
+        action_url = request.url_for("search_download_action")
+    except Exception:  # pragma: no cover - fallback for tests
+        action_url = "/ui/search/download"
+    feedback_target = "#hx-search-feedback"
     for item in page.items:
         score = f"{item.score * 100:.0f}%"
         bitrate = f"{item.bitrate} kbps" if item.bitrate else ""
+        if item.download:
+            serialised_files = json.dumps(
+                [dict(file) for file in item.download.files],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            hidden_fields = {
+                "csrftoken": csrf_token,
+                "identifier": item.identifier,
+                "username": item.download.username,
+                "files": serialised_files,
+            }
+            form = TableCellForm(
+                action=action_url,
+                method="post",
+                submit_label_key="search.action.queue",
+                hidden_fields=hidden_fields,
+                hx_target=feedback_target,
+            )
+            action_cell = TableCell(form=form, test_id=f"queue-{item.identifier}")
+        else:
+            action_cell = TableCell(text_key="search.action.unavailable")
         rows.append(
             TableRow(
                 cells=(
@@ -893,6 +933,7 @@ def build_search_results_context(
                     TableCell(text=item.source),
                     TableCell(text=score),
                     TableCell(text=bitrate),
+                    action_cell,
                 )
             )
         )
@@ -905,6 +946,7 @@ def build_search_results_context(
             "search.source",
             "search.score",
             "search.bitrate",
+            "search.actions",
         ),
         rows=tuple(rows),
         caption_key="search.results.caption",
@@ -1000,6 +1042,7 @@ __all__ = [
     "TableFragment",
     "StatusBadge",
     "TableCell",
+    "TableCellForm",
     "TableDefinition",
     "TableRow",
     "build_spotify_backfill_context",

@@ -18,16 +18,30 @@
         <tr {% if row.test_id %}data-test="{{ row.test_id }}"{% endif %}>
           {% for cell in row.cells %}
             <td {% if cell.test_id %}data-test="{{ cell.test_id }}"{% endif %}>
-              {% if cell.badge %}
-                {{ badges.render_badge(cell.badge) }}
-              {% elif cell.text_key %}
-                {{ strings.table_cell(cell.text_key) }}
-              {% elif cell.text %}
-                {{ cell.text }}
-              {% endif %}
-            </td>
-          {% endfor %}
-        </tr>
+          {% if cell.badge %}
+            {{ badges.render_badge(cell.badge) }}
+          {% elif cell.text_key %}
+            {{ strings.table_cell(cell.text_key) }}
+          {% elif cell.text %}
+            {{ cell.text }}
+          {% elif cell.form %}
+            {% set form = cell.form %}
+            <form method="{{ form.method }}"
+                  action="{{ form.action }}"
+                  hx-post="{{ form.action }}"
+                  {% if form.hx_target %}hx-target="{{ form.hx_target }}"{% endif %}
+                  hx-swap="{{ form.hx_swap }}">
+              {% for name, value in form.hidden_fields.items() %}
+                <input type="hidden" name="{{ name }}" value="{{ value }}" />
+              {% endfor %}
+              <button type="submit" {% if form.disabled %}disabled{% endif %}>
+                {{ strings.button_label(form.submit_label_key) }}
+              </button>
+            </form>
+          {% endif %}
+        </td>
+      {% endfor %}
+    </tr>
       {% endfor %}
     </tbody>
   </table>
