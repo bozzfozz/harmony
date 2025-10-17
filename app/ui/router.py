@@ -26,6 +26,7 @@ from app.ui.context import (
     build_downloads_fragment_context,
     build_jobs_fragment_context,
     build_login_page_context,
+    build_soulseek_page_context,
     build_search_page_context,
     build_search_results_context,
     build_spotify_artists_context,
@@ -302,6 +303,28 @@ async def spotify_page(
     response = templates.TemplateResponse(
         request,
         "pages/spotify.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/soulseek", include_in_schema=False)
+async def soulseek_page(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/soulseek.j2",
         context,
     )
     if issued:
