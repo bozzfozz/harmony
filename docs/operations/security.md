@@ -31,7 +31,7 @@
 | `UI_FEATURE_SPOTIFY` | `bool` | `true` | Aktiviert die Spotify-Oberfläche und zugehörige Navigation. |
 | `UI_FEATURE_SOULSEEK` | `bool` | `true` | Schaltet Soulseek-Suche, Queue und Jobs frei. |
 | `UI_FEATURE_DLQ` | `bool` | `true` | Aktiviert DLQ-spezifische Tabellen und Aktionen. |
-| `UI_FEATURE_IMPORTS` | `bool` | `true` | Erlaubt Zugriff auf `/ui/imports` und Upload-Verarbeitung. |
+| `UI_FEATURE_IMPORTS` | `bool` | `true` | Schaltet die FREE-Ingest-Tools innerhalb von `/ui/spotify` (Drag&Drop-Uploads & Verarbeitung) frei. |
 | `UI_ALLOW_CDN` | `bool` | `false` | Erlaubt Einbindung definierter CDN-Ressourcen (siehe `docs/ui/csp.md`). |
 | `UI_LIVE_UPDATES` | `str` (`polling\|SSE`) | `polling` | Umschaltung zwischen HTMX-Polling (Standard) und SSE-Stream. |
 
