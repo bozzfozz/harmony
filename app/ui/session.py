@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import secrets
-from typing import Literal
+from typing import Awaitable, Callable, Literal
 
 from fastapi import HTTPException, Request, Response, status
 
@@ -290,6 +290,23 @@ def require_feature(feature: Literal["spotify", "soulseek", "dlq", "imports"]):
     return dependency
 
 
+def require_operator_with_feature(
+    feature: Literal["spotify", "soulseek", "dlq", "imports"],
+) -> Callable[[Request], Awaitable[UiSession]]:
+    operator_dependency = require_role("operator")
+
+    async def dependency(request: Request) -> UiSession:
+        session = await operator_dependency(request)
+        if not getattr(session.features, feature, False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The requested UI feature is disabled.",
+            )
+        return session
+
+    return dependency
+
+
 def attach_session_cookie(
     response: Response, session: UiSession, manager: UiSessionManager
 ) -> None:
@@ -324,5 +341,6 @@ __all__ = [
     "get_session_manager",
     "require_role",
     "require_feature",
+    "require_operator_with_feature",
     "require_session",
 ]
