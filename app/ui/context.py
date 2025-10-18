@@ -749,17 +749,19 @@ def build_spotify_page_context(
         loading_key="spotify.artists",
     )
 
-    try:
-        free_ingest_url = request.url_for("spotify_free_ingest_fragment")
-    except Exception:
-        free_ingest_url = "/ui/spotify/free"
-    free_ingest_fragment = AsyncFragment(
-        identifier="hx-spotify-free-ingest",
-        url=free_ingest_url,
-        target="#hx-spotify-free-ingest",
-        swap="innerHTML",
-        loading_key="spotify.free_ingest",
-    )
+    free_ingest_fragment: AsyncFragment | None = None
+    if session.features.imports:
+        try:
+            free_ingest_url = request.url_for("spotify_free_ingest_fragment")
+        except Exception:
+            free_ingest_url = "/ui/spotify/free"
+        free_ingest_fragment = AsyncFragment(
+            identifier="hx-spotify-free-ingest",
+            url=free_ingest_url,
+            target="#hx-spotify-free-ingest",
+            swap="innerHTML",
+            loading_key="spotify.free_ingest",
+        )
 
     try:
         backfill_url = request.url_for("spotify_backfill_fragment")

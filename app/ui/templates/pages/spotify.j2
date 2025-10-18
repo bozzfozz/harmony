@@ -137,21 +137,23 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(artists_fragment.loading_key) }}</p>
     </div>
   </section>
-  <section class="page-section page-section--card" aria-labelledby="{{ free_ingest_fragment.identifier }}-heading">
-    <h3 id="{{ free_ingest_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_free_ingest_heading() }}</h3>
-    <div id="{{ free_ingest_fragment.identifier }}"
-         class="async-fragment"
-         role="region"
-         aria-live="polite"
-         aria-labelledby="{{ free_ingest_fragment.identifier }}-heading"
-         data-fragment="spotify-free-ingest"
-         hx-get="{{ free_ingest_fragment.url }}"
-         hx-trigger="{{ free_ingest_fragment.trigger }}"
-         hx-target="{{ free_ingest_fragment.target }}"
-         hx-swap="{{ free_ingest_fragment.swap }}">
-      <p class="async-fragment__placeholder">{{ strings.fragment_loading(free_ingest_fragment.loading_key) }}</p>
-    </div>
-  </section>
+  {% if session.features.imports and free_ingest_fragment %}
+    <section class="page-section page-section--card" aria-labelledby="{{ free_ingest_fragment.identifier }}-heading">
+      <h3 id="{{ free_ingest_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_free_ingest_heading() }}</h3>
+      <div id="{{ free_ingest_fragment.identifier }}"
+           class="async-fragment"
+           role="region"
+           aria-live="polite"
+           aria-labelledby="{{ free_ingest_fragment.identifier }}-heading"
+           data-fragment="spotify-free-ingest"
+           hx-get="{{ free_ingest_fragment.url }}"
+           hx-trigger="{{ free_ingest_fragment.trigger }}"
+           hx-target="{{ free_ingest_fragment.target }}"
+           hx-swap="{{ free_ingest_fragment.swap }}">
+        <p class="async-fragment__placeholder">{{ strings.fragment_loading(free_ingest_fragment.loading_key) }}</p>
+      </div>
+    </section>
+  {% endif %}
   <section class="page-section page-section--card" aria-labelledby="{{ backfill_fragment.identifier }}-heading">
     <h3 id="{{ backfill_fragment.identifier }}-heading" class="page-section__title">{{ strings.spotify_backfill_heading() }}</h3>
     <div id="{{ backfill_fragment.identifier }}"
