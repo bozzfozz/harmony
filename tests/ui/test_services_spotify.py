@@ -20,7 +20,10 @@ from app.services.free_ingest_service import (
     JobCounts,
     JobStatus,
 )
-from app.ui.context import build_spotify_top_tracks_context
+from app.ui.context import (
+    build_spotify_recommendations_context,
+    build_spotify_top_tracks_context,
+)
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
@@ -234,6 +237,37 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
     assert action_cell.forms and len(action_cell.forms) == 1
     form = action_cell.forms[0]
     assert form.action.endswith("/tracks/track-123")
+    assert form.method == "get"
+    assert form.hx_method == "get"
+    assert form.hx_target == "#modal-root"
+    assert form.submit_label_key == "spotify.track.view"
+
+
+def test_build_recommendations_context_adds_detail_action() -> None:
+    request = _make_request()
+    row = SpotifyRecommendationRow(
+        identifier="track-xyz",
+        name="Example Track",
+        artists=("Artist One", "Artist Two"),
+        album="Example Album",
+        preview_url=None,
+    )
+
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf-token",
+        rows=(row,),
+    )
+
+    fragment = context["fragment"]
+    table = fragment.table
+    assert table.column_keys[-1] == "spotify.recommendations.actions"
+    assert table.rows, "expected at least one recommendation row"
+    recommendation_row = table.rows[0]
+    action_cell = recommendation_row.cells[-1]
+    assert action_cell.forms and len(action_cell.forms) == 1
+    form = action_cell.forms[0]
+    assert form.action.endswith("/tracks/track-xyz")
     assert form.method == "get"
     assert form.hx_method == "get"
     assert form.hx_target == "#modal-root"

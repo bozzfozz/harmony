@@ -421,6 +421,7 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert "Track One" in html
     assert "Artist One, Artist Two" in html
     assert "Album Name" in html
+    assert "View details" in html
     assert 'data-count="1"' in html
 
 
