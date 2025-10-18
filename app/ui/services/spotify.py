@@ -410,6 +410,80 @@ class SpotifyUiService:
         return tuple(cleaned)
 
     @staticmethod
+    def _clean_track_uris(uris: Sequence[str]) -> tuple[str, ...]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for uri in uris:
+            candidate = str(uri or "").strip()
+            if not candidate:
+                continue
+            key = candidate.lower()
+            if key in seen:
+                continue
+            cleaned.append(candidate)
+            seen.add(key)
+        return tuple(cleaned)
+
+    def add_tracks_to_playlist(self, playlist_id: str, uris: Sequence[str]) -> int:
+        playlist_key = str(playlist_id or "").strip()
+        if not playlist_key:
+            raise ValueError("A Spotify playlist identifier is required.")
+        cleaned = self._clean_track_uris(uris)
+        if not cleaned:
+            raise ValueError("At least one Spotify track URI is required.")
+        self._spotify.add_tracks_to_playlist(playlist_key, cleaned)
+        logger.info(
+            "spotify.ui.playlists.add_tracks",
+            extra={"playlist_id": playlist_key, "count": len(cleaned)},
+        )
+        return len(cleaned)
+
+    def remove_tracks_from_playlist(self, playlist_id: str, uris: Sequence[str]) -> int:
+        playlist_key = str(playlist_id or "").strip()
+        if not playlist_key:
+            raise ValueError("A Spotify playlist identifier is required.")
+        cleaned = self._clean_track_uris(uris)
+        if not cleaned:
+            raise ValueError("At least one Spotify track URI is required.")
+        self._spotify.remove_tracks_from_playlist(playlist_key, cleaned)
+        logger.info(
+            "spotify.ui.playlists.remove_tracks",
+            extra={"playlist_id": playlist_key, "count": len(cleaned)},
+        )
+        return len(cleaned)
+
+    def reorder_playlist(
+        self,
+        playlist_id: str,
+        *,
+        range_start: int,
+        insert_before: int,
+    ) -> None:
+        playlist_key = str(playlist_id or "").strip()
+        if not playlist_key:
+            raise ValueError("A Spotify playlist identifier is required.")
+        try:
+            start_value = int(range_start)
+            target_value = int(insert_before)
+        except (TypeError, ValueError) as exc:  # pragma: no cover - defensive guard
+            raise ValueError("Valid start and insert positions are required.") from exc
+        if start_value < 0 or target_value < 0:
+            raise ValueError("Positions must be zero or greater.")
+        self._spotify.reorder_playlist(
+            playlist_key,
+            range_start=start_value,
+            insert_before=target_value,
+        )
+        logger.info(
+            "spotify.ui.playlists.reorder",
+            extra={
+                "playlist_id": playlist_key,
+                "range_start": start_value,
+                "insert_before": target_value,
+            },
+        )
+
+    @staticmethod
     def _normalise_recommendation_rows(entries: object) -> tuple[SpotifyRecommendationRow, ...]:
         if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
             return ()

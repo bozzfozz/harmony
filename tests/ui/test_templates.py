@@ -298,6 +298,7 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert 'id="spotify-recommendations-form"' in html
     assert 'hx-post="/ui/spotify/recommendations"' in html
     assert 'name="csrftoken" value="csrf-token"' in html
+    assert """hx-headers='{"X-CSRF-Token":"csrf-token"}'""" in html
     assert 'name="seed_tracks"' in html and 'value="track-123"' in html
     assert 'name="seed_artists"' in html and 'value="artist-1"' in html
     assert 'name="seed_genres"' in html
@@ -370,6 +371,7 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert 'id="spotify-save-track-form"' in html
     assert 'hx-post="/ui/spotify/saved/save"' in html
     assert 'name="csrftoken" value="csrf-token"' in html
+    assert html.count('hx-headers=\'{"X-CSRF-Token":"csrf-token"}\'') >= 2
     assert 'data-count="1"' in html
     assert "Track One" in html
     assert "Artist One, Artist Two" in html
@@ -445,6 +447,7 @@ def test_search_page_template_renders_form_and_queue() -> None:
     assert 'hx-post="/ui/search/results"' in html
     assert 'hx-push-url="/ui/search/results"' in html
     assert 'hx-target="#hx-search-results"' in html
+    assert """hx-headers='{"X-CSRF-Token":"csrf-search"}'""" in html
     assert 'id="hx-search-results"' in html
     assert "<legend>Sources</legend>" in html
     assert 'id="sources-spotify"' in html
@@ -600,6 +603,7 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert 'hx-post="/ui/spotify/oauth/manual"' in html
     assert 'hx-target="closest .async-fragment"' in html
     assert 'hx-swap="innerHTML"' in html
+    assert html.count('hx-headers=\'{"X-CSRF-Token":"csrf-token"}\'') >= 2
     assert "Authentication is required" in html
     assert "Redirect URI" in html
     assert "Manual session timeout" in html
@@ -700,7 +704,12 @@ def test_spotify_playlists_partial_renders_table() -> None:
             updated_at=datetime.now(tz=UTC),
         )
     ]
-    context = build_spotify_playlists_context(request, playlists=playlists)
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        is_authenticated=True,
+    )
     template = templates.get_template("partials/spotify_playlists.j2")
     html = template.render(**context)
 
@@ -708,6 +717,33 @@ def test_spotify_playlists_partial_renders_table() -> None:
     assert 'class="table"' in html
     assert "Daily Mix" in html
     assert 'data-count="1"' in html
+    assert 'name="uris"' in html
+    assert 'hx-post="/ui/spotify/playlists/playlist-1/tracks/add"' in html
+    assert 'hx-post="/ui/spotify/playlists/playlist-1/reorder"' in html
+    assert html.count('hx-headers=\'{"X-CSRF-Token":"csrf-token"}\'') >= 3
+    assert 'name="range_start"' in html
+
+
+def test_spotify_playlists_partial_disables_forms_when_unauthenticated() -> None:
+    request = _make_request("/ui/spotify/playlists")
+    playlists = [
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=42,
+            updated_at=datetime.now(tz=UTC),
+        )
+    ]
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        is_authenticated=False,
+    )
+    template = templates.get_template("partials/spotify_playlists.j2")
+    html = template.render(**context)
+
+    assert html.count("disabled") >= 3
 
 
 def test_spotify_artists_partial_renders_table() -> None:
@@ -762,6 +798,7 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
     assert "Expand playlists" in html
     assert 'hx-target="closest .async-fragment"' in html
     assert 'hx-swap="innerHTML"' in html
+    assert """hx-headers='{"X-CSRF-Token":"csrf-token"}'""" in html
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:

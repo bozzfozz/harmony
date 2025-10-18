@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from typing import Mapping
 from unittest.mock import Mock
 
+import pytest
+
 from starlette.requests import Request
 
 from app.ui.services.spotify import (
@@ -355,6 +357,117 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
         seed_genres=("rock", "jazz"),
         limit=100,
     )
+
+
+def test_add_tracks_to_playlist_cleans_input() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    count = service.add_tracks_to_playlist(
+        " playlist-1 ",
+        ["spotify:track:123", "spotify:track:123", "  spotify:track:456  "],
+    )
+
+    assert count == 2
+    spotify_service.add_tracks_to_playlist.assert_called_once_with(
+        "playlist-1",
+        ("spotify:track:123", "spotify:track:456"),
+    )
+
+
+def test_add_tracks_to_playlist_raises_without_uris() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=Mock(),
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        service.add_tracks_to_playlist("playlist-1", [])
+
+
+def test_remove_tracks_from_playlist_invokes_domain() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    count = service.remove_tracks_from_playlist("playlist-2", ["spotify:track:abc"])
+
+    assert count == 1
+    spotify_service.remove_tracks_from_playlist.assert_called_once_with(
+        "playlist-2",
+        ("spotify:track:abc",),
+    )
+
+
+def test_remove_tracks_from_playlist_requires_playlist_id() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=Mock(),
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        service.remove_tracks_from_playlist("  ", ["spotify:track:abc"])
+
+
+def test_reorder_playlist_calls_domain_with_validated_positions() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    service.reorder_playlist("playlist-3", range_start=2, insert_before=5)
+
+    spotify_service.reorder_playlist.assert_called_once_with(
+        "playlist-3",
+        range_start=2,
+        insert_before=5,
+    )
+
+
+def test_reorder_playlist_rejects_negative_positions() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=Mock(),
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        service.reorder_playlist("playlist-3", range_start=-1, insert_before=1)
 
 
 def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:

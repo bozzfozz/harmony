@@ -10,7 +10,8 @@
         action="/ui/spotify/backfill/run"
         hx-post="/ui/spotify/backfill/run"
         hx-target="closest .async-fragment"
-        hx-swap="innerHTML">
+        hx-swap="innerHTML"
+        hx-headers='{"X-CSRF-Token":"{{ snapshot.csrf_token }}"}'>
     <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
     <label for="max_items">{{ strings.form_label("spotify.backfill.max_items") }}</label>
     <input type="number" id="max_items" name="max_items" min="1" {% if snapshot.default_max_items %}value="{{ snapshot.default_max_items }}"{% endif %} />

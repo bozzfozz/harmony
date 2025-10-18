@@ -11,7 +11,8 @@
         action="/ui/spotify/recommendations"
         hx-post="/ui/spotify/recommendations"
         hx-target="#hx-spotify-recommendations"
-        hx-swap="outerHTML">
+        hx-swap="outerHTML"
+        hx-headers='{"X-CSRF-Token":"{{ csrf_token }}"}'>
     <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
     <div class="form-field">
       <label for="seed-artists">{{ strings.form_label("spotify.recommendations.seed_artists") }}</label>

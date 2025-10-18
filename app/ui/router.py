@@ -115,6 +115,61 @@ def _render_alert_fragment(
     )
 
 
+def _render_playlist_fragment_response(
+    request: Request,
+    session: UiSession,
+    service: SpotifyUiService,
+    *,
+    status_code: int = status.HTTP_200_OK,
+    error_message: str = "Unable to load Spotify playlists.",
+) -> Response:
+    try:
+        playlists = service.list_playlists()
+        status_info = service.status()
+    except Exception:
+        logger.exception("ui.fragment.spotify.playlists.refresh")
+        return _render_alert_fragment(
+            request,
+            error_message,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token=csrf_token,
+        is_authenticated=status_info.authenticated,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_playlists.j2",
+        context,
+        status_code=status_code,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.playlists",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+    )
+    return response
+
+
+def _parse_form_payload(raw_body: bytes) -> dict[str, list[str]]:
+    try:
+        decoded = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        decoded = ""
+    parsed = parse_qs(decoded)
+    return {key: [value for value in values if isinstance(value, str)] for key, values in parsed.items()}
+
+
 def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[str, bool]:
     token = request.cookies.get("csrftoken")
     if token:
@@ -1860,29 +1915,139 @@ async def spotify_playlists_fragment(
     session: UiSession = Depends(require_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
-    try:
-        playlists = service.list_playlists()
-    except Exception:
-        logger.exception("ui.fragment.spotify.playlists")
+    return _render_playlist_fragment_response(request, session, service)
+
+
+@router.post(
+    "/spotify/playlists/{playlist_id}/tracks/{action}",
+    include_in_schema=False,
+    name="spotify_playlist_tracks_action",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_playlist_tracks_action(
+    request: Request,
+    playlist_id: str,
+    action: str,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    action_key = action.strip().lower()
+    if action_key not in {"add", "remove"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported action.")
+
+    raw_body = await request.body()
+    form_entries = _parse_form_payload(raw_body)
+    raw_values: list[str] = []
+    for key in ("uris", "uri", "uri[]", "track_uri", "track_uris", "track_uri[]"):
+        raw_values.extend(form_entries.get(key, []))
+        raw_values.extend(request.query_params.getlist(key))
+
+    extracted: list[str] = []
+    for raw in raw_values:
+        if not isinstance(raw, str):
+            continue
+        for part in re.split(r"[\s,]+", raw.strip()):
+            candidate = part.strip()
+            if candidate:
+                extracted.append(candidate)
+
+    if not extracted:
         return _render_alert_fragment(
             request,
-            "Unable to load Spotify playlists.",
+            "Provide at least one Spotify track URI.",
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
-    context = build_spotify_playlists_context(request, playlists=playlists)
-    log_event(
-        logger,
-        "ui.fragment.spotify.playlists",
-        component="ui.router",
-        status="success",
-        role=session.role,
-        count=len(context["fragment"].table.rows),
-    )
-    return templates.TemplateResponse(
+
+    try:
+        if action_key == "add":
+            service.add_tracks_to_playlist(playlist_id, extracted)
+        else:
+            service.remove_tracks_from_playlist(playlist_id, extracted)
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.spotify.playlists.tracks.%s", action_key)
+        return _render_alert_fragment(
+            request,
+            "Unable to update the Spotify playlist. Try again shortly.",
+        )
+
+    return _render_playlist_fragment_response(
         request,
-        "partials/spotify_playlists.j2",
-        context,
+        session,
+        service,
     )
 
+
+@router.post(
+    "/spotify/playlists/{playlist_id}/reorder",
+    include_in_schema=False,
+    name="spotify_playlist_reorder",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_playlist_reorder(
+    request: Request,
+    playlist_id: str,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    raw_body = await request.body()
+    form_entries = _parse_form_payload(raw_body)
+    range_start_values = form_entries.get("range_start", [])
+    insert_before_values = form_entries.get("insert_before", [])
+
+    range_start_raw = range_start_values[0] if range_start_values else request.query_params.get("range_start")
+    insert_before_raw = (
+        insert_before_values[0]
+        if insert_before_values
+        else request.query_params.get("insert_before")
+    )
+
+    if range_start_raw in (None, "") or insert_before_raw in (None, ""):
+        return _render_alert_fragment(
+            request,
+            "Provide both start and target positions for the reorder operation.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        range_start_value = int(str(range_start_raw).strip())
+        insert_before_value = int(str(insert_before_raw).strip())
+    except (TypeError, ValueError):
+        return _render_alert_fragment(
+            request,
+            "Provide both start and target positions for the reorder operation.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        service.reorder_playlist(
+            playlist_id,
+            range_start=range_start_value,
+            insert_before=insert_before_value,
+        )
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.spotify.playlists.reorder")
+        return _render_alert_fragment(
+            request,
+            "Unable to update the Spotify playlist. Try again shortly.",
+        )
+
+    return _render_playlist_fragment_response(
+        request,
+        session,
+        service,
+    )
 
 @router.get(
     "/spotify/recommendations",

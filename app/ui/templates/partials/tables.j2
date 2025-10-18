@@ -40,9 +40,32 @@
                     hx-post="{{ form.action }}"
                   {% endif %}
                   {% if form.hx_target %}hx-target="{{ form.hx_target }}"{% endif %}
-                  hx-swap="{{ form.hx_swap }}">
+                  hx-swap="{{ form.hx_swap }}"
+                  {% if form.hx_headers_json %}hx-headers='{{ form.hx_headers_json }}'{% endif %}>
               {% for name, value in form.hidden_fields.items() %}
                 <input type="hidden" name="{{ name }}" value="{{ value }}" />
+              {% endfor %}
+              {% for field in form.fields %}
+                {% set placeholder = field.placeholder %}
+                {% if not placeholder and field.label_key %}
+                  {% set placeholder = strings.form_help(field.label_key) %}
+                {% endif %}
+                {% if field.input_type == "textarea" %}
+                  <textarea name="{{ field.name }}"
+                            {% if field.label_key %}aria-label="{{ strings.form_label(field.label_key) }}"{% endif %}
+                            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+                            {% if form.disabled %}disabled{% endif %}
+                            {% if field.required %}required{% endif %}>{{ field.value or "" }}</textarea>
+                {% else %}
+                  <input type="{{ field.input_type }}"
+                         name="{{ field.name }}"
+                         {% if field.label_key %}aria-label="{{ strings.form_label(field.label_key) }}"{% endif %}
+                         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+                         {% if field.value %}value="{{ field.value }}"{% endif %}
+                         {% for attr_name, attr_value in field.attributes.items() %}{{ attr_name }}="{{ attr_value }}" {% endfor %}
+                         {% if form.disabled %}disabled{% endif %}
+                         {% if field.required %}required{% endif %} />
+                {% endif %}
               {% endfor %}
               <button type="submit" {% if form.disabled %}disabled{% endif %}>
                 {{ strings.button_label(form.submit_label_key) }}

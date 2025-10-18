@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 import re
 from typing import Any
@@ -304,8 +304,14 @@ class _StubSpotifyService:
         self.top_artists_calls: list[int] = []
         self.save_calls: list[tuple[str, ...]] = []
         self.remove_calls: list[tuple[str, ...]] = []
+        self.playlist_add_calls: list[tuple[str, tuple[str, ...]]] = []
+        self.playlist_remove_calls: list[tuple[str, tuple[str, ...]]] = []
+        self.playlist_reorder_calls: list[tuple[str, int, int]] = []
         self.save_exception: Exception | None = None
         self.remove_exception: Exception | None = None
+        self.playlist_add_exception: Exception | None = None
+        self.playlist_remove_exception: Exception | None = None
+        self.playlist_reorder_exception: Exception | None = None
 
     def status(self) -> SpotifyStatus:
         return self._status
@@ -317,6 +323,44 @@ class _StubSpotifyService:
         if isinstance(self.playlists, Exception):
             raise self.playlists
         return tuple(self.playlists)
+
+    def _mutate_playlist(
+        self, playlist_id: str, *, delta: int = 0
+    ) -> None:
+        if isinstance(self.playlists, Exception):
+            return
+        updated: list[SpotifyPlaylistRow] = []
+        for row in self.playlists:
+            if row.identifier == playlist_id:
+                updated.append(
+                    replace(row, track_count=max(0, row.track_count + delta))
+                )
+            else:
+                updated.append(row)
+        self.playlists = tuple(updated)
+
+    def add_tracks_to_playlist(self, playlist_id: str, uris: Sequence[str]) -> int:
+        if self.playlist_add_exception:
+            raise self.playlist_add_exception
+        cleaned = tuple(uris)
+        self.playlist_add_calls.append((playlist_id, cleaned))
+        self._mutate_playlist(playlist_id, delta=len(cleaned))
+        return len(cleaned)
+
+    def remove_tracks_from_playlist(self, playlist_id: str, uris: Sequence[str]) -> int:
+        if self.playlist_remove_exception:
+            raise self.playlist_remove_exception
+        cleaned = tuple(uris)
+        self.playlist_remove_calls.append((playlist_id, cleaned))
+        self._mutate_playlist(playlist_id, delta=-len(cleaned))
+        return len(cleaned)
+
+    def reorder_playlist(
+        self, playlist_id: str, *, range_start: int, insert_before: int
+    ) -> None:
+        if self.playlist_reorder_exception:
+            raise self.playlist_reorder_exception
+        self.playlist_reorder_calls.append((playlist_id, range_start, insert_before))
 
     def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
         if isinstance(self.artists, Exception):
@@ -2036,6 +2080,137 @@ def test_spotify_playlists_fragment_returns_error_on_failure(monkeypatch) -> Non
             )
             assert response.status_code == 500
             assert "Unable to load Spotify playlists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_tracks_action_add_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=1,
+            updated_at=datetime.now(tz=UTC),
+        ),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/playlist-1/tracks/add",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "uris": "spotify:track:123 spotify:track:456",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert stub.playlist_add_calls == [
+                ("playlist-1", ("spotify:track:123", "spotify:track:456"))
+            ]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_tracks_action_rejects_empty_payload(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/playlist-1/tracks/add",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers={**headers, "HX-Request": "true"},
+            )
+            assert response.status_code == 400
+            assert "Provide at least one Spotify track URI." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_tracks_action_handles_failure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlist_add_exception = RuntimeError("boom")
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=1,
+            updated_at=datetime.now(tz=UTC),
+        ),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/playlist-1/tracks/add",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "uris": "spotify:track:123",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            assert response.status_code == 500
+            assert "Unable to update the Spotify playlist" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_reorder_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Daily Mix",
+            track_count=1,
+            updated_at=datetime.now(tz=UTC),
+        ),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/playlist-1/reorder",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "range_start": "1",
+                    "insert_before": "3",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert stub.playlist_reorder_calls == [("playlist-1", 1, 3)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlist_reorder_validates_positions(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/playlist-1/reorder",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "range_start": "",
+                    "insert_before": "1",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            assert response.status_code == 400
+            assert "Provide both start and target positions" in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

@@ -7,7 +7,8 @@
       action="{{ save_action_url }}"
       hx-post="{{ save_action_url }}"
       hx-target="#hx-spotify-saved"
-      hx-swap="outerHTML">
+      hx-swap="outerHTML"
+      hx-headers='{{ hx_headers_json }}'>
   <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
   <input type="hidden" name="limit" value="{{ page_limit }}" />
   <input type="hidden" name="offset" value="{{ page_offset }}" />
