@@ -30,6 +30,11 @@ from app.ui.services import (
     SpotifyArtistRow,
     SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
+    SpotifyFreeIngestAccepted,
+    SpotifyFreeIngestJobCounts,
+    SpotifyFreeIngestJobSnapshot,
+    SpotifyFreeIngestResult,
+    SpotifyFreeIngestSkipped,
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistItemRow,
@@ -330,6 +335,26 @@ class _StubSpotifyService:
         self.remove_calls: list[tuple[str, ...]] = []
         self.save_exception: Exception | None = None
         self.remove_exception: Exception | None = None
+        self.free_ingest_submit_calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        self.free_ingest_submit_result = SpotifyFreeIngestResult(
+            ok=False,
+            job_id=None,
+            accepted=SpotifyFreeIngestAccepted(playlists=0, tracks=0, batches=0),
+            skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+            error="",
+        )
+        self.free_ingest_submit_exception: Exception | None = None
+        self.free_import_calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        self.free_import_result = SpotifyFreeIngestResult(
+            ok=True,
+            job_id="job-free",
+            accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=2, batches=1),
+            skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+            error=None,
+        )
+        self.free_import_exception: Exception | None = None
+        self.free_ingest_status_calls: list[str | None] = []
+        self.free_ingest_status_result: SpotifyFreeIngestJobSnapshot | None = None
 
     def status(self) -> SpotifyStatus:
         return self._status
@@ -480,6 +505,34 @@ class _StubSpotifyService:
     ) -> SpotifyBackfillSnapshot:
         self.backfill_snapshot_calls.append((csrf_token, job_id, status_payload))
         return self.snapshot
+
+    async def submit_free_ingest(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: int | None = None,
+    ) -> SpotifyFreeIngestResult:
+        self.free_ingest_submit_calls.append((tuple(playlist_links or ()), tuple(tracks or ())))
+        if self.free_ingest_submit_exception:
+            raise self.free_ingest_submit_exception
+        return self.free_ingest_submit_result
+
+    async def free_import(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: int | None = None,
+    ) -> SpotifyFreeIngestResult:
+        self.free_import_calls.append((tuple(playlist_links or ()), tuple(tracks or ())))
+        if self.free_import_exception:
+            raise self.free_import_exception
+        return self.free_import_result
+
+    def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
+        self.free_ingest_status_calls.append(job_id)
+        return self.free_ingest_status_result
 
 
 class _StubWatchlistService:
@@ -2313,5 +2366,111 @@ def test_spotify_backfill_run_returns_success_alert(monkeypatch) -> None:
             assert "Backfill job job-1 enqueued." in response.text
             assert stub.run_calls == [(25, True)]
             assert stub.backfill_status_calls[-1] == "job-1"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_fragment_renders_form(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.free_ingest_status_result = SpotifyFreeIngestJobSnapshot(
+        job_id="job-free",
+        state="running",
+        counts=SpotifyFreeIngestJobCounts(
+            registered=2,
+            normalized=2,
+            queued=1,
+            completed=1,
+            failed=0,
+        ),
+        accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=3, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        queued_tracks=2,
+        failed_tracks=0,
+        skipped_tracks=0,
+        skip_reason=None,
+        error=None,
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/free",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-free-ingest-form" in response.text
+            assert "job-free" in response.text
+            assert stub.free_ingest_status_calls[-1] is None
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_run_returns_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.free_import_result = SpotifyFreeIngestResult(
+        ok=True,
+        job_id="job-free",
+        accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=2, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        error=None,
+    )
+    stub.free_ingest_status_result = SpotifyFreeIngestJobSnapshot(
+        job_id="job-free",
+        state="running",
+        counts=SpotifyFreeIngestJobCounts(
+            registered=1,
+            normalized=1,
+            queued=1,
+            completed=0,
+            failed=0,
+        ),
+        accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=2, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        queued_tracks=3,
+        failed_tracks=0,
+        skipped_tracks=0,
+        skip_reason=None,
+        error=None,
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/run",
+                data={
+                    "playlist_links": "https://open.spotify.com/playlist/demo",
+                    "tracks": "Artist - Track",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "job-free" in response.text
+            assert "Queued tracks" in response.text
+            assert stub.free_import_calls == [
+                (("https://open.spotify.com/playlist/demo",), ("Artist - Track",))
+            ]
+            assert stub.free_ingest_status_calls[-1] == "job-free"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_run_requires_input(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/run",
+                data={"playlist_links": "", "tracks": ""},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Provide at least one playlist link or track entry." in response.text
+            assert stub.free_import_calls == []
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)

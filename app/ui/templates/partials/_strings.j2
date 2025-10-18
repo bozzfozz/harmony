@@ -60,6 +60,8 @@
     "spotify.recommendations.seed_tracks": "Track seeds",
     "spotify.recommendations.seed_genres": "Genre seeds",
     "spotify.recommendations.limit": "Result limit",
+    "spotify.free_ingest.playlist_links": "Playlist links",
+    "spotify.free_ingest.tracks": "Track list",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -71,6 +73,8 @@
     "spotify.recommendations.seed_artists": "Enter up to five Spotify artist IDs, separated by commas or spaces.",
     "spotify.recommendations.seed_tracks": "Enter up to five Spotify track IDs, separated by commas or spaces.",
     "spotify.recommendations.seed_genres": "Provide Spotify genre seeds, separated by commas or new lines.",
+    "spotify.free_ingest.playlist_links": "Paste Spotify playlist URLs, one per line.",
+    "spotify.free_ingest.tracks": "Provide track entries in \"Artist - Title\" format, one per line.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -92,6 +96,7 @@
     "search.submit": "Search",
     "search.action.queue": "Queue download",
     "spotify.playlists.view_tracks": "View tracks",
+    "spotify.free_ingest.submit": "Submit ingest request",
     "soulseek.uploads.cancel": "Cancel upload",
     "soulseek.uploads.refresh": "Refresh",
     "soulseek.uploads.show_active": "Active uploads",
@@ -316,6 +321,8 @@
     Preparing Spotify recommendations…
   {%- elif key == "spotify.top_artists" -%}
     Loading top Spotify artists…
+  {%- elif key == "spotify.free_ingest" -%}
+    Preparing FREE ingest controls…
   {%- elif key == "spotify.backfill" -%}
     Fetching Spotify backfill status…
   {%- elif key == "search.results" -%}
@@ -402,6 +409,68 @@
   {%- else -%}
     Manual completion is unavailable until Spotify credentials are configured.
   {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_free_ingest_heading() %}FREE ingest{% endmacro %}
+
+{% macro spotify_free_ingest_description() %}Submit Spotify playlists or track listings for FREE ingest processing.{% endmacro %}
+
+{% macro spotify_free_ingest_playlist_placeholder() %}https://open.spotify.com/playlist/…{% endmacro %}
+
+{% macro spotify_free_ingest_tracks_placeholder() %}Artist - Track title{% endmacro %}
+
+{% macro spotify_free_ingest_summary_heading() %}Latest submission{% endmacro %}
+
+{% macro spotify_free_ingest_summary_label(key) -%}
+  {%- set labels = {
+    "accepted_heading": "Accepted",
+    "skipped_heading": "Skipped",
+    "spotify.free_ingest.summary.accepted_playlists": "Playlists",
+    "spotify.free_ingest.summary.accepted_tracks": "Tracks",
+    "spotify.free_ingest.summary.accepted_batches": "Batches",
+    "spotify.free_ingest.summary.skipped_playlists": "Skipped playlists",
+    "spotify.free_ingest.summary.skipped_tracks": "Skipped tracks",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_free_ingest_status_heading() %}Latest FREE ingest job{% endmacro %}
+
+{% macro spotify_free_ingest_status_counts_heading() %}Item counts{% endmacro %}
+
+{% macro spotify_free_ingest_status_metrics_heading() %}Track metrics{% endmacro %}
+
+{% macro spotify_free_ingest_status_label(key) -%}
+  {%- set labels = {
+    "job_id": "Job ID",
+    "state": "State",
+    "spotify.free_ingest.status.registered": "Registered",
+    "spotify.free_ingest.status.normalized": "Normalized",
+    "spotify.free_ingest.status.queued": "Queued",
+    "spotify.free_ingest.status.completed": "Completed",
+    "spotify.free_ingest.status.failed": "Failed",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_free_ingest_status_metric(key) -%}
+  {%- set labels = {
+    "queued_tracks": "Queued tracks",
+    "failed_tracks": "Failed tracks",
+    "skipped_tracks": "Skipped tracks",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_free_ingest_status_empty() %}No FREE ingest job has been recorded yet.{% endmacro %}
+
+{% macro spotify_free_ingest_skip_reason(reason) -%}
+  {%- set messages = {
+    "limit": "Some items were skipped because the maximum limit was reached.",
+    "duplicate": "Duplicate items were skipped.",
+    "invalid": "Invalid items were skipped.",
+  } -%}
+  {{ messages.get(reason, reason) }}
 {%- endmacro %}
 
 {% macro spotify_backfill_hint() -%}

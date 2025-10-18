@@ -36,6 +36,7 @@ from app.ui.context import (
     build_soulseek_uploads_context,
     build_search_page_context,
     build_search_results_context,
+    build_spotify_free_ingest_context,
     build_spotify_artists_context,
     build_spotify_account_context,
     build_spotify_backfill_context,
@@ -59,6 +60,7 @@ from app.ui.services import (
     SearchUiService,
     SoulseekUiService,
     SpotifyUiService,
+    SpotifyFreeIngestResult,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     WatchlistUiService,
@@ -154,6 +156,17 @@ def _split_seed_genres(raw_value: str) -> list[str]:
                 continue
             entries.append(candidate)
             seen.add(lowered)
+    return entries
+
+
+def _split_ingest_lines(raw_value: str) -> list[str]:
+    entries: list[str] = []
+    normalised = raw_value.replace("\r", "\n")
+    for part in normalised.split("\n"):
+        candidate = part.strip()
+        if not candidate:
+            continue
+        entries.append(candidate)
     return entries
 
 
@@ -1560,6 +1573,95 @@ async def spotify_oauth_manual(
 
 
 @router.post(
+    "/spotify/free/run",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_free_ingest_run(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    if not session.features.spotify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="The requested UI feature is disabled."
+        )
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+    playlist_raw = values.get("playlist_links", [""])[0]
+    tracks_raw = values.get("tracks", [""])[0]
+    form_values = {"playlist_links": playlist_raw, "tracks": tracks_raw}
+    playlist_links = _split_ingest_lines(playlist_raw)
+    track_entries = _split_ingest_lines(tracks_raw)
+
+    alerts: list[AlertMessage] = []
+    form_errors: dict[str, str] = {}
+    result: SpotifyFreeIngestResult | None
+
+    if not playlist_links and not track_entries:
+        message = "Provide at least one playlist link or track entry."
+        form_errors["playlist_links"] = message
+        alerts.append(AlertMessage(level="error", text=message))
+        result = None
+    else:
+        result = await service.free_import(
+            playlist_links=playlist_links or None,
+            tracks=track_entries or None,
+        )
+        if result.error and not result.ok:
+            alerts.append(AlertMessage(level="error", text=result.error))
+        elif result.job_id:
+            alerts.append(
+                AlertMessage(
+                    level="success",
+                    text=f"Free ingest job {result.job_id} enqueued.",
+                )
+            )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    stored_job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    if result and result.ok and result.job_id:
+        stored_job_id = result.job_id
+        request.app.state.ui_spotify_free_ingest_job_id = result.job_id
+
+    job_status = service.free_ingest_job_status(stored_job_id)
+
+    context = build_spotify_free_ingest_context(
+        request,
+        csrf_token=csrf_token,
+        form_values=form_values,
+        form_errors=form_errors,
+        result=result,
+        job_status=job_status,
+        alerts=alerts,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_free_ingest.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+
+    if result is not None:
+        log_event(
+            logger,
+            "ui.spotify.free_ingest.run",
+            component="ui.router",
+            status="success" if result.ok else "error",
+            role=session.role,
+            job_id=result.job_id,
+        )
+    return response
+
+
+@router.post(
     "/spotify/backfill/run",
     include_in_schema=False,
     dependencies=[Depends(enforce_csrf)],
@@ -1716,6 +1818,35 @@ async def activity_table(
         "partials/activity_table.j2",
         context,
     )
+
+
+@router.get(
+    "/spotify/free",
+    include_in_schema=False,
+    name="spotify_free_ingest_fragment",
+)
+async def spotify_free_ingest_fragment(
+    request: Request,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    job_status = service.free_ingest_job_status(job_id)
+    context = build_spotify_free_ingest_context(
+        request,
+        csrf_token=csrf_token,
+        job_status=job_status,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_free_ingest.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.get("/spotify/account", include_in_schema=False, name="spotify_account_fragment")

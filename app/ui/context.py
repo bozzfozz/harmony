@@ -22,6 +22,8 @@ from app.ui.services import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
+    SpotifyFreeIngestJobSnapshot,
+    SpotifyFreeIngestResult,
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistItemRow,
@@ -211,6 +213,31 @@ class AsyncFragment:
         if self.poll_interval_seconds is not None:
             parts.append(f"every {self.poll_interval_seconds}s")
         return ", ".join(parts)
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestFormContext:
+    csrf_token: str
+    playlist_value: str
+    tracks_value: str
+    accepted_items: Sequence[DefinitionItem] = field(default_factory=tuple)
+    skipped_items: Sequence[DefinitionItem] = field(default_factory=tuple)
+    result: SpotifyFreeIngestResult | None = None
+    form_errors: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestJobContext:
+    job_id: str
+    state: str
+    counts: Sequence[DefinitionItem]
+    accepted_items: Sequence[DefinitionItem]
+    skipped_items: Sequence[DefinitionItem]
+    queued_tracks: int
+    failed_tracks: int
+    skipped_tracks: int
+    error: str | None = None
+    skip_reason: str | None = None
 
 
 _SEARCH_SOURCE_LABELS: dict[str, str] = {
@@ -669,6 +696,18 @@ def build_spotify_page_context(
     )
 
     try:
+        free_ingest_url = request.url_for("spotify_free_ingest_fragment")
+    except Exception:
+        free_ingest_url = "/ui/spotify/free"
+    free_ingest_fragment = AsyncFragment(
+        identifier="hx-spotify-free-ingest",
+        url=free_ingest_url,
+        target="#hx-spotify-free-ingest",
+        swap="innerHTML",
+        loading_key="spotify.free_ingest",
+    )
+
+    try:
         backfill_url = request.url_for("spotify_backfill_fragment")
     except Exception:
         backfill_url = "/ui/spotify/backfill"
@@ -694,6 +733,7 @@ def build_spotify_page_context(
         "saved_fragment": saved_fragment,
         "playlists_fragment": playlists_fragment,
         "artists_fragment": artists_fragment,
+        "free_ingest_fragment": free_ingest_fragment,
         "backfill_fragment": backfill_fragment,
     }
 
@@ -2152,6 +2192,151 @@ def build_spotify_backfill_context(
     }
 
 
+def build_spotify_free_ingest_form_context(
+    *,
+    csrf_token: str,
+    form_values: Mapping[str, str] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+    result: SpotifyFreeIngestResult | None = None,
+) -> SpotifyFreeIngestFormContext:
+    values = {key: value for key, value in (form_values or {}).items()}
+    playlist_value = values.get("playlist_links", "")
+    tracks_value = values.get("tracks", "")
+    errors = {key: value for key, value in (form_errors or {}).items() if value}
+
+    accepted_items: list[DefinitionItem] = []
+    skipped_items: list[DefinitionItem] = []
+    if result is not None:
+        accepted_items = [
+            DefinitionItem(
+                label_key="spotify.free_ingest.summary.accepted_playlists",
+                value=f"{result.accepted.playlists:,}",
+            ),
+            DefinitionItem(
+                label_key="spotify.free_ingest.summary.accepted_tracks",
+                value=f"{result.accepted.tracks:,}",
+            ),
+            DefinitionItem(
+                label_key="spotify.free_ingest.summary.accepted_batches",
+                value=f"{result.accepted.batches:,}",
+            ),
+        ]
+        skipped_items = [
+            DefinitionItem(
+                label_key="spotify.free_ingest.summary.skipped_playlists",
+                value=f"{result.skipped.playlists:,}",
+            ),
+            DefinitionItem(
+                label_key="spotify.free_ingest.summary.skipped_tracks",
+                value=f"{result.skipped.tracks:,}",
+            ),
+        ]
+
+    return SpotifyFreeIngestFormContext(
+        csrf_token=csrf_token,
+        playlist_value=playlist_value,
+        tracks_value=tracks_value,
+        accepted_items=tuple(accepted_items),
+        skipped_items=tuple(skipped_items),
+        result=result,
+        form_errors=errors,
+    )
+
+
+def build_spotify_free_ingest_status_context(
+    *, status: SpotifyFreeIngestJobSnapshot | None
+) -> SpotifyFreeIngestJobContext | None:
+    if status is None:
+        return None
+
+    counts = (
+        DefinitionItem(
+            label_key="spotify.free_ingest.status.registered",
+            value=f"{status.counts.registered:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.status.normalized",
+            value=f"{status.counts.normalized:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.status.queued",
+            value=f"{status.counts.queued:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.status.completed",
+            value=f"{status.counts.completed:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.status.failed",
+            value=f"{status.counts.failed:,}",
+        ),
+    )
+
+    accepted_items = (
+        DefinitionItem(
+            label_key="spotify.free_ingest.summary.accepted_playlists",
+            value=f"{status.accepted.playlists:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.summary.accepted_tracks",
+            value=f"{status.accepted.tracks:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.summary.accepted_batches",
+            value=f"{status.accepted.batches:,}",
+        ),
+    )
+
+    skipped_items = (
+        DefinitionItem(
+            label_key="spotify.free_ingest.summary.skipped_playlists",
+            value=f"{status.skipped.playlists:,}",
+        ),
+        DefinitionItem(
+            label_key="spotify.free_ingest.summary.skipped_tracks",
+            value=f"{status.skipped.tracks:,}",
+        ),
+    )
+
+    return SpotifyFreeIngestJobContext(
+        job_id=status.job_id,
+        state=status.state,
+        counts=counts,
+        accepted_items=accepted_items,
+        skipped_items=skipped_items,
+        queued_tracks=status.queued_tracks,
+        failed_tracks=status.failed_tracks,
+        skipped_tracks=status.skipped_tracks,
+        error=status.error,
+        skip_reason=status.skip_reason,
+    )
+
+
+def build_spotify_free_ingest_context(
+    request: Request,
+    *,
+    csrf_token: str,
+    form_values: Mapping[str, str] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+    result: SpotifyFreeIngestResult | None = None,
+    job_status: SpotifyFreeIngestJobSnapshot | None = None,
+    alerts: Sequence[AlertMessage] | None = None,
+) -> Mapping[str, Any]:
+    form = build_spotify_free_ingest_form_context(
+        csrf_token=csrf_token,
+        form_values=form_values,
+        form_errors=form_errors,
+        result=result,
+    )
+    status_context = build_spotify_free_ingest_status_context(status=job_status)
+    return {
+        "request": request,
+        "alert_messages": tuple(alerts or ()),
+        "form": form,
+        "job_status": status_context,
+    }
+
+
 def build_watchlist_fragment_context(
     request: Request,
     *,
@@ -2493,6 +2678,8 @@ __all__ = [
     "TableCellForm",
     "TableDefinition",
     "TableRow",
+    "SpotifyFreeIngestFormContext",
+    "SpotifyFreeIngestJobContext",
     "build_spotify_backfill_context",
     "build_spotify_artists_context",
     "build_spotify_page_context",
@@ -2505,6 +2692,9 @@ __all__ = [
     "build_spotify_top_tracks_context",
     "build_spotify_account_context",
     "build_spotify_status_context",
+    "build_spotify_free_ingest_context",
+    "build_spotify_free_ingest_form_context",
+    "build_spotify_free_ingest_status_context",
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",

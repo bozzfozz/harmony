@@ -19,6 +19,14 @@ from app.dependencies import (
     get_spotify_client,
 )
 from app.logging import get_logger
+from app.services.free_ingest_service import (
+    IngestAccepted,
+    IngestSkipped,
+    IngestSubmission,
+    JobCounts,
+    JobStatus,
+    PlaylistValidationError,
+)
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
 from app.services.spotify_domain_service import SpotifyDomainService, SpotifyServiceStatus
 
@@ -181,6 +189,52 @@ class SpotifyTrackDetail:
     external_url: str | None
     detail: Mapping[str, Any] | None
     features: Mapping[str, Any] | None
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestAccepted:
+    playlists: int
+    tracks: int
+    batches: int
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestSkipped:
+    playlists: int
+    tracks: int
+    reason: str | None
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestResult:
+    ok: bool
+    job_id: str | None
+    accepted: SpotifyFreeIngestAccepted
+    skipped: SpotifyFreeIngestSkipped
+    error: str | None
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestJobCounts:
+    registered: int
+    normalized: int
+    queued: int
+    completed: int
+    failed: int
+
+
+@dataclass(slots=True)
+class SpotifyFreeIngestJobSnapshot:
+    job_id: str
+    state: str
+    counts: SpotifyFreeIngestJobCounts
+    accepted: SpotifyFreeIngestAccepted
+    skipped: SpotifyFreeIngestSkipped
+    queued_tracks: int
+    failed_tracks: int
+    skipped_tracks: int
+    skip_reason: str | None
+    error: str | None
 
 
 class SpotifyUiService:
@@ -639,6 +693,121 @@ class SpotifyUiService:
             )
         return tuple(seeds)
 
+    @staticmethod
+    def _map_ingest_counts(
+        accepted: IngestAccepted | IngestSkipped,
+    ) -> tuple[int, int, int | None]:
+        playlists = int(getattr(accepted, "playlists", 0) or 0)
+        tracks = int(getattr(accepted, "tracks", 0) or 0)
+        batches = getattr(accepted, "batches", None)
+        try:
+            batches_value = int(batches) if batches is not None else None
+        except (TypeError, ValueError):
+            batches_value = None
+        return playlists, tracks, batches_value
+
+    def _map_ingest_submission(self, submission: IngestSubmission) -> SpotifyFreeIngestResult:
+        accepted_playlists, accepted_tracks, accepted_batches = self._map_ingest_counts(
+            submission.accepted
+        )
+        skipped_playlists, skipped_tracks, _ = self._map_ingest_counts(submission.skipped)
+        accepted = SpotifyFreeIngestAccepted(
+            playlists=accepted_playlists,
+            tracks=accepted_tracks,
+            batches=accepted_batches or 0,
+        )
+        skipped = SpotifyFreeIngestSkipped(
+            playlists=skipped_playlists,
+            tracks=skipped_tracks,
+            reason=submission.skipped.reason,
+        )
+        return SpotifyFreeIngestResult(
+            ok=submission.ok,
+            job_id=submission.job_id or None,
+            accepted=accepted,
+            skipped=skipped,
+            error=submission.error,
+        )
+
+    def _map_job_status(self, status: JobStatus) -> SpotifyFreeIngestJobSnapshot:
+        counts = self._map_job_counts(status.counts)
+        accepted_playlists, accepted_tracks, accepted_batches = self._map_ingest_counts(
+            status.accepted
+        )
+        skipped_playlists, skipped_tracks, _ = self._map_ingest_counts(status.skipped)
+        accepted = SpotifyFreeIngestAccepted(
+            playlists=accepted_playlists,
+            tracks=accepted_tracks,
+            batches=accepted_batches or 0,
+        )
+        skipped = SpotifyFreeIngestSkipped(
+            playlists=skipped_playlists,
+            tracks=skipped_tracks,
+            reason=status.skip_reason,
+        )
+        return SpotifyFreeIngestJobSnapshot(
+            job_id=status.id,
+            state=status.state,
+            counts=counts,
+            accepted=accepted,
+            skipped=skipped,
+            queued_tracks=int(status.queued_tracks or 0),
+            failed_tracks=int(status.failed_tracks or 0),
+            skipped_tracks=int(status.skipped_tracks or 0),
+            skip_reason=status.skip_reason,
+            error=status.error,
+        )
+
+    @staticmethod
+    def _map_job_counts(counts: JobCounts) -> SpotifyFreeIngestJobCounts:
+        return SpotifyFreeIngestJobCounts(
+            registered=int(counts.registered or 0),
+            normalized=int(counts.normalized or 0),
+            queued=int(counts.queued or 0),
+            completed=int(counts.completed or 0),
+            failed=int(counts.failed or 0),
+        )
+
+    def _build_ingest_error(
+        self,
+        message: str,
+        *,
+        skipped_playlists: int = 0,
+        skipped_tracks: int = 0,
+        reason: str | None = None,
+    ) -> SpotifyFreeIngestResult:
+        accepted = SpotifyFreeIngestAccepted(playlists=0, tracks=0, batches=0)
+        skipped = SpotifyFreeIngestSkipped(
+            playlists=skipped_playlists,
+            tracks=skipped_tracks,
+            reason=reason,
+        )
+        return SpotifyFreeIngestResult(
+            ok=False,
+            job_id=None,
+            accepted=accepted,
+            skipped=skipped,
+            error=message,
+        )
+
+    @staticmethod
+    def _render_playlist_validation_error(exc: PlaylistValidationError) -> str:
+        invalid_links = getattr(exc, "invalid_links", None)
+        if not invalid_links:
+            return "One or more playlist links could not be validated."
+        parts: list[str] = []
+        for item in invalid_links:
+            url = (item.url or "").strip()
+            reason = (item.reason or "invalid").lower()
+            if url:
+                parts.append(f"{url} ({reason})")
+            else:
+                parts.append(reason)
+        joined = ", ".join(parts)
+        if not joined:
+            return "Invalid playlist links provided."
+        return f"Invalid playlist links: {joined}"
+
     def recommendations(
         self,
         *,
@@ -739,6 +908,89 @@ class SpotifyUiService:
             extra={"authorization_url": response.authorization_url},
         )
         return response.authorization_url
+
+    async def submit_free_ingest(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: int | None = None,
+    ) -> SpotifyFreeIngestResult:
+        try:
+            submission = await self._spotify.submit_free_ingest(
+                playlist_links=playlist_links,
+                tracks=tracks,
+                batch_hint=batch_hint,
+            )
+        except PlaylistValidationError as exc:
+            logger.warning(
+                "spotify.ui.free_ingest.validation",
+                extra={"invalid": len(exc.invalid_links)},
+            )
+            message = self._render_playlist_validation_error(exc)
+            return self._build_ingest_error(
+                message,
+                skipped_playlists=len(exc.invalid_links),
+                reason="invalid",
+            )
+        except Exception:
+            logger.exception("spotify.ui.free_ingest.submit_error")
+            return self._build_ingest_error("Failed to submit the ingest request.")
+        return self._map_ingest_submission(submission)
+
+    async def free_import(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: int | None = None,
+    ) -> SpotifyFreeIngestResult:
+        try:
+            submission = await self._spotify.free_import(
+                playlist_links=playlist_links,
+                tracks=tracks,
+                batch_hint=batch_hint,
+            )
+        except PermissionError as exc:
+            logger.warning("spotify.ui.free_ingest.denied", extra={"error": str(exc)})
+            return self._build_ingest_error(
+                "Spotify authentication is required before running the import."
+            )
+        except PlaylistValidationError as exc:
+            logger.warning(
+                "spotify.ui.free_ingest.validation",
+                extra={"invalid": len(exc.invalid_links)},
+            )
+            message = self._render_playlist_validation_error(exc)
+            return self._build_ingest_error(
+                message,
+                skipped_playlists=len(exc.invalid_links),
+                reason="invalid",
+            )
+        except Exception:
+            logger.exception("spotify.ui.free_ingest.enqueue_error")
+            return self._build_ingest_error("Failed to enqueue the ingest job.")
+        logger.info(
+            "spotify.ui.free_ingest.enqueued",
+            extra={
+                "job_id": submission.job_id,
+                "accepted_playlists": submission.accepted.playlists,
+                "accepted_tracks": submission.accepted.tracks,
+            },
+        )
+        return self._map_ingest_submission(submission)
+
+    def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
+        if not job_id:
+            return None
+        try:
+            status = self._spotify.get_free_ingest_job(job_id)
+        except Exception:
+            logger.exception("spotify.ui.free_ingest.status_error")
+            return None
+        if status is None:
+            return None
+        return self._map_job_status(status)
 
     async def run_backfill(self, *, max_items: int | None, expand_playlists: bool) -> str:
         if not self._spotify.is_authenticated():
@@ -1087,6 +1339,11 @@ __all__ = [
     "SpotifyManualResult",
     "SpotifyOAuthHealth",
     "SpotifyPlaylistRow",
+    "SpotifyFreeIngestAccepted",
+    "SpotifyFreeIngestSkipped",
+    "SpotifyFreeIngestResult",
+    "SpotifyFreeIngestJobCounts",
+    "SpotifyFreeIngestJobSnapshot",
     "SpotifyStatus",
     "SpotifyUiService",
     "get_spotify_ui_service",

@@ -1,0 +1,120 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alerts %}
+
+{{ alerts.render_alerts(alert_messages) }}
+
+<div class="spotify-free-ingest">
+  <p class="spotify-free-ingest__hint">{{ strings.spotify_free_ingest_description() }}</p>
+  <form id="spotify-free-ingest-form"
+        method="post"
+        action="/ui/spotify/free/run"
+        hx-post="/ui/spotify/free/run"
+        hx-target="closest .async-fragment"
+        hx-swap="innerHTML">
+    <input type="hidden" name="csrftoken" value="{{ form.csrf_token }}" />
+    <label for="playlist_links">{{ strings.form_label("spotify.free_ingest.playlist_links") }}</label>
+    <textarea id="playlist_links"
+              name="playlist_links"
+              rows="6"
+              placeholder="{{ strings.spotify_free_ingest_playlist_placeholder() }}">{{ form.playlist_value }}</textarea>
+    <p class="form-field__help">{{ strings.form_help("spotify.free_ingest.playlist_links") }}</p>
+    {% if form.form_errors.get("playlist_links") %}
+      <p class="form-field__error">{{ form.form_errors.get("playlist_links") }}</p>
+    {% endif %}
+    <label for="tracks">{{ strings.form_label("spotify.free_ingest.tracks") }}</label>
+    <textarea id="tracks"
+              name="tracks"
+              rows="6"
+              placeholder="{{ strings.spotify_free_ingest_tracks_placeholder() }}">{{ form.tracks_value }}</textarea>
+    <p class="form-field__help">{{ strings.form_help("spotify.free_ingest.tracks") }}</p>
+    {% if form.form_errors.get("tracks") %}
+      <p class="form-field__error">{{ form.form_errors.get("tracks") }}</p>
+    {% endif %}
+    <button type="submit">{{ strings.button_label("spotify.free_ingest.submit") }}</button>
+  </form>
+
+  {% if form.result %}
+    <section class="spotify-free-ingest__summary">
+      <h4>{{ strings.spotify_free_ingest_summary_heading() }}</h4>
+      {% if form.result.error and not form.result.ok %}
+        <p class="spotify-free-ingest__error">{{ form.result.error }}</p>
+      {% endif %}
+      <div class="spotify-free-ingest__summary-group">
+        <h5>{{ strings.spotify_free_ingest_summary_label("accepted_heading") }}</h5>
+        <dl>
+          {% for item in form.accepted_items %}
+            <dt>{{ strings.spotify_free_ingest_summary_label(item.label_key) }}</dt>
+            <dd>{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+      <div class="spotify-free-ingest__summary-group">
+        <h5>{{ strings.spotify_free_ingest_summary_label("skipped_heading") }}</h5>
+        <dl>
+          {% for item in form.skipped_items %}
+            <dt>{{ strings.spotify_free_ingest_summary_label(item.label_key) }}</dt>
+            <dd>{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+        {% if form.result.skipped.reason %}
+          <p class="spotify-free-ingest__note">{{ strings.spotify_free_ingest_skip_reason(form.result.skipped.reason) }}</p>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="spotify-free-ingest__status">
+    <h4>{{ strings.spotify_free_ingest_status_heading() }}</h4>
+    {% if job_status %}
+      <dl class="spotify-free-ingest__meta">
+        <dt>{{ strings.spotify_free_ingest_status_label("job_id") }}</dt>
+        <dd>{{ job_status.job_id }}</dd>
+        <dt>{{ strings.spotify_free_ingest_status_label("state") }}</dt>
+        <dd>{{ job_status.state }}</dd>
+      </dl>
+      <div class="spotify-free-ingest__counts">
+        <h5>{{ strings.spotify_free_ingest_status_counts_heading() }}</h5>
+        <dl>
+          {% for item in job_status.counts %}
+            <dt>{{ strings.spotify_free_ingest_status_label(item.label_key) }}</dt>
+            <dd>{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+      <div class="spotify-free-ingest__summary-group">
+        <h5>{{ strings.spotify_free_ingest_summary_label("accepted_heading") }}</h5>
+        <dl>
+          {% for item in job_status.accepted_items %}
+            <dt>{{ strings.spotify_free_ingest_summary_label(item.label_key) }}</dt>
+            <dd>{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+      <div class="spotify-free-ingest__summary-group">
+        <h5>{{ strings.spotify_free_ingest_summary_label("skipped_heading") }}</h5>
+        <dl>
+          {% for item in job_status.skipped_items %}
+            <dt>{{ strings.spotify_free_ingest_summary_label(item.label_key) }}</dt>
+            <dd>{{ item.value }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+      <div class="spotify-free-ingest__metrics">
+        <h5>{{ strings.spotify_free_ingest_status_metrics_heading() }}</h5>
+        <ul>
+          <li>{{ strings.spotify_free_ingest_status_metric("queued_tracks") }}: {{ "{:,}".format(job_status.queued_tracks) }}</li>
+          <li>{{ strings.spotify_free_ingest_status_metric("failed_tracks") }}: {{ "{:,}".format(job_status.failed_tracks) }}</li>
+          <li>{{ strings.spotify_free_ingest_status_metric("skipped_tracks") }}: {{ "{:,}".format(job_status.skipped_tracks) }}</li>
+        </ul>
+      </div>
+      {% if job_status.skip_reason %}
+        <p class="spotify-free-ingest__note">{{ strings.spotify_free_ingest_skip_reason(job_status.skip_reason) }}</p>
+      {% endif %}
+      {% if job_status.error %}
+        <p class="spotify-free-ingest__error">{{ job_status.error }}</p>
+      {% endif %}
+    {% else %}
+      <p class="spotify-free-ingest__empty">{{ strings.spotify_free_ingest_status_empty() }}</p>
+    {% endif %}
+  </section>
+</div>
