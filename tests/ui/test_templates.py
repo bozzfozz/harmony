@@ -198,6 +198,7 @@ def test_spotify_page_template_renders_sections() -> None:
         session=session,
         csrf_token="csrf-token",
     )
+    assert context["free_ingest_fragment"] is not None
     template = templates.get_template("pages/spotify.j2")
     html = template.render(**context)
 
@@ -251,6 +252,32 @@ def test_spotify_page_template_renders_sections() -> None:
     assert "Fetching Spotify backfill status…" in html
 
 
+def test_spotify_page_template_hides_free_ingest_when_imports_disabled() -> None:
+    request = _make_request("/ui/spotify")
+    features = UiFeatures(spotify=True, soulseek=True, dlq=True, imports=False)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-spotify-imports-off",
+        role="operator",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_spotify_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-token",
+    )
+    assert context["free_ingest_fragment"] is None
+    template = templates.get_template("pages/spotify.j2")
+    html = template.render(**context)
+
+    assert 'hx-get="/ui/spotify/status"' in html
+    assert 'hx-get="/ui/spotify/free"' not in html
+    assert 'hx-target="#hx-spotify-free-ingest"' not in html
+    assert 'data-fragment="spotify-free-ingest"' not in html
+    assert "FREE ingest" not in html
 def test_spotify_top_tracks_partial_renders_table() -> None:
     request = _make_request("/ui/spotify/top/tracks")
     tracks = [
