@@ -733,6 +733,9 @@ def test_soulseek_status_fragment_handles_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=500)
             assert "Unable to load Soulseek status." in response.text
+            assert 'data-test="fragment-retry"' in response.text
+            assert 'hx-get="http://testserver/ui/soulseek/status"' in response.text
+            assert 'hx-target="#hx-soulseek-status"' in response.text
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -770,6 +773,9 @@ def test_soulseek_config_fragment_handles_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=500)
             assert "Unable to load Soulseek configuration." in response.text
+            assert 'data-test="fragment-retry"' in response.text
+            assert 'hx-get="http://testserver/ui/soulseek/config"' in response.text
+            assert 'hx-target="#hx-soulseek-configuration"' in response.text
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -820,6 +826,9 @@ def test_soulseek_uploads_fragment_handles_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=502)
             assert "boom" in response.text
+            assert 'data-test="fragment-retry"' in response.text
+            assert 'hx-get="http://testserver/ui/soulseek/uploads"' in response.text
+            assert 'hx-target="#hx-soulseek-uploads"' in response.text
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -895,6 +904,25 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert "Active downloads" in html
             assert "hx-soulseek-downloads" in html
             assert 'data-scope="active"' in html
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_downloads_fragment_handles_error(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    stub.list_exception = AppError(code=ErrorCode.INTERNAL_ERROR, message="fail", http_status=502)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/soulseek/downloads", headers=headers)
+            _assert_html_response(response, status_code=502)
+            assert "fail" in response.text
+            assert 'data-test="fragment-retry"' in response.text
+            assert 'hx-get="http://testserver/ui/soulseek/downloads"' in response.text
+            assert 'hx-target="#hx-soulseek-downloads"' in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 

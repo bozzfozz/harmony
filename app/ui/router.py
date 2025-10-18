@@ -107,15 +107,21 @@ def _render_alert_fragment(
     message: str,
     *,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+    retry_url: str | None = None,
+    retry_target: str | None = None,
+    retry_label_key: str = "fragments.retry",
 ) -> Response:
     alert = AlertMessage(level="error", text=message or "An unexpected error occurred.")
     context = {
         "request": request,
         "alerts": (alert,),
+        "retry_url": retry_url,
+        "retry_target": retry_target,
+        "retry_label_key": retry_label_key,
     }
     return templates.TemplateResponse(
         request,
-        "partials/alerts_fragment.j2",
+        "partials/async_error.j2",
         context,
         status_code=status_code,
     )
@@ -664,6 +670,9 @@ async def _render_search_results_fragment(
             request,
             exc.message,
             status_code=exc.http_status,
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-downloads",
+            retry_label_key="soulseek.retry",
         )
     except Exception:
         logger.exception("ui.fragment.search")
@@ -883,6 +892,9 @@ async def soulseek_status_fragment(
         return _render_alert_fragment(
             request,
             "Unable to load Soulseek status.",
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-status",
+            retry_label_key="soulseek.retry",
         )
 
     context = build_soulseek_status_context(
@@ -930,6 +942,9 @@ async def soulseek_configuration_fragment(
         return _render_alert_fragment(
             request,
             "Unable to load Soulseek configuration.",
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-configuration",
+            retry_label_key="soulseek.retry",
         )
 
     context = build_soulseek_config_context(
@@ -978,6 +993,9 @@ async def soulseek_uploads_fragment(
             request,
             detail,
             status_code=exc.status_code,
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-uploads",
+            retry_label_key="soulseek.retry",
         )
     except Exception:
         logger.exception("ui.fragment.soulseek.uploads")
@@ -992,6 +1010,9 @@ async def soulseek_uploads_fragment(
         return _render_alert_fragment(
             request,
             "Unable to load Soulseek uploads.",
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-uploads",
+            retry_label_key="soulseek.retry",
         )
 
     csrf_manager = get_csrf_manager(request)
@@ -1054,6 +1075,9 @@ async def soulseek_downloads_fragment(
             request,
             exc.message,
             status_code=exc.http_status,
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-downloads",
+            retry_label_key="soulseek.retry",
         )
     except Exception:
         logger.exception("ui.fragment.soulseek.downloads")
@@ -1068,6 +1092,9 @@ async def soulseek_downloads_fragment(
         return _render_alert_fragment(
             request,
             "Unable to load Soulseek downloads.",
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-downloads",
+            retry_label_key="soulseek.retry",
         )
 
     csrf_manager = get_csrf_manager(request)

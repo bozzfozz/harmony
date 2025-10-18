@@ -19,6 +19,7 @@ REQUIRED_PARTIAL_TEMPLATES: tuple[str, ...] = (
     "partials/activity_table.j2",
     "partials/alerts.j2",
     "partials/alerts_fragment.j2",
+    "partials/async_error.j2",
     "partials/downloads_table.j2",
     "partials/forms.j2",
     "partials/jobs_fragment.j2",
