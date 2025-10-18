@@ -6,6 +6,7 @@ from typing import Any
 from jinja2 import Template
 from starlette.requests import Request
 
+from app.integrations.health import IntegrationHealth
 from app.ui.context import (
     AlertMessage,
     AsyncFragment,
@@ -23,6 +24,7 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_search_page_context,
     build_spotify_artists_context,
@@ -41,6 +43,7 @@ from app.ui.context import (
     build_watchlist_fragment_context,
 )
 from app.ui.router import templates
+from app.schemas import StatusResponse
 from app.ui.services import (
     SpotifyArtistRow,
     SpotifyAccountSummary,
@@ -504,10 +507,16 @@ def test_soulseek_page_template_renders_fragments() -> None:
         issued_at=now,
         last_seen_at=now,
     )
+    nav_badge = StatusBadge(
+        label_key="soulseek.integration.ok",
+        variant="success",
+        test_id="nav-soulseek-status",
+    )
     context = build_soulseek_page_context(
         request,
         session=session,
         csrf_token="csrf-soulseek",
+        soulseek_badge=nav_badge,
     )
     template = templates.get_template("pages/soulseek.j2")
     html = template.render(**context)
@@ -515,6 +524,8 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'meta name="csrf-token" content="csrf-soulseek"' in html
     assert 'href="/ui/soulseek"' in html
     assert 'data-test="nav-soulseek"' in html
+    assert 'data-test="nav-soulseek-status"' in html
+    assert "status-badge--success" in html
     assert 'hx-get="/ui/soulseek/status"' in html
     assert 'hx-get="/ui/soulseek/configuration"' in html
     assert 'hx-get="/ui/soulseek/uploads"' in html
@@ -621,6 +632,75 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert "alert alert--warning" in html
     assert "Check status" in html
     assert '<meta name="csrf-token" content="token" />' in html
+
+
+def test_primary_nav_renders_soulseek_success_badge() -> None:
+    items = (
+        NavItem(
+            label_key="nav.soulseek",
+            href="/ui/soulseek",
+            test_id="nav-soulseek",
+            badge=build_soulseek_navigation_badge(
+                connection=StatusResponse(status="connected"),
+                integration=IntegrationHealth(overall="ok", providers=()),
+            ),
+        ),
+    )
+    html = _render_inline(
+        "{% import 'partials/nav.j2' as nav %}{{ nav.render_primary_nav(items) }}",
+        items=items,
+    )
+
+    assert 'data-test="nav-soulseek"' in html
+    assert 'data-test="nav-soulseek-status"' in html
+    assert "status-badge--success" in html
+    assert "Healthy" in html
+
+
+def test_primary_nav_renders_soulseek_degraded_badge() -> None:
+    items = (
+        NavItem(
+            label_key="nav.soulseek",
+            href="/ui/soulseek",
+            test_id="nav-soulseek",
+            badge=build_soulseek_navigation_badge(
+                connection=StatusResponse(status="connected"),
+                integration=IntegrationHealth(overall="degraded", providers=()),
+            ),
+        ),
+    )
+    html = _render_inline(
+        "{% import 'partials/nav.j2' as nav %}{{ nav.render_primary_nav(items) }}",
+        items=items,
+    )
+
+    assert 'data-test="nav-soulseek"' in html
+    assert 'data-test="nav-soulseek-status"' in html
+    assert "status-badge--danger" in html
+    assert "Degraded" in html
+
+
+def test_primary_nav_renders_soulseek_down_badge() -> None:
+    items = (
+        NavItem(
+            label_key="nav.soulseek",
+            href="/ui/soulseek",
+            test_id="nav-soulseek",
+            badge=build_soulseek_navigation_badge(
+                connection=StatusResponse(status="disconnected"),
+                integration=IntegrationHealth(overall="down", providers=()),
+            ),
+        ),
+    )
+    html = _render_inline(
+        "{% import 'partials/nav.j2' as nav %}{{ nav.render_primary_nav(items) }}",
+        items=items,
+    )
+
+    assert 'data-test="nav-soulseek"' in html
+    assert 'data-test="nav-soulseek-status"' in html
+    assert "status-badge--danger" in html
+    assert "Offline" in html
 
 
 def test_activity_fragment_template_uses_table_macro() -> None:

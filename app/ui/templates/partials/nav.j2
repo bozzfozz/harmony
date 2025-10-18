@@ -1,13 +1,19 @@
 {% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
 
 {% macro render_primary_nav(items) -%}
   {% if items %}
     <nav aria-label="Primary">
       {% for item in items %}
         <a href="{{ item.href }}"
-           {% if item.test_id %}data-test="{{ item.test_id }}"{% endif %}
+          {% if item.test_id %}data-test="{{ item.test_id }}"{% endif %}
            class="primary-nav__link{% if item.active %} is-active{% endif %}">
           {{ strings.nav_label(item.label_key) }}
+          {% if item.badge %}
+            <span class="primary-nav__indicator">
+              {{ status_badges.render_badge(item.badge) }}
+            </span>
+          {% endif %}
         </a>
       {% endfor %}
     </nav>

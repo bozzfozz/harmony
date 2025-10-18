@@ -32,6 +32,7 @@ from app.ui.context import (
     build_login_page_context,
     build_soulseek_config_context,
     build_soulseek_downloads_context,
+    build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_uploads_context,
@@ -810,13 +811,45 @@ async def spotify_page(
 async def soulseek_page(
     request: Request,
     session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        connection = await service.status()
+        integration = await service.integration_health()
+        soulseek_badge = build_soulseek_navigation_badge(
+            connection=connection,
+            integration=integration,
+        )
+        log_event(
+            logger,
+            "ui.page.soulseek.badge",
+            component="ui.router",
+            status="success",
+            role=session.role,
+            meta={
+                "connection": connection.status,
+                "integration": integration.overall,
+                "badge_variant": soulseek_badge.variant,
+            },
+        )
+    except Exception:
+        logger.exception("ui.page.soulseek.badge")
+        log_event(
+            logger,
+            "ui.page.soulseek.badge",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        soulseek_badge = build_soulseek_navigation_badge(connection=None, integration=None)
     context = build_soulseek_page_context(
         request,
         session=session,
         csrf_token=csrf_token,
+        soulseek_badge=soulseek_badge,
     )
     response = templates.TemplateResponse(
         request,
