@@ -788,8 +788,34 @@ def test_soulseek_config_fragment_renders_table(monkeypatch) -> None:
             assert "Soulseek configuration" in response.text
             assert 'data-test="soulseek-config-base-url"' in response.text
             assert "http://localhost:5030" in response.text
-            assert "Enabled" in response.text
+            assert 'data-test="soulseek-config-api-key"' in response.text
+            snippet_index = response.text.index('data-test="soulseek-config-api-key"')
+            snippet = response.text[max(0, snippet_index - 50) : snippet_index + 100]
+            assert "••••••" in snippet
+            assert "status-badge--danger" not in snippet
             assert "token" not in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_config_fragment_marks_missing_api_key(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.config = replace(stub.config, api_key=None)
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/config",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert 'data-test="soulseek-config-api-key"' in response.text
+            snippet_index = response.text.index('data-test="soulseek-config-api-key"')
+            snippet = response.text[max(0, snippet_index - 50) : snippet_index + 150]
+            assert "Missing" in snippet
+            assert "status-badge--danger" in snippet
+            assert "••••••" not in snippet
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
