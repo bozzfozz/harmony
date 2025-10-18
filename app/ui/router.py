@@ -43,6 +43,7 @@ from app.ui.context import (
     build_spotify_playlist_items_context,
     build_spotify_playlists_context,
     build_spotify_recommendations_context,
+    build_spotify_track_detail_context,
     build_spotify_saved_tracks_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
@@ -2215,6 +2216,49 @@ async def spotify_saved_tracks_action(
         status="success",
         role=session.role,
         count=affected,
+    )
+    return response
+
+
+@router.get(
+    "/spotify/tracks/{track_id}",
+    include_in_schema=False,
+    name="spotify_track_detail",
+)
+async def spotify_track_detail_modal(
+    request: Request,
+    track_id: str,
+    session: UiSession = Depends(require_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    try:
+        detail = service.track_detail(track_id)
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.fragment.spotify.track_detail")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify track details.",
+        )
+
+    context = build_spotify_track_detail_context(request, track=detail)
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_track_detail.j2",
+        context,
+    )
+    log_event(
+        logger,
+        "ui.fragment.spotify.track_detail",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=1,
     )
     return response
 

@@ -87,6 +87,8 @@
     "spotify.saved.save": "Save tracks",
     "spotify.saved.remove": "Remove",
     "spotify.recommendations.submit": "Fetch recommendations",
+    "spotify.track.view": "View details",
+    "modal.close": "Close",
     "search.submit": "Search",
     "search.action.queue": "Queue download",
     "spotify.playlists.view_tracks": "View tracks",
@@ -186,6 +188,7 @@
     "spotify.playlist_items.album": "Album",
     "spotify.playlist_items.added": "Added",
     "spotify.playlist_items.added_by": "Added by",
+    "spotify.playlist_items.actions": "Actions",
     "spotify.top_tracks.rank": "Rank",
     "spotify.top_tracks.name": "Track",
     "spotify.top_tracks.artists": "Artists",
@@ -573,4 +576,83 @@
     "confirm": "Confirm",
   } -%}
   {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_track_detail_title(name) -%}
+  {%- if name -%}
+    Track details · {{ name }}
+  {%- else -%}
+    Track details
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_track_detail_metadata_heading() %}Metadata{% endmacro %}
+
+{% macro spotify_track_detail_features_heading() %}Audio features{% endmacro %}
+
+{% macro spotify_track_detail_metadata_empty() %}No metadata is available for this track.{% endmacro %}
+
+{% macro spotify_track_detail_features_empty(features_available) -%}
+  {%- if not features_available -%}
+    Spotify did not return audio features for this track.
+  {%- else -%}
+    No audio features are available for this track.
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_track_detail_field_label(key) -%}
+  {%- set labels = {
+    "name": "Track",
+    "artists": "Artists",
+    "album": "Album",
+    "release_date": "Release date",
+    "duration": "Duration",
+    "popularity": "Popularity",
+    "explicit": "Explicit",
+    "preview_url": "Preview",
+    "external_url": "Spotify link",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_track_detail_feature_label(key) -%}
+  {%- set labels = {
+    "danceability": "Danceability",
+    "energy": "Energy",
+    "acousticness": "Acousticness",
+    "instrumentalness": "Instrumentalness",
+    "liveness": "Liveness",
+    "speechiness": "Speechiness",
+    "valence": "Valence",
+    "tempo": "Tempo",
+    "loudness": "Loudness",
+    "key": "Key",
+    "mode": "Mode",
+    "time_signature": "Time signature",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_track_detail_boolean(value) -%}
+  {{ "Yes" if value else "No" }}
+{%- endmacro %}
+
+{% macro spotify_track_detail_value_missing() %}Not available{% endmacro %}
+
+{% macro spotify_track_detail_link_label(key) -%}
+  {%- set labels = {
+    "preview_url": "Play preview",
+    "external_url": "Open in Spotify",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro spotify_track_detail_mode_label(value) -%}
+  {%- if value == "major" -%}
+    Major
+  {%- elif value == "minor" -%}
+    Minor
+  {%- else -%}
+    {{ value }}
+  {%- endif -%}
 {%- endmacro %}

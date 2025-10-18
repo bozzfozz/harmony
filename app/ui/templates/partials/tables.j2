@@ -1,6 +1,32 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/status_badges.j2" as badges %}
 
+{% macro _render_form(form) -%}
+  <form method="{{ form.method }}"
+        action="{{ form.action }}"
+        {% if form.hx_method == "get" %}
+          hx-get="{{ form.action }}"
+        {% elif form.hx_method == "put" %}
+          hx-put="{{ form.action }}"
+        {% elif form.hx_method == "patch" %}
+          hx-patch="{{ form.action }}"
+        {% elif form.hx_method == "delete" %}
+          hx-delete="{{ form.action }}"
+        {% else %}
+          hx-post="{{ form.action }}"
+        {% endif %}
+        {% if form.hx_target %}hx-target="{{ form.hx_target }}"{% endif %}
+        hx-swap="{{ form.hx_swap }}">
+    {% for name, value in form.hidden_fields.items() %}
+      <input type="hidden" name="{{ name }}" value="{{ value }}" />
+    {% endfor %}
+    <button type="submit" {% if form.disabled %}disabled{% endif %}>
+      {{ strings.button_label(form.submit_label_key) }}
+    </button>
+  </form>
+{%- endmacro %}
+
+
 {% macro render_table(table) -%}
   <table id="{{ table.identifier }}" class="table">
     {% if table.caption_key %}
@@ -24,30 +50,14 @@
             {{ strings.table_cell(cell.text_key) }}
           {% elif cell.text %}
             {{ cell.text }}
-          {% elif cell.form %}
-            {% set form = cell.form %}
-            <form method="{{ form.method }}"
-                  action="{{ form.action }}"
-                  {% if form.hx_method == "get" %}
-                    hx-get="{{ form.action }}"
-                  {% elif form.hx_method == "put" %}
-                    hx-put="{{ form.action }}"
-                  {% elif form.hx_method == "patch" %}
-                    hx-patch="{{ form.action }}"
-                  {% elif form.hx_method == "delete" %}
-                    hx-delete="{{ form.action }}"
-                  {% else %}
-                    hx-post="{{ form.action }}"
-                  {% endif %}
-                  {% if form.hx_target %}hx-target="{{ form.hx_target }}"{% endif %}
-                  hx-swap="{{ form.hx_swap }}">
-              {% for name, value in form.hidden_fields.items() %}
-                <input type="hidden" name="{{ name }}" value="{{ value }}" />
+          {% elif cell.forms %}
+            <div class="table-cell-actions">
+              {% for form in cell.forms %}
+                {{ _render_form(form) }}
               {% endfor %}
-              <button type="submit" {% if form.disabled %}disabled{% endif %}>
-                {{ strings.button_label(form.submit_label_key) }}
-              </button>
-            </form>
+            </div>
+          {% elif cell.form %}
+            {{ _render_form(cell.form) }}
           {% endif %}
         </td>
       {% endfor %}

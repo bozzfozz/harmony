@@ -32,6 +32,7 @@ from app.ui.context import (
     build_spotify_playlist_items_context,
     build_spotify_playlists_context,
     build_spotify_recommendations_context,
+    build_spotify_track_detail_context,
     build_spotify_saved_tracks_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
@@ -50,6 +51,7 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
+    SpotifyTrackDetail,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
     SpotifyStatus,
@@ -377,8 +379,50 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert "Artist One, Artist Two" in html
     assert "Album Name" in html
     assert "2023-09-01T10:00:00+00:00" in html
-    assert 'data-test="spotify-remove-track-1"' in html
+    assert 'data-test="spotify-saved-track-actions-track-1"' in html
+    assert 'hx-get="/ui/spotify/tracks/track-1"' in html
     assert 'hx-delete="/ui/spotify/saved/remove"' in html
+
+
+def test_spotify_track_detail_template_renders_modal() -> None:
+    request = _make_request("/ui/spotify")
+    track = SpotifyTrackDetail(
+        track_id="track-1",
+        name="Example Track",
+        artists=("Artist One", "Artist Two"),
+        album="Example Album",
+        release_date="2023-09-01",
+        duration_ms=185000,
+        popularity=1050,
+        explicit=True,
+        preview_url="https://preview.example/track-1",
+        external_url="https://open.spotify.com/track/track-1",
+        detail={"id": "track-1"},
+        features={
+            "danceability": 0.82,
+            "tempo": 123.45,
+            "mode": 0,
+            "time_signature": 4,
+        },
+    )
+    context = build_spotify_track_detail_context(request, track=track)
+    template = templates.get_template("partials/spotify_track_detail.j2")
+    html = template.render(**context)
+
+    assert 'id="spotify-track-detail-modal"' in html
+    assert "Track details · Example Track" in html
+    assert "Artist One, Artist Two" in html
+    assert "Example Album" in html
+    assert "3:05" in html
+    assert "1,050" in html
+    assert "Yes" in html
+    assert 'href="https://preview.example/track-1"' in html
+    assert 'href="https://open.spotify.com/track/track-1"' in html
+    assert "82%" in html
+    assert "123.5 BPM" in html
+    assert "Minor" in html
+    assert "4/4" in html
+    assert 'hx-on="htmx:afterSwap: this.showModal()"' in html
 
 
 def test_spotify_playlists_template_includes_actions() -> None:
@@ -435,6 +479,8 @@ def test_spotify_playlist_items_template_renders_table() -> None:
     assert "Track One" in html
     assert "Artist One" in html
     assert "Curator" in html
+    assert 'data-test="spotify-playlist-item-detail-track-1"' in html
+    assert 'hx-get="/ui/spotify/tracks/track-1"' in html
 
 
 def test_soulseek_page_template_renders_fragments() -> None:

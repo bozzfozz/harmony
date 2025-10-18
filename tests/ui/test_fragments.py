@@ -37,6 +37,7 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
+    SpotifyTrackDetail,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
     SpotifyStatus,
@@ -278,6 +279,22 @@ class _StubSpotifyService:
         ]
         self.saved_tracks_total: int | None = len(self.saved_tracks_rows)
         self.saved_tracks_exception: Exception | None = None
+        self.track_detail_result = SpotifyTrackDetail(
+            track_id="track-1",
+            name="Track One",
+            artists=("Artist One",),
+            album="Album One",
+            release_date="2023-09-01",
+            duration_ms=185000,
+            popularity=80,
+            explicit=False,
+            preview_url=None,
+            external_url=None,
+            detail={},
+            features={},
+        )
+        self.track_detail_exception: Exception | None = None
+        self.track_detail_calls: list[str] = []
         self.manual_result = SpotifyManualResult(ok=True, message="Completed")
         self.manual_exception: Exception | None = None
         self.start_url = "https://spotify.example/auth"
@@ -391,6 +408,12 @@ class _StubSpotifyService:
         start = max(0, min(offset, len(self.saved_tracks_rows)))
         end = max(start, min(start + max(limit, 0), len(self.saved_tracks_rows)))
         return tuple(self.saved_tracks_rows[start:end]), total
+
+    def track_detail(self, track_id: str) -> SpotifyTrackDetail:
+        self.track_detail_calls.append(track_id)
+        if self.track_detail_exception:
+            raise self.track_detail_exception
+        return self.track_detail_result
 
     def account(self) -> SpotifyAccountSummary | None:
         if self.account_exception:
@@ -2024,6 +2047,72 @@ def test_spotify_saved_tracks_action_remove_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert "No Spotify tracks are currently saved" in response.text
             assert stub.remove_calls == [("track-1",)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_track_detail_modal_renders_modal(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.track_detail_result = SpotifyTrackDetail(
+        track_id="track-42",
+        name="Modal Track",
+        artists=("Artist A", "Artist B"),
+        album="Album Z",
+        release_date="2023-01-01",
+        duration_ms=200000,
+        popularity=64,
+        explicit=True,
+        preview_url="https://preview.example/track-42",
+        external_url="https://open.spotify.com/track/track-42",
+        detail={},
+        features={},
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/tracks/track-42",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-track-detail-modal" in response.text
+            assert "Modal Track" in response.text
+            assert stub.track_detail_calls == ["track-42"]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_track_detail_modal_handles_service_value_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.track_detail_exception = ValueError("invalid track")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/tracks/invalid",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "invalid track" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_track_detail_modal_handles_exception(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.track_detail_exception = Exception("boom")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/tracks/track-1",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Spotify track details." in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
