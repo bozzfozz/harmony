@@ -1,28 +1,31 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
+{% set fragment_target = fragment.pagination.target if fragment.pagination else "#hx-soulseek-downloads" %}
+{% set fragment_swap = fragment.pagination.swap if fragment.pagination else "outerHTML" %}
+
 {% if active_url and all_url and refresh_url %}
   <div class="table-controls">
     <div class="table-controls__group">
       <button type="button"
               hx-get="{{ active_url }}"
-              hx-target="#hx-soulseek-downloads"
-              hx-swap="outerHTML"
+              hx-target="{{ fragment_target }}"
+              hx-swap="{{ fragment_swap }}"
               {% if not include_all %}disabled{% endif %}>
         {{ strings.button_label("soulseek.downloads.show_active") }}
       </button>
       <button type="button"
               hx-get="{{ all_url }}"
-              hx-target="#hx-soulseek-downloads"
-              hx-swap="outerHTML"
+              hx-target="{{ fragment_target }}"
+              hx-swap="{{ fragment_swap }}"
               {% if include_all %}disabled{% endif %}>
         {{ strings.button_label("soulseek.downloads.show_all") }}
       </button>
     </div>
     <button type="button"
             hx-get="{{ refresh_url }}"
-            hx-target="#hx-soulseek-downloads"
-            hx-swap="outerHTML">
+            hx-target="{{ fragment_target }}"
+            hx-swap="{{ fragment_swap }}">
       {{ strings.button_label("soulseek.downloads.refresh") }}
     </button>
   </div>
