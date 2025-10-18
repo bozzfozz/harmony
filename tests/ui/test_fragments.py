@@ -1156,6 +1156,30 @@ def test_jobs_fragment_forbidden_for_read_only(monkeypatch) -> None:
     [
         "/ui/spotify",
         "/ui/spotify/status",
+    ],
+)
+def test_spotify_routes_not_found_when_feature_disabled(monkeypatch, path: str) -> None:
+    """When the Spotify feature flag is off, the UI hides behind JSON 404 responses."""
+    extra_env = {"UI_FEATURE_SPOTIFY": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        response = client.get(path, headers={"Cookie": _cookies_header(client)})
+        _assert_json_error(response, status_code=404)
+        body = response.json()
+        assert body == {
+            "ok": False,
+            "error": {
+                "code": ErrorCode.NOT_FOUND.value,
+                "message": "The requested UI feature is disabled.",
+            },
+        }
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/ui/spotify",
+        "/ui/spotify/status",
         "/ui/spotify/account",
         "/ui/spotify/recommendations",
         "/ui/spotify/saved",
