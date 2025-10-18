@@ -888,7 +888,7 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
         ],
         limit=20,
         offset=0,
-        has_next=False,
+        has_next=True,
         has_previous=False,
     )
     stub = _RecordingDownloadsService(page)
@@ -906,6 +906,8 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert "Active downloads" in html
             assert "hx-soulseek-downloads" in html
             assert 'data-scope="active"' in html
+            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
+            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -929,8 +931,48 @@ def test_soulseek_downloads_fragment_handles_error(monkeypatch) -> None:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
 
+def test_soulseek_downloads_fragment_pagination_links(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=84,
+                filename="mix.flac",
+                status="completed",
+                progress=1.0,
+                priority=1,
+                username="dj",
+                created_at=None,
+                updated_at=None,
+                retry_count=0,
+                next_retry_at=None,
+                last_error=None,
+                live_queue=None,
+            )
+        ],
+        limit=20,
+        offset=10,
+        has_next=True,
+        has_previous=True,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/soulseek/downloads", headers=headers)
+            _assert_html_response(response)
+            html = response.text
+            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
+            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
+            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
+            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
 def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
-    page = DownloadPage(items=[], limit=50, offset=0, has_next=False, has_previous=False)
+    page = DownloadPage(items=[], limit=50, offset=0, has_next=True, has_previous=False)
     stub = _RecordingDownloadsService(page)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
@@ -947,6 +989,8 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
             assert "All downloads" in html
             assert 'data-scope="all"' in html
             assert "No Soulseek downloads" in html
+            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
+            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 

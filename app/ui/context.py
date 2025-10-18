@@ -1372,6 +1372,25 @@ def build_soulseek_downloads_context(
         return f"{base_url}?{urlencode(query)}"
 
     refresh_url = _url_for_scope(include_all)
+
+    def _page_url(new_offset: int) -> str:
+        query = [("limit", str(page.limit)), ("offset", str(max(new_offset, 0)))]
+        if include_all:
+            query.append(("all", "1"))
+        return f"{base_url}?{urlencode(query)}"
+
+    previous_url = _page_url(page.offset - page.limit) if page.has_previous else None
+    next_url = _page_url(page.offset + page.limit) if page.has_next else None
+
+    pagination: PaginationContext | None = None
+    if previous_url or next_url:
+        pagination = PaginationContext(
+            label_key="downloads",
+            target=target,
+            previous_url=previous_url,
+            next_url=next_url,
+        )
+
     fragment = TableFragment(
         identifier="hx-soulseek-downloads",
         table=table,
@@ -1383,6 +1402,7 @@ def build_soulseek_downloads_context(
             "scope": scope_value,
             "refresh-url": refresh_url,
         },
+        pagination=pagination,
     )
 
     return {
