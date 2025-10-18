@@ -24,6 +24,11 @@ subsystems.
 - [docs/operations/repo_maintenance.md](operations/repo_maintenance.md) – repository quality gates and release duties.
 - [docs/troubleshooting.md](troubleshooting.md) – incident triage and recovery hints.
 
+## UI & Frontend
+- [docs/ui/spotify.md](ui/spotify.md) – operator-focused guide for the `/ui/spotify` console, card responsibilities and recovery tips.
+- [docs/ui/fe-htmx-plan.md](ui/fe-htmx-plan.md) – implementation roadmap for the server-rendered frontend.
+- [docs/ui/csp.md](ui/csp.md) – content security policy guidance for UI deployments.
+
 ## Security & Compliance
 - [SECURITY.md](../SECURITY.md) – threat model, reporting channels and mitigations.
 - [docs/security.md](security.md) & [docs/secrets.md](secrets.md) – secure configuration guidance.

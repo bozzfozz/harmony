@@ -68,8 +68,9 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
    Logs (`docker logs -f harmony`) auf die Meldung
    `oauth.service: ready (client_id=***set***).`
 2. **OAuth initialisieren:** Navigieren Sie zur Einstellungen-Seite im Frontend
-   und starten Sie „Spotify PRO verbinden“. Stellen Sie sicher, dass das Popup
-   nicht geblockt wird. Alternativ können Sie
+   (siehe [Spotify UI Operations Guide](../../ui/spotify.md) für eine
+   Kartenübersicht) und starten Sie „Spotify PRO verbinden“. Stellen Sie sicher,
+   dass das Popup nicht geblockt wird. Alternativ können Sie
    `POST /api/v1/spotify/pro/oauth/start` per API aufrufen.
 3. **Callback bestätigen:** Nach erfolgreichem Consent sollte das Frontend
    automatisch schließen und `GET /spotify/status` `authorized: true`
