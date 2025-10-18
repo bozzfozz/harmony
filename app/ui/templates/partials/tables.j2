@@ -48,6 +48,8 @@
             {{ badges.render_badge(cell.badge) }}
           {% elif cell.text_key %}
             {{ strings.table_cell(cell.text_key) }}
+          {% elif cell.html %}
+            {{ cell.html | safe }}
           {% elif cell.text %}
             {{ cell.text }}
           {% elif cell.forms %}

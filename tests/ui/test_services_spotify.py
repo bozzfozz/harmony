@@ -261,9 +261,18 @@ def test_build_recommendations_context_adds_detail_action() -> None:
 
     fragment = context["fragment"]
     table = fragment.table
-    assert table.column_keys[-1] == "spotify.recommendations.actions"
+    assert table.column_keys == (
+        "spotify.recommendations.track",
+        "spotify.recommendations.artists",
+        "spotify.recommendations.album",
+        "spotify.recommendations.preview",
+        "spotify.recommendations.actions",
+    )
     assert table.rows, "expected at least one recommendation row"
     recommendation_row = table.rows[0]
+    preview_cell = recommendation_row.cells[-2]
+    assert preview_cell.test_id == "spotify-recommendation-preview-cell-track-xyz"
+    assert preview_cell.text == "—"
     action_cell = recommendation_row.cells[-1]
     assert action_cell.forms and len(action_cell.forms) == 1
     form = action_cell.forms[0]
@@ -272,6 +281,34 @@ def test_build_recommendations_context_adds_detail_action() -> None:
     assert form.hx_method == "get"
     assert form.hx_target == "#modal-root"
     assert form.submit_label_key == "spotify.track.view"
+
+
+def test_build_recommendations_context_includes_preview_player() -> None:
+    request = _make_request()
+    row = SpotifyRecommendationRow(
+        identifier="track-abc",
+        name="Preview Track",
+        artists=("Preview Artist",),
+        album=None,
+        preview_url="https://cdn.example/track-abc.mp3",
+    )
+
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf-token",
+        rows=(row,),
+    )
+
+    fragment = context["fragment"]
+    table = fragment.table
+    recommendation_row = table.rows[0]
+    preview_cell = recommendation_row.cells[-2]
+    assert preview_cell.html is not None
+    html = str(preview_cell.html)
+    assert "<audio" in html
+    assert "controls" in html
+    assert "data-test=\"spotify-recommendation-preview-track-abc\"" in html
+    assert "https://cdn.example/track-abc.mp3" in html
 
 
 def test_track_detail_combines_metadata_and_features() -> None:
