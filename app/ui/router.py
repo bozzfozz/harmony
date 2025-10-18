@@ -79,6 +79,7 @@ from app.ui.session import (
     attach_session_cookie,
     clear_session_cookie,
     get_session_manager,
+    require_operator_with_feature,
     require_feature,
     require_role,
     require_session,
@@ -797,7 +798,7 @@ async def dashboard(
 @router.get("/spotify", include_in_schema=False)
 async def spotify_page(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -1550,7 +1551,7 @@ async def logout(
 )
 async def spotify_oauth_start(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -1581,7 +1582,7 @@ async def spotify_oauth_start(
 )
 async def spotify_oauth_manual(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     raw_body = await request.body()
@@ -1640,13 +1641,9 @@ async def spotify_oauth_manual(
 )
 async def spotify_free_ingest_run(
     request: Request,
-    session: UiSession = Depends(require_role("operator")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
-    if not session.features.spotify:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="The requested UI feature is disabled."
-        )
     raw_body = await request.body()
     try:
         payload = raw_body.decode("utf-8")
@@ -1733,15 +1730,9 @@ async def spotify_free_ingest_run(
 )
 async def spotify_free_ingest_upload(
     request: Request,
-    session: UiSession = Depends(require_role("operator")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
-    if not session.features.spotify:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="The requested UI feature is disabled.",
-        )
-
     content_type = request.headers.get("content-type") or ""
     body = await request.body()
     try:
@@ -1838,13 +1829,9 @@ async def spotify_free_ingest_upload(
 )
 async def spotify_backfill_run(
     request: Request,
-    session: UiSession = Depends(require_role("operator")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
-    if not session.features.spotify:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="The requested UI feature is disabled."
-        )
     raw_body = await request.body()
     try:
         payload = raw_body.decode("utf-8")
@@ -1997,7 +1984,7 @@ async def activity_table(
 )
 async def spotify_free_ingest_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
@@ -2022,7 +2009,7 @@ async def spotify_free_ingest_fragment(
 @router.get("/spotify/account", include_in_schema=False, name="spotify_account_fragment")
 async def spotify_account_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
@@ -2058,7 +2045,7 @@ async def spotify_account_fragment(
 @router.get("/spotify/top/tracks", include_in_schema=False, name="spotify_top_tracks_fragment")
 async def spotify_top_tracks_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2089,7 +2076,7 @@ async def spotify_top_tracks_fragment(
 @router.get("/spotify/top/artists", include_in_schema=False, name="spotify_top_artists_fragment")
 async def spotify_top_artists_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2120,7 +2107,7 @@ async def spotify_top_artists_fragment(
 @router.get("/spotify/backfill", include_in_schema=False, name="spotify_backfill_fragment")
 async def spotify_backfill_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
@@ -2146,7 +2133,7 @@ async def spotify_backfill_fragment(
 @router.get("/spotify/artists", include_in_schema=False, name="spotify_artists_fragment")
 async def spotify_artists_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2176,7 +2163,7 @@ async def spotify_artists_fragment(
 @router.get("/spotify/playlists", include_in_schema=False, name="spotify_playlists_fragment")
 async def spotify_playlists_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2214,7 +2201,7 @@ async def spotify_playlist_items_fragment(
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0),
     playlist_name: str | None = Query(None, alias="name"),
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2265,7 +2252,7 @@ async def spotify_playlist_items_fragment(
 )
 async def spotify_recommendations_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -2295,7 +2282,7 @@ async def spotify_recommendations_fragment(
 )
 async def spotify_recommendations_submit(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     form = await _read_recommendations_form(request)
@@ -2338,7 +2325,7 @@ async def spotify_saved_tracks_fragment(
     request: Request,
     limit: int = Query(25, ge=1, le=50),
     offset: int = Query(0, ge=0),
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2394,7 +2381,7 @@ async def spotify_saved_tracks_fragment(
 async def spotify_saved_tracks_action(
     request: Request,
     action: str,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     action_key = action.strip().lower()
@@ -2529,7 +2516,7 @@ async def spotify_saved_tracks_action(
 async def spotify_track_detail_modal(
     request: Request,
     track_id: str,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
@@ -2567,7 +2554,7 @@ async def spotify_track_detail_modal(
 @router.get("/spotify/status", include_in_schema=False, name="spotify_status_fragment")
 async def spotify_status_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("spotify")),
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)

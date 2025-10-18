@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+import pytest
+
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -1146,6 +1148,53 @@ def test_jobs_fragment_forbidden_for_read_only(monkeypatch) -> None:
         _login(client)
         headers = {"Cookie": _cookies_header(client)}
         response = client.get("/ui/jobs/table", headers=headers)
+        _assert_json_error(response, status_code=403)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/ui/spotify",
+        "/ui/spotify/status",
+        "/ui/spotify/account",
+        "/ui/spotify/recommendations",
+        "/ui/spotify/saved",
+        "/ui/spotify/playlists",
+        "/ui/spotify/artists",
+        "/ui/spotify/playlists/demo/tracks",
+        "/ui/spotify/tracks/demo",
+        "/ui/spotify/free",
+        "/ui/spotify/backfill",
+        "/ui/spotify/top/tracks",
+        "/ui/spotify/top/artists",
+    ],
+)
+def test_spotify_get_routes_forbidden_for_read_only(monkeypatch, path: str) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get(path, headers=headers)
+        _assert_json_error(response, status_code=403)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/ui/spotify/recommendations",
+        "/ui/spotify/saved/save",
+        "/ui/spotify/saved/remove",
+        "/ui/spotify/free/run",
+        "/ui/spotify/free/upload",
+        "/ui/spotify/backfill/run",
+        "/ui/spotify/oauth/manual",
+        "/ui/spotify/oauth/start",
+    ],
+)
+def test_spotify_post_routes_forbidden_for_read_only(monkeypatch, path: str) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(path, headers=headers)
         _assert_json_error(response, status_code=403)
 
 
