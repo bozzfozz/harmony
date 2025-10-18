@@ -179,6 +179,14 @@ def _split_ingest_lines(raw_value: str) -> list[str]:
     return entries
 
 
+def _ensure_imports_feature_enabled(session: UiSession) -> None:
+    if not session.features.imports:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+
+
 def _render_recommendations_response(
     request: Request,
     session: UiSession,
@@ -1644,6 +1652,8 @@ async def spotify_free_ingest_run(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    _ensure_imports_feature_enabled(session)
+
     raw_body = await request.body()
     try:
         payload = raw_body.decode("utf-8")
@@ -1733,6 +1743,8 @@ async def spotify_free_ingest_upload(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    _ensure_imports_feature_enabled(session)
+
     content_type = request.headers.get("content-type") or ""
     body = await request.body()
     try:
@@ -1987,6 +1999,8 @@ async def spotify_free_ingest_fragment(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    _ensure_imports_feature_enabled(session)
+
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
