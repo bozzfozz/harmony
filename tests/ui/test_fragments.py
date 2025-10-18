@@ -2646,3 +2646,65 @@ def test_spotify_free_ingest_upload_handles_validation_error(monkeypatch) -> Non
             assert stub.free_ingest_status_calls == []
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_fragment_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        extra_env = {"UI_FEATURE_IMPORTS": "false"}
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/free",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_json_error(response, status_code=404)
+            assert stub.free_ingest_status_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_run_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        extra_env = {"UI_FEATURE_IMPORTS": "false"}
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/run",
+                data={
+                    "playlist_links": "https://open.spotify.com/playlist/demo",
+                    "tracks": "Artist - Track",
+                },
+                headers=headers,
+            )
+            _assert_json_error(response, status_code=404)
+            assert stub.free_import_calls == []
+            assert stub.free_ingest_status_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_upload_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        extra_env = {"UI_FEATURE_IMPORTS": "false"}
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/upload",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                files={"file": ("tracks.txt", b"Artist - Track", "text/plain")},
+                headers=headers,
+            )
+            _assert_json_error(response, status_code=404)
+            assert stub.free_upload_calls == []
+            assert stub.free_import_calls == []
+            assert stub.free_ingest_status_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
