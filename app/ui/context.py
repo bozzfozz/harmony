@@ -2213,12 +2213,30 @@ def build_spotify_recommendations_context(
 
     table_rows: list[TableRow] = []
     for row in rows:
+        try:
+            detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
+        except Exception:  # pragma: no cover - fallback for tests
+            detail_url = (
+                f"/ui/spotify/tracks/{row.identifier}" if row.identifier else "/ui/spotify/tracks"
+            )
+        view_form = TableCellForm(
+            action=detail_url,
+            method="get",
+            submit_label_key="spotify.track.view",
+            hx_target="#modal-root",
+            hx_swap="innerHTML",
+            hx_method="get",
+        )
         table_rows.append(
             TableRow(
                 cells=(
                     TableCell(text=row.name, test_id=f"spotify-reco-track-{row.identifier}"),
                     TableCell(text=", ".join(row.artists)),
                     TableCell(text=row.album or "—"),
+                    TableCell(
+                        forms=(view_form,),
+                        test_id=f"spotify-recommendation-actions-{row.identifier}",
+                    ),
                 ),
                 test_id=f"spotify-recommendation-{row.identifier}",
             )
@@ -2230,6 +2248,7 @@ def build_spotify_recommendations_context(
             "spotify.recommendations.track",
             "spotify.recommendations.artists",
             "spotify.recommendations.album",
+            "spotify.recommendations.actions",
         ),
         rows=tuple(table_rows),
         caption_key="spotify.recommendations.caption",
