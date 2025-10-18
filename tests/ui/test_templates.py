@@ -317,6 +317,8 @@ def test_spotify_page_template_hides_free_ingest_when_imports_disabled() -> None
     assert 'hx-target="#hx-spotify-free-ingest"' not in html
     assert 'data-fragment="spotify-free-ingest"' not in html
     assert "FREE ingest" not in html
+
+
 def test_spotify_top_tracks_partial_renders_table() -> None:
     request = _make_request("/ui/spotify/top/tracks")
     tracks = [
@@ -330,7 +332,13 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
             rank=1,
         )
     ]
-    context = build_spotify_top_tracks_context(request, tracks=tracks)
+    context = build_spotify_top_tracks_context(
+        request,
+        tracks=tracks,
+        csrf_token="csrf-token",
+        limit=25,
+        offset=0,
+    )
     template = templates.get_template("partials/spotify_top_tracks.j2")
     html = template.render(**context)
 
@@ -340,6 +348,11 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
     assert "Artist One, Artist Two" in html
     assert "3:03" in html
     assert 'data-count="1"' in html
+    assert 'data-test="spotify-top-track-save-track-1"' in html
+    assert 'hx-post="/ui/spotify/saved/save"' in html
+    assert 'hx-target="#hx-spotify-saved"' in html
+    assert '<input type="hidden" name="limit" value="25" />' in html
+    assert '<input type="hidden" name="offset" value="0" />' in html
 
 
 def test_spotify_top_artists_partial_renders_table() -> None:
@@ -398,6 +411,8 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
         csrf_token="csrf-token",
         rows=rows,
         seeds=seeds,
+        limit=10,
+        offset=15,
         form_values={
             "seed_tracks": "track-123",
             "seed_artists": "artist-1",
@@ -429,8 +444,12 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert "Artist One, Artist Two" in html
     assert "Album Name" in html
     assert 'data-test="spotify-recommendation-preview-track-2"' in html
-    assert '<audio controls' in html
+    assert "<audio controls" in html
     assert "View details" in html
+    assert 'data-test="spotify-recommendation-save-track-1"' in html
+    assert 'hx-target="#hx-spotify-saved"' in html
+    assert '<input type="hidden" name="limit" value="10" />' in html
+    assert '<input type="hidden" name="offset" value="15" />' in html
     assert 'data-count="2"' in html
 
 
