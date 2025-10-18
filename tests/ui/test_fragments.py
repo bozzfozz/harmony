@@ -1862,6 +1862,47 @@ def test_spotify_status_fragment_renders_forms(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_oauth_start_redirects_on_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/oauth/start",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers={**headers, "HX-Request": "true"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            assert response.headers.get("HX-Redirect") == stub.start_url
+            assert response.headers.get("location") == stub.start_url
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_oauth_start_returns_alert_on_value_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.start_exception = ValueError("Temporarily unavailable")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/oauth/start",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=503)
+            assert "alert--error" in response.text
+            assert "Temporarily unavailable" in response.text
+            assert "HX-Redirect" not in response.headers
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
 def test_spotify_saved_tracks_fragment_renders_table(monkeypatch) -> None:
     stub = _StubSpotifyService()
     app.dependency_overrides[get_spotify_ui_service] = lambda: stub

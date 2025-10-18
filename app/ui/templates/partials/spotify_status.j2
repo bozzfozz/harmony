@@ -18,8 +18,8 @@
             method="post"
             action="/ui/spotify/oauth/start"
             hx-post="/ui/spotify/oauth/start"
-            hx-target="this"
-            hx-swap="none">
+            hx-target="closest .async-fragment"
+            hx-swap="innerHTML">
         <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
         <button type="submit">{{ strings.button_label("spotify.connect") }}</button>
       </form>
