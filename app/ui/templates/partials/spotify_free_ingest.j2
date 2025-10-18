@@ -33,6 +33,27 @@
     <button type="submit">{{ strings.button_label("spotify.free_ingest.submit") }}</button>
   </form>
 
+  <form id="spotify-free-ingest-upload-form"
+        method="post"
+        action="/ui/spotify/free/upload"
+        enctype="multipart/form-data"
+        hx-post="/ui/spotify/free/upload"
+        hx-target="closest .async-fragment"
+        hx-swap="innerHTML"
+        hx-encoding="multipart/form-data">
+    <input type="hidden" name="csrftoken" value="{{ form.csrf_token }}" />
+    <label for="ingest_file">{{ strings.form_label("spotify.free_ingest.upload_file") }}</label>
+    <input id="ingest_file"
+           type="file"
+           name="file"
+           accept=".txt,.m3u,.m3u8" />
+    <p class="form-field__help">{{ strings.form_help("spotify.free_ingest.upload_file") }}</p>
+    {% if form.upload_error %}
+      <p class="form-field__error">{{ form.upload_error }}</p>
+    {% endif %}
+    <button type="submit">{{ strings.button_label("spotify.free_ingest.upload_file") }}</button>
+  </form>
+
   {% if form.result %}
     <section class="spotify-free-ingest__summary">
       <h4>{{ strings.spotify_free_ingest_summary_heading() }}</h4>

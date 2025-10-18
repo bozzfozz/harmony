@@ -224,6 +224,7 @@ class SpotifyFreeIngestFormContext:
     skipped_items: Sequence[DefinitionItem] = field(default_factory=tuple)
     result: SpotifyFreeIngestResult | None = None
     form_errors: Mapping[str, str] = field(default_factory=dict)
+    upload_error: str | None = None
 
 
 @dataclass(slots=True)
@@ -2240,6 +2241,7 @@ def build_spotify_free_ingest_form_context(
         skipped_items=tuple(skipped_items),
         result=result,
         form_errors=errors,
+        upload_error=errors.get("upload"),
     )
 
 

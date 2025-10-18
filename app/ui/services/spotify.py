@@ -252,6 +252,8 @@ class SpotifyUiService:
         self._spotify = spotify_service
         self._oauth = oauth_service
         self._db = db_session
+        self._free_ingest_result: SpotifyFreeIngestResult | None = None
+        self._free_ingest_error: str | None = None
 
     def status(self) -> SpotifyStatus:
         payload: SpotifyServiceStatus = self._spotify.get_status()
@@ -790,6 +792,20 @@ class SpotifyUiService:
             error=message,
         )
 
+    def _remember_free_ingest_result(
+        self, result: SpotifyFreeIngestResult, *, error_message: str | None = None
+    ) -> SpotifyFreeIngestResult:
+        self._free_ingest_result = result
+        self._free_ingest_error = error_message or result.error
+        return result
+
+    def consume_free_ingest_feedback(self) -> tuple[SpotifyFreeIngestResult | None, str | None]:
+        result = self._free_ingest_result
+        error = self._free_ingest_error
+        self._free_ingest_result = None
+        self._free_ingest_error = None
+        return result, error
+
     @staticmethod
     def _render_playlist_validation_error(exc: PlaylistValidationError) -> str:
         invalid_links = getattr(exc, "invalid_links", None)
@@ -928,15 +944,18 @@ class SpotifyUiService:
                 extra={"invalid": len(exc.invalid_links)},
             )
             message = self._render_playlist_validation_error(exc)
-            return self._build_ingest_error(
+            error_result = self._build_ingest_error(
                 message,
                 skipped_playlists=len(exc.invalid_links),
                 reason="invalid",
             )
+            return self._remember_free_ingest_result(error_result, error_message=message)
         except Exception:
             logger.exception("spotify.ui.free_ingest.submit_error")
-            return self._build_ingest_error("Failed to submit the ingest request.")
-        return self._map_ingest_submission(submission)
+            error_result = self._build_ingest_error("Failed to submit the ingest request.")
+            return self._remember_free_ingest_result(error_result)
+        mapped = self._map_ingest_submission(submission)
+        return self._remember_free_ingest_result(mapped)
 
     async def free_import(
         self,
@@ -953,23 +972,26 @@ class SpotifyUiService:
             )
         except PermissionError as exc:
             logger.warning("spotify.ui.free_ingest.denied", extra={"error": str(exc)})
-            return self._build_ingest_error(
+            error_result = self._build_ingest_error(
                 "Spotify authentication is required before running the import."
             )
+            return self._remember_free_ingest_result(error_result)
         except PlaylistValidationError as exc:
             logger.warning(
                 "spotify.ui.free_ingest.validation",
                 extra={"invalid": len(exc.invalid_links)},
             )
             message = self._render_playlist_validation_error(exc)
-            return self._build_ingest_error(
+            error_result = self._build_ingest_error(
                 message,
                 skipped_playlists=len(exc.invalid_links),
                 reason="invalid",
             )
+            return self._remember_free_ingest_result(error_result, error_message=message)
         except Exception:
             logger.exception("spotify.ui.free_ingest.enqueue_error")
-            return self._build_ingest_error("Failed to enqueue the ingest job.")
+            error_result = self._build_ingest_error("Failed to enqueue the ingest job.")
+            return self._remember_free_ingest_result(error_result)
         logger.info(
             "spotify.ui.free_ingest.enqueued",
             extra={
@@ -978,7 +1000,35 @@ class SpotifyUiService:
                 "accepted_tracks": submission.accepted.tracks,
             },
         )
-        return self._map_ingest_submission(submission)
+        mapped = self._map_ingest_submission(submission)
+        return self._remember_free_ingest_result(mapped)
+
+    async def upload_free_ingest_file(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+    ) -> SpotifyFreeIngestResult:
+        limit = max(1, int(self._config.spotify.free_import_max_file_bytes))
+        if len(content) > limit:
+            message = "The uploaded file exceeds the allowed size. Please submit a smaller file."
+            self._free_ingest_error = message
+            raise ValueError(message)
+        if not content:
+            message = "The uploaded file is empty."
+            error_result = self._build_ingest_error(message, reason="empty")
+            return self._remember_free_ingest_result(error_result, error_message=message)
+        try:
+            tracks = self._spotify.parse_tracks_from_file(content, filename)
+        except ValueError as exc:
+            message = str(exc) or "Failed to parse the uploaded file."
+            self._free_ingest_error = message
+            raise
+        if not tracks:
+            message = "No tracks were found in the uploaded file."
+            error_result = self._build_ingest_error(message, reason="empty")
+            return self._remember_free_ingest_result(error_result, error_message=message)
+        return await self.free_import(tracks=tracks)
 
     def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
         if not job_id:
