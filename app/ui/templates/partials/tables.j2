@@ -20,7 +20,9 @@
     {% for name, value in form.hidden_fields.items() %}
       <input type="hidden" name="{{ name }}" value="{{ value }}" />
     {% endfor %}
-    <button type="submit" {% if form.disabled %}disabled{% endif %}>
+    <button type="submit"
+            {% if form.test_id %}data-test="{{ form.test_id }}"{% endif %}
+            {% if form.disabled %}disabled{% endif %}>
       {{ strings.button_label(form.submit_label_key) }}
     </button>
   </form>

@@ -197,6 +197,7 @@ class TableCellForm:
     hx_swap: str = "innerHTML"
     disabled: bool = False
     hx_method: HxMethod = "post"
+    test_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -1586,6 +1587,9 @@ def build_spotify_top_tracks_context(
     request: Request,
     *,
     tracks: Sequence[SpotifyTopTrackRow],
+    csrf_token: str,
+    limit: int,
+    offset: int,
 ) -> Mapping[str, Any]:
     def _format_duration(duration_ms: int | None) -> str:
         if duration_ms is None or duration_ms < 0:
@@ -1593,6 +1597,11 @@ def build_spotify_top_tracks_context(
         total_seconds = duration_ms // 1000
         minutes, seconds = divmod(total_seconds, 60)
         return f"{minutes}:{seconds:02d}"
+
+    try:
+        save_url = request.url_for("spotify_saved_tracks_action", action="save")
+    except Exception:  # pragma: no cover - fallback for tests
+        save_url = "/ui/spotify/saved/save"
 
     rows: list[TableRow] = []
     for track in tracks:
@@ -1602,7 +1611,9 @@ def build_spotify_top_tracks_context(
             detail_url = request.url_for("spotify_track_detail", track_id=track.identifier)
         except Exception:  # pragma: no cover - fallback for tests
             detail_url = (
-                f"/ui/spotify/tracks/{track.identifier}" if track.identifier else "/ui/spotify/tracks"
+                f"/ui/spotify/tracks/{track.identifier}"
+                if track.identifier
+                else "/ui/spotify/tracks"
             )
         detail_form = TableCellForm(
             action=detail_url,
@@ -1611,6 +1622,25 @@ def build_spotify_top_tracks_context(
             hx_target="#modal-root",
             hx_swap="innerHTML",
             hx_method="get",
+        )
+        save_form = TableCellForm(
+            action=save_url,
+            method="post",
+            submit_label_key="spotify.saved.save",
+            hidden_fields={
+                "csrftoken": csrf_token,
+                "track_id": track.identifier,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+            hx_target="#hx-spotify-saved",
+            hx_swap="outerHTML",
+            disabled=not bool(track.identifier),
+            test_id=(
+                f"spotify-top-track-save-{track.identifier}"
+                if track.identifier
+                else "spotify-top-track-save"
+            ),
         )
         rows.append(
             TableRow(
@@ -1622,8 +1652,12 @@ def build_spotify_top_tracks_context(
                     TableCell(text=str(track.popularity)),
                     TableCell(text=duration_text),
                     TableCell(
-                        forms=(detail_form,),
-                        test_id=f"spotify-top-track-detail-{track.identifier}",
+                        forms=(detail_form, save_form),
+                        test_id=(
+                            f"spotify-top-track-actions-{track.identifier}"
+                            if track.identifier
+                            else "spotify-top-track-actions"
+                        ),
                     ),
                 ),
                 test_id=f"spotify-top-track-{track.identifier}",
@@ -2199,6 +2233,8 @@ def build_spotify_recommendations_context(
     csrf_token: str,
     rows: Sequence[SpotifyRecommendationRow] = (),
     seeds: Sequence[SpotifyRecommendationSeed] = (),
+    limit: int = 25,
+    offset: int = 0,
     form_values: Mapping[str, str] | None = None,
     form_errors: Mapping[str, str] | None = None,
     alerts: Sequence[AlertMessage] | None = None,
@@ -2213,6 +2249,10 @@ def build_spotify_recommendations_context(
     errors = {key: value for key, value in (form_errors or {}).items() if value}
 
     table_rows: list[TableRow] = []
+    try:
+        save_url = request.url_for("spotify_saved_tracks_action", action="save")
+    except Exception:  # pragma: no cover - fallback for tests
+        save_url = "/ui/spotify/saved/save"
     for row in rows:
         try:
             detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
@@ -2222,11 +2262,11 @@ def build_spotify_recommendations_context(
             )
         if row.preview_url:
             preview_html = (
-                "<audio controls preload=\"none\" "
-                f"data-test=\"spotify-recommendation-preview-{row.identifier}\">"
-                f"<source src=\"{row.preview_url}\" type=\"audio/mpeg\" />"
+                '<audio controls preload="none" '
+                f'data-test="spotify-recommendation-preview-{row.identifier}">'
+                f'<source src="{row.preview_url}" type="audio/mpeg" />'
                 "Your browser does not support audio playback."
-                f" <a href=\"{row.preview_url}\" target=\"_blank\" rel=\"noopener\">"
+                f' <a href="{row.preview_url}" target="_blank" rel="noopener">'
                 "Open preview"
                 "</a>."
                 "</audio>"
@@ -2248,6 +2288,25 @@ def build_spotify_recommendations_context(
             hx_swap="innerHTML",
             hx_method="get",
         )
+        save_form = TableCellForm(
+            action=save_url,
+            method="post",
+            submit_label_key="spotify.saved.save",
+            hidden_fields={
+                "csrftoken": csrf_token,
+                "track_id": row.identifier,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+            hx_target="#hx-spotify-saved",
+            hx_swap="outerHTML",
+            disabled=not bool(row.identifier),
+            test_id=(
+                f"spotify-recommendation-save-{row.identifier}"
+                if row.identifier
+                else "spotify-recommendation-save"
+            ),
+        )
         table_rows.append(
             TableRow(
                 cells=(
@@ -2256,7 +2315,7 @@ def build_spotify_recommendations_context(
                     TableCell(text=row.album or "—"),
                     preview_cell,
                     TableCell(
-                        forms=(view_form,),
+                        forms=(view_form, save_form),
                         test_id=f"spotify-recommendation-actions-{row.identifier}",
                     ),
                 ),

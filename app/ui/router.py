@@ -138,6 +138,22 @@ def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[s
     return issued, True
 
 
+def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
+    def _coerce(raw: str | None, default: int, *, minimum: int, maximum: int | None = None) -> int:
+        try:
+            value = int(raw) if raw not in (None, "") else default
+        except (TypeError, ValueError):
+            value = default
+        value = max(minimum, value)
+        if maximum is not None:
+            value = min(value, maximum)
+        return value
+
+    limit = _coerce(request.query_params.get("limit"), 25, minimum=1, maximum=50)
+    offset = _coerce(request.query_params.get("offset"), 0, minimum=0)
+    return limit, offset
+
+
 def _split_seed_ids(raw_value: str) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -203,11 +219,14 @@ def _render_recommendations_response(
     alerts: Sequence[AlertMessage] | None = None,
     status_code: int = status.HTTP_200_OK,
 ) -> Response:
+    limit, offset = _extract_saved_tracks_pagination(request)
     context = build_spotify_recommendations_context(
         request,
         csrf_token=csrf_token,
         rows=rows,
         seeds=seeds,
+        limit=limit,
+        offset=offset,
         form_values=form_values,
         form_errors=form_errors,
         alerts=alerts,
@@ -2089,7 +2108,23 @@ async def spotify_top_tracks_fragment(
             "Unable to load Spotify top tracks.",
         )
 
-    context = build_spotify_top_tracks_context(request, tracks=tracks)
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    limit, offset = _extract_saved_tracks_pagination(request)
+    context = build_spotify_top_tracks_context(
+        request,
+        tracks=tracks,
+        csrf_token=csrf_token,
+        limit=limit,
+        offset=offset,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_top_tracks.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     log_event(
         logger,
         "ui.fragment.spotify.top_tracks",
@@ -2098,11 +2133,7 @@ async def spotify_top_tracks_fragment(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
-        request,
-        "partials/spotify_top_tracks.j2",
-        context,
-    )
+    return response
 
 
 @router.get("/spotify/top/artists", include_in_schema=False, name="spotify_top_artists_fragment")

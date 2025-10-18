@@ -226,7 +226,13 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
         rank=1,
     )
 
-    context = build_spotify_top_tracks_context(request, tracks=(track,))
+    context = build_spotify_top_tracks_context(
+        request,
+        tracks=(track,),
+        csrf_token="csrf-token",
+        limit=25,
+        offset=5,
+    )
 
     fragment = context["fragment"]
     table = fragment.table
@@ -234,13 +240,28 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
     assert table.rows, "expected at least one top track row"
     row = table.rows[0]
     action_cell = row.cells[-1]
-    assert action_cell.forms and len(action_cell.forms) == 1
-    form = action_cell.forms[0]
-    assert form.action.endswith("/tracks/track-123")
-    assert form.method == "get"
-    assert form.hx_method == "get"
-    assert form.hx_target == "#modal-root"
-    assert form.submit_label_key == "spotify.track.view"
+    assert action_cell.test_id == "spotify-top-track-actions-track-123"
+    assert action_cell.forms and len(action_cell.forms) == 2
+    view_form, save_form = action_cell.forms
+    assert view_form.action.endswith("/tracks/track-123")
+    assert view_form.method == "get"
+    assert view_form.hx_method == "get"
+    assert view_form.hx_target == "#modal-root"
+    assert view_form.submit_label_key == "spotify.track.view"
+    assert save_form.action.endswith("/ui/spotify/saved/save")
+    assert save_form.method == "post"
+    assert save_form.hx_method == "post"
+    assert save_form.hx_target == "#hx-spotify-saved"
+    assert save_form.hx_swap == "outerHTML"
+    assert save_form.submit_label_key == "spotify.saved.save"
+    assert save_form.hidden_fields == {
+        "csrftoken": "csrf-token",
+        "track_id": "track-123",
+        "limit": "25",
+        "offset": "5",
+    }
+    assert save_form.test_id == "spotify-top-track-save-track-123"
+    assert save_form.disabled is False
 
 
 def test_build_recommendations_context_adds_detail_action() -> None:
@@ -257,6 +278,8 @@ def test_build_recommendations_context_adds_detail_action() -> None:
         request,
         csrf_token="csrf-token",
         rows=(row,),
+        limit=50,
+        offset=10,
     )
 
     fragment = context["fragment"]
@@ -274,13 +297,27 @@ def test_build_recommendations_context_adds_detail_action() -> None:
     assert preview_cell.test_id == "spotify-recommendation-preview-cell-track-xyz"
     assert preview_cell.text == "—"
     action_cell = recommendation_row.cells[-1]
-    assert action_cell.forms and len(action_cell.forms) == 1
-    form = action_cell.forms[0]
-    assert form.action.endswith("/tracks/track-xyz")
-    assert form.method == "get"
-    assert form.hx_method == "get"
-    assert form.hx_target == "#modal-root"
-    assert form.submit_label_key == "spotify.track.view"
+    assert action_cell.forms and len(action_cell.forms) == 2
+    view_form, save_form = action_cell.forms
+    assert view_form.action.endswith("/tracks/track-xyz")
+    assert view_form.method == "get"
+    assert view_form.hx_method == "get"
+    assert view_form.hx_target == "#modal-root"
+    assert view_form.submit_label_key == "spotify.track.view"
+    assert save_form.action.endswith("/ui/spotify/saved/save")
+    assert save_form.method == "post"
+    assert save_form.hx_method == "post"
+    assert save_form.hx_target == "#hx-spotify-saved"
+    assert save_form.hx_swap == "outerHTML"
+    assert save_form.submit_label_key == "spotify.saved.save"
+    assert save_form.hidden_fields == {
+        "csrftoken": "csrf-token",
+        "track_id": "track-xyz",
+        "limit": "50",
+        "offset": "10",
+    }
+    assert save_form.test_id == "spotify-recommendation-save-track-xyz"
+    assert save_form.disabled is False
 
 
 def test_build_recommendations_context_includes_preview_player() -> None:
@@ -297,6 +334,8 @@ def test_build_recommendations_context_includes_preview_player() -> None:
         request,
         csrf_token="csrf-token",
         rows=(row,),
+        limit=25,
+        offset=0,
     )
 
     fragment = context["fragment"]
@@ -307,7 +346,7 @@ def test_build_recommendations_context_includes_preview_player() -> None:
     html = str(preview_cell.html)
     assert "<audio" in html
     assert "controls" in html
-    assert "data-test=\"spotify-recommendation-preview-track-abc\"" in html
+    assert 'data-test="spotify-recommendation-preview-track-abc"' in html
     assert "https://cdn.example/track-abc.mp3" in html
 
 
