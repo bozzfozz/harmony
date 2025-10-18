@@ -31,6 +31,7 @@ from app.ui.context import (
     build_spotify_page_context,
     build_spotify_playlist_items_context,
     build_spotify_playlists_context,
+    build_spotify_free_ingest_context,
     build_spotify_recommendations_context,
     build_spotify_track_detail_context,
     build_spotify_saved_tracks_context,
@@ -44,6 +45,11 @@ from app.ui.services import (
     SpotifyArtistRow,
     SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
+    SpotifyFreeIngestAccepted,
+    SpotifyFreeIngestJobCounts,
+    SpotifyFreeIngestJobSnapshot,
+    SpotifyFreeIngestResult,
+    SpotifyFreeIngestSkipped,
     SpotifyManualResult,
     SpotifyOAuthHealth,
     SpotifyPlaylistItemRow,
@@ -175,6 +181,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-get="/ui/spotify/saved"' in html
     assert 'hx-get="/ui/spotify/playlists"' in html
     assert 'hx-get="/ui/spotify/artists"' in html
+    assert 'hx-get="/ui/spotify/free"' in html
     assert 'hx-get="/ui/spotify/backfill"' in html
     assert 'hx-target="#hx-spotify-status"' in html
     assert 'hx-target="#hx-spotify-account"' in html
@@ -184,6 +191,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-target="#hx-spotify-saved"' in html
     assert 'hx-target="#hx-spotify-playlists"' in html
     assert 'hx-target="#hx-spotify-artists"' in html
+    assert 'hx-target="#hx-spotify-free-ingest"' in html
     assert 'hx-target="#hx-spotify-backfill"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert 'hx-trigger="load, every 30s"' in html
@@ -199,6 +207,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'data-fragment="spotify-saved-tracks"' in html
     assert 'data-fragment="spotify-playlists"' in html
     assert 'data-fragment="spotify-artists"' in html
+    assert 'data-fragment="spotify-free-ingest"' in html
     assert 'data-fragment="spotify-backfill"' in html
     assert 'class="async-fragment"' in html
     assert 'aria-live="polite"' in html
@@ -866,6 +875,54 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
     assert "Expand playlists" in html
     assert 'hx-target="closest .async-fragment"' in html
     assert 'hx-swap="innerHTML"' in html
+
+
+def test_spotify_free_ingest_partial_renders_form_and_status() -> None:
+    request = _make_request("/ui/spotify/free")
+    result = SpotifyFreeIngestResult(
+        ok=True,
+        job_id="job-free",
+        accepted=SpotifyFreeIngestAccepted(playlists=2, tracks=5, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=1, tracks=0, reason="limit"),
+        error=None,
+    )
+    job_status = SpotifyFreeIngestJobSnapshot(
+        job_id="job-free",
+        state="running",
+        counts=SpotifyFreeIngestJobCounts(
+            registered=3,
+            normalized=3,
+            queued=2,
+            completed=1,
+            failed=0,
+        ),
+        accepted=SpotifyFreeIngestAccepted(playlists=2, tracks=5, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        queued_tracks=4,
+        failed_tracks=0,
+        skipped_tracks=1,
+        skip_reason=None,
+        error=None,
+    )
+    context = build_spotify_free_ingest_context(
+        request,
+        csrf_token="csrf-token",
+        form_values={
+            "playlist_links": "https://open.spotify.com/playlist/demo",
+            "tracks": "Artist - Track",
+        },
+        result=result,
+        job_status=job_status,
+        alerts=(AlertMessage(level="success", text="Job enqueued"),),
+    )
+    template = templates.get_template("partials/spotify_free_ingest.j2")
+    html = template.render(**context)
+
+    assert 'id="spotify-free-ingest-form"' in html
+    assert 'hx-post="/ui/spotify/free/run"' in html
+    assert "Job enqueued" in html
+    assert "job-free" in html
+    assert "Queued tracks" in html
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:

@@ -5,16 +5,27 @@ from __future__ import annotations
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Mapping
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from starlette.requests import Request
 
 from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
+from app.services.free_ingest_service import (
+    IngestAccepted,
+    IngestSkipped,
+    IngestSubmission,
+    InvalidPlaylistLink,
+    PlaylistValidationError,
+    JobCounts,
+    JobStatus,
+)
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyPlaylistItemRow,
+    SpotifyFreeIngestJobSnapshot,
+    SpotifyFreeIngestResult,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
@@ -671,3 +682,174 @@ def test_remove_saved_tracks_requires_identifiers() -> None:
         assert "identifier" in str(exc)
     else:  # pragma: no cover - sanity guard
         assert False, "Expected ValueError"
+
+
+@pytest.mark.asyncio
+async def test_free_import_success_maps_submission() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    submission = IngestSubmission(
+        ok=True,
+        job_id="job-1",
+        accepted=IngestAccepted(playlists=2, tracks=10, batches=3),
+        skipped=IngestSkipped(playlists=1, tracks=0, reason="limit"),
+        error=None,
+    )
+    spotify_service = AsyncMock()
+    spotify_service.free_import.return_value = submission
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.free_import(
+        playlist_links=["https://open.spotify.com/playlist/demo"],
+        tracks=["Artist - Track"],
+    )
+
+    assert isinstance(result, SpotifyFreeIngestResult)
+    assert result.ok is True
+    assert result.job_id == "job-1"
+    assert result.accepted.playlists == 2
+    assert result.skipped.reason == "limit"
+    spotify_service.free_import.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_free_import_handles_permission_error() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = AsyncMock()
+    spotify_service.free_import.side_effect = PermissionError("auth required")
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.free_import(playlist_links=None, tracks=None)
+
+    assert result.ok is False
+    assert "Spotify authentication" in (result.error or "")
+    assert result.accepted.playlists == 0
+    assert result.skipped.playlists == 0
+    spotify_service.free_import.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_free_import_handles_unexpected_error() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = AsyncMock()
+    spotify_service.free_import.side_effect = RuntimeError("boom")
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.free_import(playlist_links=None, tracks=None)
+
+    assert result.ok is False
+    assert result.error == "Failed to enqueue the ingest job."
+    assert result.skipped.playlists == 0
+    spotify_service.free_import.assert_awaited_once()
+
+
+def test_free_ingest_job_status_returns_none_without_job_id() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    assert service.free_ingest_job_status(None) is None
+    spotify_service.get_free_ingest_job.assert_not_called()
+
+
+def test_free_ingest_job_status_returns_none_on_error() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_free_ingest_job.side_effect = RuntimeError("boom")
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    assert service.free_ingest_job_status("job-404") is None
+    spotify_service.get_free_ingest_job.assert_called_once_with("job-404")
+
+
+@pytest.mark.asyncio
+async def test_submit_free_ingest_handles_validation_error() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = AsyncMock()
+    spotify_service.submit_free_ingest.side_effect = PlaylistValidationError(
+        [InvalidPlaylistLink(url="https://bad", reason="INVALID_SCHEME")]
+    )
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.submit_free_ingest(playlist_links=["https://bad"])
+
+    assert result.ok is False
+    assert result.error is not None and "Invalid playlist links" in result.error
+    assert result.skipped.playlists == 1
+    spotify_service.submit_free_ingest.assert_awaited_once()
+
+
+def test_free_ingest_job_status_converts_snapshot() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    job_status = JobStatus(
+        id="job-9",
+        state="running",
+        counts=JobCounts(registered=5, normalized=4, queued=3, completed=2, failed=1),
+        accepted=IngestAccepted(playlists=1, tracks=2, batches=1),
+        skipped=IngestSkipped(playlists=0, tracks=1, reason="invalid"),
+        error="warning",
+        queued_tracks=5,
+        failed_tracks=1,
+        skipped_tracks=2,
+        skip_reason="invalid",
+    )
+    spotify_service = Mock()
+    spotify_service.get_free_ingest_job.return_value = job_status
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    snapshot = service.free_ingest_job_status("job-9")
+
+    assert isinstance(snapshot, SpotifyFreeIngestJobSnapshot)
+    assert snapshot.job_id == "job-9"
+    assert snapshot.counts.completed == 2
+    assert snapshot.accepted.tracks == 2
+    assert snapshot.skipped.reason == "invalid"
+    spotify_service.get_free_ingest_job.assert_called_once_with("job-9")
