@@ -1597,6 +1597,20 @@ def build_spotify_top_tracks_context(
     for track in tracks:
         artists_text = ", ".join(track.artists)
         duration_text = _format_duration(track.duration_ms)
+        try:
+            detail_url = request.url_for("spotify_track_detail", track_id=track.identifier)
+        except Exception:  # pragma: no cover - fallback for tests
+            detail_url = (
+                f"/ui/spotify/tracks/{track.identifier}" if track.identifier else "/ui/spotify/tracks"
+            )
+        detail_form = TableCellForm(
+            action=detail_url,
+            method="get",
+            submit_label_key="spotify.track.view",
+            hx_target="#modal-root",
+            hx_swap="innerHTML",
+            hx_method="get",
+        )
         rows.append(
             TableRow(
                 cells=(
@@ -1606,6 +1620,10 @@ def build_spotify_top_tracks_context(
                     TableCell(text=track.album or ""),
                     TableCell(text=str(track.popularity)),
                     TableCell(text=duration_text),
+                    TableCell(
+                        forms=(detail_form,),
+                        test_id=f"spotify-top-track-detail-{track.identifier}",
+                    ),
                 ),
                 test_id=f"spotify-top-track-{track.identifier}",
             )
@@ -1622,6 +1640,7 @@ def build_spotify_top_tracks_context(
             "spotify.top_tracks.album",
             "spotify.top_tracks.popularity",
             "spotify.top_tracks.duration",
+            "spotify.top_tracks.actions",
         ),
         rows=rows,
         caption_key="spotify.top_tracks.caption",
