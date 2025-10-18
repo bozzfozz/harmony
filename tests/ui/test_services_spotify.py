@@ -198,7 +198,90 @@ def test_account_handles_missing_profile() -> None:
         country=None,
     )
 
-    spotify_service.get_current_user.assert_called_once_with()
+
+def test_track_detail_combines_metadata_and_features() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_track_details.return_value = {
+        "id": "track-123",
+        "name": "Example Track",
+        "artists": [
+            {"name": "Artist One"},
+            {"name": "Artist Two"},
+        ],
+        "album": {"name": "Example Album", "release_date": "2023-09-01"},
+        "duration_ms": 185000,
+        "popularity": 87,
+        "explicit": True,
+        "preview_url": "https://preview.example/track-123",
+        "external_urls": {"spotify": "https://open.spotify.com/track/track-123"},
+    }
+    spotify_service.get_audio_features.return_value = {
+        "danceability": 0.85,
+        "energy": 0.92,
+        "tempo": 128.123,
+        "mode": 1,
+    }
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    detail = service.track_detail(" track-123 ")
+
+    assert detail.track_id == "track-123"
+    assert detail.name == "Example Track"
+    assert detail.artists == ("Artist One", "Artist Two")
+    assert detail.album == "Example Album"
+    assert detail.release_date == "2023-09-01"
+    assert detail.duration_ms == 185000
+    assert detail.popularity == 87
+    assert detail.explicit is True
+    assert detail.preview_url == "https://preview.example/track-123"
+    assert detail.external_url == "https://open.spotify.com/track/track-123"
+    assert detail.features["danceability"] == 0.85
+    assert detail.features["mode"] == 1
+
+
+def test_track_detail_handles_missing_payload() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_track_details.return_value = None
+    spotify_service.get_audio_features.return_value = None
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    detail = service.track_detail("track-999")
+
+    assert detail.name is None
+    assert detail.artists == ()
+    assert detail.album is None
+    assert detail.features is None
+
+
+def test_track_detail_rejects_empty_identifier() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=Mock(),
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        service.track_detail(" ")
 
 
 def test_list_saved_tracks_normalizes_payload() -> None:

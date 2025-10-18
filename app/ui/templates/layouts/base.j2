@@ -30,6 +30,7 @@
     </main>
     {% block modals %}
       {{ modals.render_modals(layout.modals) }}
+      <div id="modal-root" data-role="modal-container"></div>
     {% endblock %}
     {% block scripts %}
       <script src="/ui/static/js/htmx.min.js" defer></script>

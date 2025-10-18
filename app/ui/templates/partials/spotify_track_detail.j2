@@ -1,0 +1,63 @@
+{% import "partials/_strings.j2" as strings %}
+
+<dialog id="{{ modal_id }}"
+        data-role="modal"
+        hx-on="htmx:afterSwap: this.showModal()"
+        hx-on:close="this.remove()"
+        hx-on:cancel="this.remove()">
+  <h2>{{ strings.spotify_track_detail_title(track_title) }}</h2>
+  {% if artist_summary %}
+    <p class="spotify-track-detail__subtitle">{{ artist_summary }}</p>
+  {% endif %}
+  <div class="modal-body">
+    {% if has_metadata %}
+      <section class="spotify-track-detail__section">
+        <h3>{{ strings.spotify_track_detail_metadata_heading() }}</h3>
+        <dl class="spotify-track-detail__list">
+          {% for entry in metadata_entries %}
+            <dt>{{ strings.spotify_track_detail_field_label(entry["key"]) }}</dt>
+            <dd{% if entry["test_id"] %} data-test="{{ entry["test_id"] }}"{% endif %}>
+              {% if entry["is_missing"] %}
+                {{ strings.spotify_track_detail_value_missing() }}
+              {% elif entry["key"] == "explicit" %}
+                {{ strings.spotify_track_detail_boolean(entry["value"]) }}
+              {% elif entry["url"] %}
+                <a href="{{ entry["url"] }}" target="_blank" rel="noopener">
+                  {{ strings.spotify_track_detail_link_label(entry["key"]) }}
+                </a>
+              {% else %}
+                {{ entry["value"] }}
+              {% endif %}
+            </dd>
+          {% endfor %}
+        </dl>
+      </section>
+    {% else %}
+      <p class="spotify-track-detail__empty">{{ strings.spotify_track_detail_metadata_empty() }}</p>
+    {% endif %}
+    <section class="spotify-track-detail__section">
+      <h3>{{ strings.spotify_track_detail_features_heading() }}</h3>
+      {% if has_features %}
+        <dl class="spotify-track-detail__list">
+          {% for entry in feature_entries %}
+            <dt>{{ strings.spotify_track_detail_feature_label(entry["key"]) }}</dt>
+            <dd{% if entry["test_id"] %} data-test="{{ entry["test_id"] }}"{% endif %}>
+              {% if entry["is_missing"] %}
+                {{ strings.spotify_track_detail_value_missing() }}
+              {% elif entry["key"] == "mode" %}
+                {{ strings.spotify_track_detail_mode_label(entry["value"]) }}
+              {% else %}
+                {{ entry["value"] }}
+              {% endif %}
+            </dd>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p class="spotify-track-detail__empty">{{ strings.spotify_track_detail_features_empty(features_available) }}</p>
+      {% endif %}
+    </section>
+    <form method="dialog" class="modal-actions">
+      <button type="submit">{{ strings.button_label("modal.close") }}</button>
+    </form>
+  </div>
+</dialog>

@@ -167,6 +167,22 @@ class SpotifyBackfillSnapshot:
     error: str | None
 
 
+@dataclass(slots=True)
+class SpotifyTrackDetail:
+    track_id: str
+    name: str | None
+    artists: tuple[str, ...]
+    album: str | None
+    release_date: str | None
+    duration_ms: int | None
+    popularity: int | None
+    explicit: bool
+    preview_url: str | None
+    external_url: str | None
+    detail: Mapping[str, Any] | None
+    features: Mapping[str, Any] | None
+
+
 class SpotifyUiService:
     def __init__(
         self,
@@ -804,6 +820,110 @@ class SpotifyUiService:
         )
         return tuple(rows)
 
+    def track_detail(self, track_id: str) -> SpotifyTrackDetail:
+        track_key = str(track_id or "").strip()
+        if not track_key:
+            raise ValueError("A Spotify track identifier is required.")
+
+        detail_payload = self._spotify.get_track_details(track_key)
+        detail: Mapping[str, Any] | None
+        if isinstance(detail_payload, Mapping):
+            detail = dict(detail_payload)
+        else:
+            detail = None
+
+        features_payload = self._spotify.get_audio_features(track_key)
+        features: Mapping[str, Any] | None
+        if isinstance(features_payload, Mapping):
+            features = dict(features_payload)
+        else:
+            features = None
+
+        name: str | None = None
+        artists: list[str] = []
+        album: str | None = None
+        release_date: str | None = None
+        duration_ms: int | None = None
+        popularity: int | None = None
+        explicit = False
+        preview_url: str | None = None
+        external_url: str | None = None
+
+        if detail:
+            name_raw = detail.get("name")
+            if isinstance(name_raw, str):
+                candidate = name_raw.strip()
+                name = candidate or None
+
+            artists_payload = detail.get("artists")
+            if isinstance(artists_payload, Sequence):
+                for artist_entry in artists_payload:
+                    if isinstance(artist_entry, Mapping):
+                        artist_name_raw = artist_entry.get("name")
+                    else:
+                        artist_name_raw = artist_entry
+                    if isinstance(artist_name_raw, str):
+                        artist_candidate = artist_name_raw.strip()
+                        if artist_candidate:
+                            artists.append(artist_candidate)
+
+            album_payload = detail.get("album")
+            if isinstance(album_payload, Mapping):
+                album_name_raw = album_payload.get("name")
+                if isinstance(album_name_raw, str):
+                    album_candidate = album_name_raw.strip()
+                    album = album_candidate or None
+                release_raw = album_payload.get("release_date")
+                if isinstance(release_raw, str):
+                    release_candidate = release_raw.strip()
+                    release_date = release_candidate or None
+
+            duration_raw = detail.get("duration_ms")
+            try:
+                duration_value = int(duration_raw) if duration_raw is not None else None
+            except (TypeError, ValueError):
+                duration_value = None
+            duration_ms = duration_value
+
+            popularity_raw = detail.get("popularity")
+            try:
+                popularity_value = int(popularity_raw) if popularity_raw is not None else None
+            except (TypeError, ValueError):
+                popularity_value = None
+            popularity = popularity_value
+
+            explicit_value = detail.get("explicit")
+            explicit = (
+                bool(explicit_value) if isinstance(explicit_value, bool) else bool(explicit_value)
+            )
+
+            preview_raw = detail.get("preview_url")
+            if isinstance(preview_raw, str):
+                preview_candidate = preview_raw.strip()
+                preview_url = preview_candidate or None
+
+            external_payload = detail.get("external_urls")
+            if isinstance(external_payload, Mapping):
+                external_raw = external_payload.get("spotify")
+                if isinstance(external_raw, str):
+                    external_candidate = external_raw.strip()
+                    external_url = external_candidate or None
+
+        return SpotifyTrackDetail(
+            track_id=track_key,
+            name=name,
+            artists=tuple(artists),
+            album=album,
+            release_date=release_date,
+            duration_ms=duration_ms,
+            popularity=popularity,
+            explicit=explicit,
+            preview_url=preview_url,
+            external_url=external_url,
+            detail=detail,
+            features=features,
+        )
+
     def top_artists(self, *, limit: int = 20) -> Sequence[SpotifyTopArtistRow]:
         page_limit = max(1, min(int(limit), 50))
         items = self._spotify.get_top_artists(limit=page_limit)
@@ -956,6 +1076,7 @@ def get_spotify_ui_service(
 
 __all__ = [
     "SpotifyAccountSummary",
+    "SpotifyTrackDetail",
     "SpotifyRecommendationRow",
     "SpotifyRecommendationSeed",
     "SpotifyBackfillSnapshot",

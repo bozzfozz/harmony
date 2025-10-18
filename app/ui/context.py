@@ -29,6 +29,7 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
+    SpotifyTrackDetail,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
     SpotifyStatus,
@@ -79,6 +80,7 @@ class DefinitionItem:
     label_key: str
     value: str
     test_id: str | None = None
+    is_missing: bool = False
 
 
 @dataclass(slots=True)
@@ -146,6 +148,7 @@ class TableCell:
     badge: StatusBadge | None = None
     test_id: str | None = None
     form: "TableCellForm" | None = None
+    forms: Sequence["TableCellForm"] = field(default_factory=tuple)
 
 
 @dataclass(slots=True)
@@ -1605,6 +1608,20 @@ def build_spotify_playlist_items_context(
         artists_text = ", ".join(row.artists)
         added_text = row.added_at.isoformat() if row.added_at else ""
         track_text = row.name if not row.is_local else f"{row.name} (local)"
+        try:
+            detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
+        except Exception:  # pragma: no cover - fallback for tests
+            detail_url = (
+                f"/ui/spotify/tracks/{row.identifier}" if row.identifier else "/ui/spotify/tracks"
+            )
+        detail_form = TableCellForm(
+            action=detail_url,
+            method="get",
+            submit_label_key="spotify.track.view",
+            hx_target="#modal-root",
+            hx_swap="innerHTML",
+            hx_method="get",
+        )
         table_rows.append(
             TableRow(
                 cells=(
@@ -1613,6 +1630,10 @@ def build_spotify_playlist_items_context(
                     TableCell(text=row.album or ""),
                     TableCell(text=added_text),
                     TableCell(text=row.added_by or ""),
+                    TableCell(
+                        forms=(detail_form,),
+                        test_id=f"spotify-playlist-item-detail-{row.identifier}",
+                    ),
                 ),
                 test_id=f"spotify-playlist-item-{row.identifier}",
             )
@@ -1628,6 +1649,7 @@ def build_spotify_playlist_items_context(
             "spotify.playlist_items.album",
             "spotify.playlist_items.added",
             "spotify.playlist_items.added_by",
+            "spotify.playlist_items.actions",
         ),
         rows=tuple(table_rows),
         caption_key="spotify.playlist_items.caption",
@@ -1712,6 +1734,20 @@ def build_spotify_saved_tracks_context(
     for row in rows:
         artist_text = ", ".join(row.artists)
         added_text = row.added_at.isoformat() if row.added_at else ""
+        try:
+            detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
+        except Exception:  # pragma: no cover - fallback for tests
+            detail_url = (
+                f"/ui/spotify/tracks/{row.identifier}" if row.identifier else "/ui/spotify/tracks"
+            )
+        view_form = TableCellForm(
+            action=detail_url,
+            method="get",
+            submit_label_key="spotify.track.view",
+            hx_target="#modal-root",
+            hx_swap="innerHTML",
+            hx_method="get",
+        )
         remove_form = TableCellForm(
             action=remove_url,
             method="post",
@@ -1733,7 +1769,10 @@ def build_spotify_saved_tracks_context(
                     TableCell(text=artist_text),
                     TableCell(text=row.album or ""),
                     TableCell(text=added_text),
-                    TableCell(form=remove_form, test_id=f"spotify-remove-{row.identifier}"),
+                    TableCell(
+                        forms=(view_form, remove_form),
+                        test_id=f"spotify-saved-track-actions-{row.identifier}",
+                    ),
                 ),
                 test_id=f"spotify-saved-track-{row.identifier}",
             )
@@ -1794,6 +1833,197 @@ def build_spotify_saved_tracks_context(
         "csrf_token": csrf_token,
         "page_limit": limit,
         "page_offset": offset,
+    }
+
+
+def build_spotify_track_detail_context(
+    request: Request,
+    *,
+    track: SpotifyTrackDetail,
+) -> Mapping[str, Any]:
+    def _format_duration(duration_ms: int | None) -> str | None:
+        if duration_ms is None or duration_ms < 0:
+            return None
+        total_seconds = duration_ms // 1000
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes}:{seconds:02d}"
+
+    def _format_popularity(value: int | None) -> str | None:
+        if value is None or value < 0:
+            return None
+        return f"{value:,}"
+
+    def _format_percentage(value: object) -> str | None:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        if numeric < 0:
+            return None
+        return f"{numeric * 100:.0f}%"
+
+    def _format_tempo(value: object) -> str | None:
+        try:
+            tempo = float(value)
+        except (TypeError, ValueError):
+            return None
+        if tempo <= 0:
+            return None
+        return f"{tempo:.1f} BPM"
+
+    def _format_loudness(value: object) -> str | None:
+        try:
+            loudness = float(value)
+        except (TypeError, ValueError):
+            return None
+        return f"{loudness:.1f} dB"
+
+    def _format_time_signature(value: object) -> str | None:
+        try:
+            signature = int(value)
+        except (TypeError, ValueError):
+            return None
+        if signature <= 0:
+            return None
+        return f"{signature}/4"
+
+    key_lookup = {
+        0: "C",
+        1: "C♯ / D♭",
+        2: "D",
+        3: "D♯ / E♭",
+        4: "E",
+        5: "F",
+        6: "F♯ / G♭",
+        7: "G",
+        8: "G♯ / A♭",
+        9: "A",
+        10: "A♯ / B♭",
+        11: "B",
+    }
+
+    metadata_entries: list[dict[str, Any]] = []
+
+    def _append_metadata(
+        key: str,
+        value: Any,
+        *,
+        test_suffix: str,
+        url: str | None = None,
+    ) -> None:
+        is_missing = False
+        if value is None or (isinstance(value, str) and not value.strip()):
+            is_missing = True
+        metadata_entries.append(
+            {
+                "key": key,
+                "value": value,
+                "is_missing": is_missing,
+                "test_id": f"spotify-track-detail-{test_suffix}",
+                "url": url,
+            }
+        )
+
+    artist_summary = ", ".join(track.artists)
+
+    _append_metadata("name", track.name, test_suffix="name")
+    _append_metadata("artists", artist_summary, test_suffix="artists")
+    _append_metadata("album", track.album, test_suffix="album")
+    _append_metadata("release_date", track.release_date, test_suffix="release-date")
+    _append_metadata(
+        "duration",
+        _format_duration(track.duration_ms),
+        test_suffix="duration",
+    )
+    _append_metadata(
+        "popularity",
+        _format_popularity(track.popularity),
+        test_suffix="popularity",
+    )
+    metadata_entries.append(
+        {
+            "key": "explicit",
+            "value": bool(track.explicit),
+            "is_missing": False,
+            "test_id": "spotify-track-detail-explicit",
+            "url": None,
+        }
+    )
+    _append_metadata(
+        "preview_url",
+        track.preview_url,
+        test_suffix="preview",
+        url=track.preview_url,
+    )
+    _append_metadata(
+        "external_url",
+        track.external_url,
+        test_suffix="external",
+        url=track.external_url,
+    )
+
+    feature_entries: list[dict[str, Any]] = []
+    features_source = track.features if isinstance(track.features, Mapping) else {}
+
+    def _format_key(value: object) -> str | None:
+        try:
+            key_index = int(value)
+        except (TypeError, ValueError):
+            return None
+        return key_lookup.get(key_index)
+
+    def _format_mode(value: object) -> str | None:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return None
+        if numeric == 1:
+            return "major"
+        if numeric == 0:
+            return "minor"
+        return None
+
+    feature_specs = (
+        ("danceability", _format_percentage),
+        ("energy", _format_percentage),
+        ("acousticness", _format_percentage),
+        ("instrumentalness", _format_percentage),
+        ("liveness", _format_percentage),
+        ("speechiness", _format_percentage),
+        ("valence", _format_percentage),
+        ("tempo", _format_tempo),
+        ("loudness", _format_loudness),
+        ("key", _format_key),
+        ("mode", _format_mode),
+        ("time_signature", _format_time_signature),
+    )
+
+    for key, formatter in feature_specs:
+        raw_value = features_source.get(key) if isinstance(features_source, Mapping) else None
+        formatted = formatter(raw_value) if formatter else raw_value
+        is_missing = formatted is None
+        feature_entries.append(
+            {
+                "key": key,
+                "value": formatted,
+                "is_missing": is_missing,
+                "test_id": f"spotify-track-feature-{key}",
+            }
+        )
+
+    modal_title = track.name or track.track_id
+
+    return {
+        "request": request,
+        "modal_id": "spotify-track-detail-modal",
+        "track_identifier": track.track_id,
+        "track_title": modal_title,
+        "artist_summary": artist_summary,
+        "metadata_entries": tuple(metadata_entries),
+        "has_metadata": any(not entry["is_missing"] for entry in metadata_entries),
+        "feature_entries": tuple(feature_entries),
+        "features_available": track.features is not None,
+        "has_features": any(not entry["is_missing"] for entry in feature_entries),
     }
 
 
@@ -2268,6 +2498,7 @@ __all__ = [
     "build_spotify_page_context",
     "build_spotify_playlists_context",
     "build_spotify_playlist_items_context",
+    "build_spotify_track_detail_context",
     "build_spotify_recommendations_context",
     "build_spotify_saved_tracks_context",
     "build_spotify_top_artists_context",
