@@ -141,6 +141,7 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
 
     assert 'meta name="csrf-token" content="csrf-token-value"' in html
     assert "nav-home" in html
+    assert "nav-spotify" in html
     assert "nav-operator" in html
     assert "nav-admin" in html
     assert 'id="features-table"' in html
@@ -153,6 +154,31 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert 'hx-get="/ui/activity/table"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert 'hx-target="#hx-activity-table"' in html
+
+
+def test_dashboard_template_hides_spotify_navigation_for_read_only_sessions() -> None:
+    request = _make_request("/ui")
+    features = UiFeatures(spotify=True, soulseek=False, dlq=True, imports=False)
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-read-only",
+        role="read_only",
+        features=features,
+        fingerprint="fp",
+        issued_at=now,
+        last_seen_at=now,
+    )
+    context = build_dashboard_page_context(
+        request,
+        session=session,
+        csrf_token="csrf-token-value",
+    )
+    template = templates.get_template("pages/dashboard.j2")
+    html = template.render(**context)
+
+    assert 'data-test="nav-home"' in html
+    assert 'data-test="nav-spotify"' not in html
+    assert 'data-test="nav-operator"' not in html
 
 
 def test_spotify_page_template_renders_sections() -> None:
