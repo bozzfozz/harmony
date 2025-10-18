@@ -9,7 +9,7 @@
 ```
 /ui/login                – API-Key Login-Formular für UI-Session
 /ui                      – Dashboard mit Status, Aktivität, Schnellaktionen
-/ui/spotify               – Konto-Status, OAuth-Flow, Playlist-Tools
+/ui/spotify               – Konto-Status, OAuth-Flow, Playlist-Tools & FREE-Ingest
 /ui/search                – Aggregierte Suche + Auswahl und Download-Start
 /ui/downloads             – Download-Liste, Priorität, Retry, Export
 /ui/jobs                  – Orchestrator, DLQ, Metadata-, Sync-Trigger
@@ -17,7 +17,6 @@
 /ui/activity              – Aktivitätsfeed & Export
 /ui/settings              – Konfigurationsschlüssel, Historie, Präferenzen
 /ui/system                – Health, Readiness, Metriken, Secrets-Checks
-/ui/imports               – Spotify-FREE-Importe & Upload-Rückmeldungen
 ```
 
 ## Geplante UI-Routen
@@ -26,7 +25,7 @@
 | GET | /ui/login | API-Key Eingabe & Session-Erstellung | — (öffentlich) | — |
 | POST | /ui/login | Session erstellen, Weiterleitung Dashboard | — (öffentlich) | — |
 | GET | /ui | Einstiegs-Dashboard mit Status-KPIs | read_only | — |
-| GET | /ui/spotify | Spotify-Verbindung, OAuth-Flow, Backfill-Panels | operator | UI_FEATURE_SPOTIFY |
+| GET | /ui/spotify | Spotify-Verbindung, OAuth-Flow, Backfill-Panels & FREE-Ingest | operator | `UI_FEATURE_SPOTIFY` (Uploads zusätzlich `UI_FEATURE_IMPORTS`) |
 | GET | /ui/search | Suchformular & Ergebnis-Liste | operator | UI_FEATURE_SOULSEEK |
 | GET | /ui/downloads | Download-Queue & Verwaltung | operator | UI_FEATURE_DLQ |
 | GET | /ui/jobs | Überblick Jobs (Metadata, Sync, DLQ) | operator | UI_FEATURE_DLQ |
@@ -34,7 +33,6 @@
 | GET | /ui/activity | Aktivitätsverlauf & Exportlinks | read_only | — |
 | GET | /ui/settings | Systemeinstellungen & Präferenzen | admin | — |
 | GET | /ui/system | System-/Health-Diagnostik, OAuth-Status | operator | — |
-| GET | /ui/imports | Spotify FREE Import-Uploads | operator | UI_FEATURE_IMPORTS |
 
 ## Template-Architektur
 ```
@@ -84,6 +82,7 @@ templates/
 | Orchestrator manuell starten | POST `/api/v1/sync/sync` | Button `hx-post`, `hx-confirm` | Toast via `hx-swap-oob`, aktualisiert Jobs-Karten | 503 ⇒ Modal mit fehlenden Credentials【F:app/routers/sync_router.py†L26-L106】 |
 
 ### Spotify (/ui/spotify)
+Die Spotify-Seite bündelt nun Status, OAuth-Flows, Playlist-Verwaltung sowie die FREE-Ingest-Uploads.
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
 | Status abrufen | GET `/api/v1/spotify/status` | `load, every 60s` | `#hx-spotify-status`, `innerHTML` | Badge rot bei `status="unauthenticated"`【F:app/api/spotify.py†L113-L162】 |
@@ -91,6 +90,7 @@ templates/
 | OAuth-Manual-Complete | POST `/api/v1/oauth/manual` | Formular-Submit | `#hx-oauth-manual`, `hx-swap="outerHTML"` | 400/429 ⇒ Formular-Errors rendern |【F:app/api/oauth_public.py†L42-L62】
 | Playlist-Liste | GET `/api/v1/spotify/playlists` | Tab-Selektion | `#hx-spotify-playlists`, `innerHTML` (ETag berücksichtigt) | 304 ⇒ Kein Swap |【F:app/api/spotify.py†L173-L196】
 | Backfill-Trigger | POST `/api/v1/spotify/backfill/...` (auszudifferenzieren) | Buttons mit `hx-post`, CSRF | `hx-swap-oob` Badge-Update | Fehler-Toast bei 4xx/5xx |
+| FREE-Import Upload | POST `/api/v1/imports/free` | Drag&Drop-Form (multipart/text) (nur `operator`+) | `#hx-import-result`, `innerHTML` | 413 ⇒ Fehlerfeld; 200 zeigt akzeptierte/rejecte Links |【F:app/routers/imports_router.py†L34-L140】 |
 
 ### Suche & Queue (/ui/search)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
@@ -149,10 +149,7 @@ Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions
 | Metrics-Link | GET `/api/v1/metrics` | Standard-Link (öffnet neuen Tab) | — | 5xx ⇒ Hinweis |
 | Spotify/Soulseek Health | GET `/api/v1/health/spotify`, `/api/v1/health/soulseek` | `load`, `hx-trigger="every 60s"` | Badges | Status ≠ ok ⇒ Rot |【F:app/routers/health_router.py†L15-L33】
 
-### Imports (/ui/imports)
-| Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
-|-------------|------------|---------|---------------|------------|
-| FREE-Import Upload | POST `/api/v1/imports/free` | Drag&Drop-Form (multipart/text) (nur `operator`+) | `#hx-import-result`, `innerHTML` | 413 ⇒ Fehlerfeld; 200 zeigt akzeptierte/rejecte Links |【F:app/routers/imports_router.py†L34-L140】
+Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SPOTIFY` aktiv ist; Upload-Aktionen selbst werden zusätzlich von `UI_FEATURE_IMPORTS` gesteuert.
 
 ### Fehler- und Toast-Behandlung
 - Standard: HTTP 4xx/5xx Antworten werden via HTMX `hx-on="htmx:responseError"` abgefangen → `partials/alerts.html` rendert Fehlermeldungen.
