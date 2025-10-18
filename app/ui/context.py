@@ -148,6 +148,7 @@ class StatusBadge:
 class TableCell:
     text_key: str | None = None
     text: str | None = None
+    html: str | None = None
     badge: StatusBadge | None = None
     test_id: str | None = None
     form: "TableCellForm" | None = None
@@ -2219,6 +2220,26 @@ def build_spotify_recommendations_context(
             detail_url = (
                 f"/ui/spotify/tracks/{row.identifier}" if row.identifier else "/ui/spotify/tracks"
             )
+        if row.preview_url:
+            preview_html = (
+                "<audio controls preload=\"none\" "
+                f"data-test=\"spotify-recommendation-preview-{row.identifier}\">"
+                f"<source src=\"{row.preview_url}\" type=\"audio/mpeg\" />"
+                "Your browser does not support audio playback."
+                f" <a href=\"{row.preview_url}\" target=\"_blank\" rel=\"noopener\">"
+                "Open preview"
+                "</a>."
+                "</audio>"
+            )
+            preview_cell = TableCell(
+                html=preview_html,
+                test_id=f"spotify-recommendation-preview-cell-{row.identifier}",
+            )
+        else:
+            preview_cell = TableCell(
+                text="—",
+                test_id=f"spotify-recommendation-preview-cell-{row.identifier}",
+            )
         view_form = TableCellForm(
             action=detail_url,
             method="get",
@@ -2233,6 +2254,7 @@ def build_spotify_recommendations_context(
                     TableCell(text=row.name, test_id=f"spotify-reco-track-{row.identifier}"),
                     TableCell(text=", ".join(row.artists)),
                     TableCell(text=row.album or "—"),
+                    preview_cell,
                     TableCell(
                         forms=(view_form,),
                         test_id=f"spotify-recommendation-actions-{row.identifier}",
@@ -2248,6 +2270,7 @@ def build_spotify_recommendations_context(
             "spotify.recommendations.track",
             "spotify.recommendations.artists",
             "spotify.recommendations.album",
+            "spotify.recommendations.preview",
             "spotify.recommendations.actions",
         ),
         rows=tuple(table_rows),

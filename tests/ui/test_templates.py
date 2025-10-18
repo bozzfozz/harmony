@@ -376,6 +376,13 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
             album="Album Name",
             preview_url=None,
         ),
+        SpotifyRecommendationRow(
+            identifier="track-2",
+            name="Track Two",
+            artists=("Solo Artist",),
+            album=None,
+            preview_url="https://cdn.example/track-2.mp3",
+        ),
     )
     seeds = (
         SpotifyRecommendationSeed(
@@ -421,8 +428,10 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert "Track One" in html
     assert "Artist One, Artist Two" in html
     assert "Album Name" in html
+    assert 'data-test="spotify-recommendation-preview-track-2"' in html
+    assert '<audio controls' in html
     assert "View details" in html
-    assert 'data-count="1"' in html
+    assert 'data-count="2"' in html
 
 
 def test_spotify_account_fragment_template_renders_summary() -> None:
