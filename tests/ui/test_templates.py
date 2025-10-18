@@ -26,6 +26,7 @@ from app.ui.context import (
     build_login_page_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
+    build_soulseek_status_context,
     build_search_page_context,
     build_spotify_artists_context,
     build_spotify_account_context,
@@ -179,6 +180,44 @@ def test_dashboard_template_hides_spotify_navigation_for_read_only_sessions() ->
     assert 'data-test="nav-home"' in html
     assert 'data-test="nav-spotify"' not in html
     assert 'data-test="nav-operator"' not in html
+
+
+def test_soulseek_status_template_includes_navigation_oob_snippet() -> None:
+    request = _make_request("/ui/soulseek/status")
+    layout = LayoutContext(
+        page_id="soulseek",
+        role="admin",
+        navigation=NavigationContext(
+            primary=(
+                NavItem(
+                    label_key="nav.soulseek",
+                    href="/ui/soulseek",
+                    active=True,
+                    test_id="nav-soulseek",
+                    badge=StatusBadge(
+                        label_key="soulseek.integration.ok",
+                        variant="success",
+                        test_id="nav-soulseek-status",
+                    ),
+                ),
+            ),
+        ),
+    )
+    context = build_soulseek_status_context(
+        request,
+        status=StatusResponse(status="connected"),
+        health=IntegrationHealth(overall="ok", providers=()),
+        layout=layout,
+    )
+    template = templates.get_template("partials/soulseek_status.j2")
+    html = template.render(**context)
+
+    assert 'hx-swap-oob="outerHTML"' in html
+    assert 'id="primary-navigation"' in html
+    assert html.count('data-test="nav-soulseek-status"') == 1
+    snippet_index = html.index('data-test="nav-soulseek-status"')
+    window = html[max(0, snippet_index - 120) : snippet_index + 120]
+    assert "status-badge--success" in window
 
 
 def test_spotify_page_template_renders_sections() -> None:
@@ -680,7 +719,8 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     template = templates.get_template("layouts/base.j2")
     html = template.render(request=request, layout=layout)
 
-    assert '<nav aria-label="Primary">' in html
+    assert '<nav aria-label="Primary"' in html
+    assert 'id="primary-navigation"' in html
     assert 'data-test="nav-home"' in html
     assert "alert alert--warning" in html
     assert "Check status" in html
