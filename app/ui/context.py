@@ -483,6 +483,21 @@ def _build_primary_navigation(
     return NavigationContext(primary=tuple(items))
 
 
+def build_primary_navigation(
+    session: UiSession,
+    *,
+    active: str,
+    soulseek_badge: StatusBadge | None = None,
+) -> NavigationContext:
+    """Public wrapper to build the primary navigation context."""
+
+    return _build_primary_navigation(
+        session,
+        active=active,
+        soulseek_badge=soulseek_badge,
+    )
+
+
 def build_dashboard_page_context(
     request: Request,
     *,
@@ -913,6 +928,7 @@ def build_soulseek_status_context(
     *,
     status: StatusResponse,
     health: IntegrationHealth,
+    layout: LayoutContext | None = None,
 ) -> Mapping[str, Any]:
     connection_badge = _status_badge(
         status=status.status,
@@ -975,6 +991,7 @@ def build_soulseek_status_context(
         "connection_badge": connection_badge,
         "integration_badge": integration_badge,
         "provider_table": provider_table,
+        "layout": layout,
     }
 
 
@@ -2780,6 +2797,7 @@ __all__ = [
     "build_activity_fragment_context",
     "build_dashboard_page_context",
     "build_login_page_context",
+    "build_primary_navigation",
     "build_soulseek_page_context",
     "build_soulseek_status_context",
     "build_soulseek_config_context",

@@ -1,9 +1,11 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/status_badges.j2" as status_badges %}
 
-{% macro render_primary_nav(items) -%}
+{% macro _render_primary_nav(items, swap_oob) -%}
   {% if items %}
-    <nav aria-label="Primary">
+    <nav aria-label="Primary"
+         id="primary-navigation"
+         {% if swap_oob %}hx-swap-oob="{{ swap_oob }}"{% endif %}>
       {% for item in items %}
         <a href="{{ item.href }}"
           {% if item.test_id %}data-test="{{ item.test_id }}"{% endif %}
@@ -18,4 +20,14 @@
       {% endfor %}
     </nav>
   {% endif %}
+{%- endmacro %}
+
+
+{% macro render_primary_nav(items) -%}
+  {{ _render_primary_nav(items, None) }}
+{%- endmacro %}
+
+
+{% macro render_primary_nav_oob(items) -%}
+  {{ _render_primary_nav(items, "outerHTML") }}
 {%- endmacro %}

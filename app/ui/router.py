@@ -25,6 +25,7 @@ from app.services.download_service import DownloadService
 from app.ui.context import (
     AlertMessage,
     FormDefinition,
+    LayoutContext,
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_downloads_fragment_context,
@@ -32,6 +33,7 @@ from app.ui.context import (
     build_login_page_context,
     build_soulseek_config_context,
     build_soulseek_downloads_context,
+    build_primary_navigation,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
@@ -906,10 +908,26 @@ async def soulseek_status_fragment(
             retry_label_key="soulseek.retry",
         )
 
+    soulseek_badge = build_soulseek_navigation_badge(
+        connection=connection,
+        integration=health,
+    )
+    navigation = build_primary_navigation(
+        session,
+        active="soulseek",
+        soulseek_badge=soulseek_badge,
+    )
+    layout = LayoutContext(
+        page_id="soulseek",
+        role=session.role,
+        navigation=navigation,
+    )
+
     context = build_soulseek_status_context(
         request,
         status=connection,
         health=health,
+        layout=layout,
     )
     log_event(
         logger,

@@ -1,6 +1,7 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/status_badges.j2" as badges %}
 {% import "partials/tables.j2" as tables %}
+{% import "partials/nav.j2" as navigation %}
 
 {% set connection = connection_badge %}
 {% set integration = integration_badge %}
@@ -26,4 +27,8 @@
 {% if providers_table %}
   <h4 class="status-subheading">{{ strings.soulseek_providers_heading() }}</h4>
   {{ tables.render_table(providers_table) }}
+{% endif %}
+
+{% if layout and layout.navigation.primary %}
+  {{ navigation.render_primary_nav_oob(layout.navigation.primary) }}
 {% endif %}

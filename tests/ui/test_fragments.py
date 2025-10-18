@@ -718,6 +718,12 @@ def test_soulseek_status_fragment_renders_badges(monkeypatch) -> None:
             assert "Integration health" in response.text
             assert 'data-test="soulseek-provider-soulseek"' in response.text
             assert "latency" in response.text
+            assert 'id="primary-navigation"' in response.text
+            assert 'data-test="nav-soulseek-status"' in response.text
+            assert 'hx-swap-oob="outerHTML"' in response.text
+            snippet_index = response.text.index('data-test="nav-soulseek-status"')
+            snippet = response.text[max(0, snippet_index - 200) : snippet_index + 200]
+            assert "status-badge--success" in snippet
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -738,6 +744,32 @@ def test_soulseek_status_fragment_handles_error(monkeypatch) -> None:
             assert 'data-test="fragment-retry"' in response.text
             assert 'hx-get="http://testserver/ui/soulseek/status"' in response.text
             assert 'hx-target="#hx-soulseek-status"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_status_fragment_updates_navigation_badge_variant(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.connection = StatusResponse(status="failed")
+    stub.health = IntegrationHealth(
+        overall="down",
+        providers=(
+            ProviderHealth(provider="soulseek", status="down", details={}),
+        ),
+    )
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/status",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert 'data-test="nav-soulseek-status"' in response.text
+            snippet_index = response.text.index('data-test="nav-soulseek-status"')
+            snippet = response.text[max(0, snippet_index - 200) : snippet_index + 200]
+            assert "status-badge--danger" in snippet
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
