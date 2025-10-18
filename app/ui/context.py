@@ -439,7 +439,7 @@ def _build_primary_navigation(
         )
     ]
 
-    if session.features.spotify:
+    if session.features.spotify and session.allows("operator"):
         items.append(
             NavItem(
                 label_key="nav.spotify",
