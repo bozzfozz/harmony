@@ -20,6 +20,7 @@ from app.services.free_ingest_service import (
     JobCounts,
     JobStatus,
 )
+from app.ui.context import build_spotify_top_tracks_context
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
@@ -208,6 +209,35 @@ def test_account_handles_missing_profile() -> None:
         followers=0,
         country=None,
     )
+
+
+def test_build_top_tracks_context_adds_detail_action() -> None:
+    request = _make_request()
+    track = SpotifyTopTrackRow(
+        identifier="track-123",
+        name="Example Track",
+        artists=("Artist One", "Artist Two"),
+        album="Example Album",
+        popularity=87,
+        duration_ms=185000,
+        rank=1,
+    )
+
+    context = build_spotify_top_tracks_context(request, tracks=(track,))
+
+    fragment = context["fragment"]
+    table = fragment.table
+    assert table.column_keys[-1] == "spotify.top_tracks.actions"
+    assert table.rows, "expected at least one top track row"
+    row = table.rows[0]
+    action_cell = row.cells[-1]
+    assert action_cell.forms and len(action_cell.forms) == 1
+    form = action_cell.forms[0]
+    assert form.action.endswith("/tracks/track-123")
+    assert form.method == "get"
+    assert form.hx_method == "get"
+    assert form.hx_target == "#modal-root"
+    assert form.submit_label_key == "spotify.track.view"
 
 
 def test_track_detail_combines_metadata_and_features() -> None:
