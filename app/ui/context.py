@@ -51,6 +51,7 @@ class NavItem:
     href: str
     active: bool = False
     test_id: str | None = None
+    badge: StatusBadge | None = None
 
 
 @dataclass(slots=True)
@@ -272,6 +273,52 @@ def _status_badge(
     return StatusBadge(label_key=unknown_label, variant="muted", test_id=test_id)
 
 
+def build_soulseek_navigation_badge(
+    *,
+    connection: StatusResponse | None,
+    integration: IntegrationHealth | None,
+    test_id: str = "nav-soulseek-status",
+) -> StatusBadge:
+    connection_status = _normalise_status(connection.status if connection else "")
+    integration_status = _normalise_status(integration.overall if integration else "")
+
+    if (
+        connection_status in {"disconnected", "down", "failed", "error"}
+        or integration_status == "down"
+    ):
+        return StatusBadge(
+            label_key="soulseek.integration.down",
+            variant="danger",
+            test_id=test_id,
+        )
+
+    if connection_status == "degraded" or integration_status == "degraded":
+        return StatusBadge(
+            label_key="soulseek.integration.degraded",
+            variant="danger",
+            test_id=test_id,
+        )
+
+    if connection_status in {"connected", "ok", "online"} and integration_status in {"", "ok"}:
+        label_key = (
+            "soulseek.integration.ok" if integration_status == "ok" else "soulseek.status.connected"
+        )
+        return StatusBadge(label_key=label_key, variant="success", test_id=test_id)
+
+    if integration_status == "ok":
+        return StatusBadge(
+            label_key="soulseek.integration.ok",
+            variant="success",
+            test_id=test_id,
+        )
+
+    return StatusBadge(
+        label_key="soulseek.integration.unknown",
+        variant="muted",
+        test_id=test_id,
+    )
+
+
 def _format_health_details(details: Mapping[str, Any]) -> str:
     if not details:
         return ""
@@ -377,7 +424,12 @@ def build_login_page_context(request: Request, *, error: str | None = None) -> M
     }
 
 
-def _build_primary_navigation(session: UiSession, *, active: str) -> NavigationContext:
+def _build_primary_navigation(
+    session: UiSession,
+    *,
+    active: str,
+    soulseek_badge: StatusBadge | None = None,
+) -> NavigationContext:
     items: list[NavItem] = [
         NavItem(
             label_key="nav.home",
@@ -404,6 +456,7 @@ def _build_primary_navigation(session: UiSession, *, active: str) -> NavigationC
                 href="/ui/soulseek",
                 active=active in {"soulseek", "search"},
                 test_id="nav-soulseek",
+                badge=soulseek_badge,
             )
         )
 
@@ -791,11 +844,16 @@ def build_soulseek_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    soulseek_badge: StatusBadge | None = None,
 ) -> Mapping[str, Any]:
     layout = LayoutContext(
         page_id="soulseek",
         role=session.role,
-        navigation=_build_primary_navigation(session, active="soulseek"),
+        navigation=_build_primary_navigation(
+            session,
+            active="soulseek",
+            soulseek_badge=soulseek_badge,
+        ),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
     )
 
@@ -2705,6 +2763,7 @@ __all__ = [
     "build_soulseek_config_context",
     "build_soulseek_uploads_context",
     "build_soulseek_downloads_context",
+    "build_soulseek_navigation_badge",
     "build_search_page_context",
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",
