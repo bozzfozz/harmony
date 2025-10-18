@@ -1093,6 +1093,20 @@ def build_soulseek_config_context(
     else:
         preferred_formats = "Any"
 
+    if has_api_key:
+        api_key_cell = TableCell(
+            text_key="soulseek.config.api_key_set",
+            test_id="soulseek-config-api-key",
+        )
+    else:
+        api_key_cell = TableCell(
+            badge=StatusBadge(
+                label_key="soulseek.config.api_key_missing",
+                variant="danger",
+                test_id="soulseek-config-api-key",
+            )
+        )
+
     rows = [
         TableRow(
             cells=(
@@ -1104,13 +1118,7 @@ def build_soulseek_config_context(
         TableRow(
             cells=(
                 TableCell(text_key="soulseek.config.api_key"),
-                TableCell(
-                    badge=_boolean_badge(
-                        has_api_key,
-                        test_id="soulseek-config-api-key",
-                        highlight_missing=True,
-                    )
-                ),
+                api_key_cell,
             ),
         ),
         TableRow(
