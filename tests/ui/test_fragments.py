@@ -355,6 +355,12 @@ class _StubSpotifyService:
         self.free_import_exception: Exception | None = None
         self.free_ingest_status_calls: list[str | None] = []
         self.free_ingest_status_result: SpotifyFreeIngestJobSnapshot | None = None
+        self.free_upload_calls: list[tuple[str, bytes]] = []
+        self.free_upload_result: SpotifyFreeIngestResult | None = None
+        self.free_upload_exception: Exception | None = None
+        self.free_upload_tracks: tuple[str, ...] = ("Artist - Track",)
+        self._free_ingest_result_store: SpotifyFreeIngestResult | None = None
+        self._free_ingest_error_store: str | None = None
 
     def status(self) -> SpotifyStatus:
         return self._status
@@ -516,6 +522,8 @@ class _StubSpotifyService:
         self.free_ingest_submit_calls.append((tuple(playlist_links or ()), tuple(tracks or ())))
         if self.free_ingest_submit_exception:
             raise self.free_ingest_submit_exception
+        self._free_ingest_result_store = self.free_ingest_submit_result
+        self._free_ingest_error_store = self.free_ingest_submit_result.error
         return self.free_ingest_submit_result
 
     async def free_import(
@@ -528,7 +536,32 @@ class _StubSpotifyService:
         self.free_import_calls.append((tuple(playlist_links or ()), tuple(tracks or ())))
         if self.free_import_exception:
             raise self.free_import_exception
+        self._free_ingest_result_store = self.free_import_result
+        self._free_ingest_error_store = self.free_import_result.error
         return self.free_import_result
+
+    async def upload_free_ingest_file(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+    ) -> SpotifyFreeIngestResult:
+        self.free_upload_calls.append((filename, content))
+        if self.free_upload_exception:
+            self._free_ingest_error_store = str(self.free_upload_exception)
+            raise self.free_upload_exception
+        if self.free_upload_result is not None:
+            self._free_ingest_result_store = self.free_upload_result
+            self._free_ingest_error_store = self.free_upload_result.error
+            return self.free_upload_result
+        return await self.free_import(tracks=self.free_upload_tracks)
+
+    def consume_free_ingest_feedback(self) -> tuple[SpotifyFreeIngestResult | None, str | None]:
+        result = self._free_ingest_result_store
+        error = self._free_ingest_error_store
+        self._free_ingest_result_store = None
+        self._free_ingest_error_store = None
+        return result, error
 
     def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
         self.free_ingest_status_calls.append(job_id)
@@ -2472,5 +2505,67 @@ def test_spotify_free_ingest_run_requires_input(monkeypatch) -> None:
             _assert_html_response(response)
             assert "Provide at least one playlist link or track entry." in response.text
             assert stub.free_import_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_upload_returns_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.free_ingest_status_result = SpotifyFreeIngestJobSnapshot(
+        job_id="job-free",
+        state="running",
+        counts=SpotifyFreeIngestJobCounts(
+            registered=1,
+            normalized=1,
+            queued=1,
+            completed=0,
+            failed=0,
+        ),
+        accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=2, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        queued_tracks=3,
+        failed_tracks=0,
+        skipped_tracks=0,
+        skip_reason=None,
+        error=None,
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/upload",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                files={"file": ("tracks.txt", b"Artist - Track", "text/plain")},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Free ingest job job-free enqueued." in response.text
+            assert stub.free_upload_calls[0][0] == "tracks.txt"
+            assert stub.free_import_calls == [(tuple(), ("Artist - Track",))]
+            assert stub.free_ingest_status_calls[-1] == "job-free"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_free_ingest_upload_handles_validation_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.free_upload_exception = ValueError("file too large")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/free/upload",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                files={"file": ("tracks.txt", b"bad", "text/plain")},
+                headers=headers,
+            )
+            assert response.status_code == 400
+            assert "file too large" in response.text
+            assert stub.free_upload_calls
+            assert stub.free_ingest_status_calls == []
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)

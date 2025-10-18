@@ -920,6 +920,10 @@ def test_spotify_free_ingest_partial_renders_form_and_status() -> None:
 
     assert 'id="spotify-free-ingest-form"' in html
     assert 'hx-post="/ui/spotify/free/run"' in html
+    assert 'id="spotify-free-ingest-upload-form"' in html
+    assert 'enctype="multipart/form-data"' in html
+    assert 'hx-post="/ui/spotify/free/upload"' in html
+    assert 'name="file"' in html
     assert "Job enqueued" in html
     assert "job-free" in html
     assert "Queued tracks" in html

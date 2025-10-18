@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from app.api.search import DEFAULT_SOURCES
+from app.api.spotify import _parse_multipart_file
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.dependencies import get_download_service, get_soulseek_client
@@ -1607,14 +1608,18 @@ async def spotify_free_ingest_run(
         form_errors["playlist_links"] = message
         alerts.append(AlertMessage(level="error", text=message))
         result = None
+        service.consume_free_ingest_feedback()
     else:
-        result = await service.free_import(
+        awaited_result = await service.free_import(
             playlist_links=playlist_links or None,
             tracks=track_entries or None,
         )
-        if result.error and not result.ok:
-            alerts.append(AlertMessage(level="error", text=result.error))
-        elif result.job_id:
+        stored_result, stored_error = service.consume_free_ingest_feedback()
+        result = stored_result or awaited_result
+        message = stored_error or (result.error if result else None)
+        if result and message and not result.ok:
+            alerts.append(AlertMessage(level="error", text=message))
+        elif result and result.job_id:
             alerts.append(
                 AlertMessage(
                     level="success",
@@ -1653,6 +1658,111 @@ async def spotify_free_ingest_run(
         log_event(
             logger,
             "ui.spotify.free_ingest.run",
+            component="ui.router",
+            status="success" if result.ok else "error",
+            role=session.role,
+            job_id=result.job_id,
+        )
+    return response
+
+
+@router.post(
+    "/spotify/free/upload",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_free_ingest_upload(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    if not session.features.spotify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+
+    content_type = request.headers.get("content-type") or ""
+    body = await request.body()
+    try:
+        filename, content = _parse_multipart_file(content_type, body)
+    except ValueError as exc:
+        message = str(exc) or "Select a track list file to upload."
+        return _render_alert_fragment(
+            request,
+            message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        awaited_result = await service.upload_free_ingest_file(
+            filename=filename,
+            content=content,
+        )
+    except ValueError as exc:
+        message = str(exc) or "The uploaded file could not be processed."
+        return _render_alert_fragment(
+            request,
+            message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception:
+        logger.exception("ui.spotify.free_ingest.upload_error")
+        return _render_alert_fragment(
+            request,
+            "Failed to process the uploaded file.",
+        )
+
+    result, stored_error = service.consume_free_ingest_feedback()
+    result = result or awaited_result
+
+    alerts: list[AlertMessage] = []
+    form_errors: dict[str, str] = {}
+    if result and stored_error and not result.ok:
+        form_errors["upload"] = stored_error
+        alerts.append(AlertMessage(level="error", text=stored_error))
+    elif result and result.error and not result.ok:
+        form_errors["upload"] = result.error
+        alerts.append(AlertMessage(level="error", text=result.error))
+    elif result and result.job_id:
+        alerts.append(
+            AlertMessage(
+                level="success",
+                text=f"Free ingest job {result.job_id} enqueued.",
+            )
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    stored_job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    if result and result.ok and result.job_id:
+        stored_job_id = result.job_id
+        request.app.state.ui_spotify_free_ingest_job_id = result.job_id
+
+    job_status = service.free_ingest_job_status(stored_job_id)
+
+    context = build_spotify_free_ingest_context(
+        request,
+        csrf_token=csrf_token,
+        form_values={"playlist_links": "", "tracks": ""},
+        form_errors=form_errors,
+        result=result,
+        job_status=job_status,
+        alerts=alerts,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_free_ingest.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+
+    if result is not None:
+        log_event(
+            logger,
+            "ui.spotify.free_ingest.upload",
             component="ui.router",
             status="success" if result.ok else "error",
             role=session.role,
