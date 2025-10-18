@@ -951,6 +951,92 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
 
+def test_soulseek_downloads_scope_switch_resets_offset(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=101,
+                filename="switch.flac",
+                status="queued",
+                progress=0.25,
+                priority=1,
+                username="dj",
+                created_at=datetime(2024, 1, 1, 12, 0, 0),
+                updated_at=datetime(2024, 1, 1, 12, 5, 0),
+                retry_count=0,
+                next_retry_at=None,
+                last_error=None,
+                live_queue=None,
+            )
+        ],
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+
+    class _DynamicDownloadsService(_RecordingDownloadsService):
+        def list_downloads(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            include_all: bool,
+            status_filter: str | None,
+        ) -> DownloadPage:
+            self.page.limit = limit
+            self.page.offset = offset
+            return super().list_downloads(
+                limit=limit,
+                offset=offset,
+                include_all=include_all,
+                status_filter=status_filter,
+            )
+
+    stub = _DynamicDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+
+            response = client.get(
+                "/ui/soulseek/downloads",
+                params={"offset": "40", "limit": "20"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            html = response.text
+            normalized = html.replace("&amp;", "&")
+            assert (
+                'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0&all=1"'
+                in normalized
+            )
+            assert (
+                'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=40"' in normalized
+            )
+            assert '<input type="hidden" name="offset" value="40"' in normalized
+
+            response = client.get(
+                "/ui/soulseek/downloads",
+                params={"all": "1", "offset": "0", "limit": "20"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            html = response.text
+            normalized = html.replace("&amp;", "&")
+            assert (
+                'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in normalized
+            )
+            assert (
+                'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0&all=1"'
+                in normalized
+            )
+            assert '<input type="hidden" name="offset" value="0"' in normalized
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
 def test_soulseek_download_requeue_success(monkeypatch) -> None:
     page = DownloadPage(
         items=[

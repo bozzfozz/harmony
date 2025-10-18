@@ -1365,13 +1365,21 @@ def build_soulseek_downloads_context(
         "/ui/soulseek/downloads",
     )
 
-    def _url_for_scope(all_scope: bool) -> str:
-        query = [("limit", str(page.limit)), ("offset", str(page.offset))]
-        if all_scope:
+    def _url_for_scope(*, target_include_all: bool, offset: int) -> str:
+        query = [("limit", str(page.limit)), ("offset", str(offset))]
+        if target_include_all:
             query.append(("all", "1"))
         return f"{base_url}?{urlencode(query)}"
 
-    refresh_url = _url_for_scope(include_all)
+    refresh_url = _url_for_scope(target_include_all=include_all, offset=page.offset)
+    active_url = _url_for_scope(
+        target_include_all=False,
+        offset=page.offset if not include_all else 0,
+    )
+    all_url = _url_for_scope(
+        target_include_all=True,
+        offset=page.offset if include_all else 0,
+    )
     fragment = TableFragment(
         identifier="hx-soulseek-downloads",
         table=table,
@@ -1391,8 +1399,8 @@ def build_soulseek_downloads_context(
         "csrf_token": csrf_token,
         "include_all": include_all,
         "refresh_url": refresh_url,
-        "active_url": _url_for_scope(False),
-        "all_url": _url_for_scope(True),
+        "active_url": active_url,
+        "all_url": all_url,
     }
 
 
