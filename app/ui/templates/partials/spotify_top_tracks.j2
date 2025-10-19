@@ -3,6 +3,22 @@
 
 {% set _ = strings.button_label("spotify.track.view") %}
 
+{% if time_range_options %}
+  <div class="spotify-time-range" role="group" aria-label="Time range">
+    {% for option in time_range_options %}
+      <button type="button"
+              class="spotify-time-range__button{% if option.active %} is-active{% endif %}"
+              hx-get="{{ option.url }}"
+              hx-target="#{{ fragment.identifier }}"
+              hx-swap="outerHTML"
+              aria-pressed="{{ 'true' if option.active else 'false' }}"
+              data-test="{{ option.test_id }}">
+        {{ option.label }}
+      </button>
+    {% endfor %}
+  </div>
+{% endif %}
+
 <div class="table-external-link-hint">
   <span class="table-external-link__icon" aria-hidden="true">↗</span>
   <span>{{ strings.spotify_external_link_hint() }}</span>

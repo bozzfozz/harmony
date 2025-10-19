@@ -339,6 +339,7 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
         csrf_token="csrf-token",
         limit=25,
         offset=0,
+        time_range="medium_term",
     )
     template = templates.get_template("partials/spotify_top_tracks.j2")
     html = template.render(**context)
@@ -356,6 +357,10 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
     assert 'hx-target="#hx-spotify-saved"' in html
     assert '<input type="hidden" name="limit" value="25" />' in html
     assert '<input type="hidden" name="offset" value="0" />' in html
+    assert 'data-test="hx-spotify-top-tracks-range-medium_term"' in html
+    assert 'hx-get="/ui/spotify/top/tracks?time_range=short_term"' in html
+    assert 'hx-get="/ui/spotify/top/tracks?time_range=long_term"' in html
+    assert 'aria-pressed="true"' in html
 
 
 def test_spotify_top_artists_partial_renders_table() -> None:
@@ -370,7 +375,11 @@ def test_spotify_top_artists_partial_renders_table() -> None:
             rank=1,
         )
     ]
-    context = build_spotify_top_artists_context(request, artists=artists)
+    context = build_spotify_top_artists_context(
+        request,
+        artists=artists,
+        time_range="long_term",
+    )
     template = templates.get_template("partials/spotify_top_artists.j2")
     html = template.render(**context)
 
@@ -380,6 +389,8 @@ def test_spotify_top_artists_partial_renders_table() -> None:
     assert "543,210" in html
     assert "rock, indie" in html
     assert 'data-count="1"' in html
+    assert 'data-test="hx-spotify-top-artists-range-long_term"' in html
+    assert 'hx-get="/ui/spotify/top/artists?time_range=medium_term"' in html
 
 
 def test_spotify_recommendations_partial_renders_form_and_results() -> None:

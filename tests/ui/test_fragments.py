@@ -334,8 +334,8 @@ class _StubSpotifyService:
         self.backfill_status_calls: list[str | None] = []
         self.run_calls: list[tuple[int | None, bool]] = []
         self.list_saved_calls: list[tuple[int, int]] = []
-        self.top_tracks_calls: list[int] = []
-        self.top_artists_calls: list[int] = []
+        self.top_tracks_calls: list[tuple[int, str | None]] = []
+        self.top_artists_calls: list[tuple[int, str | None]] = []
         self.save_calls: list[tuple[str, ...]] = []
         self.remove_calls: list[tuple[str, ...]] = []
         self.save_exception: Exception | None = None
@@ -398,14 +398,24 @@ class _StubSpotifyService:
             raise self.artists
         return tuple(self.artists)
 
-    def top_tracks(self, *, limit: int = 20) -> Sequence[SpotifyTopTrackRow]:
-        self.top_tracks_calls.append(limit)
+    def top_tracks(
+        self,
+        *,
+        limit: int = 20,
+        time_range: str | None = None,
+    ) -> Sequence[SpotifyTopTrackRow]:
+        self.top_tracks_calls.append((limit, time_range))
         if isinstance(self.top_tracks_rows, Exception):
             raise self.top_tracks_rows
         return tuple(self.top_tracks_rows)
 
-    def top_artists(self, *, limit: int = 20) -> Sequence[SpotifyTopArtistRow]:
-        self.top_artists_calls.append(limit)
+    def top_artists(
+        self,
+        *,
+        limit: int = 20,
+        time_range: str | None = None,
+    ) -> Sequence[SpotifyTopArtistRow]:
+        self.top_artists_calls.append((limit, time_range))
         if isinstance(self.top_artists_rows, Exception):
             raise self.top_artists_rows
         return tuple(self.top_artists_rows)
@@ -2078,7 +2088,7 @@ def test_spotify_top_tracks_fragment_renders_table(monkeypatch) -> None:
             assert "spotify-top-tracks-table" in response.text
             assert "table-external-link-hint" in response.text
             assert "spotify-top-track-link-top-track-1" in response.text
-            assert stub.top_tracks_calls == [20]
+            assert stub.top_tracks_calls == [(20, "medium_term")]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
@@ -2113,7 +2123,7 @@ def test_spotify_top_artists_fragment_renders_table(monkeypatch) -> None:
             _assert_html_response(response)
             assert "Top Artist" in response.text
             assert "spotify-top-artists-table" in response.text
-            assert stub.top_artists_calls == [20]
+            assert stub.top_artists_calls == [(20, "medium_term")]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

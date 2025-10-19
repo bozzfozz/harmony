@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Final
 from datetime import datetime
 from typing import Any
 
@@ -31,6 +32,19 @@ from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, 
 from app.services.spotify_domain_service import SpotifyDomainService, SpotifyServiceStatus
 
 logger = get_logger(__name__)
+
+_SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset(
+    {"short_term", "medium_term", "long_term"}
+)
+
+
+def _normalise_time_range(value: str | None) -> str | None:
+    if not value:
+        return None
+    candidate = value.strip()
+    if candidate in _SPOTIFY_TIME_RANGES:
+        return candidate
+    return None
 
 
 @dataclass(slots=True)
@@ -1077,9 +1091,17 @@ class SpotifyUiService:
         )
         return job.id
 
-    def top_tracks(self, *, limit: int = 20) -> Sequence[SpotifyTopTrackRow]:
+    def top_tracks(
+        self,
+        *,
+        limit: int = 20,
+        time_range: str | None = None,
+    ) -> Sequence[SpotifyTopTrackRow]:
         page_limit = max(1, min(int(limit), 50))
-        items = self._spotify.get_top_tracks(limit=page_limit)
+        resolved_time_range = _normalise_time_range(time_range)
+        items = self._spotify.get_top_tracks(
+            limit=page_limit, time_range=resolved_time_range
+        )
         rows: list[SpotifyTopTrackRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1148,7 +1170,11 @@ class SpotifyUiService:
 
         logger.debug(
             "spotify.ui.top_tracks",
-            extra={"count": len(rows), "limit": page_limit},
+            extra={
+                "count": len(rows),
+                "limit": page_limit,
+                "time_range": resolved_time_range or "default",
+            },
         )
         return tuple(rows)
 
@@ -1256,9 +1282,17 @@ class SpotifyUiService:
             features=features,
         )
 
-    def top_artists(self, *, limit: int = 20) -> Sequence[SpotifyTopArtistRow]:
+    def top_artists(
+        self,
+        *,
+        limit: int = 20,
+        time_range: str | None = None,
+    ) -> Sequence[SpotifyTopArtistRow]:
         page_limit = max(1, min(int(limit), 50))
-        items = self._spotify.get_top_artists(limit=page_limit)
+        resolved_time_range = _normalise_time_range(time_range)
+        items = self._spotify.get_top_artists(
+            limit=page_limit, time_range=resolved_time_range
+        )
         rows: list[SpotifyTopArtistRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1318,7 +1352,11 @@ class SpotifyUiService:
 
         logger.debug(
             "spotify.ui.top_artists",
-            extra={"count": len(rows), "limit": page_limit},
+            extra={
+                "count": len(rows),
+                "limit": page_limit,
+                "time_range": resolved_time_range or "default",
+            },
         )
         return tuple(rows)
 

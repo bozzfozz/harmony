@@ -9,6 +9,7 @@ from typing import Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import Request
+from starlette.datastructures import URL
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
@@ -242,6 +243,50 @@ class AsyncFragment:
         if self.poll_interval_seconds is not None:
             parts.append(f"every {self.poll_interval_seconds}s")
         return ", ".join(parts)
+
+
+@dataclass(slots=True)
+class SpotifyTimeRangeOption:
+    value: str
+    label: str
+    url: str
+    active: bool
+    test_id: str
+
+
+_SPOTIFY_TIME_RANGE_LABELS: Mapping[str, str] = {
+    "short_term": "Last 4 weeks",
+    "medium_term": "Last 6 months",
+    "long_term": "All time",
+}
+
+
+def _build_time_range_options(
+    request: Request,
+    *,
+    endpoint_name: str,
+    fragment_id: str,
+    selected: str,
+    fallback_path: str,
+) -> tuple[SpotifyTimeRangeOption, ...]:
+    try:
+        base_raw = request.url_for(endpoint_name)
+    except Exception:
+        base_raw = fallback_path
+    base_url = URL(str(base_raw))
+    options: list[SpotifyTimeRangeOption] = []
+    for value, label in _SPOTIFY_TIME_RANGE_LABELS.items():
+        option_url = base_url.include_query_params(time_range=value)
+        options.append(
+            SpotifyTimeRangeOption(
+                value=value,
+                label=label,
+                url=str(option_url),
+                active=value == selected,
+                test_id=f"{fragment_id}-range-{value}",
+            )
+        )
+    return tuple(options)
 
 
 @dataclass(slots=True)
@@ -1591,6 +1636,8 @@ def _build_spotify_top_context(
     rows: Sequence[TableRow],
     caption_key: str,
     empty_state_key: str,
+    time_range: str | None = None,
+    time_range_options: Sequence[SpotifyTimeRangeOption] | None = None,
 ) -> Mapping[str, Any]:
     table = TableDefinition(
         identifier=table_identifier,
@@ -1605,8 +1652,11 @@ def _build_spotify_top_context(
         empty_state_key=empty_state_key,
         data_attributes={"count": str(len(rows))},
     )
-
-    return {"request": request, "fragment": fragment}
+    context: dict[str, Any] = {"request": request, "fragment": fragment}
+    if time_range_options is not None:
+        context["time_range"] = time_range
+        context["time_range_options"] = tuple(time_range_options)
+    return context
 
 
 def build_spotify_top_tracks_context(
@@ -1616,6 +1666,7 @@ def build_spotify_top_tracks_context(
     csrf_token: str,
     limit: int,
     offset: int,
+    time_range: str,
 ) -> Mapping[str, Any]:
     def _format_duration(duration_ms: int | None) -> str:
         if duration_ms is None or duration_ms < 0:
@@ -1724,6 +1775,14 @@ def build_spotify_top_tracks_context(
         rows=rows,
         caption_key="spotify.top_tracks.caption",
         empty_state_key="spotify.top_tracks",
+        time_range=time_range,
+        time_range_options=_build_time_range_options(
+            request,
+            endpoint_name="spotify_top_tracks_fragment",
+            fragment_id="hx-spotify-top-tracks",
+            selected=time_range,
+            fallback_path="/ui/spotify/top/tracks",
+        ),
     )
 
 
@@ -1731,6 +1790,7 @@ def build_spotify_top_artists_context(
     request: Request,
     *,
     artists: Sequence[SpotifyTopArtistRow],
+    time_range: str,
 ) -> Mapping[str, Any]:
     rows: list[TableRow] = []
     for artist in artists:
@@ -1762,6 +1822,14 @@ def build_spotify_top_artists_context(
         rows=rows,
         caption_key="spotify.top_artists.caption",
         empty_state_key="spotify.top_artists",
+        time_range=time_range,
+        time_range_options=_build_time_range_options(
+            request,
+            endpoint_name="spotify_top_artists_fragment",
+            fragment_id="hx-spotify-top-artists",
+            selected=time_range,
+            fallback_path="/ui/spotify/top/artists",
+        ),
     )
 
 

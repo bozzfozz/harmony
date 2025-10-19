@@ -475,11 +475,27 @@ class SpotifyClient:
     def get_current_user(self) -> dict[str, Any]:
         return self._execute(self._client.current_user)
 
-    def get_top_tracks(self, limit: int = 20) -> dict[str, Any]:
-        return self._execute(self._client.current_user_top_tracks, limit=limit)
+    def get_top_tracks(
+        self,
+        limit: int = 20,
+        *,
+        time_range: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if time_range:
+            params["time_range"] = time_range
+        return self._execute(self._client.current_user_top_tracks, **params)
 
-    def get_top_artists(self, limit: int = 20) -> dict[str, Any]:
-        return self._execute(self._client.current_user_top_artists, limit=limit)
+    def get_top_artists(
+        self,
+        limit: int = 20,
+        *,
+        time_range: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if time_range:
+            params["time_range"] = time_range
+        return self._execute(self._client.current_user_top_artists, **params)
 
     def get_recommendations(
         self,

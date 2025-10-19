@@ -346,14 +346,24 @@ class SpotifyDomainService:
         profile = client.get_current_user()
         return profile if isinstance(profile, dict) else None
 
-    def get_top_tracks(self, *, limit: int) -> Sequence[dict[str, Any]]:
+    def get_top_tracks(
+        self,
+        *,
+        limit: int,
+        time_range: str | None = None,
+    ) -> Sequence[dict[str, Any]]:
         client = self._require_spotify()
-        response = client.get_top_tracks(limit=limit)
+        response = client.get_top_tracks(limit=limit, time_range=time_range)
         return self._extract_items(response, "items")
 
-    def get_top_artists(self, *, limit: int) -> Sequence[dict[str, Any]]:
+    def get_top_artists(
+        self,
+        *,
+        limit: int,
+        time_range: str | None = None,
+    ) -> Sequence[dict[str, Any]]:
         client = self._require_spotify()
-        response = client.get_top_artists(limit=limit)
+        response = client.get_top_artists(limit=limit, time_range=time_range)
         return self._extract_items(response, "items")
 
     def get_recommendations(
