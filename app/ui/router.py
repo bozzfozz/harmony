@@ -91,15 +91,20 @@ from app.ui.services import (
     get_watchlist_ui_service,
 )
 from app.ui.session import (
+    clear_spotify_job_state,
     UiSession,
     attach_session_cookie,
     clear_session_cookie,
+    get_spotify_backfill_job_id,
+    get_spotify_free_ingest_job_id,
     get_session_manager,
     require_admin_with_feature,
     require_feature,
     require_operator_with_feature,
     require_role,
     require_session,
+    set_spotify_backfill_job_id,
+    set_spotify_free_ingest_job_id,
 )
 
 logger = get_logger(__name__)
@@ -215,7 +220,7 @@ async def _handle_backfill_action(
             "Failed to update the backfill job.",
         )
 
-    request.app.state.ui_spotify_backfill_job_id = job_id
+    await set_spotify_backfill_job_id(request, session, job_id)
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     snapshot = service.build_backfill_snapshot(
@@ -2430,6 +2435,7 @@ async def logout(
     session: UiSession = Depends(require_session),
 ) -> Response:
     manager = get_session_manager(request)
+    await clear_spotify_job_state(request, session)
     await manager.invalidate(session.identifier)
     response = RedirectResponse("/ui/login", status_code=status.HTTP_303_SEE_OTHER)
     clear_session_cookie(response)
@@ -2590,10 +2596,10 @@ async def spotify_free_ingest_run(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
 
-    stored_job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    stored_job_id = await get_spotify_free_ingest_job_id(request, session)
     if result and result.ok and result.job_id:
         stored_job_id = result.job_id
-        request.app.state.ui_spotify_free_ingest_job_id = result.job_id
+        await set_spotify_free_ingest_job_id(request, session, result.job_id)
 
     job_status = service.free_ingest_job_status(stored_job_id)
 
@@ -2691,10 +2697,10 @@ async def spotify_free_ingest_upload(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
 
-    stored_job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    stored_job_id = await get_spotify_free_ingest_job_id(request, session)
     if result and result.ok and result.job_id:
         stored_job_id = result.job_id
-        request.app.state.ui_spotify_free_ingest_job_id = result.job_id
+        await set_spotify_free_ingest_job_id(request, session, result.job_id)
 
     job_status = service.free_ingest_job_status(stored_job_id)
 
@@ -2779,7 +2785,7 @@ async def spotify_backfill_run(
             "Failed to enqueue the backfill job.",
         )
 
-    request.app.state.ui_spotify_backfill_job_id = job_id
+    await set_spotify_backfill_job_id(request, session, job_id)
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     status_payload = service.backfill_status(job_id)
@@ -2956,7 +2962,7 @@ async def spotify_free_ingest_fragment(
 
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    job_id = getattr(request.app.state, "ui_spotify_free_ingest_job_id", None)
+    job_id = await get_spotify_free_ingest_job_id(request, session)
     job_status = service.free_ingest_job_status(job_id)
     context = build_spotify_free_ingest_context(
         request,
@@ -3247,7 +3253,7 @@ async def spotify_backfill_fragment(
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    job_id = getattr(request.app.state, "ui_spotify_backfill_job_id", None)
+    job_id = await get_spotify_backfill_job_id(request, session)
     status_payload = service.backfill_status(job_id)
     snapshot = service.build_backfill_snapshot(
         csrf_token=csrf_token,

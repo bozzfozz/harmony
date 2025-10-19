@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Sequence
 
 import pytest
 
@@ -16,6 +17,12 @@ def _assert_html_response(response, status_code: int = 200) -> None:
 from app.config import override_runtime_env
 from app.dependencies import get_app_config
 from app.main import app
+from app.ui.services import (
+    SpotifyFreeIngestAccepted,
+    SpotifyFreeIngestResult,
+    SpotifyFreeIngestSkipped,
+    get_spotify_ui_service,
+)
 from app.ui.session import fingerprint_api_key
 
 _CSRF_META_PATTERN = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
@@ -184,3 +191,92 @@ def test_logout_form_token(monkeypatch) -> None:
         )
         assert submission.status_code == 303
         assert submission.headers["location"] == "/ui/login"
+
+
+class _JobTrackingSpotifyService:
+    def __init__(self) -> None:
+        self.free_import_calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        self.free_ingest_status_calls: list[str | None] = []
+        self.free_import_result = SpotifyFreeIngestResult(
+            ok=True,
+            job_id="job-alpha",
+            accepted=SpotifyFreeIngestAccepted(playlists=1, tracks=1, batches=1),
+            skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+            error=None,
+        )
+        self._stored_result: SpotifyFreeIngestResult | None = None
+        self._stored_error: str | None = None
+
+    async def free_import(
+        self,
+        *,
+        playlist_links: Sequence[str] | None = None,
+        tracks: Sequence[str] | None = None,
+        batch_hint: int | None = None,
+    ) -> SpotifyFreeIngestResult:
+        self.free_import_calls.append((tuple(playlist_links or ()), tuple(tracks or ())))
+        self._stored_result = self.free_import_result
+        self._stored_error = None
+        return self.free_import_result
+
+    def consume_free_ingest_feedback(self) -> tuple[SpotifyFreeIngestResult | None, str | None]:
+        result = self._stored_result
+        error = self._stored_error
+        self._stored_result = None
+        self._stored_error = None
+        return result, error
+
+    def free_ingest_job_status(self, job_id: str | None):
+        self.free_ingest_status_calls.append(job_id)
+        return None
+
+
+def test_sessions_keep_independent_free_ingest_jobs(monkeypatch) -> None:
+    stub = _JobTrackingSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            login_one = client.post(
+                "/ui/login",
+                data={"api_key": "primary-key"},
+                follow_redirects=False,
+            )
+            assert login_one.status_code == 303
+            cookie_header_one = "; ".join(
+                f"{name}={value}" for name, value in login_one.cookies.items()
+            )
+            dashboard_one = client.get("/ui/", headers={"Cookie": cookie_header_one})
+            _assert_html_response(dashboard_one)
+            token_match = _CSRF_META_PATTERN.search(dashboard_one.text)
+            assert token_match is not None
+            cookie_header_one = "; ".join(
+                f"{name}={value}" for name, value in client.cookies.items()
+            )
+            headers_one = {
+                "Cookie": cookie_header_one,
+                "X-CSRF-Token": token_match.group(1),
+            }
+            ingest_response = client.post(
+                "/ui/spotify/free/run",
+                data={"playlist_links": "https://open.spotify.com/playlist/demo"},
+                headers=headers_one,
+            )
+            _assert_html_response(ingest_response)
+            assert stub.free_ingest_status_calls[-1] == stub.free_import_result.job_id
+
+            login_two = client.post(
+                "/ui/login",
+                data={"api_key": "primary-key"},
+                follow_redirects=False,
+            )
+            assert login_two.status_code == 303
+            cookies_two = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+            fragment_two = client.get(
+                "/ui/spotify/free",
+                headers={"Cookie": cookies_two},
+            )
+            _assert_html_response(fragment_two)
+            assert stub.free_ingest_status_calls[-1] is None
+            assert stub.free_import_result.job_id not in fragment_two.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
