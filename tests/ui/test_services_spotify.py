@@ -983,6 +983,76 @@ def test_remove_saved_tracks_requires_identifiers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_queue_saved_tracks_formats_and_submits() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    submission = IngestSubmission(
+        ok=True,
+        job_id="job-queue",
+        accepted=IngestAccepted(playlists=0, tracks=2, batches=1),
+        skipped=IngestSkipped(playlists=0, tracks=0, reason=None),
+        error=None,
+    )
+    spotify_service = Mock()
+    spotify_service.get_track_details.side_effect = [
+        {
+            "name": "Track One",
+            "artists": [{"name": "Artist One"}, {"name": "Artist Two"}],
+            "album": {"name": "Album One"},
+        },
+        {
+            "name": "Track Two",
+            "artists": [{"name": "Artist Two"}],
+            "album": {},
+        },
+    ]
+    spotify_service.submit_free_ingest = AsyncMock(return_value=submission)
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.queue_saved_tracks([" track-1 ", "track-2"])
+
+    assert isinstance(result, SpotifyFreeIngestResult)
+    assert result.accepted.tracks == 2
+    spotify_service.get_track_details.assert_any_call("track-1")
+    spotify_service.get_track_details.assert_any_call("track-2")
+    spotify_service.submit_free_ingest.assert_awaited_once()
+    args, kwargs = spotify_service.submit_free_ingest.await_args
+    assert args == ()
+    submitted_tracks = kwargs["tracks"]
+    assert submitted_tracks == (
+        "Artist One, Artist Two - Track One (Album One)",
+        "Artist Two - Track Two",
+    )
+
+
+@pytest.mark.asyncio
+async def test_queue_saved_tracks_raises_when_no_metadata() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_track_details.return_value = {}
+    spotify_service.submit_free_ingest = AsyncMock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError):
+        await service.queue_saved_tracks(["missing-track"])
+
+    spotify_service.submit_free_ingest.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_free_import_success_maps_submission() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))

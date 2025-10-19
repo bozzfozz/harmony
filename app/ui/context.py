@@ -2057,6 +2057,11 @@ def build_spotify_saved_tracks_context(
     except Exception:  # pragma: no cover - fallback for tests
         save_url = "/ui/spotify/saved/save"
 
+    try:
+        queue_url = request.url_for("spotify_saved_tracks_action", action="queue")
+    except Exception:  # pragma: no cover - fallback for tests
+        queue_url = "/ui/spotify/saved/queue"
+
     table_rows: list[TableRow] = []
     for row in rows:
         artist_text = ", ".join(row.artists)
@@ -2089,6 +2094,20 @@ def build_spotify_saved_tracks_context(
             hx_swap="outerHTML",
             hx_method="delete",
         )
+        queue_form = TableCellForm(
+            action=queue_url,
+            method="post",
+            submit_label_key="spotify.saved.queue",
+            hidden_fields={
+                "csrftoken": csrf_token,
+                "track_id": row.identifier,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+            hx_target="#hx-spotify-saved",
+            hx_swap="outerHTML",
+            hx_method="post",
+        )
         table_rows.append(
             TableRow(
                 cells=(
@@ -2097,7 +2116,7 @@ def build_spotify_saved_tracks_context(
                     TableCell(text=row.album or ""),
                     TableCell(text=added_text),
                     TableCell(
-                        forms=(view_form, remove_form),
+                        forms=(view_form, queue_form, remove_form),
                         test_id=f"spotify-saved-track-actions-{row.identifier}",
                     ),
                 ),
@@ -2157,6 +2176,7 @@ def build_spotify_saved_tracks_context(
         "request": request,
         "fragment": fragment,
         "save_action_url": save_url,
+        "queue_action_url": queue_url,
         "csrf_token": csrf_token,
         "page_limit": limit,
         "page_offset": offset,
