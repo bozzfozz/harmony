@@ -89,6 +89,9 @@ from app.ui.session import (
 
 logger = get_logger(__name__)
 
+_SPOTIFY_TIME_RANGES = frozenset({"short_term", "medium_term", "long_term"})
+_DEFAULT_TIME_RANGE = "medium_term"
+
 router = APIRouter(prefix="/ui", tags=["UI"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
@@ -152,6 +155,13 @@ def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
     limit = _coerce(request.query_params.get("limit"), 25, minimum=1, maximum=50)
     offset = _coerce(request.query_params.get("offset"), 0, minimum=0)
     return limit, offset
+
+
+def _extract_time_range(request: Request) -> str:
+    value = request.query_params.get("time_range")
+    if value in _SPOTIFY_TIME_RANGES:
+        return value
+    return _DEFAULT_TIME_RANGE
 
 
 def _split_seed_ids(raw_value: str) -> list[str]:
@@ -2099,8 +2109,9 @@ async def spotify_top_tracks_fragment(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    time_range = _extract_time_range(request)
     try:
-        tracks = service.top_tracks()
+        tracks = service.top_tracks(time_range=time_range)
     except Exception:
         logger.exception("ui.fragment.spotify.top_tracks")
         return _render_alert_fragment(
@@ -2117,6 +2128,7 @@ async def spotify_top_tracks_fragment(
         csrf_token=csrf_token,
         limit=limit,
         offset=offset,
+        time_range=time_range,
     )
     response = templates.TemplateResponse(
         request,
@@ -2142,8 +2154,9 @@ async def spotify_top_artists_fragment(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    time_range = _extract_time_range(request)
     try:
-        artists = service.top_artists()
+        artists = service.top_artists(time_range=time_range)
     except Exception:
         logger.exception("ui.fragment.spotify.top_artists")
         return _render_alert_fragment(
@@ -2151,7 +2164,11 @@ async def spotify_top_artists_fragment(
             "Unable to load Spotify top artists.",
         )
 
-    context = build_spotify_top_artists_context(request, artists=artists)
+    context = build_spotify_top_artists_context(
+        request,
+        artists=artists,
+        time_range=time_range,
+    )
     log_event(
         logger,
         "ui.fragment.spotify.top_artists",

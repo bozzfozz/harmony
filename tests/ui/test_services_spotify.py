@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Mapping
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from starlette.requests import Request
@@ -235,6 +235,7 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
         csrf_token="csrf-token",
         limit=25,
         offset=5,
+        time_range="medium_term",
     )
 
     fragment = context["fragment"]
@@ -258,6 +259,12 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
     assert view_form.hx_target == "#modal-root"
     assert view_form.submit_label_key == "spotify.track.view"
     assert save_form.action.endswith("/ui/spotify/saved/save")
+
+    assert context["time_range"] == "medium_term"
+    options = context["time_range_options"]
+    assert len(options) == 3
+    active = [option for option in options if option.active]
+    assert active and active[0].value == "medium_term"
     assert save_form.method == "post"
     assert save_form.hx_method == "post"
     assert save_form.hx_target == "#hx-spotify-saved"
@@ -768,7 +775,53 @@ def test_top_tracks_normalizes_payload() -> None:
             external_url="https://open.spotify.com/track/track-1",
         ),
     )
-    spotify_service.get_top_tracks.assert_called_once_with(limit=20)
+    spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range=None)
+
+
+def test_top_tracks_honours_time_range_and_logs() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_top_tracks.return_value = []
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with patch("app.ui.services.spotify.logger") as mock_logger:
+        rows = service.top_tracks(time_range="long_term")
+
+    assert rows == ()
+    spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range="long_term")
+    mock_logger.debug.assert_called_once()
+    extra = mock_logger.debug.call_args.kwargs["extra"]
+    assert extra["time_range"] == "long_term"
+
+
+def test_top_tracks_invalid_time_range_falls_back_to_default() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_top_tracks.return_value = []
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with patch("app.ui.services.spotify.logger") as mock_logger:
+        rows = service.top_tracks(time_range="unknown")
+
+    assert rows == ()
+    spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range=None)
+    mock_logger.debug.assert_called_once()
+    extra = mock_logger.debug.call_args.kwargs["extra"]
+    assert extra["time_range"] == "default"
 
 
 def test_top_artists_normalizes_payload() -> None:
@@ -807,7 +860,32 @@ def test_top_artists_normalizes_payload() -> None:
             external_url="https://open.spotify.com/artist/artist-1",
         ),
     )
-    spotify_service.get_top_artists.assert_called_once_with(limit=20)
+    spotify_service.get_top_artists.assert_called_once_with(limit=20, time_range=None)
+
+
+def test_top_artists_honours_time_range() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_top_artists.return_value = []
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with patch("app.ui.services.spotify.logger") as mock_logger:
+        rows = service.top_artists(time_range="short_term")
+
+    assert rows == ()
+    spotify_service.get_top_artists.assert_called_once_with(
+        limit=20, time_range="short_term"
+    )
+    mock_logger.debug.assert_called_once()
+    extra = mock_logger.debug.call_args.kwargs["extra"]
+    assert extra["time_range"] == "short_term"
 
 
 def test_save_tracks_filters_and_returns_count() -> None:
