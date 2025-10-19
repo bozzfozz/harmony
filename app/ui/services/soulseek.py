@@ -25,7 +25,7 @@ from app.routers.soulseek_router import (
     soulseek_uploads,
 )
 from app.schemas import StatusResponse
-from app.ui.context import SuggestedTask
+from app.ui.context import SuggestedTask, _normalise_status
 
 logger = get_logger(__name__)
 
@@ -41,6 +41,9 @@ class SoulseekUploadRow:
     size_bytes: int | None
     speed_bps: float | None
     username: str | None
+
+
+_HEALTHY_STATUSES: frozenset[str] = frozenset({"ok", "connected", "online"})
 
 
 class SoulseekUiService:
@@ -128,10 +131,11 @@ class SoulseekUiService:
 
         config = self._config.soulseek
         security = self._config.security
-        normalised_status = (status.status or "").strip().lower()
-        daemon_connected = normalised_status == "ok"
+        normalised_status = _normalise_status(status.status or "")
+        daemon_connected = normalised_status in _HEALTHY_STATUSES
         providers_ok = all(
-            (report.status or "").strip().lower() == "ok" for report in health.providers
+            _normalise_status(report.status or "") in _HEALTHY_STATUSES
+            for report in health.providers
         )
         tasks: list[SuggestedTask] = [
             SuggestedTask(

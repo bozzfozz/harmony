@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 import json
 import re
+from types import SimpleNamespace
 from typing import Any, Sequence
 
 import asyncio
@@ -30,6 +31,7 @@ from app.ui.services import (
     SearchResult,
     SearchResultDownload,
     SearchResultsPage,
+    SoulseekUiService,
     SoulseekUploadRow,
     SpotifyArtistRow,
     SpotifyAccountSummary,
@@ -857,7 +859,7 @@ class _StubSoulseekUiService:
             api_keys=("primary-key",),
             allowlist=(),
             allowed_origins=(),
-            _require_auth_default=False,
+            _require_auth_default=True,
             _rate_limiting_default=True,
         )
         self.status_exception: Exception | None = None
@@ -878,6 +880,7 @@ class _StubSoulseekUiService:
         self.cancel_exception: Exception | None = None
         self.upload_calls: list[bool] = []
         self.cancelled: list[str] = []
+        self._delegate_service: SoulseekUiService | None = None
 
     async def status(self) -> StatusResponse:
         if self.status_exception:
@@ -910,6 +913,30 @@ class _StubSoulseekUiService:
             raise self.cancel_exception
         self.cancelled.append(upload_id)
 
+    def suggested_tasks(
+        self,
+        *,
+        status: StatusResponse,
+        health: IntegrationHealth,
+        limit: int = 20,
+    ):
+        if self._delegate_service is None:
+            class _DelegateRegistry:
+                def initialise(self) -> None:
+                    return None
+
+            self._delegate_service = SoulseekUiService(
+                request=SimpleNamespace(),
+                config=SimpleNamespace(soulseek=self.config, security=self.security),
+                soulseek_client=SimpleNamespace(),
+                registry=_DelegateRegistry(),
+            )
+        return self._delegate_service.suggested_tasks(
+            status=status,
+            health=health,
+            limit=limit,
+        )
+
 
 def test_soulseek_status_fragment_renders_badges(monkeypatch) -> None:
     stub = _StubSoulseekUiService()
@@ -932,6 +959,22 @@ def test_soulseek_status_fragment_renders_badges(monkeypatch) -> None:
             snippet_index = response.text.index('data-test="nav-soulseek-status"')
             snippet = response.text[max(0, snippet_index - 200) : snippet_index + 200]
             assert "status-badge--success" in snippet
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_page_reports_full_completion_when_connected(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "Completion: 100%" in response.text
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
