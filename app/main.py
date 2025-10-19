@@ -674,6 +674,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        soulseek_client: Any | None = None
+        try:
+            soulseek_client = get_soulseek_client()
+        except Exception:  # pragma: no cover - defensive shutdown guard
+            logger.exception("Failed to retrieve Soulseek client during shutdown")
+        else:
+            close_callable = getattr(soulseek_client, "close", None)
+            if callable(close_callable):
+                try:
+                    close_result = close_callable()
+                    if inspect.isawaitable(close_result):
+                        await close_result
+                except Exception:  # pragma: no cover - defensive shutdown guard
+                    logger.exception("Failed to close Soulseek client during shutdown")
         await _stop_orchestrator_workers(app)
         logger.info("Harmony application stopped")
 
