@@ -70,6 +70,20 @@ def test_suggested_tasks_reflects_healthy_configuration() -> None:
     assert all(task.completed for task in tasks)
 
 
+def test_suggested_tasks_marks_daemon_completed_for_connected_status() -> None:
+    service = _make_service()
+    status = StatusResponse(status="connected")
+    health = IntegrationHealth(
+        overall="ok",
+        providers=(ProviderHealth(provider="soulseek", status="ok", details={}),),
+    )
+
+    tasks = service.suggested_tasks(status=status, health=health)
+
+    daemon_task = next(task for task in tasks if task.identifier == "daemon")
+    assert daemon_task.completed is True
+
+
 def test_suggested_tasks_flags_gaps_and_limits_count() -> None:
     service = _make_service(
         soulseek_overrides={
