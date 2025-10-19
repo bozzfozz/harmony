@@ -105,3 +105,7 @@ fields. Dependency failures log at `WARNING` level; payload issues log at `WARNI
 
 `IntegrationService.search_tracks("slskd", ...)` returns the above structure and raises the mapped
 Harmony errors for the listed failure scenarios.
+
+> **API-Hinweis:** Das öffentliche `/soulseek/search`-Endpoint liefert diese normalisierten Kandidaten
+> zusätzlich unter `normalised`, während `results` und `raw` die ursprünglichen slskd-Payloads für
+> Rückwärtskompatibilität enthalten.

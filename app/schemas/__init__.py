@@ -222,8 +222,17 @@ class DiscographyJobResponse(BaseModel):
 class SoulseekSearchResponse(BaseModel):
     """Response payload for Soulseek search results."""
 
-    results: list[Any]
-    raw: dict[str, Any] | None = None
+    results: list[Any] = Field(
+        ..., description="Raw search result entries returned by slskd (legacy shape)"
+    )
+    raw: dict[str, Any] | None = Field(
+        None,
+        description="Original payload emitted by slskd when available for debugging",
+    )
+    normalised: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Flattened file-level entries produced by SoulseekClient.normalise_search_results",
+    )
 
 
 class SoulseekDownloadResponse(BaseModel):
