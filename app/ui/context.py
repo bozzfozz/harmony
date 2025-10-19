@@ -2404,13 +2404,26 @@ def build_spotify_recommendations_context(
     form_values: Mapping[str, str] | None = None,
     form_errors: Mapping[str, str] | None = None,
     alerts: Sequence[AlertMessage] | None = None,
+    seed_defaults: Mapping[str, str] | None = None,
+    show_admin_controls: bool = False,
 ) -> Mapping[str, Any]:
     values = dict(form_values or {})
+    defaults_source = dict(seed_defaults or {})
+
+    def _resolve_default(key: str, fallback: str) -> str:
+        value = values.get(key)
+        if value not in (None, ""):
+            return str(value)
+        default_value = defaults_source.get(key)
+        if default_value not in (None, ""):
+            return str(default_value)
+        return fallback
+
     defaults = {
-        "seed_artists": values.get("seed_artists", ""),
-        "seed_tracks": values.get("seed_tracks", ""),
-        "seed_genres": values.get("seed_genres", ""),
-        "limit": values.get("limit", "20"),
+        "seed_artists": _resolve_default("seed_artists", ""),
+        "seed_tracks": _resolve_default("seed_tracks", ""),
+        "seed_genres": _resolve_default("seed_genres", ""),
+        "limit": _resolve_default("limit", str(limit)),
     }
     errors = {key: value for key, value in (form_errors or {}).items() if value}
 
@@ -2419,6 +2432,10 @@ def build_spotify_recommendations_context(
         save_url = request.url_for("spotify_saved_tracks_action", action="save")
     except Exception:  # pragma: no cover - fallback for tests
         save_url = "/ui/spotify/saved/save"
+    try:
+        queue_url = request.url_for("spotify_recommendations_submit")
+    except Exception:  # pragma: no cover - fallback for tests
+        queue_url = "/ui/spotify/recommendations"
     for row in rows:
         try:
             detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
@@ -2453,6 +2470,28 @@ def build_spotify_recommendations_context(
             hx_target="#modal-root",
             hx_swap="innerHTML",
             hx_method="get",
+        )
+        queue_form = TableCellForm(
+            action=queue_url,
+            method="post",
+            submit_label_key="spotify.saved.queue",
+            hidden_fields={
+                "csrftoken": csrf_token,
+                "action": "queue",
+                "track_id": row.identifier,
+                "seed_artists": defaults["seed_artists"],
+                "seed_tracks": defaults["seed_tracks"],
+                "seed_genres": defaults["seed_genres"],
+                "limit": defaults["limit"],
+            },
+            hx_target="#hx-spotify-recommendations",
+            hx_swap="outerHTML",
+            disabled=not bool(row.identifier),
+            test_id=(
+                f"spotify-recommendation-queue-{row.identifier}"
+                if row.identifier
+                else "spotify-recommendation-queue"
+            ),
         )
         save_form = TableCellForm(
             action=save_url,
@@ -2498,7 +2537,7 @@ def build_spotify_recommendations_context(
                     ),
                     preview_cell,
                     TableCell(
-                        forms=(view_form, save_form),
+                        forms=(view_form, queue_form, save_form),
                         test_id=f"spotify-recommendation-actions-{row.identifier}",
                     ),
                 ),
@@ -2539,6 +2578,8 @@ def build_spotify_recommendations_context(
         "alerts": tuple(alerts or ()),
         "fragment": fragment,
         "seeds": tuple(seeds),
+        "show_admin_controls": show_admin_controls,
+        "seed_defaults": defaults_source,
     }
 
 

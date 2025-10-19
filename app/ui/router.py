@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -99,16 +100,19 @@ router = APIRouter(prefix="/ui", tags=["UI"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
-ParsedRecommendationsForm = tuple[
-    Mapping[str, str],
-    Sequence[str],
-    Sequence[str],
-    Sequence[str],
-    Mapping[str, str],
-    Sequence[AlertMessage],
-    int,
-    bool,
-]
+
+@dataclass(slots=True)
+class RecommendationsFormData:
+    values: Mapping[str, str]
+    artist_seeds: tuple[str, ...]
+    track_seeds: tuple[str, ...]
+    genre_seeds: tuple[str, ...]
+    errors: Mapping[str, str]
+    alerts: tuple[AlertMessage, ...]
+    limit: int
+    general_error: bool
+    action: str
+    queue_track_ids: tuple[str, ...]
 
 
 def _render_alert_fragment(
@@ -230,6 +234,8 @@ def _render_recommendations_response(
     form_values: Mapping[str, str] | None = None,
     form_errors: Mapping[str, str] | None = None,
     alerts: Sequence[AlertMessage] | None = None,
+    seed_defaults: Mapping[str, str] | None = None,
+    show_admin_controls: bool = False,
     status_code: int = status.HTTP_200_OK,
 ) -> Response:
     limit, offset = _extract_saved_tracks_pagination(request)
@@ -243,6 +249,8 @@ def _render_recommendations_response(
         form_values=form_values,
         form_errors=form_errors,
         alerts=alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
     )
     response = templates.TemplateResponse(
         request,
@@ -256,23 +264,45 @@ def _render_recommendations_response(
 
 
 def _parse_recommendations_form(
-    form: Mapping[str, object],
-) -> tuple[
-    dict[str, str],
-    list[str],
-    list[str],
-    list[str],
-    dict[str, str],
-    list[AlertMessage],
-    int,
-    bool,
-]:
+    form: Mapping[str, Sequence[str]],
+) -> RecommendationsFormData:
+    def _first(name: str) -> str:
+        entries = form.get(name, ())
+        if entries:
+            entry = entries[0]
+            return str(entry) if entry is not None else ""
+        return ""
+
+    action_raw = _first("action").strip().lower()
+    action = action_raw or "submit"
+
     form_values = {
-        "seed_artists": str(form.get("seed_artists") or "").strip(),
-        "seed_tracks": str(form.get("seed_tracks") or "").strip(),
-        "seed_genres": str(form.get("seed_genres") or "").strip(),
-        "limit": str(form.get("limit") or "").strip(),
+        "seed_artists": _first("seed_artists").strip(),
+        "seed_tracks": _first("seed_tracks").strip(),
+        "seed_genres": _first("seed_genres").strip(),
+        "limit": _first("limit").strip(),
     }
+
+    queue_candidates: list[str] = []
+    for key in ("track_id", "track_ids", "track_id[]"):
+        entries = form.get(key, ())
+        for entry in entries:
+            if isinstance(entry, str):
+                queue_candidates.append(entry)
+
+    queue_ids: list[str] = []
+    seen_queue: set[str] = set()
+    for candidate in queue_candidates:
+        for part in re.split(r"[\s,]+", candidate):
+            cleaned = part.strip()
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            if lowered in seen_queue:
+                continue
+            seen_queue.add(lowered)
+            queue_ids.append(cleaned)
+
     errors: dict[str, str] = {}
     alerts: list[AlertMessage] = []
 
@@ -286,28 +316,33 @@ def _parse_recommendations_form(
     if "limit" not in errors and not 1 <= limit_value <= 100:
         errors["limit"] = "Enter a number between 1 and 100."
 
-    artist_seeds = _split_seed_ids(form_values["seed_artists"])
-    track_seeds = _split_seed_ids(form_values["seed_tracks"])
-    genre_seeds = _split_seed_genres(form_values["seed_genres"])
+    artist_seeds = tuple(_split_seed_ids(form_values["seed_artists"]))
+    track_seeds = tuple(_split_seed_ids(form_values["seed_tracks"]))
+    genre_seeds = tuple(_split_seed_genres(form_values["seed_genres"]))
 
     total_seeds = len(artist_seeds) + len(track_seeds) + len(genre_seeds)
     general_error = False
-    if total_seeds == 0:
-        alerts.append(AlertMessage(level="error", text="Provide at least one seed value."))
-        general_error = True
-    elif total_seeds > 5:
-        alerts.append(AlertMessage(level="error", text="Specify no more than five seeds in total."))
-        general_error = True
+    if action not in {"save_defaults", "load_defaults"}:
+        if total_seeds == 0:
+            alerts.append(AlertMessage(level="error", text="Provide at least one seed value."))
+            general_error = True
+        elif total_seeds > 5:
+            alerts.append(
+                AlertMessage(level="error", text="Specify no more than five seeds in total.")
+            )
+            general_error = True
 
-    return (
-        form_values,
-        artist_seeds,
-        track_seeds,
-        genre_seeds,
-        errors,
-        alerts,
-        limit_value,
-        general_error,
+    return RecommendationsFormData(
+        values=form_values,
+        artist_seeds=artist_seeds,
+        track_seeds=track_seeds,
+        genre_seeds=genre_seeds,
+        errors=errors,
+        alerts=tuple(alerts),
+        limit=limit_value,
+        general_error=general_error,
+        action=action,
+        queue_track_ids=tuple(queue_ids),
     )
 
 
@@ -321,6 +356,8 @@ def _recommendations_value_error_response(
     alerts: Sequence[AlertMessage],
     form_values: Mapping[str, str],
     message: str,
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> Response:
     combined_alerts = list(alerts)
     combined_alerts.append(AlertMessage(level="error", text=message))
@@ -340,6 +377,8 @@ def _recommendations_value_error_response(
         issued=issued,
         form_values=form_values,
         alerts=combined_alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
         status_code=status.HTTP_400_BAD_REQUEST,
     )
 
@@ -355,6 +394,8 @@ def _recommendations_app_error_response(
     alerts: Sequence[AlertMessage],
     error_code: str,
     status_code: int,
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> Response:
     log_event(
         logger,
@@ -372,6 +413,8 @@ def _recommendations_app_error_response(
         issued=issued,
         form_values=form_values,
         alerts=alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
         status_code=status_code,
     )
 
@@ -384,6 +427,8 @@ def _recommendations_unexpected_response(
     csrf_token: str,
     issued: bool,
     form_values: Mapping[str, str],
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> Response:
     logger.exception("ui.fragment.spotify.recommendations")
     log_event(
@@ -408,6 +453,8 @@ def _recommendations_unexpected_response(
         issued=issued,
         form_values=form_values,
         alerts=fallback_alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
@@ -415,17 +462,15 @@ def _recommendations_unexpected_response(
 def _execute_recommendations_request(
     *,
     service: SpotifyUiService,
-    artist_seeds: Sequence[str],
-    track_seeds: Sequence[str],
-    genre_seeds: Sequence[str],
-    limit_value: int,
-    alerts: Sequence[AlertMessage],
+    form_data: RecommendationsFormData,
     request: Request,
     session: UiSession,
     csrf_manager,
     csrf_token: str,
     issued: bool,
     form_values: Mapping[str, str],
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> tuple[
     tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None,
     Response | None,
@@ -436,19 +481,27 @@ def _execute_recommendations_request(
         "csrf_manager": csrf_manager,
         "csrf_token": csrf_token,
         "issued": issued,
+        "seed_defaults": seed_defaults,
+        "show_admin_controls": show_admin_controls,
     }
+    form_values = _build_recommendation_form_values(
+        artist_seeds=form_data.artist_seeds,
+        track_seeds=form_data.track_seeds,
+        genre_seeds=form_data.genre_seeds,
+        limit_value=form_data.limit,
+    )
     try:
         rows, seeds = service.recommendations(
-            seed_tracks=track_seeds,
-            seed_artists=artist_seeds,
-            seed_genres=genre_seeds,
-            limit=limit_value,
+            seed_tracks=form_data.track_seeds,
+            seed_artists=form_data.artist_seeds,
+            seed_genres=form_data.genre_seeds,
+            limit=form_data.limit,
         )
         return (rows, seeds), None
     except ValueError as exc:
         return None, _recommendations_value_error_response(
             **base_args,
-            alerts=alerts,
+            alerts=form_data.alerts,
             form_values=form_values,
             message=str(exc) or "Unable to fetch Spotify recommendations.",
         )
@@ -492,6 +545,9 @@ def _finalize_recommendations_success(
     rows: Sequence[SpotifyRecommendationRow],
     seeds: Sequence[SpotifyRecommendationSeed],
     form_values: Mapping[str, str],
+    alerts: Sequence[AlertMessage] | None,
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> Response:
     response = _render_recommendations_response(
         request,
@@ -502,6 +558,9 @@ def _finalize_recommendations_success(
         rows=rows,
         seeds=seeds,
         form_values=form_values,
+        alerts=alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
     )
     log_event(
         logger,
@@ -522,46 +581,204 @@ def _fetch_recommendation_rows(
     csrf_manager,
     csrf_token: str,
     issued: bool,
-    parsed_form: ParsedRecommendationsForm,
+    parsed_form: RecommendationsFormData,
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> tuple[
     Mapping[str, str],
     tuple[Sequence[SpotifyRecommendationRow], Sequence[SpotifyRecommendationSeed]] | None,
     Response | None,
 ]:
-    (
-        _form_values,
-        artist_seeds,
-        track_seeds,
-        genre_seeds,
-        _errors,
-        alerts,
-        limit_value,
-        _general_error,
-    ) = parsed_form
     normalised_values = _build_recommendation_form_values(
-        artist_seeds=artist_seeds,
-        track_seeds=track_seeds,
-        genre_seeds=genre_seeds,
-        limit_value=limit_value,
+        artist_seeds=parsed_form.artist_seeds,
+        track_seeds=parsed_form.track_seeds,
+        genre_seeds=parsed_form.genre_seeds,
+        limit_value=parsed_form.limit,
     )
     result, error_response = _execute_recommendations_request(
         service=service,
-        artist_seeds=artist_seeds,
-        track_seeds=track_seeds,
-        genre_seeds=genre_seeds,
-        limit_value=limit_value,
-        alerts=alerts,
+        form_data=parsed_form,
         request=request,
         session=session,
         csrf_manager=csrf_manager,
         csrf_token=csrf_token,
         issued=issued,
         form_values=normalised_values,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
     )
     return normalised_values, result, error_response
 
 
-def _process_recommendations_submission(
+def _render_recommendations_form(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    form_values: Mapping[str, str],
+    seed_defaults: Mapping[str, str],
+    show_admin_controls: bool,
+    alerts: Sequence[AlertMessage] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+    status_code: int = status.HTTP_200_OK,
+) -> Response:
+    return _render_recommendations_response(
+        request,
+        session,
+        csrf_manager,
+        csrf_token,
+        issued=issued,
+        form_values=form_values,
+        form_errors=form_errors,
+        alerts=alerts,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
+        status_code=status_code,
+    )
+
+
+def _ensure_admin(show_admin_controls: bool) -> None:
+    if not show_admin_controls:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted.")
+
+
+async def _handle_queue_action(
+    *,
+    service: SpotifyUiService,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    parsed_form: RecommendationsFormData,
+    alerts: list[AlertMessage],
+    normalised_values: Mapping[str, str],
+    current_defaults: Mapping[str, str],
+    show_admin_controls: bool,
+) -> Response | None:
+    if not parsed_form.queue_track_ids:
+        alerts.append(
+            AlertMessage(level="error", text="Select at least one recommendation to queue.")
+        )
+        return _render_recommendations_form(
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
+            issued=issued,
+            form_values=normalised_values,
+            alerts=alerts,
+            seed_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        result = await service.queue_recommendation_tracks(parsed_form.queue_track_ids)
+    except ValueError as exc:
+        alerts.append(AlertMessage(level="error", text=str(exc)))
+        return _render_recommendations_form(
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
+            issued=issued,
+            form_values=normalised_values,
+            alerts=alerts,
+            seed_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except AppError as exc:
+        alerts.append(AlertMessage(level="error", text=exc.message))
+        log_event(
+            logger,
+            "ui.spotify.recommendations.queue",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_recommendations_form(
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
+            issued=issued,
+            form_values=normalised_values,
+            alerts=alerts,
+            seed_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.spotify.recommendations.queue")
+        alerts.append(AlertMessage(level="error", text="Unable to queue Spotify downloads."))
+        return _render_recommendations_form(
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
+            issued=issued,
+            form_values=normalised_values,
+            alerts=alerts,
+            seed_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    alerts.append(
+        AlertMessage(
+            level="success",
+            text=(
+                "Queued "
+                f"{result.accepted.tracks:,} Spotify track"
+                f"{'s' if result.accepted.tracks != 1 else ''} for download."
+            ),
+        )
+    )
+    log_event(
+        logger,
+        "ui.spotify.recommendations.queue",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=result.accepted.tracks,
+        job_id=result.job_id,
+    )
+    return None
+
+
+def _handle_defaults_action(
+    *,
+    action: str,
+    service: SpotifyUiService,
+    parsed_form: RecommendationsFormData,
+    alerts: list[AlertMessage],
+    current_defaults: Mapping[str, str],
+    show_admin_controls: bool,
+) -> Mapping[str, str]:
+    if action == "save_defaults":
+        _ensure_admin(show_admin_controls)
+        updated = service.save_recommendation_seed_defaults(
+            seed_tracks=parsed_form.track_seeds,
+            seed_artists=parsed_form.artist_seeds,
+            seed_genres=parsed_form.genre_seeds,
+        )
+        alerts.append(AlertMessage(level="success", text="Default recommendation seeds saved."))
+        return dict(updated)
+    if action == "load_defaults":
+        _ensure_admin(show_admin_controls)
+        if not any(value.strip() for value in current_defaults.values()):
+            alerts.append(
+                AlertMessage(level="info", text="No default recommendation seeds are configured.")
+            )
+        return current_defaults
+    return current_defaults
+
+
+async def _process_recommendations_submission(
     *,
     request: Request,
     session: UiSession,
@@ -569,29 +786,60 @@ def _process_recommendations_submission(
     csrf_manager,
     csrf_token: str,
     issued: bool,
-    parsed_form: ParsedRecommendationsForm,
+    parsed_form: RecommendationsFormData,
+    seed_defaults: Mapping[str, str] | None,
+    show_admin_controls: bool,
 ) -> Response:
-    (
-        form_values,
-        artist_seeds,
-        track_seeds,
-        genre_seeds,
-        errors,
-        alerts,
-        limit_value,
-        general_error,
-    ) = parsed_form
-    if errors or general_error:
-        return _render_recommendations_response(
-            request,
-            session,
-            csrf_manager,
-            csrf_token,
+    current_defaults = dict(seed_defaults or {})
+    alerts = list(parsed_form.alerts)
+    form_errors = dict(parsed_form.errors)
+    normalised_values = _build_recommendation_form_values(
+        artist_seeds=parsed_form.artist_seeds,
+        track_seeds=parsed_form.track_seeds,
+        genre_seeds=parsed_form.genre_seeds,
+        limit_value=parsed_form.limit,
+    )
+
+    if form_errors or parsed_form.general_error:
+        return _render_recommendations_form(
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
             issued=issued,
-            form_values=form_values,
-            form_errors=errors,
+            form_values=parsed_form.values,
+            form_errors=form_errors,
             alerts=alerts,
+            seed_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
             status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if parsed_form.action == "queue":
+        queue_response = await _handle_queue_action(
+            service=service,
+            request=request,
+            session=session,
+            csrf_manager=csrf_manager,
+            csrf_token=csrf_token,
+            issued=issued,
+            parsed_form=parsed_form,
+            alerts=alerts,
+            normalised_values=normalised_values,
+            current_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
+        )
+        if queue_response is not None:
+            return queue_response
+
+    else:
+        current_defaults = _handle_defaults_action(
+            action=parsed_form.action,
+            service=service,
+            parsed_form=parsed_form,
+            alerts=alerts,
+            current_defaults=current_defaults,
+            show_admin_controls=show_admin_controls,
         )
 
     normalised_values, result, error_response = _fetch_recommendation_rows(
@@ -602,11 +850,13 @@ def _process_recommendations_submission(
         csrf_token=csrf_token,
         issued=issued,
         parsed_form=parsed_form,
+        seed_defaults=current_defaults,
+        show_admin_controls=show_admin_controls,
     )
     if error_response is not None:
         return error_response
-    rows, seeds = result
 
+    rows, seeds = result
     return _finalize_recommendations_success(
         request=request,
         session=session,
@@ -616,29 +866,20 @@ def _process_recommendations_submission(
         rows=rows,
         seeds=seeds,
         form_values=normalised_values,
+        alerts=tuple(alerts),
+        seed_defaults=current_defaults,
+        show_admin_controls=show_admin_controls,
     )
 
 
-async def _read_recommendations_form(request: Request) -> Mapping[str, str]:
+async def _read_recommendations_form(request: Request) -> Mapping[str, Sequence[str]]:
     raw_body = await request.body()
     try:
         payload = raw_body.decode("utf-8")
     except UnicodeDecodeError:
         payload = ""
     values = parse_qs(payload)
-
-    def _first(name: str) -> str:
-        entries = values.get(name)
-        if entries:
-            return entries[0]
-        return ""
-
-    return {
-        "seed_artists": _first("seed_artists"),
-        "seed_tracks": _first("seed_tracks"),
-        "seed_genres": _first("seed_genres"),
-        "limit": _first("limit"),
-    }
+    return {key: list(entries) for key, entries in values.items()}
 
 
 def _normalize_playlist_filter(value: str | None) -> str | None:
@@ -2612,15 +2853,19 @@ async def spotify_playlist_items_fragment(
 async def spotify_recommendations_fragment(
     request: Request,
     session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    seed_defaults = service.get_recommendation_seed_defaults()
     response = _render_recommendations_response(
         request,
         session,
         csrf_manager,
         csrf_token,
         issued=issued,
+        seed_defaults=seed_defaults,
+        show_admin_controls=session.allows("admin"),
     )
     log_event(
         logger,
@@ -2644,38 +2889,39 @@ async def spotify_recommendations_submit(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
-    form = await _read_recommendations_form(request)
-    (
-        form_values,
-        artist_seeds,
-        track_seeds,
-        genre_seeds,
-        errors,
-        alerts,
-        limit_value,
-        general_error,
-    ) = _parse_recommendations_form(form)
+    raw_form = await _read_recommendations_form(request)
+    form = dict(raw_form)
+
+    def _first_action(values: Mapping[str, Sequence[str]]) -> str:
+        entries = values.get("action", ())
+        if entries:
+            candidate = entries[0]
+            return str(candidate or "").strip().lower()
+        return ""
+
+    action = _first_action(form)
+    show_admin_controls = session.allows("admin")
+    seed_defaults = service.get_recommendation_seed_defaults()
+    if action == "load_defaults" and show_admin_controls:
+        form = dict(form)
+        for key in ("seed_artists", "seed_tracks", "seed_genres"):
+            form[key] = [seed_defaults.get(key, "")]
+
+    parsed_form = _parse_recommendations_form(form)
 
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
 
-    return _process_recommendations_submission(
+    return await _process_recommendations_submission(
         request=request,
         session=session,
         service=service,
         csrf_manager=csrf_manager,
         csrf_token=csrf_token,
         issued=issued,
-        parsed_form=(
-            form_values,
-            artist_seeds,
-            track_seeds,
-            genre_seeds,
-            errors,
-            alerts,
-            limit_value,
-            general_error,
-        ),
+        parsed_form=parsed_form,
+        seed_defaults=seed_defaults,
+        show_admin_controls=show_admin_controls,
     )
 
 

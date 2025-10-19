@@ -463,6 +463,7 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert 'data-test="spotify-recommendation-preview-track-2"' in html
     assert "<audio controls" in html
     assert "View details" in html
+    assert 'data-test="spotify-recommendation-queue-track-1"' in html
     assert 'data-test="spotify-recommendation-save-track-1"' in html
     assert 'hx-target="#hx-spotify-saved"' in html
     assert '<input type="hidden" name="limit" value="10" />' in html
