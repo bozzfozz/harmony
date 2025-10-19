@@ -7,6 +7,7 @@ from jinja2 import Template
 from starlette.requests import Request
 
 from app.integrations.health import IntegrationHealth
+from app.schemas import StatusResponse
 from app.ui.context import (
     AlertMessage,
     AsyncFragment,
@@ -17,6 +18,7 @@ from app.ui.context import (
     NavItem,
     PaginationContext,
     StatusBadge,
+    SuggestedTask,
     TableCell,
     TableDefinition,
     TableFragment,
@@ -24,30 +26,29 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_login_page_context,
+    build_search_page_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
-    build_search_page_context,
-    build_spotify_artists_context,
     build_spotify_account_context,
+    build_spotify_artists_context,
     build_spotify_backfill_context,
+    build_spotify_free_ingest_context,
     build_spotify_page_context,
     build_spotify_playlist_items_context,
     build_spotify_playlists_context,
-    build_spotify_free_ingest_context,
     build_spotify_recommendations_context,
-    build_spotify_track_detail_context,
     build_spotify_saved_tracks_context,
+    build_spotify_status_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
-    build_spotify_status_context,
+    build_spotify_track_detail_context,
     build_watchlist_fragment_context,
 )
 from app.ui.router import templates
-from app.schemas import StatusResponse
 from app.ui.services import (
-    SpotifyArtistRow,
     SpotifyAccountSummary,
+    SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -61,10 +62,10 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
-    SpotifyTrackDetail,
+    SpotifyStatus,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
-    SpotifyStatus,
+    SpotifyTrackDetail,
     WatchlistRow,
 )
 from app.ui.session import UiFeatures, UiSession
@@ -655,6 +656,21 @@ def test_soulseek_page_template_renders_fragments() -> None:
         session=session,
         csrf_token="csrf-soulseek",
         soulseek_badge=nav_badge,
+        suggested_tasks=(
+            SuggestedTask(
+                identifier="daemon",
+                title_key="soulseek.task.daemon",
+                description_key="soulseek.task.daemon.desc",
+                completed=True,
+            ),
+            SuggestedTask(
+                identifier="api-key",
+                title_key="soulseek.task.api_key",
+                description_key="soulseek.task.api_key.desc",
+                completed=False,
+            ),
+        ),
+        tasks_completion=50,
     )
     template = templates.get_template("pages/soulseek.j2")
     html = template.render(**context)
@@ -679,6 +695,11 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert "Loading Soulseek configuration…" in html
     assert "Loading active Soulseek uploads…" in html
     assert "Loading active Soulseek downloads…" in html
+    assert 'data-test="soulseek-tasks"' in html
+    assert 'data-test="soulseek-task-daemon"' in html
+    assert 'data-test="soulseek-task-api-key"' in html
+    assert "Completion: 50%" in html
+    assert html.count("task-list__item--completed") >= 1
 
 
 def test_search_page_template_renders_form_and_queue() -> None:

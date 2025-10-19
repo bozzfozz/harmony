@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import json
-import re
 from pathlib import Path
+import re
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -19,6 +19,7 @@ from app.dependencies import get_download_service, get_soulseek_client
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.routers.soulseek_router import soulseek_cancel, soulseek_requeue_download
 from app.schemas import SoulseekDownloadRequest
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
@@ -26,47 +27,47 @@ from app.ui.context import (
     AlertMessage,
     FormDefinition,
     LayoutContext,
+    SuggestedTask,
     build_activity_fragment_context,
     build_dashboard_page_context,
     build_downloads_fragment_context,
     build_jobs_fragment_context,
     build_login_page_context,
+    build_primary_navigation,
+    build_search_page_context,
+    build_search_results_context,
     build_soulseek_config_context,
     build_soulseek_downloads_context,
-    build_primary_navigation,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_uploads_context,
-    build_search_page_context,
-    build_search_results_context,
-    build_spotify_free_ingest_context,
-    build_spotify_artists_context,
     build_spotify_account_context,
+    build_spotify_artists_context,
     build_spotify_backfill_context,
+    build_spotify_free_ingest_context,
     build_spotify_page_context,
     build_spotify_playlist_items_context,
     build_spotify_playlists_context,
     build_spotify_recommendations_context,
-    build_spotify_track_detail_context,
     build_spotify_saved_tracks_context,
+    build_spotify_status_context,
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
-    build_spotify_status_context,
+    build_spotify_track_detail_context,
     build_watchlist_fragment_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
-from app.routers.soulseek_router import soulseek_cancel, soulseek_requeue_download
 from app.ui.services import (
     ActivityUiService,
     DownloadsUiService,
     JobsUiService,
     SearchUiService,
     SoulseekUiService,
-    SpotifyUiService,
     SpotifyFreeIngestResult,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
+    SpotifyUiService,
     WatchlistUiService,
     get_activity_ui_service,
     get_downloads_ui_service,
@@ -81,8 +82,8 @@ from app.ui.session import (
     attach_session_cookie,
     clear_session_cookie,
     get_session_manager,
-    require_operator_with_feature,
     require_feature,
+    require_operator_with_feature,
     require_role,
     require_session,
 )
@@ -864,9 +865,17 @@ async def soulseek_page(
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    tasks: Sequence[SuggestedTask] = ()
+    tasks_completion = 0
     try:
         connection = await service.status()
         integration = await service.integration_health()
+        tasks = service.suggested_tasks(status=connection, health=integration)
+        if tasks:
+            completed_count = sum(1 for task in tasks if task.completed)
+            tasks_completion = int(round((completed_count / len(tasks)) * 100))
+        else:
+            tasks_completion = 100
         soulseek_badge = build_soulseek_navigation_badge(
             connection=connection,
             integration=integration,
@@ -881,6 +890,19 @@ async def soulseek_page(
                 "connection": connection.status,
                 "integration": integration.overall,
                 "badge_variant": soulseek_badge.variant,
+                "tasks_total": len(tasks),
+                "tasks_completion": tasks_completion,
+            },
+        )
+        log_event(
+            logger,
+            "ui.page.soulseek.tasks",
+            component="ui.router",
+            status="success",
+            role=session.role,
+            meta={
+                "tasks_total": len(tasks),
+                "tasks_completion": tasks_completion,
             },
         )
     except Exception:
@@ -894,11 +916,15 @@ async def soulseek_page(
             error="unexpected",
         )
         soulseek_badge = build_soulseek_navigation_badge(connection=None, integration=None)
+        tasks = ()
+        tasks_completion = 0
     context = build_soulseek_page_context(
         request,
         session=session,
         csrf_token=csrf_token,
         soulseek_badge=soulseek_badge,
+        suggested_tasks=tasks,
+        tasks_completion=tasks_completion,
     )
     response = templates.TemplateResponse(
         request,

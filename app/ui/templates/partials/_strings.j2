@@ -654,6 +654,44 @@
 
 {% macro soulseek_downloads_heading() %}Active downloads{% endmacro %}
 
+{% macro soulseek_tasks_heading() %}Suggested tasks{% endmacro %}
+
+{% macro soulseek_tasks_description() %}Complete these checks to keep the Soulseek integration healthy.{% endmacro %}
+
+{% macro soulseek_tasks_completion(percent) %}Completion: {{ percent }}%{% endmacro %}
+
+{% macro soulseek_task_title(key) -%}
+  {%- set labels = {
+    "soulseek.task.daemon": "Verify daemon connectivity",
+    "soulseek.task.providers": "Review provider health",
+    "soulseek.task.api_key": "Configure API key",
+    "soulseek.task.formats": "Set preferred formats",
+    "soulseek.task.retry_policy": "Validate retry policy",
+    "soulseek.task.retry_jitter": "Enable retry jitter",
+    "soulseek.task.timeout": "Check request timeout",
+    "soulseek.task.max_results": "Limit result window",
+    "soulseek.task.auth": "Require authentication",
+    "soulseek.task.rate_limiting": "Enable rate limiting",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro soulseek_task_description(key) -%}
+  {%- set labels = {
+    "soulseek.task.daemon.desc": "Ensure the Soulseek daemon reports an OK status.",
+    "soulseek.task.providers.desc": "All Soulseek providers should report OK status.",
+    "soulseek.task.api_key.desc": "Store a valid slskd API key in configuration.",
+    "soulseek.task.formats.desc": "Review and confirm the preferred download formats list.",
+    "soulseek.task.retry_policy.desc": "Keep retry attempts at three or more to recover from transient failures.",
+    "soulseek.task.retry_jitter.desc": "Use retry jitter above 0% to avoid thundering herd behaviour.",
+    "soulseek.task.timeout.desc": "Keep the Soulseek request timeout under ten seconds.",
+    "soulseek.task.max_results.desc": "Limit search results to one hundred entries or fewer for predictability.",
+    "soulseek.task.auth.desc": "Require authentication for operators interacting with Soulseek actions.",
+    "soulseek.task.rate_limiting.desc": "Enable rate limiting to protect the Soulseek API from bursts.",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
 {% macro modal_title(key) -%}
   {%- set labels = {
     "confirm": "Confirm",
