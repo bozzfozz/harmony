@@ -35,7 +35,8 @@
         <input type="hidden" name="scope" value="all" />
       {% endif %}
       <button type="submit"
-              data-test="soulseek-uploads-cleanup">
+              data-test="soulseek-uploads-cleanup"
+              {% if cleanup_disabled %}disabled{% endif %}>
         {{ strings.button_label("soulseek.uploads.cleanup") }}
       </button>
     </form>

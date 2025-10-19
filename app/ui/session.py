@@ -290,6 +290,23 @@ def require_feature(feature: Literal["spotify", "soulseek", "dlq", "imports"]):
     return dependency
 
 
+def require_admin_with_feature(
+    feature: Literal["spotify", "soulseek", "dlq", "imports"]
+) -> Callable[[Request], Awaitable[UiSession]]:
+    admin_dependency = require_role("admin")
+
+    async def dependency(request: Request) -> UiSession:
+        session = await admin_dependency(request)
+        if not getattr(session.features, feature, False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="The requested UI feature is disabled.",
+            )
+        return session
+
+    return dependency
+
+
 def require_operator_with_feature(
     feature: Literal["spotify", "soulseek", "dlq", "imports"],
 ) -> Callable[[Request], Awaitable[UiSession]]:
@@ -339,6 +356,7 @@ __all__ = [
     "clear_session_cookie",
     "fingerprint_api_key",
     "get_session_manager",
+    "require_admin_with_feature",
     "require_role",
     "require_feature",
     "require_operator_with_feature",

@@ -1504,7 +1504,9 @@ def build_soulseek_uploads_context(
     uploads: Sequence[SoulseekUploadRow],
     csrf_token: str,
     include_all: bool,
+    session: UiSession,
 ) -> Mapping[str, Any]:
+    can_manage_uploads = session.allows("admin")
     rows: list[TableRow] = []
     cancel_url = _safe_url_for(
         request,
@@ -1537,6 +1539,8 @@ def build_soulseek_uploads_context(
                             hidden_fields=hidden_fields,
                             hx_target=target,
                             hx_swap="outerHTML",
+                            disabled=not can_manage_uploads,
+                            test_id="soulseek-upload-cancel",
                         )
                     ),
                 ),
@@ -1594,6 +1598,8 @@ def build_soulseek_uploads_context(
         "cleanup_url": cleanup_url,
         "cleanup_target": target,
         "cleanup_swap": "outerHTML",
+        "cleanup_disabled": not can_manage_uploads,
+        "can_manage_uploads": can_manage_uploads,
     }
 
 
@@ -1603,10 +1609,12 @@ def build_soulseek_downloads_context(
     page: DownloadPage,
     csrf_token: str,
     include_all: bool,
+    session: UiSession,
 ) -> Mapping[str, Any]:
     scope_value = "all" if include_all else "active"
     retryable_states = set(SOULSEEK_RETRYABLE_STATES)
     target = "#hx-soulseek-downloads"
+    can_manage_downloads = session.allows("admin")
 
     rows: list[TableRow] = []
     for entry in page.items:
@@ -1651,7 +1659,8 @@ def build_soulseek_downloads_context(
                             hidden_fields=hidden_fields,
                             hx_target=target,
                             hx_swap="outerHTML",
-                            disabled=not can_requeue,
+                            disabled=not (can_manage_downloads and can_requeue),
+                            test_id="soulseek-download-requeue",
                         )
                     ),
                     TableCell(
@@ -1663,6 +1672,8 @@ def build_soulseek_downloads_context(
                             hx_target=target,
                             hx_swap="outerHTML",
                             hx_method="delete",
+                            disabled=not can_manage_downloads,
+                            test_id="soulseek-download-cancel",
                         )
                     ),
                 ),
@@ -1752,6 +1763,8 @@ def build_soulseek_downloads_context(
         "cleanup_url": cleanup_url,
         "cleanup_target": pagination.target if pagination else target,
         "cleanup_swap": pagination.swap if pagination else "outerHTML",
+        "cleanup_disabled": not can_manage_downloads,
+        "can_manage_downloads": can_manage_downloads,
     }
 
 
