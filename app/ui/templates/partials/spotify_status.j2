@@ -24,6 +24,12 @@
         <button type="submit">{{ strings.button_label("spotify.connect") }}</button>
       </form>
     {% endif %}
+    <a class="spotify-status__runbook-link"
+       href="{{ runbook_url }}"
+       target="_blank"
+       rel="noopener noreferrer">
+      Runbook öffnen
+    </a>
   </div>
   <div class="spotify-status__manual">
     <p>{{ strings.spotify_manual_hint(oauth, status) }}</p>

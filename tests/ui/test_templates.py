@@ -1012,6 +1012,9 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert "Redirect URI" in html
     assert "Manual session timeout" in html
     assert 'name="redirect_url" value=' not in html
+    assert f'href="{context["runbook_url"]}"' in html
+    assert "Runbook öffnen" in html
+    assert 'target="_blank"' in html
 
 
 def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
