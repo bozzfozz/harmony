@@ -3749,6 +3749,25 @@ def test_spotify_free_ingest_fragment_renders_form(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_free_ingest_fragment_polls_existing_job(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    app.state.ui_spotify_free_ingest_job_id = "job-free"
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/free",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert stub.free_ingest_status_calls[-1] == "job-free"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+        if hasattr(app.state, "ui_spotify_free_ingest_job_id"):
+            delattr(app.state, "ui_spotify_free_ingest_job_id")
+
+
 def test_spotify_free_ingest_run_returns_fragment(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.free_import_result = SpotifyFreeIngestResult(

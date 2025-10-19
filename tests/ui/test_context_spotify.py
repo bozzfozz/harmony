@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from starlette.requests import Request
 
 from app.ui.context import (
     AlertMessage,
+    build_spotify_page_context,
     build_spotify_free_ingest_context,
     build_spotify_free_ingest_form_context,
     build_spotify_free_ingest_status_context,
 )
+from app.ui.session import UiFeatures, UiSession
 from app.ui.services import (
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -108,3 +112,23 @@ def test_build_spotify_free_ingest_context_includes_alerts_and_form_values() -> 
         AlertMessage(level="error", text="Something failed"),
     )
     assert context["job_status"] is None
+
+
+def test_build_spotify_page_context_sets_free_ingest_poll_interval() -> None:
+    request = _make_request("/ui/spotify")
+    now = datetime.now(tz=UTC)
+    session = UiSession(
+        identifier="session-1",
+        role="operator",
+        features=UiFeatures(spotify=True, soulseek=True, dlq=True, imports=True),
+        fingerprint="fingerprint",
+        issued_at=now,
+        last_seen_at=now,
+    )
+
+    context = build_spotify_page_context(request, session=session, csrf_token="csrf")
+
+    fragment = context["free_ingest_fragment"]
+    assert fragment is not None
+    assert fragment.poll_interval_seconds == 15
+    assert fragment.trigger == "load, every 15s"
