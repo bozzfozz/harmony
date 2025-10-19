@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
+from typing import Any
 
 from fastapi import Depends
 
@@ -117,26 +118,23 @@ class DownloadsUiService:
 
     @staticmethod
     def _to_row(entry: DownloadEntryResponse) -> DownloadRow:
-        payload = entry.model_dump()
-        progress_value = payload.get("progress")
+        progress_value = entry.progress
         progress = float(progress_value) if progress_value is not None else None
 
-        live_metadata = payload.get("live_queue")
-        if not isinstance(live_metadata, Mapping):
-            live_metadata = None
+        live_metadata = entry.live_queue if isinstance(entry.live_queue, Mapping) else None
 
         return DownloadRow(
-            identifier=int(payload["id"]),
-            filename=str(payload.get("filename", "")),
-            status=str(payload.get("status", "unknown")),
+            identifier=int(entry.id),
+            filename=str(entry.filename or ""),
+            status=str(entry.status or "unknown"),
             progress=progress,
-            priority=int(payload.get("priority", 0)),
-            username=payload.get("username"),
-            created_at=payload.get("created_at"),
-            updated_at=payload.get("updated_at"),
-            retry_count=int(payload.get("retry_count", 0) or 0),
-            next_retry_at=payload.get("next_retry_at"),
-            last_error=payload.get("last_error"),
+            priority=int(entry.priority or 0),
+            username=entry.username,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+            retry_count=int(entry.retry_count or 0),
+            next_retry_at=entry.next_retry_at,
+            last_error=entry.last_error,
             live_queue=live_metadata,
         )
 

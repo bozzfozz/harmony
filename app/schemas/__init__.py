@@ -333,6 +333,7 @@ class DownloadEntryResponse(BaseModel):
     retry_count: int = 0
     next_retry_at: datetime | None = None
     last_error: str | None = None
+    live_queue: dict[str, Any] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

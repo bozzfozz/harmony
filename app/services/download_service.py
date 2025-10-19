@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import asyncio
 from typing import Any
 
 from fastapi import status
@@ -112,6 +113,59 @@ class DownloadService:
         self._run_session = session_runner
         self._transfers = transfers
 
+    def _attach_live_queue_metadata(self, downloads: Sequence[Download]) -> None:
+        if not downloads:
+            return
+
+        active: list[Download] = []
+        for download in downloads:
+            state = (download.state or "").strip().lower()
+            if state in ACTIVE_STATES:
+                active.append(download)
+
+        metadata: dict[int, Mapping[str, Any]] = {}
+        if active:
+            try:
+                metadata = asyncio.run(self._collect_live_queue_metadata(tuple(active)))
+            except TransfersApiError as exc:
+                logger.debug(
+                    "downloads.live_queue.fetch_failed",
+                    extra={"error": str(exc)},
+                )
+            except Exception:
+                logger.exception("downloads.live_queue.fetch_error")
+
+        for download in downloads:
+            download.live_queue = metadata.get(download.id)
+
+    async def _collect_live_queue_metadata(
+        self, downloads: Sequence[Download]
+    ) -> dict[int, Mapping[str, Any]]:
+        async def _fetch(download: Download) -> tuple[int, Mapping[str, Any] | None]:
+            try:
+                payload = await self._transfers.get_download_queue(download.id)
+            except TransfersApiError as exc:
+                logger.debug(
+                    "downloads.live_queue.fetch_failed", extra={"download_id": download.id, "error": str(exc)}
+                )
+                return download.id, None
+            except Exception:
+                logger.exception(
+                    "downloads.live_queue.fetch_error", extra={"download_id": download.id}
+                )
+                return download.id, None
+
+            if isinstance(payload, Mapping) and payload:
+                return download.id, dict(payload)
+            return download.id, None
+
+        results = await asyncio.gather(*(_fetch(download) for download in downloads))
+        metadata: dict[int, Mapping[str, Any]] = {}
+        for download_id, payload in results:
+            if payload is not None:
+                metadata[download_id] = payload
+        return metadata
+
     # ------------------------------------------------------------------
     # Query helpers
     # ------------------------------------------------------------------
@@ -147,12 +201,15 @@ class DownloadService:
     ) -> list[Download]:
         try:
             query = self._build_download_query(include_all=include_all, status_filter=status_filter)
-            return query.offset(offset).limit(limit).all()
+            downloads = query.offset(offset).limit(limit).all()
         except AppError:
             raise
         except Exception as exc:  # pragma: no cover - defensive database failure handling
             logger.exception("Failed to list downloads: %s", exc)
             raise InternalServerError("Failed to fetch downloads") from exc
+
+        self._attach_live_queue_metadata(downloads)
+        return downloads
 
     def get_download(self, download_id: int) -> Download:
         try:
@@ -166,6 +223,7 @@ class DownloadService:
         if download is None:
             logger.warning("Download %s not found", download_id)
             raise NotFoundError("Download not found")
+        self._attach_live_queue_metadata((download,))
         return download
 
     def update_priority(self, download_id: int, payload: DownloadPriorityUpdate) -> Download:
@@ -191,6 +249,7 @@ class DownloadService:
                 job_id,
             )
 
+        self._attach_live_queue_metadata((download,))
         return download
 
     async def queue_downloads(
