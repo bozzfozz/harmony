@@ -1303,6 +1303,8 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert "retry.flac" in html
             assert "Retries" in html
             assert "network timeout" in html
+            assert "status=waiting" in html
+            assert "eta=30s" in html
             assert "Active downloads" in html
             assert "hx-soulseek-downloads" in html
             assert 'data-scope="active"' in html

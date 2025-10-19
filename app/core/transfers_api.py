@@ -96,6 +96,19 @@ class TransfersApi:
             self._raise_from_client_error("Failed to cancel download", exc)
         return self._acknowledged(payload)
 
+    async def get_download_queue(self, transfer_id: str | int) -> dict[str, Any]:
+        """Return live queue metadata for an individual download."""
+
+        normalised = self._normalise_transfer_id(transfer_id)
+        try:
+            payload = await self._client.get_queue_position(normalised)
+        except SoulseekClientError as exc:  # pragma: no cover - network failure path
+            self._raise_from_client_error("Failed to fetch download queue", exc)
+
+        if isinstance(payload, Mapping):
+            return dict(payload)
+        return {}
+
     async def enqueue(
         self,
         *,
