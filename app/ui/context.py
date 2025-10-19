@@ -639,6 +639,215 @@ def build_dashboard_page_context(
     }
 
 
+def build_operations_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="operations",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="operations"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    downloads_fragment: AsyncFragment | None = None
+    jobs_fragment: AsyncFragment | None = None
+    if session.features.dlq:
+        downloads_fragment = AsyncFragment(
+            identifier="hx-downloads-table",
+            url=_safe_url_for(request, "downloads_table", "/ui/downloads/table"),
+            target="#hx-downloads-table",
+            poll_interval_seconds=15,
+            loading_key="downloads",
+        )
+        jobs_fragment = AsyncFragment(
+            identifier="hx-jobs-table",
+            url=_safe_url_for(request, "jobs_table", "/ui/jobs/table"),
+            target="#hx-jobs-table",
+            poll_interval_seconds=15,
+            loading_key="jobs",
+        )
+
+    watchlist_fragment = AsyncFragment(
+        identifier="hx-watchlist-table",
+        url=_safe_url_for(request, "watchlist_table", "/ui/watchlist/table"),
+        target="#hx-watchlist-table",
+        poll_interval_seconds=30,
+        loading_key="watchlist",
+    )
+
+    activity_fragment = AsyncFragment(
+        identifier="hx-activity-table",
+        url=_safe_url_for(request, "activity_table", "/ui/activity/table"),
+        target="#hx-activity-table",
+        poll_interval_seconds=60,
+        loading_key="activity",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "downloads_fragment": downloads_fragment,
+        "jobs_fragment": jobs_fragment,
+        "watchlist_fragment": watchlist_fragment,
+        "activity_fragment": activity_fragment,
+        "dashboard_url": "/ui",
+        "downloads_page_url": "/ui/downloads",
+        "jobs_page_url": "/ui/jobs",
+        "watchlist_page_url": "/ui/watchlist",
+        "activity_page_url": "/ui/activity",
+    }
+
+
+def build_downloads_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="downloads",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="operations"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    downloads_fragment = AsyncFragment(
+        identifier="hx-downloads-table",
+        url=_safe_url_for(request, "downloads_table", "/ui/downloads/table"),
+        target="#hx-downloads-table",
+        poll_interval_seconds=15,
+        loading_key="downloads",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "downloads_fragment": downloads_fragment,
+        "operations_url": "/ui/operations",
+    }
+
+
+def build_jobs_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="jobs",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="operations"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    jobs_fragment = AsyncFragment(
+        identifier="hx-jobs-table",
+        url=_safe_url_for(request, "jobs_table", "/ui/jobs/table"),
+        target="#hx-jobs-table",
+        poll_interval_seconds=15,
+        loading_key="jobs",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "jobs_fragment": jobs_fragment,
+        "operations_url": "/ui/operations",
+    }
+
+
+def build_watchlist_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="watchlist",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="operations"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    watchlist_fragment = AsyncFragment(
+        identifier="hx-watchlist-table",
+        url=_safe_url_for(request, "watchlist_table", "/ui/watchlist/table"),
+        target="#hx-watchlist-table",
+        poll_interval_seconds=30,
+        loading_key="watchlist",
+    )
+
+    watchlist_form = FormDefinition(
+        identifier="watchlist-create-form",
+        method="post",
+        action="/ui/watchlist",
+        submit_label_key="watchlist.create",
+        fields=(
+            FormField(
+                name="artist_key",
+                input_type="text",
+                label_key="watchlist.artist",
+                required=True,
+            ),
+            FormField(
+                name="priority",
+                input_type="number",
+                label_key="watchlist.priority",
+            ),
+        ),
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "watchlist_fragment": watchlist_fragment,
+        "watchlist_form": watchlist_form,
+        "operations_url": "/ui/operations",
+    }
+
+
+def build_activity_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="activity",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="operations"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    activity_fragment = AsyncFragment(
+        identifier="hx-activity-table",
+        url=_safe_url_for(request, "activity_table", "/ui/activity/table"),
+        target="#hx-activity-table",
+        poll_interval_seconds=60,
+        loading_key="activity",
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "activity_fragment": activity_fragment,
+        "operations_url": "/ui/operations",
+    }
+
+
 def _format_activity_cell(value: Any) -> str:
     if value is None:
         return ""
@@ -3224,8 +3433,11 @@ __all__ = [
     "build_spotify_free_ingest_form_context",
     "build_spotify_free_ingest_status_context",
     "build_activity_fragment_context",
+    "build_activity_page_context",
     "build_dashboard_page_context",
+    "build_downloads_page_context",
     "build_login_page_context",
+    "build_operations_page_context",
     "build_primary_navigation",
     "build_soulseek_page_context",
     "build_soulseek_status_context",
@@ -3237,5 +3449,6 @@ __all__ = [
     "build_downloads_fragment_context",
     "build_jobs_fragment_context",
     "build_search_results_context",
+    "build_watchlist_page_context",
     "build_watchlist_fragment_context",
 ]

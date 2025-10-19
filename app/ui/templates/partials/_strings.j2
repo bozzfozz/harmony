@@ -4,6 +4,9 @@
   {%- set titles = {
     "login": "Login",
     "dashboard": "Dashboard",
+    "operations": "Operations",
+    "downloads": "Downloads",
+    "jobs": "Jobs",
     "activity": "Activity",
     "watchlist": "Watchlist",
     "spotify": "Spotify",
@@ -21,6 +24,9 @@
   {%- set headings = {
     "login": "Sign in",
     "dashboard": "Welcome",
+    "operations": "Operations overview",
+    "downloads": "Download queue",
+    "jobs": "Background jobs",
     "activity": "Recent activity",
     "watchlist": "Watchlist",
     "spotify": "Spotify integration",
@@ -126,9 +132,33 @@
     "soulseek.downloads.show_all": "All downloads",
     "soulseek.downloads.cleanup": "Remove completed downloads",
     "soulseek.retry": "Retry",
+    "watchlist.create": "Add artist",
+    "operations.view_details": "Open details",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
+
+{% macro link_text(key) -%}
+  {%- set labels = {
+    "operations.back_to_dashboard": "Back to dashboard",
+    "operations.back_to_overview": "Back to operations overview",
+    "operations.view_downloads": "View download queue",
+    "operations.view_jobs": "View orchestrator jobs",
+    "operations.view_watchlist": "Manage watchlist",
+    "operations.view_activity": "View activity log",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro operations_page_intro() %}Monitor key operator workflows from a single overview.{% endmacro %}
+
+{% macro downloads_page_intro() %}Review and monitor queued downloads with live updates every 15 seconds.{% endmacro %}
+
+{% macro jobs_page_intro() %}Inspect orchestrator jobs and their current status with automatic refreshes.{% endmacro %}
+
+{% macro watchlist_page_intro() %}Add artists to the watchlist and watch processing states update in real time.{% endmacro %}
+
+{% macro activity_page_intro() %}Follow recent activity entries with automatic refreshes and pagination controls.{% endmacro %}
 
 {% macro status_badge_label(key) -%}
   {%- set labels = {
@@ -357,6 +387,14 @@
     Waiting for search results…
   {%- elif key == "search.queue" -%}
     Loading the Soulseek queue…
+  {%- elif key == "downloads" -%}
+    Loading download queue…
+  {%- elif key == "jobs" -%}
+    Loading job information…
+  {%- elif key == "watchlist" -%}
+    Loading watchlist entries…
+  {%- elif key == "activity" -%}
+    Loading activity entries…
   {%- elif key == "soulseek.status" -%}
     Checking Soulseek connection…
   {%- elif key == "soulseek.configuration" -%}

@@ -1,0 +1,41 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.jobs_page_intro() }}</p>
+    <p>
+      <a href="{{ operations_url }}">{{ strings.link_text("operations.back_to_overview") }}</a>
+    </p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section class="page-section page-section--card" aria-labelledby="{{ jobs_fragment.identifier }}-heading">
+    <h3 id="{{ jobs_fragment.identifier }}-heading" class="page-section__title">
+      {{ strings.section_heading(layout.page_id) }}
+    </h3>
+    <div id="{{ jobs_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ jobs_fragment.identifier }}-heading"
+         data-fragment="jobs-table"
+         hx-get="{{ jobs_fragment.url }}"
+         hx-trigger="{{ jobs_fragment.trigger }}"
+         hx-target="{{ jobs_fragment.target }}"
+         hx-swap="{{ jobs_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(jobs_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+{% endblock %}
