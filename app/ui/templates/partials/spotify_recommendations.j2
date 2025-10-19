@@ -59,7 +59,18 @@
         <p class="form-field__error">{{ form_errors.get('limit') }}</p>
       {% endif %}
     </div>
-    <button type="submit">{{ strings.button_label("spotify.recommendations.submit") }}</button>
+    <div class="spotify-recommendations__actions">
+      <button type="submit" name="action" value="submit">{{ strings.button_label("spotify.recommendations.submit") }}</button>
+      {% if show_admin_controls %}
+        <div class="spotify-recommendations__admin">
+          <button type="submit" name="action" value="load_defaults" formnovalidate>{{ strings.button_label("spotify.recommendations.load_defaults") }}</button>
+          <button type="submit" name="action" value="save_defaults">{{ strings.button_label("spotify.recommendations.save_defaults") }}</button>
+          {% if seed_defaults %}
+            <p class="spotify-recommendations__admin-note">Stored defaults: {{ seed_defaults.get('seed_artists', '') or '—' }}, {{ seed_defaults.get('seed_tracks', '') or '—' }}, {{ seed_defaults.get('seed_genres', '') or '—' }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
   </form>
 
   {% if seeds %}
@@ -82,7 +93,7 @@
   <div class="spotify-recommendations__results">
     <div class="table-external-link-hint">
       <span class="table-external-link__icon" aria-hidden="true">↗</span>
-      <span>{{ strings.spotify_external_link_hint() }}</span>
+                    <span>{{ strings.spotify_external_link_hint() }}</span>
     </div>
     {{ tables.render_table_fragment(fragment) }}
   </div>

@@ -385,6 +385,12 @@ class _StubSpotifyService:
         self.free_upload_tracks: tuple[str, ...] = ("Artist - Track",)
         self._free_ingest_result_store: SpotifyFreeIngestResult | None = None
         self._free_ingest_error_store: str | None = None
+        self.recommendation_seed_defaults: dict[str, str] = {}
+        self.save_seed_defaults_calls: list[
+            tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]
+        ] = []
+        self.queue_recommendation_calls: list[tuple[str, ...]] = []
+        self.queue_recommendation_exception: Exception | None = None
 
     def status(self) -> SpotifyStatus:
         return self._status
@@ -475,6 +481,36 @@ class _StubSpotifyService:
         if self.recommendations_exception:
             raise self.recommendations_exception
         return tuple(self.recommendation_rows), tuple(self.recommendation_seeds)
+
+    def get_recommendation_seed_defaults(self) -> Mapping[str, str]:
+        return dict(self.recommendation_seed_defaults)
+
+    def save_recommendation_seed_defaults(
+        self,
+        *,
+        seed_tracks: Sequence[str],
+        seed_artists: Sequence[str],
+        seed_genres: Sequence[str],
+    ) -> Mapping[str, str]:
+        record = (tuple(seed_tracks), tuple(seed_artists), tuple(seed_genres))
+        self.save_seed_defaults_calls.append(record)
+        self.recommendation_seed_defaults = {
+            "seed_tracks": ", ".join(seed_tracks),
+            "seed_artists": ", ".join(seed_artists),
+            "seed_genres": ", ".join(seed_genres),
+        }
+        return dict(self.recommendation_seed_defaults)
+
+    async def queue_recommendation_tracks(
+        self, track_ids: Sequence[str]
+    ) -> SpotifyFreeIngestResult:
+        self.queue_recommendation_calls.append(tuple(track_ids))
+        if self.queue_recommendation_exception:
+            exc = self.queue_recommendation_exception
+            if isinstance(exc, AppError):
+                raise exc
+            raise exc
+        return self.queue_result
 
     def list_saved_tracks(
         self, *, limit: int, offset: int
@@ -2287,6 +2323,141 @@ def test_spotify_recommendations_submit_handles_service_error(monkeypatch) -> No
             _assert_html_response(response, status_code=400)
             assert "Invalid seeds" in response.text
             assert stub.recommendations_calls == [(("track-1",), (), (), 5)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_queue_action(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "queue",
+                    "track_id": "track-1",
+                    "seed_tracks": "track-1",
+                    "seed_artists": "artist-1",
+                    "seed_genres": "",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "Queued 1 Spotify track" in response.text
+            assert stub.queue_recommendation_calls == [("track-1",)]
+            assert stub.recommendations_calls == [(("track-1",), ("artist-1",), (), 10)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_queue_handles_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.queue_recommendation_exception = ValueError("Unable to queue tracks")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "queue",
+                    "track_id": "track-1",
+                    "seed_tracks": "track-1",
+                    "seed_artists": "",
+                    "seed_genres": "",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "Unable to queue tracks" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_save_defaults_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "save_defaults",
+                    "seed_tracks": "track-1",
+                    "seed_artists": "artist-1",
+                    "seed_genres": "genre-1",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert "Default recommendation seeds saved." in response.text
+            assert stub.save_seed_defaults_calls == [(("track-1",), ("artist-1",), ("genre-1",))]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_save_defaults_requires_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "save_defaults",
+                    "seed_tracks": "track-1",
+                    "seed_artists": "artist-1",
+                    "seed_genres": "genre-1",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_recommendations_submit_load_defaults_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.recommendation_seed_defaults = {
+        "seed_tracks": "track-2",
+        "seed_artists": "artist-2",
+        "seed_genres": "genre-2",
+    }
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "load_defaults",
+                    "limit": "20",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert 'value="track-2"' in response.text
+            assert 'value="artist-2"' in response.text
+            assert "genre-2" in response.text
+            assert stub.recommendations_calls == [(("track-2",), ("artist-2",), ("genre-2",), 20)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

@@ -322,13 +322,29 @@ def test_build_recommendations_context_adds_detail_action() -> None:
     assert preview_cell.test_id == "spotify-recommendation-preview-cell-track-xyz"
     assert preview_cell.text == "—"
     action_cell = recommendation_row.cells[-1]
-    assert action_cell.forms and len(action_cell.forms) == 2
-    view_form, save_form = action_cell.forms
+    assert action_cell.forms and len(action_cell.forms) == 3
+    view_form, queue_form, save_form = action_cell.forms
     assert view_form.action.endswith("/tracks/track-xyz")
     assert view_form.method == "get"
     assert view_form.hx_method == "get"
     assert view_form.hx_target == "#modal-root"
     assert view_form.submit_label_key == "spotify.track.view"
+    assert queue_form.action.endswith("/ui/spotify/recommendations")
+    assert queue_form.method == "post"
+    assert queue_form.hx_method == "post"
+    assert queue_form.hx_target == "#hx-spotify-recommendations"
+    assert queue_form.hx_swap == "outerHTML"
+    assert queue_form.submit_label_key == "spotify.saved.queue"
+    assert queue_form.hidden_fields == {
+        "csrftoken": "csrf-token",
+        "action": "queue",
+        "track_id": "track-xyz",
+        "seed_artists": "",
+        "seed_tracks": "",
+        "seed_genres": "",
+        "limit": "50",
+    }
+    assert queue_form.disabled is False
     assert save_form.action.endswith("/ui/spotify/saved/save")
     assert save_form.method == "post"
     assert save_form.hx_method == "post"
@@ -375,6 +391,26 @@ def test_build_recommendations_context_includes_preview_player() -> None:
     assert "controls" in html
     assert 'data-test="spotify-recommendation-preview-track-abc"' in html
     assert "https://cdn.example/track-abc.mp3" in html
+
+
+def test_build_recommendations_context_uses_seed_defaults() -> None:
+    request = _make_request()
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf-token",
+        seed_defaults={
+            "seed_tracks": "track-default",
+            "seed_artists": "artist-default",
+            "seed_genres": "genre-default",
+        },
+        show_admin_controls=True,
+    )
+
+    defaults = context["form_defaults"]
+    assert defaults["seed_tracks"] == "track-default"
+    assert defaults["seed_artists"] == "artist-default"
+    assert defaults["seed_genres"] == "genre-default"
+    assert context["show_admin_controls"] is True
 
 
 def test_build_playlist_items_context_formats_added_timestamp() -> None:

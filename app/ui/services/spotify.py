@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -31,10 +32,12 @@ from app.services.free_ingest_service import (
 )
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
 from app.services.spotify_domain_service import SpotifyDomainService, SpotifyServiceStatus
+from app.utils.settings_store import read_setting, write_setting
 
 logger = get_logger(__name__)
 
 _SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset({"short_term", "medium_term", "long_term"})
+_RECOMMENDATION_SEED_SETTINGS_KEY: Final[str] = "spotify.recommendations.seed_defaults"
 
 
 def _normalise_time_range(value: str | None) -> str | None:
@@ -799,6 +802,40 @@ class SpotifyUiService:
         return len(cleaned)
 
     async def queue_saved_tracks(self, track_ids: Sequence[str]) -> SpotifyFreeIngestResult:
+        return await self._queue_tracks(
+            track_ids,
+            log_namespace="spotify.ui.saved_tracks.queue",
+        )
+
+    @staticmethod
+    def _clean_seed_values(values: Sequence[str]) -> tuple[str, ...]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            candidate = str(value or "").strip()
+            if not candidate:
+                continue
+            key = candidate.lower()
+            if key in seen:
+                continue
+            cleaned.append(candidate)
+            seen.add(key)
+        return tuple(cleaned)
+
+    async def queue_recommendation_tracks(
+        self, track_ids: Sequence[str]
+    ) -> SpotifyFreeIngestResult:
+        return await self._queue_tracks(
+            track_ids,
+            log_namespace="spotify.ui.recommendations.queue",
+        )
+
+    async def _queue_tracks(
+        self,
+        track_ids: Sequence[str],
+        *,
+        log_namespace: str,
+    ) -> SpotifyFreeIngestResult:
         cleaned = self._clean_track_ids(track_ids)
         if not cleaned:
             raise ValueError("At least one Spotify track identifier is required.")
@@ -812,7 +849,7 @@ class SpotifyUiService:
                 raise
             except Exception:
                 logger.exception(
-                    "spotify.ui.saved_tracks.queue.detail_error",
+                    f"{log_namespace}.detail_error",
                     extra={"track_id": track_id},
                 )
                 skipped.append(track_id)
@@ -830,7 +867,7 @@ class SpotifyUiService:
 
         if not ingest_lines:
             logger.warning(
-                "spotify.ui.saved_tracks.queue.no_ingest_lines",
+                f"{log_namespace}.no_ingest_lines",
                 extra={"requested": len(cleaned)},
             )
             raise ValueError("Unable to queue downloads for the selected tracks.")
@@ -839,7 +876,7 @@ class SpotifyUiService:
             submission = await self._spotify.submit_free_ingest(tracks=tuple(ingest_lines))
         except PlaylistValidationError as exc:
             logger.warning(
-                "spotify.ui.saved_tracks.queue.validation_error",
+                f"{log_namespace}.validation_error",
                 extra={"invalid": len(exc.invalid_links), "requested": len(cleaned)},
             )
             raise ValueError("Unable to queue downloads for the selected tracks.") from exc
@@ -847,14 +884,14 @@ class SpotifyUiService:
             raise
         except Exception:
             logger.exception(
-                "spotify.ui.saved_tracks.queue.submit_error",
+                f"{log_namespace}.submit_error",
                 extra={"requested": len(cleaned), "prepared": len(ingest_lines)},
             )
             raise
 
         result = self._map_ingest_submission(submission)
         logger.info(
-            "spotify.ui.saved_tracks.queue.success",
+            f"{log_namespace}.success",
             extra={
                 "requested": len(cleaned),
                 "queued": result.accepted.tracks,
@@ -864,20 +901,74 @@ class SpotifyUiService:
         )
         return result
 
+    def get_recommendation_seed_defaults(self) -> Mapping[str, str]:
+        seeds = self._load_recommendation_seed_defaults()
+        return self._format_seed_defaults(*seeds)
+
+    def save_recommendation_seed_defaults(
+        self,
+        *,
+        seed_tracks: Sequence[str],
+        seed_artists: Sequence[str],
+        seed_genres: Sequence[str],
+    ) -> Mapping[str, str]:
+        cleaned_tracks = self._clean_seed_values(seed_tracks)
+        cleaned_artists = self._clean_seed_values(seed_artists)
+        cleaned_genres = self._clean_seed_values(seed_genres)
+        payload = {
+            "tracks": list(cleaned_tracks),
+            "artists": list(cleaned_artists),
+            "genres": list(cleaned_genres),
+        }
+        write_setting(
+            _RECOMMENDATION_SEED_SETTINGS_KEY,
+            json.dumps(payload, separators=(",", ":")),
+        )
+        logger.info(
+            "spotify.ui.recommendations.defaults.save",
+            extra={
+                "tracks": len(cleaned_tracks),
+                "artists": len(cleaned_artists),
+                "genres": len(cleaned_genres),
+            },
+        )
+        return self._format_seed_defaults(
+            cleaned_tracks,
+            cleaned_artists,
+            cleaned_genres,
+        )
+
+    def _load_recommendation_seed_defaults(
+        self,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        raw = read_setting(_RECOMMENDATION_SEED_SETTINGS_KEY)
+        if not raw:
+            return (), (), ()
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            logger.warning("spotify.ui.recommendations.defaults.invalid_store")
+            return (), (), ()
+
+        def _extract(key: str) -> tuple[str, ...]:
+            value = data.get(key)
+            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                return ()
+            return self._clean_seed_values(tuple(str(item) for item in value))
+
+        return _extract("tracks"), _extract("artists"), _extract("genres")
+
     @staticmethod
-    def _clean_seed_values(values: Sequence[str]) -> tuple[str, ...]:
-        cleaned: list[str] = []
-        seen: set[str] = set()
-        for value in values:
-            candidate = str(value or "").strip()
-            if not candidate:
-                continue
-            key = candidate.lower()
-            if key in seen:
-                continue
-            cleaned.append(candidate)
-            seen.add(key)
-        return tuple(cleaned)
+    def _format_seed_defaults(
+        tracks: Sequence[str],
+        artists: Sequence[str],
+        genres: Sequence[str],
+    ) -> Mapping[str, str]:
+        return {
+            "seed_tracks": ", ".join(tracks),
+            "seed_artists": ", ".join(artists),
+            "seed_genres": ", ".join(genres),
+        }
 
     @staticmethod
     def _normalise_recommendation_rows(entries: object) -> tuple[SpotifyRecommendationRow, ...]:
