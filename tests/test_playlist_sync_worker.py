@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import cast
+
+from app.core.spotify_client import SpotifyClient
+from app.db import init_db, session_scope
+from app.models import Playlist
+from app.workers.playlist_sync_worker import PlaylistSyncWorker
+
+
+def _worker() -> PlaylistSyncWorker:
+    client = cast(SpotifyClient, object())
+    return PlaylistSyncWorker(client)
+
+
+def test_persist_playlists_populates_metadata() -> None:
+    init_db()
+    worker = _worker()
+    timestamp = datetime(2023, 9, 1, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+    payload = {
+        "id": "playlist-1",
+        "name": "Example",
+        "tracks": {"total": 15},
+        "owner": {"display_name": "Owner A", "id": "owner-a"},
+        "followers": {"total": 42},
+        "snapshot_id": "snapshot-1",
+        "public": True,
+        "collaborative": False,
+    }
+
+    processed = worker._persist_playlists([payload], timestamp, None)
+
+    assert processed == 1
+    with session_scope() as session:
+        record = session.get(Playlist, "playlist-1")
+        assert record is not None
+        assert record.metadata_json["owner"] == "Owner A"
+        assert record.metadata_json["owner_id"] == "owner-a"
+        assert record.metadata_json["followers"] == 42
+        assert record.metadata_json["snapshot_id"] == "snapshot-1"
+        assert record.metadata_json["sync_status"] == "fresh"
+
+
+def test_persist_playlists_marks_stale_on_snapshot_change() -> None:
+    init_db()
+    worker = _worker()
+    timestamp = datetime(2023, 9, 1, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+    first_payload = {
+        "id": "playlist-2",
+        "name": "Daily Mix",
+        "tracks": {"total": 10},
+        "owner": {"display_name": "Owner B", "id": "owner-b"},
+        "followers": {"total": 5},
+        "snapshot_id": "snapshot-1",
+    }
+    worker._persist_playlists([first_payload], timestamp, None)
+
+    second_payload = dict(first_payload, snapshot_id="snapshot-2", followers={"total": 7})
+    worker._persist_playlists([second_payload], timestamp, None)
+
+    with session_scope() as session:
+        record = session.get(Playlist, "playlist-2")
+        assert record is not None
+        assert record.metadata_json["followers"] == 7
+        assert record.metadata_json["sync_status"] == "stale"
+        assert record.metadata_json["snapshot_id"] == "snapshot-2"

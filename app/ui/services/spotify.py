@@ -92,6 +92,10 @@ class SpotifyPlaylistRow:
     name: str
     track_count: int
     updated_at: datetime
+    owner: str | None
+    owner_id: str | None
+    follower_count: int
+    sync_status: str | None
 
 
 @dataclass(slots=True)
@@ -360,6 +364,10 @@ class SpotifyUiService:
                 name=playlist.name,
                 track_count=int(playlist.track_count or 0),
                 updated_at=playlist.updated_at or datetime.utcnow(),
+                owner=self._extract_owner(playlist),
+                owner_id=self._extract_owner_id(playlist),
+                follower_count=self._extract_follower_count(playlist),
+                sync_status=self._extract_sync_status(playlist),
             )
             for playlist in playlists
             if self._matches_playlist_filters(
@@ -564,11 +572,26 @@ class SpotifyUiService:
                 if owner_candidate:
                     return owner_candidate
 
-        metadata = getattr(playlist, "metadata", None)
+        metadata = getattr(playlist, "metadata_json", None)
         if isinstance(metadata, Mapping):
             owner_value = metadata.get("owner")
             if isinstance(owner_value, str) and owner_value.strip():
                 return owner_value.strip()
+        return None
+
+    def _extract_owner_id(self, playlist: Any) -> str | None:
+        for attribute in ("owner_id", "owner_identifier"):
+            value = getattr(playlist, attribute, None)
+            if isinstance(value, str):
+                candidate = value.strip()
+                if candidate:
+                    return candidate
+
+        metadata = getattr(playlist, "metadata_json", None)
+        if isinstance(metadata, Mapping):
+            value = metadata.get("owner_id")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
         return None
 
     def _extract_sync_status(self, playlist: Any) -> str | None:
@@ -579,12 +602,30 @@ class SpotifyUiService:
                 if status_candidate:
                     return status_candidate
 
-        metadata = getattr(playlist, "metadata", None)
+        metadata = getattr(playlist, "metadata_json", None)
         if isinstance(metadata, Mapping):
             status_value = metadata.get("sync_status")
             if isinstance(status_value, str) and status_value.strip():
                 return status_value.strip()
         return None
+
+    def _extract_follower_count(self, playlist: Any) -> int:
+        direct = getattr(playlist, "follower_count", None)
+        try:
+            if direct is not None:
+                return max(int(direct), 0)
+        except (TypeError, ValueError):
+            pass
+
+        metadata = getattr(playlist, "metadata_json", None)
+        if isinstance(metadata, Mapping):
+            value = metadata.get("followers")
+            try:
+                if value is not None:
+                    return max(int(value), 0)
+            except (TypeError, ValueError):
+                return 0
+        return 0
 
     def _matches_playlist_filters(
         self,

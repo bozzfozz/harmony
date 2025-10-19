@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -238,10 +238,14 @@ class PlaylistSyncWorker:
                             candidate=timestamp,
                             floor=last_assigned,
                         )
+                        playlist.metadata_json = self._build_playlist_metadata(payload)
                         session.add(playlist)
                     else:
                         playlist.name = str(name)
                         playlist.track_count = track_count
+                        playlist.metadata_json = self._build_playlist_metadata(
+                            payload, previous=playlist.metadata_json
+                        )
                         playlist.updated_at = self._compute_next_updated_at(
                             previous=playlist.updated_at,
                             candidate=timestamp,
@@ -323,3 +327,90 @@ class PlaylistSyncWorker:
                 track_count = 0
 
         return max(track_count, 0)
+
+    @staticmethod
+    def _build_playlist_metadata(
+        payload: Mapping[str, Any],
+        *,
+        previous: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        metadata: dict[str, Any] = dict(previous or {})
+        prior_snapshot = PlaylistSyncWorker._clean_text(metadata.get("snapshot_id"))
+        prior_status = PlaylistSyncWorker._clean_text(metadata.get("sync_status"))
+
+        owner_payload = payload.get("owner")
+        if isinstance(owner_payload, Mapping):
+            owner_display = PlaylistSyncWorker._clean_text(owner_payload.get("display_name"))
+            owner_id = PlaylistSyncWorker._clean_text(owner_payload.get("id"))
+            if owner_display:
+                metadata["owner"] = owner_display
+                metadata["owner_display_name"] = owner_display
+            elif "owner" in metadata:
+                metadata.pop("owner", None)
+                metadata.pop("owner_display_name", None)
+            if owner_id:
+                metadata["owner_id"] = owner_id
+            elif "owner_id" in metadata:
+                metadata.pop("owner_id", None)
+
+        followers_payload = payload.get("followers")
+        followers_total = PlaylistSyncWorker._extract_int(followers_payload, "total")
+        if followers_total is not None:
+            metadata["followers"] = max(followers_total, 0)
+
+        snapshot_id = PlaylistSyncWorker._clean_text(payload.get("snapshot_id"))
+        if snapshot_id:
+            metadata["snapshot_id"] = snapshot_id
+
+        public_value = payload.get("public")
+        if isinstance(public_value, bool):
+            metadata["public"] = public_value
+
+        collaborative = payload.get("collaborative")
+        if isinstance(collaborative, bool):
+            metadata["collaborative"] = collaborative
+
+        sync_status = PlaylistSyncWorker._derive_sync_status(
+            snapshot_id=snapshot_id,
+            previous_snapshot=prior_snapshot,
+            previous_status=prior_status,
+        )
+        if sync_status:
+            metadata["sync_status"] = sync_status
+
+        # TODO: clarify sync semantics with product; snapshot heuristic used for now.
+
+        return metadata or None
+
+    @staticmethod
+    def _derive_sync_status(
+        *,
+        snapshot_id: str | None,
+        previous_snapshot: str | None,
+        previous_status: str | None,
+    ) -> str | None:
+        if snapshot_id:
+            if previous_snapshot and previous_snapshot != snapshot_id:
+                return "stale"
+            return "fresh"
+
+        return previous_status or None
+
+    @staticmethod
+    def _extract_int(value: Any, key: str | None = None) -> int | None:
+        target = value
+        if key and isinstance(value, Mapping):
+            target = value.get(key)
+        try:
+            if target is None:
+                return None
+            return int(target)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _clean_text(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        return candidate or None
