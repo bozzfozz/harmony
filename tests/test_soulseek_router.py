@@ -1,3 +1,12 @@
+"""Integration tests for the Soulseek router.
+
+The test suite covers both synchronous download workflows (legacy tests) and
+new asynchronous checks ensuring the upload endpoints return the expected JSON
+payloads and translate `SoulseekClientError` instances into HTTP 502
+exceptions. Success and failure paths for cancel, detail, listing, and cleanup
+operations are exercised via mocked `SoulseekClient` instances.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -5,16 +14,16 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from app.config import load_config
 from app.db import init_db, session_scope
 from app.dependencies import get_app_config, get_db, get_soulseek_client
 from app.models import Download
-from app.core.soulseek_client import SoulseekClientError
+from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.utils.path_safety import allowed_download_roots
 
 _SOULSEEK_MODULE_SPEC = importlib.util.spec_from_file_location(
@@ -38,6 +47,17 @@ class _MockSoulseekClient:
         self.remove_completed_downloads = AsyncMock()
         self.get_queue_position = AsyncMock()
         self.enqueue = AsyncMock()
+
+
+@pytest.fixture()
+def upload_client_mock() -> Mock:
+    client = Mock(spec=SoulseekClient)
+    client.cancel_upload = AsyncMock()
+    client.get_upload = AsyncMock()
+    client.get_uploads = AsyncMock()
+    client.get_all_uploads = AsyncMock()
+    client.remove_completed_uploads = AsyncMock()
+    return client
 
 
 class _StubSyncWorker:
@@ -198,6 +218,8 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
     with session_scope() as session:
         stored = session.query(Download).one()
         assert Path(stored.filename) == expected_path
+
+
         stored_payload = dict(stored.request_payload or {})
 
     sync_worker: _StubSyncWorker = soulseek_client.app.state.sync_worker
@@ -207,6 +229,139 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
     assert job_file["filename"] == "album/song.mp3"
     file_metadata = stored_payload.get("file") if isinstance(stored_payload, dict) else None
     assert file_metadata and file_metadata.get("local_path") == str(expected_path)
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_upload_detail_success(upload_client_mock: Mock) -> None:
+    expected = {"id": "upload-1", "status": "active"}
+    upload_client_mock.get_upload.return_value = expected
+
+    result = await _soulseek_module.soulseek_upload_detail(
+        "upload-1", client=upload_client_mock
+    )
+
+    assert result == expected
+    upload_client_mock.get_upload.assert_awaited_once_with("upload-1")
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_upload_detail_error(upload_client_mock: Mock) -> None:
+    upload_client_mock.get_upload.side_effect = SoulseekClientError("boom")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_upload_detail(
+            "upload-2", client=upload_client_mock
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to fetch upload"
+    upload_client_mock.get_upload.assert_awaited_once_with("upload-2")
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_uploads_success(upload_client_mock: Mock) -> None:
+    expected = [{"id": "u1"}, {"id": "u2"}]
+    upload_client_mock.get_uploads.return_value = expected
+
+    result = await _soulseek_module.soulseek_uploads(client=upload_client_mock)
+
+    assert result == {"uploads": expected}
+    upload_client_mock.get_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_uploads_error(upload_client_mock: Mock) -> None:
+    upload_client_mock.get_uploads.side_effect = SoulseekClientError("fail")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_uploads(client=upload_client_mock)
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to fetch uploads"
+    upload_client_mock.get_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_all_uploads_success(upload_client_mock: Mock) -> None:
+    expected = [{"id": "u1"}]
+    upload_client_mock.get_all_uploads.return_value = expected
+
+    result = await _soulseek_module.soulseek_all_uploads(client=upload_client_mock)
+
+    assert result == {"uploads": expected}
+    upload_client_mock.get_all_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_all_uploads_error(upload_client_mock: Mock) -> None:
+    upload_client_mock.get_all_uploads.side_effect = SoulseekClientError("error")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_all_uploads(client=upload_client_mock)
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to fetch all uploads"
+    upload_client_mock.get_all_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_remove_completed_uploads_success(
+    upload_client_mock: Mock,
+) -> None:
+    expected = {"removed": 3}
+    upload_client_mock.remove_completed_uploads.return_value = expected
+
+    result = await _soulseek_module.soulseek_remove_completed_uploads(
+        client=upload_client_mock
+    )
+
+    assert result == expected
+    upload_client_mock.remove_completed_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_remove_completed_uploads_error(
+    upload_client_mock: Mock,
+) -> None:
+    upload_client_mock.remove_completed_uploads.side_effect = SoulseekClientError(
+        "nope"
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_remove_completed_uploads(
+            client=upload_client_mock
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to remove completed uploads"
+    upload_client_mock.remove_completed_uploads.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_cancel_upload_success(upload_client_mock: Mock) -> None:
+    expected = {"cancelled": True}
+    upload_client_mock.cancel_upload.return_value = expected
+
+    result = await _soulseek_module.soulseek_cancel_upload(
+        "upload-3", client=upload_client_mock
+    )
+
+    assert result == expected
+    upload_client_mock.cancel_upload.assert_awaited_once_with("upload-3")
+
+
+@pytest.mark.asyncio()
+async def test_soulseek_cancel_upload_error(upload_client_mock: Mock) -> None:
+    upload_client_mock.cancel_upload.side_effect = SoulseekClientError("kaboom")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_cancel_upload(
+            "upload-4", client=upload_client_mock
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Failed to cancel upload"
+    upload_client_mock.cancel_upload.assert_awaited_once_with("upload-4")
 
 
 def test_lyrics_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> None:
