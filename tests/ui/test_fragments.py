@@ -2235,6 +2235,12 @@ def test_spotify_top_tracks_fragment_renders_table(monkeypatch) -> None:
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
+            saved_response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 10, "offset": 30},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(saved_response)
             response = client.get(
                 "/ui/spotify/top/tracks",
                 headers={"Cookie": _cookies_header(client)},
@@ -2244,6 +2250,8 @@ def test_spotify_top_tracks_fragment_renders_table(monkeypatch) -> None:
             assert "spotify-top-tracks-table" in response.text
             assert "table-external-link-hint" in response.text
             assert "spotify-top-track-link-top-track-1" in response.text
+            assert 'name="limit" value="10"' in response.text
+            assert 'name="offset" value="30"' in response.text
             assert stub.top_tracks_calls == [(20, "medium_term")]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
@@ -2328,6 +2336,13 @@ def test_spotify_recommendations_submit_success(monkeypatch) -> None:
         with _create_client(monkeypatch) as client:
             _login(client)
             headers = _csrf_headers(client)
+            saved_response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 12, "offset": 18},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(saved_response)
+            headers["Cookie"] = _cookies_header(client)
             response = client.post(
                 "/ui/spotify/recommendations",
                 data={
@@ -2347,6 +2362,7 @@ def test_spotify_recommendations_submit_success(monkeypatch) -> None:
             assert "spotify-recommendation-link-track-reco-1" in response.text
             assert "table-external-link-hint" in response.text
             assert stub.recommendations_calls == [(("track-1",), ("artist-1",), ("rock",), 10)]
+            assert 'name="offset" value="18"' in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
@@ -2730,6 +2746,53 @@ def test_spotify_saved_tracks_action_save_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_saved_tracks_action_save_uses_persisted_pagination(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.saved_tracks_rows = [
+        SpotifySavedTrackRow(
+            identifier=f"track-{index}",
+            name=f"Track {index}",
+            artists=(f"Artist {index}",),
+            album="Album",
+            added_at=datetime(2023, 1, 1, 12, 0),
+        )
+        for index in range(60)
+    ]
+    stub.saved_tracks_total = len(stub.saved_tracks_rows)
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            csrf_headers = _csrf_headers(client)
+            saved_response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 15, "offset": 45},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(saved_response)
+            action_headers = {
+                "Cookie": _cookies_header(client),
+                "X-CSRF-Token": csrf_headers["X-CSRF-Token"],
+                "HX-Request": "true",
+                "HX-Current-URL": "http://testserver/ui/spotify/saved?limit=15&offset=45",
+            }
+            response = client.post(
+                "/ui/spotify/saved/save",
+                data={
+                    "csrftoken": csrf_headers["X-CSRF-Token"],
+                    "track_id": "track-999",
+                },
+                headers=action_headers,
+            )
+            _assert_html_response(response)
+            assert stub.save_calls[-1] == ("track-999",)
+            assert stub.list_saved_calls[-1] == (15, 45)
+            assert 'name="offset" value="45"' in response.text
+            assert client.cookies.get("spotify_saved_tracks_offset") == "45"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
 def test_spotify_saved_tracks_action_queue_success(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.queue_result = SpotifyFreeIngestResult(
@@ -2807,6 +2870,54 @@ def test_spotify_saved_tracks_action_remove_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert "No Spotify tracks are currently saved" in response.text
             assert stub.remove_calls == [("track-1",)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_remove_uses_persisted_pagination(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.saved_tracks_rows = [
+        SpotifySavedTrackRow(
+            identifier=f"track-{index}",
+            name=f"Track {index}",
+            artists=(f"Artist {index}",),
+            album="Album",
+            added_at=datetime(2023, 1, 1, 12, 0),
+        )
+        for index in range(60)
+    ]
+    stub.saved_tracks_total = len(stub.saved_tracks_rows)
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            csrf_headers = _csrf_headers(client)
+            saved_response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 15, "offset": 30},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(saved_response)
+            action_headers = {
+                "Cookie": _cookies_header(client),
+                "X-CSRF-Token": csrf_headers["X-CSRF-Token"],
+                "HX-Request": "true",
+                "HX-Current-URL": "http://testserver/ui/spotify/saved?limit=15&offset=30",
+            }
+            response = client.request(
+                "DELETE",
+                "/ui/spotify/saved/remove",
+                data={
+                    "csrftoken": csrf_headers["X-CSRF-Token"],
+                    "track_id": "track-5",
+                },
+                headers=action_headers,
+            )
+            _assert_html_response(response)
+            assert stub.remove_calls[-1] == ("track-5",)
+            assert stub.list_saved_calls[-1] == (15, 30)
+            assert 'name="offset" value="30"' in response.text
+            assert client.cookies.get("spotify_saved_tracks_offset") == "30"
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
