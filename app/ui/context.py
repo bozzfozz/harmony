@@ -1839,6 +1839,23 @@ def build_spotify_top_artists_context(
                 cells=(
                     TableCell(text=str(artist.rank)),
                     TableCell(text=artist.name),
+                    _build_external_link_cell(
+                        artist.external_url,
+                        cell_test_id=(
+                            f"spotify-top-artist-link-cell-{artist.identifier}"
+                            if artist.identifier
+                            else "spotify-top-artist-link-cell"
+                        ),
+                        anchor_test_id=(
+                            f"spotify-top-artist-link-{artist.identifier}"
+                            if artist.identifier
+                            else "spotify-top-artist-link"
+                        ),
+                        label="Spotify",
+                        aria_label=(
+                            f"Open {artist.name} on Spotify" if artist.name else "Open in Spotify"
+                        ),
+                    ),
                     TableCell(text=f"{artist.followers:,}" if artist.followers else "0"),
                     TableCell(text=str(artist.popularity)),
                     TableCell(text=genres_text),
@@ -1854,6 +1871,7 @@ def build_spotify_top_artists_context(
         column_keys=(
             "spotify.top_artists.rank",
             "spotify.top_artists.name",
+            "spotify.top_artists.link",
             "spotify.top_artists.followers",
             "spotify.top_artists.popularity",
             "spotify.top_artists.genres",

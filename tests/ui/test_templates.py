@@ -376,6 +376,7 @@ def test_spotify_top_artists_partial_renders_table() -> None:
             popularity=99,
             genres=("rock", "indie"),
             rank=1,
+            external_url="https://open.spotify.com/artist/artist-1",
         )
     ]
     context = build_spotify_top_artists_context(
@@ -388,12 +389,15 @@ def test_spotify_top_artists_partial_renders_table() -> None:
 
     assert 'id="hx-spotify-top-artists"' in html
     assert 'class="table"' in html
+    assert 'class="table-external-link-hint"' in html
     assert "Artist One" in html
     assert "543,210" in html
     assert "rock, indie" in html
     assert 'data-count="1"' in html
     assert 'data-test="hx-spotify-top-artists-range-long_term"' in html
     assert 'hx-get="/ui/spotify/top/artists?time_range=medium_term"' in html
+    assert 'data-test="spotify-top-artist-link-cell-artist-1"' in html
+    assert 'data-test="spotify-top-artist-link-artist-1"' in html
 
 
 def test_spotify_recommendations_partial_renders_form_and_results() -> None:
