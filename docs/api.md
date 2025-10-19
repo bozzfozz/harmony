@@ -49,6 +49,9 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
   (`DOWNLOADS_DIR`) sein. Absolute Pfade, Parent-Verweise (`..`) oder Laufwerkspräfixe werden
   mit `400 Bad Request` abgewiesen. Gleiches gilt für nachgelagerte Refresh-Routen, die lokale
   Dateien erneut einlesen.
+- **Suchantwort:** `POST /soulseek/search` liefert weiterhin das rohe Ergebnis unter `results`
+  und `raw`. Zusätzlich stellt `normalised` jetzt eine flache Liste einzelner Datei-Einträge
+  bereit, wie sie von `SoulseekClient.normalise_search_results` aufbereitet werden.
 
 ## Suche & Matching
 

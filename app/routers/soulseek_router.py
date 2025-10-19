@@ -105,6 +105,7 @@ async def soulseek_search(
     except SoulseekClientError as exc:
         logger.error("Soulseek search failed: %s", exc)
         raise HTTPException(status_code=502, detail="Soulseek search failed") from exc
+    normalised_results = client.normalise_search_results(results)
     items: list[Any]
     raw_payload: dict[str, Any] | None = None
     if isinstance(results, dict):
@@ -115,7 +116,11 @@ async def soulseek_search(
         items = results
     else:
         items = [results] if results else []
-    return SoulseekSearchResponse(results=items, raw=raw_payload)
+    return SoulseekSearchResponse(
+        results=items,
+        raw=raw_payload,
+        normalised=normalised_results,
+    )
 
 
 @router.post("/download", response_model=SoulseekDownloadResponse)

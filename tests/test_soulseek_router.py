@@ -38,6 +38,7 @@ router = _soulseek_module.router
 
 class _MockSoulseekClient:
     def __init__(self) -> None:
+        self.search = AsyncMock()
         self.download = AsyncMock(
             side_effect=AssertionError("download should not be invoked during tests")
         )
@@ -53,6 +54,7 @@ class _MockSoulseekClient:
         self.user_directory = AsyncMock()
         self.user_info = AsyncMock()
         self.user_status = AsyncMock()
+        self.normalise_search_results = Mock(return_value=[])
 
 
 @pytest.fixture()
@@ -198,6 +200,45 @@ def test_download_rejects_absolute_filename(soulseek_client: TestClient) -> None
 
     assert response.status_code == 400
     assert not Path("/tmp/owned.mp3").exists()
+
+
+def test_soulseek_search_includes_normalised_results(
+    soulseek_client: TestClient,
+) -> None:
+    client_stub = soulseek_client.app.state.soulseek_client
+    raw_payload = {
+        "results": [
+            {
+                "username": "listener",
+                "files": [
+                    {
+                        "id": 42,
+                        "filename": "Listener - Track.flac",
+                        "bitrate": 1000,
+                    }
+                ],
+            }
+        ]
+    }
+    normalised_entries = [
+        {
+            "id": "42",
+            "filename": "Listener - Track.flac",
+            "bitrate": 1000,
+            "username": "listener",
+        }
+    ]
+    client_stub.search.return_value = raw_payload
+    client_stub.normalise_search_results.return_value = normalised_entries
+
+    response = soulseek_client.post("/soulseek/search", json={"query": "listener"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["results"] == raw_payload["results"]
+    assert payload["raw"] == raw_payload
+    assert payload["normalised"] == normalised_entries
+    client_stub.normalise_search_results.assert_called_once_with(raw_payload)
     with session_scope() as session:
         assert session.query(Download).count() == 0
 
