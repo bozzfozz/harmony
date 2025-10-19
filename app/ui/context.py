@@ -1530,6 +1530,9 @@ def build_soulseek_downloads_context(
     }
 
 
+SPOTIFY_RUNBOOK_URL = "/docs/operations/runbooks/hdm.md"
+
+
 def build_spotify_status_context(
     request: Request,
     *,
@@ -1589,6 +1592,7 @@ def build_spotify_status_context(
         "csrf_token": csrf_token,
         "status_label_key": status_label_key,
         "manual_redirect_url": manual_redirect_url,
+        "runbook_url": SPOTIFY_RUNBOOK_URL,
     }
 
 
