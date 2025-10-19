@@ -534,7 +534,7 @@ def _build_primary_navigation(
             )
         )
 
-    if session.features.soulseek:
+    if session.features.soulseek and session.allows("operator"):
         items.append(
             NavItem(
                 label_key="nav.soulseek",

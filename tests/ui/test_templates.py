@@ -178,9 +178,9 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert 'hx-target="#hx-activity-table"' in html
 
 
-def test_dashboard_template_hides_spotify_navigation_for_read_only_sessions() -> None:
+def test_dashboard_template_hides_operator_navigation_for_read_only_sessions() -> None:
     request = _make_request("/ui")
-    features = UiFeatures(spotify=True, soulseek=False, dlq=True, imports=False)
+    features = UiFeatures(spotify=True, soulseek=True, dlq=True, imports=False)
     now = datetime.now(tz=UTC)
     session = UiSession(
         identifier="session-read-only",
@@ -200,6 +200,7 @@ def test_dashboard_template_hides_spotify_navigation_for_read_only_sessions() ->
 
     assert 'data-test="nav-home"' in html
     assert 'data-test="nav-spotify"' not in html
+    assert 'data-test="nav-soulseek"' not in html
     assert 'data-test="nav-operator"' not in html
 
 

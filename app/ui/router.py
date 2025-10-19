@@ -1349,7 +1349,7 @@ async def spotify_page(
 @router.get("/soulseek", include_in_schema=False)
 async def soulseek_page(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
@@ -1428,7 +1428,7 @@ async def soulseek_page(
 @router.get("/soulseek/status", include_in_schema=False, name="soulseek_status_fragment")
 async def soulseek_status_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     try:
@@ -1494,7 +1494,7 @@ async def soulseek_status_fragment(
 )
 async def soulseek_configuration_fragment(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     try:
@@ -1545,7 +1545,7 @@ async def soulseek_configuration_fragment(
 async def soulseek_uploads_fragment(
     request: Request,
     include_all: bool = Query(False, alias="all"),
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     try:
@@ -1624,7 +1624,7 @@ async def soulseek_downloads_fragment(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     include_all: bool = Query(False, alias="all"),
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
     service: DownloadsUiService = Depends(get_downloads_ui_service),
 ) -> Response:
     try:
