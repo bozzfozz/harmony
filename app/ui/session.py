@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
@@ -37,6 +37,12 @@ class UiFeatures:
 
 
 @dataclass(slots=True)
+class UiJobState:
+    spotify_free_ingest_job_id: str | None = None
+    spotify_backfill_job_id: str | None = None
+
+
+@dataclass(slots=True)
 class UiSession:
     identifier: str
     role: RoleName
@@ -44,6 +50,7 @@ class UiSession:
     fingerprint: str
     issued_at: datetime
     last_seen_at: datetime
+    jobs: UiJobState = field(default_factory=UiJobState)
 
     def allows(self, required: RoleName) -> bool:
         return _ROLE_ORDER[self.role] >= _ROLE_ORDER[required]
@@ -123,14 +130,7 @@ class UiSessionManager:
 
     async def get_session(self, identifier: str) -> UiSession | None:
         async with self._lock:
-            session = self._sessions.get(identifier)
-            if session is None:
-                return None
-            if self._is_expired(session):
-                del self._sessions[identifier]
-                return None
-            session.last_seen_at = datetime.now(tz=UTC)
-            return session
+            return self._get_active_session(identifier)
 
     async def invalidate(self, identifier: str) -> None:
         async with self._lock:
@@ -138,6 +138,44 @@ class UiSessionManager:
 
     def cookie_max_age(self) -> int:
         return int(self._session_ttl.total_seconds())
+
+    async def get_spotify_free_ingest_job_id(self, identifier: str) -> str | None:
+        async with self._lock:
+            session = self._get_active_session(identifier)
+            if session is None:
+                return None
+            return session.jobs.spotify_free_ingest_job_id
+
+    async def set_spotify_free_ingest_job_id(
+        self, identifier: str, job_id: str | None
+    ) -> None:
+        async with self._lock:
+            session = self._get_active_session(identifier)
+            if session is None:
+                return
+            session.jobs.spotify_free_ingest_job_id = job_id
+
+    async def get_spotify_backfill_job_id(self, identifier: str) -> str | None:
+        async with self._lock:
+            session = self._get_active_session(identifier)
+            if session is None:
+                return None
+            return session.jobs.spotify_backfill_job_id
+
+    async def set_spotify_backfill_job_id(self, identifier: str, job_id: str | None) -> None:
+        async with self._lock:
+            session = self._get_active_session(identifier)
+            if session is None:
+                return
+            session.jobs.spotify_backfill_job_id = job_id
+
+    async def clear_job_state(self, identifier: str) -> None:
+        async with self._lock:
+            session = self._get_active_session(identifier)
+            if session is None:
+                return
+            session.jobs.spotify_free_ingest_job_id = None
+            session.jobs.spotify_backfill_job_id = None
 
     def _is_valid_key(self, candidate: str) -> bool:
         return any(
@@ -153,6 +191,16 @@ class UiSessionManager:
 
     def _is_expired(self, session: UiSession) -> bool:
         return session.last_seen_at + self._session_ttl < datetime.now(tz=UTC)
+
+    def _get_active_session(self, identifier: str) -> UiSession | None:
+        session = self._sessions.get(identifier)
+        if session is None:
+            return None
+        if self._is_expired(session):
+            del self._sessions[identifier]
+            return None
+        session.last_seen_at = datetime.now(tz=UTC)
+        return session
 
     @property
     def security(self) -> SecurityConfig:
@@ -245,6 +293,39 @@ def get_session_manager(request: Request) -> UiSessionManager:
         manager = build_session_manager(security)
         request.app.state.ui_session_manager = manager
     return manager
+
+
+async def get_spotify_free_ingest_job_id(
+    request: Request, session: UiSession
+) -> str | None:
+    manager = get_session_manager(request)
+    return await manager.get_spotify_free_ingest_job_id(session.identifier)
+
+
+async def set_spotify_free_ingest_job_id(
+    request: Request, session: UiSession, job_id: str | None
+) -> None:
+    manager = get_session_manager(request)
+    await manager.set_spotify_free_ingest_job_id(session.identifier, job_id)
+
+
+async def get_spotify_backfill_job_id(
+    request: Request, session: UiSession
+) -> str | None:
+    manager = get_session_manager(request)
+    return await manager.get_spotify_backfill_job_id(session.identifier)
+
+
+async def set_spotify_backfill_job_id(
+    request: Request, session: UiSession, job_id: str | None
+) -> None:
+    manager = get_session_manager(request)
+    await manager.set_spotify_backfill_job_id(session.identifier, job_id)
+
+
+async def clear_spotify_job_state(request: Request, session: UiSession) -> None:
+    manager = get_session_manager(request)
+    await manager.clear_job_state(session.identifier)
 
 
 async def require_session(request: Request) -> UiSession:
@@ -349,16 +430,22 @@ def clear_session_cookie(response: Response) -> None:
 __all__ = [
     "RoleName",
     "UiFeatures",
+    "UiJobState",
     "UiSession",
     "UiSessionManager",
     "attach_session_cookie",
+    "clear_spotify_job_state",
     "build_session_manager",
     "clear_session_cookie",
     "fingerprint_api_key",
+    "get_spotify_backfill_job_id",
+    "get_spotify_free_ingest_job_id",
     "get_session_manager",
     "require_admin_with_feature",
     "require_role",
     "require_feature",
     "require_operator_with_feature",
     "require_session",
+    "set_spotify_backfill_job_id",
+    "set_spotify_free_ingest_job_id",
 ]

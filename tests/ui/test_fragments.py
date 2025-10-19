@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+import asyncio
+
 import pytest
 
 from fastapi import HTTPException, status
@@ -3752,10 +3754,13 @@ def test_spotify_free_ingest_fragment_renders_form(monkeypatch) -> None:
 def test_spotify_free_ingest_fragment_polls_existing_job(monkeypatch) -> None:
     stub = _StubSpotifyService()
     app.dependency_overrides[get_spotify_ui_service] = lambda: stub
-    app.state.ui_spotify_free_ingest_job_id = "job-free"
     try:
         with _create_client(monkeypatch) as client:
             _login(client)
+            session_id = client.cookies.get("ui_session")
+            assert session_id
+            manager = client.app.state.ui_session_manager
+            asyncio.run(manager.set_spotify_free_ingest_job_id(session_id, "job-free"))
             response = client.get(
                 "/ui/spotify/free",
                 headers={"Cookie": _cookies_header(client)},
@@ -3764,8 +3769,6 @@ def test_spotify_free_ingest_fragment_polls_existing_job(monkeypatch) -> None:
             assert stub.free_ingest_status_calls[-1] == "job-free"
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
-        if hasattr(app.state, "ui_spotify_free_ingest_job_id"):
-            delattr(app.state, "ui_spotify_free_ingest_job_id")
 
 
 def test_spotify_free_ingest_run_returns_fragment(monkeypatch) -> None:
