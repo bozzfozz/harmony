@@ -2279,6 +2279,8 @@ def test_spotify_top_artists_fragment_renders_table(monkeypatch) -> None:
             _assert_html_response(response)
             assert "Top Artist" in response.text
             assert "spotify-top-artists-table" in response.text
+            assert "table-external-link-hint" in response.text
+            assert "spotify-top-artist-link-top-artist-1" in response.text
             assert stub.top_artists_calls == [(20, "medium_term")]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
