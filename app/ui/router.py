@@ -2491,7 +2491,7 @@ async def spotify_saved_tracks_action(
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     action_key = action.strip().lower()
-    if action_key not in {"save", "remove"}:
+    if action_key not in {"save", "remove", "queue"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported action.")
 
     raw_body = await request.body()
@@ -2550,10 +2550,15 @@ async def spotify_saved_tracks_action(
             affected = service.save_tracks(extracted_ids)
             event_name = "ui.spotify.saved.save"
             failure_message = "Unable to save Spotify tracks."
-        else:
+        elif action_key == "remove":
             affected = service.remove_saved_tracks(extracted_ids)
             event_name = "ui.spotify.saved.remove"
             failure_message = "Unable to remove Spotify tracks."
+        else:
+            result = await service.queue_saved_tracks(extracted_ids)
+            affected = int(result.accepted.tracks)
+            event_name = "ui.spotify.saved.queue"
+            failure_message = "Unable to queue Spotify downloads."
     except ValueError as exc:
         return _render_alert_fragment(
             request,

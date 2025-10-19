@@ -338,8 +338,10 @@ class _StubSpotifyService:
         self.top_artists_calls: list[tuple[int, str | None]] = []
         self.save_calls: list[tuple[str, ...]] = []
         self.remove_calls: list[tuple[str, ...]] = []
+        self.queue_calls: list[tuple[str, ...]] = []
         self.save_exception: Exception | None = None
         self.remove_exception: Exception | None = None
+        self.queue_exception: Exception | None = None
         self.free_ingest_submit_calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
         self.free_ingest_submit_result = SpotifyFreeIngestResult(
             ok=False,
@@ -347,6 +349,13 @@ class _StubSpotifyService:
             accepted=SpotifyFreeIngestAccepted(playlists=0, tracks=0, batches=0),
             skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
             error="",
+        )
+        self.queue_result = SpotifyFreeIngestResult(
+            ok=True,
+            job_id="job-queue",
+            accepted=SpotifyFreeIngestAccepted(playlists=0, tracks=1, batches=1),
+            skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+            error=None,
         )
         self.free_ingest_submit_exception: Exception | None = None
         self.free_import_calls: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
@@ -512,6 +521,13 @@ class _StubSpotifyService:
         self.saved_tracks_rows = remaining
         self.saved_tracks_total = len(self.saved_tracks_rows)
         return removed
+
+    async def queue_saved_tracks(self, track_ids: Sequence[str]) -> SpotifyFreeIngestResult:
+        if self.queue_exception:
+            raise self.queue_exception
+        cleaned = tuple(track_ids)
+        self.queue_calls.append(cleaned)
+        return self.queue_result
 
     def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
         self.backfill_status_calls.append(job_id)
@@ -2065,6 +2081,10 @@ def test_spotify_saved_tracks_fragment_renders_table(monkeypatch) -> None:
             assert "Artist One" in response.text
             assert "Album One" in response.text
             assert (
+                'hx-post="/ui/spotify/saved/queue"' in response.text
+                or 'hx-post="http://testserver/ui/spotify/saved/queue"' in response.text
+            )
+            assert (
                 'hx-delete="/ui/spotify/saved/remove"' in response.text
                 or 'hx-delete="http://testserver/ui/spotify/saved/remove"' in response.text
             )
@@ -2356,6 +2376,37 @@ def test_spotify_saved_tracks_action_save_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_saved_tracks_action_queue_success(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.queue_result = SpotifyFreeIngestResult(
+        ok=True,
+        job_id="job-queue",
+        accepted=SpotifyFreeIngestAccepted(playlists=0, tracks=2, batches=1),
+        skipped=SpotifyFreeIngestSkipped(playlists=0, tracks=0, reason=None),
+        error=None,
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/saved/queue",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_ids": "track-queue-1, track-queue-2",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert stub.queue_calls == [("track-queue-1", "track-queue-2")]
+            assert "Queue download" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
 def test_spotify_saved_tracks_action_remove_handles_value_error(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.remove_exception = ValueError("At least one Spotify track identifier is required.")
@@ -2402,6 +2453,30 @@ def test_spotify_saved_tracks_action_remove_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert "No Spotify tracks are currently saved" in response.text
             assert stub.remove_calls == [("track-1",)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_queue_handles_value_error(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.queue_exception = ValueError("At least one Spotify track identifier is required.")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/saved/queue",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_ids": " ",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response, status_code=400)
+            assert "At least one Spotify track identifier is required." in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

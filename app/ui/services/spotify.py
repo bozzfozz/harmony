@@ -20,6 +20,7 @@ from app.dependencies import (
     get_spotify_client,
 )
 from app.logging import get_logger
+from app.errors import AppError
 from app.services.free_ingest_service import (
     IngestAccepted,
     IngestSkipped,
@@ -610,6 +611,44 @@ class SpotifyUiService:
             seen.add(value)
         return tuple(cleaned)
 
+    @staticmethod
+    def _format_ingest_track(track_payload: Mapping[str, Any]) -> str | None:
+        name_raw = track_payload.get("name")
+        name = str(name_raw or "").strip()
+
+        artists_payload = track_payload.get("artists")
+        artist_names: list[str] = []
+        if isinstance(artists_payload, Sequence) and not isinstance(
+            artists_payload, (str, bytes)
+        ):
+            for artist_entry in artists_payload:
+                if isinstance(artist_entry, Mapping):
+                    artist_name_raw = artist_entry.get("name")
+                else:
+                    artist_name_raw = artist_entry
+                if isinstance(artist_name_raw, str):
+                    artist_candidate = artist_name_raw.strip()
+                    if artist_candidate:
+                        artist_names.append(artist_candidate)
+
+        album_name: str | None = None
+        album_payload = track_payload.get("album")
+        if isinstance(album_payload, Mapping):
+            album_raw = album_payload.get("name")
+            if isinstance(album_raw, str):
+                album_candidate = album_raw.strip()
+                if album_candidate:
+                    album_name = album_candidate
+
+        if not name or not artist_names:
+            return None
+
+        artist_text = ", ".join(artist_names)
+        line = f"{artist_text} - {name}"
+        if album_name:
+            line = f"{line} ({album_name})"
+        return line
+
     def save_tracks(self, track_ids: Sequence[str]) -> int:
         cleaned = self._clean_track_ids(track_ids)
         if not cleaned:
@@ -625,6 +664,76 @@ class SpotifyUiService:
         self._spotify.remove_saved_tracks(cleaned)
         logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
         return len(cleaned)
+
+    async def queue_saved_tracks(
+        self, track_ids: Sequence[str]
+    ) -> SpotifyFreeIngestResult:
+        cleaned = self._clean_track_ids(track_ids)
+        if not cleaned:
+            raise ValueError("At least one Spotify track identifier is required.")
+
+        ingest_lines: list[str] = []
+        skipped: list[str] = []
+        for track_id in cleaned:
+            try:
+                detail = self._spotify.get_track_details(track_id)
+            except AppError:
+                raise
+            except Exception:
+                logger.exception(
+                    "spotify.ui.saved_tracks.queue.detail_error",
+                    extra={"track_id": track_id},
+                )
+                skipped.append(track_id)
+                continue
+
+            if not isinstance(detail, Mapping):
+                skipped.append(track_id)
+                continue
+
+            formatted = self._format_ingest_track(detail)
+            if not formatted:
+                skipped.append(track_id)
+                continue
+            ingest_lines.append(formatted)
+
+        if not ingest_lines:
+            logger.warning(
+                "spotify.ui.saved_tracks.queue.no_ingest_lines",
+                extra={"requested": len(cleaned)},
+            )
+            raise ValueError("Unable to queue downloads for the selected tracks.")
+
+        try:
+            submission = await self._spotify.submit_free_ingest(
+                tracks=tuple(ingest_lines)
+            )
+        except PlaylistValidationError as exc:
+            logger.warning(
+                "spotify.ui.saved_tracks.queue.validation_error",
+                extra={"invalid": len(exc.invalid_links), "requested": len(cleaned)},
+            )
+            raise ValueError("Unable to queue downloads for the selected tracks.") from exc
+        except AppError:
+            raise
+        except Exception:
+            logger.exception(
+                "spotify.ui.saved_tracks.queue.submit_error",
+                extra={"requested": len(cleaned), "prepared": len(ingest_lines)},
+            )
+            raise
+
+        result = self._map_ingest_submission(submission)
+        logger.info(
+            "spotify.ui.saved_tracks.queue.success",
+            extra={
+                "requested": len(cleaned),
+                "queued": result.accepted.tracks,
+                "skipped": len(skipped),
+                "job_id": result.job_id,
+            },
+        )
+        return result
 
     @staticmethod
     def _clean_seed_values(values: Sequence[str]) -> tuple[str, ...]:

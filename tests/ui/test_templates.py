@@ -522,6 +522,7 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     template = templates.get_template("partials/spotify_saved_tracks.j2")
     html = template.render(**context)
 
+    assert context["queue_action_url"].endswith("/ui/spotify/saved/queue")
     assert 'id="spotify-save-track-form"' in html
     assert 'hx-post="/ui/spotify/saved/save"' in html
     assert 'name="csrftoken" value="csrf-token"' in html
@@ -532,7 +533,9 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert "2023-09-01 10:00" in html
     assert 'data-test="spotify-saved-track-actions-track-1"' in html
     assert 'hx-get="/ui/spotify/tracks/track-1"' in html
+    assert 'hx-post="/ui/spotify/saved/queue"' in html
     assert 'hx-delete="/ui/spotify/saved/remove"' in html
+    assert "Queue download" in html
 
 
 def test_spotify_track_detail_template_renders_modal() -> None:
