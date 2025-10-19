@@ -63,6 +63,8 @@
     "spotify.free_ingest.playlist_links": "Playlist links",
     "spotify.free_ingest.tracks": "Track list",
     "spotify.free_ingest.upload_file": "Track list file",
+    "spotify.playlists.filter.owner": "Playlist owner",
+    "spotify.playlists.filter.status": "Sync status",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -99,6 +101,9 @@
     "search.submit": "Search",
     "search.action.queue": "Queue download",
     "spotify.playlists.view_tracks": "View tracks",
+    "spotify.playlists.apply_filters": "Apply filters",
+    "spotify.playlists.refresh": "Refresh",
+    "spotify.playlists.force_sync": "Force sync",
     "spotify.free_ingest.submit": "Submit ingest request",
     "spotify.free_ingest.upload_file": "Upload track file",
     "fragments.retry": "Retry",
@@ -584,6 +589,16 @@
 {% macro spotify_saved_tracks_heading() %}Saved tracks{% endmacro %}
 
 {% macro spotify_playlists_heading() %}Cached playlists{% endmacro %}
+
+{% macro spotify_playlists_filter_owner_label() %}
+  {{ form_label("spotify.playlists.filter.owner") }}
+{% endmacro %}
+
+{% macro spotify_playlists_filter_status_label() %}
+  {{ form_label("spotify.playlists.filter.status") }}
+{% endmacro %}
+
+{% macro spotify_playlists_filter_any() %}All{% endmacro %}
 
 {% macro spotify_playlist_items_heading(name) -%}
   {%- if name -%}

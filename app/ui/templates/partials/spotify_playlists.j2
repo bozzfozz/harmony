@@ -1,12 +1,69 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
-{{ tables.render_table_fragment(fragment) }}
+<div id="spotify-playlists-fragment" class="spotify-playlists">
+  <div class="spotify-playlists__controls">
+    <form id="spotify-playlists-filter-form"
+          class="spotify-playlists__filter-form"
+          method="post"
+          action="{{ filter_action }}"
+          hx-post="{{ filter_action }}"
+          hx-target="{{ table_target }}"
+          hx-swap="outerHTML">
+      <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+      <div class="form-field">
+        <label for="playlist-owner-filter">{{ strings.spotify_playlists_filter_owner_label() }}</label>
+        <select id="playlist-owner-filter" name="owner">
+          <option value="" {% if not owner_filter %}selected{% endif %}>{{ strings.spotify_playlists_filter_any() }}</option>
+          {% for option in owner_options %}
+            <option value="{{ option.value }}" {% if owner_filter == option.value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="playlist-status-filter">{{ strings.spotify_playlists_filter_status_label() }}</label>
+        <select id="playlist-status-filter" name="status">
+          <option value="" {% if not status_filter %}selected{% endif %}>{{ strings.spotify_playlists_filter_any() }}</option>
+          {% for option in sync_status_options %}
+            <option value="{{ option.value }}" {% if status_filter == option.value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit">{{ strings.button_label("spotify.playlists.apply_filters") }}</button>
+    </form>
+    <div class="spotify-playlists__actions">
+      <form method="post"
+            action="{{ refresh_url }}"
+            hx-post="{{ refresh_url }}"
+            hx-target="{{ table_target }}"
+            hx-swap="outerHTML"
+            hx-include="#spotify-playlists-filter-form">
+        <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+        <button type="submit">{{ strings.button_label("spotify.playlists.refresh") }}</button>
+      </form>
+      {% if force_sync_url %}
+        <form method="post"
+              action="{{ force_sync_url }}"
+              hx-post="{{ force_sync_url }}"
+              hx-target="{{ table_target }}"
+              hx-swap="outerHTML"
+              hx-include="#spotify-playlists-filter-form">
+          <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+          <button type="submit">{{ strings.button_label("spotify.playlists.force_sync") }}</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
 
-<div id="spotify-playlist-items"
-     class="spotify-playlist-items"
-     role="region"
-     aria-live="polite"
-     aria-label="{{ strings.spotify_playlist_items_region_label() }}">
-  <p class="async-fragment__placeholder">{{ strings.fragment_loading("spotify.playlist_items") }}</p>
+  <div id="spotify-playlists-table-container">
+    {{ tables.render_table_fragment(fragment) }}
+  </div>
+
+  <div id="spotify-playlist-items"
+       class="spotify-playlist-items"
+       role="region"
+       aria-live="polite"
+       aria-label="{{ strings.spotify_playlist_items_region_label() }}">
+    <p class="async-fragment__placeholder">{{ strings.fragment_loading("spotify.playlist_items") }}</p>
+  </div>
 </div>

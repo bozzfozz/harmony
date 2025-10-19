@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
 from datetime import datetime
-from typing import Any
+from time import perf_counter
+from typing import Any, Final
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
@@ -34,9 +34,7 @@ from app.services.spotify_domain_service import SpotifyDomainService, SpotifySer
 
 logger = get_logger(__name__)
 
-_SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset(
-    {"short_term", "medium_term", "long_term"}
-)
+_SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset({"short_term", "medium_term", "long_term"})
 
 
 def _normalise_time_range(value: str | None) -> str | None:
@@ -85,6 +83,18 @@ class SpotifyPlaylistRow:
     name: str
     track_count: int
     updated_at: datetime
+
+
+@dataclass(slots=True)
+class SpotifyPlaylistFilterOption:
+    value: str
+    label: str
+
+
+@dataclass(slots=True)
+class SpotifyPlaylistFilters:
+    owners: tuple[SpotifyPlaylistFilterOption, ...]
+    sync_statuses: tuple[SpotifyPlaylistFilterOption, ...]
 
 
 @dataclass(slots=True)
@@ -313,8 +323,15 @@ class SpotifyUiService:
             ttl_seconds=int(ttl_seconds or 0),
         )
 
-    def list_playlists(self) -> Sequence[SpotifyPlaylistRow]:
+    def list_playlists(
+        self,
+        *,
+        owner: str | None = None,
+        sync_status: str | None = None,
+    ) -> Sequence[SpotifyPlaylistRow]:
         playlists = self._spotify.list_playlists(self._db)
+        owner_filter = self._normalise_filter(owner)
+        status_filter = self._normalise_filter(sync_status)
         rows = [
             SpotifyPlaylistRow(
                 identifier=playlist.id,
@@ -323,9 +340,66 @@ class SpotifyUiService:
                 updated_at=playlist.updated_at or datetime.utcnow(),
             )
             for playlist in playlists
+            if self._matches_playlist_filters(
+                playlist, owner_filter=owner_filter, status_filter=status_filter
+            )
         ]
-        logger.debug("spotify.ui.playlists", extra={"count": len(rows)})
+        logger.debug(
+            "spotify.ui.playlists",
+            extra={
+                "count": len(rows),
+                "owner_filter": owner_filter,
+                "sync_status_filter": status_filter,
+            },
+        )
         return tuple(rows)
+
+    def playlist_filters(self) -> SpotifyPlaylistFilters:
+        playlists = self._spotify.list_playlists(self._db)
+        owners: set[str] = set()
+        statuses: set[str] = set()
+
+        for playlist in playlists:
+            owner_value = self._extract_owner(playlist)
+            if owner_value:
+                owners.add(owner_value)
+
+            status_value = self._extract_sync_status(playlist)
+            if status_value:
+                statuses.add(status_value)
+
+        owner_options = tuple(
+            SpotifyPlaylistFilterOption(value=value, label=self._format_filter_label(value))
+            for value in sorted(owners, key=str.lower)
+        )
+        status_options = tuple(
+            SpotifyPlaylistFilterOption(value=value, label=self._format_filter_label(value))
+            for value in sorted(statuses, key=str.lower)
+        )
+
+        logger.debug(
+            "spotify.ui.playlists.filters",
+            extra={
+                "owner_count": len(owner_options),
+                "status_count": len(status_options),
+            },
+        )
+        return SpotifyPlaylistFilters(
+            owners=owner_options,
+            sync_statuses=status_options,
+        )
+
+    async def refresh_playlists(self) -> None:
+        started = perf_counter()
+        await self._spotify.refresh_playlists()
+        duration_ms = round((perf_counter() - started) * 1_000, 3)
+        logger.info("spotify.ui.playlists.refresh", extra={"duration_ms": duration_ms})
+
+    async def force_sync_playlists(self) -> None:
+        started = perf_counter()
+        await self._spotify.force_sync_playlists()
+        duration_ms = round((perf_counter() - started) * 1_000, 3)
+        logger.info("spotify.ui.playlists.force_sync", extra={"duration_ms": duration_ms})
 
     def playlist_items(
         self,
@@ -447,6 +521,67 @@ class SpotifyUiService:
             },
         )
         return tuple(rows), total_count, page_limit, page_offset
+
+    @staticmethod
+    def _normalise_filter(value: str | None) -> str | None:
+        if not value:
+            return None
+        candidate = value.strip()
+        return candidate.lower() if candidate else None
+
+    @staticmethod
+    def _format_filter_label(value: str) -> str:
+        cleaned = value.replace("_", " ").strip()
+        return cleaned.title() if cleaned else value
+
+    def _extract_owner(self, playlist: Any) -> str | None:
+        for attribute in ("owner", "owner_name", "owner_display_name", "owner_id"):
+            owner_value = getattr(playlist, attribute, None)
+            if isinstance(owner_value, str):
+                owner_candidate = owner_value.strip()
+                if owner_candidate:
+                    return owner_candidate
+
+        metadata = getattr(playlist, "metadata", None)
+        if isinstance(metadata, Mapping):
+            owner_value = metadata.get("owner")
+            if isinstance(owner_value, str) and owner_value.strip():
+                return owner_value.strip()
+        return None
+
+    def _extract_sync_status(self, playlist: Any) -> str | None:
+        for attribute in ("sync_status", "sync_state", "status"):
+            status_value = getattr(playlist, attribute, None)
+            if isinstance(status_value, str):
+                status_candidate = status_value.strip()
+                if status_candidate:
+                    return status_candidate
+
+        metadata = getattr(playlist, "metadata", None)
+        if isinstance(metadata, Mapping):
+            status_value = metadata.get("sync_status")
+            if isinstance(status_value, str) and status_value.strip():
+                return status_value.strip()
+        return None
+
+    def _matches_playlist_filters(
+        self,
+        playlist: Any,
+        *,
+        owner_filter: str | None,
+        status_filter: str | None,
+    ) -> bool:
+        if owner_filter:
+            owner = self._extract_owner(playlist)
+            if not owner or owner.lower() != owner_filter:
+                return False
+
+        if status_filter:
+            status = self._extract_sync_status(playlist)
+            if not status or status.lower() != status_filter:
+                return False
+
+        return True
 
     def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
         raw_payload = self._spotify.get_followed_artists()
@@ -618,9 +753,7 @@ class SpotifyUiService:
 
         artists_payload = track_payload.get("artists")
         artist_names: list[str] = []
-        if isinstance(artists_payload, Sequence) and not isinstance(
-            artists_payload, (str, bytes)
-        ):
+        if isinstance(artists_payload, Sequence) and not isinstance(artists_payload, (str, bytes)):
             for artist_entry in artists_payload:
                 if isinstance(artist_entry, Mapping):
                     artist_name_raw = artist_entry.get("name")
@@ -665,9 +798,7 @@ class SpotifyUiService:
         logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
         return len(cleaned)
 
-    async def queue_saved_tracks(
-        self, track_ids: Sequence[str]
-    ) -> SpotifyFreeIngestResult:
+    async def queue_saved_tracks(self, track_ids: Sequence[str]) -> SpotifyFreeIngestResult:
         cleaned = self._clean_track_ids(track_ids)
         if not cleaned:
             raise ValueError("At least one Spotify track identifier is required.")
@@ -705,9 +836,7 @@ class SpotifyUiService:
             raise ValueError("Unable to queue downloads for the selected tracks.")
 
         try:
-            submission = await self._spotify.submit_free_ingest(
-                tracks=tuple(ingest_lines)
-            )
+            submission = await self._spotify.submit_free_ingest(tracks=tuple(ingest_lines))
         except PlaylistValidationError as exc:
             logger.warning(
                 "spotify.ui.saved_tracks.queue.validation_error",
@@ -1208,9 +1337,7 @@ class SpotifyUiService:
     ) -> Sequence[SpotifyTopTrackRow]:
         page_limit = max(1, min(int(limit), 50))
         resolved_time_range = _normalise_time_range(time_range)
-        items = self._spotify.get_top_tracks(
-            limit=page_limit, time_range=resolved_time_range
-        )
+        items = self._spotify.get_top_tracks(limit=page_limit, time_range=resolved_time_range)
         rows: list[SpotifyTopTrackRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1399,9 +1526,7 @@ class SpotifyUiService:
     ) -> Sequence[SpotifyTopArtistRow]:
         page_limit = max(1, min(int(limit), 50))
         resolved_time_range = _normalise_time_range(time_range)
-        items = self._spotify.get_top_artists(
-            limit=page_limit, time_range=resolved_time_range
-        )
+        items = self._spotify.get_top_artists(limit=page_limit, time_range=resolved_time_range)
         rows: list[SpotifyTopArtistRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1575,6 +1700,8 @@ __all__ = [
     "SpotifyManualResult",
     "SpotifyOAuthHealth",
     "SpotifyPlaylistRow",
+    "SpotifyPlaylistFilterOption",
+    "SpotifyPlaylistFilters",
     "SpotifyFreeIngestAccepted",
     "SpotifyFreeIngestSkipped",
     "SpotifyFreeIngestResult",

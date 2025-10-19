@@ -65,6 +65,8 @@ from app.ui.services import (
     SearchUiService,
     SoulseekUiService,
     SpotifyFreeIngestResult,
+    SpotifyPlaylistFilters,
+    SpotifyPlaylistRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifyUiService,
@@ -637,6 +639,78 @@ async def _read_recommendations_form(request: Request) -> Mapping[str, str]:
         "seed_genres": _first("seed_genres"),
         "limit": _first("limit"),
     }
+
+
+def _normalize_playlist_filter(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value.strip()
+    return candidate or None
+
+
+async def _read_playlist_filter_form(request: Request) -> dict[str, str]:
+    raw_body = await request.body()
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    values = parse_qs(payload)
+
+    def _first(name: str) -> str:
+        entries = values.get(name)
+        if entries:
+            return entries[0]
+        return ""
+
+    return {
+        "owner": _first("owner"),
+        "status": _first("status"),
+    }
+
+
+def _render_spotify_playlists_fragment_response(
+    *,
+    request: Request,
+    session: UiSession,
+    csrf_manager,
+    csrf_token: str,
+    issued: bool,
+    playlists: Sequence[SpotifyPlaylistRow],
+    filter_options: SpotifyPlaylistFilters,
+    owner_filter: str | None,
+    status_filter: str | None,
+) -> Response:
+    filter_action = request.url_for("spotify_playlists_filter")
+    refresh_url = request.url_for("spotify_playlists_refresh")
+    table_target = "#spotify-playlists-fragment"
+    force_sync_url: str | None = None
+    if session.allows("admin"):
+        try:
+            force_sync_url = request.url_for("spotify_playlists_force_sync")
+        except Exception:  # pragma: no cover - defensive guard
+            force_sync_url = None
+
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token=csrf_token,
+        filter_action=filter_action,
+        refresh_url=refresh_url,
+        table_target=table_target,
+        owner_options=filter_options.owners,
+        sync_status_options=filter_options.sync_statuses,
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+        force_sync_url=force_sync_url,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_playlists.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 async def _render_search_results_fragment(
@@ -2272,28 +2346,207 @@ async def spotify_playlists_fragment(
     session: UiSession = Depends(require_operator_with_feature("spotify")),
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
+    owner_filter = _normalize_playlist_filter(request.query_params.get("owner"))
+    status_filter = _normalize_playlist_filter(request.query_params.get("status"))
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        playlists = service.list_playlists()
+        filter_options = service.playlist_filters()
+        playlists = service.list_playlists(
+            owner=owner_filter,
+            sync_status=status_filter,
+        )
     except Exception:
         logger.exception("ui.fragment.spotify.playlists")
         return _render_alert_fragment(
             request,
             "Unable to load Spotify playlists.",
         )
-    context = build_spotify_playlists_context(request, playlists=playlists)
+    response = _render_spotify_playlists_fragment_response(
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        playlists=playlists,
+        filter_options=filter_options,
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
     log_event(
         logger,
         "ui.fragment.spotify.playlists",
         component="ui.router",
         status="success",
         role=session.role,
-        count=len(context["fragment"].table.rows),
+        count=len(playlists),
+        owner_filter=owner_filter,
+        status_filter=status_filter,
     )
-    return templates.TemplateResponse(
-        request,
-        "partials/spotify_playlists.j2",
-        context,
+    return response
+
+
+@router.post(
+    "/spotify/playlists/filter",
+    include_in_schema=False,
+    name="spotify_playlists_filter",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_playlists_filter(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    form = await _read_playlist_filter_form(request)
+    owner_filter = _normalize_playlist_filter(form.get("owner"))
+    status_filter = _normalize_playlist_filter(form.get("status"))
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        filter_options = service.playlist_filters()
+        playlists = service.list_playlists(
+            owner=owner_filter,
+            sync_status=status_filter,
+        )
+    except Exception:
+        logger.exception("ui.fragment.spotify.playlists.filter")
+        return _render_alert_fragment(
+            request,
+            "Unable to load Spotify playlists.",
+        )
+    response = _render_spotify_playlists_fragment_response(
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        playlists=playlists,
+        filter_options=filter_options,
+        owner_filter=owner_filter,
+        status_filter=status_filter,
     )
+    log_event(
+        logger,
+        "ui.fragment.spotify.playlists.filter",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(playlists),
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
+    return response
+
+
+@router.post(
+    "/spotify/playlists/refresh",
+    include_in_schema=False,
+    name="spotify_playlists_refresh",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_playlists_refresh(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    form = await _read_playlist_filter_form(request)
+    owner_filter = _normalize_playlist_filter(form.get("owner"))
+    status_filter = _normalize_playlist_filter(form.get("status"))
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        await service.refresh_playlists()
+        filter_options = service.playlist_filters()
+        playlists = service.list_playlists(
+            owner=owner_filter,
+            sync_status=status_filter,
+        )
+    except Exception:
+        logger.exception("ui.spotify.playlists.refresh")
+        return _render_alert_fragment(
+            request,
+            "Unable to refresh Spotify playlists.",
+        )
+    response = _render_spotify_playlists_fragment_response(
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        playlists=playlists,
+        filter_options=filter_options,
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
+    log_event(
+        logger,
+        "ui.spotify.playlists.refresh",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(playlists),
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
+    return response
+
+
+@router.post(
+    "/spotify/playlists/force-sync",
+    include_in_schema=False,
+    name="spotify_playlists_force_sync",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_playlists_force_sync(
+    request: Request,
+    session: UiSession = Depends(require_role("admin")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    if not session.features.spotify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+    form = await _read_playlist_filter_form(request)
+    owner_filter = _normalize_playlist_filter(form.get("owner"))
+    status_filter = _normalize_playlist_filter(form.get("status"))
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        await service.force_sync_playlists()
+        filter_options = service.playlist_filters()
+        playlists = service.list_playlists(
+            owner=owner_filter,
+            sync_status=status_filter,
+        )
+    except Exception:
+        logger.exception("ui.spotify.playlists.force_sync")
+        return _render_alert_fragment(
+            request,
+            "Unable to force sync Spotify playlists.",
+        )
+    response = _render_spotify_playlists_fragment_response(
+        request=request,
+        session=session,
+        csrf_manager=csrf_manager,
+        csrf_token=csrf_token,
+        issued=issued,
+        playlists=playlists,
+        filter_options=filter_options,
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
+    log_event(
+        logger,
+        "ui.spotify.playlists.force_sync",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(playlists),
+        owner_filter=owner_filter,
+        status_filter=status_filter,
+    )
+    return response
 
 
 @router.get(
