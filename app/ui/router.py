@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -95,6 +95,9 @@ logger = get_logger(__name__)
 
 _SPOTIFY_TIME_RANGES = frozenset({"short_term", "medium_term", "long_term"})
 _DEFAULT_TIME_RANGE = "medium_term"
+
+_SAVED_TRACKS_LIMIT_COOKIE = "spotify_saved_tracks_limit"
+_SAVED_TRACKS_OFFSET_COOKIE = "spotify_saved_tracks_offset"
 
 router = APIRouter(prefix="/ui", tags=["UI"])
 
@@ -243,7 +246,13 @@ def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[s
 
 
 def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
-    def _coerce(raw: str | None, default: int, *, minimum: int, maximum: int | None = None) -> int:
+    def _coerce(
+        raw: str | None,
+        default: int,
+        *,
+        minimum: int,
+        maximum: int | None = None,
+    ) -> int:
         try:
             value = int(raw) if raw not in (None, "") else default
         except (TypeError, ValueError):
@@ -253,9 +262,69 @@ def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
             value = min(value, maximum)
         return value
 
-    limit = _coerce(request.query_params.get("limit"), 25, minimum=1, maximum=50)
-    offset = _coerce(request.query_params.get("offset"), 0, minimum=0)
+    default_limit = 25
+    default_offset = 0
+
+    header_url = request.headers.get("hx-current-url")
+    header_params: dict[str, str] = {}
+    if header_url:
+        try:
+            parsed = urlparse(header_url)
+        except ValueError:
+            parsed = None
+        if parsed is not None:
+            header_params = {
+                key: values[0] for key, values in parse_qs(parsed.query).items() if values
+            }
+
+    def _resolve(key: str, *, fallback: str | None = None) -> str | None:
+        value = request.query_params.get(key)
+        if value not in (None, ""):
+            return value
+        value = header_params.get(key)
+        if value not in (None, ""):
+            return value
+        value = request.cookies.get(
+            {
+                "limit": _SAVED_TRACKS_LIMIT_COOKIE,
+                "offset": _SAVED_TRACKS_OFFSET_COOKIE,
+            }[key]
+        )
+        if value not in (None, ""):
+            return value
+        return fallback
+
+    limit = _coerce(
+        _resolve("limit", fallback=str(default_limit)),
+        default_limit,
+        minimum=1,
+        maximum=50,
+    )
+    offset = _coerce(
+        _resolve("offset", fallback=str(default_offset)),
+        default_offset,
+        minimum=0,
+    )
     return limit, offset
+
+
+def _persist_saved_tracks_pagination(response: Response, *, limit: int, offset: int) -> None:
+    response.set_cookie(
+        _SAVED_TRACKS_LIMIT_COOKIE,
+        str(limit),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/ui/spotify",
+    )
+    response.set_cookie(
+        _SAVED_TRACKS_OFFSET_COOKIE,
+        str(offset),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/ui/spotify",
+    )
 
 
 def _extract_time_range(request: Request) -> str:
@@ -3266,6 +3335,7 @@ async def spotify_saved_tracks_fragment(
         "partials/spotify_saved_tracks.j2",
         context,
     )
+    _persist_saved_tracks_pagination(response, limit=limit, offset=offset)
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     log_event(
@@ -3325,8 +3395,9 @@ async def spotify_saved_tracks_action(
             return max(minimum, value)
         return max(minimum, min(value, maximum))
 
-    limit = _coerce_int(_first("limit"), 25, minimum=1, maximum=50)
-    offset = _coerce_int(_first("offset"), 0, minimum=0)
+    default_limit, default_offset = _extract_saved_tracks_pagination(request)
+    limit = _coerce_int(_first("limit"), default_limit, minimum=1, maximum=50)
+    offset = _coerce_int(_first("offset"), default_offset, minimum=0)
 
     track_values: list[str] = []
     for key in ("track_id", "track_ids", "track_id[]"):
@@ -3408,6 +3479,7 @@ async def spotify_saved_tracks_action(
         "partials/spotify_saved_tracks.j2",
         context,
     )
+    _persist_saved_tracks_pagination(response, limit=limit, offset=offset)
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     log_event(
