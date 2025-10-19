@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         SpotifyAccountSummary,
         SpotifyArtistRow,
         SpotifyBackfillSnapshot,
+        SpotifyBackfillTimelineEntry,
         SpotifyFreeIngestJobSnapshot,
         SpotifyFreeIngestResult,
         SpotifyManualResult,
@@ -2939,6 +2940,7 @@ def build_spotify_backfill_context(
     request: Request,
     *,
     snapshot: SpotifyBackfillSnapshot,
+    timeline: Sequence["SpotifyBackfillTimelineEntry"] | None = None,
     alert: AlertMessage | None = None,
 ) -> Mapping[str, Any]:
     alert_messages: tuple[AlertMessage, ...]
@@ -2946,10 +2948,12 @@ def build_spotify_backfill_context(
         alert_messages = tuple()
     else:
         alert_messages = (alert,)
+    history = tuple(timeline or ())
     return {
         "request": request,
         "snapshot": snapshot,
         "alert_messages": alert_messages,
+        "timeline": history,
     }
 
 

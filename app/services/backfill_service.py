@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
 import time
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import urlparse
 import uuid
 
@@ -77,6 +77,26 @@ class BackfillJobStatus:
     expand_playlists: bool
     duration_ms: int | None
     error: str | None
+
+
+@dataclass(slots=True)
+class BackfillJobRecord:
+    """Lightweight representation of a persisted backfill job."""
+
+    id: str
+    state: str
+    requested_items: int
+    processed_items: int
+    matched_items: int
+    cache_hits: int
+    cache_misses: int
+    expanded_playlists: int
+    expanded_tracks: int
+    expand_playlists: bool
+    duration_ms: int | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime | None
 
 
 class BackfillService:
@@ -176,6 +196,43 @@ class BackfillService:
         updated = self._transition_job_state(job_id, target_state="cancelled")
         logger.info("event=backfill_cancel job_id=%s", job_id)
         return updated
+
+    def list_recent_jobs(self, *, limit: int = 10) -> Sequence[BackfillJobRecord]:
+        """Return a reverse-chronological slice of backfill jobs."""
+
+        resolved_limit = max(1, min(int(limit or 0), 50))
+        statement: Select[BackfillJob] = (
+            select(BackfillJob).order_by(BackfillJob.created_at.desc()).limit(resolved_limit)
+        )
+        with session_scope() as session:
+            records = session.execute(statement).scalars().all()
+
+        history: list[BackfillJobRecord] = []
+        for record in records:
+            history.append(
+                BackfillJobRecord(
+                    id=record.id,
+                    state=record.state,
+                    requested_items=int(record.requested_items or 0),
+                    processed_items=int(record.processed_items or 0),
+                    matched_items=int(record.matched_items or 0),
+                    cache_hits=int(record.cache_hits or 0),
+                    cache_misses=int(record.cache_misses or 0),
+                    expanded_playlists=int(record.expanded_playlists or 0),
+                    expanded_tracks=int(record.expanded_tracks or 0),
+                    expand_playlists=bool(record.expand_playlists),
+                    duration_ms=record.duration_ms,
+                    error=record.error,
+                    created_at=record.created_at or datetime.utcnow(),
+                    updated_at=record.updated_at,
+                )
+            )
+
+        logger.debug(
+            "backfill.jobs.list_recent",
+            extra={"count": len(history), "limit": resolved_limit},
+        )
+        return tuple(history)
 
     # Core processing ----------------------------------------------------
 

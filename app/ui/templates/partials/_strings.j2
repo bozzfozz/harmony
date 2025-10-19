@@ -590,6 +590,12 @@
 
 {% macro spotify_backfill_latest_heading() %}Latest job{% endmacro %}
 
+{% macro spotify_backfill_timeline_heading() %}Recent jobs{% endmacro %}
+
+{% macro spotify_backfill_timeline_created_label() %}Created{% endmacro %}
+
+{% macro spotify_backfill_timeline_updated_label() %}Updated{% endmacro %}
+
 {% macro spotify_backfill_field_label(key) -%}
   {%- set labels = {
     "id": "Job ID",

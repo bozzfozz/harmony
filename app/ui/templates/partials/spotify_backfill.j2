@@ -96,4 +96,50 @@
   {% else %}
     <p class="spotify-backfill__empty">{{ strings.spotify_backfill_empty_state() }}</p>
   {% endif %}
+  {% if timeline %}
+    <section class="spotify-backfill__timeline" data-test="spotify-backfill-timeline">
+      <h4>{{ strings.spotify_backfill_timeline_heading() }}</h4>
+      <ol class="spotify-backfill__timeline-list">
+        {% for entry in timeline %}
+          <li class="spotify-backfill__timeline-item" data-test="spotify-backfill-timeline-entry">
+            <div class="spotify-backfill__timeline-meta">
+              <span class="spotify-backfill__timeline-created">
+                {{ strings.spotify_backfill_timeline_created_label() }}: {{ entry.created_display or "—" }}
+              </span>
+              {% if entry.updated_display %}
+                <span class="spotify-backfill__timeline-updated">
+                  {{ strings.spotify_backfill_timeline_updated_label() }}: {{ entry.updated_display }}
+                </span>
+              {% endif %}
+            </div>
+            <dl class="spotify-backfill__timeline-details">
+              <dt>{{ strings.spotify_backfill_field_label("id") }}</dt>
+              <dd>{{ entry.identifier }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("state") }}</dt>
+              <dd>{{ entry.state }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("processed") }}</dt>
+              <dd>{{ entry.processed }} / {{ entry.requested }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("matched") }}</dt>
+              <dd>{{ entry.matched }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("cache_hits") }}</dt>
+              <dd>{{ entry.cache_hits }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("cache_misses") }}</dt>
+              <dd>{{ entry.cache_misses }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("expanded_playlists") }}</dt>
+              <dd>{{ entry.expanded_playlists }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("expanded_tracks") }}</dt>
+              <dd>{{ entry.expanded_tracks }}</dd>
+              <dt>{{ strings.spotify_backfill_expand_label() }}</dt>
+              <dd>{{ "Yes" if entry.expand_playlists else "No" }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("duration") }}</dt>
+              <dd>{{ strings.spotify_backfill_duration(entry.duration_ms) }}</dd>
+            </dl>
+            {% if entry.error %}
+              <p class="spotify-backfill__timeline-error">{{ entry.error }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endif %}
 </div>

@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import re
 import secrets
 import time
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -408,6 +409,28 @@ class BackfillJobResponse(BaseModel):
     error: str | None = None
 
 
+class BackfillJobHistoryItem(BaseModel):
+    job_id: str
+    state: str
+    requested: int
+    processed: int
+    matched: int
+    cache_hits: int
+    cache_misses: int
+    expanded_playlists: int
+    expanded_tracks: int
+    expand_playlists: bool
+    duration_ms: int | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class BackfillJobHistoryResponse(BaseModel):
+    ok: bool
+    jobs: list[BackfillJobHistoryItem]
+
+
 @backfill_router.post("/run", response_model=BackfillRunResponse)
 async def run_backfill(
     payload: BackfillRunRequest,
@@ -466,6 +489,34 @@ async def get_backfill_job(
         duration_ms=status_payload.duration_ms,
         error=status_payload.error,
     )
+
+
+@backfill_router.get("/jobs", response_model=BackfillJobHistoryResponse)
+async def list_backfill_jobs(
+    limit: int = Query(10, ge=1, le=50),
+    service: SpotifyDomainService = Depends(_get_spotify_service),
+) -> BackfillJobHistoryResponse:
+    records = service.list_backfill_jobs(limit=limit)
+    jobs = [
+        BackfillJobHistoryItem(
+            job_id=record.id,
+            state=record.state,
+            requested=record.requested_items,
+            processed=record.processed_items,
+            matched=record.matched_items,
+            cache_hits=record.cache_hits,
+            cache_misses=record.cache_misses,
+            expanded_playlists=record.expanded_playlists,
+            expanded_tracks=record.expanded_tracks,
+            expand_playlists=record.expand_playlists,
+            duration_ms=record.duration_ms,
+            error=record.error,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+        for record in records
+    ]
+    return BackfillJobHistoryResponse(ok=True, jobs=jobs)
 
 
 class FreeIngestRequest(BaseModel):

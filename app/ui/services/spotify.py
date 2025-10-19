@@ -32,12 +32,14 @@ from app.services.free_ingest_service import (
     PlaylistValidationError,
 )
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
+from app.services.backfill_service import BackfillJobRecord
 from app.services.spotify_domain_service import (
     BackfillJobStatus,
     SpotifyDomainService,
     SpotifyServiceStatus,
 )
 from app.utils.settings_store import delete_setting, read_setting, write_setting
+from app.ui.formatters import format_datetime_display
 
 logger = get_logger(__name__)
 
@@ -229,6 +231,26 @@ class SpotifyBackfillOption:
     description_key: str | None
     checked: bool
     enabled: bool = True
+
+
+@dataclass(slots=True)
+class SpotifyBackfillTimelineEntry:
+    identifier: str
+    state: str
+    requested: int
+    processed: int
+    matched: int
+    cache_hits: int
+    cache_misses: int
+    expanded_playlists: int
+    expanded_tracks: int
+    expand_playlists: bool
+    duration_ms: int | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime | None
+    created_display: str
+    updated_display: str
 
 
 @dataclass(slots=True)
@@ -1849,6 +1871,47 @@ class SpotifyUiService:
             raise LookupError(job_id)
         return payload
 
+    def backfill_timeline(self, *, limit: int = 10) -> Sequence[SpotifyBackfillTimelineEntry]:
+        resolved_limit = max(1, min(int(limit or 0), 25))
+        try:
+            jobs: Sequence[BackfillJobRecord] = self._spotify.list_backfill_jobs(
+                limit=resolved_limit
+            )
+        except Exception:
+            logger.exception("spotify.ui.backfill.timeline_error")
+            return tuple()
+
+        entries: list[SpotifyBackfillTimelineEntry] = []
+        for record in jobs:
+            created_display = format_datetime_display(record.created_at)
+            updated_display = format_datetime_display(record.updated_at)
+            entries.append(
+                SpotifyBackfillTimelineEntry(
+                    identifier=record.id,
+                    state=record.state,
+                    requested=record.requested_items,
+                    processed=record.processed_items,
+                    matched=record.matched_items,
+                    cache_hits=record.cache_hits,
+                    cache_misses=record.cache_misses,
+                    expanded_playlists=record.expanded_playlists,
+                    expanded_tracks=record.expanded_tracks,
+                    expand_playlists=record.expand_playlists,
+                    duration_ms=record.duration_ms,
+                    error=record.error,
+                    created_at=record.created_at,
+                    updated_at=record.updated_at,
+                    created_display=created_display,
+                    updated_display=updated_display,
+                )
+            )
+
+        logger.debug(
+            "spotify.ui.backfill.timeline",
+            extra={"count": len(entries), "limit": resolved_limit},
+        )
+        return tuple(entries)
+
     def build_backfill_snapshot(
         self,
         *,
@@ -1971,6 +2034,7 @@ __all__ = [
     "SpotifyRecommendationSeed",
     "SpotifyBackfillSnapshot",
     "SpotifyBackfillOption",
+    "SpotifyBackfillTimelineEntry",
     "SpotifyArtistRow",
     "SpotifySavedTrackRow",
     "SpotifyTopArtistRow",

@@ -114,6 +114,7 @@ _DEFAULT_TIME_RANGE = "medium_term"
 
 _SAVED_TRACKS_LIMIT_COOKIE = "spotify_saved_tracks_limit"
 _SAVED_TRACKS_OFFSET_COOKIE = "spotify_saved_tracks_offset"
+_SPOTIFY_BACKFILL_TIMELINE_LIMIT = 10
 
 router = APIRouter(prefix="/ui", tags=["UI"])
 
@@ -3260,7 +3261,8 @@ async def spotify_backfill_fragment(
         job_id=job_id,
         status_payload=status_payload,
     )
-    context = build_spotify_backfill_context(request, snapshot=snapshot)
+    timeline = service.backfill_timeline(limit=_SPOTIFY_BACKFILL_TIMELINE_LIMIT)
+    context = build_spotify_backfill_context(request, snapshot=snapshot, timeline=timeline)
     response = templates.TemplateResponse(
         request,
         "partials/spotify_backfill.j2",

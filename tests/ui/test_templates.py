@@ -56,6 +56,7 @@ from app.ui.services import (
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
     SpotifyBackfillOption,
+    SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
     SpotifyFreeIngestJobSnapshot,
@@ -1310,7 +1311,27 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
         can_resume=False,
         can_cancel=True,
     )
-    context = build_spotify_backfill_context(request, snapshot=snapshot)
+    timeline = (
+        SpotifyBackfillTimelineEntry(
+            identifier="job-2",
+            state="completed",
+            requested=200,
+            processed=200,
+            matched=150,
+            cache_hits=80,
+            cache_misses=20,
+            expanded_playlists=5,
+            expanded_tracks=40,
+            expand_playlists=True,
+            duration_ms=2345,
+            error=None,
+            created_at=datetime(2023, 9, 2, 10, 30),
+            updated_at=datetime(2023, 9, 2, 10, 45),
+            created_display="2023-09-02 10:30",
+            updated_display="2023-09-02 10:45",
+        ),
+    )
+    context = build_spotify_backfill_context(request, snapshot=snapshot, timeline=timeline)
     template = templates.get_template("partials/spotify_backfill.j2")
     html = template.render(**context)
 
@@ -1322,6 +1343,9 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
     assert "Expand playlists" in html
     assert 'hx-target="closest .async-fragment"' in html
     assert 'hx-swap="innerHTML"' in html
+    assert "Recent jobs" in html
+    assert "spotify-backfill-timeline" in html
+    assert "job-2" in html
 
 
 def test_spotify_free_ingest_partial_renders_form_and_status() -> None:
