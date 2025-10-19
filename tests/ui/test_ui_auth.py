@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import re
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 
@@ -109,6 +111,28 @@ def test_search_page_forbidden_for_read_only(monkeypatch) -> None:
         assert login.status_code == 303
         cookie_header = "; ".join(f"{name}={value}" for name, value in login.cookies.items())
         response = client.get("/ui/search", headers={"Cookie": cookie_header})
+        assert response.status_code == 403
+        assert response.headers.get("content-type", "").startswith("application/json")
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/ui/soulseek",
+        "/ui/soulseek/status",
+        "/ui/soulseek/config",
+        "/ui/soulseek/uploads",
+        "/ui/soulseek/downloads",
+    ),
+)
+def test_soulseek_routes_forbidden_for_read_only(monkeypatch, path: str) -> None:
+    fingerprint = fingerprint_api_key("primary-key")
+    extra = {"UI_ROLE_OVERRIDES": f"{fingerprint}:read_only"}
+    with _create_client(monkeypatch, extra_env=extra) as client:
+        login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert login.status_code == 303
+        cookie_header = "; ".join(f"{name}={value}" for name, value in login.cookies.items())
+        response = client.get(path, headers={"Cookie": cookie_header})
         assert response.status_code == 403
         assert response.headers.get("content-type", "").startswith("application/json")
 

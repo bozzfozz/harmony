@@ -118,6 +118,23 @@ def _admin_env() -> dict[str, str]:
     return {"UI_ROLE_OVERRIDES": f"{fingerprint}:admin"}
 
 
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/ui/soulseek/status",
+        "/ui/soulseek/config",
+        "/ui/soulseek/uploads",
+        "/ui/soulseek/downloads",
+    ),
+)
+def test_soulseek_fragments_forbidden_for_read_only(monkeypatch, path: str) -> None:
+    with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        _login(client)
+        response = client.get(path, headers={"Cookie": _cookies_header(client)})
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.headers.get("content-type", "").startswith("application/json")
+
+
 class _StubActivityService:
     def __init__(self, page: ActivityPage | None = None) -> None:
         default_page = ActivityPage(
@@ -983,7 +1000,7 @@ def test_soulseek_config_fragment_marks_missing_api_key(monkeypatch) -> None:
     stub.config = replace(stub.config, api_key=None)
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        with _create_client(monkeypatch) as client:
             _login(client)
             response = client.get(
                 "/ui/soulseek/config",
@@ -1276,7 +1293,7 @@ def test_soulseek_downloads_fragment_operator_disables_actions(monkeypatch) -> N
     stub = _RecordingDownloadsService(page)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+        with _create_client(monkeypatch) as client:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/soulseek/downloads", headers=headers)
