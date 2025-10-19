@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -138,6 +138,100 @@ def _render_alert_fragment(
         context,
         status_code=status_code,
     )
+
+
+def _parse_form_body(raw_body: bytes) -> dict[str, str]:
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    parsed = parse_qs(payload)
+    return {key: (values[0].strip() if values else "") for key, values in parsed.items()}
+
+
+async def _handle_backfill_action(
+    request: Request,
+    session: UiSession,
+    service: SpotifyUiService,
+    *,
+    action: Callable[[SpotifyUiService, str], Mapping[str, object]],
+    success_message: str,
+    event_key: str,
+) -> Response:
+    values = _parse_form_body(await request.body())
+    job_id = values.get("job_id", "")
+    if not job_id:
+        return _render_alert_fragment(
+            request,
+            "A backfill job identifier is required.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        status_payload = action(service, job_id)
+    except PermissionError as exc:
+        logger.warning("spotify.ui.backfill.denied", extra={"error": str(exc)})
+        return _render_alert_fragment(
+            request,
+            "Spotify authentication is required before managing backfill jobs.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    except LookupError:
+        return _render_alert_fragment(
+            request,
+            "The requested backfill job could not be found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return _render_alert_fragment(
+            request,
+            str(exc) or "Invalid backfill action request.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    except AppError as exc:
+        logger.warning("spotify.ui.backfill.error", extra={"error": exc.code})
+        return _render_alert_fragment(
+            request,
+            exc.message if exc.message else "Unable to update the backfill job.",
+        )
+    except Exception:
+        logger.exception("spotify.ui.backfill.error")
+        return _render_alert_fragment(
+            request,
+            "Failed to update the backfill job.",
+        )
+
+    request.app.state.ui_spotify_backfill_job_id = job_id
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    snapshot = service.build_backfill_snapshot(
+        csrf_token=csrf_token,
+        job_id=job_id,
+        status_payload=status_payload,
+    )
+    alert = AlertMessage(level="success", text=success_message.format(job_id=job_id))
+    context = build_spotify_backfill_context(
+        request,
+        snapshot=snapshot,
+        alert=alert,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_backfill.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        event_key,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        job_id=job_id,
+        state=status_payload.get("state"),
+    )
+    return response
 
 
 def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[str, bool]:
@@ -2305,6 +2399,66 @@ async def spotify_backfill_run(
         job_id=job_id,
     )
     return response
+
+
+@router.post(
+    "/spotify/backfill/pause",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_backfill_pause(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    return await _handle_backfill_action(
+        request,
+        session,
+        service,
+        action=lambda svc, job_id: svc.pause_backfill(job_id),
+        success_message="Backfill job {job_id} paused.",
+        event_key="ui.spotify.backfill.pause",
+    )
+
+
+@router.post(
+    "/spotify/backfill/resume",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_backfill_resume(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    return await _handle_backfill_action(
+        request,
+        session,
+        service,
+        action=lambda svc, job_id: svc.resume_backfill(job_id),
+        success_message="Backfill job {job_id} resumed.",
+        event_key="ui.spotify.backfill.resume",
+    )
+
+
+@router.post(
+    "/spotify/backfill/cancel",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_backfill_cancel(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    return await _handle_backfill_action(
+        request,
+        session,
+        service,
+        action=lambda svc, job_id: svc.cancel_backfill(job_id),
+        success_message="Backfill job {job_id} cancelled.",
+        event_key="ui.spotify.backfill.cancel",
+    )
 
 
 @router.get("/activity/table", include_in_schema=False)

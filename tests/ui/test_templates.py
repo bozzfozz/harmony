@@ -50,6 +50,7 @@ from app.ui.services import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillSnapshot,
+    SpotifyBackfillOption,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
     SpotifyFreeIngestJobSnapshot,
@@ -1166,6 +1167,20 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
         can_run=True,
         default_max_items=500,
         expand_playlists=True,
+        options=(
+            SpotifyBackfillOption(
+                name="expand_playlists",
+                label_key="spotify.backfill.options.expand_playlists",
+                description_key="spotify.backfill.options.expand_playlists_hint",
+                checked=True,
+            ),
+            SpotifyBackfillOption(
+                name="include_cached_results",
+                label_key="spotify.backfill.options.include_cached",
+                description_key="spotify.backfill.options.include_cached_hint",
+                checked=True,
+            ),
+        ),
         last_job_id="job-1",
         state="running",
         requested=100,
@@ -1177,12 +1192,17 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
         expanded_tracks=10,
         duration_ms=1234,
         error=None,
+        can_pause=True,
+        can_resume=False,
+        can_cancel=True,
     )
     context = build_spotify_backfill_context(request, snapshot=snapshot)
     template = templates.get_template("partials/spotify_backfill.j2")
     html = template.render(**context)
 
     assert "spotify-backfill-form" in html
+    assert "spotify-backfill__advanced" in html
+    assert "spotify-backfill__actions" in html
     assert 'value="500"' in html
     assert "job-1" in html
     assert "Expand playlists" in html

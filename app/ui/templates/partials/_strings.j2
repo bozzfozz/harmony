@@ -92,6 +92,9 @@
     "spotify.connect": "Connect",
     "spotify.manual.submit": "Complete manually",
     "spotify.backfill.run": "Start backfill",
+    "spotify.backfill.pause": "Pause",
+    "spotify.backfill.resume": "Resume",
+    "spotify.backfill.cancel": "Cancel",
     "spotify.saved.save": "Save tracks",
     "spotify.saved.queue": "Queue download",
     "spotify.saved.remove": "Remove",
@@ -497,6 +500,28 @@
 
 {% macro spotify_backfill_hint() -%}
   Trigger a Spotify enrichment job for pending FREE ingest items. Requires a valid Spotify session.
+{%- endmacro %}
+
+{% macro spotify_backfill_advanced_summary() %}Advanced options{% endmacro %}
+
+{% macro spotify_backfill_option_label(key) -%}
+  {%- if key == "spotify.backfill.options.expand_playlists" -%}
+    Expand playlists after enrichment
+  {%- elif key == "spotify.backfill.options.include_cached" -%}
+    Include cached results
+  {%- else -%}
+    {{ key }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro spotify_backfill_option_hint(key) -%}
+  {%- if key == "spotify.backfill.options.expand_playlists_hint" -%}
+    Automatically add discovered playlists to the import queue.
+  {%- elif key == "spotify.backfill.options.include_cached_hint" -%}
+    Reuse cached Spotify lookups when available to speed up processing.
+  {%- else -%}
+    {{ key }}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro spotify_manual_host_hint(host) -%}
