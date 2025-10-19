@@ -14,4 +14,32 @@
   {% else %}
     <p class="spotify-account__empty">{{ strings.spotify_account_empty_state() }}</p>
   {% endif %}
+  {% if show_refresh or (show_reset and reset_action) %}
+    <div class="spotify-account__actions">
+      {% if show_refresh %}
+        <form id="spotify-account-refresh"
+              data-test="spotify-account-refresh"
+              method="post"
+              action="{{ refresh_action }}"
+              hx-post="{{ refresh_action }}"
+              hx-target="closest .async-fragment"
+              hx-swap="innerHTML">
+          <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+          <button type="submit">{{ strings.button_label("spotify.account.refresh") }}</button>
+        </form>
+      {% endif %}
+      {% if show_reset and reset_action %}
+        <form id="spotify-account-reset-scopes"
+              data-test="spotify-account-reset-scopes"
+              method="post"
+              action="{{ reset_action }}"
+              hx-post="{{ reset_action }}"
+              hx-target="closest .async-fragment"
+              hx-swap="innerHTML">
+          <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+          <button type="submit">{{ strings.button_label("spotify.account.reset_scopes") }}</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
 </div>

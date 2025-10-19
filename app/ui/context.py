@@ -1596,12 +1596,25 @@ def build_spotify_account_context(
     request: Request,
     *,
     account: SpotifyAccountSummary | None,
+    csrf_token: str,
+    refresh_action: str,
+    show_refresh: bool,
+    show_reset: bool,
+    reset_action: str | None,
 ) -> Mapping[str, Any]:
     alerts: tuple[AlertMessage, ...] = ()
+    base_context = {
+        "request": request,
+        "alert_messages": alerts,
+        "csrf_token": csrf_token,
+        "refresh_action": refresh_action,
+        "show_refresh": show_refresh,
+        "show_reset": show_reset,
+        "reset_action": reset_action,
+    }
     if account is None:
         return {
-            "request": request,
-            "alert_messages": alerts,
+            **base_context,
             "has_account": False,
             "summary": None,
             "fields": (),
@@ -1610,12 +1623,19 @@ def build_spotify_account_context(
     product_text = account.product or "—"
     followers_text = f"{account.followers:,}" if account.followers else "0"
     country_text = account.country or "—"
+    email_text = account.email or "—"
 
     fields: tuple[DefinitionItem, ...] = (
         DefinitionItem(
             label_key="spotify.account.display_name",
             value=account.display_name,
             test_id="spotify-account-display-name",
+        ),
+        DefinitionItem(
+            label_key="spotify.account.email",
+            value=email_text,
+            test_id="spotify-account-email",
+            is_missing=account.email is None,
         ),
         DefinitionItem(
             label_key="spotify.account.product",
@@ -1635,8 +1655,7 @@ def build_spotify_account_context(
     )
 
     return {
-        "request": request,
-        "alert_messages": alerts,
+        **base_context,
         "has_account": True,
         "summary": account,
         "fields": fields,

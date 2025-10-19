@@ -39,14 +39,19 @@ from app.ui.services.spotify import (
     SpotifyTopTrackRow,
     SpotifyUiService,
 )
+from app.utils.settings_store import read_setting, write_setting
 
 
 class _StubOAuthService:
     def __init__(self, payload: Mapping[str, object]) -> None:
         self._payload = payload
+        self.reset_calls: list[None] = []
 
     def health(self) -> Mapping[str, object]:
         return self._payload
+
+    def reset_scopes(self) -> None:
+        self.reset_calls.append(None)
 
 
 def _make_request() -> Request:
@@ -170,6 +175,7 @@ def test_account_returns_summary_with_defaults() -> None:
         "product": "premium",
         "followers": {"total": "2500"},
         "country": "gb",
+        "email": "user@example.com",
     }
     service = SpotifyUiService(
         request=request,
@@ -183,6 +189,7 @@ def test_account_returns_summary_with_defaults() -> None:
 
     assert summary == SpotifyAccountSummary(
         display_name="Example User",
+        email="user@example.com",
         product="Premium",
         followers=2500,
         country="GB",
@@ -212,10 +219,70 @@ def test_account_handles_missing_profile() -> None:
 
     assert summary == SpotifyAccountSummary(
         display_name="user-123",
+        email=None,
         product=None,
         followers=0,
         country=None,
     )
+
+
+def test_refresh_account_clears_token_setting() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_current_user.return_value = {
+        "display_name": "Example User",
+        "id": "example-id",
+        "product": "premium",
+        "followers": {"total": 15},
+        "country": "us",
+        "email": "user@example.com",
+    }
+    oauth = _StubOAuthService({})
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=oauth,
+        db_session=Mock(),
+    )
+
+    write_setting("SPOTIFY_TOKEN_INFO", '{"access_token": "value"}')
+
+    summary = service.refresh_account()
+
+    assert summary == SpotifyAccountSummary(
+        display_name="Example User",
+        email="user@example.com",
+        product="Premium",
+        followers=15,
+        country="US",
+    )
+    assert read_setting("SPOTIFY_TOKEN_INFO") is None
+    assert oauth.reset_calls == []
+
+
+def test_reset_scopes_uses_oauth_and_clears_token_setting() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_current_user.return_value = None
+    oauth = _StubOAuthService({})
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=oauth,
+        db_session=Mock(),
+    )
+
+    write_setting("SPOTIFY_TOKEN_INFO", '{"access_token": "value"}')
+
+    summary = service.reset_scopes()
+
+    assert summary is None
+    assert oauth.reset_calls == [None]
+    assert read_setting("SPOTIFY_TOKEN_INFO") is None
 
 
 def test_build_top_tracks_context_adds_detail_action() -> None:

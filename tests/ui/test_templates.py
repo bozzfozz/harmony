@@ -477,29 +477,51 @@ def test_spotify_account_fragment_template_renders_summary() -> None:
     request = _make_request("/ui/spotify")
     summary = SpotifyAccountSummary(
         display_name="Example User",
+        email="user@example.com",
         product="Premium",
         followers=2500,
         country="GB",
     )
-    context = build_spotify_account_context(request, account=summary)
+    context = build_spotify_account_context(
+        request,
+        account=summary,
+        csrf_token="csrf-token",
+        refresh_action="/ui/spotify/account/refresh",
+        show_refresh=True,
+        show_reset=False,
+        reset_action=None,
+    )
     template = templates.get_template("partials/spotify_account.j2")
     html = template.render(**context)
 
     assert "Example User" in html
+    assert "user@example.com" in html
     assert "Premium" in html
     assert "2,500" in html
     assert "GB" in html
     assert 'data-test="spotify-account-product"' in html
+    assert 'data-test="spotify-account-refresh"' in html
+    assert 'data-test="spotify-account-reset-scopes"' not in html
 
 
 def test_spotify_account_fragment_template_handles_missing_profile() -> None:
     request = _make_request("/ui/spotify")
-    context = build_spotify_account_context(request, account=None)
+    context = build_spotify_account_context(
+        request,
+        account=None,
+        csrf_token="csrf-token",
+        refresh_action="/ui/spotify/account/refresh",
+        show_refresh=True,
+        show_reset=True,
+        reset_action="/ui/spotify/account/reset-scopes",
+    )
     template = templates.get_template("partials/spotify_account.j2")
     html = template.render(**context)
 
     assert "No Spotify profile information is available." in html
     assert 'data-has-account="0"' in html
+    assert 'data-test="spotify-account-refresh"' in html
+    assert 'data-test="spotify-account-reset-scopes"' in html
 
 
 def test_spotify_saved_tracks_fragment_template_renders_table() -> None:

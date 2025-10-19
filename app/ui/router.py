@@ -2425,7 +2425,29 @@ async def spotify_account_fragment(
             "Unable to load Spotify account details.",
         )
 
-    context = build_spotify_account_context(request, account=summary)
+    try:
+        refresh_action = request.url_for("spotify_account_refresh")
+    except Exception:  # pragma: no cover - fallback for tests
+        refresh_action = "/ui/spotify/account/refresh"
+    show_reset = session.allows("admin")
+    reset_action: str | None
+    if show_reset:
+        try:
+            reset_action = request.url_for("spotify_account_reset_scopes")
+        except Exception:  # pragma: no cover - fallback for tests
+            reset_action = "/ui/spotify/account/reset-scopes"
+    else:
+        reset_action = None
+
+    context = build_spotify_account_context(
+        request,
+        account=summary,
+        csrf_token=csrf_token,
+        refresh_action=refresh_action,
+        show_refresh=True,
+        show_reset=show_reset,
+        reset_action=reset_action,
+    )
     response = templates.TemplateResponse(
         request,
         "partials/spotify_account.j2",
@@ -2436,6 +2458,133 @@ async def spotify_account_fragment(
     log_event(
         logger,
         "ui.fragment.spotify.account",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fields"]),
+    )
+    return response
+
+
+@router.post(
+    "/spotify/account/refresh",
+    include_in_schema=False,
+    name="spotify_account_refresh",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_account_refresh(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("spotify")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        summary = service.refresh_account()
+    except Exception:
+        logger.exception("ui.fragment.spotify.account.refresh")
+        return _render_alert_fragment(
+            request,
+            "Unable to refresh Spotify account details.",
+        )
+
+    try:
+        refresh_action = request.url_for("spotify_account_refresh")
+    except Exception:  # pragma: no cover - fallback for tests
+        refresh_action = "/ui/spotify/account/refresh"
+    show_reset = session.allows("admin")
+    reset_action: str | None
+    if show_reset:
+        try:
+            reset_action = request.url_for("spotify_account_reset_scopes")
+        except Exception:  # pragma: no cover - fallback for tests
+            reset_action = "/ui/spotify/account/reset-scopes"
+    else:
+        reset_action = None
+
+    context = build_spotify_account_context(
+        request,
+        account=summary,
+        csrf_token=csrf_token,
+        refresh_action=refresh_action,
+        show_refresh=True,
+        show_reset=show_reset,
+        reset_action=reset_action,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_account.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.account.refresh",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fields"]),
+    )
+    return response
+
+
+@router.post(
+    "/spotify/account/reset-scopes",
+    include_in_schema=False,
+    name="spotify_account_reset_scopes",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def spotify_account_reset_scopes(
+    request: Request,
+    session: UiSession = Depends(require_role("admin")),
+    service: SpotifyUiService = Depends(get_spotify_ui_service),
+) -> Response:
+    if not session.features.spotify:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    try:
+        summary = service.reset_scopes()
+    except Exception:
+        logger.exception("ui.fragment.spotify.account.reset_scopes")
+        return _render_alert_fragment(
+            request,
+            "Unable to reset Spotify scopes.",
+        )
+
+    try:
+        refresh_action = request.url_for("spotify_account_refresh")
+    except Exception:  # pragma: no cover - fallback for tests
+        refresh_action = "/ui/spotify/account/refresh"
+    try:
+        reset_action = request.url_for("spotify_account_reset_scopes")
+    except Exception:  # pragma: no cover - fallback for tests
+        reset_action = "/ui/spotify/account/reset-scopes"
+
+    context = build_spotify_account_context(
+        request,
+        account=summary,
+        csrf_token=csrf_token,
+        refresh_action=refresh_action,
+        show_refresh=True,
+        show_reset=True,
+        reset_action=reset_action,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/spotify_account.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        "ui.fragment.spotify.account.reset_scopes",
         component="ui.router",
         status="success",
         role=session.role,

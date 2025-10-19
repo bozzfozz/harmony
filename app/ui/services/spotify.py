@@ -32,12 +32,13 @@ from app.services.free_ingest_service import (
 )
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
 from app.services.spotify_domain_service import SpotifyDomainService, SpotifyServiceStatus
-from app.utils.settings_store import read_setting, write_setting
+from app.utils.settings_store import delete_setting, read_setting, write_setting
 
 logger = get_logger(__name__)
 
 _SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset({"short_term", "medium_term", "long_term"})
 _RECOMMENDATION_SEED_SETTINGS_KEY: Final[str] = "spotify.recommendations.seed_defaults"
+_SPOTIFY_TOKEN_CACHE_KEY: Final[str] = "SPOTIFY_TOKEN_INFO"
 
 
 def _normalise_time_range(value: str | None) -> str | None:
@@ -75,6 +76,7 @@ class SpotifyManualResult:
 @dataclass(slots=True)
 class SpotifyAccountSummary:
     display_name: str
+    email: str | None
     product: str | None
     followers: int
     country: str | None
@@ -1237,6 +1239,10 @@ class SpotifyUiService:
             fallback_id = str(profile.get("id") or "").strip()
             display_name = fallback_id or "Spotify user"
 
+        email_raw = profile.get("email")
+        email_text = str(email_raw or "").strip()
+        email = email_text or None
+
         product_raw = profile.get("product")
         product_text = str(product_raw or "").strip()
         product = product_text.replace("_", " ").title() if product_text else None
@@ -1257,10 +1263,33 @@ class SpotifyUiService:
 
         return SpotifyAccountSummary(
             display_name=display_name,
+            email=email,
             product=product,
             followers=followers,
             country=country,
         )
+
+    def refresh_account(self) -> SpotifyAccountSummary | None:
+        self._clear_cached_tokens()
+        summary = self.account()
+        logger.info(
+            "spotify.ui.account.refresh",
+            extra={"has_summary": summary is not None},
+        )
+        return summary
+
+    def reset_scopes(self) -> SpotifyAccountSummary | None:
+        self._clear_cached_tokens()
+        self._oauth.reset_scopes()
+        summary = self.account()
+        logger.info(
+            "spotify.ui.account.reset_scopes",
+            extra={"has_summary": summary is not None},
+        )
+        return summary
+
+    def _clear_cached_tokens(self) -> None:
+        delete_setting(_SPOTIFY_TOKEN_CACHE_KEY)
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         request_payload = OAuthManualRequest(redirect_url=redirect_url)
