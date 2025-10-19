@@ -57,6 +57,7 @@ from app.ui.services import (
     SpotifyFreeIngestSkipped,
     SpotifyManualResult,
     SpotifyOAuthHealth,
+    SpotifyPlaylistFilterOption,
     SpotifyPlaylistItemRow,
     SpotifyPlaylistRow,
     SpotifyRecommendationRow,
@@ -589,10 +590,37 @@ def test_spotify_playlists_template_includes_actions() -> None:
             updated_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
         ),
     )
-    context = build_spotify_playlists_context(request, playlists=playlists)
+    owner_options = (SpotifyPlaylistFilterOption(value="owner-a", label="Owner A"),)
+    status_options = (SpotifyPlaylistFilterOption(value="fresh", label="Fresh"),)
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        filter_action="/ui/spotify/playlists/filter",
+        refresh_url="/ui/spotify/playlists/refresh",
+        table_target="#spotify-playlists-fragment",
+        owner_options=owner_options,
+        sync_status_options=status_options,
+        owner_filter="owner-a",
+        status_filter=None,
+        force_sync_url="/ui/spotify/playlists/force-sync",
+    )
     template = templates.get_template("partials/spotify_playlists.j2")
     html = template.render(**context)
 
+    assert 'id="spotify-playlists-fragment"' in html
+    assert 'id="spotify-playlists-filter-form"' in html
+    assert 'hx-post="/ui/spotify/playlists/filter"' in html
+    assert 'hx-target="#spotify-playlists-fragment"' in html
+    assert 'name="csrftoken" value="csrf-token"' in html
+    assert 'id="playlist-owner-filter"' in html
+    assert '<option value="owner-a" selected>Owner A</option>' in html
+    assert 'id="playlist-status-filter"' in html
+    assert '<option value="" selected>All</option>' in html
+    assert 'hx-post="/ui/spotify/playlists/refresh"' in html
+    assert 'hx-include="#spotify-playlists-filter-form"' in html
+    assert 'hx-post="/ui/spotify/playlists/force-sync"' in html
+    assert 'id="hx-spotify-playlists"' in html
     assert 'id="spotify-playlists-table"' in html
     assert 'data-test="spotify-playlist-view-playlist-1"' in html
     assert 'hx-get="/ui/spotify/playlists/playlist-1/tracks"' in html
@@ -1057,11 +1085,23 @@ def test_spotify_playlists_partial_renders_table() -> None:
             updated_at=datetime.now(tz=UTC),
         )
     ]
-    context = build_spotify_playlists_context(request, playlists=playlists)
+    context = build_spotify_playlists_context(
+        request,
+        playlists=playlists,
+        csrf_token="csrf-token",
+        filter_action="/ui/spotify/playlists/filter",
+        refresh_url="/ui/spotify/playlists/refresh",
+        table_target="#spotify-playlists-fragment",
+        owner_options=(),
+        sync_status_options=(),
+        owner_filter=None,
+        status_filter=None,
+        force_sync_url=None,
+    )
     template = templates.get_template("partials/spotify_playlists.j2")
     html = template.render(**context)
 
-    assert 'id="hx-spotify-playlists"' in html
+    assert 'id="spotify-playlists-table"' in html
     assert 'class="table"' in html
     assert "Daily Mix" in html
     assert 'data-count="1"' in html

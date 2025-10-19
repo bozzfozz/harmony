@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from time import perf_counter
@@ -34,6 +35,7 @@ from app.services.free_ingest_service import (
     JobStatus,
 )
 from app.workers.backfill_worker import BackfillWorker
+from app.workers.playlist_sync_worker import PlaylistCacheInvalidator, PlaylistSyncWorker
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.workers.sync_worker import SyncWorker
@@ -230,6 +232,55 @@ class SpotifyDomainService:
 
     def list_playlists(self, session: Session) -> Sequence[Playlist]:
         return session.query(Playlist).order_by(Playlist.updated_at.desc()).all()
+
+    async def refresh_playlists(self) -> None:
+        worker = self._ensure_playlist_worker()
+        started = perf_counter()
+        try:
+            await worker.sync_once()
+        except Exception as exc:
+            log_event(
+                logger,
+                "spotify.playlists.refresh",
+                component="service.spotify",
+                status="error",
+                error=str(exc),
+            )
+            raise
+        duration_ms = round((perf_counter() - started) * 1_000, 3)
+        log_event(
+            logger,
+            "spotify.playlists.refresh",
+            component="service.spotify",
+            status="success",
+            duration_ms=duration_ms,
+        )
+
+    async def force_sync_playlists(self) -> None:
+        worker = self._ensure_playlist_worker()
+        invalidator = self._build_playlist_cache_invalidator()
+        if invalidator is not None:
+            invalidator.invalidate(())
+        started = perf_counter()
+        try:
+            await worker.sync_once()
+        except Exception as exc:
+            log_event(
+                logger,
+                "spotify.playlists.force_sync",
+                component="service.spotify",
+                status="error",
+                error=str(exc),
+            )
+            raise
+        duration_ms = round((perf_counter() - started) * 1_000, 3)
+        log_event(
+            logger,
+            "spotify.playlists.force_sync",
+            component="service.spotify",
+            status="success",
+            duration_ms=duration_ms,
+        )
 
     def get_playlist_items(
         self, playlist_id: str, *, limit: int, offset: int = 0
@@ -499,6 +550,32 @@ class SpotifyDomainService:
         await worker.enqueue(job)
 
     # Helpers -----------------------------------------------------------
+
+    def _ensure_playlist_worker(self) -> PlaylistSyncWorker:
+        worker = getattr(self._state, "playlist_worker", None)
+        if isinstance(worker, PlaylistSyncWorker):
+            return worker
+        spotify_client = self._require_spotify()
+        response_cache = getattr(self._state, "response_cache", None)
+        worker = PlaylistSyncWorker(
+            spotify_client,
+            interval_seconds=900.0,
+            response_cache=response_cache,
+        )
+        setattr(self._state, "playlist_worker", worker)
+        return worker
+
+    def _build_playlist_cache_invalidator(self) -> PlaylistCacheInvalidator | None:
+        response_cache = getattr(self._state, "response_cache", None)
+        if response_cache is None:
+            return None
+        if not getattr(response_cache, "write_through", True):
+            return None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+        return PlaylistCacheInvalidator(response_cache, loop=loop)
 
     def _build_free_ingest_service(self) -> FreeIngestService:
         from app.workers.sync_worker import (

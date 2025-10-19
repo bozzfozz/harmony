@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 import re
 from typing import Any
 
 import pytest
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
 from app.api.search import DEFAULT_SOURCES
@@ -39,6 +39,8 @@ from app.ui.services import (
     SpotifyFreeIngestSkipped,
     SpotifyManualResult,
     SpotifyOAuthHealth,
+    SpotifyPlaylistFilterOption,
+    SpotifyPlaylistFilters,
     SpotifyPlaylistItemRow,
     SpotifyPlaylistRow,
     SpotifyRecommendationRow,
@@ -225,6 +227,14 @@ class _StubSpotifyService:
         )
         self.account_exception: Exception | None = None
         self.playlists: Sequence[SpotifyPlaylistRow] | Exception = ()
+        self.filter_options = SpotifyPlaylistFilters(
+            owners=(),
+            sync_statuses=(),
+        )
+        self.playlist_filters_exception: Exception | None = None
+        self.refresh_calls: list[None] = []
+        self.force_sync_calls: list[None] = []
+        self.list_playlists_calls: list[tuple[str | None, str | None]] = []
         self.playlist_items_rows: Sequence[SpotifyPlaylistItemRow] | Exception = ()
         self.playlist_items_total: int = 0
         self.playlist_items_page_limit: int = 25
@@ -382,10 +392,27 @@ class _StubSpotifyService:
     def oauth_health(self) -> SpotifyOAuthHealth:
         return self._oauth
 
-    def list_playlists(self) -> Sequence[SpotifyPlaylistRow]:
+    def list_playlists(
+        self,
+        *,
+        owner: str | None = None,
+        sync_status: str | None = None,
+    ) -> Sequence[SpotifyPlaylistRow]:
         if isinstance(self.playlists, Exception):
             raise self.playlists
+        self.list_playlists_calls.append((owner, sync_status))
         return tuple(self.playlists)
+
+    def playlist_filters(self) -> SpotifyPlaylistFilters:
+        if self.playlist_filters_exception:
+            raise self.playlist_filters_exception
+        return self.filter_options
+
+    async def refresh_playlists(self) -> None:
+        self.refresh_calls.append(None)
+
+    async def force_sync_playlists(self) -> None:
+        self.force_sync_calls.append(None)
 
     def playlist_items(
         self, playlist_id: str, *, limit: int, offset: int
@@ -2577,6 +2604,119 @@ def test_spotify_playlists_fragment_returns_error_on_failure(monkeypatch) -> Non
             )
             assert response.status_code == 500
             assert "Unable to load Spotify playlists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlists_filter_updates_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-1",
+            name="Example",
+            track_count=10,
+            updated_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
+        ),
+    )
+    stub.filter_options = SpotifyPlaylistFilters(
+        owners=(SpotifyPlaylistFilterOption(value="owner-a", label="Owner A"),),
+        sync_statuses=(SpotifyPlaylistFilterOption(value="fresh", label="Fresh"),),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/filter",
+                data={
+                    "owner": "owner-a",
+                    "status": "fresh",
+                    "csrftoken": headers["X-CSRF-Token"],
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Owner A" in response.text
+            assert 'value="owner-a" selected' in response.text
+            assert stub.list_playlists_calls == [("owner-a", "fresh")]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlists_refresh_triggers_service(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-2",
+            name="Daily Mix",
+            track_count=5,
+            updated_at=datetime(2023, 9, 2, 9, 0, tzinfo=UTC),
+        ),
+    )
+    stub.filter_options = SpotifyPlaylistFilters(
+        owners=(),
+        sync_statuses=(),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/refresh",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert stub.refresh_calls == [None]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlists_force_sync_requires_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/force-sync",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_json_error(response, status_code=status.HTTP_403_FORBIDDEN)
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_playlists_force_sync_runs_for_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.playlists = (
+        SpotifyPlaylistRow(
+            identifier="playlist-3",
+            name="Release Radar",
+            track_count=30,
+            updated_at=datetime(2023, 9, 3, 8, 30, tzinfo=UTC),
+        ),
+    )
+    stub.filter_options = SpotifyPlaylistFilters(
+        owners=(),
+        sync_statuses=(),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/playlists/force-sync",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert stub.force_sync_calls == [None]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

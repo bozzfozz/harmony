@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         SpotifyFreeIngestResult,
         SpotifyManualResult,
         SpotifyOAuthHealth,
+        SpotifyPlaylistFilterOption,
         SpotifyPlaylistItemRow,
         SpotifyPlaylistRow,
         SpotifyRecommendationRow,
@@ -1852,6 +1853,15 @@ def build_spotify_playlists_context(
     request: Request,
     *,
     playlists: Sequence[SpotifyPlaylistRow],
+    csrf_token: str,
+    filter_action: str,
+    refresh_url: str,
+    table_target: str,
+    owner_options: Sequence[SpotifyPlaylistFilterOption],
+    sync_status_options: Sequence[SpotifyPlaylistFilterOption],
+    owner_filter: str | None = None,
+    status_filter: str | None = None,
+    force_sync_url: str | None = None,
 ) -> Mapping[str, Any]:
     default_limit = 25
     rows: list[TableRow] = []
@@ -1917,6 +1927,15 @@ def build_spotify_playlists_context(
         "request": request,
         "fragment": fragment,
         "playlist_items_target": "#spotify-playlist-items",
+        "csrf_token": csrf_token,
+        "filter_action": filter_action,
+        "refresh_url": refresh_url,
+        "force_sync_url": force_sync_url,
+        "table_target": table_target,
+        "owner_options": tuple(owner_options),
+        "sync_status_options": tuple(sync_status_options),
+        "owner_filter": owner_filter,
+        "status_filter": status_filter,
     }
 
 
