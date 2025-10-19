@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
+import inspect
 
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
@@ -16,6 +17,44 @@ from app.logging import get_logger
 logger = get_logger(__name__)
 
 
+_ShutdownCallback = Callable[[], Awaitable[None] | None]
+
+
+class _AdapterShutdownManager:
+    """Manage adapter shutdown callbacks safely and idempotently."""
+
+    def __init__(self) -> None:
+        self._callbacks: list[tuple[str, _ShutdownCallback]] = []
+        self._shutdown_started = False
+
+    def register(self, provider: str, callback: _ShutdownCallback) -> None:
+        if self._shutdown_started:
+            logger.warning(
+                "Late registration of provider shutdown callback ignored",
+                extra={"event": "provider.shutdown.late_registration", "provider": provider},
+            )
+            return
+        self._callbacks.append((provider, callback))
+
+    async def shutdown(self) -> None:
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+        try:
+            for provider, callback in self._callbacks:
+                try:
+                    result = callback()
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:  # pragma: no cover - defensive guard
+                    logger.exception(
+                        "Error while shutting down provider adapter",
+                        extra={"event": "provider.shutdown.error", "provider": provider},
+                    )
+        finally:
+            self._callbacks.clear()
+
+
 class ProviderRegistry:
     """Factory resolving provider adapters based on feature flags."""
 
@@ -24,6 +63,7 @@ class ProviderRegistry:
         self._providers: dict[str, TrackProvider] = {}
         self._policies: dict[str, ProviderRetryPolicy] = {}
         self._initialised = False
+        self._shutdown_manager = _AdapterShutdownManager()
 
     @property
     def gateway_config(self) -> ProviderGatewayConfig:
@@ -52,6 +92,7 @@ class ProviderRegistry:
                 continue
             self._providers[provider.name] = provider
             self._policies[provider.name] = self._policy_for(provider.name)
+            self._register_shutdown_callback(provider)
         self._initialised = True
 
     def _build_track_provider(self, name: str) -> TrackProvider | None:
@@ -104,6 +145,21 @@ class ProviderRegistry:
         if normalized not in self._providers:
             raise KeyError(f"Track provider {name!r} is not enabled")
         return self._providers[normalized]
+
+    async def shutdown(self) -> None:
+        """Close all registered providers, ignoring repeated calls."""
+
+        await self._shutdown_manager.shutdown()
+
+    def _register_shutdown_callback(self, provider: TrackProvider) -> None:
+        close_callable = getattr(provider, "aclose", None)
+        if close_callable is None or not callable(close_callable):
+            return
+
+        def _callback() -> Awaitable[None] | None:
+            return close_callable()
+
+        self._shutdown_manager.register(provider.name, _callback)
 
 
 __all__ = ["ProviderRegistry"]

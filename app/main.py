@@ -22,6 +22,7 @@ from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
 from app.dependencies import (
     get_app_config,
+    get_provider_registry,
     get_soulseek_client,
     get_spotify_client,
     set_oauth_service_instance,
@@ -688,6 +689,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         await close_result
                 except Exception:  # pragma: no cover - defensive shutdown guard
                     logger.exception("Failed to close Soulseek client during shutdown")
+        try:
+            registry = get_provider_registry()
+        except Exception:  # pragma: no cover - defensive shutdown guard
+            logger.exception("Failed to retrieve provider registry during shutdown")
+        else:
+            try:
+                await registry.shutdown()
+            except Exception:  # pragma: no cover - defensive shutdown guard
+                logger.exception("Failed to shutdown provider registry")
         await _stop_orchestrator_workers(app)
         logger.info("Harmony application stopped")
 
