@@ -835,12 +835,16 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
         db_session=Mock(),
     )
 
-    rows, seeds = service.recommendations(
-        seed_tracks=[" track-1 ", "TRACK-1", "track-2"],
-        seed_artists=[" artist-1 ", "ARTIST-1", "artist-2"],
-        seed_genres=["rock", " Rock ", "jazz"],
-        limit=200,
-    )
+    seed_tracks = [" track-1 ", "TRACK-1", "track-2"]
+    seed_artists = [" artist-1 ", "ARTIST-1", "artist-2"]
+    seed_genres = ["rock", " Rock ", "jazz"]
+    with patch("app.ui.services.spotify.log_event") as mock_log_event:
+        rows, seeds = service.recommendations(
+            seed_tracks=seed_tracks,
+            seed_artists=seed_artists,
+            seed_genres=seed_genres,
+            limit=200,
+        )
 
     assert rows == (
         SpotifyRecommendationRow(
@@ -867,6 +871,17 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
         seed_genres=("rock", "jazz"),
         limit=100,
     )
+    assert mock_log_event.call_count == 1
+    event_args = mock_log_event.call_args
+    assert event_args[0][1] == "spotify.recommendations"
+    fields = event_args.kwargs
+    assert fields["status"] == "ok"
+    assert fields["result_tracks"] == len(rows)
+    assert fields["result_seeds"] == len(seeds)
+    assert fields["seed_tracks"] == len(SpotifyUiService._clean_seed_values(seed_tracks))
+    assert fields["seed_artists"] == len(SpotifyUiService._clean_seed_values(seed_artists))
+    assert fields["seed_genres"] == len(SpotifyUiService._clean_seed_values(seed_genres))
+    assert fields["spotify.recommendations.latency_ms"] >= 0
 
 
 def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
