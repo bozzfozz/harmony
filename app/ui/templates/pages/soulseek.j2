@@ -33,6 +33,32 @@
     </div>
   </section>
 
+  {% if suggested_tasks %}
+    <section class="page-section page-section--card"
+             aria-labelledby="soulseek-tasks-heading"
+             data-test="soulseek-tasks">
+      <h3 id="soulseek-tasks-heading" class="page-section__title">{{ strings.soulseek_tasks_heading() }}</h3>
+      <p class="page-section__description">{{ strings.soulseek_tasks_description() }}</p>
+      <p class="page-section__meta" data-test="soulseek-tasks-completion">{{ strings.soulseek_tasks_completion(tasks_completion) }}</p>
+      <ol class="task-list">
+        {% for task in suggested_tasks %}
+          <li class="task-list__item{% if task.completed %} task-list__item--completed{% endif %}"
+              data-test="soulseek-task-{{ task.identifier }}">
+            <div class="task-list__content">
+              <span class="task-list__status" aria-hidden="true">{% if task.completed %}✓{% else %}○{% endif %}</span>
+              <div class="task-list__body">
+                <h4>{{ strings.soulseek_task_title(task.title_key) }}</h4>
+                {% if task.description_key %}
+                  <p>{{ strings.soulseek_task_description(task.description_key) }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endif %}
+
   <section class="page-section page-section--card" aria-labelledby="{{ configuration_fragment.identifier }}-heading">
     <h3 id="{{ configuration_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_configuration_heading() }}</h3>
     <div id="{{ configuration_fragment.identifier }}"

@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
 from html import escape
-from typing import Any, Literal
+import json
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import Request
@@ -16,31 +16,33 @@ from app.config import SecurityConfig, SoulseekConfig
 from app.integrations.health import IntegrationHealth
 from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
 from app.ui.formatters import format_datetime_display
-from app.ui.services import (
-    DownloadPage,
-    DownloadRow,
-    OrchestratorJob,
-    SearchResultsPage,
-    SoulseekUploadRow,
-    SpotifyAccountSummary,
-    SpotifyArtistRow,
-    SpotifyBackfillSnapshot,
-    SpotifyFreeIngestJobSnapshot,
-    SpotifyFreeIngestResult,
-    SpotifyManualResult,
-    SpotifyOAuthHealth,
-    SpotifyPlaylistItemRow,
-    SpotifyPlaylistRow,
-    SpotifyRecommendationRow,
-    SpotifyRecommendationSeed,
-    SpotifySavedTrackRow,
-    SpotifyTrackDetail,
-    SpotifyTopArtistRow,
-    SpotifyTopTrackRow,
-    SpotifyStatus,
-    WatchlistRow,
-)
 from app.ui.session import UiFeatures, UiSession
+
+if TYPE_CHECKING:
+    from app.ui.services import (
+        DownloadPage,
+        DownloadRow,
+        OrchestratorJob,
+        SearchResultsPage,
+        SoulseekUploadRow,
+        SpotifyAccountSummary,
+        SpotifyArtistRow,
+        SpotifyBackfillSnapshot,
+        SpotifyFreeIngestJobSnapshot,
+        SpotifyFreeIngestResult,
+        SpotifyManualResult,
+        SpotifyOAuthHealth,
+        SpotifyPlaylistItemRow,
+        SpotifyPlaylistRow,
+        SpotifyRecommendationRow,
+        SpotifyRecommendationSeed,
+        SpotifySavedTrackRow,
+        SpotifyStatus,
+        SpotifyTopArtistRow,
+        SpotifyTopTrackRow,
+        SpotifyTrackDetail,
+        WatchlistRow,
+    )
 
 AlertLevel = Literal["info", "success", "warning", "error"]
 ButtonMethod = Literal["get", "post"]
@@ -138,6 +140,14 @@ class FormDefinition:
 class ActionButton:
     identifier: str
     label_key: str
+
+
+@dataclass(slots=True)
+class SuggestedTask:
+    identifier: str
+    title_key: str
+    description_key: str | None = None
+    completed: bool = False
 
 
 @dataclass(slots=True)
@@ -936,6 +946,8 @@ def build_soulseek_page_context(
     session: UiSession,
     csrf_token: str,
     soulseek_badge: StatusBadge | None = None,
+    suggested_tasks: Sequence[SuggestedTask] = (),
+    tasks_completion: int = 0,
 ) -> Mapping[str, Any]:
     layout = LayoutContext(
         page_id="soulseek",
@@ -994,6 +1006,8 @@ def build_soulseek_page_context(
         "configuration_fragment": configuration_fragment,
         "uploads_fragment": uploads_fragment,
         "downloads_fragment": downloads_fragment,
+        "suggested_tasks": tuple(suggested_tasks),
+        "tasks_completion": tasks_completion,
     }
 
 
@@ -3037,6 +3051,7 @@ def _build_features_table(features: UiFeatures) -> TableDefinition:
 
 __all__ = [
     "ActionButton",
+    "SuggestedTask",
     "AsyncFragment",
     "AlertMessage",
     "CheckboxGroup",

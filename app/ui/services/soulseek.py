@@ -25,7 +25,7 @@ from app.routers.soulseek_router import (
     soulseek_uploads,
 )
 from app.schemas import StatusResponse
-
+from app.ui.context import SuggestedTask
 
 logger = get_logger(__name__)
 
@@ -113,6 +113,99 @@ class SoulseekUiService:
             "soulseek.ui.upload.cancelled",
             extra={"upload_id": upload_id},
         )
+
+    def suggested_tasks(
+        self,
+        *,
+        status: StatusResponse,
+        health: IntegrationHealth,
+        limit: int = 20,
+    ) -> Sequence[SuggestedTask]:
+        """Return recommended follow-up tasks for the Soulseek integration."""
+
+        if limit <= 0:
+            return ()
+
+        config = self._config.soulseek
+        security = self._config.security
+        normalised_status = (status.status or "").strip().lower()
+        daemon_connected = normalised_status == "ok"
+        providers_ok = all(
+            (report.status or "").strip().lower() == "ok" for report in health.providers
+        )
+        tasks: list[SuggestedTask] = [
+            SuggestedTask(
+                identifier="daemon",
+                title_key="soulseek.task.daemon",
+                description_key="soulseek.task.daemon.desc",
+                completed=daemon_connected,
+            ),
+            SuggestedTask(
+                identifier="providers",
+                title_key="soulseek.task.providers",
+                description_key="soulseek.task.providers.desc",
+                completed=providers_ok,
+            ),
+            SuggestedTask(
+                identifier="api-key",
+                title_key="soulseek.task.api_key",
+                description_key="soulseek.task.api_key.desc",
+                completed=bool((config.api_key or "").strip()),
+            ),
+            SuggestedTask(
+                identifier="preferred-formats",
+                title_key="soulseek.task.formats",
+                description_key="soulseek.task.formats.desc",
+                completed=bool(config.preferred_formats),
+            ),
+            SuggestedTask(
+                identifier="retry-policy",
+                title_key="soulseek.task.retry_policy",
+                description_key="soulseek.task.retry_policy.desc",
+                completed=config.retry_max >= 3,
+            ),
+            SuggestedTask(
+                identifier="retry-jitter",
+                title_key="soulseek.task.retry_jitter",
+                description_key="soulseek.task.retry_jitter.desc",
+                completed=config.retry_jitter_pct > 0.0,
+            ),
+            SuggestedTask(
+                identifier="timeout",
+                title_key="soulseek.task.timeout",
+                description_key="soulseek.task.timeout.desc",
+                completed=0 < config.timeout_ms <= 10_000,
+            ),
+            SuggestedTask(
+                identifier="max-results",
+                title_key="soulseek.task.max_results",
+                description_key="soulseek.task.max_results.desc",
+                completed=config.max_results <= 100,
+            ),
+            SuggestedTask(
+                identifier="require-auth",
+                title_key="soulseek.task.auth",
+                description_key="soulseek.task.auth.desc",
+                completed=security.require_auth,
+            ),
+            SuggestedTask(
+                identifier="rate-limiting",
+                title_key="soulseek.task.rate_limiting",
+                description_key="soulseek.task.rate_limiting.desc",
+                completed=security.rate_limiting_enabled,
+            ),
+        ]
+
+        limited = tuple(tasks[: min(len(tasks), limit)])
+        logger.debug(
+            "soulseek.ui.tasks",
+            extra={
+                "count": len(limited),
+                "completed": sum(1 for task in limited if task.completed),
+                "limit": limit,
+            },
+        )
+        return limited
 
     @staticmethod
     def _extract_uploads(payload: Any) -> Sequence[Any]:
