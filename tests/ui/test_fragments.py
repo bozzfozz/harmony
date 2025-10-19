@@ -241,6 +241,7 @@ class _StubSpotifyService:
                 popularity=98,
                 duration_ms=180000,
                 rank=1,
+                external_url="https://open.spotify.com/track/top-track-1",
             ),
         )
         self.top_artists_rows: Sequence[SpotifyTopArtistRow] | Exception = (
@@ -251,6 +252,7 @@ class _StubSpotifyService:
                 popularity=99,
                 genres=("rock",),
                 rank=1,
+                external_url="https://open.spotify.com/artist/top-artist-1",
             ),
         )
         self.recommendation_rows: Sequence[SpotifyRecommendationRow] = (
@@ -260,6 +262,7 @@ class _StubSpotifyService:
                 artists=("Reco Artist",),
                 album="Reco Album",
                 preview_url=None,
+                external_url="https://open.spotify.com/track/track-reco-1",
             ),
         )
         self.recommendation_seeds: Sequence[SpotifyRecommendationSeed] = (
@@ -753,9 +756,7 @@ def test_soulseek_status_fragment_updates_navigation_badge_variant(monkeypatch) 
     stub.connection = StatusResponse(status="failed")
     stub.health = IntegrationHealth(
         overall="down",
-        providers=(
-            ProviderHealth(provider="soulseek", status="down", details={}),
-        ),
+        providers=(ProviderHealth(provider="soulseek", status="down", details={}),),
     )
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
@@ -965,7 +966,9 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert "hx-soulseek-downloads" in html
             assert 'data-scope="active"' in html
             assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
-            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
+            assert (
+                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
+            )
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1024,7 +1027,9 @@ def test_soulseek_downloads_fragment_pagination_links(monkeypatch) -> None:
             assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
             assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
             assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
-            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
+            assert (
+                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
+            )
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1047,8 +1052,13 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
             assert "All downloads" in html
             assert 'data-scope="all"' in html
             assert "No Soulseek downloads" in html
-            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
-            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
+            assert (
+                'hx-get="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
+            )
+            assert (
+                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"'
+                in html
+            )
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -2066,6 +2076,8 @@ def test_spotify_top_tracks_fragment_renders_table(monkeypatch) -> None:
             _assert_html_response(response)
             assert "Top Track" in response.text
             assert "spotify-top-tracks-table" in response.text
+            assert "table-external-link-hint" in response.text
+            assert "spotify-top-track-link-top-track-1" in response.text
             assert stub.top_tracks_calls == [20]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
@@ -2136,6 +2148,7 @@ def test_spotify_recommendations_fragment_renders_form(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert "spotify-recommendations-form" in response.text
+            assert "table-external-link-hint" in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
@@ -2163,6 +2176,8 @@ def test_spotify_recommendations_submit_success(monkeypatch) -> None:
             assert "spotify-recommendation-seed-artist-artist-seed-1" in response.text
             assert "<strong>Artist:</strong>" in response.text
             assert "artist-seed-1" in response.text
+            assert "spotify-recommendation-link-track-reco-1" in response.text
+            assert "table-external-link-hint" in response.text
             assert stub.recommendations_calls == [(("track-1",), ("artist-1",), ("rock",), 10)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
@@ -2579,6 +2594,7 @@ def test_spotify_artists_fragment_renders_table(monkeypatch) -> None:
             followers=1200,
             popularity=75,
             genres=("rock", "pop"),
+            external_url="https://open.spotify.com/artist/artist-1",
         ),
     )
     app.dependency_overrides[get_spotify_ui_service] = lambda: stub
@@ -2592,6 +2608,8 @@ def test_spotify_artists_fragment_renders_table(monkeypatch) -> None:
             _assert_html_response(response)
             assert "spotify-artists-table" in response.text
             assert "Artist One" in response.text
+            assert "table-external-link-hint" in response.text
+            assert "spotify-artist-link-artist-1" in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

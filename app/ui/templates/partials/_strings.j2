@@ -206,10 +206,12 @@
     "spotify.top_tracks.album": "Album",
     "spotify.top_tracks.popularity": "Popularity",
     "spotify.top_tracks.duration": "Duration",
+    "spotify.top_tracks.link": "Spotify",
     "spotify.top_tracks.actions": "Actions",
     "spotify.recommendations.track": "Track",
     "spotify.recommendations.artists": "Artists",
     "spotify.recommendations.album": "Album",
+    "spotify.recommendations.link": "Spotify",
     "spotify.recommendations.preview": "Preview",
     "spotify.saved_tracks.name": "Track",
     "spotify.saved_tracks.artists": "Artists",
@@ -217,6 +219,7 @@
     "spotify.saved_tracks.added": "Saved",
     "spotify.saved_tracks.actions": "Actions",
     "spotify.artists.name": "Artist",
+    "spotify.artists.link": "Spotify",
     "spotify.artists.followers": "Followers",
     "spotify.artists.popularity": "Popularity",
     "spotify.artists.genres": "Genres",
@@ -574,6 +577,8 @@
   } -%}
   {{ labels.get(seed_type, seed_type) }}
 {%- endmacro %}
+
+{% macro spotify_external_link_hint() %}Open Spotify links in a new tab.{% endmacro %}
 
 {% macro spotify_saved_tracks_heading() %}Saved tracks{% endmacro %}
 

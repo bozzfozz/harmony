@@ -330,6 +330,7 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
             popularity=95,
             duration_ms=183000,
             rank=1,
+            external_url="https://open.spotify.com/track/track-1",
         )
     ]
     context = build_spotify_top_tracks_context(
@@ -348,6 +349,8 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
     assert "Artist One, Artist Two" in html
     assert "3:03" in html
     assert 'data-count="1"' in html
+    assert 'class="table-external-link-hint"' in html
+    assert 'data-test="spotify-top-track-link-track-1"' in html
     assert 'data-test="spotify-top-track-save-track-1"' in html
     assert 'hx-post="/ui/spotify/saved/save"' in html
     assert 'hx-target="#hx-spotify-saved"' in html
@@ -388,6 +391,7 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
             artists=("Artist One", "Artist Two"),
             album="Album Name",
             preview_url=None,
+            external_url="https://open.spotify.com/track/track-1",
         ),
         SpotifyRecommendationRow(
             identifier="track-2",
@@ -451,6 +455,8 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert '<input type="hidden" name="limit" value="10" />' in html
     assert '<input type="hidden" name="offset" value="15" />' in html
     assert 'data-count="2"' in html
+    assert 'class="table-external-link-hint"' in html
+    assert 'data-test="spotify-recommendation-link-track-1"' in html
 
 
 def test_spotify_account_fragment_template_renders_summary() -> None:
@@ -1035,6 +1041,7 @@ def test_spotify_artists_partial_renders_table() -> None:
             followers=123456,
             popularity=87,
             genres=("rock", "indie"),
+            external_url="https://open.spotify.com/artist/artist-1",
         )
     ]
     context = build_spotify_artists_context(request, artists=artists)
@@ -1047,6 +1054,8 @@ def test_spotify_artists_partial_renders_table() -> None:
     assert "123,456" in html
     assert "rock, indie" in html
     assert 'data-count="1"' in html
+    assert 'class="table-external-link-hint"' in html
+    assert 'data-test="spotify-artist-link-artist-1"' in html
 
 
 def test_spotify_backfill_partial_renders_snapshot() -> None:

@@ -91,6 +91,7 @@ class SpotifyArtistRow:
     followers: int
     popularity: int
     genres: tuple[str, ...]
+    external_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -111,6 +112,7 @@ class SpotifyTopTrackRow:
     popularity: int
     duration_ms: int | None
     rank: int
+    external_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -121,6 +123,7 @@ class SpotifyTopArtistRow:
     popularity: int
     genres: tuple[str, ...]
     rank: int
+    external_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -154,6 +157,7 @@ class SpotifyRecommendationRow:
     artists: tuple[str, ...]
     album: str | None
     preview_url: str | None
+    external_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -471,6 +475,14 @@ class SpotifyUiService:
                         if cleaned:
                             genres_list.append(cleaned)
 
+            external_url = None
+            external_payload = entry.get("external_urls")
+            if isinstance(external_payload, Mapping):
+                external_raw = external_payload.get("spotify")
+                if isinstance(external_raw, str):
+                    external_candidate = external_raw.strip()
+                    external_url = external_candidate or None
+
             rows.append(
                 SpotifyArtistRow(
                     identifier=identifier,
@@ -478,6 +490,7 @@ class SpotifyUiService:
                     followers=followers,
                     popularity=popularity,
                     genres=tuple(genres_list),
+                    external_url=external_url,
                 )
             )
 
@@ -652,6 +665,13 @@ class SpotifyUiService:
             if isinstance(preview_raw, str):
                 preview_candidate = preview_raw.strip()
                 preview_url = preview_candidate or None
+            external_url = None
+            external_payload = entry.get("external_urls")
+            if isinstance(external_payload, Mapping):
+                external_raw = external_payload.get("spotify")
+                if isinstance(external_raw, str):
+                    external_candidate = external_raw.strip()
+                    external_url = external_candidate or None
             rows.append(
                 SpotifyRecommendationRow(
                     identifier=identifier,
@@ -659,6 +679,7 @@ class SpotifyUiService:
                     artists=tuple(artist_names),
                     album=album,
                     preview_url=preview_url,
+                    external_url=external_url,
                 )
             )
         return tuple(rows)
@@ -1104,6 +1125,14 @@ class SpotifyUiService:
                 except (TypeError, ValueError):
                     duration_ms = None
 
+                external_url: str | None = None
+                external_payload = entry.get("external_urls")
+                if isinstance(external_payload, Mapping):
+                    external_raw = external_payload.get("spotify")
+                    if isinstance(external_raw, str):
+                        external_candidate = external_raw.strip()
+                        external_url = external_candidate or None
+
                 rows.append(
                     SpotifyTopTrackRow(
                         identifier=identifier,
@@ -1113,6 +1142,7 @@ class SpotifyUiService:
                         popularity=popularity,
                         duration_ms=duration_ms,
                         rank=index,
+                        external_url=external_url,
                     )
                 )
 
@@ -1266,6 +1296,14 @@ class SpotifyUiService:
                             if cleaned:
                                 genres.append(cleaned)
 
+                external_url = None
+                external_payload = entry.get("external_urls")
+                if isinstance(external_payload, Mapping):
+                    external_raw = external_payload.get("spotify")
+                    if isinstance(external_raw, str):
+                        external_candidate = external_raw.strip()
+                        external_url = external_candidate or None
+
                 rows.append(
                     SpotifyTopArtistRow(
                         identifier=identifier,
@@ -1274,6 +1312,7 @@ class SpotifyUiService:
                         popularity=popularity,
                         genres=tuple(genres),
                         rank=index,
+                        external_url=external_url,
                     )
                 )
 
