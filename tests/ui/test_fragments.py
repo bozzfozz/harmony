@@ -1167,9 +1167,7 @@ def test_soulseek_uploads_cleanup_success(monkeypatch) -> None:
     async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
         calls.append(client)
 
-    monkeypatch.setattr(
-        "app.ui.router.soulseek_remove_completed_uploads", _fake_cleanup
-    )
+    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_uploads", _fake_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1200,9 +1198,7 @@ def test_soulseek_uploads_cleanup_failure(monkeypatch) -> None:
     async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
         raise HTTPException(status_code=503, detail="unavailable")
 
-    monkeypatch.setattr(
-        "app.ui.router.soulseek_remove_completed_uploads", _fail_cleanup
-    )
+    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_uploads", _fail_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1544,9 +1540,7 @@ def test_soulseek_downloads_cleanup_success(monkeypatch) -> None:
     async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
         calls.append(client)
 
-    monkeypatch.setattr(
-        "app.ui.router.soulseek_remove_completed_downloads", _fake_cleanup
-    )
+    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_downloads", _fake_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1580,9 +1574,7 @@ def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
     async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
         raise HTTPException(status_code=502, detail="cleanup failed")
 
-    monkeypatch.setattr(
-        "app.ui.router.soulseek_remove_completed_downloads", _fail_cleanup
-    )
+    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_downloads", _fail_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1612,11 +1604,15 @@ def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
         ("post", "/ui/soulseek/uploads/cleanup", {"csrftoken": "", "scope": "active"}),
     ],
 )
-def test_soulseek_admin_actions_forbidden(monkeypatch, role_name: str, method: str, url: str, payload: dict[str, str]) -> None:
+def test_soulseek_admin_actions_forbidden(
+    monkeypatch, role_name: str, method: str, url: str, payload: dict[str, str]
+) -> None:
     overrides: list[Any] = []
     if "/ui/soulseek/download" in url:
         page = DownloadPage(items=(), limit=20, offset=0, has_next=False, has_previous=False)
-        app.dependency_overrides[get_downloads_ui_service] = lambda: _RecordingDownloadsService(page)
+        app.dependency_overrides[get_downloads_ui_service] = lambda: _RecordingDownloadsService(
+            page
+        )
         overrides.append(get_downloads_ui_service)
         app.dependency_overrides[get_soulseek_client] = lambda: object()
         overrides.append(get_soulseek_client)
@@ -3337,6 +3333,10 @@ def test_spotify_playlists_filter_updates_fragment(monkeypatch) -> None:
             name="Example",
             track_count=10,
             updated_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
+            owner="Owner A",
+            owner_id="owner-a",
+            follower_count=12,
+            sync_status="fresh",
         ),
     )
     stub.filter_options = SpotifyPlaylistFilters(
@@ -3373,6 +3373,10 @@ def test_spotify_playlists_refresh_triggers_service(monkeypatch) -> None:
             name="Daily Mix",
             track_count=5,
             updated_at=datetime(2023, 9, 2, 9, 0, tzinfo=UTC),
+            owner="Owner B",
+            owner_id="owner-b",
+            follower_count=20,
+            sync_status="fresh",
         ),
     )
     stub.filter_options = SpotifyPlaylistFilters(
@@ -3420,6 +3424,10 @@ def test_spotify_playlists_force_sync_runs_for_admin(monkeypatch) -> None:
             name="Release Radar",
             track_count=30,
             updated_at=datetime(2023, 9, 3, 8, 30, tzinfo=UTC),
+            owner="Owner C",
+            owner_id="owner-c",
+            follower_count=55,
+            sync_status="stale",
         ),
     )
     stub.filter_options = SpotifyPlaylistFilters(

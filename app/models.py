@@ -44,6 +44,7 @@ class Playlist(Base):
     id = Column(String(128), primary_key=True)
     name = Column(String(512), nullable=False)
     track_count = Column(Integer, nullable=False, default=0)
+    metadata_json = Column("metadata", JSON, nullable=True)
     updated_at = Column(
         DateTime,
         default=datetime.utcnow,

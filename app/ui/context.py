@@ -2172,7 +2172,16 @@ def build_spotify_playlists_context(
             TableRow(
                 cells=(
                     TableCell(text=playlist.name),
+                    TableCell(text=playlist.owner or "—"),
                     TableCell(text=str(playlist.track_count)),
+                    TableCell(text=str(playlist.follower_count)),
+                    TableCell(
+                        text=(
+                            playlist.sync_status.replace("_", " ").title()
+                            if playlist.sync_status
+                            else "—"
+                        )
+                    ),
                     TableCell(text=playlist.updated_at.isoformat()),
                     TableCell(
                         form=action_form,
@@ -2187,7 +2196,10 @@ def build_spotify_playlists_context(
         identifier="spotify-playlists-table",
         column_keys=(
             "spotify.playlists.name",
+            "spotify.playlists.owner",
             "spotify.playlists.tracks",
+            "spotify.playlists.followers",
+            "spotify.playlists.sync_status",
             "spotify.playlists.updated",
             "spotify.playlists.actions",
         ),

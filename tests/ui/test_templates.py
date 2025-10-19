@@ -711,6 +711,10 @@ def test_spotify_playlists_template_includes_actions() -> None:
             name="Example Playlist",
             track_count=12,
             updated_at=datetime(2023, 9, 1, 12, 0, tzinfo=UTC),
+            owner="Owner A",
+            owner_id="owner-a",
+            follower_count=42,
+            sync_status="fresh",
         ),
     )
     owner_options = (SpotifyPlaylistFilterOption(value="owner-a", label="Owner A"),)
@@ -745,6 +749,12 @@ def test_spotify_playlists_template_includes_actions() -> None:
     assert 'hx-post="/ui/spotify/playlists/force-sync"' in html
     assert 'id="hx-spotify-playlists"' in html
     assert 'id="spotify-playlists-table"' in html
+    assert '<th scope="col">Owner</th>' in html
+    assert '<th scope="col">Followers</th>' in html
+    assert '<th scope="col">Sync status</th>' in html
+    assert ">Owner A<" in html
+    assert "42" in html
+    assert ">Fresh<" in html
     assert 'data-test="spotify-playlist-view-playlist-1"' in html
     assert 'hx-get="/ui/spotify/playlists/playlist-1/tracks"' in html
     assert 'name="limit" value="25"' in html
@@ -1209,6 +1219,10 @@ def test_spotify_playlists_partial_renders_table() -> None:
             name="Daily Mix",
             track_count=42,
             updated_at=datetime.now(tz=UTC),
+            owner="Owner A",
+            owner_id="owner-a",
+            follower_count=12,
+            sync_status="fresh",
         )
     ]
     context = build_spotify_playlists_context(

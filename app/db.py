@@ -14,6 +14,7 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_env, load_config
+from app.db_migrations import apply_schema_migrations
 
 
 class Base(DeclarativeBase):
@@ -167,6 +168,7 @@ def init_db() -> None:
         from app import models  # noqa: F401
 
         Base.metadata.create_all(bind=_engine, checkfirst=True)
+        apply_schema_migrations(_engine)
 
         if created:
             _logger.info("Database bootstrap completed", extra={"event": "database.bootstrap"})
