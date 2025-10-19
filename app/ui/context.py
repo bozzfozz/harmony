@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+from html import escape
 from typing import Any, Literal
 from urllib.parse import urlencode
 
@@ -153,6 +154,31 @@ class TableCell:
     test_id: str | None = None
     form: "TableCellForm" | None = None
     forms: Sequence["TableCellForm"] = field(default_factory=tuple)
+
+
+def _build_external_link_cell(
+    url: str | None,
+    *,
+    cell_test_id: str,
+    anchor_test_id: str,
+    label: str,
+    aria_label: str,
+) -> TableCell:
+    if not url:
+        return TableCell(text="—", test_id=cell_test_id)
+
+    anchor_html = (
+        f'<a class="table-external-link" '
+        f'href="{escape(url, quote=True)}" '
+        'target="_blank" '
+        'rel="noopener" '
+        f'data-test="{escape(anchor_test_id, quote=True)}" '
+        f'aria-label="{escape(aria_label, quote=True)}">'
+        f"{escape(label)} "
+        '<span class="table-external-link__icon" aria-hidden="true">↗</span>'
+        "</a>"
+    )
+    return TableCell(html=anchor_html, test_id=cell_test_id)
 
 
 @dataclass(slots=True)
@@ -1651,6 +1677,23 @@ def build_spotify_top_tracks_context(
                     TableCell(text=track.album or ""),
                     TableCell(text=str(track.popularity)),
                     TableCell(text=duration_text),
+                    _build_external_link_cell(
+                        track.external_url,
+                        cell_test_id=(
+                            f"spotify-top-track-link-cell-{track.identifier}"
+                            if track.identifier
+                            else "spotify-top-track-link-cell"
+                        ),
+                        anchor_test_id=(
+                            f"spotify-top-track-link-{track.identifier}"
+                            if track.identifier
+                            else "spotify-top-track-link"
+                        ),
+                        label="Spotify",
+                        aria_label=(
+                            f"Open {track.name} on Spotify" if track.name else "Open in Spotify"
+                        ),
+                    ),
                     TableCell(
                         forms=(detail_form, save_form),
                         test_id=(
@@ -1675,6 +1718,7 @@ def build_spotify_top_tracks_context(
             "spotify.top_tracks.album",
             "spotify.top_tracks.popularity",
             "spotify.top_tracks.duration",
+            "spotify.top_tracks.link",
             "spotify.top_tracks.actions",
         ),
         rows=rows,
@@ -2313,6 +2357,23 @@ def build_spotify_recommendations_context(
                     TableCell(text=row.name, test_id=f"spotify-reco-track-{row.identifier}"),
                     TableCell(text=", ".join(row.artists)),
                     TableCell(text=row.album or "—"),
+                    _build_external_link_cell(
+                        row.external_url,
+                        cell_test_id=(
+                            f"spotify-recommendation-link-cell-{row.identifier}"
+                            if row.identifier
+                            else "spotify-recommendation-link-cell"
+                        ),
+                        anchor_test_id=(
+                            f"spotify-recommendation-link-{row.identifier}"
+                            if row.identifier
+                            else "spotify-recommendation-link"
+                        ),
+                        label="Spotify",
+                        aria_label=(
+                            f"Open {row.name} on Spotify" if row.name else "Open in Spotify"
+                        ),
+                    ),
                     preview_cell,
                     TableCell(
                         forms=(view_form, save_form),
@@ -2329,6 +2390,7 @@ def build_spotify_recommendations_context(
             "spotify.recommendations.track",
             "spotify.recommendations.artists",
             "spotify.recommendations.album",
+            "spotify.recommendations.link",
             "spotify.recommendations.preview",
             "spotify.recommendations.actions",
         ),
@@ -2370,6 +2432,23 @@ def build_spotify_artists_context(
             TableRow(
                 cells=(
                     TableCell(text=artist.name),
+                    _build_external_link_cell(
+                        artist.external_url,
+                        cell_test_id=(
+                            f"spotify-artist-link-cell-{artist.identifier}"
+                            if artist.identifier
+                            else "spotify-artist-link-cell"
+                        ),
+                        anchor_test_id=(
+                            f"spotify-artist-link-{artist.identifier}"
+                            if artist.identifier
+                            else "spotify-artist-link"
+                        ),
+                        label="Spotify",
+                        aria_label=(
+                            f"Open {artist.name} on Spotify" if artist.name else "Open in Spotify"
+                        ),
+                    ),
                     TableCell(text=f"{artist.followers:,}" if artist.followers else "0"),
                     TableCell(text=str(artist.popularity)),
                     TableCell(text=genres_text),
@@ -2382,6 +2461,7 @@ def build_spotify_artists_context(
         identifier="spotify-artists-table",
         column_keys=(
             "spotify.artists.name",
+            "spotify.artists.link",
             "spotify.artists.followers",
             "spotify.artists.popularity",
             "spotify.artists.genres",

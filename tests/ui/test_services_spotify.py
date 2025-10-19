@@ -128,6 +128,7 @@ def test_list_followed_artists_normalizes_payload() -> None:
             "followers": {"total": 43210},
             "popularity": 92,
             "genres": ["rock", " pop ", ""],
+            "external_urls": {"spotify": "https://open.spotify.com/artist/artist-1"},
         },
         {
             "id": "",
@@ -151,6 +152,7 @@ def test_list_followed_artists_normalizes_payload() -> None:
             followers=43210,
             popularity=92,
             genres=("rock", "pop"),
+            external_url="https://open.spotify.com/artist/artist-1",
         ),
     )
     spotify_service.get_followed_artists.assert_called_once_with()
@@ -224,6 +226,7 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
         popularity=87,
         duration_ms=185000,
         rank=1,
+        external_url="https://open.spotify.com/track/track-123",
     )
 
     context = build_spotify_top_tracks_context(
@@ -236,9 +239,15 @@ def test_build_top_tracks_context_adds_detail_action() -> None:
 
     fragment = context["fragment"]
     table = fragment.table
+    assert table.column_keys[-2] == "spotify.top_tracks.link"
     assert table.column_keys[-1] == "spotify.top_tracks.actions"
     assert table.rows, "expected at least one top track row"
     row = table.rows[0]
+    link_cell = row.cells[-2]
+    assert link_cell.test_id == "spotify-top-track-link-cell-track-123"
+    assert link_cell.html is not None
+    assert 'data-test="spotify-top-track-link-track-123"' in link_cell.html
+    assert 'rel="noopener"' in link_cell.html
     action_cell = row.cells[-1]
     assert action_cell.test_id == "spotify-top-track-actions-track-123"
     assert action_cell.forms and len(action_cell.forms) == 2
@@ -272,6 +281,7 @@ def test_build_recommendations_context_adds_detail_action() -> None:
         artists=("Artist One", "Artist Two"),
         album="Example Album",
         preview_url=None,
+        external_url="https://open.spotify.com/track/track-xyz",
     )
 
     context = build_spotify_recommendations_context(
@@ -288,11 +298,17 @@ def test_build_recommendations_context_adds_detail_action() -> None:
         "spotify.recommendations.track",
         "spotify.recommendations.artists",
         "spotify.recommendations.album",
+        "spotify.recommendations.link",
         "spotify.recommendations.preview",
         "spotify.recommendations.actions",
     )
     assert table.rows, "expected at least one recommendation row"
     recommendation_row = table.rows[0]
+    link_cell = recommendation_row.cells[3]
+    assert link_cell.test_id == "spotify-recommendation-link-cell-track-xyz"
+    assert link_cell.html is not None
+    assert 'data-test="spotify-recommendation-link-track-xyz"' in link_cell.html
+    assert 'rel="noopener"' in link_cell.html
     preview_cell = recommendation_row.cells[-2]
     assert preview_cell.test_id == "spotify-recommendation-preview-cell-track-xyz"
     assert preview_cell.text == "—"
@@ -341,6 +357,8 @@ def test_build_recommendations_context_includes_preview_player() -> None:
     fragment = context["fragment"]
     table = fragment.table
     recommendation_row = table.rows[0]
+    link_cell = recommendation_row.cells[3]
+    assert link_cell.text == "—"
     preview_cell = recommendation_row.cells[-2]
     assert preview_cell.html is not None
     html = str(preview_cell.html)
@@ -620,6 +638,7 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
                 ],
                 "album": {"name": " Album Name "},
                 "preview_url": " https://preview.example ",
+                "external_urls": {"spotify": " https://open.spotify.com/track/track-123 "},
             },
             {
                 "id": "",
@@ -662,6 +681,7 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
             artists=("Artist One", "Artist Two"),
             album="Album Name",
             preview_url="https://preview.example",
+            external_url="https://open.spotify.com/track/track-123",
         ),
     )
     assert seeds == (
@@ -722,6 +742,7 @@ def test_top_tracks_normalizes_payload() -> None:
             "album": {"name": "Album One"},
             "popularity": "87",
             "duration_ms": "195000",
+            "external_urls": {"spotify": "https://open.spotify.com/track/track-1"},
         },
         {"id": None, "name": ""},
     ]
@@ -744,6 +765,7 @@ def test_top_tracks_normalizes_payload() -> None:
             popularity=87,
             duration_ms=195000,
             rank=1,
+            external_url="https://open.spotify.com/track/track-1",
         ),
     )
     spotify_service.get_top_tracks.assert_called_once_with(limit=20)
@@ -760,6 +782,7 @@ def test_top_artists_normalizes_payload() -> None:
             "followers": {"total": "12000"},
             "popularity": "99",
             "genres": ["rock", " pop ", 42],
+            "external_urls": {"spotify": "https://open.spotify.com/artist/artist-1"},
         },
         {"id": "", "name": "Unnamed"},
     ]
@@ -781,6 +804,7 @@ def test_top_artists_normalizes_payload() -> None:
             popularity=99,
             genres=("rock", "pop"),
             rank=1,
+            external_url="https://open.spotify.com/artist/artist-1",
         ),
     )
     spotify_service.get_top_artists.assert_called_once_with(limit=20)

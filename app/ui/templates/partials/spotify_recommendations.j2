@@ -80,6 +80,10 @@
   {% endif %}
 
   <div class="spotify-recommendations__results">
+    <div class="table-external-link-hint">
+      <span class="table-external-link__icon" aria-hidden="true">↗</span>
+      <span>{{ strings.spotify_external_link_hint() }}</span>
+    </div>
     {{ tables.render_table_fragment(fragment) }}
   </div>
 </div>
