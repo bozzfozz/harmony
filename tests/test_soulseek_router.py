@@ -47,6 +47,12 @@ class _MockSoulseekClient:
         self.remove_completed_downloads = AsyncMock()
         self.get_queue_position = AsyncMock()
         self.enqueue = AsyncMock()
+        self.user_address = AsyncMock()
+        self.user_browse = AsyncMock()
+        self.user_browsing_status = AsyncMock()
+        self.user_directory = AsyncMock()
+        self.user_info = AsyncMock()
+        self.user_status = AsyncMock()
 
 
 @pytest.fixture()
@@ -362,6 +368,126 @@ async def test_soulseek_cancel_upload_error(upload_client_mock: Mock) -> None:
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Failed to cancel upload"
     upload_client_mock.cancel_upload.assert_awaited_once_with("upload-4")
+
+
+_USER_ENDPOINT_CASES = [
+    pytest.param(
+        "/soulseek/user/alice/address",
+        "user_address",
+        {"ip": "127.0.0.1"},
+        "Failed to fetch user address",
+        ("alice",),
+        None,
+        id="address",
+    ),
+    pytest.param(
+        "/soulseek/user/alice/browse",
+        "user_browse",
+        {"files": []},
+        "Failed to browse user",
+        ("alice",),
+        None,
+        id="browse",
+    ),
+    pytest.param(
+        "/soulseek/user/alice/browsing_status",
+        "user_browsing_status",
+        {"status": "active"},
+        "Failed to fetch user browsing status",
+        ("alice",),
+        None,
+        id="browsing-status",
+    ),
+    pytest.param(
+        "/soulseek/user/alice/directory",
+        "user_directory",
+        {"directories": []},
+        "Failed to fetch user directory",
+        ("alice", "Music/Albums"),
+        {"path": "Music/Albums"},
+        id="directory",
+    ),
+    pytest.param(
+        "/soulseek/user/alice/info",
+        "user_info",
+        {"username": "alice"},
+        "Failed to fetch user info",
+        ("alice",),
+        None,
+        id="info",
+    ),
+    pytest.param(
+        "/soulseek/user/alice/status",
+        "user_status",
+        {"online": True},
+        "Failed to fetch user status",
+        ("alice",),
+        None,
+        id="status",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    (
+        "endpoint",
+        "client_method",
+        "payload",
+        "_error_detail",
+        "expected_call_args",
+        "query_params",
+    ),
+    _USER_ENDPOINT_CASES,
+)
+def test_soulseek_user_routes_success(
+    soulseek_client: TestClient,
+    endpoint: str,
+    client_method: str,
+    payload: dict[str, Any],
+    _error_detail: str,
+    expected_call_args: tuple[Any, ...],
+    query_params: dict[str, str] | None,
+) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    method_mock: AsyncMock = getattr(client_stub, client_method)
+    method_mock.return_value = payload
+
+    response = soulseek_client.get(endpoint, params=query_params)
+
+    assert response.status_code == 200
+    assert response.json() == payload
+    method_mock.assert_awaited_once_with(*expected_call_args)
+
+
+@pytest.mark.parametrize(
+    (
+        "endpoint",
+        "client_method",
+        "_payload",
+        "error_detail",
+        "expected_call_args",
+        "query_params",
+    ),
+    _USER_ENDPOINT_CASES,
+)
+def test_soulseek_user_routes_failure(
+    soulseek_client: TestClient,
+    endpoint: str,
+    client_method: str,
+    _payload: dict[str, Any],
+    error_detail: str,
+    expected_call_args: tuple[Any, ...],
+    query_params: dict[str, str] | None,
+) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    method_mock: AsyncMock = getattr(client_stub, client_method)
+    method_mock.side_effect = SoulseekClientError("boom")
+
+    response = soulseek_client.get(endpoint, params=query_params)
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": error_detail}
+    method_mock.assert_awaited_once_with(*expected_call_args)
 
 
 def test_lyrics_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> None:
