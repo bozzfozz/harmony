@@ -221,6 +221,9 @@ async def soulseek_download(
             if download is None:
                 continue
             download.state = "failed"
+            download.last_error = str(exc)
+            progress_value = download.progress if download.progress is not None else 0.0
+            download.progress = max(progress_value, 0.0)
             download.updated_at = datetime.utcnow()
         session.commit()
         raise HTTPException(status_code=502, detail="Soulseek download failed") from exc

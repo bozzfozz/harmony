@@ -74,6 +74,17 @@ class _StubSyncWorker:
         self.jobs.append(job)
 
 
+class _FailingSyncWorker(_StubSyncWorker):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self._error = error
+        self.attempts = 0
+
+    async def enqueue(self, job: dict[str, Any]) -> None:
+        self.attempts += 1
+        raise self._error
+
+
 class _StubLyricsWorker:
     def __init__(self) -> None:
         self.calls: list[tuple[int | None, str, dict[str, Any]]] = []
@@ -225,7 +236,6 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
         stored = session.query(Download).one()
         assert Path(stored.filename) == expected_path
 
-
         stored_payload = dict(stored.request_payload or {})
 
     sync_worker: _StubSyncWorker = soulseek_client.app.state.sync_worker
@@ -237,14 +247,71 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
     assert file_metadata and file_metadata.get("local_path") == str(expected_path)
 
 
+def test_download_marks_failed_when_worker_errors(soulseek_client: TestClient) -> None:
+    error = RuntimeError("sync worker rejected job")
+    failing_worker = _FailingSyncWorker(error)
+    soulseek_client.app.state.sync_worker = failing_worker
+
+    response = soulseek_client.post(
+        "/soulseek/download",
+        json={
+            "username": "tester",
+            "files": [{"filename": "failure/single.mp3"}],
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Soulseek download failed"}
+    assert failing_worker.attempts == 1
+    assert failing_worker.jobs == []
+
+    expected_path = _downloads_dir() / "failure" / "single.mp3"
+    with session_scope() as session:
+        download = session.query(Download).filter_by(filename=str(expected_path)).one()
+        assert download.state == "failed"
+        assert download.last_error == str(error)
+        assert download.progress >= 0
+
+
+def test_download_marks_all_failed_when_worker_errors_multiple_files(
+    soulseek_client: TestClient,
+) -> None:
+    error = RuntimeError("sync worker failed for batch")
+    failing_worker = _FailingSyncWorker(error)
+    soulseek_client.app.state.sync_worker = failing_worker
+
+    filenames = ["failure/multi_one.mp3", "failure/multi_two.mp3"]
+    response = soulseek_client.post(
+        "/soulseek/download",
+        json={
+            "username": "tester",
+            "files": [{"filename": name} for name in filenames],
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Soulseek download failed"}
+    assert failing_worker.attempts == 1
+    assert failing_worker.jobs == []
+
+    expected_paths = {str(_downloads_dir() / path) for path in filenames}
+    with session_scope() as session:
+        downloads = (
+            session.query(Download).filter(Download.filename.in_(list(expected_paths))).all()
+        )
+        assert len(downloads) == len(expected_paths)
+        for download in downloads:
+            assert download.state == "failed"
+            assert download.last_error == str(error)
+            assert download.progress >= 0
+
+
 @pytest.mark.asyncio()
 async def test_soulseek_upload_detail_success(upload_client_mock: Mock) -> None:
     expected = {"id": "upload-1", "status": "active"}
     upload_client_mock.get_upload.return_value = expected
 
-    result = await _soulseek_module.soulseek_upload_detail(
-        "upload-1", client=upload_client_mock
-    )
+    result = await _soulseek_module.soulseek_upload_detail("upload-1", client=upload_client_mock)
 
     assert result == expected
     upload_client_mock.get_upload.assert_awaited_once_with("upload-1")
@@ -255,9 +322,7 @@ async def test_soulseek_upload_detail_error(upload_client_mock: Mock) -> None:
     upload_client_mock.get_upload.side_effect = SoulseekClientError("boom")
 
     with pytest.raises(HTTPException) as exc_info:
-        await _soulseek_module.soulseek_upload_detail(
-            "upload-2", client=upload_client_mock
-        )
+        await _soulseek_module.soulseek_upload_detail("upload-2", client=upload_client_mock)
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Failed to fetch upload"
@@ -317,9 +382,7 @@ async def test_soulseek_remove_completed_uploads_success(
     expected = {"removed": 3}
     upload_client_mock.remove_completed_uploads.return_value = expected
 
-    result = await _soulseek_module.soulseek_remove_completed_uploads(
-        client=upload_client_mock
-    )
+    result = await _soulseek_module.soulseek_remove_completed_uploads(client=upload_client_mock)
 
     assert result == expected
     upload_client_mock.remove_completed_uploads.assert_awaited_once_with()
@@ -329,14 +392,10 @@ async def test_soulseek_remove_completed_uploads_success(
 async def test_soulseek_remove_completed_uploads_error(
     upload_client_mock: Mock,
 ) -> None:
-    upload_client_mock.remove_completed_uploads.side_effect = SoulseekClientError(
-        "nope"
-    )
+    upload_client_mock.remove_completed_uploads.side_effect = SoulseekClientError("nope")
 
     with pytest.raises(HTTPException) as exc_info:
-        await _soulseek_module.soulseek_remove_completed_uploads(
-            client=upload_client_mock
-        )
+        await _soulseek_module.soulseek_remove_completed_uploads(client=upload_client_mock)
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Failed to remove completed uploads"
@@ -348,9 +407,7 @@ async def test_soulseek_cancel_upload_success(upload_client_mock: Mock) -> None:
     expected = {"cancelled": True}
     upload_client_mock.cancel_upload.return_value = expected
 
-    result = await _soulseek_module.soulseek_cancel_upload(
-        "upload-3", client=upload_client_mock
-    )
+    result = await _soulseek_module.soulseek_cancel_upload("upload-3", client=upload_client_mock)
 
     assert result == expected
     upload_client_mock.cancel_upload.assert_awaited_once_with("upload-3")
@@ -361,9 +418,7 @@ async def test_soulseek_cancel_upload_error(upload_client_mock: Mock) -> None:
     upload_client_mock.cancel_upload.side_effect = SoulseekClientError("kaboom")
 
     with pytest.raises(HTTPException) as exc_info:
-        await _soulseek_module.soulseek_cancel_upload(
-            "upload-4", client=upload_client_mock
-        )
+        await _soulseek_module.soulseek_cancel_upload("upload-4", client=upload_client_mock)
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Failed to cancel upload"
