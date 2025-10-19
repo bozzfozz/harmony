@@ -41,6 +41,16 @@ def read_setting(key: str) -> str | None:
         return setting.value
 
 
+def delete_setting(key: str) -> None:
+    """Remove a setting row if it exists."""
+
+    with session_scope() as session:
+        setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
+        if setting is None:
+            return
+        session.delete(setting)
+
+
 def ensure_default_settings(defaults: Mapping[str, str]) -> None:
     """Insert missing settings using provided defaults."""
 

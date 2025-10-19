@@ -67,3 +67,12 @@ class SettingsCacheHandler(CacheHandler):
             else:
                 record.value = serialized
                 record.updated_at = now
+
+    def clear_token_cache(self) -> None:
+        """Delete any cached Spotify token from the settings table."""
+
+        with session_scope() as session:
+            record = session.query(Setting).filter(Setting.key == self._key).one_or_none()
+            if record is None:
+                return
+            session.delete(record)

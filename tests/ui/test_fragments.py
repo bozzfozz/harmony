@@ -221,6 +221,7 @@ class _StubSpotifyService:
         )
         self.account_summary: SpotifyAccountSummary | None = SpotifyAccountSummary(
             display_name="Stub User",
+            email="stub@example.com",
             product="Premium",
             followers=1200,
             country="US",
@@ -338,6 +339,8 @@ class _StubSpotifyService:
             error=None,
         )
         self.run_backfill_job_id = "job-1"
+        self.refresh_account_calls: list[None] = []
+        self.reset_scopes_calls: list[None] = []
         self.run_backfill_exception: Exception | None = None
         self.manual_calls: list[str] = []
         self.backfill_snapshot_calls: list[tuple[str, str | None, Mapping[str, object] | None]] = []
@@ -537,6 +540,14 @@ class _StubSpotifyService:
         if self.account_exception:
             raise self.account_exception
         return self.account_summary
+
+    def refresh_account(self) -> SpotifyAccountSummary | None:
+        self.refresh_account_calls.append(None)
+        return self.account()
+
+    def reset_scopes(self) -> SpotifyAccountSummary | None:
+        self.reset_scopes_calls.append(None)
+        return self.account()
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         if self.manual_exception:
@@ -2530,6 +2541,7 @@ def test_spotify_account_fragment_renders_summary(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.account_summary = SpotifyAccountSummary(
         display_name="Example User",
+        email="user@example.com",
         product="Premium",
         followers=2500,
         country="GB",
@@ -2544,8 +2556,88 @@ def test_spotify_account_fragment_renders_summary(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert "Example User" in response.text
+            assert "user@example.com" in response.text
             assert "2,500" in response.text
             assert "Premium" in response.text
+            assert 'data-test="spotify-account-refresh"' in response.text
+            assert 'data-test="spotify-account-reset-scopes"' not in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_fragment_shows_reset_for_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.account_summary = SpotifyAccountSummary(
+        display_name="Admin User",
+        email="admin@example.com",
+        product="Premium",
+        followers=100,
+        country="DE",
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/account",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert 'data-test="spotify-account-refresh"' in response.text
+            assert 'data-test="spotify-account-reset-scopes"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_refresh_invokes_service(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/account/refresh",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert stub.refresh_account_calls == [None]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_reset_requires_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/account/reset-scopes",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_json_error(response, status_code=status.HTTP_403_FORBIDDEN)
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_account_reset_runs_for_admin(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/account/reset-scopes",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_html_response(response)
+            assert stub.reset_scopes_calls == [None]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

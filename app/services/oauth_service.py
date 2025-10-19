@@ -624,3 +624,14 @@ class OAuthService:
             "public_host_hint": self.public_host_hint,
             "manual_url": manual_url,
         }
+
+    def reset_scopes(self) -> None:
+        """Clear cached Spotify OAuth tokens to force a new authorization."""
+
+        self._cache_handler.clear_token_cache()
+        with self._status_lock:
+            self._statuses.clear()
+        logger.info(
+            "Spotify OAuth scopes reset",
+            extra={"event": "oauth.scopes.reset", "provider": "spotify"},
+        )
