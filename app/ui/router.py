@@ -20,7 +20,12 @@ from app.dependencies import get_download_service, get_soulseek_client
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.routers.soulseek_router import soulseek_cancel, soulseek_requeue_download
+from app.routers.soulseek_router import (
+    soulseek_cancel,
+    soulseek_requeue_download,
+    soulseek_remove_completed_downloads,
+    soulseek_remove_completed_uploads,
+)
 from app.schemas import SoulseekDownloadRequest
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
@@ -1958,6 +1963,130 @@ async def soulseek_download_cancel(
     return response
 
 
+@router.api_route(
+    "/soulseek/downloads/cleanup",
+    methods=["POST", "DELETE"],
+    include_in_schema=False,
+    name="soulseek_downloads_cleanup",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_downloads_cleanup(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Response:
+    values = _parse_form_body(await request.body())
+
+    def _parse_int(value: str | None, *, default: int, minimum: int, maximum: int) -> int:
+        if value is None or not value.strip():
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return max(min(parsed, maximum), minimum)
+
+    limit_value = _parse_int(
+        values.get("limit"),
+        default=20,
+        minimum=1,
+        maximum=100,
+    )
+    offset_value = _parse_int(
+        values.get("offset"),
+        default=0,
+        minimum=0,
+        maximum=10_000,
+    )
+    scope_raw = (values.get("scope") or request.query_params.get("scope") or "").lower()
+    include_all = scope_raw in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+
+    try:
+        await soulseek_remove_completed_downloads(client=client)
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = (
+            exc.detail if isinstance(exc.detail, str) else "Failed to remove completed downloads."
+        )
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads.cleanup",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads.cleanup",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.cleanup")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.downloads.cleanup",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to remove completed downloads.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.downloads.cleanup",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
 @router.post(
     "/soulseek/uploads/cancel",
     include_in_schema=False,
@@ -2039,6 +2168,86 @@ async def soulseek_upload_cancel(
         role=session.role,
         count=len(context["fragment"].table.rows),
         upload_id=upload_id,
+        scope="all" if include_all else "active",
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_uploads.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.post(
+    "/soulseek/uploads/cleanup",
+    include_in_schema=False,
+    name="soulseek_uploads_cleanup",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_uploads_cleanup(
+    request: Request,
+    session: UiSession = Depends(require_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+    client: SoulseekClient = Depends(get_soulseek_client),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    scope_value = (values.get("scope") or request.query_params.get("scope") or "").lower()
+    include_all = scope_value in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+
+    try:
+        await soulseek_remove_completed_uploads(client=client)
+        uploads = await service.uploads(include_all=include_all)
+    except HTTPException as exc:
+        detail = (
+            exc.detail if isinstance(exc.detail, str) else "Failed to remove completed uploads."
+        )
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads.cleanup",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.uploads.cleanup")
+        log_event(
+            logger,
+            "ui.fragment.soulseek.uploads.cleanup",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to remove completed uploads.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_uploads_context(
+        request,
+        uploads=uploads,
+        csrf_token=csrf_token,
+        include_all=include_all,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.uploads.cleanup",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
         scope="all" if include_all else "active",
     )
     response = templates.TemplateResponse(

@@ -22,12 +22,38 @@
         {{ strings.button_label("soulseek.downloads.show_all") }}
       </button>
     </div>
-    <button type="button"
-            hx-get="{{ refresh_url }}"
-            hx-target="{{ fragment_target }}"
-            hx-swap="{{ fragment_swap }}">
-      {{ strings.button_label("soulseek.downloads.refresh") }}
-    </button>
+    <div class="table-controls__group">
+      <button type="button"
+              hx-get="{{ refresh_url }}"
+              hx-target="{{ fragment_target }}"
+              hx-swap="{{ fragment_swap }}">
+        {{ strings.button_label("soulseek.downloads.refresh") }}
+      </button>
+      <form method="post"
+            action="{{ cleanup_url }}"
+            hx-delete="{{ cleanup_url }}"
+            hx-target="{{ cleanup_target }}"
+            hx-swap="{{ cleanup_swap }}">
+        <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+        {% if fragment.data_attributes.get("limit") %}
+          <input type="hidden"
+                 name="limit"
+                 value="{{ fragment.data_attributes.get("limit") }}" />
+        {% endif %}
+        {% if fragment.data_attributes.get("offset") %}
+          <input type="hidden"
+                 name="offset"
+                 value="{{ fragment.data_attributes.get("offset") }}" />
+        {% endif %}
+        <input type="hidden"
+               name="scope"
+               value="{{ "all" if include_all else "active" }}" />
+        <button type="submit"
+                data-test="soulseek-downloads-cleanup">
+          {{ strings.button_label("soulseek.downloads.cleanup") }}
+        </button>
+      </form>
+    </div>
   </div>
 {% endif %}
 

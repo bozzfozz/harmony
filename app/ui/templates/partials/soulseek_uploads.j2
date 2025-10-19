@@ -18,12 +18,28 @@
       {{ strings.button_label("soulseek.uploads.show_all") }}
     </button>
   </div>
-  <button type="button"
-          hx-get="{{ refresh_url }}"
-          hx-target="#hx-soulseek-uploads"
-          hx-swap="outerHTML">
-    {{ strings.button_label("soulseek.uploads.refresh") }}
-  </button>
+  <div class="table-controls__group">
+    <button type="button"
+            hx-get="{{ refresh_url }}"
+            hx-target="#hx-soulseek-uploads"
+            hx-swap="outerHTML">
+      {{ strings.button_label("soulseek.uploads.refresh") }}
+    </button>
+    <form method="post"
+          action="{{ cleanup_url }}"
+          hx-post="{{ cleanup_url }}"
+          hx-target="{{ cleanup_target }}"
+          hx-swap="{{ cleanup_swap }}">
+      <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+      {% if include_all %}
+        <input type="hidden" name="scope" value="all" />
+      {% endif %}
+      <button type="submit"
+              data-test="soulseek-uploads-cleanup">
+        {{ strings.button_label("soulseek.uploads.cleanup") }}
+      </button>
+    </form>
+  </div>
 </div>
 
 {{ tables.render_table_fragment(fragment) }}
