@@ -21,6 +21,7 @@ from app.dependencies import (
     get_spotify_client,
 )
 from app.logging import get_logger
+from app.logging_events import log_event
 from app.errors import AppError
 from app.services.free_ingest_service import (
     IngestAccepted,
@@ -1260,18 +1261,49 @@ class SpotifyUiService:
         cleaned_tracks = self._clean_seed_values(seed_tracks or ())
         cleaned_artists = self._clean_seed_values(seed_artists or ())
         cleaned_genres = self._clean_seed_values(seed_genres or ())
-        payload = self._spotify.get_recommendations(
-            seed_tracks=cleaned_tracks or None,
-            seed_artists=cleaned_artists or None,
-            seed_genres=cleaned_genres or None,
-            limit=page_limit,
-        )
+        started = perf_counter()
+        try:
+            payload = self._spotify.get_recommendations(
+                seed_tracks=cleaned_tracks or None,
+                seed_artists=cleaned_artists or None,
+                seed_genres=cleaned_genres or None,
+                limit=page_limit,
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            duration_ms = int((perf_counter() - started) * 1000)
+            log_event(
+                logger,
+                "spotify.recommendations",
+                component="ui.spotify",
+                status="error",
+                error=exc.__class__.__name__,
+                seed_tracks=len(cleaned_tracks),
+                seed_artists=len(cleaned_artists),
+                seed_genres=len(cleaned_genres),
+                **{"spotify.recommendations.latency_ms": duration_ms},
+            )
+            raise
+
+        duration_ms = int((perf_counter() - started) * 1000)
 
         rows = self._normalise_recommendation_rows(
             payload.get("tracks") if isinstance(payload, Mapping) else []
         )
         seeds = self._normalise_recommendation_seeds(
             payload.get("seeds") if isinstance(payload, Mapping) else []
+        )
+
+        log_event(
+            logger,
+            "spotify.recommendations",
+            component="ui.spotify",
+            status="ok",
+            result_tracks=len(rows),
+            result_seeds=len(seeds),
+            seed_tracks=len(cleaned_tracks),
+            seed_artists=len(cleaned_artists),
+            seed_genres=len(cleaned_genres),
+            **{"spotify.recommendations.latency_ms": duration_ms},
         )
 
         logger.debug(
