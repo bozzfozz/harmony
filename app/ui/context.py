@@ -15,6 +15,7 @@ from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
 from app.integrations.health import IntegrationHealth
 from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
+from app.ui.formatters import format_datetime_display
 from app.ui.services import (
     DownloadPage,
     DownloadRow,
@@ -1918,7 +1919,7 @@ def build_spotify_playlist_items_context(
     table_rows: list[TableRow] = []
     for row in rows:
         artists_text = ", ".join(row.artists)
-        added_text = row.added_at.isoformat() if row.added_at else ""
+        added_text = format_datetime_display(row.added_at)
         track_text = row.name if not row.is_local else f"{row.name} (local)"
         try:
             detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
@@ -2045,7 +2046,7 @@ def build_spotify_saved_tracks_context(
     table_rows: list[TableRow] = []
     for row in rows:
         artist_text = ", ".join(row.artists)
-        added_text = row.added_at.isoformat() if row.added_at else ""
+        added_text = format_datetime_display(row.added_at)
         try:
             detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
         except Exception:  # pragma: no cover - fallback for tests

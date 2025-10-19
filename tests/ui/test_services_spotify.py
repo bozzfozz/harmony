@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Mapping
 from unittest.mock import AsyncMock, Mock, patch
@@ -21,7 +21,9 @@ from app.services.free_ingest_service import (
     JobStatus,
 )
 from app.ui.context import (
+    build_spotify_playlist_items_context,
     build_spotify_recommendations_context,
+    build_spotify_saved_tracks_context,
     build_spotify_top_tracks_context,
 )
 from app.ui.services.spotify import (
@@ -373,6 +375,62 @@ def test_build_recommendations_context_includes_preview_player() -> None:
     assert "controls" in html
     assert 'data-test="spotify-recommendation-preview-track-abc"' in html
     assert "https://cdn.example/track-abc.mp3" in html
+
+
+def test_build_playlist_items_context_formats_added_timestamp() -> None:
+    request = _make_request()
+    row = SpotifyPlaylistItemRow(
+        identifier="track-1",
+        name="Example Track",
+        artists=("Artist One",),
+        album="Example Album",
+        added_at=datetime(2024, 1, 31, 18, 45, tzinfo=UTC),
+        added_by="Curator",
+        is_local=False,
+        metadata={},
+    )
+
+    context = build_spotify_playlist_items_context(
+        request,
+        playlist_id="playlist-1",
+        playlist_name="Playlist",
+        rows=(row,),
+        total_count=1,
+        limit=25,
+        offset=0,
+    )
+
+    fragment = context["fragment"]
+    table = fragment.table
+    playlist_row = table.rows[0]
+    added_cell = playlist_row.cells[3]
+    assert added_cell.text == "2024-01-31 18:45"
+
+
+def test_build_saved_tracks_context_formats_added_timestamp() -> None:
+    request = _make_request()
+    row = SpotifySavedTrackRow(
+        identifier="track-1",
+        name="Example Track",
+        artists=("Artist One", "Artist Two"),
+        album="Example Album",
+        added_at=datetime(2024, 1, 31, 18, 45, tzinfo=UTC),
+    )
+
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=(row,),
+        total_count=1,
+        limit=25,
+        offset=0,
+        csrf_token="csrf-token",
+    )
+
+    fragment = context["fragment"]
+    table = fragment.table
+    saved_row = table.rows[0]
+    added_cell = saved_row.cells[3]
+    assert added_cell.text == "2024-01-31 18:45"
 
 
 def test_track_detail_combines_metadata_and_features() -> None:
@@ -880,9 +938,7 @@ def test_top_artists_honours_time_range() -> None:
         rows = service.top_artists(time_range="short_term")
 
     assert rows == ()
-    spotify_service.get_top_artists.assert_called_once_with(
-        limit=20, time_range="short_term"
-    )
+    spotify_service.get_top_artists.assert_called_once_with(limit=20, time_range="short_term")
     mock_logger.debug.assert_called_once()
     extra = mock_logger.debug.call_args.kwargs["extra"]
     assert extra["time_range"] == "short_term"

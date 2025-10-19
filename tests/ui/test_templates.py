@@ -528,7 +528,7 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert "Track One" in html
     assert "Artist One, Artist Two" in html
     assert "Album Name" in html
-    assert "2023-09-01T10:00:00+00:00" in html
+    assert "2023-09-01 10:00" in html
     assert 'data-test="spotify-saved-track-actions-track-1"' in html
     assert 'hx-get="/ui/spotify/tracks/track-1"' in html
     assert 'hx-delete="/ui/spotify/saved/remove"' in html
