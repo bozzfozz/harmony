@@ -1031,6 +1031,8 @@ def test_soulseek_uploads_fragment_success(monkeypatch) -> None:
             assert "MiB" in body
             assert "Cancel upload" in body
             assert "hx-soulseek-uploads" in body
+            assert "Remove completed uploads" in body
+            assert 'hx-post="http://testserver/ui/soulseek/uploads/cleanup"' in body
             assert stub.upload_calls == [False]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
@@ -1089,6 +1091,70 @@ def test_soulseek_upload_cancel_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
 
+def test_soulseek_uploads_cleanup_success(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.upload_rows = []
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    client_instance = object()
+    app.dependency_overrides[get_soulseek_client] = lambda: client_instance
+    calls: list[object] = []
+
+    async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
+        calls.append(client)
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_remove_completed_uploads", _fake_cleanup
+    )
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/uploads/cleanup",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "all",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "No uploads are currently in progress." in response.text
+            assert calls == [client_instance]
+            assert stub.upload_calls == [True]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_uploads_cleanup_failure(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+
+    async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
+        raise HTTPException(status_code=503, detail="unavailable")
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_remove_completed_uploads", _fail_cleanup
+    )
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/uploads/cleanup",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_html_response(response, status_code=503)
+            assert "unavailable" in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
 def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
     page = DownloadPage(
         items=[
@@ -1131,6 +1197,8 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert (
                 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
             )
+            assert "Remove completed downloads" in html
+            assert 'hx-delete="http://testserver/ui/soulseek/downloads/cleanup"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1357,6 +1425,74 @@ def test_soulseek_download_cancel_failure(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=404)
             assert "missing" in response.text
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_downloads_cleanup_success(monkeypatch) -> None:
+    page = DownloadPage(items=(), limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    client_instance = object()
+    app.dependency_overrides[get_soulseek_client] = lambda: client_instance
+    calls: list[object] = []
+
+    async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
+        calls.append(client)
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_remove_completed_downloads", _fake_cleanup
+    )
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.request(
+                "DELETE",
+                "/ui/soulseek/downloads/cleanup",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "limit": "20",
+                    "offset": "0",
+                    "scope": "active",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "downloads" in response.text.lower()
+            assert calls == [client_instance]
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
+    page = DownloadPage(items=(), limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+
+    async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
+        raise HTTPException(status_code=502, detail="cleanup failed")
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_remove_completed_downloads", _fail_cleanup
+    )
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.request(
+                "DELETE",
+                "/ui/soulseek/downloads/cleanup",
+                data={"csrftoken": headers["X-CSRF-Token"]},
+                headers=headers,
+            )
+            _assert_html_response(response, status_code=502)
+            assert "cleanup failed" in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
         app.dependency_overrides.pop(get_soulseek_client, None)

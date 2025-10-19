@@ -1357,6 +1357,11 @@ def build_soulseek_uploads_context(
         "/ui/soulseek/uploads",
     )
     refresh_url = f"{base_url}?all=1" if include_all else base_url
+    cleanup_url = _safe_url_for(
+        request,
+        "soulseek_uploads_cleanup",
+        "/ui/soulseek/uploads/cleanup",
+    )
 
     fragment = TableFragment(
         identifier="hx-soulseek-uploads",
@@ -1377,6 +1382,9 @@ def build_soulseek_uploads_context(
         "refresh_url": refresh_url,
         "active_url": base_url,
         "all_url": f"{base_url}?all=1",
+        "cleanup_url": cleanup_url,
+        "cleanup_target": target,
+        "cleanup_swap": "outerHTML",
     }
 
 
@@ -1486,6 +1494,11 @@ def build_soulseek_downloads_context(
         return f"{base_url}?{urlencode(query)}"
 
     refresh_url = _url_for_scope(include_all)
+    cleanup_url = _safe_url_for(
+        request,
+        "soulseek_downloads_cleanup",
+        "/ui/soulseek/downloads/cleanup",
+    )
 
     def _page_url(new_offset: int) -> str:
         query = [("limit", str(page.limit)), ("offset", str(max(new_offset, 0)))]
@@ -1527,6 +1540,9 @@ def build_soulseek_downloads_context(
         "refresh_url": refresh_url,
         "active_url": _url_for_scope(False),
         "all_url": _url_for_scope(True),
+        "cleanup_url": cleanup_url,
+        "cleanup_target": pagination.target if pagination else target,
+        "cleanup_swap": pagination.swap if pagination else "outerHTML",
     }
 
 
