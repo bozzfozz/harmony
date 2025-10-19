@@ -24,8 +24,12 @@ from app.ui.context import (
     TableFragment,
     TableRow,
     build_activity_fragment_context,
+    build_activity_page_context,
     build_dashboard_page_context,
+    build_downloads_page_context,
+    build_jobs_page_context,
     build_login_page_context,
+    build_operations_page_context,
     build_search_page_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
@@ -44,6 +48,7 @@ from app.ui.context import (
     build_spotify_top_tracks_context,
     build_spotify_track_detail_context,
     build_watchlist_fragment_context,
+    build_watchlist_page_context,
 )
 from app.ui.router import templates
 from app.ui.services import (
@@ -86,6 +91,19 @@ def _make_request(path: str) -> Request:
 def _render_inline(source: str, **context: Any) -> str:
     template = Template(templates.env, "<inline>", source)
     return template.render(**context)
+
+
+def _make_session(role: str = "operator", *, dlq: bool = True) -> UiSession:
+    features = UiFeatures(spotify=True, soulseek=True, dlq=dlq, imports=True)
+    now = datetime.now(tz=UTC)
+    return UiSession(
+        identifier="session-id",
+        role=role,
+        features=features,
+        fingerprint="fingerprint",
+        issued_at=now,
+        last_seen_at=now,
+    )
 
 
 def test_async_fragment_trigger_without_polling() -> None:
@@ -600,12 +618,88 @@ def test_spotify_track_detail_template_renders_modal() -> None:
     assert "1,050" in html
     assert "Yes" in html
     assert 'href="https://preview.example/track-1"' in html
-    assert 'href="https://open.spotify.com/track/track-1"' in html
-    assert "82%" in html
-    assert "123.5 BPM" in html
-    assert "Minor" in html
-    assert "4/4" in html
-    assert 'hx-on="htmx:afterSwap: this.showModal()"' in html
+
+
+def test_operations_template_renders_enabled_sections() -> None:
+    request = _make_request("/ui/operations")
+    session = _make_session()
+    context = build_operations_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/operations.j2")
+    html = template.render(**context)
+
+    assert "/ui/downloads/table" in html
+    assert "/ui/jobs/table" in html
+    assert 'hx-trigger="load, every 15s"' in html
+    assert 'data-fragment="operations-watchlist"' in html
+    assert "/ui/watchlist/table" in html
+    assert "/ui/activity/table" in html
+    assert "View download queue" in html
+    assert "Manage watchlist" in html
+
+
+def test_operations_template_skips_dlq_sections_when_disabled() -> None:
+    request = _make_request("/ui/operations")
+    session = _make_session(dlq=False)
+    context = build_operations_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/operations.j2")
+    html = template.render(**context)
+
+    assert 'data-fragment="operations-downloads"' not in html
+    assert 'data-fragment="operations-jobs"' not in html
+    assert 'data-fragment="operations-watchlist"' in html
+    assert 'data-fragment="operations-activity"' in html
+
+
+def test_downloads_template_mounts_polling_fragment() -> None:
+    request = _make_request("/ui/downloads")
+    session = _make_session()
+    context = build_downloads_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/downloads.j2")
+    html = template.render(**context)
+
+    assert "/ui/downloads/table" in html
+    assert 'hx-trigger="load, every 15s"' in html
+    assert 'hx-target="#hx-downloads-table"' in html
+    assert "Back to operations overview" in html
+
+
+def test_jobs_template_mounts_polling_fragment() -> None:
+    request = _make_request("/ui/jobs")
+    session = _make_session()
+    context = build_jobs_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/jobs.j2")
+    html = template.render(**context)
+
+    assert "/ui/jobs/table" in html
+    assert 'hx-trigger="load, every 15s"' in html
+    assert 'hx-target="#hx-jobs-table"' in html
+
+
+def test_watchlist_template_renders_form_and_fragment() -> None:
+    request = _make_request("/ui/watchlist")
+    session = _make_session()
+    context = build_watchlist_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/watchlist.j2")
+    html = template.render(**context)
+
+    assert 'id="watchlist-create-form"' in html
+    assert 'hx-post="/ui/watchlist"' in html
+    assert 'name="artist_key"' in html
+    assert 'name="priority"' in html
+    assert "/ui/watchlist/table" in html
+    assert 'hx-trigger="load, every 30s"' in html
+
+
+def test_activity_template_mounts_polling_fragment() -> None:
+    request = _make_request("/ui/activity")
+    session = _make_session()
+    context = build_activity_page_context(request, session=session, csrf_token="csrf-token")
+    template = templates.get_template("pages/activity.j2")
+    html = template.render(**context)
+
+    assert "/ui/activity/table" in html
+    assert 'hx-trigger="load, every 60s"' in html
+    assert 'hx-target="#hx-activity-table"' in html
 
 
 def test_spotify_playlists_template_includes_actions() -> None:

@@ -34,6 +34,13 @@
 | GET | /ui/settings | Systemeinstellungen & Präferenzen | admin | — |
 | GET | /ui/system | System-/Health-Diagnostik, OAuth-Status | operator | — |
 
+## Umsetzung Operator-Seiten (Status)
+- ✅ `/ui/operations` bündelt die Async-Fragmente für Downloads, Jobs, Watchlist und Activity. Die Seite pollt die DLQ-Sektionen alle 15 s, die Watchlist alle 30 s und den Activity-Feed alle 60 s über die Routen `/ui/downloads/table`, `/ui/jobs/table`, `/ui/watchlist/table` und `/ui/activity/table` (`hx-get`, `hx-trigger="load, every Ns"`, `hx-target` identisch mit den Fragment-IDs).【F:app/ui/templates/pages/operations.j2†L21-L103】【F:app/ui/router.py†L2275-L2337】
+- ✅ `/ui/downloads` und `/ui/jobs` sind eigenständige Operator-Ansichten mit `hx-get` Polling (15 s) auf die Tabellen-Fragmente und verlinken zurück zur Operations-Übersicht, Feature-Gate via `UI_FEATURE_DLQ`.【F:app/ui/templates/pages/downloads.j2†L1-L33】【F:app/ui/templates/pages/jobs.j2†L1-L33】【F:app/ui/router.py†L2339-L2383】
+- ✅ `/ui/watchlist` stellt das Formular für neue Einträge (`hx-post="/ui/watchlist"`, CSRF-Meta) sowie das regelmäßig aktualisierte Tabellenfragment (`hx-trigger="load, every 30s"`).【F:app/ui/templates/pages/watchlist.j2†L1-L49】【F:app/ui/router.py†L2385-L2410】
+- ✅ `/ui/activity` ist für alle Rollen sichtbar (`require_session`) und pollt den Aktivitätsfeed alle 60 s (`hx-get="/ui/activity/table"`).【F:app/ui/templates/pages/activity.j2†L1-L33】【F:app/ui/router.py†L2412-L2438】
+- Die Navigation markiert auf allen Unterseiten den Operations-Tab als aktiv; Rücksprunglinks zeigen auf `/ui/operations` bzw. `/ui`.【F:app/ui/context.py†L586-L686】【F:app/ui/templates/pages/downloads.j2†L11-L18】
+
 ## Template-Architektur
 ```
 templates/

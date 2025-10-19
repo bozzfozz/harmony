@@ -35,10 +35,14 @@ from app.ui.context import (
     LayoutContext,
     SuggestedTask,
     build_activity_fragment_context,
+    build_activity_page_context,
     build_dashboard_page_context,
+    build_downloads_page_context,
     build_downloads_fragment_context,
     build_jobs_fragment_context,
+    build_jobs_page_context,
     build_login_page_context,
+    build_operations_page_context,
     build_primary_navigation,
     build_search_page_context,
     build_search_results_context,
@@ -62,6 +66,7 @@ from app.ui.context import (
     build_spotify_top_tracks_context,
     build_spotify_track_detail_context,
     build_watchlist_fragment_context,
+    build_watchlist_page_context,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
 from app.ui.services import (
@@ -2280,6 +2285,126 @@ async def search_page(
     response = templates.TemplateResponse(
         request,
         "pages/search.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/operations", include_in_schema=False, name="operations_page")
+async def operations_page(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_operations_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/operations.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/downloads", include_in_schema=False, name="downloads_page")
+async def downloads_page(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+) -> Response:
+    if not session.features.dlq:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_downloads_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/downloads.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/jobs", include_in_schema=False, name="jobs_page")
+async def jobs_page(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+) -> Response:
+    if not session.features.dlq:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested UI feature is disabled.",
+        )
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_jobs_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/jobs.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/watchlist", include_in_schema=False, name="watchlist_page")
+async def watchlist_page(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_watchlist_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/watchlist.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/activity", include_in_schema=False, name="activity_page")
+async def activity_page(
+    request: Request,
+    session: UiSession = Depends(require_session),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_activity_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/activity.j2",
         context,
     )
     if issued:
