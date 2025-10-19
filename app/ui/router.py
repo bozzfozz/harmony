@@ -95,6 +95,7 @@ from app.ui.session import (
     attach_session_cookie,
     clear_session_cookie,
     get_session_manager,
+    require_admin_with_feature,
     require_feature,
     require_operator_with_feature,
     require_role,
@@ -1592,6 +1593,7 @@ async def soulseek_uploads_fragment(
         uploads=uploads,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -1674,6 +1676,7 @@ async def soulseek_downloads_fragment(
         page=page,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -1705,7 +1708,7 @@ async def soulseek_downloads_fragment(
 async def soulseek_download_requeue(
     request: Request,
     download_id: int,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
     service: DownloadsUiService = Depends(get_downloads_ui_service),
 ) -> Response:
     raw_body = await request.body()
@@ -1808,6 +1811,7 @@ async def soulseek_download_requeue(
         page=page,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -1841,7 +1845,7 @@ async def soulseek_download_requeue(
 async def soulseek_download_cancel(
     request: Request,
     download_id: int,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
     service: DownloadsUiService = Depends(get_downloads_ui_service),
     client: SoulseekClient = Depends(get_soulseek_client),
 ) -> Response:
@@ -1945,6 +1949,7 @@ async def soulseek_download_cancel(
         page=page,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -1977,7 +1982,7 @@ async def soulseek_download_cancel(
 )
 async def soulseek_downloads_cleanup(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
     service: DownloadsUiService = Depends(get_downloads_ui_service),
     client: SoulseekClient = Depends(get_soulseek_client),
 ) -> Response:
@@ -2070,6 +2075,7 @@ async def soulseek_downloads_cleanup(
         page=page,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -2100,7 +2106,7 @@ async def soulseek_downloads_cleanup(
 )
 async def soulseek_upload_cancel(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
 ) -> Response:
     raw_body = await request.body()
@@ -2164,6 +2170,7 @@ async def soulseek_upload_cancel(
         uploads=uploads,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,
@@ -2193,7 +2200,7 @@ async def soulseek_upload_cancel(
 )
 async def soulseek_uploads_cleanup(
     request: Request,
-    session: UiSession = Depends(require_feature("soulseek")),
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
     service: SoulseekUiService = Depends(get_soulseek_ui_service),
     client: SoulseekClient = Depends(get_soulseek_client),
 ) -> Response:
@@ -2245,6 +2252,7 @@ async def soulseek_uploads_cleanup(
         uploads=uploads,
         csrf_token=csrf_token,
         include_all=include_all,
+        session=session,
     )
     log_event(
         logger,

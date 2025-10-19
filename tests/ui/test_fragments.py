@@ -96,9 +96,26 @@ def _assert_json_error(response, *, status_code: int) -> None:
     assert content_type.startswith("application/json"), content_type
 
 
+def _assert_button_enabled(html: str, data_test: str) -> None:
+    assert f'data-test="{data_test}"' in html
+    pattern = rf'data-test="{re.escape(data_test)}"[^>]*disabled'
+    assert re.search(pattern, html) is None
+
+
+def _assert_button_disabled(html: str, data_test: str) -> None:
+    assert f'data-test="{data_test}"' in html
+    pattern = rf'data-test="{re.escape(data_test)}"[^>]*disabled'
+    assert re.search(pattern, html) is not None
+
+
 def _read_only_env() -> dict[str, str]:
     fingerprint = fingerprint_api_key("primary-key")
     return {"UI_ROLE_OVERRIDES": f"{fingerprint}:read_only"}
+
+
+def _admin_env() -> dict[str, str]:
+    fingerprint = fingerprint_api_key("primary-key")
+    return {"UI_ROLE_OVERRIDES": f"{fingerprint}:admin"}
 
 
 class _StubActivityService:
@@ -966,7 +983,7 @@ def test_soulseek_config_fragment_marks_missing_api_key(monkeypatch) -> None:
     stub.config = replace(stub.config, api_key=None)
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
             _login(client)
             response = client.get(
                 "/ui/soulseek/config",
@@ -1018,7 +1035,7 @@ def test_soulseek_uploads_fragment_success(monkeypatch) -> None:
     ]
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             response = client.get(
                 "/ui/soulseek/uploads",
@@ -1033,6 +1050,8 @@ def test_soulseek_uploads_fragment_success(monkeypatch) -> None:
             assert "hx-soulseek-uploads" in body
             assert "Remove completed uploads" in body
             assert 'hx-post="http://testserver/ui/soulseek/uploads/cleanup"' in body
+            _assert_button_enabled(body, "soulseek-upload-cancel")
+            _assert_button_enabled(body, "soulseek-uploads-cleanup")
             assert stub.upload_calls == [False]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
@@ -1043,7 +1062,7 @@ def test_soulseek_uploads_fragment_handles_error(monkeypatch) -> None:
     stub.upload_exception = HTTPException(status_code=502, detail="boom")
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             response = client.get(
                 "/ui/soulseek/uploads",
@@ -1054,6 +1073,35 @@ def test_soulseek_uploads_fragment_handles_error(monkeypatch) -> None:
             assert 'data-test="fragment-retry"' in response.text
             assert 'hx-get="http://testserver/ui/soulseek/uploads"' in response.text
             assert 'hx-target="#hx-soulseek-uploads"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_uploads_fragment_operator_disables_actions(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.upload_rows = [
+        SoulseekUploadRow(
+            identifier="abc-123",
+            filename="track.flac",
+            status="uploading",
+            progress=0.5,
+            size_bytes=5_242_880,
+            speed_bps=8_192.0,
+            username="dj",
+        )
+    ]
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/uploads",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            body = response.text
+            _assert_button_disabled(body, "soulseek-upload-cancel")
+            _assert_button_disabled(body, "soulseek-uploads-cleanup")
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -1075,7 +1123,7 @@ def test_soulseek_upload_cancel_success(monkeypatch) -> None:
     stub.upload_rows = []
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1107,7 +1155,7 @@ def test_soulseek_uploads_cleanup_success(monkeypatch) -> None:
     )
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1140,7 +1188,7 @@ def test_soulseek_uploads_cleanup_failure(monkeypatch) -> None:
     )
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1181,7 +1229,7 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
     stub = _RecordingDownloadsService(page)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/soulseek/downloads", headers=headers)
@@ -1199,6 +1247,44 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             )
             assert "Remove completed downloads" in html
             assert 'hx-delete="http://testserver/ui/soulseek/downloads/cleanup"' in html
+            _assert_button_enabled(html, "soulseek-download-requeue")
+            _assert_button_enabled(html, "soulseek-download-cancel")
+            _assert_button_enabled(html, "soulseek-downloads-cleanup")
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_downloads_fragment_operator_disables_actions(monkeypatch) -> None:
+    page = DownloadPage(
+        items=[
+            DownloadRow(
+                identifier=7,
+                filename="queue.flac",
+                status="failed",
+                progress=0.0,
+                priority=1,
+                username=None,
+                created_at=None,
+                updated_at=None,
+            )
+        ],
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env=_read_only_env()) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/soulseek/downloads", headers=headers)
+            _assert_html_response(response)
+            html = response.text
+            _assert_button_disabled(html, "soulseek-download-requeue")
+            _assert_button_disabled(html, "soulseek-download-cancel")
+            _assert_button_disabled(html, "soulseek-downloads-cleanup")
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1209,7 +1295,7 @@ def test_soulseek_downloads_fragment_handles_error(monkeypatch) -> None:
     stub.list_exception = AppError(code=ErrorCode.INTERNAL_ERROR, message="fail", http_status=502)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/soulseek/downloads", headers=headers)
@@ -1248,7 +1334,7 @@ def test_soulseek_downloads_fragment_pagination_links(monkeypatch) -> None:
     stub = _RecordingDownloadsService(page)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/soulseek/downloads", headers=headers)
@@ -1269,7 +1355,7 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
     stub = _RecordingDownloadsService(page)
     app.dependency_overrides[get_downloads_ui_service] = lambda: stub
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = {"Cookie": _cookies_header(client)}
             response = client.get(
@@ -1322,7 +1408,7 @@ def test_soulseek_download_requeue_success(monkeypatch) -> None:
     monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fake_requeue)
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1352,7 +1438,7 @@ def test_soulseek_download_requeue_failure(monkeypatch) -> None:
     monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fail_requeue)
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1382,7 +1468,7 @@ def test_soulseek_download_cancel_success(monkeypatch) -> None:
     monkeypatch.setattr("app.ui.router.soulseek_cancel", _fake_cancel)
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1412,7 +1498,7 @@ def test_soulseek_download_cancel_failure(monkeypatch) -> None:
     monkeypatch.setattr("app.ui.router.soulseek_cancel", _fail_cancel)
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.post(
@@ -1446,7 +1532,7 @@ def test_soulseek_downloads_cleanup_success(monkeypatch) -> None:
     )
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.request(
@@ -1482,7 +1568,7 @@ def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
     )
 
     try:
-        with _create_client(monkeypatch) as client:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
             _login(client)
             headers = _csrf_headers(client)
             response = client.request(
@@ -1496,6 +1582,50 @@ def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
         app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+@pytest.mark.parametrize("role_name", ["operator", "read_only"])
+@pytest.mark.parametrize(
+    ("method", "url", "payload"),
+    [
+        ("post", "/ui/soulseek/downloads/7/requeue", {"scope": "all", "csrftoken": ""}),
+        ("post", "/ui/soulseek/download/7", {"scope": "active", "csrftoken": ""}),
+        ("delete", "/ui/soulseek/downloads/cleanup", {"csrftoken": "", "scope": "active"}),
+        ("post", "/ui/soulseek/uploads/cancel", {"upload_id": "upload-1", "csrftoken": ""}),
+        ("post", "/ui/soulseek/uploads/cleanup", {"csrftoken": "", "scope": "active"}),
+    ],
+)
+def test_soulseek_admin_actions_forbidden(monkeypatch, role_name: str, method: str, url: str, payload: dict[str, str]) -> None:
+    overrides: list[Any] = []
+    if "/ui/soulseek/download" in url:
+        page = DownloadPage(items=(), limit=20, offset=0, has_next=False, has_previous=False)
+        app.dependency_overrides[get_downloads_ui_service] = lambda: _RecordingDownloadsService(page)
+        overrides.append(get_downloads_ui_service)
+        app.dependency_overrides[get_soulseek_client] = lambda: object()
+        overrides.append(get_soulseek_client)
+    if "/ui/soulseek/uploads" in url:
+        stub = _StubSoulseekUiService()
+        app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+        overrides.append(get_soulseek_ui_service)
+        app.dependency_overrides[get_soulseek_client] = lambda: object()
+        overrides.append(get_soulseek_client)
+
+    extra_env = None
+    if role_name == "read_only":
+        extra_env = _read_only_env()
+
+    try:
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            data = dict(payload)
+            if "csrftoken" in data:
+                data["csrftoken"] = headers["X-CSRF-Token"]
+            response = client.request(method.upper(), url, data=data, headers=headers)
+            assert response.status_code == 403
+    finally:
+        for override in overrides:
+            app.dependency_overrides.pop(override, None)
 
 
 def test_activity_fragment_requires_session(monkeypatch) -> None:
