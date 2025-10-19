@@ -25,6 +25,7 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import Playlist
 from app.services.backfill_service import (
+    BackfillJobRecord,
     BackfillJobSpec,
     BackfillJobStatus,
     BackfillService,
@@ -566,6 +567,10 @@ class SpotifyDomainService:
             raise ValueError("A job identifier is required to cancel backfill.")
         service = self.ensure_backfill_service()
         return service.cancel_job(job_id)
+
+    def list_backfill_jobs(self, *, limit: int = 10) -> Sequence[BackfillJobRecord]:
+        service = self.ensure_backfill_service()
+        return service.list_recent_jobs(limit=limit)
 
     # Helpers -----------------------------------------------------------
 

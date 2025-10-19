@@ -5,7 +5,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 import json
 import re
-from typing import Any
+from typing import Any, Sequence
 
 import asyncio
 
@@ -35,6 +35,7 @@ from app.ui.services import (
     SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
     SpotifyBackfillOption,
+    SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
     SpotifyFreeIngestJobSnapshot,
@@ -409,6 +410,8 @@ class _StubSpotifyService:
         self.pause_backfill_result: Mapping[str, object] | None = None
         self.resume_backfill_result: Mapping[str, object] | None = None
         self.cancel_backfill_result: Mapping[str, object] | None = None
+        self.backfill_timeline_entries: tuple[SpotifyBackfillTimelineEntry, ...] = ()
+        self.backfill_timeline_calls: list[int] = []
         self.list_saved_calls: list[tuple[int, int]] = []
         self.top_tracks_calls: list[tuple[int, str | None]] = []
         self.top_artists_calls: list[tuple[int, str | None]] = []
@@ -697,6 +700,10 @@ class _StubSpotifyService:
         if self.cancel_backfill_exception:
             raise self.cancel_backfill_exception
         return self.cancel_backfill_result or self._default_backfill_payload(job_id, "cancelled")
+
+    def backfill_timeline(self, *, limit: int = 10) -> Sequence[SpotifyBackfillTimelineEntry]:
+        self.backfill_timeline_calls.append(limit)
+        return tuple(self.backfill_timeline_entries)
 
     @staticmethod
     def _default_backfill_payload(job_id: str, state: str) -> Mapping[str, object]:
@@ -3583,6 +3590,44 @@ def test_spotify_artists_fragment_returns_error_on_failure(monkeypatch) -> None:
             )
             assert response.status_code == 500
             assert "Unable to load Spotify artists." in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_fragment_includes_timeline(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.backfill_timeline_entries = (
+        SpotifyBackfillTimelineEntry(
+            identifier="history-1",
+            state="completed",
+            requested=25,
+            processed=25,
+            matched=20,
+            cache_hits=12,
+            cache_misses=3,
+            expanded_playlists=1,
+            expanded_tracks=8,
+            expand_playlists=False,
+            duration_ms=1456,
+            error=None,
+            created_at=datetime(2023, 8, 1, 9, 0, tzinfo=UTC),
+            updated_at=datetime(2023, 8, 1, 9, 5, tzinfo=UTC),
+            created_display="2023-08-01 09:00",
+            updated_display="2023-08-01 09:05",
+        ),
+    )
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/backfill",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            assert "spotify-backfill-timeline" in response.text
+            assert "history-1" in response.text
+            assert stub.backfill_timeline_calls == [10]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
