@@ -1068,6 +1068,7 @@ def build_spotify_page_context(
             identifier="hx-spotify-free-ingest",
             url=free_ingest_url,
             target="#hx-spotify-free-ingest",
+            poll_interval_seconds=15,
             swap="innerHTML",
             loading_key="spotify.free_ingest",
         )
