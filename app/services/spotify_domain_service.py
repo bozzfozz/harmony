@@ -549,6 +549,24 @@ class SpotifyDomainService:
         worker = await self.ensure_backfill_worker()
         await worker.enqueue(job)
 
+    def pause_backfill(self, job_id: str) -> BackfillJobStatus:
+        if not job_id:
+            raise ValueError("A job identifier is required to pause backfill.")
+        service = self.ensure_backfill_service()
+        return service.pause_job(job_id)
+
+    def resume_backfill(self, job_id: str) -> BackfillJobStatus:
+        if not job_id:
+            raise ValueError("A job identifier is required to resume backfill.")
+        service = self.ensure_backfill_service()
+        return service.resume_job(job_id)
+
+    def cancel_backfill(self, job_id: str) -> BackfillJobStatus:
+        if not job_id:
+            raise ValueError("A job identifier is required to cancel backfill.")
+        service = self.ensure_backfill_service()
+        return service.cancel_job(job_id)
+
     # Helpers -----------------------------------------------------------
 
     def _ensure_playlist_worker(self) -> PlaylistSyncWorker:

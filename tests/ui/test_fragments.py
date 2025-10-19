@@ -32,6 +32,7 @@ from app.ui.services import (
     SpotifyArtistRow,
     SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
+    SpotifyBackfillOption,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
     SpotifyFreeIngestJobSnapshot,
@@ -326,6 +327,20 @@ class _StubSpotifyService:
             can_run=True,
             default_max_items=100,
             expand_playlists=True,
+            options=(
+                SpotifyBackfillOption(
+                    name="expand_playlists",
+                    label_key="spotify.backfill.options.expand_playlists",
+                    description_key="spotify.backfill.options.expand_playlists_hint",
+                    checked=True,
+                ),
+                SpotifyBackfillOption(
+                    name="include_cached_results",
+                    label_key="spotify.backfill.options.include_cached",
+                    description_key="spotify.backfill.options.include_cached_hint",
+                    checked=True,
+                ),
+            ),
             last_job_id="job-1",
             state="queued",
             requested=10,
@@ -337,6 +352,9 @@ class _StubSpotifyService:
             expanded_tracks=0,
             duration_ms=None,
             error=None,
+            can_pause=True,
+            can_resume=False,
+            can_cancel=True,
         )
         self.run_backfill_job_id = "job-1"
         self.refresh_account_calls: list[None] = []
@@ -346,6 +364,15 @@ class _StubSpotifyService:
         self.backfill_snapshot_calls: list[tuple[str, str | None, Mapping[str, object] | None]] = []
         self.backfill_status_calls: list[str | None] = []
         self.run_calls: list[tuple[int | None, bool]] = []
+        self.pause_backfill_calls: list[str] = []
+        self.resume_backfill_calls: list[str] = []
+        self.cancel_backfill_calls: list[str] = []
+        self.pause_backfill_exception: Exception | None = None
+        self.resume_backfill_exception: Exception | None = None
+        self.cancel_backfill_exception: Exception | None = None
+        self.pause_backfill_result: Mapping[str, object] | None = None
+        self.resume_backfill_result: Mapping[str, object] | None = None
+        self.cancel_backfill_result: Mapping[str, object] | None = None
         self.list_saved_calls: list[tuple[int, int]] = []
         self.top_tracks_calls: list[tuple[int, str | None]] = []
         self.top_artists_calls: list[tuple[int, str | None]] = []
@@ -616,6 +643,41 @@ class _StubSpotifyService:
     ) -> SpotifyBackfillSnapshot:
         self.backfill_snapshot_calls.append((csrf_token, job_id, status_payload))
         return self.snapshot
+
+    def pause_backfill(self, job_id: str) -> Mapping[str, object]:
+        self.pause_backfill_calls.append(job_id)
+        if self.pause_backfill_exception:
+            raise self.pause_backfill_exception
+        return self.pause_backfill_result or self._default_backfill_payload(job_id, "paused")
+
+    def resume_backfill(self, job_id: str) -> Mapping[str, object]:
+        self.resume_backfill_calls.append(job_id)
+        if self.resume_backfill_exception:
+            raise self.resume_backfill_exception
+        return self.resume_backfill_result or self._default_backfill_payload(job_id, "queued")
+
+    def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
+        self.cancel_backfill_calls.append(job_id)
+        if self.cancel_backfill_exception:
+            raise self.cancel_backfill_exception
+        return self.cancel_backfill_result or self._default_backfill_payload(job_id, "cancelled")
+
+    @staticmethod
+    def _default_backfill_payload(job_id: str, state: str) -> Mapping[str, object]:
+        return {
+            "id": job_id,
+            "state": state,
+            "requested": 5,
+            "processed": 1,
+            "matched": 1,
+            "cache_hits": 1,
+            "cache_misses": 0,
+            "expanded_playlists": 0,
+            "expanded_tracks": 0,
+            "duration_ms": 1000,
+            "error": None,
+            "expand_playlists": True,
+        }
 
     async def submit_free_ingest(
         self,
@@ -3149,6 +3211,100 @@ def test_spotify_backfill_run_returns_success_alert(monkeypatch) -> None:
             assert "Backfill job job-1 enqueued." in response.text
             assert stub.run_calls == [(25, True)]
             assert stub.backfill_status_calls[-1] == "job-1"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_pause_returns_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/pause",
+                data={"job_id": "job-1"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Backfill job job-1 paused." in response.text
+            assert stub.pause_backfill_calls == ["job-1"]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_resume_returns_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/resume",
+                data={"job_id": "job-1"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Backfill job job-1 resumed." in response.text
+            assert stub.resume_backfill_calls == ["job-1"]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_cancel_returns_fragment(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/cancel",
+                data={"job_id": "job-1"},
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Backfill job job-1 cancelled." in response.text
+            assert stub.cancel_backfill_calls == ["job-1"]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_pause_requires_job_id(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/pause",
+                data={},
+                headers=headers,
+            )
+            assert response.status_code == 400
+            assert "identifier is required" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_pause_returns_forbidden(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.pause_backfill_exception = PermissionError("no auth")
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/pause",
+                data={"job_id": "job-1"},
+                headers=headers,
+            )
+            assert response.status_code == 403
+            assert "Spotify authentication is required" in response.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

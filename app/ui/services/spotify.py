@@ -31,7 +31,11 @@ from app.services.free_ingest_service import (
     PlaylistValidationError,
 )
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
-from app.services.spotify_domain_service import SpotifyDomainService, SpotifyServiceStatus
+from app.services.spotify_domain_service import (
+    BackfillJobStatus,
+    SpotifyDomainService,
+    SpotifyServiceStatus,
+)
 from app.utils.settings_store import delete_setting, read_setting, write_setting
 
 logger = get_logger(__name__)
@@ -196,6 +200,7 @@ class SpotifyBackfillSnapshot:
     can_run: bool
     default_max_items: int | None
     expand_playlists: bool
+    options: tuple["SpotifyBackfillOption", ...]
     last_job_id: str | None
     state: str | None
     requested: int | None
@@ -207,6 +212,18 @@ class SpotifyBackfillSnapshot:
     expanded_tracks: int | None
     duration_ms: int | None
     error: str | None
+    can_pause: bool
+    can_resume: bool
+    can_cancel: bool
+
+
+@dataclass(slots=True)
+class SpotifyBackfillOption:
+    name: str
+    label_key: str
+    description_key: str | None
+    checked: bool
+    enabled: bool = True
 
 
 @dataclass(slots=True)
@@ -1718,22 +1735,46 @@ class SpotifyUiService:
         if not job_id:
             return None
         status = self._spotify.get_backfill_status(job_id)
-        if status is None:
-            return None
-        return {
-            "id": status.id,
-            "state": status.state,
-            "requested": status.requested_items,
-            "processed": status.processed_items,
-            "matched": status.matched_items,
-            "cache_hits": status.cache_hits,
-            "cache_misses": status.cache_misses,
-            "expanded_playlists": status.expanded_playlists,
-            "expanded_tracks": status.expanded_tracks,
-            "duration_ms": status.duration_ms,
-            "error": status.error,
-            "expand_playlists": status.expand_playlists,
-        }
+        return self._serialise_backfill_status(status)
+
+    def pause_backfill(self, job_id: str) -> Mapping[str, object]:
+        if not self._spotify.is_authenticated():
+            raise PermissionError("Spotify authentication required")
+        status = self._spotify.pause_backfill(job_id)
+        logger.info(
+            "spotify.ui.backfill.pause",
+            extra={"job_id": job_id, "state": getattr(status, "state", None)},
+        )
+        payload = self._serialise_backfill_status(status)
+        if payload is None:
+            raise LookupError(job_id)
+        return payload
+
+    def resume_backfill(self, job_id: str) -> Mapping[str, object]:
+        if not self._spotify.is_authenticated():
+            raise PermissionError("Spotify authentication required")
+        status = self._spotify.resume_backfill(job_id)
+        logger.info(
+            "spotify.ui.backfill.resume",
+            extra={"job_id": job_id, "state": getattr(status, "state", None)},
+        )
+        payload = self._serialise_backfill_status(status)
+        if payload is None:
+            raise LookupError(job_id)
+        return payload
+
+    def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
+        if not self._spotify.is_authenticated():
+            raise PermissionError("Spotify authentication required")
+        status = self._spotify.cancel_backfill(job_id)
+        logger.info(
+            "spotify.ui.backfill.cancel",
+            extra={"job_id": job_id, "state": getattr(status, "state", None)},
+        )
+        payload = self._serialise_backfill_status(status)
+        if payload is None:
+            raise LookupError(job_id)
+        return payload
 
     def build_backfill_snapshot(
         self,
@@ -1755,13 +1796,32 @@ class SpotifyUiService:
         )
         expanded_tracks = int(status_payload.get("expanded_tracks", 0)) if status_payload else None
         duration_ms = int(status_payload.get("duration_ms", 0)) if status_payload else None
+        state = status_payload.get("state") if status_payload else None
+        options = (
+            SpotifyBackfillOption(
+                name="expand_playlists",
+                label_key="spotify.backfill.options.expand_playlists",
+                description_key="spotify.backfill.options.expand_playlists_hint",
+                checked=expand,
+            ),
+            SpotifyBackfillOption(
+                name="include_cached_results",
+                label_key="spotify.backfill.options.include_cached",
+                description_key="spotify.backfill.options.include_cached_hint",
+                checked=True,
+            ),
+        )
+        can_pause = state in {"running", "queued"}
+        can_resume = state == "paused"
+        can_cancel = state in {"running", "queued", "paused"}
         return SpotifyBackfillSnapshot(
             csrf_token=csrf_token,
             can_run=self._spotify.is_authenticated(),
             default_max_items=default_max,
             expand_playlists=expand,
+            options=options,
             last_job_id=status_payload.get("id") if status_payload else None,
-            state=status_payload.get("state") if status_payload else None,
+            state=state,
             requested=requested,
             processed=processed,
             matched=matched,
@@ -1771,7 +1831,31 @@ class SpotifyUiService:
             expanded_tracks=expanded_tracks,
             duration_ms=duration_ms,
             error=status_payload.get("error") if status_payload else None,
+            can_pause=can_pause,
+            can_resume=can_resume,
+            can_cancel=can_cancel,
         )
+
+    @staticmethod
+    def _serialise_backfill_status(
+        status: BackfillJobStatus | None,
+    ) -> Mapping[str, object] | None:
+        if status is None:
+            return None
+        return {
+            "id": status.id,
+            "state": status.state,
+            "requested": status.requested_items,
+            "processed": status.processed_items,
+            "matched": status.matched_items,
+            "cache_hits": status.cache_hits,
+            "cache_misses": status.cache_misses,
+            "expanded_playlists": status.expanded_playlists,
+            "expanded_tracks": status.expanded_tracks,
+            "duration_ms": status.duration_ms,
+            "error": status.error,
+            "expand_playlists": status.expand_playlists,
+        }
 
 
 def _build_spotify_service(
@@ -1813,6 +1897,7 @@ __all__ = [
     "SpotifyRecommendationRow",
     "SpotifyRecommendationSeed",
     "SpotifyBackfillSnapshot",
+    "SpotifyBackfillOption",
     "SpotifyArtistRow",
     "SpotifySavedTrackRow",
     "SpotifyTopArtistRow",

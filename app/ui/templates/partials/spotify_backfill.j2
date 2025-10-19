@@ -14,10 +14,25 @@
     <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
     <label for="max_items">{{ strings.form_label("spotify.backfill.max_items") }}</label>
     <input type="number" id="max_items" name="max_items" min="1" {% if snapshot.default_max_items %}value="{{ snapshot.default_max_items }}"{% endif %} />
-    <label for="expand_playlists">
-      <input type="checkbox" id="expand_playlists" name="expand_playlists" value="1" {% if snapshot.expand_playlists %}checked{% endif %} />
-      {{ strings.spotify_backfill_expand_label() }}
-    </label>
+    <details class="spotify-backfill__advanced">
+      <summary>{{ strings.spotify_backfill_advanced_summary() }}</summary>
+      {% for option in snapshot.options %}
+        <div class="spotify-backfill__option">
+          <label for="spotify-backfill-option-{{ option.name }}">
+            <input type="checkbox"
+                   id="spotify-backfill-option-{{ option.name }}"
+                   name="{{ option.name }}"
+                   value="1"
+                   {% if option.checked %}checked{% endif %}
+                   {% if not option.enabled %}disabled{% endif %} />
+            {{ strings.spotify_backfill_option_label(option.label_key) }}
+          </label>
+          {% if option.description_key %}
+            <p class="spotify-backfill__option-hint">{{ strings.spotify_backfill_option_hint(option.description_key) }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </details>
     <button type="submit" {% if not snapshot.can_run %}disabled{% endif %}>{{ strings.button_label("spotify.backfill.run") }}</button>
   </form>
   {% if snapshot.last_job_id %}
@@ -45,6 +60,35 @@
         <dt>{{ strings.spotify_backfill_field_label("duration") }}</dt>
         <dd>{{ strings.spotify_backfill_duration(snapshot.duration_ms) }}</dd>
       </dl>
+      <div class="spotify-backfill__actions">
+        <form method="post"
+              action="/ui/spotify/backfill/pause"
+              hx-post="/ui/spotify/backfill/pause"
+              hx-target="closest .async-fragment"
+              hx-swap="innerHTML">
+          <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
+          <input type="hidden" name="job_id" value="{{ snapshot.last_job_id }}" />
+          <button type="submit" {% if not snapshot.can_pause %}disabled{% endif %}>{{ strings.button_label("spotify.backfill.pause") }}</button>
+        </form>
+        <form method="post"
+              action="/ui/spotify/backfill/resume"
+              hx-post="/ui/spotify/backfill/resume"
+              hx-target="closest .async-fragment"
+              hx-swap="innerHTML">
+          <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
+          <input type="hidden" name="job_id" value="{{ snapshot.last_job_id }}" />
+          <button type="submit" {% if not snapshot.can_resume %}disabled{% endif %}>{{ strings.button_label("spotify.backfill.resume") }}</button>
+        </form>
+        <form method="post"
+              action="/ui/spotify/backfill/cancel"
+              hx-post="/ui/spotify/backfill/cancel"
+              hx-target="closest .async-fragment"
+              hx-swap="innerHTML">
+          <input type="hidden" name="csrftoken" value="{{ snapshot.csrf_token }}" />
+          <input type="hidden" name="job_id" value="{{ snapshot.last_job_id }}" />
+          <button type="submit" {% if not snapshot.can_cancel %}disabled{% endif %}>{{ strings.button_label("spotify.backfill.cancel") }}</button>
+        </form>
+      </div>
       {% if snapshot.error %}
         <p class="spotify-backfill__error">{{ snapshot.error }}</p>
       {% endif %}

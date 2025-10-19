@@ -52,6 +52,15 @@ class BackfillJobSpec:
     expand_playlists: bool
 
 
+TERMINAL_BACKFILL_STATES: frozenset[str] = frozenset(
+    {
+        "completed",
+        "failed",
+        "cancelled",
+    }
+)
+
+
 @dataclass(slots=True)
 class BackfillJobStatus:
     """External representation of a persisted backfill job."""
@@ -141,6 +150,32 @@ class BackfillService:
                 duration_ms=record.duration_ms,
                 error=record.error,
             )
+
+    def pause_job(self, job_id: str) -> BackfillJobStatus:
+        """Transition a job into a paused state."""
+
+        updated = self._transition_job_state(job_id, target_state="paused")
+        logger.info("event=backfill_pause job_id=%s", job_id)
+        return updated
+
+    def resume_job(self, job_id: str) -> BackfillJobStatus:
+        """Resume a previously paused job."""
+
+        status = self.get_status(job_id)
+        if status is None:
+            raise LookupError(f"Backfill job {job_id} not found")
+        if status.state != "paused":
+            return status
+        updated = self._transition_job_state(job_id, target_state="queued")
+        logger.info("event=backfill_resume job_id=%s", job_id)
+        return updated
+
+    def cancel_job(self, job_id: str) -> BackfillJobStatus:
+        """Cancel a job regardless of its current progress."""
+
+        updated = self._transition_job_state(job_id, target_state="cancelled")
+        logger.info("event=backfill_cancel job_id=%s", job_id)
+        return updated
 
     # Core processing ----------------------------------------------------
 
@@ -519,6 +554,28 @@ class BackfillService:
             record.error = error
             record.updated_at = datetime.utcnow()
             session.add(record)
+
+    def _transition_job_state(self, job_id: str, *, target_state: str) -> BackfillJobStatus:
+        with session_scope() as session:
+            record = session.get(BackfillJob, job_id)
+            if record is None:
+                raise LookupError(f"Backfill job {job_id} not found")
+            current_state = record.state or ""
+            if current_state in TERMINAL_BACKFILL_STATES and target_state != current_state:
+                logger.info(
+                    "event=backfill_transition_blocked job_id=%s state=%s target=%s",
+                    job_id,
+                    current_state,
+                    target_state,
+                )
+            else:
+                record.state = target_state
+                record.updated_at = datetime.utcnow()
+                session.add(record)
+        status = self.get_status(job_id)
+        if status is None:
+            raise LookupError(f"Backfill job {job_id} not found")
+        return status
 
     def _persist_progress(
         self,
