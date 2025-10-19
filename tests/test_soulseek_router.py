@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import importlib.util
 from pathlib import Path
 from typing import Any
@@ -8,11 +8,13 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from unittest.mock import AsyncMock
 
 from app.config import load_config
 from app.db import init_db, session_scope
 from app.dependencies import get_app_config, get_db, get_soulseek_client
 from app.models import Download
+from app.core.soulseek_client import SoulseekClientError
 from app.utils.path_safety import allowed_download_roots
 
 _SOULSEEK_MODULE_SPEC = importlib.util.spec_from_file_location(
@@ -25,9 +27,17 @@ _SOULSEEK_MODULE_SPEC.loader.exec_module(_soulseek_module)
 router = _soulseek_module.router
 
 
-class _StubSoulseekClient:
-    async def download(self, payload: dict[str, Any]) -> None:  # pragma: no cover - guard
-        raise AssertionError("download should not be invoked during tests")
+class _MockSoulseekClient:
+    def __init__(self) -> None:
+        self.download = AsyncMock(
+            side_effect=AssertionError("download should not be invoked during tests")
+        )
+        self.cancel_download = AsyncMock()
+        self.get_download = AsyncMock()
+        self.get_all_downloads = AsyncMock()
+        self.remove_completed_downloads = AsyncMock()
+        self.get_queue_position = AsyncMock()
+        self.enqueue = AsyncMock()
 
 
 class _StubSyncWorker:
@@ -73,12 +83,14 @@ def soulseek_client() -> Iterator[TestClient]:
     app = FastAPI()
     app.include_router(router, prefix="/soulseek")
 
+    client_stub = _MockSoulseekClient()
+
     def _get_db() -> Iterator[Any]:
         with session_scope() as session:
             yield session
 
     app.dependency_overrides[get_db] = _get_db
-    app.dependency_overrides[get_soulseek_client] = lambda: _StubSoulseekClient()
+    app.dependency_overrides[get_soulseek_client] = lambda: client_stub
     app.dependency_overrides[get_app_config] = lambda: config
 
     client = TestClient(app)
@@ -87,6 +99,7 @@ def soulseek_client() -> Iterator[TestClient]:
         test_client.app.state.lyrics_worker = _StubLyricsWorker()
         test_client.app.state.rich_metadata_worker = _StubMetadataWorker()
         test_client.app.state.feature_flags = config.features
+        test_client.app.state.soulseek_client = client_stub
         yield test_client
 
 
@@ -94,6 +107,47 @@ def _downloads_dir() -> Path:
     config = load_config()
     roots = allowed_download_roots(config)
     return roots[0]
+
+
+@pytest.fixture()
+def download_factory(soulseek_client: TestClient) -> Iterator[Callable[..., Download]]:
+    created_ids: list[int] = []
+
+    def _create_download(**overrides: Any) -> Download:
+        defaults: dict[str, Any] = {
+            "filename": str(_downloads_dir() / "test.mp3"),
+            "state": "failed",
+            "progress": 0.0,
+            "priority": 0,
+            "username": "tester",
+            "retry_count": 1,
+            "request_payload": {
+                "file": {
+                    "filename": "test.mp3",
+                    "priority": 0,
+                },
+                "username": "tester",
+                "priority": 0,
+            },
+        }
+        defaults.update(overrides)
+
+        with session_scope() as session:
+            download = Download(**defaults)
+            session.add(download)
+            session.commit()
+            session.refresh(download)
+            created_ids.append(download.id)
+            return download
+
+    yield _create_download
+
+    with session_scope() as session:
+        for download_id in created_ids:
+            record = session.get(Download, download_id)
+            if record is not None:
+                session.delete(record)
+        session.commit()
 
 
 def test_download_rejects_absolute_filename(soulseek_client: TestClient) -> None:
@@ -191,3 +245,256 @@ def test_metadata_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> 
     assert response.status_code == 400
     metadata_worker: _StubMetadataWorker = soulseek_client.app.state.rich_metadata_worker
     assert not metadata_worker.calls
+
+
+def test_requeue_download_success(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(state="failed", retry_count=3)
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "enqueued"}
+
+    sync_worker: _StubSyncWorker = soulseek_client.app.state.sync_worker
+    assert len(sync_worker.jobs) == 1
+    job = sync_worker.jobs[0]
+    assert job["username"] == "tester"
+    assert job["priority"] == 0
+    assert job["files"][0]["download_id"] == download.id
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download.id)
+        assert refreshed is not None
+        assert refreshed.state == "queued"
+        assert refreshed.retry_count == 0
+        payload = refreshed.request_payload or {}
+        assert payload.get("username") == "tester"
+        file_payload = payload.get("file") or {}
+        assert file_payload.get("download_id") == download.id
+
+
+def test_requeue_download_dead_letter(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(state="dead_letter")
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Download is in the dead-letter queue"
+
+
+def test_requeue_download_missing_file_payload(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(request_payload={"username": "tester"})
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Download cannot be requeued"
+
+
+def test_requeue_download_missing_username(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(
+        username=None,
+        request_payload={
+            "file": {"filename": "test.mp3"},
+            "username": "",
+        },
+    )
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Download username missing for retry"
+
+
+def test_requeue_download_worker_unavailable(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory()
+    soulseek_client.app.state.sync_worker = None
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Sync worker unavailable"
+
+
+def test_requeue_download_worker_failure(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory()
+
+    class _FailingWorker:
+        async def enqueue(self, job: dict[str, Any]) -> None:
+            raise RuntimeError("boom")
+
+    soulseek_client.app.state.sync_worker = _FailingWorker()
+
+    response = soulseek_client.post(f"/soulseek/downloads/{download.id}/requeue")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to requeue download"
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download.id)
+        assert refreshed is not None
+        assert refreshed.state == "failed"
+        assert refreshed.last_error is not None
+
+
+def test_cancel_download_success(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(state="queued", progress=150.0)
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+
+    response = soulseek_client.delete(f"/soulseek/download/{download.id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": True}
+    client_stub.cancel_download.assert_awaited_once_with(str(download.id))
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download.id)
+        assert refreshed is not None
+        assert refreshed.state == "failed"
+        assert refreshed.progress == 100.0
+
+
+def test_cancel_download_client_error(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    download = download_factory(state="queued", progress=50.0)
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.cancel_download.side_effect = SoulseekClientError("failure")
+
+    response = soulseek_client.delete(f"/soulseek/download/{download.id}")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to cancel download"
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download.id)
+        assert refreshed is not None
+        assert refreshed.state == "queued"
+
+
+def test_get_downloads_returns_db_entries(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    first = download_factory(state="completed", progress=1.0, priority=2)
+    second = download_factory(state="failed", progress=0.5, priority=1)
+
+    response = soulseek_client.get("/soulseek/downloads")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert {entry["id"] for entry in payload["downloads"]} == {first.id, second.id}
+    assert payload["retryable_states"]
+
+
+def test_get_all_downloads_uses_client(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.get_all_downloads.return_value = {"active": []}
+
+    response = soulseek_client.get("/soulseek/downloads/all")
+
+    assert response.status_code == 200
+    assert response.json() == {"downloads": {"active": []}}
+    client_stub.get_all_downloads.assert_awaited_once()
+
+
+def test_get_all_downloads_client_error(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.get_all_downloads.side_effect = SoulseekClientError("boom")
+
+    response = soulseek_client.get("/soulseek/downloads/all")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to fetch downloads"
+
+
+def test_remove_completed_downloads(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.remove_completed_downloads.return_value = {"removed": 3}
+
+    response = soulseek_client.delete("/soulseek/downloads/completed")
+
+    assert response.status_code == 200
+    assert response.json() == {"removed": 3}
+    client_stub.remove_completed_downloads.assert_awaited_once()
+
+
+def test_remove_completed_downloads_client_error(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.remove_completed_downloads.side_effect = SoulseekClientError("boom")
+
+    response = soulseek_client.delete("/soulseek/downloads/completed")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to remove completed downloads"
+
+
+def test_get_download_queue(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.get_queue_position.return_value = {"position": 1}
+
+    response = soulseek_client.get("/soulseek/download/123/queue")
+
+    assert response.status_code == 200
+    assert response.json() == {"position": 1}
+    client_stub.get_queue_position.assert_awaited_once_with("123")
+
+
+def test_get_download_queue_client_error(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.get_queue_position.side_effect = SoulseekClientError("boom")
+
+    response = soulseek_client.get("/soulseek/download/123/queue")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to fetch queue position"
+
+
+def test_enqueue_downloads(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.enqueue.return_value = {"enqueued": 2}
+
+    payload = {
+        "username": "tester",
+        "files": [
+            {"filename": "a.mp3", "size": 1, "priority": 0},
+            {"filename": "b.mp3", "size": 2, "priority": 1},
+        ],
+    }
+
+    response = soulseek_client.post("/soulseek/enqueue", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {"enqueued": 2}
+    client_stub.enqueue.assert_awaited_once_with(
+        "tester",
+        [
+            {"filename": "a.mp3", "size": 1, "priority": 0},
+            {"filename": "b.mp3", "size": 2, "priority": 1},
+        ],
+    )
+
+
+def test_enqueue_downloads_client_error(soulseek_client: TestClient) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.enqueue.side_effect = SoulseekClientError("boom")
+
+    payload = {"username": "tester", "files": []}
+
+    response = soulseek_client.post("/soulseek/enqueue", json=payload)
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to enqueue downloads"
