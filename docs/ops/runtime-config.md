@@ -56,6 +56,7 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 - `VITE_REQUIRE_AUTH`/`VITE_AUTH_HEADER_MODE` spiegeln die Backend-Einstellungen (`FEATURE_REQUIRE_AUTH`, bevorzugter Header) und verhindern fehlkonfigurierte Browser-Clients.
 - `VITE_RUNTIME_API_KEY` erlaubt das Injizieren eines Schlüssels via `<script>` – praktisch für statische Deployments hinter einem Secret-Store.
 - `VITE_LIBRARY_POLL_INTERVAL_MS` steuert Poll-Intervalle der Library-Ansicht; das Backend selbst bleibt durch Watchlist-Intervalle geschützt.
+- `UI_LIVE_UPDATES` wählt zwischen klassischem Polling (`polling`) und Server-Sent Events (`SSE`). Der SSE-Modus streamt Tabellen-Updates über `/ui/events`; ohne Setzung bleibt HTMX-Polling aktiv.
 
 ## Änderungs-Workflow
 

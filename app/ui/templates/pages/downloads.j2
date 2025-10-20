@@ -29,6 +29,7 @@
          aria-live="polite"
          aria-labelledby="{{ downloads_fragment.identifier }}-heading"
          data-fragment="downloads-table"
+         {% if downloads_fragment.event_name %}data-live-event="{{ downloads_fragment.event_name }}"{% endif %}
          hx-get="{{ downloads_fragment.url }}"
          hx-trigger="{{ downloads_fragment.trigger }}"
          hx-target="{{ downloads_fragment.target }}"

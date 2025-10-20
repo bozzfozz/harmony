@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+import asyncio
 from dataclasses import dataclass, replace
 from datetime import datetime
 import json
 from pathlib import Path
 import re
+import time
+from typing import Any, AsyncGenerator, Awaitable, Literal
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -167,6 +170,9 @@ templates.env.globals["get_ui_assets"] = get_ui_assets
 
 _DISCOGRAPHY_JOB_LIMIT = 20
 
+_LIVE_UPDATES_POLLING: Literal["polling"] = "polling"
+_LIVE_UPDATES_SSE: Literal["sse"] = "sse"
+
 
 @dataclass(slots=True)
 class RecommendationsFormData:
@@ -205,6 +211,62 @@ def _render_alert_fragment(
         context,
         status_code=status_code,
     )
+
+
+def _resolve_live_updates_mode(config: AppConfig) -> Literal["polling", "sse"]:
+    ui_config = getattr(config, "ui", None)
+    if ui_config is None:
+        return _LIVE_UPDATES_POLLING
+    mode = getattr(ui_config, "live_updates", _LIVE_UPDATES_POLLING)
+    if mode == _LIVE_UPDATES_SSE:
+        return _LIVE_UPDATES_SSE
+    return _LIVE_UPDATES_POLLING
+
+
+@dataclass(slots=True)
+class _LiveFragmentBuilder:
+    name: str
+    interval: float
+    build: Callable[[], Awaitable[dict[str, Any] | None]]
+
+
+async def _ui_event_stream(
+    request: Request, builders: Sequence[_LiveFragmentBuilder]
+) -> AsyncGenerator[str, None]:
+    if not builders:
+        yield ": no-fragments\n\n"
+        return
+
+    next_run = {builder.name: 0.0 for builder in builders}
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            now = time.monotonic()
+            emitted = False
+            for builder in builders:
+                target_time = next_run[builder.name]
+                if now < target_time:
+                    continue
+                next_run[builder.name] = now + builder.interval
+                try:
+                    payload = await builder.build()
+                except Exception:  # pragma: no cover - defensive guard
+                    logger.exception("ui.events.build_failed", extra={"event": builder.name})
+                    continue
+                if not payload:
+                    continue
+                payload.setdefault("event", builder.name)
+                data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                yield f"event: fragment\ndata: {data}\n\n"
+                emitted = True
+            if emitted:
+                await asyncio.sleep(0.25)
+                continue
+            sleep_for = min(max(next_run[name] - now, 0.0) for name in next_run)
+            await asyncio.sleep(min(sleep_for, 1.0) if sleep_for > 0 else 0.5)
+    except asyncio.CancelledError:  # pragma: no cover - cancellation boundary
+        return
 
 
 def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[DiscographyJob]:
@@ -4267,10 +4329,127 @@ async def system_validate_secret(
     return response
 
 
+@router.get("/events", include_in_schema=False, name="ui_events")
+async def ui_events(
+    request: Request,
+    session: UiSession = Depends(require_session),
+    downloads_service: DownloadsUiService = Depends(get_downloads_ui_service),
+    jobs_service: JobsUiService = Depends(get_jobs_ui_service),
+    watchlist_service: WatchlistUiService = Depends(get_watchlist_ui_service),
+    activity_service: ActivityUiService = Depends(get_activity_ui_service),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    if _resolve_live_updates_mode(config) != _LIVE_UPDATES_SSE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Live updates via SSE are disabled.",
+        )
+
+    csrf_token = request.cookies.get("csrftoken", "")
+
+    def _render_fragment(
+        event_name: str,
+        template_name: str,
+        context: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        fragment = context.get("fragment")
+        if fragment is None:
+            return None
+        template = templates.get_template(template_name)
+        html = template.render(context)
+        data_attributes = dict(getattr(fragment, "data_attributes", {}))
+        return {
+            "event": event_name,
+            "fragment_id": fragment.identifier,
+            "html": html,
+            "data_attributes": data_attributes,
+        }
+
+    builders: list[_LiveFragmentBuilder] = []
+
+    if session.features.dlq and session.allows("operator"):
+
+        async def _build_downloads() -> dict[str, Any] | None:
+            page = downloads_service.list_downloads(
+                limit=20,
+                offset=0,
+                include_all=False,
+                status_filter=None,
+            )
+            context = build_downloads_fragment_context(
+                request,
+                page=page,
+                status_filter=None,
+                include_all=False,
+            )
+            context["csrf_token"] = csrf_token
+            return _render_fragment("downloads", "partials/downloads_table.j2", context)
+
+        async def _build_jobs() -> dict[str, Any] | None:
+            jobs = await jobs_service.list_jobs(request)
+            context = build_jobs_fragment_context(
+                request,
+                jobs=jobs,
+            )
+            return _render_fragment("jobs", "partials/jobs_fragment.j2", context)
+
+        builders.append(
+            _LiveFragmentBuilder(name="downloads", interval=15.0, build=_build_downloads)
+        )
+        builders.append(_LiveFragmentBuilder(name="jobs", interval=15.0, build=_build_jobs))
+
+    if session.allows("operator"):
+
+        async def _build_watchlist() -> dict[str, Any] | None:
+            table = watchlist_service.list_entries(request)
+            context = build_watchlist_fragment_context(
+                request,
+                entries=table.entries,
+            )
+            return _render_fragment("watchlist", "partials/watchlist_table.j2", context)
+
+        builders.append(
+            _LiveFragmentBuilder(name="watchlist", interval=30.0, build=_build_watchlist)
+        )
+
+    async def _build_activity() -> dict[str, Any] | None:
+        page = activity_service.list_activity(
+            limit=50,
+            offset=0,
+            type_filter=None,
+            status_filter=None,
+        )
+        context = build_activity_fragment_context(
+            request,
+            items=page.items,
+            limit=page.limit,
+            offset=page.offset,
+            total_count=page.total_count,
+            type_filter=page.type_filter,
+            status_filter=page.status_filter,
+        )
+        return _render_fragment("activity", "partials/activity_table.j2", context)
+
+    builders.append(_LiveFragmentBuilder(name="activity", interval=60.0, build=_build_activity))
+
+    logger.info(
+        "ui.events.start",
+        extra={"role": session.role, "fragments": [builder.name for builder in builders]},
+    )
+
+    stream = _ui_event_stream(request, builders)
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
+
+
 @router.get("/operations", include_in_schema=False, name="operations_page")
 async def operations_page(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -4278,6 +4457,7 @@ async def operations_page(
         request,
         session=session,
         csrf_token=csrf_token,
+        live_updates_mode=_resolve_live_updates_mode(config),
     )
     response = templates.TemplateResponse(
         request,
@@ -4293,6 +4473,7 @@ async def operations_page(
 async def downloads_page(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     if not session.features.dlq:
         raise HTTPException(
@@ -4305,6 +4486,7 @@ async def downloads_page(
         request,
         session=session,
         csrf_token=csrf_token,
+        live_updates_mode=_resolve_live_updates_mode(config),
     )
     response = templates.TemplateResponse(
         request,
@@ -4320,6 +4502,7 @@ async def downloads_page(
 async def jobs_page(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     if not session.features.dlq:
         raise HTTPException(
@@ -4332,6 +4515,7 @@ async def jobs_page(
         request,
         session=session,
         csrf_token=csrf_token,
+        live_updates_mode=_resolve_live_updates_mode(config),
     )
     response = templates.TemplateResponse(
         request,
@@ -4347,6 +4531,7 @@ async def jobs_page(
 async def watchlist_page(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -4354,6 +4539,7 @@ async def watchlist_page(
         request,
         session=session,
         csrf_token=csrf_token,
+        live_updates_mode=_resolve_live_updates_mode(config),
     )
     response = templates.TemplateResponse(
         request,
@@ -4369,6 +4555,7 @@ async def watchlist_page(
 async def activity_page(
     request: Request,
     session: UiSession = Depends(require_session),
+    config: AppConfig = Depends(get_app_config),
 ) -> Response:
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -4376,6 +4563,7 @@ async def activity_page(
         request,
         session=session,
         csrf_token=csrf_token,
+        live_updates_mode=_resolve_live_updates_mode(config),
     )
     response = templates.TemplateResponse(
         request,

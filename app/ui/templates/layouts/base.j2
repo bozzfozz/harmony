@@ -15,7 +15,9 @@
       {% endfor %}
     {%- endblock %}
   </head>
-  <body data-role="{{ layout.role or 'anonymous' }}">
+  <body data-role="{{ layout.role or 'anonymous' }}"
+        data-live-updates="{{ layout.live_updates_mode }}"
+        {% if layout.live_updates_source %}data-live-source="{{ layout.live_updates_source }}"{% endif %}>
     <header>
       <h1>{{ strings.app_name() }}</h1>
       {% if layout.navigation.primary %}

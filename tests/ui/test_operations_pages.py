@@ -25,6 +25,18 @@ def test_operations_page_renders_fragments(monkeypatch) -> None:
         assert "/ui/activity/table" in html
 
 
+def test_operations_page_exposes_sse_mode(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env={"UI_LIVE_UPDATES": "SSE"}) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/operations", headers=headers)
+        _assert_html_response(response)
+        html = response.text
+        assert 'data-live-updates="sse"' in html
+        assert 'data-live-event="downloads"' in html
+        assert "/ui/events" in html
+
+
 def test_operations_page_handles_disabled_dlq(monkeypatch) -> None:
     with _create_client(monkeypatch, extra_env={"UI_FEATURE_DLQ": "false"}) as client:
         _login(client)

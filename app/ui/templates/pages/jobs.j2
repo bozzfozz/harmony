@@ -29,6 +29,7 @@
          aria-live="polite"
          aria-labelledby="{{ jobs_fragment.identifier }}-heading"
          data-fragment="jobs-table"
+         {% if jobs_fragment.event_name %}data-live-event="{{ jobs_fragment.event_name }}"{% endif %}
          hx-get="{{ jobs_fragment.url }}"
          hx-trigger="{{ jobs_fragment.trigger }}"
          hx-target="{{ jobs_fragment.target }}"

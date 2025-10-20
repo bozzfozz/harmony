@@ -166,9 +166,9 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 - `hx-swap-oob` wird für globale Toasts, KPI-Zähler und Badge-Updates genutzt.
 
 ## Live-Update-Strategie
-- **Phase 1 (Standard)**: Polling über HTMX mit festen Intervallen pro Seite – Dashboard 30 s, Health-Badges 60 s, Downloads & Jobs 15 s, Watchlist 30 s, Activity 60 s. Trigger sind in den obigen Tabellen hinterlegt und werden zentral getestet.
-- **Phase 2 (Optional)**: Server-Sent Events für Jobs/Warteschlangen können per `UI_LIVE_UPDATES=SSE` aktiviert werden. Implementierung folgt später und ergänzt einen SSE-Endpunkt mit Fallback auf Polling.
-- **Backoff & Fehlerhandling**: wiederholte 5xx-Antworten lösen visuelle Warnungen aus und verdoppeln clientseitig das Polling-Intervall bis max. 5 min (Implementation Detail im Folgetask).
+- **Standard (Polling)**: Polling über HTMX mit festen Intervallen pro Seite – Dashboard 30 s, Health-Badges 60 s, Downloads & Jobs 15 s, Watchlist 30 s, Activity 60 s. Trigger sind in den obigen Tabellen hinterlegt und werden zentral getestet.
+- **Server-Sent Events**: Per `UI_LIVE_UPDATES=SSE` schaltet der Router auf `/ui/events` um. Der Browser initialisiert eine `EventSource`, aktualisiert Downloads-, Jobs-, Watchlist- und Activity-Tabellen ohne zusätzliche HTMX-Requests und fällt bei deaktivierter Option automatisch auf Polling zurück.
+- **Backoff & Fehlerhandling**: Wiederholte 5xx-Antworten lösen visuelle Warnungen aus und verdoppeln clientseitig das Polling-Intervall bis max. 5 min (Implementation Detail im Folgetask). SSE-Verbindungen setzen auf automatische Reconnects des Browsers.
 
 ## Security & Sessions
 - **Login & Session**: `/ui/login` nimmt einen API-Key entgegen, validiert gegen `SecurityConfig` und erzeugt eine serverseitig gespeicherte Session mit API-Key-Fingerprint. Der Client erhält ausschließlich das Cookie `ui_session=<opaque>` (`HttpOnly; Secure; SameSite=Lax`). HTMX-Anfragen nutzen dieselbe Session und benötigen keinen zusätzlichen Header.

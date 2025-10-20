@@ -36,6 +36,7 @@
            aria-live="polite"
            aria-labelledby="{{ downloads_fragment.identifier }}-heading"
            data-fragment="operations-downloads"
+           {% if downloads_fragment.event_name %}data-live-event="{{ downloads_fragment.event_name }}"{% endif %}
            hx-get="{{ downloads_fragment.url }}"
            hx-trigger="{{ downloads_fragment.trigger }}"
            hx-target="{{ downloads_fragment.target }}"
@@ -64,6 +65,7 @@
            aria-live="polite"
            aria-labelledby="{{ jobs_fragment.identifier }}-heading"
            data-fragment="operations-jobs"
+           {% if jobs_fragment.event_name %}data-live-event="{{ jobs_fragment.event_name }}"{% endif %}
            hx-get="{{ jobs_fragment.url }}"
            hx-trigger="{{ jobs_fragment.trigger }}"
            hx-target="{{ jobs_fragment.target }}"
@@ -91,6 +93,7 @@
          aria-live="polite"
          aria-labelledby="{{ watchlist_fragment.identifier }}-heading"
          data-fragment="operations-watchlist"
+         {% if watchlist_fragment.event_name %}data-live-event="{{ watchlist_fragment.event_name }}"{% endif %}
          hx-get="{{ watchlist_fragment.url }}"
          hx-trigger="{{ watchlist_fragment.trigger }}"
          hx-target="{{ watchlist_fragment.target }}"
@@ -117,6 +120,7 @@
          aria-live="polite"
          aria-labelledby="{{ activity_fragment.identifier }}-heading"
          data-fragment="operations-activity"
+         {% if activity_fragment.event_name %}data-live-event="{{ activity_fragment.event_name }}"{% endif %}
          hx-get="{{ activity_fragment.url }}"
          hx-trigger="{{ activity_fragment.trigger }}"
          hx-target="{{ activity_fragment.target }}"

@@ -50,6 +50,7 @@
          aria-live="polite"
          aria-labelledby="{{ watchlist_fragment.identifier }}-heading"
          data-fragment="watchlist-table"
+         {% if watchlist_fragment.event_name %}data-live-event="{{ watchlist_fragment.event_name }}"{% endif %}
          hx-get="{{ watchlist_fragment.url }}"
          hx-trigger="{{ watchlist_fragment.trigger }}"
          hx-target="{{ watchlist_fragment.target }}"
