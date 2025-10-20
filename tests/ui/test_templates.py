@@ -151,6 +151,8 @@ def test_login_template_renders_error_and_form() -> None:
     assert "nav-home" not in html
     assert f'href="{asset_url("css/app.css")}"' in html
     assert f'src="{asset_url("js/htmx.min.js")}"' in html
+    assert f'src="{asset_url("js/ui-bootstrap.js")}"' in html
+    assert "htmx:configRequest" not in html
 
 
 def test_dashboard_template_renders_navigation_and_features() -> None:

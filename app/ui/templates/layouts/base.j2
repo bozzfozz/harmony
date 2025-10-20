@@ -34,25 +34,7 @@
     {% endblock %}
     {% block scripts %}
       <script src="{{ asset_url('js/htmx.min.js') }}" defer></script>
-      <script>
-        (function () {
-          var meta = document.querySelector('meta[name="csrf-token"]');
-          if (!meta) {
-            return;
-          }
-          var token = meta.getAttribute('content');
-          if (!token) {
-            return;
-          }
-          document.body.dataset.csrfToken = token;
-          document.addEventListener('htmx:configRequest', function (event) {
-            if (!event.detail || !event.detail.headers) {
-              return;
-            }
-            event.detail.headers['X-CSRF-Token'] = token;
-          });
-        })();
-      </script>
+      <script src="{{ asset_url('js/ui-bootstrap.js') }}" defer></script>
     {% endblock %}
   </body>
 </html>
