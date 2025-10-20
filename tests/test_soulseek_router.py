@@ -311,6 +311,28 @@ def test_soulseek_search_includes_normalised_results(
         assert session.query(Download).count() == 0
 
 
+def test_soulseek_search_forwards_filters(soulseek_client: TestClient) -> None:
+    client_stub = soulseek_client.app.state.soulseek_client
+    client_stub.search.return_value = {"results": []}
+    client_stub.normalise_search_results.return_value = []
+
+    response = soulseek_client.post(
+        "/soulseek/search",
+        json={
+            "query": " listener ",
+            "min_bitrate": 256,
+            "preferred_formats": [" FLAC ", "MP3 320"],
+        },
+    )
+
+    assert response.status_code == 200
+    client_stub.search.assert_awaited_once_with(
+        "listener",
+        min_bitrate=256,
+        format_priority=("FLAC", "MP3 320"),
+    )
+
+
 def test_download_rejects_parent_directory_filename(soulseek_client: TestClient) -> None:
     response = soulseek_client.post(
         "/soulseek/download",
@@ -513,8 +535,7 @@ def test_discography_download_logs_worker_failure(
 
     error_messages = [record.message for record in caplog.records if record.levelname == "ERROR"]
     assert any(
-        f"Failed to enqueue discography job {job_id}" in message
-        for message in error_messages
+        f"Failed to enqueue discography job {job_id}" in message for message in error_messages
     )
 
 
@@ -1007,16 +1028,12 @@ def test_metadata_refresh_enqueues_job(
             request_payload=request_payload,
         )
 
-        response = soulseek_client.post(
-            f"/soulseek/download/{download.id}/metadata/refresh"
-        )
+        response = soulseek_client.post(f"/soulseek/download/{download.id}/metadata/refresh")
 
         assert response.status_code == 202
         assert response.json() == {"status": "queued"}
 
-        metadata_worker: _StubMetadataWorker = (
-            soulseek_client.app.state.rich_metadata_worker
-        )
+        metadata_worker: _StubMetadataWorker = soulseek_client.app.state.rich_metadata_worker
         assert len(metadata_worker.calls) == 1
         call = metadata_worker.calls[0]
         assert call["download_id"] == download.id
@@ -1051,9 +1068,7 @@ def test_artwork_refresh_enqueues_job(
             artwork_url="https://fallback.example.com/cover.jpg",
         )
 
-        response = soulseek_client.post(
-            f"/soulseek/download/{download.id}/artwork/refresh"
-        )
+        response = soulseek_client.post(f"/soulseek/download/{download.id}/artwork/refresh")
 
         assert response.status_code == 202
         assert response.json() == {"status": "pending"}
@@ -1101,9 +1116,7 @@ def test_artwork_refresh_returns_202_when_worker_missing(
 
         soulseek_client.app.state.artwork_worker = None
 
-        response = soulseek_client.post(
-            f"/soulseek/download/{download.id}/artwork/refresh"
-        )
+        response = soulseek_client.post(f"/soulseek/download/{download.id}/artwork/refresh")
 
         assert response.status_code == 202
         assert response.json() == {"status": "pending"}
@@ -1127,13 +1140,9 @@ def test_artwork_refresh_returns_502_when_worker_errors(
             filename=str(audio_path),
         )
 
-        soulseek_client.app.state.artwork_worker = _FailingArtworkWorker(
-            RuntimeError("boom")
-        )
+        soulseek_client.app.state.artwork_worker = _FailingArtworkWorker(RuntimeError("boom"))
 
-        response = soulseek_client.post(
-            f"/soulseek/download/{download.id}/artwork/refresh"
-        )
+        response = soulseek_client.post(f"/soulseek/download/{download.id}/artwork/refresh")
 
         assert response.status_code == 502
         assert response.json() == {"detail": "Failed to refresh artwork"}
