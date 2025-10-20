@@ -27,6 +27,10 @@ if TYPE_CHECKING:
         SettingRow,
         SearchResultsPage,
         SoulseekUploadRow,
+        SoulseekUserDirectoryEntry,
+        SoulseekUserDirectoryListing,
+        SoulseekUserFileEntry,
+        SoulseekUserProfile,
         SpotifyAccountSummary,
         SpotifyArtistRow,
         SpotifyBackfillSnapshot,
@@ -2036,6 +2040,30 @@ def build_soulseek_page_context(
         loading_key="soulseek.downloads",
     )
 
+    user_info_url = _safe_url_for(
+        request,
+        "soulseek_user_info_fragment",
+        "/ui/soulseek/user/info",
+    )
+    user_info_fragment = AsyncFragment(
+        identifier="hx-soulseek-user-info",
+        url=user_info_url,
+        target="#hx-soulseek-user-info",
+        loading_key="soulseek.user.profile",
+    )
+
+    user_directory_url = _safe_url_for(
+        request,
+        "soulseek_user_directory_fragment",
+        "/ui/soulseek/user/directory",
+    )
+    user_directory_fragment = AsyncFragment(
+        identifier="hx-soulseek-user-directory",
+        url=user_directory_url,
+        target="#hx-soulseek-user-directory",
+        loading_key="soulseek.user.directory",
+    )
+
     return {
         "request": request,
         "layout": layout,
@@ -2045,6 +2073,8 @@ def build_soulseek_page_context(
         "configuration_fragment": configuration_fragment,
         "uploads_fragment": uploads_fragment,
         "downloads_fragment": downloads_fragment,
+        "user_info_fragment": user_info_fragment,
+        "user_directory_fragment": user_directory_fragment,
         "suggested_tasks": tuple(suggested_tasks),
         "tasks_completion": tasks_completion,
     }
@@ -2766,6 +2796,114 @@ def build_soulseek_downloads_context(
         "cleanup_swap": pagination.swap if pagination else "outerHTML",
         "cleanup_disabled": not can_manage_downloads,
         "can_manage_downloads": can_manage_downloads,
+    }
+
+
+@dataclass(slots=True)
+class SoulseekDirectoryLinkView:
+    name: str
+    path: str
+    url: str
+
+
+@dataclass(slots=True)
+class SoulseekFileView:
+    name: str
+    path: str | None
+    size: str
+
+
+def build_soulseek_user_profile_context(
+    request: Request,
+    *,
+    username: str | None,
+    profile: SoulseekUserProfile | None,
+) -> Mapping[str, Any]:
+    lookup_url = _safe_url_for(
+        request,
+        "soulseek_user_info_fragment",
+        "/ui/soulseek/user/info",
+    )
+    trimmed_username = (username or "").strip()
+    address_items: tuple[tuple[str, str], ...] = ()
+    info_items: tuple[tuple[str, str], ...] = ()
+    if profile is not None:
+        address_items = tuple(sorted(profile.address.items()))
+        info_items = tuple(sorted(profile.info.items()))
+        trimmed_username = profile.username
+    return {
+        "request": request,
+        "lookup_url": lookup_url,
+        "username": trimmed_username,
+        "profile": profile,
+        "address_items": address_items,
+        "info_items": info_items,
+        "has_profile": bool(profile and (address_items or info_items)),
+    }
+
+
+def build_soulseek_user_directory_context(
+    request: Request,
+    *,
+    username: str | None,
+    path: str | None,
+    listing: SoulseekUserDirectoryListing | None,
+) -> Mapping[str, Any]:
+    browse_url = _safe_url_for(
+        request,
+        "soulseek_user_directory_fragment",
+        "/ui/soulseek/user/directory",
+    )
+    base_url = URL(browse_url)
+    trimmed_username = (username or "").strip()
+    if listing is not None:
+        trimmed_username = listing.username
+
+    def _entry_url(path_value: str | None) -> str:
+        params: dict[str, str] = {}
+        if trimmed_username:
+            params["username"] = trimmed_username
+        if path_value:
+            params["path"] = path_value
+        if not params:
+            return browse_url
+        return str(base_url.include_query_params(**params))
+
+    directories: tuple[SoulseekDirectoryLinkView, ...] = ()
+    files: tuple[SoulseekFileView, ...] = ()
+    current_path = path.strip() if isinstance(path, str) else None
+    parent_path: str | None = None
+    if listing is not None:
+        current_path = listing.current_path
+        parent_path = listing.parent_path
+        directories = tuple(
+            SoulseekDirectoryLinkView(
+                name=entry.name,
+                path=entry.path,
+                url=_entry_url(entry.path),
+            )
+            for entry in listing.directories
+        )
+        files = tuple(
+            SoulseekFileView(
+                name=file.name,
+                path=file.path,
+                size=_format_transfer_size(file.size_bytes) or "",
+            )
+            for file in listing.files
+        )
+    parent_url = _entry_url(parent_path) if parent_path else None
+    return {
+        "request": request,
+        "browse_url": browse_url,
+        "username": trimmed_username,
+        "path": current_path,
+        "directories": directories,
+        "files": files,
+        "listing": listing,
+        "parent_path": parent_path,
+        "parent_url": parent_url,
+        "has_listing": bool(listing and (directories or files)),
     }
 
 
@@ -4595,6 +4733,8 @@ __all__ = [
     "build_soulseek_config_context",
     "build_soulseek_uploads_context",
     "build_soulseek_downloads_context",
+    "build_soulseek_user_profile_context",
+    "build_soulseek_user_directory_context",
     "build_soulseek_download_lyrics_modal_context",
     "build_soulseek_download_metadata_modal_context",
     "build_soulseek_download_artwork_modal_context",

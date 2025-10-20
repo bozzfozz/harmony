@@ -83,6 +83,8 @@
     "settings.artist_preferences.artist": "Artist ID",
     "settings.artist_preferences.release": "Release ID",
     "settings.artist_preferences.selected": "Selected",
+    "soulseek.user.username": "Username",
+    "soulseek.user.path": "Directory path",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -228,6 +230,8 @@
     "soulseek.downloads.show_all": "All downloads",
     "soulseek.downloads.cleanup": "Remove completed downloads",
     "soulseek.retry": "Retry",
+    "soulseek.user.lookup": "Lookup user",
+    "soulseek.user.browse": "Browse directory",
     "watchlist.create": "Add artist",
     "operations.view_details": "Open details",
     "system.health.refresh": "Refresh",
@@ -699,6 +703,10 @@
     Loading active Soulseek uploads…
   {%- elif key == "soulseek.downloads" -%}
     Loading active Soulseek downloads…
+  {%- elif key == "soulseek.user.profile" -%}
+    Fetching Soulseek user profile…
+  {%- elif key == "soulseek.user.directory" -%}
+    Browsing Soulseek user directory…
   {%- else -%}
     {{ loading_placeholder() }}
   {%- endif -%}
@@ -1046,6 +1054,26 @@
 {% macro soulseek_uploads_heading() %}Active uploads{% endmacro %}
 
 {% macro soulseek_downloads_heading() %}Active downloads{% endmacro %}
+
+{% macro soulseek_user_profile_heading() %}User profile{% endmacro %}
+{% macro soulseek_user_profile_help() %}Enter a Soulseek username to load address and profile information.{% endmacro %}
+{% macro soulseek_user_profile_missing(username) %}No profile information was returned for {{ username }}.{% endmacro %}
+{% macro soulseek_user_address_heading() %}Network address{% endmacro %}
+{% macro soulseek_user_address_empty() %}No address details were reported.{% endmacro %}
+{% macro soulseek_user_info_heading() %}Account details{% endmacro %}
+{% macro soulseek_user_info_empty(username) %}No account details were returned for {{ username }}.{% endmacro %}
+{% macro soulseek_user_directory_heading() %}Shared directories{% endmacro %}
+{% macro soulseek_user_directory_help() %}Enter a Soulseek username to explore shared folders.{% endmacro %}
+{% macro soulseek_user_directory_empty(username) %}No directory entries were returned for {{ username }}.{% endmacro %}
+{% macro soulseek_user_directory_parent() %}Go up one level{% endmacro %}
+{% macro soulseek_user_directory_path(path) %}Current path: {{ path }}{% endmacro %}
+{% macro soulseek_user_directories_heading() %}Directories{% endmacro %}
+{% macro soulseek_user_directories_empty() %}No subdirectories available.{% endmacro %}
+{% macro soulseek_user_files_heading() %}Files{% endmacro %}
+{% macro soulseek_user_files_empty() %}No files were reported in this directory.{% endmacro %}
+{% macro soulseek_user_files_name() %}Name{% endmacro %}
+{% macro soulseek_user_files_size() %}Size{% endmacro %}
+{% macro soulseek_user_files_unknown_size() %}Unknown{% endmacro %}
 
 {% macro soulseek_tasks_heading() %}Suggested tasks{% endmacro %}
 

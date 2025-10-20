@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +23,10 @@ from app.routers.soulseek_router import (
     soulseek_cancel_upload,
     soulseek_status,
     soulseek_uploads,
+    soulseek_user_address,
+    soulseek_user_browse,
+    soulseek_user_directory,
+    soulseek_user_info,
 )
 from app.schemas import StatusResponse
 from app.ui.context import SuggestedTask, _normalise_status
@@ -41,6 +45,43 @@ class SoulseekUploadRow:
     size_bytes: int | None
     speed_bps: float | None
     username: str | None
+
+
+@dataclass(slots=True)
+class SoulseekUserProfile:
+    """Normalised view of a Soulseek user's profile details."""
+
+    username: str
+    address: Mapping[str, str]
+    info: Mapping[str, str]
+
+
+@dataclass(slots=True)
+class SoulseekUserDirectoryEntry:
+    """Directory entry available for browsing."""
+
+    name: str
+    path: str
+
+
+@dataclass(slots=True)
+class SoulseekUserFileEntry:
+    """File entry within a Soulseek user's shared directory."""
+
+    name: str
+    path: str | None
+    size_bytes: int | None
+
+
+@dataclass(slots=True)
+class SoulseekUserDirectoryListing:
+    """Directory listing for a Soulseek user."""
+
+    username: str
+    current_path: str | None
+    parent_path: str | None
+    directories: tuple[SoulseekUserDirectoryEntry, ...]
+    files: tuple[SoulseekUserFileEntry, ...]
 
 
 _HEALTHY_STATUSES: frozenset[str] = frozenset({"ok", "connected", "online"})
@@ -116,6 +157,80 @@ class SoulseekUiService:
             "soulseek.ui.upload.cancelled",
             extra={"upload_id": upload_id},
         )
+
+    async def user_profile(self, *, username: str) -> SoulseekUserProfile:
+        """Fetch combined Soulseek user profile information."""
+
+        trimmed = (username or "").strip()
+        if not trimmed:
+            raise ValueError("username is required")
+
+        address_raw = await soulseek_user_address(username=trimmed, client=self._client)
+        info_raw = await soulseek_user_info(username=trimmed, client=self._client)
+
+        profile = SoulseekUserProfile(
+            username=trimmed,
+            address=self._normalise_mapping(address_raw),
+            info=self._normalise_mapping(info_raw),
+        )
+        logger.debug(
+            "soulseek.ui.user.profile",
+            extra={
+                "username": trimmed,
+                "address_keys": sorted(profile.address.keys()),
+                "info_keys": sorted(profile.info.keys()),
+            },
+        )
+        return profile
+
+    async def user_directory(
+        self,
+        *,
+        username: str,
+        path: str | None = None,
+    ) -> SoulseekUserDirectoryListing:
+        """Browse a Soulseek user's shared directories."""
+
+        trimmed = (username or "").strip()
+        if not trimmed:
+            raise ValueError("username is required")
+
+        if path:
+            payload = await soulseek_user_directory(
+                username=trimmed,
+                path=path,
+                client=self._client,
+            )
+            current_path = (
+                str(payload.get("path") or path).strip() if isinstance(payload, Mapping) else path
+            )
+        else:
+            payload = await soulseek_user_browse(username=trimmed, client=self._client)
+            current_path = (
+                str(payload.get("path") or "").strip() if isinstance(payload, Mapping) else None
+            )
+
+        directories = self._extract_directories(payload)
+        files = self._extract_files(payload)
+        parent_path = self._derive_parent_path(current_path)
+
+        listing = SoulseekUserDirectoryListing(
+            username=trimmed,
+            current_path=current_path or None,
+            parent_path=parent_path,
+            directories=directories,
+            files=files,
+        )
+        logger.debug(
+            "soulseek.ui.user.directory",
+            extra={
+                "username": trimmed,
+                "path": listing.current_path or "",
+                "directories": len(listing.directories),
+                "files": len(listing.files),
+            },
+        )
+        return listing
 
     def suggested_tasks(
         self,
@@ -312,6 +427,84 @@ class SoulseekUiService:
                 return None
         return None
 
+    @staticmethod
+    def _normalise_mapping(payload: Any) -> Mapping[str, str]:
+        if not isinstance(payload, Mapping):
+            return {}
+        normalised: dict[str, str] = {}
+        for key, value in payload.items():
+            if value in {None, ""}:
+                continue
+            normalised[str(key)] = str(value)
+        return normalised
+
+    @staticmethod
+    def _extract_directories(payload: Any) -> tuple[SoulseekUserDirectoryEntry, ...]:
+        directories_raw: Sequence[Any] = ()
+        if isinstance(payload, Mapping):
+            directories_raw = payload.get("directories") or ()
+        elif isinstance(payload, Sequence):
+            directories_raw = payload
+        entries: list[SoulseekUserDirectoryEntry] = []
+        for item in directories_raw:
+            if not isinstance(item, Mapping):
+                continue
+            raw_path = item.get("path") or item.get("name") or ""
+            path = str(raw_path).strip()
+            if not path:
+                continue
+            name = str(item.get("name") or path.split("/")[-1] or path).strip()
+            if not name:
+                name = path
+            entries.append(SoulseekUserDirectoryEntry(name=name, path=path))
+        return tuple(entries)
+
+    @staticmethod
+    def _extract_files(payload: Any) -> tuple[SoulseekUserFileEntry, ...]:
+        files_raw: Sequence[Any] = ()
+        if isinstance(payload, Mapping):
+            files_raw = payload.get("files") or ()
+        elif isinstance(payload, Sequence):
+            files_raw = payload
+        entries: list[SoulseekUserFileEntry] = []
+        for item in files_raw:
+            if not isinstance(item, Mapping):
+                continue
+            raw_name = (
+                item.get("name")
+                or item.get("filename")
+                or item.get("path")
+                or item.get("title")
+                or ""
+            )
+            name = str(raw_name).strip()
+            if not name:
+                continue
+            path_value = item.get("path")
+            path = str(path_value).strip() if isinstance(path_value, str) else None
+            size_value = item.get("size") or item.get("size_bytes")
+            size = SoulseekUiService._coerce_int(size_value)
+            entries.append(
+                SoulseekUserFileEntry(
+                    name=name,
+                    path=path,
+                    size_bytes=size,
+                )
+            )
+        return tuple(entries)
+
+    @staticmethod
+    def _derive_parent_path(current_path: str | None) -> str | None:
+        if not current_path:
+            return None
+        trimmed = current_path.strip("/")
+        if not trimmed:
+            return None
+        parts = [segment for segment in trimmed.split("/") if segment]
+        if len(parts) <= 1:
+            return None
+        return "/".join(parts[:-1])
+
 
 def get_soulseek_ui_service(
     request: Request,
@@ -332,5 +525,9 @@ def get_soulseek_ui_service(
 __all__ = [
     "SoulseekUiService",
     "SoulseekUploadRow",
+    "SoulseekUserProfile",
+    "SoulseekUserDirectoryEntry",
+    "SoulseekUserFileEntry",
+    "SoulseekUserDirectoryListing",
     "get_soulseek_ui_service",
 ]
