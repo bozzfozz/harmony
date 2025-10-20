@@ -121,6 +121,40 @@ class _StubMetadataWorker:
         return {}
 
 
+class _StubArtworkWorker:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def enqueue(
+        self,
+        download_id: int,
+        audio_path: str,
+        **kwargs: Any,
+    ) -> None:
+        self.calls.append(
+            {
+                "download_id": download_id,
+                "audio_path": audio_path,
+                "kwargs": kwargs,
+            }
+        )
+
+
+class _FailingArtworkWorker(_StubArtworkWorker):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self._error = error
+
+    async def enqueue(
+        self,
+        download_id: int,
+        audio_path: str,
+        **kwargs: Any,
+    ) -> None:
+        await super().enqueue(download_id, audio_path, **kwargs)
+        raise self._error
+
+
 @pytest.fixture()
 def soulseek_client() -> Iterator[TestClient]:
     init_db()
@@ -145,10 +179,12 @@ def soulseek_client() -> Iterator[TestClient]:
         sync_worker = _StubSyncWorker()
         lyrics_worker = _StubLyricsWorker()
         metadata_worker = _StubMetadataWorker()
+        artwork_worker = _StubArtworkWorker()
 
         test_client.app.state.sync_worker = sync_worker
         test_client.app.state.lyrics_worker = lyrics_worker
         test_client.app.state.rich_metadata_worker = metadata_worker
+        test_client.app.state.artwork_worker = artwork_worker
         test_client.app.state.feature_flags = config.features
         test_client.app.state.soulseek_client = client_stub
         yield test_client
@@ -722,6 +758,76 @@ def test_lyrics_refresh_returns_503_when_worker_missing(
     assert response.json() == {"detail": "Lyrics worker unavailable"}
 
 
+def test_artwork_detail_rejects_invalid_paths(soulseek_client: TestClient) -> None:
+    with session_scope() as session:
+        download = Download(
+            filename=str(_downloads_dir() / "invalid-artwork.mp3"),
+            state="completed",
+            progress=1.0,
+            username="tester",
+            has_artwork=True,
+            artwork_status="done",
+            artwork_path="../../escape.png",
+        )
+        session.add(download)
+        session.commit()
+        download_id = download.id
+
+    response = soulseek_client.get(f"/soulseek/download/{download_id}/artwork")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid artwork path"}
+
+
+def test_artwork_detail_returns_404_when_file_missing(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    artwork_path = downloads_dir / f"missing-artwork-{uuid4().hex}.png"
+    artwork_path.parent.mkdir(parents=True, exist_ok=True)
+
+    download = download_factory(
+        state="completed",
+        progress=1.0,
+        has_artwork=True,
+        artwork_status="done",
+        artwork_path=str(artwork_path),
+    )
+
+    response = soulseek_client.get(f"/soulseek/download/{download.id}/artwork")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Artwork file not found"}
+
+
+def test_artwork_detail_returns_binary_content(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    artwork_path = downloads_dir / f"artwork-{uuid4().hex}.png"
+    artwork_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00IHDR"
+
+    try:
+        artwork_path.write_bytes(sample_bytes)
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            has_artwork=True,
+            artwork_status="done",
+            artwork_path=str(artwork_path),
+        )
+
+        response = soulseek_client.get(f"/soulseek/download/{download.id}/artwork")
+
+        assert response.status_code == 200
+        assert response.content == sample_bytes
+        assert response.headers["content-type"] == "image/png"
+    finally:
+        if artwork_path.exists():
+            artwork_path.unlink()
+
+
 def test_metadata_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> None:
     with session_scope() as session:
         download = Download(
@@ -821,6 +927,125 @@ def test_metadata_refresh_enqueues_job(
         assert call["audio_path"] == audio_path
         assert call["payload"] == request_payload
         assert call["request_payload"] == request_payload
+    finally:
+        if audio_path.exists():
+            audio_path.unlink()
+
+
+def test_artwork_refresh_enqueues_job(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"artwork-refresh-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    request_payload = {
+        "metadata": {"album": "Example Album"},
+        "file": {"filename": "artwork-refresh/test.mp3", "priority": 4},
+        "spotify_album_id": "album-123",
+        "artwork_urls": ["https://example.com/cover.jpg"],
+    }
+
+    try:
+        audio_path.touch()
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            filename=str(audio_path),
+            request_payload=request_payload,
+            artwork_url="https://fallback.example.com/cover.jpg",
+        )
+
+        response = soulseek_client.post(
+            f"/soulseek/download/{download.id}/artwork/refresh"
+        )
+
+        assert response.status_code == 202
+        assert response.json() == {"status": "pending"}
+
+        worker = soulseek_client.app.state.artwork_worker
+        assert isinstance(worker, _StubArtworkWorker)
+        assert len(worker.calls) == 1
+        call = worker.calls[0]
+        assert call["download_id"] == download.id
+        assert call["audio_path"] == str(audio_path.resolve())
+        kwargs = call["kwargs"]
+        assert kwargs["refresh"] is True
+        metadata = kwargs["metadata"]
+        assert metadata["album"] == "Example Album"
+        assert metadata["spotify_album_id"] == "album-123"
+        assert kwargs["spotify_album_id"] == "album-123"
+        assert kwargs["artwork_url"] == "https://fallback.example.com/cover.jpg"
+        assert metadata["artwork_url"] == "https://fallback.example.com/cover.jpg"
+
+        with session_scope() as session:
+            refreshed = session.get(Download, download.id)
+            assert refreshed is not None
+            assert refreshed.artwork_status == "pending"
+            assert refreshed.has_artwork is False
+            assert refreshed.artwork_path is None
+    finally:
+        if audio_path.exists():
+            audio_path.unlink()
+
+
+def test_artwork_refresh_returns_202_when_worker_missing(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"artwork-refresh-missing-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        audio_path.touch()
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            filename=str(audio_path),
+        )
+
+        soulseek_client.app.state.artwork_worker = None
+
+        response = soulseek_client.post(
+            f"/soulseek/download/{download.id}/artwork/refresh"
+        )
+
+        assert response.status_code == 202
+        assert response.json() == {"status": "pending"}
+    finally:
+        if audio_path.exists():
+            audio_path.unlink()
+
+
+def test_artwork_refresh_returns_502_when_worker_errors(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"artwork-refresh-error-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        audio_path.touch()
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            filename=str(audio_path),
+        )
+
+        soulseek_client.app.state.artwork_worker = _FailingArtworkWorker(
+            RuntimeError("boom")
+        )
+
+        response = soulseek_client.post(
+            f"/soulseek/download/{download.id}/artwork/refresh"
+        )
+
+        assert response.status_code == 502
+        assert response.json() == {"detail": "Failed to refresh artwork"}
+
+        worker = soulseek_client.app.state.artwork_worker
+        assert isinstance(worker, _FailingArtworkWorker)
+        assert len(worker.calls) == 1
+        assert worker.calls[0]["download_id"] == download.id
     finally:
         if audio_path.exists():
             audio_path.unlink()
