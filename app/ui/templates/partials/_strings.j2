@@ -149,6 +149,38 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro soulseek_download_asset_modal_title(asset, filename) -%}
+  {%- set asset_label = soulseek_downloads_asset_label(asset) -%}
+  {{ asset_label }} for {{ filename }}
+{%- endmacro %}
+
+{% macro soulseek_download_asset_pending(asset) -%}
+  {%- set asset_label = soulseek_downloads_asset_label(asset) -%}
+  {{ asset_label }} generation is still in progress. Try again later.
+{%- endmacro %}
+
+{% macro soulseek_download_asset_missing(asset) -%}
+  {%- set asset_label = soulseek_downloads_asset_label(asset) -%}
+  {{ asset_label }} are not available for this download.
+{%- endmacro %}
+
+{% macro soulseek_download_metadata_label(field) -%}
+  {%- set labels = {
+    "genre": "Genre",
+    "composer": "Composer",
+    "producer": "Producer",
+    "isrc": "ISRC",
+    "copyright": "Copyright",
+  } -%}
+  {{ labels.get(field, field) }}
+{%- endmacro %}
+
+{% macro soulseek_download_metadata_value_missing() %}Not provided.{% endmacro %}
+
+{% macro soulseek_download_artwork_alt(filename) -%}
+  Artwork for {{ filename }}
+{%- endmacro %}
+
 {% macro button_label(key) -%}
   {%- set parts = key.split(".") -%}
   {%- if key.count(".") == 3 and parts[0] == "soulseek" and parts[1] == "downloads" and parts[2] in ("lyrics", "metadata", "artwork") -%}

@@ -1,0 +1,37 @@
+{% import "partials/_strings.j2" as strings %}
+
+<dialog id="{{ modal_id }}"
+        data-role="modal"
+        data-test="soulseek-download-metadata-modal"
+        hx-on="htmx:afterSwap: this.showModal()"
+        hx-on:close="this.remove()"
+        hx-on:cancel="this.remove()">
+  <h2>{{ strings.soulseek_download_asset_modal_title(asset, filename) }}</h2>
+  {% if asset_status %}
+    <p class="modal-status"
+       data-test="soulseek-download-metadata-status">{{ strings.soulseek_downloads_asset_status(asset, asset_status) }}</p>
+  {% endif %}
+  <div class="modal-body">
+    {% if has_metadata %}
+      <dl class="soulseek-download-metadata__list">
+        {% for entry in metadata_entries %}
+          <dt>{{ strings.soulseek_download_metadata_label(entry["key"]) }}</dt>
+          <dd data-test="soulseek-download-metadata-{{ entry["key"] }}">
+            {% if entry["value"] %}
+              {{ entry["value"] }}
+            {% else %}
+              {{ strings.soulseek_download_metadata_value_missing() }}
+            {% endif %}
+          </dd>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p class="soulseek-download-metadata__empty"
+         data-test="soulseek-download-metadata-empty">{{ strings.soulseek_download_asset_missing(asset) }}</p>
+    {% endif %}
+    <form method="dialog" class="modal-actions">
+      <button type="submit"
+              data-test="soulseek-download-metadata-close">{{ strings.button_label("modal.close") }}</button>
+    </form>
+  </div>
+</dialog>

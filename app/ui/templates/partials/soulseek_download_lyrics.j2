@@ -1,0 +1,33 @@
+{% import "partials/_strings.j2" as strings %}
+
+<dialog id="{{ modal_id }}"
+        data-role="modal"
+        data-test="soulseek-download-lyrics-modal"
+        hx-on="htmx:afterSwap: this.showModal()"
+        hx-on:close="this.remove()"
+        hx-on:cancel="this.remove()">
+  <h2>{{ strings.soulseek_download_asset_modal_title(asset, filename) }}</h2>
+  {% if asset_status %}
+    <p class="modal-status"
+       data-test="soulseek-download-lyrics-status">{{ strings.soulseek_downloads_asset_status(asset, asset_status) }}</p>
+  {% endif %}
+  <div class="modal-body">
+    {% if content %}
+      <pre class="soulseek-download-lyrics__content"
+           data-test="soulseek-download-lyrics-content">{{ content }}</pre>
+    {% else %}
+      <p class="soulseek-download-lyrics__empty"
+         data-test="soulseek-download-lyrics-empty">
+        {% if pending %}
+          {{ strings.soulseek_download_asset_pending(asset) }}
+        {% else %}
+          {{ strings.soulseek_download_asset_missing(asset) }}
+        {% endif %}
+      </p>
+    {% endif %}
+    <form method="dialog" class="modal-actions">
+      <button type="submit"
+              data-test="soulseek-download-lyrics-close">{{ strings.button_label("modal.close") }}</button>
+    </form>
+  </div>
+</dialog>

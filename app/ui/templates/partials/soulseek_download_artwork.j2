@@ -1,0 +1,29 @@
+{% import "partials/_strings.j2" as strings %}
+
+<dialog id="{{ modal_id }}"
+        data-role="modal"
+        data-test="soulseek-download-artwork-modal"
+        hx-on="htmx:afterSwap: this.showModal()"
+        hx-on:close="this.remove()"
+        hx-on:cancel="this.remove()">
+  <h2>{{ strings.soulseek_download_asset_modal_title(asset, filename) }}</h2>
+  {% if asset_status %}
+    <p class="modal-status"
+       data-test="soulseek-download-artwork-status">{{ strings.soulseek_downloads_asset_status(asset, asset_status) }}</p>
+  {% endif %}
+  <div class="modal-body">
+    {% if has_asset and image_url %}
+      <img src="{{ image_url }}"
+           alt="{{ strings.soulseek_download_artwork_alt(filename) }}"
+           loading="lazy"
+           data-test="soulseek-download-artwork-image" />
+    {% else %}
+      <p class="soulseek-download-artwork__empty"
+         data-test="soulseek-download-artwork-empty">{{ strings.soulseek_download_asset_missing(asset) }}</p>
+    {% endif %}
+    <form method="dialog" class="modal-actions">
+      <button type="submit"
+              data-test="soulseek-download-artwork-close">{{ strings.button_label("modal.close") }}</button>
+    </form>
+  </div>
+</dialog>

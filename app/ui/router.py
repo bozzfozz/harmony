@@ -14,11 +14,17 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.config import AppConfig
 from app.api.search import DEFAULT_SOURCES
 from app.api.spotify import _parse_multipart_file
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
-from app.dependencies import get_db, get_download_service, get_soulseek_client
+from app.dependencies import (
+    get_app_config,
+    get_db,
+    get_download_service,
+    get_soulseek_client,
+)
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
@@ -27,8 +33,15 @@ from app.routers.soulseek_router import (
     soulseek_remove_completed_downloads,
     soulseek_remove_completed_uploads,
     soulseek_requeue_download,
+    refresh_download_lyrics as api_refresh_download_lyrics,
+    refresh_download_metadata as api_refresh_download_metadata,
+    soulseek_download_artwork as api_soulseek_download_artwork,
+    soulseek_download_lyrics as api_soulseek_download_lyrics,
+    soulseek_download_metadata as api_soulseek_download_metadata,
+    soulseek_refresh_artwork as api_soulseek_refresh_artwork,
 )
 from app.schemas import SoulseekDownloadRequest
+from app.models import Download
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
 from app.ui.assets import asset_url
@@ -58,6 +71,9 @@ from app.ui.context import (
     build_search_results_context,
     build_soulseek_config_context,
     build_soulseek_downloads_context,
+    build_soulseek_download_artwork_modal_context,
+    build_soulseek_download_lyrics_modal_context,
+    build_soulseek_download_metadata_modal_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
@@ -191,6 +207,43 @@ def _parse_form_body(raw_body: bytes) -> dict[str, str]:
         payload = ""
     parsed = parse_qs(payload)
     return {key: (values[0].strip() if values else "") for key, values in parsed.items()}
+
+
+def _extract_download_refresh_params(
+    request: Request, values: Mapping[str, str]
+) -> tuple[int, int, bool]:
+    def _parse_int(
+        value: str | None,
+        *,
+        default: int,
+        minimum: int,
+        maximum: int,
+    ) -> int:
+        if value is None or not value.strip():
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return max(min(parsed, maximum), minimum)
+
+    limit_value = _parse_int(
+        values.get("limit") or request.query_params.get("limit"),
+        default=20,
+        minimum=1,
+        maximum=100,
+    )
+    offset_value = _parse_int(
+        values.get("offset") or request.query_params.get("offset"),
+        default=0,
+        minimum=0,
+        maximum=10_000,
+    )
+    scope_raw = (values.get("scope") or request.query_params.get("scope") or "").lower()
+    include_all = scope_raw in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+    return limit_value, offset_value, include_all
 
 
 async def _handle_backfill_action(
@@ -1732,6 +1785,416 @@ async def soulseek_downloads_fragment(
     return response
 
 
+@router.get(
+    "/soulseek/download/{download_id}/lyrics",
+    include_in_schema=False,
+    name="soulseek_download_lyrics_modal",
+)
+async def soulseek_download_lyrics_modal(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    event_name = "ui.fragment.soulseek.downloads.lyrics"
+    try:
+        with session_scope() as db_session:
+            download = db_session.get(Download, download_id)
+            if download is None:
+                log_event(
+                    logger,
+                    event_name,
+                    component="ui.router",
+                    status="error",
+                    role=session.role,
+                    error="not_found",
+                    download_id=download_id,
+                )
+                return _render_alert_fragment(
+                    request,
+                    "Download not found.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    retry_url=str(request.url),
+                    retry_target="#modal-root",
+                    retry_label_key="soulseek.retry",
+                )
+
+            api_response = api_soulseek_download_lyrics(
+                download_id=download_id,
+                request=request,
+                config=config,
+                session=db_session,
+            )
+
+            status_code = api_response.status_code
+            content: str | None = None
+            pending = status_code == status.HTTP_202_ACCEPTED
+            if status_code == status.HTTP_200_OK:
+                try:
+                    content = api_response.body.decode("utf-8")
+                except UnicodeDecodeError:
+                    content = api_response.body.decode("utf-8", "replace")
+            elif status_code not in {status.HTTP_202_ACCEPTED}:
+                log_event(
+                    logger,
+                    event_name,
+                    component="ui.router",
+                    status="error",
+                    role=session.role,
+                    error=str(status_code),
+                    download_id=download_id,
+                )
+                return _render_alert_fragment(
+                    request,
+                    "Unable to load lyrics for this download.",
+                    status_code=status_code,
+                    retry_url=str(request.url),
+                    retry_target="#modal-root",
+                    retry_label_key="soulseek.retry",
+                )
+
+            filename = download.filename or f"Download {download_id}"
+            asset_status = download.lyrics_status or ""
+            has_lyrics = bool(download.has_lyrics)
+
+        context = build_soulseek_download_lyrics_modal_context(
+            request,
+            download_id=download_id,
+            filename=filename,
+            asset_status=asset_status,
+            has_lyrics=has_lyrics,
+            content=content,
+            pending=pending,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Unable to load lyrics."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.lyrics")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load lyrics for this download.",
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_download_lyrics.j2",
+        context,
+    )
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+    )
+    return response
+
+
+@router.get(
+    "/soulseek/download/{download_id}/metadata",
+    include_in_schema=False,
+    name="soulseek_download_metadata_modal",
+)
+async def soulseek_download_metadata_modal(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    event_name = "ui.fragment.soulseek.downloads.metadata"
+    try:
+        with session_scope() as db_session:
+            download = db_session.get(Download, download_id)
+            if download is None:
+                log_event(
+                    logger,
+                    event_name,
+                    component="ui.router",
+                    status="error",
+                    role=session.role,
+                    error="not_found",
+                    download_id=download_id,
+                )
+                return _render_alert_fragment(
+                    request,
+                    "Download not found.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    retry_url=str(request.url),
+                    retry_target="#modal-root",
+                    retry_label_key="soulseek.retry",
+                )
+
+            metadata_response = api_soulseek_download_metadata(
+                download_id=download_id,
+                session=db_session,
+            )
+
+            metadata = {
+                "genre": metadata_response.genre,
+                "composer": metadata_response.composer,
+                "producer": metadata_response.producer,
+                "isrc": metadata_response.isrc,
+                "copyright": metadata_response.copyright,
+            }
+            filename = metadata_response.filename or (
+                download.filename or f"Download {download_id}"
+            )
+
+        context = build_soulseek_download_metadata_modal_context(
+            request,
+            download_id=download_id,
+            filename=filename,
+            metadata=metadata,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Unable to load metadata."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.metadata")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load download metadata.",
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_download_metadata.j2",
+        context,
+    )
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+    )
+    return response
+
+
+@router.get(
+    "/soulseek/download/{download_id}/artwork",
+    include_in_schema=False,
+    name="soulseek_download_artwork_modal",
+)
+async def soulseek_download_artwork_modal(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    event_name = "ui.fragment.soulseek.downloads.artwork"
+    try:
+        with session_scope() as db_session:
+            download = db_session.get(Download, download_id)
+            if download is None:
+                log_event(
+                    logger,
+                    event_name,
+                    component="ui.router",
+                    status="error",
+                    role=session.role,
+                    error="not_found",
+                    download_id=download_id,
+                )
+                return _render_alert_fragment(
+                    request,
+                    "Download not found.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    retry_url=str(request.url),
+                    retry_target="#modal-root",
+                    retry_label_key="soulseek.retry",
+                )
+
+            api_soulseek_download_artwork(
+                download_id=download_id,
+                request=request,
+                session=db_session,
+                config=config,
+            )
+            filename = download.filename or f"Download {download_id}"
+            asset_status = download.artwork_status or ""
+            has_artwork = bool(download.has_artwork)
+
+        try:
+            image_url = request.url_for("soulseek_download_artwork", download_id=str(download_id))
+        except Exception:  # pragma: no cover - fallback for tests
+            image_url = f"/soulseek/download/{download_id}/artwork"
+
+        context = build_soulseek_download_artwork_modal_context(
+            request,
+            download_id=download_id,
+            filename=filename,
+            asset_status=asset_status,
+            has_artwork=has_artwork,
+            image_url=image_url,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Unable to load artwork."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.artwork")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load artwork for this download.",
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
+        )
+
+    response = templates.TemplateResponse(
+        request,
+        "partials/soulseek_download_artwork.j2",
+        context,
+    )
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+    )
+    return response
+
+
 @router.post(
     "/soulseek/downloads/{download_id}/requeue",
     include_in_schema=False,
@@ -2003,6 +2466,333 @@ async def soulseek_download_cancel(
     )
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.post(
+    "/soulseek/download/{download_id}/lyrics/refresh",
+    include_in_schema=False,
+    name="soulseek_download_lyrics_refresh",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_download_lyrics_refresh(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit_value, offset_value, include_all = _extract_download_refresh_params(request, values)
+    event_name = "ui.fragment.soulseek.downloads.lyrics.refresh"
+
+    try:
+        with session_scope() as db_session:
+            await api_refresh_download_lyrics(
+                download_id=download_id,
+                request=request,
+                session=db_session,
+                config=config,
+            )
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to refresh lyrics."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.lyrics.refresh")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to refresh lyrics for this download.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+        session=session,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+        count=len(context["fragment"].table.rows),
+    )
+    return response
+
+
+@router.post(
+    "/soulseek/download/{download_id}/metadata/refresh",
+    include_in_schema=False,
+    name="soulseek_download_metadata_refresh",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_download_metadata_refresh(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit_value, offset_value, include_all = _extract_download_refresh_params(request, values)
+    event_name = "ui.fragment.soulseek.downloads.metadata.refresh"
+
+    try:
+        with session_scope() as db_session:
+            await api_refresh_download_metadata(
+                download_id=download_id,
+                request=request,
+                session=db_session,
+                config=config,
+            )
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to refresh metadata."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.metadata.refresh")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to refresh metadata for this download.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+        session=session,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+        count=len(context["fragment"].table.rows),
+    )
+    return response
+
+
+@router.post(
+    "/soulseek/download/{download_id}/artwork/refresh",
+    include_in_schema=False,
+    name="soulseek_download_artwork_refresh",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_download_artwork_refresh(
+    request: Request,
+    download_id: int,
+    session: UiSession = Depends(require_admin_with_feature("soulseek")),
+    service: DownloadsUiService = Depends(get_downloads_ui_service),
+    config: AppConfig = Depends(get_app_config),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit_value, offset_value, include_all = _extract_download_refresh_params(request, values)
+    event_name = "ui.fragment.soulseek.downloads.artwork.refresh"
+
+    try:
+        with session_scope() as db_session:
+            await api_soulseek_refresh_artwork(
+                download_id=download_id,
+                request=request,
+                session=db_session,
+                config=config,
+            )
+        page = service.list_downloads(
+            limit=limit_value,
+            offset=offset_value,
+            include_all=include_all,
+            status_filter=None,
+        )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Failed to refresh artwork."
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            detail,
+            status_code=exc.status_code,
+        )
+    except AppError as exc:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.soulseek.downloads.artwork.refresh")
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to refresh artwork for this download.",
+        )
+
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_soulseek_downloads_context(
+        request,
+        page=page,
+        csrf_token=csrf_token,
+        include_all=include_all,
+        session=session,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "partials/downloads_table.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        download_id=download_id,
+        scope="all" if include_all else "active",
+        limit=limit_value,
+        offset=offset_value,
+        count=len(context["fragment"].table.rows),
+    )
     return response
 
 
