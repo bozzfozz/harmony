@@ -4,6 +4,7 @@
 {% macro _render_primary_nav(items, swap_oob) -%}
   {% if items %}
     <nav aria-label="Primary"
+         role="navigation"
          id="primary-navigation"
          {% if swap_oob %}hx-swap-oob="{{ swap_oob }}"{% endif %}>
       {% for item in items %}
