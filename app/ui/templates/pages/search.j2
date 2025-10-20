@@ -69,7 +69,8 @@
          role="region"
          aria-live="polite"
          aria-labelledby="{{ results_fragment.identifier }}-heading"
-         data-fragment="search-results">
+         data-fragment="search-results"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.search_results_placeholder() }}</p>
     </div>
   </section>
@@ -87,7 +88,8 @@
            hx-get="{{ queue_fragment.url }}"
            hx-trigger="{{ queue_fragment.trigger }}"
            hx-target="{{ queue_fragment.target }}"
-           hx-swap="{{ queue_fragment.swap }}">
+           hx-swap="{{ queue_fragment.swap }}"
+           hx-on="htmx:responseError:handleHtmxError(event)">
         <p class="async-fragment__placeholder">{{ strings.fragment_loading(queue_fragment.loading_key) }}</p>
       </div>
     </section>

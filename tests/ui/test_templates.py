@@ -499,6 +499,7 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'data-fragment="spotify-free-ingest"' in html
     assert 'data-fragment="spotify-backfill"' in html
     assert 'class="async-fragment"' in html
+    assert 'hx-on="htmx:responseError:handleHtmxError(event)"' in html
     assert 'aria-live="polite"' in html
     assert "Checking Spotify connection…" in html
     assert "Loading Spotify account details…" in html
@@ -1384,6 +1385,8 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert "alert alert--warning" in html
     assert "Check status" in html
     assert '<meta name="csrf-token" content="token" />' in html
+    assert 'data-role="alert-region"' in html
+    assert 'id="ui-alert-region"' in html
 
 
 def test_base_layout_uses_local_htmx_when_cdn_disabled() -> None:
@@ -1399,6 +1402,8 @@ def test_base_layout_uses_local_htmx_when_cdn_disabled() -> None:
     assert "https://unpkg.com/htmx.org" not in html
     assert f'src="{local_asset}"' in html
     assert "data-fallback" not in html
+    assert f'src="{asset_url("js/ui-bootstrap.js")}"' in html
+    assert f'src="{asset_url("js/htmx-error-handler.js")}"' in html
 
 
 def test_base_layout_uses_cdn_htmx_when_enabled() -> None:
@@ -1418,6 +1423,7 @@ def test_base_layout_uses_cdn_htmx_when_enabled() -> None:
     )
     assert 'crossorigin="anonymous"' in html
     assert f'data-fallback src="{fallback_asset}"' in html
+    assert f'src="{asset_url("js/htmx-error-handler.js")}"' in html
 
 
 def test_primary_nav_renders_soulseek_success_badge() -> None:

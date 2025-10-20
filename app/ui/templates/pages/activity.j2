@@ -33,7 +33,8 @@
          hx-get="{{ activity_fragment.url }}"
          hx-trigger="{{ activity_fragment.trigger }}"
          hx-target="{{ activity_fragment.target }}"
-         hx-swap="{{ activity_fragment.swap }}">
+         hx-swap="{{ activity_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(activity_fragment.loading_key) }}
       </p>
