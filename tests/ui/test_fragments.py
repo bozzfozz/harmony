@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -8,13 +9,10 @@ import re
 from types import SimpleNamespace
 from typing import Any, Sequence
 
-import asyncio
-
-import pytest
-
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
@@ -38,10 +36,10 @@ from app.ui.services import (
     SoulseekUserDirectoryListing,
     SoulseekUserFileEntry,
     SoulseekUserProfile,
-    SpotifyArtistRow,
     SpotifyAccountSummary,
-    SpotifyBackfillSnapshot,
+    SpotifyArtistRow,
     SpotifyBackfillOption,
+    SpotifyBackfillSnapshot,
     SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -57,10 +55,10 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
-    SpotifyTrackDetail,
+    SpotifyStatus,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
-    SpotifyStatus,
+    SpotifyTrackDetail,
     WatchlistRow,
     WatchlistTable,
     get_activity_ui_service,
@@ -401,6 +399,7 @@ class _StubSpotifyService:
             can_run=True,
             default_max_items=100,
             expand_playlists=True,
+            include_cached_results=True,
             options=(
                 SpotifyBackfillOption(
                     name="expand_playlists",
@@ -437,7 +436,7 @@ class _StubSpotifyService:
         self.manual_calls: list[str] = []
         self.backfill_snapshot_calls: list[tuple[str, str | None, Mapping[str, object] | None]] = []
         self.backfill_status_calls: list[str | None] = []
-        self.run_calls: list[tuple[int | None, bool]] = []
+        self.run_calls: list[tuple[int | None, bool, bool]] = []
         self.pause_backfill_calls: list[str] = []
         self.resume_backfill_calls: list[str] = []
         self.cancel_backfill_calls: list[str] = []
@@ -663,10 +662,16 @@ class _StubSpotifyService:
             raise self.start_exception
         return self.start_url
 
-    async def run_backfill(self, *, max_items: int | None, expand_playlists: bool) -> str:
+    async def run_backfill(
+        self,
+        *,
+        max_items: int | None,
+        expand_playlists: bool,
+        include_cached_results: bool,
+    ) -> str:
         if self.run_backfill_exception:
             raise self.run_backfill_exception
-        self.run_calls.append((max_items, expand_playlists))
+        self.run_calls.append((max_items, expand_playlists, include_cached_results))
         return self.run_backfill_job_id
 
     def save_tracks(self, track_ids: Sequence[str]) -> int:
@@ -759,6 +764,7 @@ class _StubSpotifyService:
             "duration_ms": 1000,
             "error": None,
             "expand_playlists": True,
+            "include_cached_results": True,
         }
 
     async def submit_free_ingest(
@@ -4313,6 +4319,7 @@ def test_spotify_backfill_fragment_includes_timeline(monkeypatch) -> None:
             expanded_playlists=1,
             expanded_tracks=8,
             expand_playlists=False,
+            include_cached_results=False,
             duration_ms=1456,
             error=None,
             created_at=datetime(2023, 8, 1, 9, 0, tzinfo=UTC),
@@ -4352,6 +4359,7 @@ def test_spotify_backfill_run_returns_success_alert(monkeypatch) -> None:
         "duration_ms": None,
         "error": None,
         "expand_playlists": True,
+        "include_cached_results": True,
     }
     app.dependency_overrides[get_spotify_ui_service] = lambda: stub
     try:
@@ -4360,13 +4368,56 @@ def test_spotify_backfill_run_returns_success_alert(monkeypatch) -> None:
             headers = _csrf_headers(client)
             response = client.post(
                 "/ui/spotify/backfill/run",
-                data={"max_items": "25", "expand_playlists": "1"},
+                data={
+                    "max_items": "25",
+                    "expand_playlists": "1",
+                    "include_cached_results": "1",
+                },
                 headers=headers,
             )
             _assert_html_response(response)
             assert "Backfill job job-1 enqueued." in response.text
-            assert stub.run_calls == [(25, True)]
+            assert stub.run_calls == [(25, True, True)]
             assert stub.backfill_status_calls[-1] == "job-1"
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_backfill_run_can_disable_cache(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.backfill_status_payload = {
+        "id": "job-9",
+        "state": "queued",
+        "requested": 5,
+        "processed": 0,
+        "matched": 0,
+        "cache_hits": 0,
+        "cache_misses": 0,
+        "expanded_playlists": 0,
+        "expanded_tracks": 0,
+        "duration_ms": None,
+        "error": None,
+        "expand_playlists": True,
+        "include_cached_results": False,
+    }
+    stub.run_backfill_job_id = "job-9"
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/backfill/run",
+                data={
+                    "max_items": "10",
+                    "expand_playlists": "1",
+                    "include_cached_results": "0",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert "Backfill job job-9 enqueued." in response.text
+            assert stub.run_calls == [(10, True, False)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

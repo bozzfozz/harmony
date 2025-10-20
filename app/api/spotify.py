@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
+from datetime import datetime
 import re
 import secrets
 import time
-from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -382,6 +382,7 @@ def get_recommendations(
 class BackfillRunRequest(BaseModel):
     max_items: int | None = Field(default=None, ge=1, le=10_000)
     expand_playlists: bool = True
+    include_cached_results: bool = True
 
 
 class BackfillRunResponse(BaseModel):
@@ -405,6 +406,7 @@ class BackfillJobResponse(BaseModel):
     state: str
     counts: BackfillJobCounts
     expand_playlists: bool
+    include_cached_results: bool
     duration_ms: int | None = None
     error: str | None = None
 
@@ -420,6 +422,7 @@ class BackfillJobHistoryItem(BaseModel):
     expanded_playlists: int
     expanded_tracks: int
     expand_playlists: bool
+    include_cached_results: bool
     duration_ms: int | None = None
     error: str | None = None
     created_at: datetime
@@ -447,6 +450,7 @@ async def run_backfill(
             service,
             max_items=payload.max_items,
             expand_playlists=payload.expand_playlists,
+            include_cached_results=payload.include_cached_results,
         )
     except PermissionError:
         raise HTTPException(
@@ -486,6 +490,7 @@ async def get_backfill_job(
         state=status_payload.state,
         counts=counts,
         expand_playlists=status_payload.expand_playlists,
+        include_cached_results=status_payload.include_cached_results,
         duration_ms=status_payload.duration_ms,
         error=status_payload.error,
     )
@@ -509,6 +514,7 @@ async def list_backfill_jobs(
             expanded_playlists=record.expanded_playlists,
             expanded_tracks=record.expanded_tracks,
             expand_playlists=record.expand_playlists,
+            include_cached_results=record.include_cached_results,
             duration_ms=record.duration_ms,
             error=record.error,
             created_at=record.created_at,

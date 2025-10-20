@@ -595,6 +595,7 @@ class BackfillJob(Base):
     expanded_playlists = Column(Integer, nullable=False, default=0)
     expanded_tracks = Column(Integer, nullable=False, default=0)
     expand_playlists = Column(Boolean, nullable=False, default=False)
+    include_cached_results = Column(Boolean, nullable=True, default=True)
     duration_ms = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

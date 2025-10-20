@@ -613,10 +613,18 @@ class SpotifyDomainService:
         return worker
 
     def create_backfill_job(
-        self, *, max_items: int | None, expand_playlists: bool
+        self,
+        *,
+        max_items: int | None,
+        expand_playlists: bool,
+        include_cached_results: bool,
     ) -> BackfillJobSpec:
         service = self.ensure_backfill_service()
-        return service.create_job(max_items=max_items, expand_playlists=expand_playlists)
+        return service.create_job(
+            max_items=max_items,
+            expand_playlists=expand_playlists,
+            include_cached_results=include_cached_results,
+        )
 
     def get_backfill_status(self, job_id: str) -> BackfillJobStatus | None:
         service = self.ensure_backfill_service()

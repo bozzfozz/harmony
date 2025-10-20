@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from time import perf_counter
 from typing import Any, Final
 
@@ -20,9 +20,10 @@ from app.dependencies import (
     get_soulseek_client,
     get_spotify_client,
 )
+from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
-from app.errors import AppError
+from app.services.backfill_service import BackfillJobRecord
 from app.services.free_ingest_service import (
     IngestAccepted,
     IngestSkipped,
@@ -32,14 +33,13 @@ from app.services.free_ingest_service import (
     PlaylistValidationError,
 )
 from app.services.oauth_service import OAuthManualRequest, OAuthManualResponse, OAuthService
-from app.services.backfill_service import BackfillJobRecord
 from app.services.spotify_domain_service import (
     BackfillJobStatus,
     SpotifyDomainService,
     SpotifyServiceStatus,
 )
-from app.utils.settings_store import delete_setting, read_setting, write_setting
 from app.ui.formatters import format_datetime_display
+from app.utils.settings_store import delete_setting, read_setting, write_setting
 
 logger = get_logger(__name__)
 
@@ -207,6 +207,7 @@ class SpotifyBackfillSnapshot:
     can_run: bool
     default_max_items: int | None
     expand_playlists: bool
+    include_cached_results: bool
     options: tuple["SpotifyBackfillOption", ...]
     last_job_id: str | None
     state: str | None
@@ -245,6 +246,7 @@ class SpotifyBackfillTimelineEntry:
     expanded_playlists: int
     expanded_tracks: int
     expand_playlists: bool
+    include_cached_results: bool
     duration_ms: int | None
     error: str | None
     created_at: datetime
@@ -1553,17 +1555,29 @@ class SpotifyUiService:
             return None
         return self._map_job_status(status)
 
-    async def run_backfill(self, *, max_items: int | None, expand_playlists: bool) -> str:
+    async def run_backfill(
+        self,
+        *,
+        max_items: int | None,
+        expand_playlists: bool,
+        include_cached_results: bool,
+    ) -> str:
         if not self._spotify.is_authenticated():
             raise PermissionError("Spotify authentication required")
         job = self._spotify.create_backfill_job(
             max_items=max_items,
             expand_playlists=expand_playlists,
+            include_cached_results=include_cached_results,
         )
         await self._spotify.enqueue_backfill(job)
         logger.info(
             "spotify.ui.backfill.run",
-            extra={"job_id": job.id, "limit": job.limit, "expand": expand_playlists},
+            extra={
+                "job_id": job.id,
+                "limit": job.limit,
+                "expand": expand_playlists,
+                "include_cached": include_cached_results,
+            },
         )
         return job.id
 
@@ -1903,6 +1917,7 @@ class SpotifyUiService:
                     expanded_playlists=record.expanded_playlists,
                     expanded_tracks=record.expanded_tracks,
                     expand_playlists=record.expand_playlists,
+                    include_cached_results=record.include_cached_results,
                     duration_ms=record.duration_ms,
                     error=record.error,
                     created_at=record.created_at,
@@ -1928,6 +1943,13 @@ class SpotifyUiService:
         raw_default = getattr(self._config.spotify, "backfill_max_items", None)
         default_max = int(raw_default) if raw_default else None
         expand = bool(status_payload.get("expand_playlists")) if status_payload else True
+        include_cached = True
+        if status_payload is not None:
+            raw_include = status_payload.get("include_cached_results")
+            if raw_include is None:
+                include_cached = True
+            else:
+                include_cached = bool(raw_include)
         requested = int(status_payload.get("requested", 0)) if status_payload else None
         processed = int(status_payload.get("processed", 0)) if status_payload else None
         matched = int(status_payload.get("matched", 0)) if status_payload else None
@@ -1950,7 +1972,7 @@ class SpotifyUiService:
                 name="include_cached_results",
                 label_key="spotify.backfill.options.include_cached",
                 description_key="spotify.backfill.options.include_cached_hint",
-                checked=True,
+                checked=include_cached,
             ),
         )
         can_pause = state in {"running", "queued"}
@@ -1961,6 +1983,7 @@ class SpotifyUiService:
             can_run=self._spotify.is_authenticated(),
             default_max_items=default_max,
             expand_playlists=expand,
+            include_cached_results=include_cached,
             options=options,
             last_job_id=status_payload.get("id") if status_payload else None,
             state=state,
@@ -1997,6 +2020,7 @@ class SpotifyUiService:
             "duration_ms": status.duration_ms,
             "error": status.error,
             "expand_playlists": status.expand_playlists,
+            "include_cached_results": status.include_cached_results,
         }
 
 

@@ -35,17 +35,17 @@ from app.ui.context import (
     build_jobs_page_context,
     build_login_page_context,
     build_operations_page_context,
+    build_search_page_context,
     build_settings_artist_preferences_fragment_context,
     build_settings_form_fragment_context,
     build_settings_history_fragment_context,
     build_settings_page_context,
-    build_search_page_context,
-    build_soulseek_navigation_badge,
+    build_soulseek_discography_jobs_context,
+    build_soulseek_discography_modal_context,
     build_soulseek_download_artwork_modal_context,
     build_soulseek_download_lyrics_modal_context,
     build_soulseek_download_metadata_modal_context,
-    build_soulseek_discography_jobs_context,
-    build_soulseek_discography_modal_context,
+    build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_user_directory_context,
@@ -68,6 +68,14 @@ from app.ui.context import (
 )
 from app.ui.router import templates
 from app.ui.services import (
+    ArtistPreferenceRow,
+    SettingRow,
+    SettingsHistoryRow,
+    SettingsOverview,
+    SoulseekUserDirectoryEntry,
+    SoulseekUserDirectoryListing,
+    SoulseekUserFileEntry,
+    SoulseekUserProfile,
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillOption,
@@ -90,15 +98,7 @@ from app.ui.services import (
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
     SpotifyTrackDetail,
-    SoulseekUserDirectoryEntry,
-    SoulseekUserDirectoryListing,
-    SoulseekUserFileEntry,
-    SoulseekUserProfile,
     WatchlistRow,
-    ArtistPreferenceRow,
-    SettingRow,
-    SettingsHistoryRow,
-    SettingsOverview,
 )
 from app.ui.session import UiFeatures, UiSession
 
@@ -1734,6 +1734,7 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
         can_run=True,
         default_max_items=500,
         expand_playlists=True,
+        include_cached_results=True,
         options=(
             SpotifyBackfillOption(
                 name="expand_playlists",
@@ -1775,6 +1776,7 @@ def test_spotify_backfill_partial_renders_snapshot() -> None:
             expanded_playlists=5,
             expanded_tracks=40,
             expand_playlists=True,
+            include_cached_results=True,
             duration_ms=2345,
             error=None,
             created_at=datetime(2023, 9, 2, 10, 30),
