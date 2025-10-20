@@ -587,6 +587,28 @@ def _safe_url_for(request: Request, name: str, fallback: str) -> str:
         return fallback
 
 
+def _download_action_base_url(
+    request: Request, name: str, fallback_template: str
+) -> str:
+    try:
+        resolved = URL(str(request.url_for(name, download_id="0")))
+    except Exception:  # pragma: no cover - fallback for tests
+        return fallback_template
+
+    segments = [segment for segment in resolved.path.split("/") if segment]
+    for index, segment in enumerate(segments):
+        if segment == "0":
+            segments[index] = "{download_id}"
+            break
+    else:
+        return fallback_template
+
+    path = "/" + "/".join(segments)
+    if resolved.query:
+        return f"{path}?{resolved.query}"
+    return path
+
+
 def _build_search_form(default_sources: Sequence[str]) -> FormDefinition:
     default_source_set = {source for source in default_sources}
     ordered_sources = list(_SEARCH_SOURCE_LABELS.keys())
@@ -2424,6 +2446,40 @@ def build_soulseek_downloads_context(
     retryable_states = set(SOULSEEK_RETRYABLE_STATES)
     target = "#hx-soulseek-downloads"
     can_manage_downloads = session.allows("admin")
+    modal_target = "#modal-root"
+    modal_swap = "innerHTML"
+    action_swap = "outerHTML"
+
+    lyrics_view_base = _download_action_base_url(
+        request,
+        "soulseek_download_lyrics",
+        "/ui/soulseek/download/{download_id}/lyrics",
+    )
+    lyrics_refresh_base = _download_action_base_url(
+        request,
+        "refresh_download_lyrics",
+        "/ui/soulseek/download/{download_id}/lyrics/refresh",
+    )
+    metadata_view_base = _download_action_base_url(
+        request,
+        "soulseek_download_metadata",
+        "/ui/soulseek/download/{download_id}/metadata",
+    )
+    metadata_refresh_base = _download_action_base_url(
+        request,
+        "refresh_download_metadata",
+        "/ui/soulseek/download/{download_id}/metadata/refresh",
+    )
+    artwork_view_base = _download_action_base_url(
+        request,
+        "soulseek_download_artwork",
+        "/ui/soulseek/download/{download_id}/artwork",
+    )
+    artwork_refresh_base = _download_action_base_url(
+        request,
+        "soulseek_refresh_artwork",
+        "/ui/soulseek/download/{download_id}/artwork/refresh",
+    )
 
     rows: list[TableRow] = []
     for entry in page.items:
@@ -2440,6 +2496,49 @@ def build_soulseek_downloads_context(
         except Exception:  # pragma: no cover - fallback for tests
             cancel_url = f"/ui/soulseek/download/{entry.identifier}"
 
+        try:
+            lyrics_view_url = request.url_for(
+                "soulseek_download_lyrics", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            lyrics_view_url = f"/ui/soulseek/download/{entry.identifier}/lyrics"
+        try:
+            lyrics_refresh_url = request.url_for(
+                "refresh_download_lyrics", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            lyrics_refresh_url = f"/ui/soulseek/download/{entry.identifier}/lyrics/refresh"
+
+        try:
+            metadata_view_url = request.url_for(
+                "soulseek_download_metadata", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            metadata_view_url = f"/ui/soulseek/download/{entry.identifier}/metadata"
+        try:
+            metadata_refresh_url = request.url_for(
+                "refresh_download_metadata", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            metadata_refresh_url = (
+                f"/ui/soulseek/download/{entry.identifier}/metadata/refresh"
+            )
+
+        try:
+            artwork_view_url = request.url_for(
+                "soulseek_download_artwork", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            artwork_view_url = f"/ui/soulseek/download/{entry.identifier}/artwork"
+        try:
+            artwork_refresh_url = request.url_for(
+                "soulseek_refresh_artwork", download_id=str(entry.identifier)
+            )
+        except Exception:  # pragma: no cover - fallback for tests
+            artwork_refresh_url = (
+                f"/ui/soulseek/download/{entry.identifier}/artwork/refresh"
+            )
+
         hidden_fields = {
             "csrftoken": csrf_token,
             "scope": scope_value,
@@ -2447,6 +2546,80 @@ def build_soulseek_downloads_context(
             "offset": str(page.offset),
         }
         can_requeue = (entry.status or "").lower() in retryable_states
+        lyrics_status = (entry.lyrics_status or "").strip().lower()
+        artwork_status = (entry.artwork_status or "").strip().lower()
+        lyrics_pending = lyrics_status in {"pending", "running", "processing", "queued"}
+        artwork_pending = artwork_status in {"pending", "running", "processing", "queued"}
+        lyrics_view_disabled = not (entry.has_lyrics and entry.lyrics_path)
+        lyrics_refresh_disabled = (not can_manage_downloads) or lyrics_pending
+        metadata_view_disabled = entry.organized_path is None
+        metadata_refresh_disabled = not can_manage_downloads
+        artwork_view_disabled = not (entry.has_artwork and entry.artwork_path)
+        artwork_refresh_disabled = (not can_manage_downloads) or artwork_pending
+
+        lyrics_view_form = TableCellForm(
+            action=lyrics_view_url,
+            method="get",
+            submit_label_key="soulseek.downloads.lyrics.view",
+            hx_target=modal_target,
+            hx_swap=modal_swap,
+            hx_method="get",
+            disabled=lyrics_view_disabled,
+            test_id=f"soulseek-download-lyrics-view-{entry.identifier}",
+        )
+        lyrics_refresh_form = TableCellForm(
+            action=lyrics_refresh_url,
+            method="post",
+            submit_label_key="soulseek.downloads.lyrics.refresh",
+            hidden_fields=hidden_fields,
+            hx_target=target,
+            hx_swap=action_swap,
+            disabled=lyrics_refresh_disabled,
+            test_id=f"soulseek-download-lyrics-refresh-{entry.identifier}",
+        )
+
+        metadata_view_form = TableCellForm(
+            action=metadata_view_url,
+            method="get",
+            submit_label_key="soulseek.downloads.metadata.view",
+            hx_target=modal_target,
+            hx_swap=modal_swap,
+            hx_method="get",
+            disabled=metadata_view_disabled,
+            test_id=f"soulseek-download-metadata-view-{entry.identifier}",
+        )
+        metadata_refresh_form = TableCellForm(
+            action=metadata_refresh_url,
+            method="post",
+            submit_label_key="soulseek.downloads.metadata.refresh",
+            hidden_fields=hidden_fields,
+            hx_target=target,
+            hx_swap=action_swap,
+            disabled=metadata_refresh_disabled,
+            test_id=f"soulseek-download-metadata-refresh-{entry.identifier}",
+        )
+
+        artwork_view_form = TableCellForm(
+            action=artwork_view_url,
+            method="get",
+            submit_label_key="soulseek.downloads.artwork.view",
+            hx_target=modal_target,
+            hx_swap=modal_swap,
+            hx_method="get",
+            disabled=artwork_view_disabled,
+            test_id=f"soulseek-download-artwork-view-{entry.identifier}",
+        )
+        artwork_refresh_form = TableCellForm(
+            action=artwork_refresh_url,
+            method="post",
+            submit_label_key="soulseek.downloads.artwork.refresh",
+            hidden_fields=hidden_fields,
+            hx_target=target,
+            hx_swap=action_swap,
+            disabled=artwork_refresh_disabled,
+            test_id=f"soulseek-download-artwork-refresh-{entry.identifier}",
+        )
+
         rows.append(
             TableRow(
                 cells=(
@@ -2461,13 +2634,25 @@ def build_soulseek_downloads_context(
                     TableCell(text=entry.last_error or ""),
                     TableCell(text=_summarize_live_metadata(entry.live_queue)),
                     TableCell(
+                        forms=(lyrics_view_form, lyrics_refresh_form),
+                        test_id=f"soulseek-download-lyrics-actions-{entry.identifier}",
+                    ),
+                    TableCell(
+                        forms=(metadata_view_form, metadata_refresh_form),
+                        test_id=f"soulseek-download-metadata-actions-{entry.identifier}",
+                    ),
+                    TableCell(
+                        forms=(artwork_view_form, artwork_refresh_form),
+                        test_id=f"soulseek-download-artwork-actions-{entry.identifier}",
+                    ),
+                    TableCell(
                         form=TableCellForm(
                             action=requeue_url,
                             method="post",
                             submit_label_key="soulseek.downloads.requeue",
                             hidden_fields=hidden_fields,
                             hx_target=target,
-                            hx_swap="outerHTML",
+                            hx_swap=action_swap,
                             disabled=not (can_manage_downloads and can_requeue),
                             test_id="soulseek-download-requeue",
                         )
@@ -2479,7 +2664,7 @@ def build_soulseek_downloads_context(
                             submit_label_key="soulseek.downloads.cancel",
                             hidden_fields=hidden_fields,
                             hx_target=target,
-                            hx_swap="outerHTML",
+                            hx_swap=action_swap,
                             hx_method="delete",
                             disabled=not can_manage_downloads,
                             test_id="soulseek-download-cancel",
@@ -2503,6 +2688,9 @@ def build_soulseek_downloads_context(
             "soulseek.downloads.next_retry",
             "soulseek.downloads.last_error",
             "soulseek.downloads.live",
+            "soulseek.downloads.lyrics",
+            "soulseek.downloads.metadata",
+            "soulseek.downloads.artwork",
             "soulseek.downloads.requeue",
             "soulseek.downloads.cancel",
         ),
@@ -2557,6 +2745,16 @@ def build_soulseek_downloads_context(
             "offset": str(page.offset),
             "scope": scope_value,
             "refresh-url": refresh_url,
+            "modal-target": modal_target,
+            "modal-swap": modal_swap,
+            "action-target": target,
+            "action-swap": action_swap,
+            "lyrics-view-base": lyrics_view_base,
+            "lyrics-refresh-base": lyrics_refresh_base,
+            "metadata-view-base": metadata_view_base,
+            "metadata-refresh-base": metadata_refresh_base,
+            "artwork-view-base": artwork_view_base,
+            "artwork-refresh-base": artwork_refresh_base,
         },
         pagination=pagination,
     )

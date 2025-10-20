@@ -208,6 +208,10 @@ class _RecordingDownloadsService:
                 username=None,
                 created_at=None,
                 updated_at=None,
+                lyrics_status=None,
+                has_lyrics=False,
+                artwork_status=None,
+                has_artwork=False,
             )
         return new_row
 
@@ -1287,6 +1291,15 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
                 next_retry_at=datetime(2024, 1, 1, 12, 0, 0),
                 last_error="network timeout",
                 live_queue={"status": "waiting", "eta": "30s"},
+                lyrics_status="done",
+                has_lyrics=True,
+                lyrics_path="/downloads/retry.lrc",
+                artwork_status="done",
+                has_artwork=True,
+                artwork_path="/downloads/retry.jpg",
+                organized_path="/library/retry.flac",
+                spotify_track_id="track-42",
+                spotify_album_id="album-42",
             )
         ],
         limit=20,
@@ -1311,15 +1324,33 @@ def test_soulseek_downloads_fragment_success(monkeypatch) -> None:
             assert "Active downloads" in html
             assert "hx-soulseek-downloads" in html
             assert 'data-scope="active"' in html
-            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
-            assert (
-                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=20"' in html
-            )
+            assert 'hx-get="/ui/soulseek/downloads?limit=20&offset=20"' in html
+            assert 'hx-push-url="/ui/soulseek/downloads?limit=20&offset=20"' in html
             assert "Remove completed downloads" in html
-            assert 'hx-delete="http://testserver/ui/soulseek/downloads/cleanup"' in html
+            assert 'hx-delete="/ui/soulseek/downloads/cleanup"' in html
+            assert 'data-modal-target="#modal-root"' in html
+            assert 'data-action-target="#hx-soulseek-downloads"' in html
+
+            def _attr_value(name: str) -> str:
+                match = re.search(rf'data-{name}="([^"]+)"', html)
+                assert match is not None, name
+                return match.group(1)
+
+            assert "soulseek/download" in _attr_value("lyrics-view-base")
+            assert "soulseek/download" in _attr_value("lyrics-refresh-base")
+            assert "soulseek/download" in _attr_value("metadata-view-base")
+            assert "soulseek/download" in _attr_value("metadata-refresh-base")
+            assert "soulseek/download" in _attr_value("artwork-view-base")
+            assert "soulseek/download" in _attr_value("artwork-refresh-base")
             _assert_button_enabled(html, "soulseek-download-requeue")
             _assert_button_enabled(html, "soulseek-download-cancel")
             _assert_button_enabled(html, "soulseek-downloads-cleanup")
+            _assert_button_enabled(html, "soulseek-download-lyrics-view-42")
+            _assert_button_enabled(html, "soulseek-download-lyrics-refresh-42")
+            _assert_button_enabled(html, "soulseek-download-metadata-view-42")
+            _assert_button_enabled(html, "soulseek-download-metadata-refresh-42")
+            _assert_button_enabled(html, "soulseek-download-artwork-view-42")
+            _assert_button_enabled(html, "soulseek-download-artwork-refresh-42")
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1336,6 +1367,10 @@ def test_soulseek_downloads_fragment_operator_disables_actions(monkeypatch) -> N
                 username=None,
                 created_at=None,
                 updated_at=None,
+                lyrics_status="pending",
+                has_lyrics=False,
+                artwork_status="pending",
+                has_artwork=False,
             )
         ],
         limit=20,
@@ -1355,6 +1390,12 @@ def test_soulseek_downloads_fragment_operator_disables_actions(monkeypatch) -> N
             _assert_button_disabled(html, "soulseek-download-requeue")
             _assert_button_disabled(html, "soulseek-download-cancel")
             _assert_button_disabled(html, "soulseek-downloads-cleanup")
+            _assert_button_disabled(html, "soulseek-download-lyrics-view-7")
+            _assert_button_disabled(html, "soulseek-download-lyrics-refresh-7")
+            _assert_button_disabled(html, "soulseek-download-metadata-view-7")
+            _assert_button_disabled(html, "soulseek-download-metadata-refresh-7")
+            _assert_button_disabled(html, "soulseek-download-artwork-view-7")
+            _assert_button_disabled(html, "soulseek-download-artwork-refresh-7")
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1410,12 +1451,10 @@ def test_soulseek_downloads_fragment_pagination_links(monkeypatch) -> None:
             response = client.get("/ui/soulseek/downloads", headers=headers)
             _assert_html_response(response)
             html = response.text
-            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
-            assert 'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=0"' in html
-            assert 'hx-get="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
-            assert (
-                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=20&offset=30"' in html
-            )
+            assert 'hx-get="/ui/soulseek/downloads?limit=20&offset=0"' in html
+            assert 'hx-push-url="/ui/soulseek/downloads?limit=20&offset=0"' in html
+            assert 'hx-get="/ui/soulseek/downloads?limit=20&offset=30"' in html
+            assert 'hx-push-url="/ui/soulseek/downloads?limit=20&offset=30"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -1438,13 +1477,8 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
             assert "All downloads" in html
             assert 'data-scope="all"' in html
             assert "No Soulseek downloads" in html
-            assert (
-                'hx-get="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
-            )
-            assert (
-                'hx-push-url="http://testserver/ui/soulseek/downloads?limit=50&offset=50&all=1"'
-                in html
-            )
+            assert 'hx-get="/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
+            assert 'hx-push-url="/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 

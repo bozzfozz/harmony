@@ -32,6 +32,15 @@ class DownloadRow:
     next_retry_at: datetime | None = None
     last_error: str | None = None
     live_queue: Mapping[str, Any] | None = None
+    organized_path: str | None = None
+    lyrics_status: str | None = None
+    has_lyrics: bool | None = None
+    lyrics_path: str | None = None
+    artwork_status: str | None = None
+    has_artwork: bool | None = None
+    artwork_path: str | None = None
+    spotify_track_id: str | None = None
+    spotify_album_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -136,6 +145,15 @@ class DownloadsUiService:
             next_retry_at=entry.next_retry_at,
             last_error=entry.last_error,
             live_queue=live_metadata,
+            organized_path=entry.organized_path,
+            lyrics_status=entry.lyrics_status,
+            has_lyrics=entry.has_lyrics,
+            lyrics_path=entry.lyrics_path,
+            artwork_status=entry.artwork_status,
+            has_artwork=entry.has_artwork,
+            artwork_path=entry.artwork_path,
+            spotify_track_id=entry.spotify_track_id,
+            spotify_album_id=entry.spotify_album_id,
         )
 
 
