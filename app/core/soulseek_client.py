@@ -177,12 +177,38 @@ class SoulseekClient:
         *,
         min_bitrate: int | None = None,
         format_priority: Sequence[str] | None = None,
+        max_results: int | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"searchText": query, "filterResponses": True}
         if min_bitrate is not None:
             payload["minBitrate"] = int(min_bitrate)
-        if format_priority:
-            payload["preferredFormats"] = list(format_priority)
+
+        preferred_formats = (
+            tuple(format_priority)
+            if format_priority is not None
+            else tuple(self._config.preferred_formats)
+        )
+        if preferred_formats:
+            resolved_formats = [str(item) for item in preferred_formats if item]
+            if resolved_formats:
+                payload["preferredFormats"] = resolved_formats
+
+        if max_results is not None:
+            try:
+                limit_value: int | None = int(max_results)
+            except (TypeError, ValueError):
+                try:
+                    limit_value = int(self._config.max_results)
+                except (TypeError, ValueError):
+                    limit_value = None
+        else:
+            try:
+                limit_value = int(self._config.max_results)
+            except (TypeError, ValueError):
+                limit_value = None
+        if limit_value is not None and limit_value > 0:
+            payload["maxResults"] = limit_value
+
         return await self._request("POST", "searches", json=payload)
 
     async def download(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -295,10 +321,30 @@ class SoulseekClient:
         stripped = str(value).strip()
         return stripped or None
 
-    def normalise_search_results(self, payload: Any) -> list[dict[str, Any]]:
+    def normalise_search_results(
+        self, payload: Any, *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         """Flatten the raw search payload returned by slskd."""
 
         if payload is None:
+            return []
+
+        resolved_limit: int | None
+        if limit is None:
+            try:
+                resolved_limit = int(self._config.max_results)
+            except (TypeError, ValueError):
+                resolved_limit = None
+        else:
+            try:
+                resolved_limit = int(limit)
+            except (TypeError, ValueError):
+                try:
+                    resolved_limit = int(self._config.max_results)
+                except (TypeError, ValueError):
+                    resolved_limit = None
+
+        if resolved_limit is not None and resolved_limit <= 0:
             return []
 
         if isinstance(payload, dict):
@@ -326,6 +372,8 @@ class SoulseekClient:
                 if not isinstance(file_info, dict):
                     continue
                 normalised.append(self._normalise_file(username, file_info))
+                if resolved_limit is not None and len(normalised) >= resolved_limit:
+                    return normalised
         return normalised
 
     @staticmethod

@@ -33,7 +33,9 @@ def _make_client(config: SoulseekConfig | None = None) -> SoulseekClient:
     return client
 
 
-def _response(*, status: int, headers: dict[str, str] | None = None, body: str = "") -> SimpleNamespace:
+def _response(
+    *, status: int, headers: dict[str, str] | None = None, body: str = ""
+) -> SimpleNamespace:
     resp_headers = headers or {}
     response = SimpleNamespace(status=status, headers=resp_headers)
 
@@ -49,6 +51,58 @@ def _context_manager(response: SimpleNamespace) -> AsyncMock:
     context.__aenter__.return_value = response
     context.__aexit__.return_value = False
     return context
+
+
+@pytest.mark.asyncio
+async def test_search_payload_uses_config_defaults() -> None:
+    config = SoulseekConfig(
+        base_url="https://slskd.local",
+        api_key=None,
+        timeout_ms=1000,
+        retry_max=2,
+        retry_backoff_base_ms=1,
+        retry_jitter_pct=0,
+        preferred_formats=("flac", "alac"),
+        max_results=7,
+    )
+    client = _make_client(config)
+    request_mock = AsyncMock(return_value={})
+    client._request = request_mock  # type: ignore[method-assign]
+
+    await client.search("query")
+
+    request_mock.assert_awaited_once()
+    payload = request_mock.await_args.kwargs["json"]
+    assert payload["preferredFormats"] == ["flac", "alac"]
+    assert payload["maxResults"] == 7
+
+
+@pytest.mark.asyncio
+async def test_search_payload_respects_overrides() -> None:
+    config = SoulseekConfig(
+        base_url="https://slskd.local",
+        api_key=None,
+        timeout_ms=1000,
+        retry_max=2,
+        retry_backoff_base_ms=1,
+        retry_jitter_pct=0,
+        preferred_formats=("flac",),
+        max_results=8,
+    )
+    client = _make_client(config)
+    request_mock = AsyncMock(return_value={})
+    client._request = request_mock  # type: ignore[method-assign]
+
+    await client.search(
+        "query",
+        format_priority=("mp3", "aac"),
+        max_results=3,
+    )
+
+    request_mock.assert_awaited_once()
+    payload = request_mock.await_args.kwargs["json"]
+    assert payload["preferredFormats"] == ["mp3", "aac"]
+    assert payload["maxResults"] == 3
 
 
 @pytest.mark.asyncio
@@ -72,7 +126,9 @@ async def test_request_returns_json_success(monkeypatch: pytest.MonkeyPatch) -> 
     client = _make_client()
     session = client._session
     assert session is not None
-    response = _response(status=200, headers={"Content-Type": "application/json"}, body='{"ok": true}')
+    response = _response(
+        status=200, headers={"Content-Type": "application/json"}, body='{"ok": true}'
+    )
     session.request = MagicMock(return_value=_context_manager(response))
     monkeypatch.setattr("app.utils.retry.asyncio.sleep", AsyncMock())
 
@@ -110,10 +166,14 @@ async def test_request_retries_on_server_error(monkeypatch: pytest.MonkeyPatch) 
     session = client._session
     assert session is not None
     first = _context_manager(
-        _response(status=503, headers={"Content-Type": "application/json"}, body='{"error": "upstream"}')
+        _response(
+            status=503, headers={"Content-Type": "application/json"}, body='{"error": "upstream"}'
+        )
     )
     second = _context_manager(
-        _response(status=500, headers={"Content-Type": "application/json"}, body='{"error": "still"}')
+        _response(
+            status=500, headers={"Content-Type": "application/json"}, body='{"error": "still"}'
+        )
     )
     final = _context_manager(
         _response(status=200, headers={"Content-Type": "application/json"}, body='{"done": true}')
@@ -252,6 +312,56 @@ def test_normalise_search_results_mixed_payloads() -> None:
     assert second["artists"] == ["Artist B"]
     assert third["format"] == "wav"
     assert third["bitrate"] == 1000
+
+
+def test_normalise_search_results_applies_limits() -> None:
+    config = SoulseekConfig(
+        base_url="https://slskd.local",
+        api_key=None,
+        timeout_ms=1000,
+        retry_max=2,
+        retry_backoff_base_ms=1,
+        retry_jitter_pct=0,
+        preferred_formats=(),
+        max_results=2,
+    )
+    client = _make_client(config)
+    payload = {
+        "results": [
+            {
+                "username": "user",
+                "files": [
+                    {
+                        "id": str(index),
+                        "filename": f"Track{index}.mp3",
+                        "bitrate": 320,
+                        "format": "mp3",
+                    }
+                    for index in range(5)
+                ],
+            }
+        ]
+    }
+
+    default_limited = client.normalise_search_results(payload)
+    assert len(default_limited) == 2
+
+    override_limited = client.normalise_search_results(payload, limit=3)
+    assert len(override_limited) == 3
+
+
+def test_normalise_search_results_zero_limit_returns_empty() -> None:
+    client = _make_client()
+    payload = {
+        "results": [
+            {
+                "username": "user",
+                "files": [{"id": "1", "filename": "Track1.mp3", "bitrate": 320, "format": "mp3"}],
+            }
+        ]
+    }
+
+    assert client.normalise_search_results(payload, limit=0) == []
 
 
 def test_normalise_file_infers_metadata() -> None:
