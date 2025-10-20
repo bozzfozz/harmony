@@ -587,9 +587,7 @@ def _safe_url_for(request: Request, name: str, fallback: str) -> str:
         return fallback
 
 
-def _download_action_base_url(
-    request: Request, name: str, fallback_template: str
-) -> str:
+def _download_action_base_url(request: Request, name: str, fallback_template: str) -> str:
     try:
         resolved = URL(str(request.url_for(name, download_id="0")))
     except Exception:  # pragma: no cover - fallback for tests
@@ -2452,32 +2450,32 @@ def build_soulseek_downloads_context(
 
     lyrics_view_base = _download_action_base_url(
         request,
-        "soulseek_download_lyrics",
+        "soulseek_download_lyrics_modal",
         "/ui/soulseek/download/{download_id}/lyrics",
     )
     lyrics_refresh_base = _download_action_base_url(
         request,
-        "refresh_download_lyrics",
+        "soulseek_download_lyrics_refresh",
         "/ui/soulseek/download/{download_id}/lyrics/refresh",
     )
     metadata_view_base = _download_action_base_url(
         request,
-        "soulseek_download_metadata",
+        "soulseek_download_metadata_modal",
         "/ui/soulseek/download/{download_id}/metadata",
     )
     metadata_refresh_base = _download_action_base_url(
         request,
-        "refresh_download_metadata",
+        "soulseek_download_metadata_refresh",
         "/ui/soulseek/download/{download_id}/metadata/refresh",
     )
     artwork_view_base = _download_action_base_url(
         request,
-        "soulseek_download_artwork",
+        "soulseek_download_artwork_modal",
         "/ui/soulseek/download/{download_id}/artwork",
     )
     artwork_refresh_base = _download_action_base_url(
         request,
-        "soulseek_refresh_artwork",
+        "soulseek_download_artwork_refresh",
         "/ui/soulseek/download/{download_id}/artwork/refresh",
     )
 
@@ -2498,46 +2496,42 @@ def build_soulseek_downloads_context(
 
         try:
             lyrics_view_url = request.url_for(
-                "soulseek_download_lyrics", download_id=str(entry.identifier)
+                "soulseek_download_lyrics_modal", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
             lyrics_view_url = f"/ui/soulseek/download/{entry.identifier}/lyrics"
         try:
             lyrics_refresh_url = request.url_for(
-                "refresh_download_lyrics", download_id=str(entry.identifier)
+                "soulseek_download_lyrics_refresh", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
             lyrics_refresh_url = f"/ui/soulseek/download/{entry.identifier}/lyrics/refresh"
 
         try:
             metadata_view_url = request.url_for(
-                "soulseek_download_metadata", download_id=str(entry.identifier)
+                "soulseek_download_metadata_modal", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
             metadata_view_url = f"/ui/soulseek/download/{entry.identifier}/metadata"
         try:
             metadata_refresh_url = request.url_for(
-                "refresh_download_metadata", download_id=str(entry.identifier)
+                "soulseek_download_metadata_refresh", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
-            metadata_refresh_url = (
-                f"/ui/soulseek/download/{entry.identifier}/metadata/refresh"
-            )
+            metadata_refresh_url = f"/ui/soulseek/download/{entry.identifier}/metadata/refresh"
 
         try:
             artwork_view_url = request.url_for(
-                "soulseek_download_artwork", download_id=str(entry.identifier)
+                "soulseek_download_artwork_modal", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
             artwork_view_url = f"/ui/soulseek/download/{entry.identifier}/artwork"
         try:
             artwork_refresh_url = request.url_for(
-                "soulseek_refresh_artwork", download_id=str(entry.identifier)
+                "soulseek_download_artwork_refresh", download_id=str(entry.identifier)
             )
         except Exception:  # pragma: no cover - fallback for tests
-            artwork_refresh_url = (
-                f"/ui/soulseek/download/{entry.identifier}/artwork/refresh"
-            )
+            artwork_refresh_url = f"/ui/soulseek/download/{entry.identifier}/artwork/refresh"
 
         hidden_fields = {
             "csrftoken": csrf_token,
@@ -2772,6 +2766,81 @@ def build_soulseek_downloads_context(
         "cleanup_swap": pagination.swap if pagination else "outerHTML",
         "cleanup_disabled": not can_manage_downloads,
         "can_manage_downloads": can_manage_downloads,
+    }
+
+
+def build_soulseek_download_lyrics_modal_context(
+    request: Request,
+    *,
+    download_id: int,
+    filename: str,
+    asset_status: str | None,
+    has_lyrics: bool,
+    content: str | None,
+    pending: bool,
+) -> Mapping[str, Any]:
+    status_value = asset_status or ("ready" if has_lyrics else "")
+    return {
+        "request": request,
+        "modal_id": "soulseek-download-lyrics-modal",
+        "asset": "lyrics",
+        "download_id": download_id,
+        "filename": filename,
+        "asset_status": _normalise_status(status_value),
+        "has_asset": has_lyrics,
+        "content": content,
+        "pending": pending,
+    }
+
+
+def build_soulseek_download_metadata_modal_context(
+    request: Request,
+    *,
+    download_id: int,
+    filename: str,
+    metadata: Mapping[str, str | None],
+) -> Mapping[str, Any]:
+    entries: list[Mapping[str, str | None]] = []
+    for key in ("genre", "composer", "producer", "isrc", "copyright"):
+        entries.append(
+            {
+                "key": key,
+                "value": metadata.get(key),
+            }
+        )
+    has_metadata = any((value or "").strip() for value in metadata.values())
+    status_value = "ready" if has_metadata else ""
+    return {
+        "request": request,
+        "modal_id": "soulseek-download-metadata-modal",
+        "asset": "metadata",
+        "download_id": download_id,
+        "filename": filename,
+        "asset_status": _normalise_status(status_value),
+        "metadata_entries": tuple(entries),
+        "has_metadata": has_metadata,
+    }
+
+
+def build_soulseek_download_artwork_modal_context(
+    request: Request,
+    *,
+    download_id: int,
+    filename: str,
+    asset_status: str | None,
+    has_artwork: bool,
+    image_url: str | None,
+) -> Mapping[str, Any]:
+    status_value = asset_status or ("ready" if has_artwork else "")
+    return {
+        "request": request,
+        "modal_id": "soulseek-download-artwork-modal",
+        "asset": "artwork",
+        "download_id": download_id,
+        "filename": filename,
+        "asset_status": _normalise_status(status_value),
+        "has_asset": has_artwork,
+        "image_url": image_url,
     }
 
 
@@ -4526,6 +4595,9 @@ __all__ = [
     "build_soulseek_config_context",
     "build_soulseek_uploads_context",
     "build_soulseek_downloads_context",
+    "build_soulseek_download_lyrics_modal_context",
+    "build_soulseek_download_metadata_modal_context",
+    "build_soulseek_download_artwork_modal_context",
     "build_soulseek_navigation_badge",
     "build_search_page_context",
     "build_downloads_fragment_context",
