@@ -482,7 +482,10 @@ class SoulseekUiService:
                 continue
             path_value = item.get("path")
             path = str(path_value).strip() if isinstance(path_value, str) else None
-            size_value = item.get("size") or item.get("size_bytes")
+            if "size" in item:
+                size_value = item.get("size")
+            else:
+                size_value = item.get("size_bytes")
             size = SoulseekUiService._coerce_int(size_value)
             entries.append(
                 SoulseekUserFileEntry(

@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.schemas import StatusResponse
-from app.ui.services.soulseek import SoulseekUiService
+from app.ui.context import build_soulseek_user_directory_context
+from app.ui.services.soulseek import (
+    SoulseekUiService,
+    SoulseekUserDirectoryListing,
+)
 
 
 class _StubRegistry:
@@ -122,3 +126,42 @@ def test_suggested_tasks_flags_gaps_and_limits_count() -> None:
     assert flags["max-results"] is False
     assert flags["require-auth"] is False
     assert flags["rate-limiting"] is False
+
+
+def test_extract_files_preserves_zero_size_and_renders_zero_bytes() -> None:
+    payload = {
+        "files": [
+            {
+                "name": "silence.flac",
+                "path": "Music/silence.flac",
+                "size": 0,
+            }
+        ]
+    }
+
+    files = SoulseekUiService._extract_files(payload)
+
+    assert files
+    assert files[0].size_bytes == 0
+
+    listing = SoulseekUserDirectoryListing(
+        username="alice",
+        current_path="Music",
+        parent_path=None,
+        directories=(),
+        files=files,
+    )
+
+    class _DummyRequest:
+        def url_for(self, name: str, **kwargs: object) -> str:
+            raise RuntimeError("no routes")
+
+    context = build_soulseek_user_directory_context(
+        _DummyRequest(),
+        username="alice",
+        path="Music",
+        listing=listing,
+    )
+
+    sizes = tuple(file.size for file in context["files"])
+    assert "0 B" in sizes
