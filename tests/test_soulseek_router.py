@@ -540,6 +540,27 @@ def test_discography_download_logs_worker_failure(
     )
 
 
+def test_discography_download_returns_503_when_worker_missing(
+    soulseek_client: TestClient,
+) -> None:
+    soulseek_client.app.state.discography_worker = None
+    artist_id = f"missing-worker-{uuid4().hex}"
+
+    response = soulseek_client.post(
+        "/soulseek/discography/download",
+        json={"artist_id": artist_id, "artist_name": "Missing Worker"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Discography worker unavailable"}
+
+    with session_scope() as session:
+        job = session.query(DiscographyJob).filter(DiscographyJob.artist_id == artist_id).one()
+        assert job.status == "failed"
+        session.delete(job)
+        session.commit()
+
+
 @pytest.mark.asyncio()
 async def test_soulseek_upload_detail_success(upload_client_mock: Mock) -> None:
     expected = {"id": "upload-1", "status": "active"}

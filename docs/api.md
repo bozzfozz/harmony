@@ -36,6 +36,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/soulseek/status` | Status des slskd-Daemons inkl. Queue-Informationen. |
 | `POST` | `/soulseek/search` | Suche nach Dateien/Nutzern. |
 | `POST` | `/soulseek/download` | Erstellt einen neuen Downloadjob. |
+| `POST` | `/soulseek/discography/download` | Persistiert einen Discography-Job; antwortet mit `503`, wenn der Worker deaktiviert ist. |
 | `GET` | `/soulseek/downloads` | Liste aller Downloads inkl. Status/Retry-Infos. |
 | `GET` | `/soulseek/download/{id}` | Einzelner Downloaddatensatz. |
 | `DELETE` | `/soulseek/download/{id}` | Bricht einen Download ab. |
@@ -52,6 +53,9 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 - **Suchantwort:** `POST /soulseek/search` liefert weiterhin das rohe Ergebnis unter `results`
   und `raw`. Zusätzlich stellt `normalised` jetzt eine flache Liste einzelner Datei-Einträge
   bereit, wie sie von `SoulseekClient.normalise_search_results` aufbereitet werden.
+- **Discography-Worker:** `POST /soulseek/discography/download` markiert Jobs als `failed`
+  und liefert `503 Service Unavailable`, wenn kein `discography_worker` mit `enqueue`
+  verfügbar ist.
 
 ### `POST /soulseek/search`
 
