@@ -2,9 +2,10 @@
 
 The test suite covers both synchronous download workflows (legacy tests) and
 new asynchronous checks ensuring the upload endpoints return the expected JSON
-payloads and translate `SoulseekClientError` instances into HTTP 502
-exceptions. Success and failure paths for cancel, detail, listing, and cleanup
-operations are exercised via mocked `SoulseekClient` instances.
+payloads and translate `SoulseekClientError` instances into appropriate HTTP
+exceptions (defaulting to 502). Success and failure paths for cancel, detail,
+listing, and cleanup operations are exercised via mocked `SoulseekClient`
+instances.
 """
 
 from __future__ import annotations
@@ -1369,6 +1370,21 @@ def test_get_download_queue_client_error(soulseek_client: TestClient) -> None:
     response = soulseek_client.get("/soulseek/download/123/queue")
 
     assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to fetch queue position"
+
+
+def test_get_download_queue_client_error_propagates_status(
+    soulseek_client: TestClient,
+) -> None:
+    client_stub: _MockSoulseekClient = soulseek_client.app.state.soulseek_client
+    client_stub.get_queue_position.side_effect = SoulseekClientError(
+        "missing queue",
+        status_code=404,
+    )
+
+    response = soulseek_client.get("/soulseek/download/123/queue")
+
+    assert response.status_code == 404
     assert response.json()["detail"] == "Failed to fetch queue position"
 
 
