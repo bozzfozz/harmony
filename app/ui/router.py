@@ -31,6 +31,7 @@ from app.routers.soulseek_router import (
 from app.schemas import SoulseekDownloadRequest
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
+from app.ui.assets import asset_url
 from app.ui.context import (
     AlertMessage,
     FormDefinition,
@@ -139,6 +140,7 @@ _SPOTIFY_BACKFILL_TIMELINE_LIMIT = 10
 router = APIRouter(prefix="/ui", tags=["UI"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+templates.env.globals["asset_url"] = asset_url
 
 
 @dataclass(slots=True)
