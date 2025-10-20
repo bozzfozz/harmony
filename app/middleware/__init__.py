@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.config import AppConfig
+from app.config import AppConfig, get_env
 from app.services.cache import ResponseCache
 
 from .auth_apikey import ApiKeyAuthMiddleware
 from .cache import CacheMiddleware
+from .csp import ContentSecurityPolicyMiddleware
 from .cors_gzip import install_cors_and_gzip
 from .errors import setup_exception_handlers
 from .logging import APILoggingMiddleware
@@ -20,6 +21,13 @@ def install_middleware(app: FastAPI, config: AppConfig) -> None:
     """Install the configured middleware stack on the provided application."""
 
     middleware_cfg = config.middleware
+
+    allow_cdn = _as_bool(get_env("UI_ALLOW_CDN"))
+
+    app.add_middleware(
+        ContentSecurityPolicyMiddleware,
+        allow_script_cdn=allow_cdn,
+    )
 
     install_cors_and_gzip(app, cors=middleware_cfg.cors, gzip=middleware_cfg.gzip)
 
@@ -53,6 +61,12 @@ def install_middleware(app: FastAPI, config: AppConfig) -> None:
     app.add_middleware(APILoggingMiddleware)
 
     setup_exception_handlers(app)
+
+
+def _as_bool(raw: str | None) -> bool:
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 __all__ = ["install_middleware"]
