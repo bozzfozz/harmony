@@ -724,7 +724,9 @@ def test_operations_template_renders_enabled_sections() -> None:
 
     assert "/ui/downloads/table" in html
     assert "/ui/jobs/table" in html
-    assert 'hx-trigger="load, every 15s"' in html
+    assert 'hx-trigger="revealed, every 15s"' in html
+    assert 'hx-trigger="revealed, every 30s"' in html
+    assert 'hx-trigger="revealed, every 60s"' in html
     assert 'data-fragment="operations-watchlist"' in html
     assert "/ui/watchlist/table" in html
     assert "/ui/activity/table" in html
@@ -995,7 +997,7 @@ def test_search_page_template_renders_form_and_queue() -> None:
     assert 'type="checkbox"' in html
     assert "Select the providers to include in your search." in html
     assert 'hx-get="/ui/downloads/table?limit=20"' in html
-    assert 'hx-trigger="load, every 30s"' in html
+    assert 'hx-trigger="revealed, every 30s"' in html
     assert 'hx-target="#hx-search-queue"' in html
 
 

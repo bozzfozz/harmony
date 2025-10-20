@@ -1454,12 +1454,15 @@ def build_operations_page_context(
     downloads_fragment: AsyncFragment | None = None
     jobs_fragment: AsyncFragment | None = None
     if session.features.dlq:
+        # Operations overview tables are non-critical; defer loading until the
+        # user scrolls them into view to reduce the initial render cost.
         downloads_fragment = AsyncFragment(
             identifier="hx-downloads-table",
             url=_safe_url_for(request, "downloads_table", "/ui/downloads/table"),
             target="#hx-downloads-table",
             poll_interval_seconds=15,
             loading_key="downloads",
+            load_event="revealed",
         )
         jobs_fragment = AsyncFragment(
             identifier="hx-jobs-table",
@@ -1467,6 +1470,7 @@ def build_operations_page_context(
             target="#hx-jobs-table",
             poll_interval_seconds=15,
             loading_key="jobs",
+            load_event="revealed",
         )
 
     watchlist_fragment = AsyncFragment(
@@ -1475,6 +1479,7 @@ def build_operations_page_context(
         target="#hx-watchlist-table",
         poll_interval_seconds=30,
         loading_key="watchlist",
+        load_event="revealed",
     )
 
     activity_fragment = AsyncFragment(
@@ -1483,6 +1488,7 @@ def build_operations_page_context(
         target="#hx-activity-table",
         poll_interval_seconds=60,
         loading_key="activity",
+        load_event="revealed",
     )
 
     return {
@@ -1930,6 +1936,8 @@ def build_search_page_context(
     queue_fragment: AsyncFragment | None = None
     if session.features.dlq:
         queue_url = _safe_url_for(request, "downloads_table", "/ui/downloads/table")
+        # The queue preview is optional context; lazy-load it via the `revealed`
+        # trigger so the primary search form stays responsive.
         queue_fragment = AsyncFragment(
             identifier="hx-search-queue",
             url=f"{queue_url}?limit=20",
@@ -1937,6 +1945,7 @@ def build_search_page_context(
             poll_interval_seconds=30,
             swap="innerHTML",
             loading_key="search.queue",
+            load_event="revealed",
         )
 
     return {

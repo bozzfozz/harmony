@@ -35,7 +35,7 @@
 | GET | /ui/system | System-/Health-Diagnostik, OAuth-Status | operator | — |
 
 ## Umsetzung Operator-Seiten (Status)
-- ✅ `/ui/operations` bündelt die Async-Fragmente für Downloads, Jobs, Watchlist und Activity. Die Seite pollt die DLQ-Sektionen alle 15 s, die Watchlist alle 30 s und den Activity-Feed alle 60 s über die Routen `/ui/downloads/table`, `/ui/jobs/table`, `/ui/watchlist/table` und `/ui/activity/table` (`hx-get`, `hx-trigger="load, every Ns"`, `hx-target` identisch mit den Fragment-IDs).【F:app/ui/templates/pages/operations.j2†L21-L103】【F:app/ui/router.py†L2275-L2337】
+- ✅ `/ui/operations` bündelt die Async-Fragmente für Downloads, Jobs, Watchlist und Activity. Die Seite pollt die DLQ-Sektionen alle 15 s, die Watchlist alle 30 s und den Activity-Feed alle 60 s über die Routen `/ui/downloads/table`, `/ui/jobs/table`, `/ui/watchlist/table` und `/ui/activity/table` (`hx-get`, `hx-trigger="revealed, every Ns"`, `hx-target` identisch mit den Fragment-IDs).【F:app/ui/templates/pages/operations.j2†L21-L103】【F:app/ui/router.py†L2275-L2337】
 - ✅ `/ui/downloads` und `/ui/jobs` sind eigenständige Operator-Ansichten mit `hx-get` Polling (15 s) auf die Tabellen-Fragmente und verlinken zurück zur Operations-Übersicht, Feature-Gate via `UI_FEATURE_DLQ`.【F:app/ui/templates/pages/downloads.j2†L1-L33】【F:app/ui/templates/pages/jobs.j2†L1-L33】【F:app/ui/router.py†L2339-L2383】
 - ✅ `/ui/watchlist` stellt das Formular für neue Einträge (`hx-post="/ui/watchlist"`, CSRF-Meta) sowie das regelmäßig aktualisierte Tabellenfragment (`hx-trigger="load, every 30s"`).【F:app/ui/templates/pages/watchlist.j2†L1-L49】【F:app/ui/router.py†L2385-L2410】
 - ✅ `/ui/activity` ist für alle Rollen sichtbar (`require_session`) und pollt den Aktivitätsfeed alle 60 s (`hx-get="/ui/activity/table"`).【F:app/ui/templates/pages/activity.j2†L1-L33】【F:app/ui/router.py†L2412-L2438】
@@ -106,7 +106,7 @@ Die Spotify-Seite bündelt nun Status, OAuth-Flows, Playlist-Verwaltung sowie di
 | Download anfordern | POST `/api/v1/download` | Button in Ergebnisliste (`hx-post`, JSON body) | `hx-swap-oob` Queue-Zähler, Erfolgsmeldung | 400/502 ⇒ Inline-Error |【F:app/routers/download_router.py†L163-L190】
 | Soulseek-Suche | POST `/api/v1/soulseek/search` | Tab „Soulseek“ `hx-post` | `#hx-soulseek-results` | 502 ⇒ Alert |【F:app/routers/soulseek_router.py†L75-L118】
 
-Die HTML-Ansicht `/ui/search` sendet das Formular via `hx-post="/ui/search/results"` und aktualisiert die Download-Queue über `hx-get="/ui/downloads/table"` mit einem Polling-Intervall von 30 Sekunden im Fragment `#hx-search-queue`. Die Formularsektion enthält Checkboxen für jede konfigurierte Quelle (Standard: Spotify und Soulseek); Pagination-Links führen die `sources`-Parameter mit, damit Filterauswahlen bestehen bleiben.
+Die HTML-Ansicht `/ui/search` sendet das Formular via `hx-post="/ui/search/results"` und aktualisiert die Download-Queue über `hx-get="/ui/downloads/table"` mit einem Polling-Intervall von 30 Sekunden im Fragment `#hx-search-queue` (`hx-trigger="revealed, every 30s"`). Die Formularsektion enthält Checkboxen für jede konfigurierte Quelle (Standard: Spotify und Soulseek); Pagination-Links führen die `sources`-Parameter mit, damit Filterauswahlen bestehen bleiben.
 Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions mit `read_only`-Rolle erhalten `403 Forbidden`, deaktivierte Soulseek-Features führen zu `404 Not Found`.
 
 ### Downloads (/ui/downloads)
@@ -195,7 +195,7 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 
 ## Performance
 - Ziel: <100 KB initiales HTML+CSS+JS (komprimiert). HTMX lädt nur benötigte Fragmente.
-- Nutzen von `hx-trigger="revealed"` für nachrangige Sektionen (z. B. Historien-Tabellen).
+- Nutzen von `hx-trigger="revealed"` für nachrangige Sektionen (z. B. Historien-Tabellen, Operations-Übersichtstabellen, Search-Queue).
 - API-Antworten für Listen pagination (bereits vorhanden) und serverseitig gefiltert (z. B. `limit`, `offset`).【F:app/routers/download_router.py†L45-L73】【F:app/routers/activity_router.py†L25-L52】
 - Client-Caching: `ETag`/`Last-Modified` via Playlist-Endpunkte; UI respektiert 304-Responses.【F:app/api/spotify.py†L173-L196】
 
