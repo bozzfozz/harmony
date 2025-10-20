@@ -12,6 +12,7 @@
     "spotify": "Spotify",
     "search": "Soulseek search",
     "soulseek": "Soulseek",
+    "admin": "Administration",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -32,6 +33,7 @@
     "spotify": "Spotify integration",
     "search": "Soulseek search",
     "soulseek": "Soulseek integration",
+    "admin": "Administration",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -146,6 +148,26 @@
     "operations.view_jobs": "View orchestrator jobs",
     "operations.view_watchlist": "Manage watchlist",
     "operations.view_activity": "View activity log",
+    "admin.system.link": "Open system diagnostics",
+    "admin.settings.link": "Open settings",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro admin_page_intro() %}Access key administration tools to manage system health and configuration.{% endmacro %}
+
+{% macro admin_card_title(key) -%}
+  {%- set labels = {
+    "admin.system.title": "System diagnostics",
+    "admin.settings.title": "Settings",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro admin_card_description(key) -%}
+  {%- set labels = {
+    "admin.system.description": "Review health checks, readiness signals, and integration status across Harmony services.",
+    "admin.settings.description": "Configure UI access, security defaults, and operational preferences for administrators.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}

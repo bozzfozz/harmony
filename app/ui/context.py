@@ -153,6 +153,16 @@ class SuggestedTask:
 
 
 @dataclass(slots=True)
+class CallToActionCard:
+    identifier: str
+    title_key: str
+    description_key: str
+    href: str
+    link_label_key: str
+    link_test_id: str | None = None
+
+
+@dataclass(slots=True)
 class StatusBadge:
     label_key: str
     variant: StatusVariant
@@ -637,6 +647,47 @@ def build_dashboard_page_context(
         "actions": tuple(actions),
         "csrf_token": csrf_token,
         "activity_fragment": activity_fragment,
+    }
+
+
+def build_admin_page_context(
+    request: Request,
+    *,
+    session: UiSession,
+    csrf_token: str,
+) -> Mapping[str, Any]:
+    layout = LayoutContext(
+        page_id="admin",
+        role=session.role,
+        navigation=_build_primary_navigation(session, active="admin"),
+        head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+    )
+
+    call_to_actions = (
+        CallToActionCard(
+            identifier="admin-system-card",
+            title_key="admin.system.title",
+            description_key="admin.system.description",
+            href="/ui/system",
+            link_label_key="admin.system.link",
+            link_test_id="admin-system-link",
+        ),
+        CallToActionCard(
+            identifier="admin-settings-card",
+            title_key="admin.settings.title",
+            description_key="admin.settings.description",
+            href="/ui/settings",
+            link_label_key="admin.settings.link",
+            link_test_id="admin-settings-link",
+        ),
+    )
+
+    return {
+        "request": request,
+        "layout": layout,
+        "session": session,
+        "csrf_token": csrf_token,
+        "call_to_actions": call_to_actions,
     }
 
 
@@ -3452,6 +3503,7 @@ def _build_features_table(features: UiFeatures) -> TableDefinition:
 __all__ = [
     "ActionButton",
     "SuggestedTask",
+    "CallToActionCard",
     "AsyncFragment",
     "AlertMessage",
     "CheckboxGroup",
@@ -3488,6 +3540,7 @@ __all__ = [
     "build_spotify_free_ingest_status_context",
     "build_activity_fragment_context",
     "build_activity_page_context",
+    "build_admin_page_context",
     "build_dashboard_page_context",
     "build_downloads_page_context",
     "build_login_page_context",
