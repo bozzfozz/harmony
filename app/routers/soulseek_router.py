@@ -648,9 +648,16 @@ async def soulseek_discography_download(
     session.refresh(job)
 
     worker = getattr(request.app.state, "discography_worker", None)
+    enqueue = getattr(worker, "enqueue", None) if worker is not None else None
+    if enqueue is None or not callable(enqueue):
+        job.status = "failed"
+        session.add(job)
+        session.commit()
+        logger.error("Discography worker unavailable for job %s", job.id)
+        raise HTTPException(status_code=503, detail="Discography worker unavailable")
+
     try:
-        if worker is not None and hasattr(worker, "enqueue"):
-            await worker.enqueue(job.id)
+        await enqueue(job.id)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to enqueue discography job %s: %s", job.id, exc)
 
