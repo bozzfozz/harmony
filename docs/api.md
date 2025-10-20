@@ -53,6 +53,17 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
   und `raw`. Zusätzlich stellt `normalised` jetzt eine flache Liste einzelner Datei-Einträge
   bereit, wie sie von `SoulseekClient.normalise_search_results` aufbereitet werden.
 
+### `POST /soulseek/search`
+
+**Request-Body**
+
+- `query` *(string, required)* – Suchtext, Leerzeichen am Anfang/Ende werden entfernt.
+- `min_bitrate` *(integer, optional)* – Untere Bitrate-Grenze in kbit/s. Werte < `0` lösen einen
+  `422 Unprocessable Entity` aus.
+- `preferred_formats` *(array[string], optional)* – Liste der bevorzugten Audioformate in
+  Prioritätsreihenfolge. Jede Angabe muss eine nicht-leere Zeichenkette sein; leere Einträge oder
+  ein leeres Array schlagen mit `422` fehl.
+
 ## Suche & Matching
 
 | Methode | Route | Beschreibung |

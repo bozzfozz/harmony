@@ -96,6 +96,39 @@ class RecommendationsResponse(BaseModel):
 
 class SoulseekSearchRequest(BaseModel):
     query: str
+    min_bitrate: int | None = Field(
+        None,
+        ge=0,
+        description="Minimum bitrate filter in kbps",
+    )
+    preferred_formats: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        description="Preferred audio formats ranked from most to least desired",
+    )
+
+    @field_validator("query")
+    @classmethod
+    def _ensure_query(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("query must not be empty")
+        return stripped
+
+    @field_validator("preferred_formats")
+    @classmethod
+    def _validate_formats(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for entry in value:
+            if entry is None:
+                raise ValueError("preferred_formats entries must be non-empty strings")
+            stripped = entry.strip()
+            if not stripped:
+                raise ValueError("preferred_formats entries must be non-empty strings")
+            cleaned.append(stripped)
+        return cleaned
 
 
 class DownloadFileRequest(BaseModel):

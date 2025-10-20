@@ -101,7 +101,13 @@ async def soulseek_search(
     """Perform a Soulseek search and normalise the JSON response."""
 
     try:
-        results = await client.search(payload.query)
+        results = await client.search(
+            payload.query,
+            min_bitrate=payload.min_bitrate,
+            format_priority=tuple(payload.preferred_formats)
+            if payload.preferred_formats is not None
+            else None,
+        )
     except SoulseekClientError as exc:
         logger.error("Soulseek search failed: %s", exc)
         raise HTTPException(status_code=502, detail="Soulseek search failed") from exc
