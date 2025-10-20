@@ -68,7 +68,30 @@ router = APIRouter()
 
 
 def _translate_error(message: str, exc: SoulseekClientError) -> HTTPException:
-    logger.error("%s: %s", message, exc)
+    status_code = getattr(exc, "status_code", None)
+    payload = getattr(exc, "payload", None)
+    status_display = status_code if status_code is not None else "unknown"
+    logger.error(
+        "%s (status=%s, payload=%r): %s",
+        message,
+        status_display,
+        payload,
+        exc,
+    )
+    if status_code is None:
+        return HTTPException(status_code=502, detail=message)
+
+    translated_codes: dict[int, int] = {
+        404: 404,
+        408: 408,
+        429: 429,
+    }
+    if status_code in translated_codes:
+        return HTTPException(status_code=translated_codes[status_code], detail=message)
+
+    if 500 <= status_code < 600:
+        return HTTPException(status_code=status_code, detail=message)
+
     return HTTPException(status_code=502, detail=message)
 
 
