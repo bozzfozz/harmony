@@ -19,19 +19,21 @@ maintains `harmony.db` inside the `/data` volume.
 docker run -d \
   --name harmony \
   -p 8080:8080 \
-  -e HARMONY_API_KEYS=change-me \
-  -e ALLOWED_ORIGINS=http://localhost:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
   ghcr.io/bozzfozz/harmony:latest
 ```
 
-- `HARMONY_API_KEYS` accepts a comma-separated list. Replace `change-me` with an actual
-  secret before exposing the service.
-- `ALLOWED_ORIGINS` should point to the public base URL that browser clients use to
-  call the API.
 - Harmony creates missing directories on start-up and keeps the SQLite database at
   `/data/harmony.db`.
+- Optional security hardening:
+  - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
+  - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
+  - Provide them via `-e ...` flags or a `.env` file when exposing Harmony
+    beyond trusted networks.
+- The first boot writes `/data/harmony.yml` with every supported configuration
+  toggle. Update the YAML to persist overrides; environment variables still win
+  when both sources specify a value.
 
 Verify the deployment:
 
@@ -45,22 +47,46 @@ Both commands must return HTTP 200. The ready endpoint prints dependency details
 
 ## Using docker compose
 
-The repository includes a single-service [`compose.yaml`](../../compose.yaml)
-matching the runtime defaults.
+[`compose.yaml`](../../compose.yaml) is the canonical docker compose definition:
+
+```yaml
+services:
+  harmony:
+    image: ghcr.io/bozzfozz/harmony:latest
+    container_name: harmony
+    environment:
+      TZ: Etc/UTC
+      PUID: "1000"
+      PGID: "1000"
+    volumes:
+      - /mnt/harmony:/data
+      - /mnt/data/downloads:/data/downloads
+      - /mnt/data/music:/data/music
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+```
+
+The host paths under `/mnt/...` are only examples—point them at your persistent
+storage and library directories. Harmony boots without additional environment
+variables. The generated `/data/harmony.yml` contains every tunable value; edit
+it to adjust defaults and commit the file to source control if desired. Supply
+`HARMONY_API_KEYS` or `ALLOWED_ORIGINS` via a `.env` file or the CLI when you want
+to tighten security. Add further overrides as needed (for example,
+`OAUTH_SPLIT_MODE=true` plus a `/data/runtime/oauth_state` mount when running OAuth
+flows across multiple containers).
+
+Bring the stack up with:
 
 ```bash
 docker compose up -d
 ```
-
-Key options:
-
-- `ports: "8080:8080"` exposes the API on the host.
-- `volumes` mount `/data/downloads` and `/data/music` from the host for persistence.
-- `OAUTH_SPLIT_MODE=true` requires a shared mount at `/data/runtime/oauth_state` and
-  should be combined with the same UID/GID across all participating containers.
-
-To override settings, place a `.env` file next to `compose.yaml` or export environment
-variables before running `docker compose up`.
 
 ## SQLite Backups
 

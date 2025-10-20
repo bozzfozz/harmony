@@ -1,9 +1,10 @@
 # Configuration Reference
 
-Harmony reads configuration from environment variables with precedence
-`environment > .env file > built-in defaults`. Secrets (API keys, Spotify credentials)
-should be injected through the environment or a secret manager—never committed to the
-repository.
+Harmony reads configuration from the generated `/data/harmony.yml` file and
+environment variables with the precedence `environment > .env file > YAML > built-in
+defaults`. The YAML is written on first start and mirrors every variable listed below.
+Secrets (API keys, Spotify credentials) should be injected through the environment or a
+secret manager—never committed to the repository.
 
 The unified container bundles the backend and workers. All variables below apply to the
 single service; optional features are disabled by default.

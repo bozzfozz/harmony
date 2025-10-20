@@ -2,46 +2,20 @@ services:
   harmony:
     image: ghcr.io/bozzfozz/harmony:latest
     container_name: harmony
-    restart: unless-stopped
-    env_file:
-      - ./.env
     environment:
-      APP_PORT: "${APP_PORT:-8080}"
+      TZ: Etc/UTC
       PUID: "1000"
       PGID: "1000"
-      UMASK: "${UMASK:-007}"
-      OAUTH_SPLIT_MODE: "${OAUTH_SPLIT_MODE:-false}"
-      OAUTH_STATE_DIR: /data/runtime/oauth_state
-      OAUTH_STATE_TTL_SEC: "${OAUTH_STATE_TTL_SEC:-600}"
-      OAUTH_STORE_HASH_CV: "${OAUTH_STORE_HASH_CV:-true}"
-      DATABASE_URL: sqlite+aiosqlite:///data/harmony.db
-      DOWNLOADS_DIR: /data/downloads
-      MUSIC_DIR: /data/music
-      WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-4}"
-      MAX_RETRIES: "${DOWNLOAD_MAX_RETRIES:-5}"
-      SLSKD_BASE_URL: "${SLSKD_BASE_URL:-http://slskd.local:5030}"
-      HARMONY_API_KEYS: "${HARMONY_API_KEYS:-change-me}"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:${APP_PORT:-8080}}"
-    ports:
-      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     volumes:
-      - harmony-data:/data
-      - type: bind
-        source: /srv/media/downloads
-        target: /data/downloads
-      - type: bind
-        source: /srv/media/music
-        target: /data/music
-      - type: bind
-        source: /srv/harmony/runtime/oauth_state
-        target: /data/runtime/oauth_state
+      - /mnt/harmony:/data
+      - /mnt/data/downloads:/data/downloads
+      - /mnt/data/music:/data/music
+    ports:
+      - "8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${APP_PORT:-8080}/live"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health/ready || exit 1"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-
-volumes:
-  harmony-data:
-    driver: local
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
