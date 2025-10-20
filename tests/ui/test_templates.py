@@ -40,6 +40,9 @@ from app.ui.context import (
     build_settings_page_context,
     build_search_page_context,
     build_soulseek_navigation_badge,
+    build_soulseek_download_artwork_modal_context,
+    build_soulseek_download_lyrics_modal_context,
+    build_soulseek_download_metadata_modal_context,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_spotify_account_context,
@@ -713,6 +716,107 @@ def test_spotify_track_detail_template_renders_modal() -> None:
     assert "1,050" in html
     assert "Yes" in html
     assert 'href="https://preview.example/track-1"' in html
+
+
+def test_soulseek_download_lyrics_modal_template_renders_content() -> None:
+    request = _make_request("/ui/soulseek/downloads")
+    context = build_soulseek_download_lyrics_modal_context(
+        request,
+        download_id=42,
+        filename="lyrics.flac",
+        asset_status="ready",
+        has_lyrics=True,
+        content="Line 1\nLine 2",
+        pending=False,
+    )
+    template = templates.get_template("partials/soulseek_download_lyrics.j2")
+    html = template.render(**context)
+    compact_html = " ".join(html.split())
+
+    assert 'data-test="soulseek-download-lyrics-modal"' in html
+    assert "Lyrics for lyrics.flac" in html
+    assert 'hx-on="htmx:afterSwap: this.showModal()"' in html
+    assert 'data-test="soulseek-download-lyrics-status"' in html
+    assert "Lyrics ready" in html
+    assert 'data-test="soulseek-download-lyrics-content">Line 1 Line 2</pre>' in compact_html
+    assert 'data-test="soulseek-download-lyrics-close">Close</button>' in compact_html
+
+
+def test_soulseek_download_lyrics_modal_template_handles_pending() -> None:
+    request = _make_request("/ui/soulseek/downloads")
+    context = build_soulseek_download_lyrics_modal_context(
+        request,
+        download_id=7,
+        filename="pending.flac",
+        asset_status=None,
+        has_lyrics=False,
+        content=None,
+        pending=True,
+    )
+    template = templates.get_template("partials/soulseek_download_lyrics.j2")
+    html = template.render(**context)
+
+    assert 'data-test="soulseek-download-lyrics-empty"' in html
+    assert "Lyrics generation is still in progress" in html
+
+
+def test_soulseek_download_metadata_modal_template_renders_entries() -> None:
+    request = _make_request("/ui/soulseek/downloads")
+    context = build_soulseek_download_metadata_modal_context(
+        request,
+        download_id=51,
+        filename="meta.flac",
+        metadata={
+            "genre": "Rock",
+            "composer": "Composer",
+            "producer": None,
+            "isrc": "ISRC999",
+            "copyright": "2024",
+        },
+    )
+    template = templates.get_template("partials/soulseek_download_metadata.j2")
+    html = template.render(**context)
+    compact_html = " ".join(html.split())
+
+    assert 'data-test="soulseek-download-metadata-modal"' in html
+    assert "Metadata for meta.flac" in html
+    assert 'data-test="soulseek-download-metadata-status"' in html
+    assert "Metadata ready" in html
+    assert 'data-test="soulseek-download-metadata-genre"' in html
+    assert 'data-test="soulseek-download-metadata-composer"' in html
+    assert 'data-test="soulseek-download-metadata-producer"' in html
+    assert 'data-test="soulseek-download-metadata-isrc"' in html
+    assert 'data-test="soulseek-download-metadata-copyright"' in html
+    assert 'data-test="soulseek-download-metadata-close">Close</button>' in compact_html
+    assert "Rock" in html
+    assert "Composer" in html
+    assert "ISRC999" in html
+    assert "2024" in html
+    assert "Not provided." in html
+
+
+def test_soulseek_download_artwork_modal_template_renders_image() -> None:
+    request = _make_request("/ui/soulseek/downloads")
+    context = build_soulseek_download_artwork_modal_context(
+        request,
+        download_id=33,
+        filename="cover.flac",
+        asset_status="ready",
+        has_artwork=True,
+        image_url="https://example.test/artwork/33.jpg",
+    )
+    template = templates.get_template("partials/soulseek_download_artwork.j2")
+    html = template.render(**context)
+    compact_html = " ".join(html.split())
+
+    assert 'data-test="soulseek-download-artwork-modal"' in html
+    assert "Artwork for cover.flac" in html
+    assert 'data-test="soulseek-download-artwork-status"' in html
+    assert "Artwork ready" in html
+    assert 'src="https://example.test/artwork/33.jpg"' in html
+    assert 'alt="Artwork for cover.flac"' in html
+    assert 'data-test="soulseek-download-artwork-image"' in html
+    assert 'data-test="soulseek-download-artwork-close">Close</button>' in compact_html
 
 
 def test_operations_template_renders_enabled_sections() -> None:
