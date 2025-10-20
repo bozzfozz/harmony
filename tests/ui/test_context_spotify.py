@@ -10,6 +10,8 @@ from app.ui.context import (
     build_spotify_free_ingest_context,
     build_spotify_free_ingest_form_context,
     build_spotify_free_ingest_status_context,
+    build_spotify_recommendations_context,
+    build_spotify_saved_tracks_context,
 )
 from app.ui.session import UiFeatures, UiSession
 from app.ui.services import (
@@ -18,6 +20,8 @@ from app.ui.services import (
     SpotifyFreeIngestJobSnapshot,
     SpotifyFreeIngestResult,
     SpotifyFreeIngestSkipped,
+    SpotifyRecommendationRow,
+    SpotifySavedTrackRow,
 )
 
 
@@ -108,9 +112,7 @@ def test_build_spotify_free_ingest_context_includes_alerts_and_form_values() -> 
 
     assert context["form"].playlist_value == "link"
     assert context["form"].form_errors == {"playlist_links": "error"}
-    assert context["alert_messages"] == (
-        AlertMessage(level="error", text="Something failed"),
-    )
+    assert context["alert_messages"] == (AlertMessage(level="error", text="Something failed"),)
     assert context["job_status"] is None
 
 
@@ -132,3 +134,57 @@ def test_build_spotify_page_context_sets_free_ingest_poll_interval() -> None:
     assert fragment is not None
     assert fragment.poll_interval_seconds == 15
     assert fragment.trigger == "load, every 15s"
+
+
+def test_build_spotify_recommendations_context_disables_queue_forms() -> None:
+    request = _make_request("/ui/spotify/recommendations")
+    rows = (
+        SpotifyRecommendationRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist",),
+            album=None,
+            preview_url=None,
+        ),
+    )
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf",
+        rows=rows,
+        queue_enabled=False,
+    )
+
+    fragment = context["fragment"]
+    actions_cell = fragment.table.rows[0].cells[-1]
+    assert all(form.submit_label_key != "spotify.saved.queue" for form in actions_cell.forms)
+    assert fragment.data_attributes["queue-enabled"] == "0"
+    assert context["queue_enabled"] is False
+
+
+def test_build_spotify_saved_tracks_context_disables_queue_forms() -> None:
+    request = _make_request("/ui/spotify")
+    rows = (
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist",),
+            album=None,
+            added_at=datetime.now(tz=UTC),
+        ),
+    )
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=rows,
+        total_count=1,
+        limit=25,
+        offset=0,
+        csrf_token="csrf",
+        queue_enabled=False,
+    )
+
+    fragment = context["fragment"]
+    actions_cell = fragment.table.rows[0].cells[-1]
+    assert all(form.submit_label_key != "spotify.saved.queue" for form in actions_cell.forms)
+    assert fragment.data_attributes["queue-enabled"] == "0"
+    assert context["queue_enabled"] is False
+    assert context["queue_action_url"] is None

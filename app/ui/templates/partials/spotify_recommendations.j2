@@ -2,7 +2,7 @@
 {% import "partials/alerts.j2" as alerts_macro %}
 {% import "partials/tables.j2" as tables %}
 
-<div class="spotify-recommendations">
+<div class="spotify-recommendations" data-queue-enabled="{{ 1 if queue_enabled else 0 }}">
   <p class="spotify-recommendations__hint">{{ strings.spotify_recommendations_hint() }}</p>
   {{ alerts_macro.render_alerts(alerts) }}
   <form id="spotify-recommendations-form"

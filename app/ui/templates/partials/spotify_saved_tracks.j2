@@ -1,23 +1,25 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
-<form id="spotify-save-track-form"
-      class="inline-form"
-      method="post"
-      action="{{ save_action_url }}"
-      hx-post="{{ save_action_url }}"
-      hx-target="#hx-spotify-saved"
-      hx-swap="outerHTML">
-  <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
-  <input type="hidden" name="limit" value="{{ page_limit }}" />
-  <input type="hidden" name="offset" value="{{ page_offset }}" />
-  <label for="track-ids">{{ strings.form_label("spotify.saved.track_ids") }}</label>
-  <input type="text"
-         name="track_ids"
-         id="track-ids"
-         autocomplete="off"
-         placeholder="{{ strings.form_help("spotify.saved.track_ids") }}" />
-  <button type="submit">{{ strings.button_label("spotify.saved.save") }}</button>
-</form>
+<div class="spotify-saved-tracks" data-queue-enabled="{{ 1 if queue_enabled else 0 }}">
+  <form id="spotify-save-track-form"
+        class="inline-form"
+        method="post"
+        action="{{ save_action_url }}"
+        hx-post="{{ save_action_url }}"
+        hx-target="#hx-spotify-saved"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <input type="hidden" name="limit" value="{{ page_limit }}" />
+    <input type="hidden" name="offset" value="{{ page_offset }}" />
+    <label for="track-ids">{{ strings.form_label("spotify.saved.track_ids") }}</label>
+    <input type="text"
+           name="track_ids"
+           id="track-ids"
+           autocomplete="off"
+           placeholder="{{ strings.form_help("spotify.saved.track_ids") }}" />
+    <button type="submit">{{ strings.button_label("spotify.saved.save") }}</button>
+  </form>
 
-{{ tables.render_table_fragment(fragment) }}
+  {{ tables.render_table_fragment(fragment) }}
+</div>

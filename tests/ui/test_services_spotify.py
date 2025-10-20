@@ -1150,6 +1150,25 @@ async def test_queue_saved_tracks_formats_and_submits() -> None:
 
 
 @pytest.mark.asyncio
+async def test_queue_saved_tracks_rejects_when_imports_disabled() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError, match="imports are off"):
+        await service.queue_saved_tracks(["track-1"], imports_enabled=False)
+
+    spotify_service.get_track_details.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_queue_saved_tracks_raises_when_no_metadata() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
@@ -1168,6 +1187,25 @@ async def test_queue_saved_tracks_raises_when_no_metadata() -> None:
         await service.queue_saved_tracks(["missing-track"])
 
     spotify_service.submit_free_ingest.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_queue_recommendation_tracks_rejects_when_imports_disabled() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    with pytest.raises(ValueError, match="imports are off"):
+        await service.queue_recommendation_tracks(["track-1"], imports_enabled=False)
+
+    spotify_service.get_track_details.assert_not_called()
 
 
 @pytest.mark.asyncio
