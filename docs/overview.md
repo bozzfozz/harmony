@@ -14,7 +14,8 @@ persists all state in a single SQLite database that ships inside the container i
   model, recovery flow and deduplication logic.
 - **Integrations** – Spotify (PRO and FREE flows) and Soulseek provide metadata and
   files. Additional utility services (lyrics, artwork, observability) are opt-in via
-  feature flags.
+  feature flags. See the [Soulseek UI dashboard guide](ui/soulseek.md) for day-to-day
+  operations on `/ui/soulseek`.
 - **Background Workers** – Watchlist, matching and enrichment workers run inside the
   same container process and respect the global HDM contracts.
 
