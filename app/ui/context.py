@@ -2357,6 +2357,7 @@ def build_spotify_saved_tracks_context(
     limit: int,
     offset: int,
     csrf_token: str,
+    queue_enabled: bool = True,
 ) -> Mapping[str, Any]:
     artists_label = "spotify.saved_tracks.artists"
     try:
@@ -2369,10 +2370,12 @@ def build_spotify_saved_tracks_context(
     except Exception:  # pragma: no cover - fallback for tests
         save_url = "/ui/spotify/saved/save"
 
-    try:
-        queue_url = request.url_for("spotify_saved_tracks_action", action="queue")
-    except Exception:  # pragma: no cover - fallback for tests
-        queue_url = "/ui/spotify/saved/queue"
+    queue_url: str | None = None
+    if queue_enabled:
+        try:
+            queue_url = request.url_for("spotify_saved_tracks_action", action="queue")
+        except Exception:  # pragma: no cover - fallback for tests
+            queue_url = "/ui/spotify/saved/queue"
 
     table_rows: list[TableRow] = []
     for row in rows:
@@ -2406,20 +2409,27 @@ def build_spotify_saved_tracks_context(
             hx_swap="outerHTML",
             hx_method="delete",
         )
-        queue_form = TableCellForm(
-            action=queue_url,
-            method="post",
-            submit_label_key="spotify.saved.queue",
-            hidden_fields={
-                "csrftoken": csrf_token,
-                "track_id": row.identifier,
-                "limit": str(limit),
-                "offset": str(offset),
-            },
-            hx_target="#hx-spotify-saved",
-            hx_swap="outerHTML",
-            hx_method="post",
-        )
+        queue_form: TableCellForm | None = None
+        if queue_url:
+            queue_form = TableCellForm(
+                action=queue_url,
+                method="post",
+                submit_label_key="spotify.saved.queue",
+                hidden_fields={
+                    "csrftoken": csrf_token,
+                    "track_id": row.identifier,
+                    "limit": str(limit),
+                    "offset": str(offset),
+                },
+                hx_target="#hx-spotify-saved",
+                hx_swap="outerHTML",
+                hx_method="post",
+            )
+        forms: list[TableCellForm] = [view_form]
+        if queue_form is not None:
+            forms.append(queue_form)
+        forms.append(remove_form)
+
         table_rows.append(
             TableRow(
                 cells=(
@@ -2428,7 +2438,7 @@ def build_spotify_saved_tracks_context(
                     TableCell(text=row.album or ""),
                     TableCell(text=added_text),
                     TableCell(
-                        forms=(view_form, queue_form, remove_form),
+                        forms=tuple(forms),
                         test_id=f"spotify-saved-track-actions-{row.identifier}",
                     ),
                 ),
@@ -2454,6 +2464,7 @@ def build_spotify_saved_tracks_context(
         "total": str(total_count),
         "limit": str(limit),
         "offset": str(offset),
+        "queue-enabled": "1" if queue_enabled and queue_url else "0",
     }
 
     try:
@@ -2492,6 +2503,7 @@ def build_spotify_saved_tracks_context(
         "csrf_token": csrf_token,
         "page_limit": limit,
         "page_offset": offset,
+        "queue_enabled": queue_enabled and queue_url is not None,
     }
 
 
@@ -2699,6 +2711,7 @@ def build_spotify_recommendations_context(
     alerts: Sequence[AlertMessage] | None = None,
     seed_defaults: Mapping[str, str] | None = None,
     show_admin_controls: bool = False,
+    queue_enabled: bool = True,
 ) -> Mapping[str, Any]:
     values = dict(form_values or {})
     defaults_source = dict(seed_defaults or {})
@@ -2725,10 +2738,12 @@ def build_spotify_recommendations_context(
         save_url = request.url_for("spotify_saved_tracks_action", action="save")
     except Exception:  # pragma: no cover - fallback for tests
         save_url = "/ui/spotify/saved/save"
-    try:
-        queue_url = request.url_for("spotify_recommendations_submit")
-    except Exception:  # pragma: no cover - fallback for tests
-        queue_url = "/ui/spotify/recommendations"
+    queue_url: str | None = None
+    if queue_enabled:
+        try:
+            queue_url = request.url_for("spotify_recommendations_submit")
+        except Exception:  # pragma: no cover - fallback for tests
+            queue_url = "/ui/spotify/recommendations"
     for row in rows:
         try:
             detail_url = request.url_for("spotify_track_detail", track_id=row.identifier)
@@ -2764,28 +2779,30 @@ def build_spotify_recommendations_context(
             hx_swap="innerHTML",
             hx_method="get",
         )
-        queue_form = TableCellForm(
-            action=queue_url,
-            method="post",
-            submit_label_key="spotify.saved.queue",
-            hidden_fields={
-                "csrftoken": csrf_token,
-                "action": "queue",
-                "track_id": row.identifier,
-                "seed_artists": defaults["seed_artists"],
-                "seed_tracks": defaults["seed_tracks"],
-                "seed_genres": defaults["seed_genres"],
-                "limit": defaults["limit"],
-            },
-            hx_target="#hx-spotify-recommendations",
-            hx_swap="outerHTML",
-            disabled=not bool(row.identifier),
-            test_id=(
-                f"spotify-recommendation-queue-{row.identifier}"
-                if row.identifier
-                else "spotify-recommendation-queue"
-            ),
-        )
+        queue_form: TableCellForm | None = None
+        if queue_enabled and queue_url:
+            queue_form = TableCellForm(
+                action=queue_url,
+                method="post",
+                submit_label_key="spotify.saved.queue",
+                hidden_fields={
+                    "csrftoken": csrf_token,
+                    "action": "queue",
+                    "track_id": row.identifier,
+                    "seed_artists": defaults["seed_artists"],
+                    "seed_tracks": defaults["seed_tracks"],
+                    "seed_genres": defaults["seed_genres"],
+                    "limit": defaults["limit"],
+                },
+                hx_target="#hx-spotify-recommendations",
+                hx_swap="outerHTML",
+                disabled=not bool(row.identifier),
+                test_id=(
+                    f"spotify-recommendation-queue-{row.identifier}"
+                    if row.identifier
+                    else "spotify-recommendation-queue"
+                ),
+            )
         save_form = TableCellForm(
             action=save_url,
             method="post",
@@ -2805,6 +2822,11 @@ def build_spotify_recommendations_context(
                 else "spotify-recommendation-save"
             ),
         )
+        forms: list[TableCellForm] = [view_form]
+        if queue_form is not None:
+            forms.append(queue_form)
+        forms.append(save_form)
+
         table_rows.append(
             TableRow(
                 cells=(
@@ -2830,7 +2852,7 @@ def build_spotify_recommendations_context(
                     ),
                     preview_cell,
                     TableCell(
-                        forms=(view_form, queue_form, save_form),
+                        forms=tuple(forms),
                         test_id=f"spotify-recommendation-actions-{row.identifier}",
                     ),
                 ),
@@ -2854,6 +2876,7 @@ def build_spotify_recommendations_context(
 
     data_attributes = {
         "count": str(len(table_rows)),
+        "queue-enabled": "1" if queue_enabled else "0",
     }
 
     fragment = TableFragment(
@@ -2873,6 +2896,7 @@ def build_spotify_recommendations_context(
         "seeds": tuple(seeds),
         "show_admin_controls": show_admin_controls,
         "seed_defaults": defaults_source,
+        "queue_enabled": queue_enabled,
     }
 
 

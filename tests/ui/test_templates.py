@@ -499,6 +499,34 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert 'data-test="spotify-recommendation-link-track-1"' in html
 
 
+def test_spotify_recommendations_partial_hides_queue_when_imports_disabled() -> None:
+    request = _make_request("/ui/spotify/recommendations")
+    rows = (
+        SpotifyRecommendationRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One",),
+            album="Album Name",
+            preview_url=None,
+            external_url="https://open.spotify.com/track/track-1",
+        ),
+    )
+    context = build_spotify_recommendations_context(
+        request,
+        csrf_token="csrf-token",
+        rows=rows,
+        limit=10,
+        offset=0,
+        queue_enabled=False,
+    )
+    template = templates.get_template("partials/spotify_recommendations.j2")
+    html = template.render(**context)
+
+    assert 'data-queue-enabled="0"' in html
+    assert 'data-test="spotify-recommendation-queue-track-1"' not in html
+    assert 'data-test="spotify-recommendation-save-track-1"' in html
+
+
 def test_spotify_account_fragment_template_renders_summary() -> None:
     request = _make_request("/ui/spotify")
     summary = SpotifyAccountSummary(
@@ -586,6 +614,35 @@ def test_spotify_saved_tracks_fragment_template_renders_table() -> None:
     assert 'hx-post="/ui/spotify/saved/queue"' in html
     assert 'hx-delete="/ui/spotify/saved/remove"' in html
     assert "Queue download" in html
+
+
+def test_spotify_saved_tracks_fragment_template_hides_queue_when_imports_disabled() -> None:
+    request = _make_request("/ui/spotify")
+    rows = (
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track One",
+            artists=("Artist One",),
+            album="Album Name",
+            added_at=datetime(2023, 9, 1, 10, 0, tzinfo=UTC),
+        ),
+    )
+    context = build_spotify_saved_tracks_context(
+        request,
+        rows=rows,
+        total_count=1,
+        limit=25,
+        offset=0,
+        csrf_token="csrf-token",
+        queue_enabled=False,
+    )
+    template = templates.get_template("partials/spotify_saved_tracks.j2")
+    html = template.render(**context)
+
+    assert context["queue_action_url"] is None
+    assert 'data-queue-enabled="0"' in html
+    assert 'hx-post="/ui/spotify/saved/queue"' not in html
+    assert 'hx-delete="/ui/spotify/saved/remove"' in html
 
 
 def test_spotify_track_detail_template_renders_modal() -> None:

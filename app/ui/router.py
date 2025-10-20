@@ -431,6 +431,7 @@ def _render_recommendations_response(
         alerts=alerts,
         seed_defaults=seed_defaults,
         show_admin_controls=show_admin_controls,
+        queue_enabled=session.features.imports,
     )
     response = templates.TemplateResponse(
         request,
@@ -855,7 +856,9 @@ async def _handle_queue_action(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     try:
-        result = await service.queue_recommendation_tracks(parsed_form.queue_track_ids)
+        result = await service.queue_recommendation_tracks(
+            parsed_form.queue_track_ids, imports_enabled=session.features.imports
+        )
     except ValueError as exc:
         alerts.append(AlertMessage(level="error", text=str(exc)))
         return _render_recommendations_form(
@@ -3622,6 +3625,8 @@ async def spotify_recommendations_submit(
         return ""
 
     action = _first_action(form)
+    if action == "queue":
+        _ensure_imports_feature_enabled(session)
     show_admin_controls = session.allows("admin")
     seed_defaults = service.get_recommendation_seed_defaults()
     if action == "load_defaults" and show_admin_controls:
@@ -3679,6 +3684,7 @@ async def spotify_saved_tracks_fragment(
         limit=limit,
         offset=offset,
         csrf_token=csrf_token,
+        queue_enabled=session.features.imports,
     )
     response = templates.TemplateResponse(
         request,
@@ -3715,6 +3721,9 @@ async def spotify_saved_tracks_action(
     action_key = action.strip().lower()
     if action_key not in {"save", "remove", "queue"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported action.")
+
+    if action_key == "queue":
+        _ensure_imports_feature_enabled(session)
 
     raw_body = await request.body()
     try:
@@ -3778,7 +3787,9 @@ async def spotify_saved_tracks_action(
             event_name = "ui.spotify.saved.remove"
             failure_message = "Unable to remove Spotify tracks."
         else:
-            result = await service.queue_saved_tracks(extracted_ids)
+            result = await service.queue_saved_tracks(
+                extracted_ids, imports_enabled=session.features.imports
+            )
             affected = int(result.accepted.tracks)
             event_name = "ui.spotify.saved.queue"
             failure_message = "Unable to queue Spotify downloads."
@@ -3823,6 +3834,7 @@ async def spotify_saved_tracks_action(
         limit=limit,
         offset=offset,
         csrf_token=csrf_token,
+        queue_enabled=session.features.imports,
     )
     response = templates.TemplateResponse(
         request,

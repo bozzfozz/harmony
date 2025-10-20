@@ -884,7 +884,11 @@ class SpotifyUiService:
         logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
         return len(cleaned)
 
-    async def queue_saved_tracks(self, track_ids: Sequence[str]) -> SpotifyFreeIngestResult:
+    async def queue_saved_tracks(
+        self, track_ids: Sequence[str], *, imports_enabled: bool = True
+    ) -> SpotifyFreeIngestResult:
+        if not imports_enabled:
+            raise ValueError("Queueing Spotify downloads is disabled while imports are off.")
         return await self._queue_tracks(
             track_ids,
             log_namespace="spotify.ui.saved_tracks.queue",
@@ -906,8 +910,10 @@ class SpotifyUiService:
         return tuple(cleaned)
 
     async def queue_recommendation_tracks(
-        self, track_ids: Sequence[str]
+        self, track_ids: Sequence[str], *, imports_enabled: bool = True
     ) -> SpotifyFreeIngestResult:
+        if not imports_enabled:
+            raise ValueError("Queueing Spotify downloads is disabled while imports are off.")
         return await self._queue_tracks(
             track_ids,
             log_namespace="spotify.ui.recommendations.queue",

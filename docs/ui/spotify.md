@@ -69,6 +69,9 @@ engineering implementation notes remain documented in
   artists, genres) using `GET /api/v1/spotify/recommendations`.
 - **Primary actions:** Operators curate seed sets, preview matching tracks, and
   queue promising items for ingest. Admins may pin default seeds for the team.
+- **Feature dependency:** Queue buttons only appear when `UI_FEATURE_IMPORTS`
+  is enabled. If imports are disabled, the UI hides queue controls and the
+  server responds with `404` to queue submissions.
 - **Operational expectations:** Seeds persist per session; expect varied
   results depending on available audio features and saved history.
 - **Observability hooks:** Recommendation payload sizes and latency surface via
@@ -80,6 +83,9 @@ engineering implementation notes remain documented in
   remove them from the saved list.
 - **Primary actions:** Operators enqueue tracks into Harmony's ingest pipeline;
   admins can bulk remove saved tracks to keep personal libraries tidy.
+- **Feature dependency:** Queueing saved tracks also requires
+  `UI_FEATURE_IMPORTS=true`; otherwise the queue action is hidden and HTTP
+  requests receive `404`.
 - **Operational expectations:** Saved items sync within 60 seconds of new likes.
   If the table lags, verify background sync workers.
 - **Observability hooks:** Mutations call `POST /api/v1/spotify/me/tracks` and

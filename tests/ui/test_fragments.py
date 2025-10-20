@@ -573,7 +573,7 @@ class _StubSpotifyService:
         return dict(self.recommendation_seed_defaults)
 
     async def queue_recommendation_tracks(
-        self, track_ids: Sequence[str]
+        self, track_ids: Sequence[str], *, imports_enabled: bool = True
     ) -> SpotifyFreeIngestResult:
         self.queue_recommendation_calls.append(tuple(track_ids))
         if self.queue_recommendation_exception:
@@ -664,7 +664,9 @@ class _StubSpotifyService:
         self.saved_tracks_total = len(self.saved_tracks_rows)
         return removed
 
-    async def queue_saved_tracks(self, track_ids: Sequence[str]) -> SpotifyFreeIngestResult:
+    async def queue_saved_tracks(
+        self, track_ids: Sequence[str], *, imports_enabled: bool = True
+    ) -> SpotifyFreeIngestResult:
         if self.queue_exception:
             raise self.queue_exception
         cleaned = tuple(track_ids)
@@ -921,6 +923,7 @@ class _StubSoulseekUiService:
         limit: int = 20,
     ):
         if self._delegate_service is None:
+
             class _DelegateRegistry:
                 def initialise(self) -> None:
                     return None
@@ -2779,6 +2782,33 @@ def test_spotify_recommendations_submit_queue_action(monkeypatch) -> None:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
 
+def test_spotify_recommendations_submit_queue_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        extra_env = {"UI_FEATURE_IMPORTS": "false"}
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/recommendations",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "action": "queue",
+                    "track_id": "track-1",
+                    "seed_tracks": "track-1",
+                    "seed_artists": "artist-1",
+                    "seed_genres": "",
+                    "limit": "10",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_json_error(response, status_code=404)
+            assert stub.queue_recommendation_calls == []
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
 def test_spotify_recommendations_submit_queue_handles_error(monkeypatch) -> None:
     stub = _StubSpotifyService()
     stub.queue_recommendation_exception = ValueError("Unable to queue tracks")
@@ -3153,6 +3183,30 @@ def test_spotify_saved_tracks_action_queue_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert stub.queue_calls == [("track-queue-1", "track-queue-2")]
             assert "Queue download" in response.text
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_action_queue_disabled(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        extra_env = {"UI_FEATURE_IMPORTS": "false"}
+        with _create_client(monkeypatch, extra_env=extra_env) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/spotify/saved/queue",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "track_ids": "track-queue-1",
+                    "limit": "25",
+                    "offset": "0",
+                },
+                headers={**headers, "HX-Request": "true"},
+            )
+            _assert_json_error(response, status_code=404)
+            assert stub.queue_calls == []
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
