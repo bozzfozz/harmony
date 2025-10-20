@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, Mock
 from app.config import load_config
 from app.db import init_db, session_scope
 from app.dependencies import get_app_config, get_db, get_soulseek_client
-from app.models import Download
+from app.models import DiscographyJob, Download
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.utils.path_safety import allowed_download_roots
 
@@ -85,6 +85,24 @@ class _FailingSyncWorker(_StubSyncWorker):
 
     async def enqueue(self, job: dict[str, Any]) -> None:
         self.attempts += 1
+        raise self._error
+
+
+class _StubDiscographyWorker:
+    def __init__(self) -> None:
+        self.job_ids: list[int] = []
+
+    async def enqueue(self, job_id: int) -> None:
+        self.job_ids.append(job_id)
+
+
+class _FailingDiscographyWorker(_StubDiscographyWorker):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self._error = error
+
+    async def enqueue(self, job_id: int) -> None:
+        await super().enqueue(job_id)
         raise self._error
 
 
@@ -177,11 +195,13 @@ def soulseek_client() -> Iterator[TestClient]:
     client = TestClient(app)
     with client as test_client:
         sync_worker = _StubSyncWorker()
+        discography_worker = _StubDiscographyWorker()
         lyrics_worker = _StubLyricsWorker()
         metadata_worker = _StubMetadataWorker()
         artwork_worker = _StubArtworkWorker()
 
         test_client.app.state.sync_worker = sync_worker
+        test_client.app.state.discography_worker = discography_worker
         test_client.app.state.lyrics_worker = lyrics_worker
         test_client.app.state.rich_metadata_worker = metadata_worker
         test_client.app.state.artwork_worker = artwork_worker
@@ -420,6 +440,82 @@ def test_download_marks_all_failed_when_worker_errors_multiple_files(
             assert download.state == "failed"
             assert download.last_error == str(error)
             assert download.progress >= 0
+
+
+def test_discography_download_persists_job_and_enqueues(
+    soulseek_client: TestClient,
+) -> None:
+    response = soulseek_client.post(
+        "/soulseek/discography/download",
+        json={"artist_id": "artist-123", "artist_name": "The Artists"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "pending"
+    job_id = payload["job_id"]
+
+    with session_scope() as session:
+        job = session.get(DiscographyJob, job_id)
+        assert job is not None
+        assert job.artist_id == "artist-123"
+        assert job.artist_name == "The Artists"
+        assert job.status == "pending"
+        session.delete(job)
+
+    worker = soulseek_client.app.state.discography_worker
+    assert isinstance(worker, _StubDiscographyWorker)
+    assert worker.job_ids == [job_id]
+
+
+def test_discography_download_rejects_missing_artist_id(
+    soulseek_client: TestClient,
+) -> None:
+    response = soulseek_client.post(
+        "/soulseek/discography/download",
+        json={"artist_id": "", "artist_name": "Nameless"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Artist identifier is required"}
+
+    with session_scope() as session:
+        assert session.query(DiscographyJob).count() == 0
+
+
+def test_discography_download_logs_worker_failure(
+    soulseek_client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    error = RuntimeError("discography worker offline")
+    failing_worker = _FailingDiscographyWorker(error)
+    soulseek_client.app.state.discography_worker = failing_worker
+    caplog.set_level("ERROR")
+
+    response = soulseek_client.post(
+        "/soulseek/discography/download",
+        json={"artist_id": "artist-500", "artist_name": "Offline"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "pending"
+    job_id = payload["job_id"]
+
+    worker = soulseek_client.app.state.discography_worker
+    assert isinstance(worker, _FailingDiscographyWorker)
+    assert worker.job_ids == [job_id]
+
+    with session_scope() as session:
+        job = session.get(DiscographyJob, job_id)
+        assert job is not None
+        assert job.status == "pending"
+        session.delete(job)
+
+    error_messages = [record.message for record in caplog.records if record.levelname == "ERROR"]
+    assert any(
+        f"Failed to enqueue discography job {job_id}" in message
+        for message in error_messages
+    )
 
 
 @pytest.mark.asyncio()
