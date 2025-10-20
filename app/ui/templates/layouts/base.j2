@@ -25,7 +25,9 @@
       {% endif %}
       {% block header_actions %}{% endblock %}
     </header>
-    {{ alerts.render_alerts(layout.alerts) }}
+    <div id="ui-alert-region" data-role="alert-region" aria-live="polite" aria-atomic="true">
+      {{ alerts.render_alerts(layout.alerts) }}
+    </div>
     <main role="main">
       {% block page_header %}{% endblock %}
       {% block main %}{% endblock %}
@@ -46,6 +48,7 @@
         <script src="{{ asset_url(ui_assets.htmx.local_asset_path) }}" defer></script>
       {% endif %}
       <script src="{{ asset_url('js/ui-bootstrap.js') }}" defer></script>
+      <script src="{{ asset_url('js/htmx-error-handler.js') }}" defer></script>
     {% endblock %}
   </body>
 </html>

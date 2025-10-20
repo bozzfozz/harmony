@@ -43,7 +43,8 @@
          hx-get="{{ liveness_fragment.url }}"
          hx-trigger="{{ liveness_fragment.trigger }}"
          hx-target="{{ liveness_fragment.target }}"
-         hx-swap="{{ liveness_fragment.swap }}">
+         hx-swap="{{ liveness_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(liveness_fragment.loading_key) }}
       </p>
@@ -72,7 +73,8 @@
          hx-get="{{ readiness_fragment.url }}"
          hx-trigger="{{ readiness_fragment.trigger }}"
          hx-target="{{ readiness_fragment.target }}"
-         hx-swap="{{ readiness_fragment.swap }}">
+         hx-swap="{{ readiness_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(readiness_fragment.loading_key) }}
       </p>
@@ -101,7 +103,8 @@
          hx-get="{{ services_fragment.url }}"
          hx-trigger="{{ services_fragment.trigger }}"
          hx-target="{{ services_fragment.target }}"
-         hx-swap="{{ services_fragment.swap }}">
+         hx-swap="{{ services_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(services_fragment.loading_key) }}
       </p>
@@ -130,7 +133,8 @@
          hx-get="{{ integrations_fragment.url }}"
          hx-trigger="{{ integrations_fragment.trigger }}"
          hx-target="{{ integrations_fragment.target }}"
-         hx-swap="{{ integrations_fragment.swap }}">
+         hx-swap="{{ integrations_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(integrations_fragment.loading_key) }}
       </p>

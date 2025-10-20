@@ -47,7 +47,8 @@
          hx-get="{{ history_fragment.url }}"
          hx-trigger="{{ history_fragment.trigger }}"
          hx-target="{{ history_fragment.target }}"
-         hx-swap="{{ history_fragment.swap }}">
+         hx-swap="{{ history_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(history_fragment.loading_key) }}
       </p>
@@ -77,7 +78,8 @@
          hx-get="{{ artist_preferences_fragment.url }}"
          hx-trigger="{{ artist_preferences_fragment.trigger }}"
          hx-target="{{ artist_preferences_fragment.target }}"
-         hx-swap="{{ artist_preferences_fragment.swap }}">
+         hx-swap="{{ artist_preferences_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">
         {{ strings.fragment_loading(artist_preferences_fragment.loading_key) }}
       </p>

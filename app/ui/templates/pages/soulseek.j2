@@ -27,7 +27,8 @@
          hx-get="{{ status_fragment.url }}"
          hx-trigger="{{ status_fragment.trigger }}"
          hx-target="{{ status_fragment.target }}"
-         hx-swap="{{ status_fragment.swap }}">
+         hx-swap="{{ status_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
       {% include "partials/soulseek_status.j2" with connection_badge=None, integration_badge=None, provider_table=None %}
     </div>
@@ -70,7 +71,8 @@
          hx-get="{{ configuration_fragment.url }}"
          hx-trigger="{{ configuration_fragment.trigger }}"
          hx-target="{{ configuration_fragment.target }}"
-         hx-swap="{{ configuration_fragment.swap }}">
+         hx-swap="{{ configuration_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(configuration_fragment.loading_key) }}</p>
       {% include "partials/soulseek_config.j2" with table=None %}
     </div>
@@ -87,7 +89,8 @@
          hx-get="{{ uploads_fragment.url }}"
          hx-trigger="{{ uploads_fragment.trigger }}"
          hx-target="{{ uploads_fragment.target }}"
-         hx-swap="{{ uploads_fragment.swap }}">
+         hx-swap="{{ uploads_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(uploads_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -103,7 +106,8 @@
          hx-get="{{ downloads_fragment.url }}"
          hx-trigger="{{ downloads_fragment.trigger }}"
          hx-target="{{ downloads_fragment.target }}"
-         hx-swap="{{ downloads_fragment.swap }}">
+         hx-swap="{{ downloads_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(downloads_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -119,7 +123,8 @@
          hx-get="{{ discography_fragment.url }}"
          hx-trigger="{{ discography_fragment.trigger }}"
          hx-target="{{ discography_fragment.target }}"
-         hx-swap="{{ discography_fragment.swap }}">
+         hx-swap="{{ discography_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(discography_fragment.loading_key) }}</p>
       <p class="async-fragment__meta">{{ strings.soulseek_discography_loading() }}</p>
       {% include "partials/soulseek_discography_jobs.j2" with fragment=None, modal_url=discography_fragment.url, alerts=() %}
@@ -137,7 +142,8 @@
          hx-get="{{ user_info_fragment.url }}"
          hx-trigger="{{ user_info_fragment.trigger }}"
          hx-target="{{ user_info_fragment.target }}"
-         hx-swap="{{ user_info_fragment.swap }}">
+         hx-swap="{{ user_info_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_info_fragment.loading_key) }}</p>
       {% include "partials/soulseek_user_info.j2" with lookup_url=user_info_fragment.url, username="", profile=None, address_items=(), info_items=(), has_profile=False, has_user_status=False, has_user_browse_status=False, user_status_badge=None, user_status_shared=None, user_status_has_shared=False, user_status_message=None, user_browse_badge=None, user_browse_progress=None, user_browse_has_progress=False, user_browse_queue=None, user_browse_has_queue=False, user_browse_message=None %}
     </div>
@@ -154,7 +160,8 @@
          hx-get="{{ user_directory_fragment.url }}"
          hx-trigger="{{ user_directory_fragment.trigger }}"
          hx-target="{{ user_directory_fragment.target }}"
-         hx-swap="{{ user_directory_fragment.swap }}">
+         hx-swap="{{ user_directory_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_directory_fragment.loading_key) }}</p>
       {% include "partials/soulseek_user_directory.j2" with browse_url=user_directory_fragment.url, username="", path=None, directories=(), files=(), parent_url=None, has_listing=False, has_user_status=False, has_user_browse_status=False, user_status_badge=None, user_status_shared=None, user_status_has_shared=False, user_status_message=None, user_browse_badge=None, user_browse_progress=None, user_browse_has_progress=False, user_browse_queue=None, user_browse_has_queue=False, user_browse_message=None %}
     </div>

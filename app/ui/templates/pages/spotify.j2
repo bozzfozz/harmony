@@ -27,7 +27,8 @@
          hx-get="{{ status_fragment.url }}"
          hx-trigger="{{ status_fragment.trigger }}"
          hx-target="{{ status_fragment.target }}"
-         hx-swap="{{ status_fragment.swap }}">
+         hx-swap="{{ status_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -42,7 +43,8 @@
          hx-get="{{ account_fragment.url }}"
          hx-trigger="{{ account_fragment.trigger }}"
          hx-target="{{ account_fragment.target }}"
-         hx-swap="{{ account_fragment.swap }}">
+         hx-swap="{{ account_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(account_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -57,7 +59,8 @@
          hx-get="{{ top_tracks_fragment.url }}"
          hx-trigger="{{ top_tracks_fragment.trigger }}"
          hx-target="{{ top_tracks_fragment.target }}"
-         hx-swap="{{ top_tracks_fragment.swap }}">
+         hx-swap="{{ top_tracks_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(top_tracks_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -72,7 +75,8 @@
          hx-get="{{ top_artists_fragment.url }}"
          hx-trigger="{{ top_artists_fragment.trigger }}"
          hx-target="{{ top_artists_fragment.target }}"
-         hx-swap="{{ top_artists_fragment.swap }}">
+         hx-swap="{{ top_artists_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(top_artists_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -88,7 +92,8 @@
          hx-get="{{ recommendations_fragment.url }}"
          hx-trigger="{{ recommendations_fragment.trigger }}"
          hx-target="{{ recommendations_fragment.target }}"
-         hx-swap="{{ recommendations_fragment.swap }}">
+         hx-swap="{{ recommendations_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(recommendations_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -103,7 +108,8 @@
          hx-get="{{ saved_fragment.url }}"
          hx-trigger="{{ saved_fragment.trigger }}"
          hx-target="{{ saved_fragment.target }}"
-         hx-swap="{{ saved_fragment.swap }}">
+         hx-swap="{{ saved_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(saved_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -118,7 +124,8 @@
          hx-get="{{ playlists_fragment.url }}"
          hx-trigger="{{ playlists_fragment.trigger }}"
          hx-target="{{ playlists_fragment.target }}"
-         hx-swap="{{ playlists_fragment.swap }}">
+         hx-swap="{{ playlists_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(playlists_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -133,7 +140,8 @@
          hx-get="{{ artists_fragment.url }}"
          hx-trigger="{{ artists_fragment.trigger }}"
          hx-target="{{ artists_fragment.target }}"
-         hx-swap="{{ artists_fragment.swap }}">
+         hx-swap="{{ artists_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(artists_fragment.loading_key) }}</p>
     </div>
   </section>
@@ -146,10 +154,11 @@
            aria-live="polite"
            aria-labelledby="{{ free_ingest_fragment.identifier }}-heading"
            data-fragment="spotify-free-ingest"
-           hx-get="{{ free_ingest_fragment.url }}"
-           hx-trigger="{{ free_ingest_fragment.trigger }}"
-           hx-target="{{ free_ingest_fragment.target }}"
-           hx-swap="{{ free_ingest_fragment.swap }}">
+          hx-get="{{ free_ingest_fragment.url }}"
+          hx-trigger="{{ free_ingest_fragment.trigger }}"
+          hx-target="{{ free_ingest_fragment.target }}"
+          hx-swap="{{ free_ingest_fragment.swap }}"
+          hx-on="htmx:responseError:handleHtmxError(event)">
         <p class="async-fragment__placeholder">{{ strings.fragment_loading(free_ingest_fragment.loading_key) }}</p>
       </div>
     </section>
@@ -165,7 +174,8 @@
          hx-get="{{ backfill_fragment.url }}"
          hx-trigger="{{ backfill_fragment.trigger }}"
          hx-target="{{ backfill_fragment.target }}"
-         hx-swap="{{ backfill_fragment.swap }}">
+         hx-swap="{{ backfill_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(backfill_fragment.loading_key) }}</p>
     </div>
   </section>

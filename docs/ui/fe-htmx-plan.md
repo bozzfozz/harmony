@@ -161,7 +161,8 @@ Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions
 Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SPOTIFY` aktiv ist; Upload-Aktionen selbst werden zusätzlich von `UI_FEATURE_IMPORTS` gesteuert.
 
 ### Fehler- und Toast-Behandlung
-- Standard: HTTP 4xx/5xx Antworten werden via HTMX `hx-on="htmx:responseError"` abgefangen → `partials/alerts.html` rendert Fehlermeldungen.
+- `app/ui/static/js/htmx-error-handler.js` registriert einen globalen Listener auf `htmx:responseError`, injiziert HTML-Antworten (`partials/alerts_fragment.j2`/`partials/async_error.j2`) in `[data-role="alert-region"]` und stellt die Funktion `handleHtmxError(event)` für Template-Hooks bereit.
+- Standard: HTTP 4xx/5xx Antworten werden via HTMX `hx-on="htmx:responseError:handleHtmxError(event)"` abgefangen → `partials/alerts.html` rendert Fehlermeldungen.
 - Validation (422/400) liefert Partial mit Formular-Fehlermarkierungen.
 - `hx-swap-oob` wird für globale Toasts, KPI-Zähler und Badge-Updates genutzt.
 

@@ -17,7 +17,7 @@ import pytest
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
 from app.dependencies import get_download_service, get_soulseek_client
-from app.errors import AppError, ErrorCode
+from app.errors import AppError, ErrorCode, ValidationAppError
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.main import app
 from app.schemas import StatusResponse
@@ -2732,6 +2732,28 @@ def test_downloads_fragment_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
 
+def test_downloads_fragment_validation_error(monkeypatch) -> None:
+    page = DownloadPage(items=[], limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    stub.list_exception = ValidationAppError("Invalid priority range.")
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/downloads/table", headers=headers)
+            _assert_html_response(response, status_code=400)
+            html = response.text
+            lines = [line.strip() for line in html.splitlines() if line.strip()]
+            assert lines == [
+                '<div class="alerts">',
+                '<p role="alert" class="alert alert--error">Invalid priority range.</p>',
+                "</div>",
+            ]
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
 def test_downloads_fragment_requires_feature(monkeypatch) -> None:
     extra_env = {"UI_FEATURE_DLQ": "false"}
     with _create_client(monkeypatch, extra_env=extra_env) as client:
@@ -2757,7 +2779,13 @@ def test_downloads_fragment_error(monkeypatch) -> None:
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/downloads/table", headers=headers)
             _assert_html_response(response, status_code=503)
-            assert "broken" in response.text
+            html = response.text
+            lines = [line.strip() for line in html.splitlines() if line.strip()]
+            assert lines == [
+                '<div class="alerts">',
+                '<p role="alert" class="alert alert--error">broken</p>',
+                "</div>",
+            ]
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
