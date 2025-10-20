@@ -100,7 +100,7 @@ class _StubLyricsWorker:
 
 class _StubMetadataWorker:
     def __init__(self) -> None:
-        self.calls: list[tuple[int, Path]] = []
+        self.calls: list[dict[str, Any]] = []
 
     async def enqueue(
         self,
@@ -110,7 +110,14 @@ class _StubMetadataWorker:
         payload: dict[str, Any] | None = None,
         request_payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        self.calls.append((download_id, audio_path))
+        self.calls.append(
+            {
+                "download_id": download_id,
+                "audio_path": audio_path,
+                "payload": payload,
+                "request_payload": request_payload,
+            }
+        )
         return {}
 
 
@@ -317,6 +324,33 @@ def test_download_marks_failed_when_worker_errors(soulseek_client: TestClient) -
         assert download.state == "failed"
         assert download.last_error == str(error)
         assert download.progress >= 0
+
+
+def test_download_marks_failed_when_worker_raises_client_error(
+    soulseek_client: TestClient,
+) -> None:
+    class _ClientErrorWorker(_StubSyncWorker):
+        async def enqueue(self, job: dict[str, Any]) -> None:
+            raise SoulseekClientError("queue rejected")
+
+    soulseek_client.app.state.sync_worker = _ClientErrorWorker()
+
+    response = soulseek_client.post(
+        "/soulseek/download",
+        json={
+            "username": "tester",
+            "files": [{"filename": "client-error/single.mp3"}],
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Soulseek download failed"}
+
+    expected_path = _downloads_dir() / "client-error" / "single.mp3"
+    with session_scope() as session:
+        download = session.query(Download).filter_by(filename=str(expected_path)).one()
+        assert download.state == "failed"
+        assert download.last_error == "queue rejected"
 
 
 def test_download_marks_all_failed_when_worker_errors_multiple_files(
@@ -705,6 +739,91 @@ def test_metadata_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> 
     assert response.status_code == 400
     metadata_worker: _StubMetadataWorker = soulseek_client.app.state.rich_metadata_worker
     assert not metadata_worker.calls
+
+
+def test_metadata_detail_returns_serialised_payload(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"metadata-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    request_payload = {
+        "metadata": {"album": "Test Album", "title": "Test Title"},
+        "file": {"filename": "metadata/test.mp3", "priority": 5},
+        "username": "tester",
+    }
+
+    try:
+        audio_path.touch()
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            filename=str(audio_path),
+            genre="Ambient",
+            composer="Composer Name",
+            producer="Producer Name",
+            isrc="US-TEST-12345",
+            copyright="2024 Example",
+            request_payload=request_payload,
+        )
+
+        response = soulseek_client.get(f"/soulseek/download/{download.id}/metadata")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": download.id,
+            "filename": str(audio_path),
+            "genre": "Ambient",
+            "composer": "Composer Name",
+            "producer": "Producer Name",
+            "isrc": "US-TEST-12345",
+            "copyright": "2024 Example",
+        }
+    finally:
+        if audio_path.exists():
+            audio_path.unlink()
+
+
+def test_metadata_refresh_enqueues_job(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"metadata-refresh-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    request_payload = {
+        "metadata": {"artist": "Example Artist"},
+        "file": {"filename": "metadata-refresh/test.mp3", "priority": 3},
+        "username": "tester",
+    }
+
+    try:
+        audio_path.touch()
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            filename=str(audio_path),
+            request_payload=request_payload,
+        )
+
+        response = soulseek_client.post(
+            f"/soulseek/download/{download.id}/metadata/refresh"
+        )
+
+        assert response.status_code == 202
+        assert response.json() == {"status": "queued"}
+
+        metadata_worker: _StubMetadataWorker = (
+            soulseek_client.app.state.rich_metadata_worker
+        )
+        assert len(metadata_worker.calls) == 1
+        call = metadata_worker.calls[0]
+        assert call["download_id"] == download.id
+        assert call["audio_path"] == audio_path
+        assert call["payload"] == request_payload
+        assert call["request_payload"] == request_payload
+    finally:
+        if audio_path.exists():
+            audio_path.unlink()
 
 
 def test_requeue_download_success(
