@@ -32,8 +32,6 @@ The complete documentation map lives in [`docs/README.md`](docs/README.md).
 docker run -d \
   --name harmony \
   -p 8080:8080 \
-  -e HARMONY_API_KEYS=change-me \
-  -e ALLOWED_ORIGINS=http://localhost:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
   ghcr.io/bozzfozz/harmony:latest
@@ -42,24 +40,36 @@ docker run -d \
 - The container creates the SQLite database at `/data/harmony.db`.
 - Mount `/data/downloads` and `/data/music` to persist downloads and the organised
   library.
+- Optional security hardening:
+  - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
+  - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
+  - Provide them via `-e ...` flags or a `.env` file when exposing Harmony
+    beyond trusted networks.
+- On first start the container writes `/data/harmony.yml` with every supported
+  configuration switch. Edit that file to tailor Harmony; environment variables
+  still win over values defined in the YAML.
 - Verify the deployment with `curl -fsS http://127.0.0.1:8080/live` and
   `curl -fsS "http://127.0.0.1:8080/api/health/ready?verbose=1"`.
   The versioned system endpoints live under `/api/v1/...`; see
   [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the UI wiring overview.
 
-A compose example with the same defaults lives in
-[`docs/install/docker.md`](docs/install/docker.md).
+A docker compose definition with the same defaults ships in
+[`compose.yaml`](compose.yaml). Adjust the `/mnt/...` host paths to match your
+environment and see [`docs/install/docker.md`](docs/install/docker.md) for
+additional deployment notes.
 
 ## Minimal configuration
 
-Only a few environment variables are required for a local deployment:
+Harmony boots with sensible defaults and only needs overrides for specific
+deployments. Key options:
 
-| Variable | Purpose | Example |
-| --- | --- | --- |
-| `HARMONY_API_KEYS` | Comma-separated API keys accepted by the gateway. | `secret-local-key` |
-| `ALLOWED_ORIGINS` | CORS allowlist for the browser UI. | `http://localhost:8080` |
-| `DOWNLOADS_DIR` | Workspace for HDM downloads. | `/data/downloads` |
-| `MUSIC_DIR` | Target library for organised media. | `/data/music` |
+| Variable | Default | Purpose | When to set |
+| --- | --- | --- | --- |
+| `HARMONY_API_KEYS` | _(empty)_ | Enables API key authentication. | Recommended when Harmony is reachable from untrusted networks. |
+| `ALLOWED_ORIGINS` | `*` | CORS allowlist for the browser UI. | Set to your public base URL when tightening CORS. |
+| `DOWNLOADS_DIR` | `/data/downloads` | Workspace for HDM downloads. | Override when the downloads path differs from the default mount. |
+| `MUSIC_DIR` | `/data/music` | Target library for organised media. | Override when the music library lives elsewhere. |
+| `harmony.yml` | auto-generated | YAML file under `/data` containing every tunable variable. | Edit to persist configuration between restarts. |
 
 All other knobs are documented in [`docs/configuration.md`](docs/configuration.md).
 

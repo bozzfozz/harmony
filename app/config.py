@@ -32,6 +32,23 @@ _LEGACY_APP_PORT_ENV_VARS: tuple[str, ...] = (
 _RUNTIME_ENV_CACHE: dict[str, str] | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class ConfigTemplateEntry:
+    name: str
+    default: Any
+    comment: str
+
+
+@dataclass(slots=True, frozen=True)
+class ConfigTemplateSection:
+    name: str
+    comment: str
+    entries: tuple[ConfigTemplateEntry, ...]
+
+
+DEFAULT_CONFIG_FILE_PATH = Path("/data/harmony.yml")
+
+
 def _load_env_file(path: Path) -> dict[str, str]:
     try:
         contents = path.read_text(encoding="utf-8")
@@ -49,6 +66,214 @@ def _load_env_file(path: Path) -> dict[str, str]:
     return env_values
 
 
+def _resolve_config_file_path(env: Mapping[str, Any]) -> Path | None:
+    raw_path = env.get("HARMONY_CONFIG_FILE")
+    if raw_path:
+        return Path(str(raw_path)).expanduser()
+    if env.get("PYTEST_CURRENT_TEST"):
+        return None
+    return DEFAULT_CONFIG_FILE_PATH
+
+
+def _render_yaml_scalar(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    if isinstance(value, list | tuple | set):
+        rendered_items = [_render_yaml_scalar(item) for item in value]
+        return f"[{', '.join(rendered_items)}]"
+    text = str(value)
+    if _needs_yaml_quotes(text):
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return text
+
+
+def _needs_yaml_quotes(text: str) -> bool:
+    if not text:
+        return True
+    lowered = text.lower()
+    if lowered in {"true", "false", "null", "~"}:
+        return True
+    if text[0] in {"-", "#", "[", "{", "!"}:
+        return True
+    if text[0].isdigit() and not text.isdigit():
+        return True
+    for char in text:
+        if char.isspace() or char in {":", "#", ",", "[", "]", "{", "}", '"', "'"}:
+            return True
+    return False
+
+
+def _render_config_template() -> str:
+    lines = [
+        "# Harmony runtime configuration",
+        "#",
+        "# This file is generated automatically on first start. Update the values",
+        "# as needed and restart the container to apply changes. Environment",
+        "# variables still take precedence over values defined here.",
+        "",
+    ]
+    for section in _CONFIG_TEMPLATE_SECTIONS:
+        lines.append(f"# {section.comment}")
+        lines.append(f"{section.name}:")
+        for entry in section.entries:
+            if entry.comment:
+                lines.append(f"  # {entry.comment}")
+            rendered = _render_yaml_scalar(entry.default)
+            lines.append(f"  {entry.name}: {rendered}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _ensure_config_file(path: Path) -> None:
+    if path.exists():
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_render_config_template(), encoding="utf-8")
+        logger.info("Created default configuration file", extra={"path": str(path)})
+    except OSError as exc:
+        logger.warning(
+            "Unable to create configuration file", extra={"path": str(path), "error": str(exc)}
+        )
+
+
+def _flatten_yaml_mapping(data: Any) -> dict[str, Any]:
+    if not isinstance(data, Mapping):
+        return {}
+    flattened: dict[str, Any] = {}
+    stack: list[tuple[str | None, Any]] = [(None, data)]
+    while stack:
+        prefix, node = stack.pop()
+        if isinstance(node, Mapping):
+            for key, value in node.items():
+                key_str = str(key)
+                stack.append((key_str, value))
+        else:
+            if prefix is not None:
+                flattened[prefix] = node
+    return flattened
+
+
+def _parse_yaml_scalar(text: str) -> Any:
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered in {"null", "~"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if text.startswith("[") and text.endswith("]"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return []
+        items: list[Any] = []
+        current = []
+        quote: str | None = None
+        escape = False
+        for char in inner:
+            if escape:
+                current.append(char)
+                escape = False
+                continue
+            if char == "\\" and quote == '"':
+                escape = True
+                current.append(char)
+                continue
+            if char in {'"', "'"}:
+                if quote is None:
+                    quote = char
+                elif quote == char:
+                    quote = None
+                current.append(char)
+                continue
+            if char == "," and quote is None:
+                item_text = "".join(current).strip()
+                if item_text:
+                    items.append(_parse_yaml_scalar(item_text))
+                current = []
+                continue
+            current.append(char)
+        if current:
+            item_text = "".join(current).strip()
+            if item_text:
+                items.append(_parse_yaml_scalar(item_text))
+        return items
+    if text.startswith('"') and text.endswith('"'):
+        inner = text[1:-1]
+        return inner.replace('\\"', '"').replace("\\\\", "\\")
+    if text.startswith("'") and text.endswith("'"):
+        return text[1:-1]
+    try:
+        if "." in text or "e" in lowered or "E" in text:
+            return float(text)
+        return int(text)
+    except ValueError:
+        return text
+
+
+def _parse_yaml_like(contents: str) -> dict[str, dict[str, Any]]:
+    parsed: dict[str, dict[str, Any]] = {}
+    current_section: dict[str, Any] | None = None
+    for raw_line in contents.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not raw_line.startswith(" "):
+            if stripped.endswith(":"):
+                section_name = stripped[:-1].strip()
+                if section_name:
+                    current_section = {}
+                    parsed[section_name] = current_section
+                else:
+                    current_section = None
+            else:
+                current_section = None
+            continue
+        if current_section is None:
+            continue
+        if ":" not in stripped:
+            continue
+        key_part, value_part = stripped.split(":", 1)
+        key = key_part.strip()
+        value = _parse_yaml_scalar(value_part.strip())
+        current_section[key] = value
+    return parsed
+
+
+def _stringify_env_values(values: Mapping[str, Any]) -> dict[str, str]:
+    env_values: dict[str, str] = {}
+    for key, value in values.items():
+        if value is None:
+            continue
+        if isinstance(value, list | tuple | set):
+            env_values[key] = ",".join(str(item) for item in value)
+            continue
+        if isinstance(value, bool):
+            env_values[key] = "true" if value else "false"
+            continue
+        env_values[key] = str(value)
+    return env_values
+
+
+def _load_yaml_config(path: Path) -> dict[str, str]:
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    parsed = _parse_yaml_like(contents)
+    flattened = _flatten_yaml_mapping(parsed)
+    if not flattened:
+        return {}
+    return _stringify_env_values(flattened)
+
+
 def load_runtime_env(
     *,
     env_file: str | os.PathLike[str] | None = None,
@@ -57,11 +282,17 @@ def load_runtime_env(
     """Load runtime environment values applying .env before explicit environment."""
 
     env: dict[str, str] = {}
+    source = dict(base_env or os.environ)
+
+    config_path = _resolve_config_file_path(source)
+    if config_path is not None:
+        _ensure_config_file(config_path)
+        env.update(_load_yaml_config(config_path))
+
     path = Path(env_file) if env_file is not None else Path(".env")
     if path.exists() and path.is_file():
         env.update(_load_env_file(path))
 
-    source = base_env or os.environ
     env.update({key: str(value) for key, value in source.items() if value is not None})
     return env
 
@@ -991,6 +1222,725 @@ DEFAULT_RETRY_MAX_ATTEMPTS = 10
 DEFAULT_RETRY_BASE_SECONDS = 60.0
 DEFAULT_RETRY_JITTER_PCT = 0.2
 DEFAULT_RETRY_POLICY_RELOAD_S = 10.0
+
+
+_CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
+    ConfigTemplateSection(
+        name="core",
+        comment="Core runtime configuration.",
+        entries=(
+            ConfigTemplateEntry(
+                "DATABASE_URL",
+                None,
+                "SQLite connection string (auto-detected when null).",
+            ),
+            ConfigTemplateEntry("APP_PORT", DEFAULT_APP_PORT, "Port exposing the API and UI."),
+            ConfigTemplateEntry("APP_MODULE", "app.main:app", "ASGI entrypoint."),
+            ConfigTemplateEntry("UVICORN_EXTRA_ARGS", "", "Additional uvicorn flags."),
+            ConfigTemplateEntry("DB_RESET", 0, "Set to 1 to recreate the SQLite database."),
+            ConfigTemplateEntry("APP_ENV", "dev", "Environment tag used in logs."),
+            ConfigTemplateEntry("ENVIRONMENT", "dev", "Legacy alias for APP_ENV."),
+            ConfigTemplateEntry("HARMONY_PROFILE", DEFAULT_SECURITY_PROFILE, "Security profile."),
+            ConfigTemplateEntry("HARMONY_LOG_LEVEL", "INFO", "Logging level."),
+            ConfigTemplateEntry("API_BASE_PATH", DEFAULT_API_BASE_PATH, "Public API prefix."),
+            ConfigTemplateEntry(
+                "REQUEST_ID_HEADER", "X-Request-ID", "Header carrying the request ID."
+            ),
+            ConfigTemplateEntry("SMOKE_PATH", "/live", "Path probed by smoke checks."),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="paths",
+        comment="Filesystem locations managed by the container.",
+        entries=(
+            ConfigTemplateEntry("DOWNLOADS_DIR", DEFAULT_DOWNLOADS_DIR, "Workspace for downloads."),
+            ConfigTemplateEntry("MUSIC_DIR", DEFAULT_MUSIC_DIR, "Final music library directory."),
+            ConfigTemplateEntry("ARTWORK_DIR", DEFAULT_ARTWORK_DIR, "Artwork cache directory."),
+            ConfigTemplateEntry(
+                "OAUTH_STATE_DIR",
+                "/data/runtime/oauth_state",
+                "Directory storing OAuth state files.",
+            ),
+            ConfigTemplateEntry(
+                "IDEMPOTENCY_SQLITE_PATH",
+                str(Path(DEFAULT_DOWNLOADS_DIR) / ".harmony" / "idempotency.db"),
+                "SQLite file used for idempotency tracking.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="security",
+        comment="Authentication, authorisation and worker toggles.",
+        entries=(
+            ConfigTemplateEntry("FEATURE_REQUIRE_AUTH", False, "Require API key authentication."),
+            ConfigTemplateEntry("FEATURE_RATE_LIMITING", False, "Enable global rate limiting."),
+            ConfigTemplateEntry(
+                "FEATURE_ENABLE_LEGACY_ROUTES",
+                False,
+                "Expose deprecated legacy endpoints.",
+            ),
+            ConfigTemplateEntry(
+                "FEATURE_ADMIN_API", DEFAULT_ADMIN_API_ENABLED, "Enable admin API."
+            ),
+            ConfigTemplateEntry("HARMONY_API_KEYS", "", "Comma-separated list of API keys."),
+            ConfigTemplateEntry(
+                "HARMONY_API_KEYS_FILE",
+                "",
+                "Optional path to file containing API keys (one per line).",
+            ),
+            ConfigTemplateEntry("HARMONY_DISABLE_WORKERS", False, "Disable background workers."),
+            ConfigTemplateEntry("WORKERS_ENABLED", True, "Preferred worker enable flag."),
+            ConfigTemplateEntry(
+                "WORKER_VISIBILITY_TIMEOUT_S",
+                DEFAULT_ORCH_VISIBILITY_TIMEOUT_S,
+                "Override worker queue visibility timeout (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "AUTH_ALLOWLIST",
+                ",".join(DEFAULT_ALLOWLIST_SUFFIXES),
+                "Comma-separated paths bypassing auth checks.",
+            ),
+            ConfigTemplateEntry(
+                "ALLOWED_ORIGINS",
+                [],
+                "List of allowed CORS origins (empty means allow all).",
+            ),
+            ConfigTemplateEntry(
+                "CORS_ALLOWED_ORIGINS",
+                [],
+                "Legacy alias for ALLOWED_ORIGINS.",
+            ),
+            ConfigTemplateEntry("CORS_ALLOWED_HEADERS", "*", "Allowed CORS request headers."),
+            ConfigTemplateEntry(
+                "CORS_ALLOWED_METHODS",
+                "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+                "Allowed HTTP methods for CORS preflight.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="middleware",
+        comment="Middleware features and observability toggles.",
+        entries=(
+            ConfigTemplateEntry("CACHE_ENABLED", True, "Enable HTTP response caching."),
+            ConfigTemplateEntry("CACHE_DEFAULT_TTL_S", 30, "Default cache TTL in seconds."),
+            ConfigTemplateEntry(
+                "CACHE_STALE_WHILE_REVALIDATE_S",
+                60,
+                "Stale-while-revalidate window in seconds.",
+            ),
+            ConfigTemplateEntry("CACHE_MAX_ITEMS", 5000, "Maximum cache entries."),
+            ConfigTemplateEntry(
+                "CACHE_FAIL_OPEN", True, "Serve original responses on cache errors."
+            ),
+            ConfigTemplateEntry("CACHE_STRATEGY_ETAG", "strong", "ETag calculation strategy."),
+            ConfigTemplateEntry(
+                "CACHE_WRITE_THROUGH", True, "Invalidate cache entries after writes."
+            ),
+            ConfigTemplateEntry("CACHE_LOG_EVICTIONS", True, "Log cache eviction events."),
+            ConfigTemplateEntry(
+                "CACHEABLE_PATHS",
+                list(DEFAULT_CACHEABLE_PATH_PATTERNS),
+                "Per-route cache rules (pattern|ttl|stale).",
+            ),
+            ConfigTemplateEntry("GZIP_MIN_SIZE", 1024, "Minimum response size before gzip."),
+            ConfigTemplateEntry(
+                "HEALTH_DB_TIMEOUT_MS",
+                DEFAULT_HEALTH_DB_TIMEOUT_MS,
+                "Database readiness timeout in milliseconds.",
+            ),
+            ConfigTemplateEntry(
+                "HEALTH_DEP_TIMEOUT_MS",
+                DEFAULT_HEALTH_DEP_TIMEOUT_MS,
+                "Dependency readiness timeout in milliseconds.",
+            ),
+            ConfigTemplateEntry(
+                "HEALTH_DEPS",
+                [],
+                "Additional dependency names probed by readiness checks.",
+            ),
+            ConfigTemplateEntry(
+                "HEALTH_READY_REQUIRE_DB",
+                True,
+                "Require database connectivity for readiness.",
+            ),
+            ConfigTemplateEntry(
+                "SECRET_VALIDATE_TIMEOUT_MS",
+                800,
+                "Timeout for runtime secret validation (ms).",
+            ),
+            ConfigTemplateEntry(
+                "SECRET_VALIDATE_MAX_PER_MIN",
+                3,
+                "Max secret validation attempts per minute.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="filesystem",
+        comment="Container filesystem helpers.",
+        entries=(
+            ConfigTemplateEntry("PUID", 1000, "Filesystem user ID."),
+            ConfigTemplateEntry("PGID", 1000, "Filesystem group ID."),
+            ConfigTemplateEntry("UMASK", "007", "Filesystem umask applied at start."),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="spotify",
+        comment="Spotify integration and free ingest limits.",
+        entries=(
+            ConfigTemplateEntry("SPOTIFY_CLIENT_ID", "", "Spotify OAuth client ID."),
+            ConfigTemplateEntry("SPOTIFY_CLIENT_SECRET", "", "Spotify OAuth client secret."),
+            ConfigTemplateEntry(
+                "SPOTIFY_REDIRECT_URI",
+                "",
+                "Optional override for the Spotify redirect URI.",
+            ),
+            ConfigTemplateEntry(
+                "SPOTIFY_SCOPE", DEFAULT_SPOTIFY_SCOPE, "Requested Spotify scopes."
+            ),
+            ConfigTemplateEntry(
+                "SPOTIFY_TIMEOUT_MS",
+                15_000,
+                "Spotify API timeout in milliseconds.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_IMPORT_MAX_LINES",
+                DEFAULT_FREE_IMPORT_MAX_LINES,
+                "Max lines parsed from text input.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_IMPORT_MAX_FILE_BYTES",
+                DEFAULT_FREE_IMPORT_MAX_FILE_BYTES,
+                "Max upload size for free import (bytes).",
+            ),
+            ConfigTemplateEntry(
+                "FREE_IMPORT_MAX_PLAYLIST_LINKS",
+                DEFAULT_FREE_IMPORT_MAX_PLAYLIST_LINKS,
+                "Max playlist links per request.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_IMPORT_HARD_CAP_MULTIPLIER",
+                DEFAULT_FREE_IMPORT_HARD_CAP_MULTIPLIER,
+                "Safety multiplier for playlist expansion.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_ACCEPT_USER_URLS",
+                False,
+                "Allow arbitrary user-submitted URLs in free mode.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_BATCH_SIZE",
+                DEFAULT_FREE_INGEST_BATCH_SIZE,
+                "Batch size for ingest normalisation in free mode.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_MAX_PLAYLISTS",
+                DEFAULT_FREE_INGEST_MAX_PLAYLISTS,
+                "Soft cap for playlists per free ingest job.",
+            ),
+            ConfigTemplateEntry(
+                "FREE_MAX_TRACKS_PER_REQUEST",
+                DEFAULT_FREE_INGEST_MAX_TRACKS,
+                "Hard limit for tracks per request.",
+            ),
+            ConfigTemplateEntry(
+                "BACKFILL_MAX_ITEMS",
+                DEFAULT_BACKFILL_MAX_ITEMS,
+                "Max items processed per backfill job.",
+            ),
+            ConfigTemplateEntry(
+                "BACKFILL_CACHE_TTL_SEC",
+                DEFAULT_BACKFILL_CACHE_TTL,
+                "Cache TTL for backfill lookups (seconds).",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="oauth",
+        comment="OAuth helper configuration.",
+        entries=(
+            ConfigTemplateEntry("OAUTH_CALLBACK_PORT", 8888, "Local OAuth callback port."),
+            ConfigTemplateEntry(
+                "OAUTH_MANUAL_CALLBACK_ENABLE",
+                True,
+                "Allow manual OAuth completion via API.",
+            ),
+            ConfigTemplateEntry(
+                "OAUTH_SESSION_TTL_MIN",
+                10,
+                "OAuth session lifetime in minutes.",
+            ),
+            ConfigTemplateEntry(
+                "OAUTH_PUBLIC_HOST_HINT",
+                "",
+                "Optional hint displayed for remote callbacks.",
+            ),
+            ConfigTemplateEntry("OAUTH_SPLIT_MODE", False, "Enable split deployment mode."),
+            ConfigTemplateEntry(
+                "OAUTH_STATE_TTL_SEC",
+                600,
+                "Lifetime of persisted OAuth state (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "OAUTH_STORE_HASH_CV",
+                True,
+                "Store hashed PKCE verifier (disable in split mode).",
+            ),
+            ConfigTemplateEntry(
+                "OAUTH_PUBLIC_BASE",
+                "/api/v1/oauth",
+                "Public base path for OAuth routes.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="integrations",
+        comment="External provider configuration.",
+        entries=(
+            ConfigTemplateEntry(
+                "INTEGRATIONS_ENABLED",
+                ["spotify", "slskd"],
+                "Comma-separated list of enabled providers.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_BASE_URL",
+                DEFAULT_SOULSEEK_URL,
+                "Preferred Soulseek daemon URL.",
+            ),
+            ConfigTemplateEntry("SLSKD_URL", "", "Legacy Soulseek URL override."),
+            ConfigTemplateEntry("SLSKD_HOST", "", "Legacy Soulseek host override."),
+            ConfigTemplateEntry("SLSKD_PORT", "", "Legacy Soulseek port override."),
+            ConfigTemplateEntry("SLSKD_API_KEY", "", "Soulseek daemon API key."),
+            ConfigTemplateEntry(
+                "SLSKD_TIMEOUT_MS",
+                DEFAULT_SLSKD_TIMEOUT_MS,
+                "Soulseek HTTP timeout in milliseconds.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_TIMEOUT_SEC",
+                DEFAULT_SLSKD_TIMEOUT_SEC,
+                "Soulseek timeout override in seconds.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_RETRY_MAX",
+                DEFAULT_SLSKD_RETRY_MAX,
+                "Retry attempts for Soulseek requests.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_RETRY_BACKOFF_BASE_MS",
+                DEFAULT_SLSKD_RETRY_BACKOFF_BASE_MS,
+                "Backoff base for Soulseek retries (ms).",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_JITTER_PCT",
+                DEFAULT_SLSKD_RETRY_JITTER_PCT,
+                "Jitter percentage applied to Soulseek retries.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_PREFERRED_FORMATS",
+                list(DEFAULT_SLSKD_PREFERRED_FORMATS),
+                "Preferred download formats (ordered).",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_MAX_RESULTS",
+                DEFAULT_SLSKD_MAX_RESULTS,
+                "Maximum Soulseek search results returned.",
+            ),
+            ConfigTemplateEntry("MUSIXMATCH_API_KEY", "", "Optional Musixmatch API key."),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="external",
+        comment="Generic external call policies.",
+        entries=(
+            ConfigTemplateEntry(
+                "EXTERNAL_TIMEOUT_MS",
+                DEFAULT_EXTERNAL_TIMEOUT_MS,
+                "Default timeout for external providers (ms).",
+            ),
+            ConfigTemplateEntry(
+                "EXTERNAL_RETRY_MAX",
+                DEFAULT_EXTERNAL_RETRY_MAX,
+                "Retry attempts for external providers.",
+            ),
+            ConfigTemplateEntry(
+                "EXTERNAL_BACKOFF_BASE_MS",
+                DEFAULT_EXTERNAL_BACKOFF_BASE_MS,
+                "Backoff base for external retries (ms).",
+            ),
+            ConfigTemplateEntry(
+                "EXTERNAL_JITTER_PCT",
+                DEFAULT_EXTERNAL_JITTER_PCT,
+                "Jitter percentage for external retries.",
+            ),
+            ConfigTemplateEntry(
+                "PROVIDER_MAX_CONCURRENCY",
+                DEFAULT_PROVIDER_MAX_CONCURRENCY,
+                "Maximum concurrency for provider calls.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="artwork",
+        comment="Artwork and lyrics features.",
+        entries=(
+            ConfigTemplateEntry("ENABLE_ARTWORK", False, "Enable artwork downloads."),
+            ConfigTemplateEntry(
+                "ARTWORK_TIMEOUT_SEC",
+                DEFAULT_ARTWORK_TIMEOUT,
+                "Primary artwork fetch timeout (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_HTTP_TIMEOUT",
+                DEFAULT_ARTWORK_TIMEOUT,
+                "HTTP timeout applied to artwork fetches (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_MAX_BYTES",
+                DEFAULT_ARTWORK_MAX_BYTES,
+                "Maximum artwork payload size in bytes.",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_CONCURRENCY",
+                DEFAULT_ARTWORK_CONCURRENCY,
+                "Parallel artwork fetchers for API requests.",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_WORKER_CONCURRENCY",
+                DEFAULT_ARTWORK_CONCURRENCY,
+                "Parallelism for the artwork worker.",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_MIN_EDGE",
+                DEFAULT_ARTWORK_MIN_EDGE,
+                "Minimum artwork resolution edge in pixels.",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_MIN_BYTES",
+                DEFAULT_ARTWORK_MIN_BYTES,
+                "Minimum payload size to accept (bytes).",
+            ),
+            ConfigTemplateEntry("ARTWORK_FALLBACK_ENABLED", False, "Enable fallback provider."),
+            ConfigTemplateEntry(
+                "ARTWORK_FALLBACK_PROVIDER",
+                "musicbrainz",
+                "Fallback artwork provider name.",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_FALLBACK_TIMEOUT_SEC",
+                DEFAULT_ARTWORK_FALLBACK_TIMEOUT,
+                "Fallback provider timeout (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_FALLBACK_MAX_BYTES",
+                DEFAULT_ARTWORK_FALLBACK_MAX_BYTES,
+                "Fallback provider max payload (bytes).",
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_POST_PROCESSING_ENABLED", False, "Enable post-processing."
+            ),
+            ConfigTemplateEntry(
+                "ARTWORK_POST_PROCESSORS",
+                [],
+                "Commands executed during post-processing.",
+            ),
+            ConfigTemplateEntry("ENABLE_LYRICS", False, "Enable automatic lyrics worker."),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="ingest",
+        comment="Ingest pipeline and matching limits.",
+        entries=(
+            ConfigTemplateEntry(
+                "INGEST_BATCH_SIZE",
+                DEFAULT_INGEST_BATCH_SIZE,
+                "Batch size for ingest queue submissions.",
+            ),
+            ConfigTemplateEntry(
+                "INGEST_MAX_PENDING_JOBS",
+                DEFAULT_INGEST_MAX_PENDING_JOBS,
+                "Max pending ingest jobs before backpressure.",
+            ),
+            ConfigTemplateEntry(
+                "FEATURE_MATCHING_EDITION_AWARE",
+                True,
+                "Enable edition-aware matching heuristics.",
+            ),
+            ConfigTemplateEntry(
+                "MATCH_FUZZY_MAX_CANDIDATES",
+                DEFAULT_MATCH_FUZZY_MAX_CANDIDATES,
+                "Fuzzy matching candidate limit.",
+            ),
+            ConfigTemplateEntry(
+                "MATCH_MIN_ARTIST_SIM",
+                DEFAULT_MATCH_MIN_ARTIST_SIM,
+                "Minimum artist similarity threshold.",
+            ),
+            ConfigTemplateEntry(
+                "MATCH_COMPLETE_THRESHOLD",
+                DEFAULT_MATCH_COMPLETE_THRESHOLD,
+                "Confidence threshold for complete discography.",
+            ),
+            ConfigTemplateEntry(
+                "MATCH_NEARLY_THRESHOLD",
+                DEFAULT_MATCH_NEARLY_THRESHOLD,
+                "Confidence threshold for nearly complete state.",
+            ),
+            ConfigTemplateEntry(
+                "MATCHING_WORKER_BATCH_SIZE",
+                5,
+                "Matching jobs processed per worker iteration.",
+            ),
+            ConfigTemplateEntry(
+                "MATCHING_CONFIDENCE_THRESHOLD",
+                0.65,
+                "Minimum score to accept a candidate.",
+            ),
+            ConfigTemplateEntry("SEARCH_MAX_LIMIT", 100, "Maximum search results returned."),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="hdm",
+        comment="Harmony Download Manager configuration.",
+        entries=(
+            ConfigTemplateEntry(
+                "WORKER_CONCURRENCY",
+                DEFAULT_DOWNLOAD_WORKER_CONCURRENCY,
+                "HDM worker concurrency.",
+            ),
+            ConfigTemplateEntry(
+                "BATCH_MAX_ITEMS",
+                DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS,
+                "Maximum queue batch size for HDM.",
+            ),
+            ConfigTemplateEntry(
+                "SIZE_STABLE_SEC",
+                DEFAULT_SIZE_STABLE_SECONDS,
+                "Seconds to consider download size stable.",
+            ),
+            ConfigTemplateEntry(
+                "MAX_RETRIES",
+                DEFAULT_DOWNLOAD_MAX_RETRIES,
+                "Maximum HDM retries per job.",
+            ),
+            ConfigTemplateEntry(
+                "MOVE_TEMPLATE", DEFAULT_MOVE_TEMPLATE, "Template for moving completed files."
+            ),
+            ConfigTemplateEntry(
+                "IDEMPOTENCY_BACKEND",
+                DEFAULT_IDEMPOTENCY_BACKEND,
+                "Backend used for HDM idempotency tracking.",
+            ),
+            ConfigTemplateEntry(
+                "SLSKD_TIMEOUT_SEC",
+                DEFAULT_SLSKD_TIMEOUT_SEC,
+                "Timeout for Soulseek transfers (seconds).",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="watchlist",
+        comment="Watchlist worker and orchestrator settings.",
+        entries=(
+            ConfigTemplateEntry(
+                "WATCHLIST_MAX_CONCURRENCY",
+                DEFAULT_WATCHLIST_MAX_CONCURRENCY,
+                "Maximum concurrent watchlist jobs.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_MAX_PER_TICK",
+                DEFAULT_WATCHLIST_MAX_PER_TICK,
+                "Maximum watchlist jobs processed per tick.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_SPOTIFY_TIMEOUT_MS",
+                DEFAULT_WATCHLIST_SPOTIFY_TIMEOUT_MS,
+                "Spotify timeout for watchlist jobs (ms).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS",
+                DEFAULT_WATCHLIST_SLSKD_SEARCH_TIMEOUT_MS,
+                "Soulseek search timeout for watchlist jobs (ms).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_TICK_BUDGET_MS",
+                DEFAULT_WATCHLIST_TICK_BUDGET_MS,
+                "Time budget per watchlist tick (ms).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_BACKOFF_BASE_MS",
+                DEFAULT_WATCHLIST_BACKOFF_BASE_MS,
+                "Base delay for watchlist retries (ms).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_RETRY_MAX",
+                DEFAULT_WATCHLIST_RETRY_MAX,
+                "Maximum watchlist retry attempts.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_JITTER_PCT",
+                DEFAULT_WATCHLIST_JITTER_PCT,
+                "Jitter percentage for watchlist retries.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_SHUTDOWN_GRACE_MS",
+                DEFAULT_WATCHLIST_SHUTDOWN_GRACE_MS,
+                "Shutdown grace period for watchlist worker (ms).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_DB_IO_MODE",
+                DEFAULT_WATCHLIST_DB_IO_MODE,
+                "Database IO mode for watchlist worker (thread/async).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_RETRY_BUDGET_PER_ARTIST",
+                DEFAULT_WATCHLIST_RETRY_BUDGET_PER_ARTIST,
+                "Retry budget per artist before cooldown.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_COOLDOWN_MINUTES",
+                DEFAULT_WATCHLIST_COOLDOWN_MINUTES,
+                "Cooldown between artist retries (minutes).",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_INTERVAL", None, "Optional override for watchlist interval."
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_TIMER_ENABLED",
+                DEFAULT_WATCHLIST_TIMER_ENABLED,
+                "Enable periodic watchlist timer.",
+            ),
+            ConfigTemplateEntry(
+                "WATCHLIST_TIMER_INTERVAL_S",
+                DEFAULT_WATCHLIST_TIMER_INTERVAL_S,
+                "Interval for watchlist timer (seconds).",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="orchestrator",
+        comment="Queue orchestrator limits and priorities.",
+        entries=(
+            ConfigTemplateEntry(
+                "WORKERS_ENABLED",
+                True,
+                "Enable orchestrator workers (duplicate for clarity).",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_GLOBAL_CONCURRENCY",
+                DEFAULT_ORCH_GLOBAL_CONCURRENCY,
+                "Global concurrency for orchestrator workers.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POOL_SYNC",
+                DEFAULT_ORCH_POOL_SYNC,
+                "Sync worker pool size.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POOL_MATCHING",
+                DEFAULT_ORCH_POOL_MATCHING,
+                "Matching worker pool size.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POOL_RETRY",
+                DEFAULT_ORCH_POOL_RETRY,
+                "Retry worker pool size.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POOL_ARTIST_REFRESH",
+                DEFAULT_ORCH_POOL_ARTIST_REFRESH,
+                "Artist refresh pool size.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POOL_ARTIST_DELTA",
+                DEFAULT_ORCH_POOL_ARTIST_DELTA,
+                "Artist delta pool size.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_VISIBILITY_TIMEOUT_S",
+                DEFAULT_ORCH_VISIBILITY_TIMEOUT_S,
+                "Queue visibility timeout (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_HEARTBEAT_S",
+                DEFAULT_ORCH_HEARTBEAT_S,
+                "Worker heartbeat interval (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POLL_INTERVAL_MS",
+                DEFAULT_ORCH_POLL_INTERVAL_MS,
+                "Minimum queue poll interval (ms).",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_POLL_INTERVAL_MAX_MS",
+                DEFAULT_ORCH_POLL_INTERVAL_MAX_MS,
+                "Maximum queue poll interval (ms).",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_PRIORITY_JSON",
+                "",
+                "JSON mapping overriding queue priorities.",
+            ),
+            ConfigTemplateEntry(
+                "ORCH_PRIORITY_CSV",
+                "",
+                "CSV mapping overriding queue priorities.",
+            ),
+        ),
+    ),
+    ConfigTemplateSection(
+        name="retry",
+        comment="Retry policy defaults for orchestrator jobs.",
+        entries=(
+            ConfigTemplateEntry(
+                "RETRY_MAX_ATTEMPTS",
+                DEFAULT_RETRY_MAX_ATTEMPTS,
+                "Maximum retry attempts per job.",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_BASE_SECONDS",
+                DEFAULT_RETRY_BASE_SECONDS,
+                "Base delay between retries (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_JITTER_PCT",
+                DEFAULT_RETRY_JITTER_PCT,
+                "Jitter fraction applied to retries.",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_SCAN_BATCH_LIMIT",
+                100,
+                "Number of queued retries scanned per sweep.",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_SCAN_INTERVAL_SEC",
+                60.0,
+                "Interval between retry scans (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_ARTIST_SYNC_MAX_ATTEMPTS",
+                10,
+                "Max retry attempts for artist sync jobs.",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_ARTIST_SYNC_BASE_SECONDS",
+                60,
+                "Base delay for artist sync retries (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_ARTIST_SYNC_JITTER_PCT",
+                0.2,
+                "Jitter fraction for artist sync retries.",
+            ),
+            ConfigTemplateEntry(
+                "RETRY_ARTIST_SYNC_TIMEOUT_SECONDS",
+                None,
+                "Optional timeout for artist sync retry cycle (seconds).",
+            ),
+        ),
+    ),
+)
 
 
 def _as_bool(value: str | None, *, default: bool = False) -> bool:
