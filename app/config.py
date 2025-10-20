@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
@@ -617,6 +617,31 @@ class FeatureFlags:
     enable_admin_api: bool
 
 
+@dataclass(slots=True, frozen=True)
+class UiConfig:
+    live_updates: Literal["polling", "sse"]
+
+
+_UI_LIVE_UPDATE_MODES: frozenset[str] = frozenset({"polling", "sse"})
+_DEFAULT_UI_LIVE_UPDATES = "polling"
+
+
+def _parse_ui_config(env: Mapping[str, Any]) -> UiConfig:
+    raw_mode = _env_value(env, "UI_LIVE_UPDATES")
+    if raw_mode is None or not raw_mode.strip():
+        return UiConfig(live_updates=_DEFAULT_UI_LIVE_UPDATES)
+
+    normalized = raw_mode.strip().lower()
+    if normalized not in _UI_LIVE_UPDATE_MODES:
+        logger.warning(
+            "Unknown UI_LIVE_UPDATES value %s; defaulting to %s",
+            raw_mode,
+            _DEFAULT_UI_LIVE_UPDATES,
+        )
+        normalized = _DEFAULT_UI_LIVE_UPDATES
+    return UiConfig(live_updates=normalized)  # type: ignore[arg-type]
+
+
 @dataclass(slots=True)
 class AdminConfig:
     api_enabled: bool
@@ -889,6 +914,7 @@ class AppConfig:
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
     features: FeatureFlags
+    ui: UiConfig
     artist_sync: ArtistSyncConfig
     integrations: IntegrationsConfig
     security: SecurityConfig
@@ -1247,6 +1273,11 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
                 "REQUEST_ID_HEADER", "X-Request-ID", "Header carrying the request ID."
             ),
             ConfigTemplateEntry("SMOKE_PATH", "/live", "Path probed by smoke checks."),
+            ConfigTemplateEntry(
+                "UI_LIVE_UPDATES",
+                _DEFAULT_UI_LIVE_UPDATES,
+                "Live update transport for UI fragments (polling or SSE).",
+            ),
         ),
     ),
     ConfigTemplateSection(
@@ -2903,6 +2934,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
             default=DEFAULT_ADMIN_API_ENABLED,
         ),
     )
+    ui_config = _parse_ui_config(env)
 
     artist_sync_config = ArtistSyncConfig(
         prune_removed=_as_bool(_env_value(env, "ARTIST_SYNC_PRUNE"), default=False),
@@ -3242,6 +3274,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         ingest=ingest,
         free_ingest=free_ingest,
         features=features,
+        ui=ui_config,
         artist_sync=artist_sync_config,
         integrations=integrations,
         security=security,

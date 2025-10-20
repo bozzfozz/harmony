@@ -118,6 +118,8 @@ class LayoutContext:
     alerts: Sequence[AlertMessage] = field(default_factory=tuple)
     head_meta: Sequence[MetaTag] = field(default_factory=tuple)
     modals: Sequence[ModalDefinition] = field(default_factory=tuple)
+    live_updates_mode: Literal["polling", "sse"] = "polling"
+    live_updates_source: str | None = None
 
 
 @dataclass(slots=True)
@@ -412,6 +414,7 @@ class AsyncFragment:
     poll_interval_seconds: int | None = None
     swap: str = "outerHTML"
     loading_key: str = "loading"
+    event_name: str | None = None
 
     @property
     def trigger(self) -> str:
@@ -1492,12 +1495,16 @@ def build_operations_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    live_updates_mode: Literal["polling", "sse"] = "polling",
 ) -> Mapping[str, Any]:
+    use_sse = live_updates_mode == "sse"
     layout = LayoutContext(
         page_id="operations",
         role=session.role,
         navigation=_build_primary_navigation(session, active="operations"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+        live_updates_mode=live_updates_mode,
+        live_updates_source="/ui/events" if use_sse else None,
     )
 
     downloads_fragment: AsyncFragment | None = None
@@ -1509,35 +1516,39 @@ def build_operations_page_context(
             identifier="hx-downloads-table",
             url=_safe_url_for(request, "downloads_table", "/ui/downloads/table"),
             target="#hx-downloads-table",
-            poll_interval_seconds=15,
+            poll_interval_seconds=None if use_sse else 15,
             loading_key="downloads",
             load_event="revealed",
+            event_name="downloads" if use_sse else None,
         )
         jobs_fragment = AsyncFragment(
             identifier="hx-jobs-table",
             url=_safe_url_for(request, "jobs_table", "/ui/jobs/table"),
             target="#hx-jobs-table",
-            poll_interval_seconds=15,
+            poll_interval_seconds=None if use_sse else 15,
             loading_key="jobs",
             load_event="revealed",
+            event_name="jobs" if use_sse else None,
         )
 
     watchlist_fragment = AsyncFragment(
         identifier="hx-watchlist-table",
         url=_safe_url_for(request, "watchlist_table", "/ui/watchlist/table"),
         target="#hx-watchlist-table",
-        poll_interval_seconds=30,
+        poll_interval_seconds=None if use_sse else 30,
         loading_key="watchlist",
         load_event="revealed",
+        event_name="watchlist" if use_sse else None,
     )
 
     activity_fragment = AsyncFragment(
         identifier="hx-activity-table",
         url=_safe_url_for(request, "activity_table", "/ui/activity/table"),
         target="#hx-activity-table",
-        poll_interval_seconds=60,
+        poll_interval_seconds=None if use_sse else 60,
         loading_key="activity",
         load_event="revealed",
+        event_name="activity" if use_sse else None,
     )
 
     return {
@@ -1562,20 +1573,25 @@ def build_downloads_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    live_updates_mode: Literal["polling", "sse"] = "polling",
 ) -> Mapping[str, Any]:
+    use_sse = live_updates_mode == "sse"
     layout = LayoutContext(
         page_id="downloads",
         role=session.role,
         navigation=_build_primary_navigation(session, active="operations"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+        live_updates_mode=live_updates_mode,
+        live_updates_source="/ui/events" if use_sse else None,
     )
 
     downloads_fragment = AsyncFragment(
         identifier="hx-downloads-table",
         url=_safe_url_for(request, "downloads_table", "/ui/downloads/table"),
         target="#hx-downloads-table",
-        poll_interval_seconds=15,
+        poll_interval_seconds=None if use_sse else 15,
         loading_key="downloads",
+        event_name="downloads" if use_sse else None,
     )
 
     return {
@@ -1593,20 +1609,25 @@ def build_jobs_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    live_updates_mode: Literal["polling", "sse"] = "polling",
 ) -> Mapping[str, Any]:
+    use_sse = live_updates_mode == "sse"
     layout = LayoutContext(
         page_id="jobs",
         role=session.role,
         navigation=_build_primary_navigation(session, active="operations"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+        live_updates_mode=live_updates_mode,
+        live_updates_source="/ui/events" if use_sse else None,
     )
 
     jobs_fragment = AsyncFragment(
         identifier="hx-jobs-table",
         url=_safe_url_for(request, "jobs_table", "/ui/jobs/table"),
         target="#hx-jobs-table",
-        poll_interval_seconds=15,
+        poll_interval_seconds=None if use_sse else 15,
         loading_key="jobs",
+        event_name="jobs" if use_sse else None,
     )
 
     return {
@@ -1624,20 +1645,25 @@ def build_watchlist_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    live_updates_mode: Literal["polling", "sse"] = "polling",
 ) -> Mapping[str, Any]:
+    use_sse = live_updates_mode == "sse"
     layout = LayoutContext(
         page_id="watchlist",
         role=session.role,
         navigation=_build_primary_navigation(session, active="operations"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+        live_updates_mode=live_updates_mode,
+        live_updates_source="/ui/events" if use_sse else None,
     )
 
     watchlist_fragment = AsyncFragment(
         identifier="hx-watchlist-table",
         url=_safe_url_for(request, "watchlist_table", "/ui/watchlist/table"),
         target="#hx-watchlist-table",
-        poll_interval_seconds=30,
+        poll_interval_seconds=None if use_sse else 30,
         loading_key="watchlist",
+        event_name="watchlist" if use_sse else None,
     )
 
     watchlist_form = FormDefinition(
@@ -1676,20 +1702,25 @@ def build_activity_page_context(
     *,
     session: UiSession,
     csrf_token: str,
+    live_updates_mode: Literal["polling", "sse"] = "polling",
 ) -> Mapping[str, Any]:
+    use_sse = live_updates_mode == "sse"
     layout = LayoutContext(
         page_id="activity",
         role=session.role,
         navigation=_build_primary_navigation(session, active="operations"),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
+        live_updates_mode=live_updates_mode,
+        live_updates_source="/ui/events" if use_sse else None,
     )
 
     activity_fragment = AsyncFragment(
         identifier="hx-activity-table",
         url=_safe_url_for(request, "activity_table", "/ui/activity/table"),
         target="#hx-activity-table",
-        poll_interval_seconds=60,
+        poll_interval_seconds=None if use_sse else 60,
         loading_key="activity",
+        event_name="activity" if use_sse else None,
     )
 
     return {
