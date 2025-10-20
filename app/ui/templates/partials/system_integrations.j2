@@ -1,0 +1,45 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+<div class="system-card__body">
+  <div class="system-card__status">
+    {{ status_badges.render_badge(overall_badge) }}
+    <span class="system-card__status-text">{{ overall_status_text }}</span>
+  </div>
+
+  {% if providers %}
+    <table class="system-table">
+      <thead>
+        <tr>
+          <th scope="col">{{ strings.system_integrations_header("provider") }}</th>
+          <th scope="col">{{ strings.system_integrations_header("status") }}</th>
+          <th scope="col">{{ strings.system_integrations_header("details") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in providers %}
+          <tr>
+            <th scope="row">{{ row.name }}</th>
+            <td class="system-table__status">{{ status_badges.render_badge(row.badge) }}</td>
+            <td>
+              {% if row.details %}
+                <dl class="system-table__details">
+                  {% for key, value in row.details.items() %}
+                    <div>
+                      <dt>{{ key }}</dt>
+                      <dd>{{ value }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              {% else %}
+                {{ strings.system_field_placeholder() }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="system-card__empty">{{ strings.system_empty_state("integrations") }}</p>
+  {% endif %}
+</div>

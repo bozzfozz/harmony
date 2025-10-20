@@ -1,0 +1,90 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+<div class="system-card__body">
+  <div class="system-card__status-block">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("database") }}</h4>
+    <div class="system-card__status">
+      {{ status_badges.render_badge(database_badge) }}
+      <span class="system-card__status-text">{{ database_status_text }}</span>
+    </div>
+  </div>
+
+  {% if error_message %}
+    <p class="system-card__alert">{{ error_message }}</p>
+  {% endif %}
+
+  <div class="system-card__section">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("dependencies") }}</h4>
+    {% if dependencies %}
+      <ul class="system-card__list">
+        {% for item in dependencies %}
+          <li class="system-card__list-item">
+            {{ status_badges.render_badge(item.badge) }}
+            <span class="system-card__item-name">{{ item.name }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="system-card__empty">{{ strings.system_empty_state("dependencies") }}</p>
+    {% endif %}
+  </div>
+
+  <div class="system-card__section">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("components") }}</h4>
+    {% if components %}
+      <ul class="system-card__list">
+        {% for item in components %}
+          <li class="system-card__list-item">
+            {{ status_badges.render_badge(item.badge) }}
+            <span class="system-card__item-name">{{ item.name }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="system-card__empty">{{ strings.system_empty_state("components") }}</p>
+    {% endif %}
+  </div>
+
+  <div class="system-card__section">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("jobs") }}</h4>
+    {% if jobs %}
+      <ul class="system-card__list">
+        {% for item in jobs %}
+          <li class="system-card__list-item">
+            {{ status_badges.render_badge(item.badge) }}
+            <span class="system-card__item-name">{{ item.name }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="system-card__empty">{{ strings.system_empty_state("jobs") }}</p>
+    {% endif %}
+  </div>
+
+  <div class="system-card__section">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("enabled") }}</h4>
+    {% if enabled_jobs %}
+      <ul class="system-card__list system-card__list--plain">
+        {% for job in enabled_jobs %}
+          <li class="system-card__list-item">{{ job }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="system-card__empty">{{ strings.system_empty_state("enabled_jobs") }}</p>
+    {% endif %}
+  </div>
+
+  <div class="system-card__section">
+    <h4 class="system-card__subtitle">{{ strings.system_readiness_heading("disabled") }}</h4>
+    {% if disabled_jobs %}
+      <ul class="system-card__list system-card__list--plain">
+        {% for job in disabled_jobs %}
+          <li class="system-card__list-item">{{ job }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="system-card__empty">{{ strings.system_empty_state("disabled_jobs") }}</p>
+    {% endif %}
+  </div>
+</div>

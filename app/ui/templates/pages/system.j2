@@ -1,0 +1,150 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.system_page_intro() }}</p>
+    <p>
+      <a href="{{ metrics_url }}" target="_blank" rel="noopener">
+        {{ strings.link_text("system.metrics") }}
+      </a>
+    </p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section class="page-section page-section--card" aria-labelledby="system-liveness-heading">
+    <header class="page-section__header">
+      <h3 id="system-liveness-heading" class="page-section__title">{{ strings.system_section_title("liveness") }}</h3>
+      <form id="{{ liveness_form.identifier }}"
+            class="form form--inline"
+            method="{{ liveness_form.method }}"
+            action="{{ liveness_form.action }}"
+            hx-get="{{ liveness_form.action }}"
+            hx-target="{{ liveness_fragment.target }}"
+            hx-swap="{{ liveness_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(liveness_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <div id="{{ liveness_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="system-liveness-heading"
+         data-fragment="system-liveness"
+         hx-get="{{ liveness_fragment.url }}"
+         hx-trigger="{{ liveness_fragment.trigger }}"
+         hx-target="{{ liveness_fragment.target }}"
+         hx-swap="{{ liveness_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(liveness_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="system-readiness-heading">
+    <header class="page-section__header">
+      <h3 id="system-readiness-heading" class="page-section__title">{{ strings.system_section_title("readiness") }}</h3>
+      <form id="{{ readiness_form.identifier }}"
+            class="form form--inline"
+            method="{{ readiness_form.method }}"
+            action="{{ readiness_form.action }}"
+            hx-get="{{ readiness_form.action }}"
+            hx-target="{{ readiness_fragment.target }}"
+            hx-swap="{{ readiness_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(readiness_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <div id="{{ readiness_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="system-readiness-heading"
+         data-fragment="system-readiness"
+         hx-get="{{ readiness_fragment.url }}"
+         hx-trigger="{{ readiness_fragment.trigger }}"
+         hx-target="{{ readiness_fragment.target }}"
+         hx-swap="{{ readiness_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(readiness_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="system-services-heading">
+    <header class="page-section__header">
+      <h3 id="system-services-heading" class="page-section__title">{{ strings.system_section_title("services") }}</h3>
+      <form id="{{ services_form.identifier }}"
+            class="form form--inline"
+            method="{{ services_form.method }}"
+            action="{{ services_form.action }}"
+            hx-get="{{ services_form.action }}"
+            hx-target="{{ services_fragment.target }}"
+            hx-swap="{{ services_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(services_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <div id="{{ services_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="system-services-heading"
+         data-fragment="system-services"
+         hx-get="{{ services_fragment.url }}"
+         hx-trigger="{{ services_fragment.trigger }}"
+         hx-target="{{ services_fragment.target }}"
+         hx-swap="{{ services_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(services_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="system-integrations-heading">
+    <header class="page-section__header">
+      <h3 id="system-integrations-heading" class="page-section__title">{{ strings.system_section_title("integrations") }}</h3>
+      <form id="{{ integrations_form.identifier }}"
+            class="form form--inline"
+            method="{{ integrations_form.method }}"
+            action="{{ integrations_form.action }}"
+            hx-get="{{ integrations_form.action }}"
+            hx-target="{{ integrations_fragment.target }}"
+            hx-swap="{{ integrations_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(integrations_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <div id="{{ integrations_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="system-integrations-heading"
+         data-fragment="system-integrations"
+         hx-get="{{ integrations_fragment.url }}"
+         hx-trigger="{{ integrations_fragment.trigger }}"
+         hx-target="{{ integrations_fragment.target }}"
+         hx-swap="{{ integrations_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(integrations_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="system-secrets-heading">
+    <header class="page-section__header">
+      <h3 id="system-secrets-heading" class="page-section__title">{{ strings.system_section_title("secrets") }}</h3>
+    </header>
+    <div class="system-secret-grid">
+      {% for card in secret_cards %}
+        {% include "partials/system_secret_card.j2" %}
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

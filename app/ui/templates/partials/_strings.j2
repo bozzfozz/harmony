@@ -13,6 +13,7 @@
     "search": "Soulseek search",
     "soulseek": "Soulseek",
     "admin": "Administration",
+    "system": "System diagnostics",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -34,6 +35,7 @@
     "search": "Soulseek search",
     "soulseek": "Soulseek integration",
     "admin": "Administration",
+    "system": "System diagnostics",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -73,6 +75,7 @@
     "spotify.free_ingest.upload_file": "Track list file",
     "spotify.playlists.filter.owner": "Playlist owner",
     "spotify.playlists.filter.status": "Sync status",
+    "system.secrets.override": "Override value",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -136,6 +139,10 @@
     "soulseek.retry": "Retry",
     "watchlist.create": "Add artist",
     "operations.view_details": "Open details",
+    "system.health.refresh": "Refresh",
+    "system.integrations.refresh": "Refresh",
+    "system.services.refresh": "Refresh",
+    "system.secrets.validate": "Validate secret",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -150,6 +157,7 @@
     "operations.view_activity": "View activity log",
     "admin.system.link": "Open system diagnostics",
     "admin.settings.link": "Open settings",
+    "system.metrics": "Open metrics",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -182,6 +190,98 @@
 
 {% macro activity_page_intro() %}Follow recent activity entries with automatic refreshes and pagination controls.{% endmacro %}
 
+{% macro system_page_intro() %}Inspect real-time health, readiness, and credential status across Harmony services.{% endmacro %}
+
+{% macro system_section_title(key) -%}
+  {%- set titles = {
+    "liveness": "Liveness",
+    "readiness": "Readiness",
+    "services": "Service credentials",
+    "integrations": "Integrations",
+    "secrets": "Secret validation",
+  } -%}
+  {{ titles.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_readiness_heading(key) -%}
+  {%- set labels = {
+    "database": "Database",
+    "dependencies": "Dependencies",
+    "components": "Orchestrator components",
+    "jobs": "Orchestrator jobs",
+    "enabled": "Enabled jobs",
+    "disabled": "Disabled jobs",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_integrations_header(key) -%}
+  {%- set labels = {
+    "provider": "Provider",
+    "status": "Status",
+    "details": "Details",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_field_label(key) -%}
+  {%- set labels = {
+    "version": "Version",
+    "uptime": "Uptime",
+    "validated_at": "Validated at",
+    "note": "Note",
+    "reason": "Reason",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_field_placeholder() %}—{% endmacro %}
+
+{% macro system_empty_state(key) -%}
+  {%- set labels = {
+    "dependencies": "No dependencies reported.",
+    "components": "No orchestrator components reported.",
+    "jobs": "No orchestrator jobs reported.",
+    "services": "No services detected.",
+    "integrations": "No integrations reported.",
+    "enabled_jobs": "No jobs enabled.",
+    "disabled_jobs": "No jobs disabled.",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_service_missing(values) -%}
+  Missing: {%- for value in values %}{% if not loop.first %}, {% endif %}{{ value }}{% endfor %}
+{%- endmacro %}
+
+{% macro system_service_optional(values) -%}
+  Optional missing: {%- for value in values %}{% if not loop.first %}, {% endif %}{{ value }}{% endfor %}
+{%- endmacro %}
+
+{% macro system_secret_title(key) -%}
+  {%- set labels = {
+    "system.secrets.spotify.title": "Spotify credentials",
+    "system.secrets.soulseek.title": "Soulseek credentials",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_secret_description(key) -%}
+  {%- set labels = {
+    "system.secrets.spotify.description": "Validate stored Spotify client credentials and optional overrides.",
+    "system.secrets.soulseek.description": "Verify Harmony can authenticate with the configured Soulseek daemon.",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro system_secret_mode(key) -%}
+  {%- set labels = {
+    "system.secrets.mode.live": "Live value",
+    "system.secrets.mode.format": "Format check",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
 {% macro status_badge_label(key) -%}
   {%- set labels = {
     "status.enabled": "Enabled",
@@ -198,6 +298,20 @@
     "spotify.status.connected": "Connected",
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
+    "system.status.ok": "OK",
+    "system.status.up": "Up",
+    "system.status.ready": "Ready",
+    "system.status.down": "Down",
+    "system.status.fail": "Failed",
+    "system.status.degraded": "Degraded",
+    "system.status.unknown": "Unknown",
+    "system.status.disabled": "Disabled",
+    "system.status.not_required": "Not required",
+    "system.status.valid": "Valid",
+    "system.status.invalid": "Invalid",
+    "system.status.passing": "Passing",
+    "system.status.pending": "Pending",
+    "system.status.n-a": "Not available",
     "soulseek.downloads.status.queued": "Queued",
     "soulseek.downloads.status.pending": "Pending",
     "soulseek.downloads.status.running": "Running",
