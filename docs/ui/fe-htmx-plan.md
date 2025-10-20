@@ -104,7 +104,7 @@ Die Spotify-Seite bündelt nun Status, OAuth-Flows, Playlist-Verwaltung sowie di
 |-------------|------------|---------|---------------|------------|
 | Aggregierte Suche | POST `/api/v1/search` | Form Submit (Enter/Click) | `#hx-search-results`, `hx-swap="innerHTML"`, `hx-push-url` für Query | 422/503 ⇒ Fehlerbanner |【F:app/api/search.py†L158-L209】
 | Download anfordern | POST `/api/v1/download` | Button in Ergebnisliste (`hx-post`, JSON body) | `hx-swap-oob` Queue-Zähler, Erfolgsmeldung | 400/502 ⇒ Inline-Error |【F:app/routers/download_router.py†L163-L190】
-| Soulseek-Suche | POST `/api/v1/soulseek/search` | Tab „Soulseek“ `hx-post` | `#hx-soulseek-results` | 502 ⇒ Alert |【F:app/routers/soulseek_router.py†L75-L118】
+| Soulseek-Suche | POST `/api/v1/soulseek/search` | Tab „Soulseek“ `hx-post` | Fragment `id="hx-search-results"`, `hx-target="#hx-search-results"`, `hx-swap="innerHTML"` | 502 ⇒ Alert |【F:app/routers/soulseek_router.py†L75-L118】
 
 Die HTML-Ansicht `/ui/search` sendet das Formular via `hx-post="/ui/search/results"` und aktualisiert die Download-Queue über `hx-get="/ui/downloads/table"` mit einem Polling-Intervall von 30 Sekunden im Fragment `#hx-search-queue` (`hx-trigger="revealed, every 30s"`). Die Formularsektion enthält Checkboxen für jede konfigurierte Quelle (Standard: Spotify und Soulseek); Pagination-Links führen die `sources`-Parameter mit, damit Filterauswahlen bestehen bleiben.
 Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions mit `read_only`-Rolle erhalten `403 Forbidden`, deaktivierte Soulseek-Features führen zu `404 Not Found`.
