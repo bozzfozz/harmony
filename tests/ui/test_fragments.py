@@ -209,10 +209,13 @@ class _RecordingDownloadsService:
                 username=None,
                 created_at=None,
                 updated_at=None,
+                organized_path=None,
                 lyrics_status=None,
                 has_lyrics=False,
+                lyrics_path=None,
                 artwork_status=None,
                 has_artwork=False,
+                artwork_path=None,
             )
         return new_row
 
@@ -1596,6 +1599,58 @@ def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
         assert "Composer" in html
 
 
+def test_soulseek_download_metadata_modal_handles_error(monkeypatch) -> None:
+    download = type("Download", (), {"id": 77, "filename": "error.flac"})()
+    stub_session = _StubDbSession(download)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+
+    def _raise_metadata(**_: object) -> None:
+        raise HTTPException(status_code=500, detail="metadata failure")
+
+    monkeypatch.setattr("app.ui.router.api_soulseek_download_metadata", _raise_metadata)
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        response = client.get(
+            "/ui/soulseek/download/77/metadata",
+            headers={"Cookie": _cookies_header(client)},
+        )
+        _assert_html_response(response, status_code=500)
+        assert "metadata failure" in response.text
+
+
+def test_soulseek_download_artwork_modal_renders_modal(monkeypatch) -> None:
+    download = type(
+        "Download",
+        (),
+        {
+            "id": 33,
+            "filename": "cover.flac",
+            "artwork_status": "ready",
+            "has_artwork": True,
+        },
+    )()
+    stub_session = _StubDbSession(download)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+
+    async def _noop_artwork(**_: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.ui.router.api_soulseek_download_artwork", _noop_artwork)
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        response = client.get(
+            "/ui/soulseek/download/33/artwork",
+            headers={"Cookie": _cookies_header(client)},
+        )
+        _assert_html_response(response)
+        html = response.text
+        assert "soulseek-download-artwork-modal" in html
+        assert "cover.flac" in html
+        assert "soulseek-download-artwork-image" in html
+
+
 def test_soulseek_download_artwork_modal_handles_error(monkeypatch) -> None:
     download = type(
         "Download",
@@ -1791,6 +1846,155 @@ def test_soulseek_download_lyrics_refresh_success(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert calls == [11]
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_download_metadata_refresh_success(monkeypatch) -> None:
+    page = DownloadPage(
+        items=(
+            DownloadRow(
+                identifier=21,
+                filename="meta.flac",
+                status="completed",
+                progress=1.0,
+                priority=1,
+                username="dj",
+                created_at=None,
+                updated_at=None,
+                organized_path="/library/meta.flac",
+                lyrics_status="done",
+                has_lyrics=True,
+                lyrics_path="/lyrics/meta.lrc",
+                artwork_status="done",
+                has_artwork=True,
+                artwork_path="/artwork/meta.jpg",
+            ),
+        ),
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+    calls: list[int] = []
+
+    async def _refresh_metadata(**_: object) -> None:
+        calls.append(21)
+
+    monkeypatch.setattr("app.ui.router.api_refresh_download_metadata", _refresh_metadata)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+
+    try:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/download/21/metadata/refresh",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "all",
+                    "limit": "20",
+                    "offset": "0",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert calls == [21]
+            assert 'soulseek-download-metadata-actions-21' in response.text
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_download_metadata_refresh_failure(monkeypatch) -> None:
+    page = DownloadPage(items=(), limit=20, offset=0, has_next=False, has_previous=False)
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+
+    async def _refresh_metadata_fail(**_: object) -> None:
+        raise HTTPException(status_code=503, detail="metadata refresh failed")
+
+    monkeypatch.setattr("app.ui.router.api_refresh_download_metadata", _refresh_metadata_fail)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+
+    try:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/download/22/metadata/refresh",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "active",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response, status_code=503)
+            assert "metadata refresh failed" in response.text
+    finally:
+        app.dependency_overrides.pop(get_downloads_ui_service, None)
+        app.dependency_overrides.pop(get_soulseek_client, None)
+
+
+def test_soulseek_download_artwork_refresh_success(monkeypatch) -> None:
+    page = DownloadPage(
+        items=(
+            DownloadRow(
+                identifier=17,
+                filename="art.flac",
+                status="completed",
+                progress=1.0,
+                priority=1,
+                username="dj",
+                created_at=None,
+                updated_at=None,
+                organized_path="/library/art.flac",
+                lyrics_status="done",
+                has_lyrics=True,
+                lyrics_path="/lyrics/art.lrc",
+                artwork_status="done",
+                has_artwork=True,
+                artwork_path="/artwork/art.jpg",
+            ),
+        ),
+        limit=20,
+        offset=0,
+        has_next=False,
+        has_previous=False,
+    )
+    stub = _RecordingDownloadsService(page)
+    app.dependency_overrides[get_downloads_ui_service] = lambda: stub
+    app.dependency_overrides[get_soulseek_client] = lambda: object()
+    calls: list[int] = []
+
+    async def _refresh_artwork(**_: object) -> None:
+        calls.append(17)
+
+    monkeypatch.setattr("app.ui.router.api_soulseek_refresh_artwork", _refresh_artwork)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+
+    try:
+        with _create_client(monkeypatch, extra_env=_admin_env()) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.post(
+                "/ui/soulseek/download/17/artwork/refresh",
+                data={
+                    "csrftoken": headers["X-CSRF-Token"],
+                    "scope": "all",
+                    "limit": "20",
+                    "offset": "0",
+                },
+                headers=headers,
+            )
+            _assert_html_response(response)
+            assert calls == [17]
+            assert 'soulseek-download-artwork-actions-17' in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
         app.dependency_overrides.pop(get_soulseek_client, None)
