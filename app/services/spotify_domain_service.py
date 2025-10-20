@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+import inspect
 from time import perf_counter
 from typing import (
     TYPE_CHECKING,
     Any,
+    Literal,
     cast,
 )
 
@@ -134,11 +136,12 @@ class SpotifyDomainService:
     # Core Spotify operations ------------------------------------------
 
     def get_status(self) -> SpotifyServiceStatus:
+        free_available = self._resolve_free_availability()
         pro_usable = self._pro_available and self._spotify is not None
         if not pro_usable:
             return SpotifyServiceStatus(
                 status="unconfigured",
-                free_available=True,
+                free_available=free_available,
                 pro_available=False,
                 authenticated=False,
             )
@@ -151,10 +154,83 @@ class SpotifyDomainService:
         status_value = "connected" if authenticated else "unauthenticated"
         return SpotifyServiceStatus(
             status=status_value,
-            free_available=True,
+            free_available=free_available,
             pro_available=True,
             authenticated=authenticated,
         )
+
+    def _resolve_free_availability(self) -> bool:
+        """Return whether FREE ingest prerequisites are satisfied."""
+
+        soulseek_config = self._config.soulseek
+        base_url = getattr(soulseek_config, "base_url", "")
+        if not isinstance(base_url, str) or not base_url.strip():
+            self._log_free_ingest_issue(reason="missing_base_url", level="warning")
+            return False
+
+        api_key = getattr(soulseek_config, "api_key", None)
+        if not isinstance(api_key, str) or not api_key.strip():
+            self._log_free_ingest_issue(reason="missing_api_key", level="warning")
+            return False
+
+        try:
+            self._perform_free_healthcheck()
+        except Exception as exc:  # pragma: no cover - defensive
+            self._log_free_ingest_issue(reason="healthcheck_failed", level="error", error=exc)
+            return False
+
+        return True
+
+    def _perform_free_healthcheck(self) -> None:
+        """Attempt to contact Soulseek if the runtime allows synchronous waits."""
+
+        timeout_seconds = self._resolve_free_health_timeout()
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+
+            async def _run_probe() -> None:
+                client = self._build_soulseek_health_client()
+                try:
+                    await asyncio.wait_for(client.get_download_status(), timeout=timeout_seconds)
+                finally:
+                    close_callable = getattr(client, "close", None)
+                    if callable(close_callable):
+                        result = close_callable()
+                        if inspect.isawaitable(result):
+                            await result
+
+            asyncio.run(_run_probe())
+        else:
+            logger.debug(
+                "spotify.free_ingest.healthcheck.skipped",
+                extra={
+                    "event": "spotify.free_ingest.healthcheck.skipped",
+                    "component": "service.spotify",
+                },
+            )
+
+    def _build_soulseek_health_client(self) -> SoulseekClient:
+        return SoulseekClient(self._config.soulseek)
+
+    def _resolve_free_health_timeout(self) -> float:
+        timeout_ms = getattr(self._config.soulseek, "timeout_ms", 0)
+        timeout_seconds = max(1.0, float(timeout_ms) / 1000.0) if timeout_ms else 5.0
+        return timeout_seconds
+
+    def _log_free_ingest_issue(
+        self, *, reason: str, level: Literal["warning", "error"], error: Exception | None = None
+    ) -> None:
+        log_method = logger.warning if level == "warning" else logger.error
+        payload: dict[str, Any] = {
+            "event": "spotify.free_ingest.unavailable",
+            "component": "service.spotify",
+            "reason": reason,
+        }
+        if error is not None:
+            payload["error"] = str(error)
+        log_method("spotify.free_ingest.unavailable", extra=payload)
 
     def is_authenticated(self) -> bool:
         if not self._pro_available or self._spotify is None:

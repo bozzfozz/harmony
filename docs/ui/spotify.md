@@ -33,6 +33,10 @@ engineering implementation notes remain documented in
   No additional privileges required beyond page access.
 - **Operational expectations:** The badge should stay green (`connected`).
   Yellow indicates credential expiry; red indicates missing configuration.
+- **FREE badge semantics:** The FREE badge switches to `Disabled` when Soulseek
+  prerequisites are missing (base URL or API key) or when the daemon health
+  check fails. Inspect application logs for
+  `spotify.free_ingest.unavailable` entries to identify the reason.
 - **Observability hooks:** Uses `GET /api/v1/spotify/status` with 60‑second
   polling; structured logs emit `oauth.service` events when state changes.
 

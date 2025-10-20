@@ -54,8 +54,8 @@ from app.ui.router import templates
 from app.ui.services import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
-    SpotifyBackfillSnapshot,
     SpotifyBackfillOption,
+    SpotifyBackfillSnapshot,
     SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -1127,6 +1127,42 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert f'href="{context["runbook_url"]}"' in html
     assert "Runbook öffnen" in html
     assert 'target="_blank"' in html
+
+
+def test_spotify_status_partial_marks_free_ingest_disabled() -> None:
+    request = _make_request("/ui/spotify/status")
+    status = SpotifyStatus(
+        status="connected",
+        free_available=False,
+        pro_available=True,
+        authenticated=True,
+    )
+    oauth = SpotifyOAuthHealth(
+        manual_enabled=True,
+        redirect_uri="http://localhost/callback",
+        public_host_hint=None,
+        active_transactions=0,
+        ttl_seconds=300,
+    )
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+    context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+    )
+    template = templates.get_template("partials/spotify_status.j2")
+    html = template.render(**context)
+
+    assert 'data-test="spotify-status-free"' in html
+    assert html.count("status-badge--muted") == 1
+    assert "Disabled" in html
 
 
 def test_spotify_status_partial_hides_manual_form_when_disabled() -> None:
