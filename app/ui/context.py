@@ -31,6 +31,8 @@ if TYPE_CHECKING:
         SoulseekUserDirectoryListing,
         SoulseekUserFileEntry,
         SoulseekUserProfile,
+        SoulseekUserStatus,
+        SoulseekUserBrowsingStatus,
         SpotifyAccountSummary,
         SpotifyArtistRow,
         SpotifyBackfillSnapshot,
@@ -2850,11 +2852,102 @@ class SoulseekFileView:
     size: str
 
 
+_USER_ONLINE_STATES = frozenset({"online", "connected", "available"})
+_USER_OFFLINE_STATES = frozenset({"offline", "disconnected"})
+_USER_IDLE_STATES = frozenset({"idle", "away"})
+_BROWSE_ACTIVE_STATES = frozenset({"browsing", "running", "processing"})
+_BROWSE_WAITING_STATES = frozenset({"queued", "pending", "waiting"})
+
+
+def _format_percentage(value: float | None) -> str | None:
+    if value is None:
+        return None
+    bounded = max(0.0, min(value, 1.0)) * 100.0
+    if abs(bounded - round(bounded)) < 0.01:
+        return f"{int(round(bounded))}%"
+    return f"{bounded:.0f}%"
+
+
+def _user_status_badge(status: SoulseekUserStatus | None) -> StatusBadge | None:
+    if status is None:
+        return None
+    state = (status.state or "unknown").lower()
+    if state in _USER_ONLINE_STATES:
+        variant: StatusVariant = "success"
+        label_key = "soulseek.user.online"
+    elif state in _USER_OFFLINE_STATES:
+        variant = "danger"
+        label_key = "soulseek.user.offline"
+    elif state in _USER_IDLE_STATES:
+        variant = "muted"
+        label_key = "soulseek.user.away"
+    else:
+        variant = "muted"
+        label_key = "soulseek.user.unknown"
+    return StatusBadge(label_key=label_key, variant=variant, test_id="soulseek-user-status-badge")
+
+
+def _user_browse_badge(status: SoulseekUserBrowsingStatus | None) -> StatusBadge | None:
+    if status is None:
+        return None
+    state = (status.state or "unknown").lower()
+    if state in _BROWSE_ACTIVE_STATES:
+        variant: StatusVariant = "success"
+        label_key = "soulseek.user.browse.active"
+    elif state in _BROWSE_WAITING_STATES:
+        variant = "muted"
+        label_key = "soulseek.user.browse.waiting"
+    elif state in {"complete", "completed", "done"}:
+        variant = "success"
+        label_key = "soulseek.user.browse.completed"
+    else:
+        variant = "muted"
+        label_key = "soulseek.user.browse.unknown"
+    return StatusBadge(label_key=label_key, variant=variant, test_id="soulseek-user-browse-badge")
+
+
+def _user_browse_queue(status: SoulseekUserBrowsingStatus | None) -> tuple[int, int | None] | None:
+    if status is None:
+        return None
+    if status.queue_position is None:
+        return None
+    return (status.queue_position, status.queue_length)
+
+
+def _build_user_status_context(
+    status: SoulseekUserStatus | None,
+    browsing: SoulseekUserBrowsingStatus | None,
+) -> dict[str, Any]:
+    shared_value = status.shared_files if status else None
+    status_message = status.message if status and status.message else None
+    browse_message = browsing.message if browsing and browsing.message else None
+    progress_value = _format_percentage(browsing.progress if browsing else None)
+    queue_value = _user_browse_queue(browsing)
+    return {
+        "user_status": status,
+        "user_status_badge": _user_status_badge(status),
+        "user_status_message": status_message,
+        "user_status_shared": shared_value,
+        "user_status_has_shared": shared_value is not None,
+        "user_browse_status": browsing,
+        "user_browse_badge": _user_browse_badge(browsing),
+        "user_browse_message": browse_message,
+        "user_browse_progress": progress_value,
+        "user_browse_has_progress": bool(progress_value),
+        "user_browse_queue": queue_value,
+        "user_browse_has_queue": queue_value is not None,
+        "has_user_status": status is not None,
+        "has_user_browse_status": browsing is not None,
+    }
+
+
 def build_soulseek_user_profile_context(
     request: Request,
     *,
     username: str | None,
     profile: SoulseekUserProfile | None,
+    status: SoulseekUserStatus | None,
+    browsing_status: SoulseekUserBrowsingStatus | None,
 ) -> Mapping[str, Any]:
     lookup_url = _safe_url_for(
         request,
@@ -2868,7 +2961,7 @@ def build_soulseek_user_profile_context(
         address_items = tuple(sorted(profile.address.items()))
         info_items = tuple(sorted(profile.info.items()))
         trimmed_username = profile.username
-    return {
+    context = {
         "request": request,
         "lookup_url": lookup_url,
         "username": trimmed_username,
@@ -2877,6 +2970,8 @@ def build_soulseek_user_profile_context(
         "info_items": info_items,
         "has_profile": bool(profile and (address_items or info_items)),
     }
+    context.update(_build_user_status_context(status, browsing_status))
+    return context
 
 
 def build_soulseek_user_directory_context(
@@ -2885,6 +2980,8 @@ def build_soulseek_user_directory_context(
     username: str | None,
     path: str | None,
     listing: SoulseekUserDirectoryListing | None,
+    status: SoulseekUserStatus | None,
+    browsing_status: SoulseekUserBrowsingStatus | None,
 ) -> Mapping[str, Any]:
     browse_url = _safe_url_for(
         request,
@@ -2930,7 +3027,7 @@ def build_soulseek_user_directory_context(
             for file in listing.files
         )
     parent_url = _entry_url(parent_path) if parent_path else None
-    return {
+    context = {
         "request": request,
         "browse_url": browse_url,
         "username": trimmed_username,
@@ -2942,6 +3039,8 @@ def build_soulseek_user_directory_context(
         "parent_url": parent_url,
         "has_listing": bool(listing and (directories or files)),
     }
+    context.update(_build_user_status_context(status, browsing_status))
+    return context
 
 
 def build_soulseek_discography_jobs_context(

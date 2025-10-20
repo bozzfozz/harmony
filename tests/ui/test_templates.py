@@ -76,6 +76,8 @@ from app.ui.services import (
     SoulseekUserDirectoryListing,
     SoulseekUserFileEntry,
     SoulseekUserProfile,
+    SoulseekUserStatus,
+    SoulseekUserBrowsingStatus,
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillOption,
@@ -297,10 +299,27 @@ def test_soulseek_user_info_template_renders_profile() -> None:
         address={"ip": "127.0.0.1", "port": "5030"},
         info={"shared": "42"},
     )
+    status = SoulseekUserStatus(
+        username="alice",
+        state="online",
+        message="Ready",
+        shared_files=42,
+        average_speed_bps=None,
+    )
+    browsing = SoulseekUserBrowsingStatus(
+        username="alice",
+        state="queued",
+        progress=0.25,
+        queue_position=1,
+        queue_length=3,
+        message=None,
+    )
     context = build_soulseek_user_profile_context(
         request,
         username="alice",
         profile=profile,
+        status=status,
+        browsing_status=browsing,
     )
     template = templates.get_template("partials/soulseek_user_info.j2")
     html = template.render(**context)
@@ -316,6 +335,8 @@ def test_soulseek_user_info_template_displays_help_without_username() -> None:
         request,
         username=None,
         profile=None,
+        status=None,
+        browsing_status=None,
     )
     template = templates.get_template("partials/soulseek_user_info.j2")
     html = template.render(**context)
@@ -330,6 +351,8 @@ def test_soulseek_user_info_template_shows_missing_message_for_empty_profile() -
         request,
         username="alice",
         profile=profile,
+        status=None,
+        browsing_status=None,
     )
     template = templates.get_template("partials/soulseek_user_info.j2")
     html = template.render(**context)
@@ -348,11 +371,28 @@ def test_soulseek_user_directory_template_renders_listing() -> None:
             SoulseekUserFileEntry(name="track.flac", path="Music/track.flac", size_bytes=1_024),
         ),
     )
+    status = SoulseekUserStatus(
+        username="alice",
+        state="online",
+        message=None,
+        shared_files=10,
+        average_speed_bps=None,
+    )
+    browsing = SoulseekUserBrowsingStatus(
+        username="alice",
+        state="browsing",
+        progress=0.75,
+        queue_position=None,
+        queue_length=None,
+        message="Browsing...",
+    )
     context = build_soulseek_user_directory_context(
         request,
         username="alice",
         path="Music",
         listing=listing,
+        status=status,
+        browsing_status=browsing,
     )
     template = templates.get_template("partials/soulseek_user_directory.j2")
     html = template.render(**context)
@@ -368,6 +408,8 @@ def test_soulseek_user_directory_template_shows_help_without_username() -> None:
         username=None,
         path=None,
         listing=None,
+        status=None,
+        browsing_status=None,
     )
     template = templates.get_template("partials/soulseek_user_directory.j2")
     html = template.render(**context)
@@ -388,6 +430,8 @@ def test_soulseek_user_directory_template_shows_empty_message_for_username() -> 
         username="alice",
         path=None,
         listing=listing,
+        status=None,
+        browsing_status=None,
     )
     template = templates.get_template("partials/soulseek_user_directory.j2")
     html = template.render(**context)

@@ -161,6 +161,8 @@ def test_extract_files_preserves_zero_size_and_renders_zero_bytes() -> None:
         username="alice",
         path="Music",
         listing=listing,
+        status=None,
+        browsing_status=None,
     )
 
     sizes = tuple(file.size for file in context["files"])

@@ -3166,6 +3166,8 @@ async def soulseek_user_info_fragment(
 ) -> Response:
     trimmed = (username or "").strip()
     profile = None
+    user_status = None
+    browsing_status = None
     if trimmed:
         try:
             profile = await service.user_profile(username=trimmed)
@@ -3204,11 +3206,91 @@ async def soulseek_user_info_fragment(
                 retry_target="#hx-soulseek-user-info",
                 retry_label_key="soulseek.retry",
             )
+        try:
+            user_status = await service.user_status(username=trimmed)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "Unable to load user status."
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_status")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user status.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
+        try:
+            browsing_status = await service.user_browsing_status(username=trimmed)
+        except HTTPException as exc:
+            detail = (
+                exc.detail
+                if isinstance(exc.detail, str)
+                else "Unable to load user browsing status."
+            )
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_browsing_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_browsing_status")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_browsing_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user browsing status.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
 
     context = build_soulseek_user_profile_context(
         request,
         username=trimmed,
         profile=profile,
+        status=user_status,
+        browsing_status=browsing_status,
     )
     log_event(
         logger,
@@ -3238,7 +3320,87 @@ async def soulseek_user_directory_fragment(
 ) -> Response:
     trimmed = (username or "").strip()
     listing = None
+    user_status = None
+    browsing_status = None
     if trimmed:
+        try:
+            user_status = await service.user_status(username=trimmed)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "Unable to load user status."
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_status")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user status.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
+        try:
+            browsing_status = await service.user_browsing_status(username=trimmed)
+        except HTTPException as exc:
+            detail = (
+                exc.detail
+                if isinstance(exc.detail, str)
+                else "Unable to load user browsing status."
+            )
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_browsing_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_browsing_status")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_browsing_status",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user browsing status.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
         try:
             listing = await service.user_directory(username=trimmed, path=path)
         except HTTPException as exc:
@@ -3282,6 +3444,8 @@ async def soulseek_user_directory_fragment(
         username=trimmed,
         path=path,
         listing=listing,
+        status=user_status,
+        browsing_status=browsing_status,
     )
     log_event(
         logger,

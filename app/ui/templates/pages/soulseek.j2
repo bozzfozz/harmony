@@ -139,7 +139,7 @@
          hx-target="{{ user_info_fragment.target }}"
          hx-swap="{{ user_info_fragment.swap }}">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_info_fragment.loading_key) }}</p>
-      {% include "partials/soulseek_user_info.j2" with lookup_url=user_info_fragment.url, username="", profile=None, address_items=(), info_items=(), has_profile=False %}
+      {% include "partials/soulseek_user_info.j2" with lookup_url=user_info_fragment.url, username="", profile=None, address_items=(), info_items=(), has_profile=False, has_user_status=False, has_user_browse_status=False, user_status_badge=None, user_status_shared=None, user_status_has_shared=False, user_status_message=None, user_browse_badge=None, user_browse_progress=None, user_browse_has_progress=False, user_browse_queue=None, user_browse_has_queue=False, user_browse_message=None %}
     </div>
   </section>
 
@@ -156,7 +156,7 @@
          hx-target="{{ user_directory_fragment.target }}"
          hx-swap="{{ user_directory_fragment.swap }}">
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_directory_fragment.loading_key) }}</p>
-      {% include "partials/soulseek_user_directory.j2" with browse_url=user_directory_fragment.url, username="", path=None, directories=(), files=(), parent_url=None, has_listing=False %}
+      {% include "partials/soulseek_user_directory.j2" with browse_url=user_directory_fragment.url, username="", path=None, directories=(), files=(), parent_url=None, has_listing=False, has_user_status=False, has_user_browse_status=False, user_status_badge=None, user_status_shared=None, user_status_has_shared=False, user_status_message=None, user_browse_badge=None, user_browse_progress=None, user_browse_has_progress=False, user_browse_queue=None, user_browse_has_queue=False, user_browse_message=None %}
     </div>
   </section>
 {% endblock %}

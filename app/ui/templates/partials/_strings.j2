@@ -434,6 +434,14 @@
     "soulseek.discography.status.failed": "Failed",
     "soulseek.discography.status.cancelled": "Cancelled",
     "soulseek.discography.status.unknown": "Unknown",
+    "soulseek.user.online": "Online",
+    "soulseek.user.offline": "Offline",
+    "soulseek.user.away": "Away",
+    "soulseek.user.unknown": "Status unknown",
+    "soulseek.user.browse.active": "Browsing",
+    "soulseek.user.browse.waiting": "Waiting",
+    "soulseek.user.browse.completed": "Completed",
+    "soulseek.user.browse.unknown": "Browse idle",
     "spotify.status.connected": "Connected",
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
@@ -1087,6 +1095,19 @@
 {% macro soulseek_user_profile_heading() %}User profile{% endmacro %}
 {% macro soulseek_user_profile_help() %}Enter a Soulseek username to load address and profile information.{% endmacro %}
 {% macro soulseek_user_profile_missing(username) %}No profile information was returned for {{ username }}.{% endmacro %}
+{% macro soulseek_user_status_heading() %}User status{% endmacro %}
+{% macro soulseek_user_status_shared(count) %}{{ count }} shared files reported.{% endmacro %}
+{% macro soulseek_user_status_empty(username) %}No status details were returned for {{ username }}.{% endmacro %}
+{% macro soulseek_user_browse_heading() %}Browse activity{% endmacro %}
+{% macro soulseek_user_browse_progress(percent) %}Browse progress: {{ percent }}{% endmacro %}
+{% macro soulseek_user_browse_queue(position, total) -%}
+  {% if total %}
+    Queue position {{ position }} of {{ total }}
+  {% else %}
+    Queue position {{ position }}
+  {% endif %}
+{%- endmacro %}
+{% macro soulseek_user_browse_empty() %}No browse activity was reported.{% endmacro %}
 {% macro soulseek_user_address_heading() %}Network address{% endmacro %}
 {% macro soulseek_user_address_empty() %}No address details were reported.{% endmacro %}
 {% macro soulseek_user_info_heading() %}Account details{% endmacro %}
