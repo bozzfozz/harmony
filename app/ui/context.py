@@ -520,6 +520,29 @@ def _status_badge(
     return StatusBadge(label_key=unknown_label, variant="muted", test_id=test_id)
 
 
+def _discography_status_badge(status: str) -> StatusBadge:
+    normalized = (status or "").strip().lower()
+    label_map = {
+        "pending": "soulseek.discography.status.pending",
+        "queued": "soulseek.discography.status.queued",
+        "running": "soulseek.discography.status.running",
+        "completed": "soulseek.discography.status.completed",
+        "failed": "soulseek.discography.status.failed",
+        "cancelled": "soulseek.discography.status.cancelled",
+    }
+    variant_map: Mapping[str, StatusVariant] = {
+        "pending": "muted",
+        "queued": "muted",
+        "running": "success",
+        "completed": "success",
+        "failed": "danger",
+        "cancelled": "muted",
+    }
+    label_key = label_map.get(normalized, "soulseek.discography.status.unknown")
+    variant = variant_map.get(normalized, "muted")
+    return StatusBadge(label_key=label_key, variant=variant)
+
+
 def build_soulseek_navigation_badge(
     *,
     connection: StatusResponse | None,
@@ -2040,6 +2063,19 @@ def build_soulseek_page_context(
         loading_key="soulseek.downloads",
     )
 
+    discography_url = _safe_url_for(
+        request,
+        "soulseek_discography_jobs_fragment",
+        "/ui/soulseek/discography/jobs",
+    )
+    discography_fragment = AsyncFragment(
+        identifier="hx-soulseek-discography-jobs",
+        url=discography_url,
+        target="#hx-soulseek-discography-jobs",
+        poll_interval_seconds=60,
+        loading_key="soulseek.discography",
+    )
+
     user_info_url = _safe_url_for(
         request,
         "soulseek_user_info_fragment",
@@ -2073,6 +2109,7 @@ def build_soulseek_page_context(
         "configuration_fragment": configuration_fragment,
         "uploads_fragment": uploads_fragment,
         "downloads_fragment": downloads_fragment,
+        "discography_fragment": discography_fragment,
         "user_info_fragment": user_info_fragment,
         "user_directory_fragment": user_directory_fragment,
         "suggested_tasks": tuple(suggested_tasks),
@@ -2904,6 +2941,101 @@ def build_soulseek_user_directory_context(
         "parent_path": parent_path,
         "parent_url": parent_url,
         "has_listing": bool(listing and (directories or files)),
+    }
+
+
+def build_soulseek_discography_jobs_context(
+    request: Request,
+    *,
+    jobs: Sequence[Any],
+    modal_url: str,
+    alerts: Sequence[AlertMessage] = (),
+) -> Mapping[str, Any]:
+    rows: list[TableRow] = []
+    for job in jobs:
+        artist_name = getattr(job, "artist_name", None) or ""
+        artist_id = getattr(job, "artist_id", "")
+        if artist_name and artist_id:
+            artist_label = f"{artist_name} ({artist_id})"
+        else:
+            artist_label = artist_name or artist_id or ""
+        identifier = getattr(job, "id", "unknown")
+        rows.append(
+            TableRow(
+                cells=(
+                    TableCell(
+                        text=str(getattr(job, "id", "")),
+                        test_id=f"soulseek-discography-job-{identifier}-id",
+                    ),
+                    TableCell(
+                        text=artist_label,
+                        test_id=f"soulseek-discography-job-{identifier}-artist",
+                    ),
+                    TableCell(
+                        badge=_discography_status_badge(getattr(job, "status", "")),
+                        test_id=f"soulseek-discography-job-{identifier}-status",
+                    ),
+                    TableCell(
+                        text=_format_datetime(getattr(job, "created_at", None)),
+                        test_id=f"soulseek-discography-job-{identifier}-created",
+                    ),
+                    TableCell(
+                        text=_format_datetime(getattr(job, "updated_at", None)),
+                        test_id=f"soulseek-discography-job-{identifier}-updated",
+                    ),
+                ),
+                test_id=f"soulseek-discography-job-{identifier}",
+            )
+        )
+
+    table = TableDefinition(
+        identifier="soulseek-discography-jobs-table",
+        column_keys=(
+            "soulseek.discography.job_id",
+            "soulseek.discography.artist",
+            "soulseek.discography.status",
+            "soulseek.discography.created",
+            "soulseek.discography.updated",
+        ),
+        rows=tuple(rows),
+    )
+    fragment = TableFragment(
+        identifier="hx-soulseek-discography-jobs",
+        table=table,
+        empty_state_key="soulseek.discography.jobs",
+        data_attributes={"count": str(len(rows))},
+    )
+    return {
+        "request": request,
+        "fragment": fragment,
+        "modal_url": modal_url,
+        "alerts": tuple(alerts),
+    }
+
+
+def build_soulseek_discography_modal_context(
+    request: Request,
+    *,
+    submit_url: str,
+    csrf_token: str,
+    target_id: str,
+    form_values: Mapping[str, str] | None = None,
+    form_errors: Mapping[str, str] | None = None,
+) -> Mapping[str, Any]:
+    values = {"artist_id": "", "artist_name": ""}
+    if form_values:
+        for key, value in form_values.items():
+            if key in values:
+                values[key] = value
+    errors = dict(form_errors or {})
+    return {
+        "request": request,
+        "modal_id": "soulseek-discography-job-modal",
+        "submit_url": submit_url,
+        "csrf_token": csrf_token,
+        "target_id": target_id,
+        "form_values": values,
+        "form_errors": errors,
     }
 
 
@@ -4733,6 +4865,8 @@ __all__ = [
     "build_soulseek_config_context",
     "build_soulseek_uploads_context",
     "build_soulseek_downloads_context",
+    "build_soulseek_discography_jobs_context",
+    "build_soulseek_discography_modal_context",
     "build_soulseek_user_profile_context",
     "build_soulseek_user_directory_context",
     "build_soulseek_download_lyrics_modal_context",

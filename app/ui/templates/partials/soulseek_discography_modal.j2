@@ -1,0 +1,41 @@
+{% import "partials/_strings.j2" as strings %}
+
+<dialog id="{{ modal_id }}"
+        data-role="modal"
+        data-test="soulseek-discography-modal"
+        hx-on="htmx:afterSwap: this.showModal()"
+        hx-on:close="this.remove()"
+        hx-on:cancel="this.remove()">
+  <h2>{{ strings.soulseek_discography_modal_title() }}</h2>
+  <p class="modal-description">{{ strings.soulseek_discography_modal_description() }}</p>
+  <form method="post"
+        action="{{ submit_url }}"
+        hx-post="{{ submit_url }}"
+        hx-target="{{ target_id }}"
+        hx-swap="outerHTML"
+        hx-on:htmx:afterRequest="if (event.detail.successful) { const dialog = this.closest('dialog'); if (dialog) { dialog.close(); } }">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <label for="soulseek-discography-artist-id">{{ strings.form_label("soulseek.discography.artist_id") }}</label>
+    <input type="text"
+           id="soulseek-discography-artist-id"
+           name="artist_id"
+           value="{{ form_values['artist_id'] }}"
+           required
+           data-test="soulseek-discography-artist-id" />
+    {% if form_errors.get('artist_id') %}
+      <p class="form-field__error" data-test="soulseek-discography-artist-id-error">{{ form_errors.get('artist_id') }}</p>
+    {% endif %}
+    <label for="soulseek-discography-artist-name">{{ strings.form_label("soulseek.discography.artist_name") }}</label>
+    <input type="text"
+           id="soulseek-discography-artist-name"
+           name="artist_name"
+           value="{{ form_values['artist_name'] }}"
+           data-test="soulseek-discography-artist-name" />
+    <div class="modal-actions">
+      <button type="submit" data-test="soulseek-discography-submit">{{ strings.button_label("soulseek.discography.submit") }}</button>
+      <button type="button"
+              data-test="soulseek-discography-cancel"
+              onclick="this.closest('dialog').close()">{{ strings.button_label("modal.close") }}</button>
+    </div>
+  </form>
+</dialog>

@@ -108,6 +108,24 @@
     </div>
   </section>
 
+  <section class="page-section page-section--card" aria-labelledby="{{ discography_fragment.identifier }}-heading">
+    <h3 id="{{ discography_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_discography_heading() }}</h3>
+    <div id="{{ discography_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ discography_fragment.identifier }}-heading"
+         data-fragment="soulseek-discography-jobs"
+         hx-get="{{ discography_fragment.url }}"
+         hx-trigger="{{ discography_fragment.trigger }}"
+         hx-target="{{ discography_fragment.target }}"
+         hx-swap="{{ discography_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(discography_fragment.loading_key) }}</p>
+      <p class="async-fragment__meta">{{ strings.soulseek_discography_loading() }}</p>
+      {% include "partials/soulseek_discography_jobs.j2" with fragment=None, modal_url=discography_fragment.url, alerts=() %}
+    </div>
+  </section>
+
   <section class="page-section page-section--card" aria-labelledby="{{ user_info_fragment.identifier }}-heading">
     <h3 id="{{ user_info_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_user_profile_heading() }}</h3>
     <div id="{{ user_info_fragment.identifier }}"

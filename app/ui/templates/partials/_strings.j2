@@ -85,6 +85,8 @@
     "settings.artist_preferences.selected": "Selected",
     "soulseek.user.username": "Username",
     "soulseek.user.path": "Directory path",
+    "soulseek.discography.artist_id": "Artist ID",
+    "soulseek.discography.artist_name": "Artist name",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -232,6 +234,8 @@
     "soulseek.retry": "Retry",
     "soulseek.user.lookup": "Lookup user",
     "soulseek.user.browse": "Browse directory",
+    "soulseek.discography.new_job": "Queue discography job",
+    "soulseek.discography.submit": "Queue job",
     "watchlist.create": "Add artist",
     "operations.view_details": "Open details",
     "system.health.refresh": "Refresh",
@@ -423,6 +427,13 @@
     "soulseek.integration.down": "Offline",
     "soulseek.integration.unknown": "Unknown",
     "soulseek.config.api_key_missing": "Missing",
+    "soulseek.discography.status.pending": "Pending",
+    "soulseek.discography.status.queued": "Queued",
+    "soulseek.discography.status.running": "Running",
+    "soulseek.discography.status.completed": "Completed",
+    "soulseek.discography.status.failed": "Failed",
+    "soulseek.discography.status.cancelled": "Cancelled",
+    "soulseek.discography.status.unknown": "Unknown",
     "spotify.status.connected": "Connected",
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
@@ -497,6 +508,11 @@
     "jobs.name": "Job",
     "jobs.status": "Status",
     "jobs.enabled": "Enabled",
+    "soulseek.discography.job_id": "Job ID",
+    "soulseek.discography.artist": "Artist",
+    "soulseek.discography.status": "Status",
+    "soulseek.discography.created": "Created",
+    "soulseek.discography.updated": "Updated",
     "search.title": "Title",
     "search.artist": "Artist",
     "search.source": "Source",
@@ -723,6 +739,8 @@
     No Soulseek downloads are currently queued.
   {%- elif key == "soulseek.uploads" -%}
     No uploads are currently in progress.
+  {%- elif key == "soulseek.discography.jobs" -%}
+    No discography jobs have been queued yet.
   {%- elif key == "jobs" -%}
     No orchestrator jobs reported yet.
   {%- elif key == "search" -%}
@@ -1054,6 +1072,16 @@
 {% macro soulseek_uploads_heading() %}Active uploads{% endmacro %}
 
 {% macro soulseek_downloads_heading() %}Active downloads{% endmacro %}
+
+{% macro soulseek_discography_heading() %}Discography jobs{% endmacro %}
+
+{% macro soulseek_discography_description() %}Queue complete discography downloads by Soulseek artist ID.{% endmacro %}
+
+{% macro soulseek_discography_loading() %}Loading discography jobs…{% endmacro %}
+
+{% macro soulseek_discography_modal_title() %}Queue discography download{% endmacro %}
+
+{% macro soulseek_discography_modal_description() %}Provide the Soulseek artist identifier to enqueue a discography job.{% endmacro %}
 
 {% macro soulseek_user_profile_heading() %}User profile{% endmacro %}
 {% macro soulseek_user_profile_help() %}Enter a Soulseek username to load address and profile information.{% endmacro %}

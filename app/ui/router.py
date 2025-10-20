@@ -40,8 +40,8 @@ from app.routers.soulseek_router import (
     soulseek_download_metadata as api_soulseek_download_metadata,
     soulseek_refresh_artwork as api_soulseek_refresh_artwork,
 )
-from app.schemas import SoulseekDownloadRequest
-from app.models import Download
+from app.schemas import DiscographyDownloadRequest, SoulseekDownloadRequest
+from app.models import DiscographyJob, Download
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
 from app.ui.assets import asset_url
@@ -74,6 +74,8 @@ from app.ui.context import (
     build_soulseek_download_artwork_modal_context,
     build_soulseek_download_lyrics_modal_context,
     build_soulseek_download_metadata_modal_context,
+    build_soulseek_discography_jobs_context,
+    build_soulseek_discography_modal_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
@@ -163,6 +165,9 @@ templates.env.globals["asset_url"] = asset_url
 templates.env.globals["get_ui_assets"] = get_ui_assets
 
 
+_DISCOGRAPHY_JOB_LIMIT = 20
+
+
 @dataclass(slots=True)
 class RecommendationsFormData:
     values: Mapping[str, str]
@@ -200,6 +205,14 @@ def _render_alert_fragment(
         context,
         status_code=status_code,
     )
+
+
+def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[DiscographyJob]:
+    with session_scope() as db_session:
+        query = db_session.query(DiscographyJob).order_by(DiscographyJob.created_at.desc())
+        if limit:
+            query = query.limit(limit)
+        return list(query.all())
 
 
 def _parse_form_body(raw_body: bytes) -> dict[str, str]:
@@ -1785,6 +1798,223 @@ async def soulseek_downloads_fragment(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
+
+@router.get(
+    "/soulseek/discography/jobs",
+    include_in_schema=False,
+    name="soulseek_discography_jobs_fragment",
+)
+async def soulseek_discography_jobs_fragment(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+) -> Response:
+    event_name = "ui.fragment.soulseek.discography.jobs"
+    try:
+        jobs = _load_discography_jobs()
+    except Exception:
+        logger.exception(event_name)
+        return _render_alert_fragment(
+            request,
+            "Unable to load discography jobs.",
+            retry_url=str(request.url),
+            retry_target="#hx-soulseek-discography-jobs",
+            retry_label_key="soulseek.retry",
+        )
+
+    try:
+        modal_url = str(request.url_for("soulseek_discography_job_modal"))
+    except Exception:
+        modal_url = "/ui/soulseek/discography/jobs/modal"
+
+    context = build_soulseek_discography_jobs_context(
+        request,
+        jobs=jobs,
+        modal_url=modal_url,
+    )
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(jobs),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_discography_jobs.j2",
+        context,
+    )
+
+
+@router.get(
+    "/soulseek/discography/jobs/modal",
+    include_in_schema=False,
+    name="soulseek_discography_job_modal",
+)
+async def soulseek_discography_job_modal(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+) -> Response:
+    try:
+        submit_url = str(request.url_for("soulseek_discography_jobs_submit"))
+    except Exception:
+        submit_url = "/ui/soulseek/discography/jobs"
+    csrf_token = request.cookies.get("csrftoken", "")
+    target_id = "#hx-soulseek-discography-jobs"
+    context = build_soulseek_discography_modal_context(
+        request,
+        submit_url=submit_url,
+        csrf_token=csrf_token,
+        target_id=target_id,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.discography.modal",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_discography_modal.j2",
+        context,
+    )
+
+
+@router.post(
+    "/soulseek/discography/jobs",
+    include_in_schema=False,
+    name="soulseek_discography_jobs_submit",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def soulseek_discography_jobs_submit(
+    request: Request,
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+) -> Response:
+    event_name = "ui.fragment.soulseek.discography.jobs.submit"
+    values = _parse_form_body(await request.body())
+    artist_id = (values.get("artist_id") or "").strip()
+    raw_name = values.get("artist_name")
+    artist_name = raw_name.strip() if isinstance(raw_name, str) else ""
+    form_values = {"artist_id": artist_id, "artist_name": artist_name}
+    csrf_token = request.cookies.get("csrftoken", "")
+    try:
+        submit_url = str(request.url_for("soulseek_discography_jobs_submit"))
+    except Exception:
+        submit_url = "/ui/soulseek/discography/jobs"
+
+    if not artist_id:
+        context = build_soulseek_discography_modal_context(
+            request,
+            submit_url=submit_url,
+            csrf_token=csrf_token,
+            target_id="#hx-soulseek-discography-jobs",
+            form_values=form_values,
+            form_errors={"artist_id": "An artist ID is required."},
+        )
+        response = templates.TemplateResponse(
+            request,
+            "partials/soulseek_discography_modal.j2",
+            context,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+        response.headers["HX-Retarget"] = "#modal-root"
+        response.headers["HX-Reswap"] = "innerHTML"
+        return response
+
+    payload = DiscographyDownloadRequest(
+        artist_id=artist_id,
+        artist_name=artist_name or None,
+    )
+    try:
+        with session_scope() as db_session:
+            job_response = await soulseek_discography_download(
+                payload=payload,
+                request=request,
+                session=db_session,
+            )
+    except HTTPException as exc:
+        detail = (
+            exc.detail if isinstance(exc.detail, str) else "Unable to queue the discography job."
+        )
+        context = build_soulseek_discography_modal_context(
+            request,
+            submit_url=submit_url,
+            csrf_token=csrf_token,
+            target_id="#hx-soulseek-discography-jobs",
+            form_values=form_values,
+            form_errors={"artist_id": detail},
+        )
+        response = templates.TemplateResponse(
+            request,
+            "partials/soulseek_discography_modal.j2",
+            context,
+            status_code=exc.status_code,
+        )
+        response.headers["HX-Retarget"] = "#modal-root"
+        response.headers["HX-Reswap"] = "innerHTML"
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=str(exc.status_code),
+        )
+        return response
+    except Exception:
+        logger.exception(event_name)
+        context = build_soulseek_discography_modal_context(
+            request,
+            submit_url=submit_url,
+            csrf_token=csrf_token,
+            target_id="#hx-soulseek-discography-jobs",
+            form_values=form_values,
+            form_errors={"artist_id": "Unable to queue the discography job."},
+        )
+        response = templates.TemplateResponse(
+            request,
+            "partials/soulseek_discography_modal.j2",
+            context,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+        response.headers["HX-Retarget"] = "#modal-root"
+        response.headers["HX-Reswap"] = "innerHTML"
+        return response
+
+    artist_label = artist_name or artist_id
+    alerts = (
+        AlertMessage(
+            level="success",
+            text=f"Queued discography download for {artist_label}.",
+        ),
+    )
+    try:
+        modal_url = str(request.url_for("soulseek_discography_job_modal"))
+    except Exception:
+        modal_url = "/ui/soulseek/discography/jobs/modal"
+    jobs = _load_discography_jobs()
+    context = build_soulseek_discography_jobs_context(
+        request,
+        jobs=jobs,
+        modal_url=modal_url,
+        alerts=alerts,
+    )
+    log_event(
+        logger,
+        event_name,
+        component="ui.router",
+        status="success",
+        role=session.role,
+        job_id=job_response.job_id,
+        job_status=job_response.status,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_discography_jobs.j2",
+        context,
+    )
 
 
 @router.get(

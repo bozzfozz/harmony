@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import UTC, datetime
 import os
+from types import SimpleNamespace
 from typing import Any
 
 from jinja2 import Template
@@ -43,6 +44,8 @@ from app.ui.context import (
     build_soulseek_download_artwork_modal_context,
     build_soulseek_download_lyrics_modal_context,
     build_soulseek_download_metadata_modal_context,
+    build_soulseek_discography_jobs_context,
+    build_soulseek_discography_modal_context,
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_user_directory_context,
@@ -1159,6 +1162,7 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'hx-get="/ui/soulseek/configuration"' in html
     assert 'hx-get="/ui/soulseek/uploads"' in html
     assert 'hx-get="/ui/soulseek/downloads"' in html
+    assert 'hx-get="/ui/soulseek/discography/jobs"' in html
     assert 'hx-get="/ui/soulseek/user/info"' in html
     assert 'hx-get="/ui/soulseek/user/directory"' in html
     assert 'hx-trigger="load, every 60s"' in html
@@ -1168,12 +1172,14 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'data-fragment="soulseek-configuration"' in html
     assert 'data-fragment="soulseek-uploads"' in html
     assert 'data-fragment="soulseek-downloads"' in html
+    assert 'data-fragment="soulseek-discography-jobs"' in html
     assert 'data-fragment="soulseek-user-info"' in html
     assert 'data-fragment="soulseek-user-directory"' in html
     assert "Checking Soulseek connection…" in html
     assert "Loading Soulseek configuration…" in html
     assert "Loading active Soulseek uploads…" in html
     assert "Loading active Soulseek downloads…" in html
+    assert "Loading discography jobs…" in html
     assert "Fetching Soulseek user profile…" in html
     assert "Browsing Soulseek user directory…" in html
     assert 'data-test="soulseek-tasks"' in html
@@ -1181,6 +1187,67 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'data-test="soulseek-task-api-key"' in html
     assert "Completion: 50%" in html
     assert html.count("task-list__item--completed") >= 1
+
+
+def test_soulseek_discography_jobs_partial_renders_rows() -> None:
+    request = _make_request("/ui/soulseek/discography/jobs")
+    jobs = (
+        SimpleNamespace(
+            id=1,
+            artist_id="artist-1",
+            artist_name="Artist One",
+            status="pending",
+            created_at=datetime(2023, 9, 1, 12, 0),
+            updated_at=datetime(2023, 9, 1, 12, 5),
+        ),
+        SimpleNamespace(
+            id=2,
+            artist_id="artist-2",
+            artist_name="Artist Two",
+            status="completed",
+            created_at=datetime(2023, 9, 2, 15, 30),
+            updated_at=datetime(2023, 9, 2, 16, 45),
+        ),
+    )
+    context = build_soulseek_discography_jobs_context(
+        request,
+        jobs=jobs,
+        modal_url="/ui/soulseek/discography/jobs/modal",
+        alerts=(AlertMessage(level="success", text="Queued discography download for Artist One."),),
+    )
+    template = templates.get_template("partials/soulseek_discography_jobs.j2")
+    html = template.render(**context)
+
+    assert "Queued discography download for Artist One." in html
+    assert 'data-test="soulseek-discography-open-modal"' in html
+    assert 'hx-get="/ui/soulseek/discography/jobs/modal"' in html
+    assert "Artist One (artist-1)" in html
+    assert "Artist Two (artist-2)" in html
+    assert 'data-test="soulseek-discography-job-1-status"' in html
+    assert "status-badge--muted" in html
+    assert "status-badge--success" in html
+
+
+def test_soulseek_discography_modal_renders_errors() -> None:
+    request = _make_request("/ui/soulseek/discography/jobs/modal")
+    context = build_soulseek_discography_modal_context(
+        request,
+        submit_url="/ui/soulseek/discography/jobs",
+        csrf_token="csrf-token",
+        target_id="#hx-soulseek-discography-jobs",
+        form_values={"artist_id": "artist-1", "artist_name": "Artist One"},
+        form_errors={"artist_id": "An artist ID is required."},
+    )
+    template = templates.get_template("partials/soulseek_discography_modal.j2")
+    html = template.render(**context)
+
+    assert 'hx-post="/ui/soulseek/discography/jobs"' in html
+    assert 'hx-target="#hx-soulseek-discography-jobs"' in html
+    assert 'data-test="soulseek-discography-artist-id"' in html
+    assert 'value="artist-1"' in html
+    assert 'data-test="soulseek-discography-artist-name"' in html
+    assert 'data-test="soulseek-discography-artist-id-error"' in html
+    assert "An artist ID is required." in html
 
 
 def test_search_page_template_renders_form_and_queue() -> None:
