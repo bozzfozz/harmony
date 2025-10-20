@@ -19,6 +19,9 @@
       {% for option in snapshot.options %}
         <div class="spotify-backfill__option">
           <label for="spotify-backfill-option-{{ option.name }}">
+            {% if option.name == "include_cached_results" %}
+              <input type="hidden" name="{{ option.name }}" value="0" />
+            {% endif %}
             <input type="checkbox"
                    id="spotify-backfill-option-{{ option.name }}"
                    name="{{ option.name }}"
@@ -57,6 +60,8 @@
         <dd>{{ snapshot.expanded_playlists or 0 }}</dd>
         <dt>{{ strings.spotify_backfill_field_label("expanded_tracks") }}</dt>
         <dd>{{ snapshot.expanded_tracks or 0 }}</dd>
+        <dt>{{ strings.spotify_backfill_field_label("include_cached_results") }}</dt>
+        <dd>{{ "Yes" if snapshot.include_cached_results else "No" }}</dd>
         <dt>{{ strings.spotify_backfill_field_label("duration") }}</dt>
         <dd>{{ strings.spotify_backfill_duration(snapshot.duration_ms) }}</dd>
       </dl>
@@ -129,6 +134,8 @@
               <dd>{{ entry.expanded_playlists }}</dd>
               <dt>{{ strings.spotify_backfill_field_label("expanded_tracks") }}</dt>
               <dd>{{ entry.expanded_tracks }}</dd>
+              <dt>{{ strings.spotify_backfill_field_label("include_cached_results") }}</dt>
+              <dd>{{ "Yes" if entry.include_cached_results else "No" }}</dd>
               <dt>{{ strings.spotify_backfill_expand_label() }}</dt>
               <dd>{{ "Yes" if entry.expand_playlists else "No" }}</dd>
               <dt>{{ strings.spotify_backfill_field_label("duration") }}</dt>

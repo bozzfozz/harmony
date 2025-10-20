@@ -14,9 +14,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.config import AppConfig
 from app.api.search import DEFAULT_SOURCES
 from app.api.spotify import _parse_multipart_file
+from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
 from app.db import session_scope
 from app.dependencies import (
@@ -28,20 +28,20 @@ from app.dependencies import (
 from app.errors import AppError
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.models import DiscographyJob, Download
 from app.routers.soulseek_router import (
-    soulseek_cancel,
-    soulseek_remove_completed_downloads,
-    soulseek_remove_completed_uploads,
-    soulseek_requeue_download,
     refresh_download_lyrics as api_refresh_download_lyrics,
     refresh_download_metadata as api_refresh_download_metadata,
+    soulseek_cancel,
     soulseek_download_artwork as api_soulseek_download_artwork,
     soulseek_download_lyrics as api_soulseek_download_lyrics,
     soulseek_download_metadata as api_soulseek_download_metadata,
     soulseek_refresh_artwork as api_soulseek_refresh_artwork,
+    soulseek_remove_completed_downloads,
+    soulseek_remove_completed_uploads,
+    soulseek_requeue_download,
 )
 from app.schemas import DiscographyDownloadRequest, SoulseekDownloadRequest
-from app.models import DiscographyJob, Download
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
 from app.ui.assets import asset_url
@@ -50,15 +50,10 @@ from app.ui.context import (
     FormDefinition,
     LayoutContext,
     SuggestedTask,
-    get_ui_assets,
     attach_secret_result,
     build_activity_fragment_context,
     build_activity_page_context,
     build_admin_page_context,
-    build_settings_artist_preferences_fragment_context,
-    build_settings_form_fragment_context,
-    build_settings_history_fragment_context,
-    build_settings_page_context,
     build_dashboard_page_context,
     build_downloads_fragment_context,
     build_downloads_page_context,
@@ -69,13 +64,17 @@ from app.ui.context import (
     build_primary_navigation,
     build_search_page_context,
     build_search_results_context,
+    build_settings_artist_preferences_fragment_context,
+    build_settings_form_fragment_context,
+    build_settings_history_fragment_context,
+    build_settings_page_context,
     build_soulseek_config_context,
-    build_soulseek_downloads_context,
+    build_soulseek_discography_jobs_context,
+    build_soulseek_discography_modal_context,
     build_soulseek_download_artwork_modal_context,
     build_soulseek_download_lyrics_modal_context,
     build_soulseek_download_metadata_modal_context,
-    build_soulseek_discography_jobs_context,
-    build_soulseek_discography_modal_context,
+    build_soulseek_downloads_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
     build_soulseek_status_context,
@@ -104,6 +103,7 @@ from app.ui.context import (
     build_system_service_health_context,
     build_watchlist_fragment_context,
     build_watchlist_page_context,
+    get_ui_assets,
     select_system_secret_card,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
@@ -112,6 +112,8 @@ from app.ui.services import (
     DownloadsUiService,
     JobsUiService,
     SearchUiService,
+    SettingsOverview,
+    SettingsUiService,
     SoulseekUiService,
     SpotifyFreeIngestResult,
     SpotifyPlaylistFilters,
@@ -121,8 +123,6 @@ from app.ui.services import (
     SpotifyUiService,
     SystemUiService,
     WatchlistUiService,
-    SettingsUiService,
-    SettingsOverview,
     get_activity_ui_service,
     get_downloads_ui_service,
     get_jobs_ui_service,
@@ -4548,7 +4548,15 @@ async def spotify_backfill_run(
         payload = ""
     values = parse_qs(payload)
     max_items_raw = values.get("max_items", [""])[0].strip()
-    expand_playlists = "expand_playlists" in values
+    expand_raw = values.get("expand_playlists", [])
+    expand_playlists = any(value.strip() not in {"", "0", "false", "False"} for value in expand_raw)
+    include_raw = values.get("include_cached_results", [])
+    if not include_raw:
+        include_cached_results = True
+    else:
+        include_cached_results = any(
+            value.strip() not in {"", "0", "false", "False"} for value in include_raw
+        )
     max_items: int | None
     if max_items_raw:
         try:
@@ -4568,6 +4576,7 @@ async def spotify_backfill_run(
         job_id = await service.run_backfill(
             max_items=max_items,
             expand_playlists=expand_playlists,
+            include_cached_results=include_cached_results,
         )
     except PermissionError as exc:
         logger.warning("spotify.ui.backfill.denied", extra={"error": str(exc)})

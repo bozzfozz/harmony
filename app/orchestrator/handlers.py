@@ -2811,12 +2811,14 @@ async def enqueue_spotify_backfill(
     *,
     max_items: int | None,
     expand_playlists: bool,
+    include_cached_results: bool,
 ) -> str:
     """Schedule a Spotify backfill job and return its identifier."""
 
     job = service.create_backfill_job(
         max_items=max_items,
         expand_playlists=expand_playlists,
+        include_cached_results=include_cached_results,
     )
     await service.enqueue_backfill(job)
     return job.id

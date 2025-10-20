@@ -50,6 +50,7 @@ class BackfillJobSpec:
     id: str
     limit: int
     expand_playlists: bool
+    include_cached_results: bool
 
 
 TERMINAL_BACKFILL_STATES: frozenset[str] = frozenset(
@@ -75,6 +76,7 @@ class BackfillJobStatus:
     expanded_playlists: int
     expanded_tracks: int
     expand_playlists: bool
+    include_cached_results: bool
     duration_ms: int | None
     error: str | None
 
@@ -93,6 +95,7 @@ class BackfillJobRecord:
     expanded_playlists: int
     expanded_tracks: int
     expand_playlists: bool
+    include_cached_results: bool
     duration_ms: int | None
     error: str | None
     created_at: datetime
@@ -110,7 +113,13 @@ class BackfillService:
 
     # Public API ---------------------------------------------------------
 
-    def create_job(self, *, max_items: int | None, expand_playlists: bool) -> BackfillJobSpec:
+    def create_job(
+        self,
+        *,
+        max_items: int | None,
+        expand_playlists: bool,
+        include_cached_results: bool = True,
+    ) -> BackfillJobSpec:
         """Persist a new job entry that will later be executed by the worker."""
 
         self._ensure_authenticated()
@@ -134,13 +143,19 @@ class BackfillService:
                 expanded_playlists=0,
                 expanded_tracks=0,
                 expand_playlists=expand_playlists,
+                include_cached_results=include_cached_results,
                 error=None,
                 duration_ms=None,
                 created_at=now,
             )
             session.add(job)
 
-        return BackfillJobSpec(id=job_id, limit=limit, expand_playlists=expand_playlists)
+        return BackfillJobSpec(
+            id=job_id,
+            limit=limit,
+            expand_playlists=expand_playlists,
+            include_cached_results=include_cached_results,
+        )
 
     async def execute(self, job: BackfillJobSpec) -> None:
         """Run a backfill job asynchronously inside a worker thread."""
@@ -167,6 +182,9 @@ class BackfillService:
                 expanded_playlists=int(record.expanded_playlists or 0),
                 expanded_tracks=int(record.expanded_tracks or 0),
                 expand_playlists=bool(record.expand_playlists),
+                include_cached_results=record.include_cached_results
+                if record.include_cached_results is not None
+                else True,
                 duration_ms=record.duration_ms,
                 error=record.error,
             )
@@ -221,6 +239,9 @@ class BackfillService:
                     expanded_playlists=int(record.expanded_playlists or 0),
                     expanded_tracks=int(record.expanded_tracks or 0),
                     expand_playlists=bool(record.expand_playlists),
+                    include_cached_results=record.include_cached_results
+                    if record.include_cached_results is not None
+                    else True,
                     duration_ms=record.duration_ms,
                     error=record.error,
                     created_at=record.created_at or datetime.utcnow(),
@@ -247,10 +268,11 @@ class BackfillService:
         metadata_cache: dict[str, dict[str, Any]] = {}
 
         logger.info(
-            "event=backfill job_id=%s state=running limit=%s expand_playlists=%s",
+            "event=backfill job_id=%s state=running limit=%s expand_playlists=%s include_cached=%s",
             job.id,
             job.limit,
             job.expand_playlists,
+            job.include_cached_results,
         )
 
         self._update_job_state(job.id, state="running", error=None)
@@ -259,7 +281,11 @@ class BackfillService:
             candidates = self._load_candidates(job.limit)
             for candidate in candidates:
                 processed += 1
-                matched_item, from_cache = self._process_candidate(candidate, metadata_cache)
+                matched_item, from_cache = self._process_candidate(
+                    candidate,
+                    metadata_cache,
+                    include_cached_results=job.include_cached_results,
+                )
                 if from_cache:
                     cache_hits += 1
                 else:
@@ -300,7 +326,7 @@ class BackfillService:
             logger.info(
                 "event=backfill job_id=%s state=completed processed=%s matched=%s "
                 "cache_hits=%s cache_misses=%s expanded_playlists=%s "
-                "expanded_tracks=%s duration_ms=%s",
+                "expanded_tracks=%s duration_ms=%s include_cached=%s",
                 job.id,
                 processed,
                 matched,
@@ -309,6 +335,7 @@ class BackfillService:
                 playlists_expanded,
                 tracks_added,
                 duration_ms,
+                job.include_cached_results,
             )
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.exception("event=backfill job_id=%s state=failed", job.id)
@@ -326,12 +353,14 @@ class BackfillService:
         self,
         candidate: CandidateItem,
         metadata_cache: dict[str, dict[str, Any]],
+        *,
+        include_cached_results: bool,
     ) -> tuple[bool, bool]:
         key = self._build_cache_key(candidate)
         cache_hit = False
         metadata: dict[str, Any] | None = None
 
-        if key:
+        if include_cached_results and key:
             cached = self._get_cache_entry(key)
             if cached is not None:
                 cache_hit = True

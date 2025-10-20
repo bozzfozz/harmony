@@ -111,11 +111,19 @@ engineering implementation notes remain documented in
   runs sourced from `/api/v1/spotify/backfill/*` endpoints.
 - **Primary actions:** Operators launch backfill jobs with preset limits, pause
   or resume active jobs, and inspect processed counts. Admins may cancel jobs or
-  override playlist expansion settings.
+  override playlist expansion settings. Advanced options now include an
+  **Include cached results** toggle—checked by default—to reuse previously
+  persisted Spotify lookups. Unchecking the box forces every track to be
+  re-evaluated against the live API, which is useful when cache entries may be
+  stale but increases runtime and rate-limit consumption.
 - **Operational expectations:** Backfills should be scheduled during off-peak
   hours; monitor processed vs. matched counters to ensure Free ingest alignment.
+  When running without cached results expect higher `cache_misses` values and
+  longer job durations.
 - **Observability hooks:** Job state transitions surface as toast notifications
   and mirror `spotify.backfill.jobs` metrics (requested, processed, matched).
+  The job timeline records whether cached results were used for each historical
+  run.
 
 ## Troubleshooting
 - **Status badge remains red:** Verify Spotify OAuth secrets, then rerun the

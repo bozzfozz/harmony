@@ -11,14 +11,15 @@ import pytest
 from starlette.requests import Request
 
 from app.integrations.contracts import ProviderAlbum, ProviderArtist, ProviderTrack
+from app.services.backfill_service import BackfillJobRecord
 from app.services.free_ingest_service import (
     IngestAccepted,
     IngestSkipped,
     IngestSubmission,
     InvalidPlaylistLink,
-    PlaylistValidationError,
     JobCounts,
     JobStatus,
+    PlaylistValidationError,
 )
 from app.ui.context import (
     build_spotify_playlist_items_context,
@@ -29,9 +30,11 @@ from app.ui.context import (
 from app.ui.services.spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
-    SpotifyPlaylistItemRow,
+    SpotifyBackfillSnapshot,
+    SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestJobSnapshot,
     SpotifyFreeIngestResult,
+    SpotifyPlaylistItemRow,
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
@@ -1342,6 +1345,186 @@ async def test_submit_free_ingest_handles_validation_error() -> None:
     assert result.error is not None and "Invalid playlist links" in result.error
     assert result.skipped.playlists == 1
     spotify_service.submit_free_ingest.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_backfill_respects_cache_toggle() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.is_authenticated.return_value = True
+    job = SimpleNamespace(
+        id="job-2",
+        limit=25,
+        expand_playlists=False,
+        include_cached_results=False,
+    )
+    spotify_service.create_backfill_job.return_value = job
+    spotify_service.enqueue_backfill = AsyncMock()
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    job_id = await service.run_backfill(
+        max_items=25,
+        expand_playlists=False,
+        include_cached_results=False,
+    )
+
+    assert job_id == "job-2"
+    spotify_service.create_backfill_job.assert_called_once_with(
+        max_items=25,
+        expand_playlists=False,
+        include_cached_results=False,
+    )
+    spotify_service.enqueue_backfill.assert_awaited_once_with(job)
+
+
+def test_build_backfill_snapshot_uses_include_cached_flag() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=400))
+    spotify_service = Mock()
+    spotify_service.is_authenticated.return_value = True
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    payload = {
+        "id": "job-5",
+        "state": "running",
+        "requested": 10,
+        "processed": 5,
+        "matched": 2,
+        "cache_hits": 1,
+        "cache_misses": 4,
+        "expanded_playlists": 0,
+        "expanded_tracks": 0,
+        "duration_ms": 2500,
+        "error": None,
+        "expand_playlists": False,
+        "include_cached_results": False,
+    }
+
+    snapshot = service.build_backfill_snapshot(
+        csrf_token="csrf",
+        job_id="job-5",
+        status_payload=payload,
+    )
+
+    assert isinstance(snapshot, SpotifyBackfillSnapshot)
+    assert snapshot.include_cached_results is False
+    cache_option = next(
+        option for option in snapshot.options if option.name == "include_cached_results"
+    )
+    assert cache_option.checked is False
+
+
+def test_build_backfill_snapshot_defaults_include_cached() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.is_authenticated.return_value = True
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    snapshot = service.build_backfill_snapshot(
+        csrf_token="csrf",
+        job_id=None,
+        status_payload=None,
+    )
+
+    assert snapshot.include_cached_results is True
+    cache_option = next(
+        option for option in snapshot.options if option.name == "include_cached_results"
+    )
+    assert cache_option.checked is True
+
+
+def test_backfill_timeline_surfaces_include_cached() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    record = BackfillJobRecord(
+        id="job-6",
+        state="completed",
+        requested_items=12,
+        processed_items=12,
+        matched_items=10,
+        cache_hits=8,
+        cache_misses=4,
+        expanded_playlists=1,
+        expanded_tracks=5,
+        expand_playlists=True,
+        include_cached_results=False,
+        duration_ms=3200,
+        error=None,
+        created_at=datetime(2023, 8, 1, 12, 0),
+        updated_at=datetime(2023, 8, 1, 12, 5),
+    )
+    spotify_service = Mock()
+    spotify_service.list_backfill_jobs.return_value = (record,)
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    timeline = service.backfill_timeline(limit=5)
+
+    assert len(timeline) == 1
+    entry = timeline[0]
+    assert isinstance(entry, SpotifyBackfillTimelineEntry)
+    assert entry.include_cached_results is False
+    spotify_service.list_backfill_jobs.assert_called_once_with(limit=5)
+
+
+def test_backfill_status_includes_cache_flag() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    status_payload = SimpleNamespace(
+        id="job-7",
+        state="queued",
+        requested_items=3,
+        processed_items=0,
+        matched_items=0,
+        cache_hits=0,
+        cache_misses=0,
+        expanded_playlists=0,
+        expanded_tracks=0,
+        duration_ms=None,
+        error=None,
+        expand_playlists=True,
+        include_cached_results=False,
+    )
+    spotify_service = Mock()
+    spotify_service.get_backfill_status.return_value = status_payload
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    payload = service.backfill_status("job-7")
+
+    assert payload is not None
+    assert payload["include_cached_results"] is False
+    spotify_service.get_backfill_status.assert_called_once_with("job-7")
 
 
 def test_free_ingest_job_status_converts_snapshot() -> None:
