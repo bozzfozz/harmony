@@ -57,6 +57,29 @@ class SoulseekUserProfile:
 
 
 @dataclass(slots=True)
+class SoulseekUserStatus:
+    """Snapshot of a Soulseek user's availability state."""
+
+    username: str
+    state: str
+    message: str | None
+    shared_files: int | None
+    average_speed_bps: float | None
+
+
+@dataclass(slots=True)
+class SoulseekUserBrowsingStatus:
+    """Progress record for a Soulseek user directory browse request."""
+
+    username: str
+    state: str
+    progress: float | None
+    queue_position: int | None
+    queue_length: int | None
+    message: str | None
+
+
+@dataclass(slots=True)
 class SoulseekUserDirectoryEntry:
     """Directory entry available for browsing."""
 
@@ -182,6 +205,96 @@ class SoulseekUiService:
             },
         )
         return profile
+
+    async def user_status(self, *, username: str) -> SoulseekUserStatus:
+        """Return the availability status for a Soulseek user."""
+
+        trimmed = (username or "").strip()
+        if not trimmed:
+            raise ValueError("username is required")
+
+        payload = await soulseek_user_status(username=trimmed, client=self._client)
+        mapping = payload if isinstance(payload, Mapping) else {}
+        state_raw = mapping.get("status") or mapping.get("state") or "unknown"
+        state = _normalise_status(str(state_raw)) if state_raw is not None else "unknown"
+        message_raw = (
+            mapping.get("message") or mapping.get("status_message") or mapping.get("detail")
+        )
+        message = str(message_raw).strip() if isinstance(message_raw, str) else None
+        if message == "":
+            message = None
+        shared_files = self._coerce_int(
+            mapping.get("shared_files")
+            or mapping.get("shared")
+            or mapping.get("shared_count")
+            or mapping.get("files")
+        )
+        average_speed = self._coerce_float(
+            mapping.get("average_speed") or mapping.get("avg_speed") or mapping.get("speed")
+        )
+        status = SoulseekUserStatus(
+            username=trimmed,
+            state=state or "unknown",
+            message=message,
+            shared_files=shared_files,
+            average_speed_bps=average_speed,
+        )
+        logger.debug(
+            "soulseek.ui.user.status",
+            extra={
+                "username": trimmed,
+                "state": status.state,
+                "shared_files": status.shared_files,
+                "average_speed_bps": status.average_speed_bps,
+            },
+        )
+        return status
+
+    async def user_browsing_status(
+        self,
+        *,
+        username: str,
+    ) -> SoulseekUserBrowsingStatus:
+        """Return the browse progress for a Soulseek user."""
+
+        trimmed = (username or "").strip()
+        if not trimmed:
+            raise ValueError("username is required")
+
+        payload = await soulseek_user_browsing_status(username=trimmed, client=self._client)
+        mapping = payload if isinstance(payload, Mapping) else {}
+        state_raw = mapping.get("status") or mapping.get("state") or "unknown"
+        state = _normalise_status(str(state_raw)) if state_raw is not None else "unknown"
+        message_raw = (
+            mapping.get("message") or mapping.get("status_message") or mapping.get("detail")
+        )
+        message = str(message_raw).strip() if isinstance(message_raw, str) else None
+        if message == "":
+            message = None
+        progress = self._coerce_progress(mapping.get("progress") or mapping.get("percent"))
+        queue_position = self._coerce_int(mapping.get("queue_position") or mapping.get("position"))
+        queue_length = self._coerce_int(
+            mapping.get("queue_length") or mapping.get("queue_size") or mapping.get("total")
+        )
+        status = SoulseekUserBrowsingStatus(
+            username=trimmed,
+            state=state or "unknown",
+            progress=progress,
+            queue_position=queue_position,
+            queue_length=queue_length,
+            message=message,
+        )
+        logger.debug(
+            "soulseek.ui.user.browsing_status",
+            extra={
+                "username": trimmed,
+                "state": status.state,
+                "progress": status.progress,
+                "queue_position": status.queue_position,
+                "queue_length": status.queue_length,
+            },
+        )
+        return status
 
     async def user_directory(
         self,

@@ -1,4 +1,5 @@
 {% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
 
 <form class="form soulseek-user-form"
       method="get"
@@ -18,6 +19,50 @@
   </div>
   <button type="submit">{{ strings.button_label("soulseek.user.lookup") }}</button>
 </form>
+
+{% set show_status = has_user_status or has_user_browse_status %}
+
+{% if show_status %}
+  <section class="soulseek-user-section" data-test="soulseek-user-status">
+    <h4>{{ strings.soulseek_user_status_heading() }}</h4>
+    {% if has_user_status %}
+      <div class="soulseek-user-status-summary">
+        {% if user_status_badge %}
+          {{ status_badges.render_badge(user_status_badge) }}
+        {% endif %}
+        {% if user_status_has_shared %}
+          <p data-test="soulseek-user-status-shared">{{ strings.soulseek_user_status_shared(user_status_shared) }}</p>
+        {% endif %}
+        {% if user_status_message %}
+          <p data-test="soulseek-user-status-message">{{ user_status_message }}</p>
+        {% elif not user_status_badge and not user_status_has_shared %}
+          <p data-test="soulseek-user-status-empty">{{ strings.soulseek_user_status_empty(username) }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if has_user_browse_status %}
+      <div class="soulseek-user-browse" data-test="soulseek-user-browse-status">
+        <h5>{{ strings.soulseek_user_browse_heading() }}</h5>
+        {% if user_browse_badge %}
+          {{ status_badges.render_badge(user_browse_badge) }}
+        {% endif %}
+        {% if user_browse_has_progress %}
+          <p data-test="soulseek-user-browse-progress">{{ strings.soulseek_user_browse_progress(user_browse_progress) }}</p>
+        {% endif %}
+        {% if user_browse_has_queue %}
+          {% set queue_position = user_browse_queue[0] %}
+          {% set queue_total = user_browse_queue[1] %}
+          <p data-test="soulseek-user-browse-queue">{{ strings.soulseek_user_browse_queue(queue_position, queue_total) }}</p>
+        {% endif %}
+        {% if user_browse_message %}
+          <p data-test="soulseek-user-browse-message">{{ user_browse_message }}</p>
+        {% elif (not user_browse_badge and not user_browse_has_progress and not user_browse_has_queue) %}
+          <p data-test="soulseek-user-browse-empty">{{ strings.soulseek_user_browse_empty() }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endif %}
 
 {% if has_profile %}
   <section class="soulseek-user-section" data-test="soulseek-user-address">

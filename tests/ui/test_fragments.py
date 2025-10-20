@@ -32,10 +32,12 @@ from app.ui.services import (
     SearchResultsPage,
     SoulseekUiService,
     SoulseekUploadRow,
+    SoulseekUserBrowsingStatus,
     SoulseekUserDirectoryEntry,
     SoulseekUserDirectoryListing,
     SoulseekUserFileEntry,
     SoulseekUserProfile,
+    SoulseekUserStatus,
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillOption,
@@ -931,6 +933,25 @@ class _StubSoulseekUiService:
         )
         self.profile_exception: Exception | None = None
         self.profile_calls: list[str] = []
+        self.user_status_result = SoulseekUserStatus(
+            username="alice",
+            state="online",
+            message="Ready to trade",
+            shared_files=42,
+            average_speed_bps=2048.0,
+        )
+        self.user_status_exception: Exception | None = None
+        self.user_status_calls: list[str] = []
+        self.user_browsing_status_result = SoulseekUserBrowsingStatus(
+            username="alice",
+            state="queued",
+            progress=0.5,
+            queue_position=2,
+            queue_length=5,
+            message="Awaiting slot",
+        )
+        self.user_browsing_status_exception: Exception | None = None
+        self.user_browsing_status_calls: list[str] = []
         self.directory_listing = SoulseekUserDirectoryListing(
             username="alice",
             current_path="Music",
@@ -983,6 +1004,18 @@ class _StubSoulseekUiService:
             raise self.profile_exception
         self.profile_calls.append(username)
         return self.profile
+
+    async def user_status(self, *, username: str) -> SoulseekUserStatus:
+        self.user_status_calls.append(username)
+        if self.user_status_exception:
+            raise self.user_status_exception
+        return self.user_status_result
+
+    async def user_browsing_status(self, *, username: str) -> SoulseekUserBrowsingStatus:
+        self.user_browsing_status_calls.append(username)
+        if self.user_browsing_status_exception:
+            raise self.user_browsing_status_exception
+        return self.user_browsing_status_result
 
     async def user_directory(
         self,
@@ -1307,8 +1340,13 @@ def test_soulseek_user_info_fragment_success(monkeypatch) -> None:
             assert "Lookup user" in body
             assert "127.0.0.1" in body
             assert "5030" in body
+            assert "User status" in body
+            assert "Online" in body
+            assert "Browse progress: 50%" in body
             assert "track.flac" not in body
             assert stub.profile_calls == ["alice"]
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == ["alice"]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -1351,6 +1389,50 @@ def test_soulseek_user_info_fragment_handles_unexpected_error(monkeypatch) -> No
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
 
+def test_soulseek_user_info_fragment_status_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.user_status_exception = HTTPException(status_code=504, detail="status error")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=504)
+            assert "status error" in response.text
+            assert 'hx-target="#hx-soulseek-user-info"' in response.text
+            assert stub.profile_calls == ["alice"]
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == []
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_info_fragment_browsing_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.user_browsing_status_exception = HTTPException(status_code=429, detail="browse error")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=429)
+            assert "browse error" in response.text
+            assert 'hx-target="#hx-soulseek-user-info"' in response.text
+            assert stub.profile_calls == ["alice"]
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == ["alice"]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
 def test_soulseek_user_directory_fragment_success(monkeypatch) -> None:
     stub = _StubSoulseekUiService()
     app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
@@ -1368,6 +1450,8 @@ def test_soulseek_user_directory_fragment_success(monkeypatch) -> None:
             assert "Albums" in body
             assert "track.flac" in body
             assert stub.directory_calls == [("alice", None)]
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == ["alice"]
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -1406,6 +1490,50 @@ def test_soulseek_user_directory_fragment_handles_unexpected_error(monkeypatch) 
             _assert_html_response(response, status_code=500)
             assert "Unable to load Soulseek user directory." in response.text
             assert 'hx-target="#hx-soulseek-user-directory"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_directory_fragment_status_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.user_status_exception = HTTPException(status_code=410, detail="status fail")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/directory",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=410)
+            assert "status fail" in response.text
+            assert 'hx-target="#hx-soulseek-user-directory"' in response.text
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == []
+            assert stub.directory_calls == []
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_directory_fragment_browsing_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.user_browsing_status_exception = HTTPException(status_code=425, detail="browse fail")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/directory",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=425)
+            assert "browse fail" in response.text
+            assert 'hx-target="#hx-soulseek-user-directory"' in response.text
+            assert stub.user_status_calls == ["alice"]
+            assert stub.user_browsing_status_calls == ["alice"]
+            assert stub.directory_calls == []
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
