@@ -24,10 +24,13 @@
       {% block header_actions %}{% endblock %}
     </header>
     {{ alerts.render_alerts(layout.alerts) }}
-    <main>
+    <main role="main">
       {% block page_header %}{% endblock %}
       {% block main %}{% endblock %}
     </main>
+    <footer>
+      {% block footer %}{% endblock %}
+    </footer>
     {% block modals %}
       {{ modals.render_modals(layout.modals) }}
       <div id="modal-root" data-role="modal-container"></div>

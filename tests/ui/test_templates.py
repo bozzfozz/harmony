@@ -165,6 +165,8 @@ def test_login_template_renders_error_and_form() -> None:
     assert "Invalid key" in html
     assert 'id="login-form"' in html
     assert 'data-role="anonymous"' in html
+    assert '<main role="main"' in html
+    assert '<footer' in html
     assert "nav-home" not in html
     assert f'href="{asset_url("css/app.css")}"' in html
     assert f'src="{asset_url("js/htmx.min.js")}"' in html
@@ -197,6 +199,9 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "nav-spotify" in html
     assert "nav-operator" in html
     assert "nav-admin" in html
+    assert 'role="navigation"' in html
+    assert '<main role="main"' in html
+    assert '<footer' in html
     assert 'id="features-table"' in html
     assert "status-badge--success" in html
     assert "status-badge--muted" in html
