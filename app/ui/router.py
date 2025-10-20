@@ -36,6 +36,7 @@ from app.ui.context import (
     SuggestedTask,
     build_activity_fragment_context,
     build_activity_page_context,
+    build_admin_page_context,
     build_dashboard_page_context,
     build_downloads_page_context,
     build_downloads_fragment_context,
@@ -2302,6 +2303,28 @@ async def search_page(
     response = templates.TemplateResponse(
         request,
         "pages/search.j2",
+        context,
+    )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get("/admin", include_in_schema=False, name="admin_page")
+async def admin_page(
+    request: Request,
+    session: UiSession = Depends(require_role("admin")),
+) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+    context = build_admin_page_context(
+        request,
+        session=session,
+        csrf_token=csrf_token,
+    )
+    response = templates.TemplateResponse(
+        request,
+        "pages/admin.j2",
         context,
     )
     if issued:

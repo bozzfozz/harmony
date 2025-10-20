@@ -1,0 +1,36 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.admin_page_intro() }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  {% for card in call_to_actions %}
+    <section class="page-section page-section--card" aria-labelledby="{{ card.identifier }}-heading">
+      <header class="page-section__header">
+        <h3 id="{{ card.identifier }}-heading" class="page-section__title">
+          {{ strings.admin_card_title(card.title_key) }}
+        </h3>
+        <a class="page-section__link"
+           {% if card.link_test_id %}data-test="{{ card.link_test_id }}"{% endif %}
+           href="{{ card.href }}">
+          {{ strings.link_text(card.link_label_key) }}
+        </a>
+      </header>
+      <p class="page-section__description">
+        {{ strings.admin_card_description(card.description_key) }}
+      </p>
+    </section>
+  {% endfor %}
+{% endblock %}
