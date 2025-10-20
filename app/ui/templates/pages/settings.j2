@@ -1,0 +1,86 @@
+{% extends "layouts/base.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block header_actions %}
+  <form id="logout-form" method="post" action="/ui/logout">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <button type="submit">{{ strings.button_label("logout") }}</button>
+  </form>
+{% endblock %}
+
+{% block page_header %}
+  <section>
+    <h2>{{ strings.section_heading(layout.page_id) }}</h2>
+    <p>{{ strings.settings_page_intro() }}</p>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <section class="page-section page-section--card" aria-labelledby="settings-manage-heading">
+    <header class="page-section__header">
+      <h3 id="settings-manage-heading" class="page-section__title">{{ strings.settings_section_title("manage") }}</h3>
+      <p class="page-section__description">{{ strings.settings_manage_description() }}</p>
+    </header>
+    {% include "partials/settings_form.j2" %}
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="settings-history-heading">
+    <header class="page-section__header">
+      <h3 id="settings-history-heading" class="page-section__title">{{ strings.settings_section_title("history") }}</h3>
+      <form id="{{ history_refresh_form.identifier }}"
+            class="form form--inline"
+            method="{{ history_refresh_form.method }}"
+            action="{{ history_refresh_form.action }}"
+            hx-get="{{ history_refresh_form.action }}"
+            hx-target="{{ history_fragment.target }}"
+            hx-swap="{{ history_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(history_refresh_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <p class="page-section__description">{{ strings.settings_history_description() }}</p>
+    <div id="{{ history_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="settings-history-heading"
+         data-fragment="settings-history"
+         hx-get="{{ history_fragment.url }}"
+         hx-trigger="{{ history_fragment.trigger }}"
+         hx-target="{{ history_fragment.target }}"
+         hx-swap="{{ history_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(history_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="settings-artist-preferences-heading">
+    <header class="page-section__header">
+      <h3 id="settings-artist-preferences-heading" class="page-section__title">{{ strings.settings_section_title("artist_preferences") }}</h3>
+      <form id="{{ artist_preferences_refresh_form.identifier }}"
+            class="form form--inline"
+            method="{{ artist_preferences_refresh_form.method }}"
+            action="{{ artist_preferences_refresh_form.action }}"
+            hx-get="{{ artist_preferences_refresh_form.action }}"
+            hx-target="{{ artist_preferences_fragment.target }}"
+            hx-swap="{{ artist_preferences_fragment.swap }}">
+        <button type="submit">{{ strings.button_label(artist_preferences_refresh_form.submit_label_key) }}</button>
+      </form>
+    </header>
+    <p class="page-section__description">{{ strings.settings_artist_preferences_description() }}</p>
+    <div id="{{ artist_preferences_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="settings-artist-preferences-heading"
+         data-fragment="settings-artist-preferences"
+         hx-get="{{ artist_preferences_fragment.url }}"
+         hx-trigger="{{ artist_preferences_fragment.trigger }}"
+         hx-target="{{ artist_preferences_fragment.target }}"
+         hx-swap="{{ artist_preferences_fragment.swap }}">
+      <p class="async-fragment__placeholder">
+        {{ strings.fragment_loading(artist_preferences_fragment.loading_key) }}
+      </p>
+    </div>
+  </section>
+{% endblock %}

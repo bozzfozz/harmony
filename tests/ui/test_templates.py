@@ -30,6 +30,10 @@ from app.ui.context import (
     build_jobs_page_context,
     build_login_page_context,
     build_operations_page_context,
+    build_settings_artist_preferences_fragment_context,
+    build_settings_form_fragment_context,
+    build_settings_history_fragment_context,
+    build_settings_page_context,
     build_search_page_context,
     build_soulseek_navigation_badge,
     build_soulseek_page_context,
@@ -75,6 +79,10 @@ from app.ui.services import (
     SpotifyTopTrackRow,
     SpotifyTrackDetail,
     WatchlistRow,
+    ArtistPreferenceRow,
+    SettingRow,
+    SettingsHistoryRow,
+    SettingsOverview,
 )
 from app.ui.session import UiFeatures, UiSession
 
@@ -1537,6 +1545,80 @@ def test_table_fragment_renders_badge_and_pagination() -> None:
     assert 'hx-get="/next"' in html
     assert 'hx-push-url="/prev"' in html
     assert 'hx-push-url="/next"' in html
+
+
+def test_settings_template_renders_sections() -> None:
+    request = _make_request("/ui/settings")
+    session = _make_session(role="admin")
+    overview = SettingsOverview(
+        rows=(
+            SettingRow(key="alpha", value="1", has_override=True),
+            SettingRow(key="beta", value=None, has_override=False),
+        ),
+        updated_at=datetime.now(tz=UTC),
+    )
+    context = build_settings_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        overview=overview,
+    )
+    template = templates.get_template("pages/settings.j2")
+    html = template.render(**context)
+
+    assert "hx-settings-form" in html
+    assert "/ui/settings/history" in html
+    assert "settings-artist-preferences-heading" in html
+
+
+def test_settings_form_partial_renders_table() -> None:
+    request = _make_request("/ui/settings")
+    overview = SettingsOverview(
+        rows=(SettingRow(key="gamma", value="7", has_override=True),),
+        updated_at=datetime.now(tz=UTC),
+    )
+    context = build_settings_form_fragment_context(request, overview=overview)
+    context["csrf_token"] = "token"
+    template = templates.get_template("partials/settings_form.j2")
+    html = template.render(**context)
+
+    assert "hx-settings-form" in html
+    assert "gamma" in html
+    assert "Save setting" in html
+
+
+def test_settings_history_partial_renders_fragment() -> None:
+    request = _make_request("/ui/settings/history")
+    rows = (
+        SettingsHistoryRow(
+            key="alpha",
+            old_value="1",
+            new_value="2",
+            changed_at=datetime.now(tz=UTC),
+        ),
+    )
+    context = build_settings_history_fragment_context(request, rows=rows)
+    template = templates.get_template("partials/settings_history.j2")
+    html = template.render(**context)
+
+    assert "settings-history-table" in html
+    assert "Previous value" in html
+
+
+def test_settings_artist_preferences_partial_renders_form() -> None:
+    request = _make_request("/ui/settings/artist-preferences")
+    rows = (ArtistPreferenceRow(artist_id="artist", release_id="release", selected=True),)
+    context = build_settings_artist_preferences_fragment_context(
+        request,
+        rows=rows,
+        csrf_token="token",
+    )
+    template = templates.get_template("partials/settings_artist_preferences.j2")
+    html = template.render(**context)
+
+    assert "settings-artist-preferences" in html
+    assert "Add preference" in html
+    assert ("Enable" in html) or ("Disable" in html)
 
 
 def test_pass_context_globals_receive_runtime_context_mapping() -> None:

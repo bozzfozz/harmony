@@ -10,6 +10,16 @@ from .search import (
     SearchUiService,
     get_search_ui_service,
 )
+from .settings import (
+    ArtistPreferenceRow,
+    ArtistPreferenceTable,
+    SettingRow,
+    SettingsHistoryRow,
+    SettingsHistoryTable,
+    SettingsOverview,
+    SettingsUiService,
+    get_settings_ui_service,
+)
 from .soulseek import SoulseekUiService, SoulseekUploadRow, get_soulseek_ui_service
 from .spotify import (
     SpotifyAccountSummary,
@@ -72,6 +82,14 @@ __all__ = [
     "SearchResultsPage",
     "SearchUiService",
     "get_search_ui_service",
+    "SettingRow",
+    "SettingsOverview",
+    "SettingsHistoryRow",
+    "SettingsHistoryTable",
+    "ArtistPreferenceRow",
+    "ArtistPreferenceTable",
+    "SettingsUiService",
+    "get_settings_ui_service",
     "SoulseekUiService",
     "SoulseekUploadRow",
     "get_soulseek_ui_service",

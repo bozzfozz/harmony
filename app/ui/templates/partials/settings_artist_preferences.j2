@@ -1,0 +1,34 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
+
+<div id="{{ fragment.identifier }}" class="settings-artist-preferences">
+  <form id="{{ add_form.identifier }}"
+        class="form"
+        method="{{ add_form.method }}"
+        action="{{ add_form.action }}"
+        hx-post="{{ add_form.action }}"
+        hx-target="#{{ fragment.identifier }}"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    <input type="hidden" name="action" value="add" />
+    {% for field in add_form.fields %}
+      <div class="form-field">
+        <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+        {% if field.input_type == "checkbox" %}
+          <input type="checkbox" name="{{ field.name }}" id="{{ field.name }}" />
+        {% else %}
+          <input type="{{ field.input_type }}"
+                 name="{{ field.name }}"
+                 id="{{ field.name }}"
+                 {% if field.required %}required{% endif %} />
+        {% endif %}
+      </div>
+    {% endfor %}
+    <button type="submit">{{ strings.button_label(add_form.submit_label_key) }}</button>
+  </form>
+  {% if fragment.table.rows %}
+    {{ tables.render_table(fragment.table) }}
+  {% else %}
+    <p class="empty-state">{{ strings.empty_state(fragment.empty_state_key) }}</p>
+  {% endif %}
+</div>

@@ -1,0 +1,30 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/tables.j2" as tables %}
+
+<div id="hx-settings-form" class="settings-form">
+  <form id="{{ settings_form.identifier }}"
+        class="form"
+        method="{{ settings_form.method }}"
+        action="{{ settings_form.action }}"
+        hx-post="{{ settings_form.action }}"
+        hx-target="#hx-settings-form"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+    {% for field in settings_form.fields %}
+      <div class="form-field">
+        <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+        <input type="{{ field.input_type }}"
+               name="{{ field.name }}"
+               id="{{ field.name }}"
+               {% if field.autocomplete %}autocomplete="{{ field.autocomplete }}"{% endif %}
+               {% if field.required %}required{% endif %} />
+        {% if field.name == "value" %}
+          <p class="form-field__help">{{ strings.form_help("settings.value.description") }}</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+    <button type="submit">{{ strings.button_label(settings_form.submit_label_key) }}</button>
+  </form>
+  <p class="form-field__help settings-form__timestamp">{{ strings.settings_last_updated(settings_updated_at_display) }}</p>
+  {{ tables.render_table(settings_table) }}
+</div>

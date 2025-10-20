@@ -14,6 +14,7 @@
     "soulseek": "Soulseek",
     "admin": "Administration",
     "system": "System diagnostics",
+    "settings": "Settings",
   } -%}
   {%- if page_id in titles -%}
     {{ titles[page_id] }} · {{ app_name() }}
@@ -36,6 +37,7 @@
     "soulseek": "Soulseek integration",
     "admin": "Administration",
     "system": "System diagnostics",
+    "settings": "Settings management",
   } -%}
   {%- if page_id in headings -%}
     {{ headings[page_id] }}
@@ -76,6 +78,11 @@
     "spotify.playlists.filter.owner": "Playlist owner",
     "spotify.playlists.filter.status": "Sync status",
     "system.secrets.override": "Override value",
+    "settings.key": "Setting key",
+    "settings.value": "Value",
+    "settings.artist_preferences.artist": "Artist ID",
+    "settings.artist_preferences.release": "Release ID",
+    "settings.artist_preferences.selected": "Selected",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -90,6 +97,7 @@
     "spotify.free_ingest.playlist_links": "Paste Spotify playlist URLs, one per line.",
     "spotify.free_ingest.tracks": "Provide track entries in \"Artist - Title\" format, one per line.",
     "spotify.free_ingest.upload_file": "Upload a .txt or .m3u playlist export to submit tracks.",
+    "settings.value.description": "Leave empty to remove a stored override and fall back to defaults.",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -143,6 +151,13 @@
     "system.integrations.refresh": "Refresh",
     "system.services.refresh": "Refresh",
     "system.secrets.validate": "Validate secret",
+    "settings.save": "Save setting",
+    "settings.history.refresh": "Refresh history",
+    "settings.artist_preferences.refresh": "Refresh preferences",
+    "settings.artist_preferences.add": "Add preference",
+    "settings.artist_preferences.enable": "Enable",
+    "settings.artist_preferences.disable": "Disable",
+    "settings.artist_preferences.remove": "Remove",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -191,6 +206,31 @@
 {% macro activity_page_intro() %}Follow recent activity entries with automatic refreshes and pagination controls.{% endmacro %}
 
 {% macro system_page_intro() %}Inspect real-time health, readiness, and credential status across Harmony services.{% endmacro %}
+
+{% macro settings_page_intro() %}Review and adjust configuration overrides applied through the operator console.{% endmacro %}
+
+{% macro settings_manage_description() %}Provide a key and value to override defaults or clear overrides for critical services.{% endmacro %}
+
+{% macro settings_history_description() %}Track the most recent configuration changes applied by administrators.{% endmacro %}
+
+{% macro settings_artist_preferences_description() %}Maintain preferred releases for highlighted artists to steer automated selections.{% endmacro %}
+
+{% macro settings_section_title(key) -%}
+  {%- set titles = {
+    "manage": "Manage settings",
+    "history": "Change history",
+    "artist_preferences": "Artist preferences",
+  } -%}
+  {{ titles.get(key, key) }}
+{%- endmacro %}
+
+{% macro settings_last_updated(value) -%}
+  {%- if value -%}
+    Last updated {{ value }}.
+  {%- else -%}
+    Last updated recently.
+  {%- endif -%}
+{%- endmacro %}
 
 {% macro system_section_title(key) -%}
   {%- set titles = {
@@ -413,6 +453,17 @@
     "spotify.top_artists.followers": "Followers",
     "spotify.top_artists.popularity": "Popularity",
     "spotify.top_artists.genres": "Genres",
+    "settings.key": "Setting",
+    "settings.value": "Value",
+    "settings.override": "Status",
+    "settings.history.key": "Setting",
+    "settings.history.old": "Previous value",
+    "settings.history.new": "New value",
+    "settings.history.changed": "Changed at",
+    "settings.artist_preferences.artist": "Artist ID",
+    "settings.artist_preferences.release": "Release ID",
+    "settings.artist_preferences.selected": "Selected",
+    "settings.artist_preferences.actions": "Actions",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -435,6 +486,9 @@
     "soulseek.providers.caption": "Provider health",
     "soulseek.config.caption": "Soulseek configuration",
     "soulseek.uploads.caption": "Soulseek uploads",
+    "settings.table.caption": "Current configuration values",
+    "settings.history.caption": "Recent configuration changes",
+    "settings.artist_preferences.caption": "Configured artist preferences",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -464,6 +518,11 @@
     "spotify.status.unauthenticated": "Authentication required",
     "spotify.status.unconfigured": "Not configured",
     "search.action.unavailable": "Not available",
+    "settings.value.unset": "Not configured",
+    "settings.override.present": "Configured",
+    "settings.override.missing": "Using default",
+    "settings.artist_preferences.state.enabled": "Enabled",
+    "settings.artist_preferences.state.disabled": "Disabled",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -532,6 +591,10 @@
     Loading job information…
   {%- elif key == "watchlist" -%}
     Loading watchlist entries…
+  {%- elif key == "settings-history" -%}
+    Loading settings history…
+  {%- elif key == "settings-artist-preferences" -%}
+    Loading artist preferences…
   {%- elif key == "activity" -%}
     Loading activity entries…
   {%- elif key == "soulseek.status" -%}
@@ -576,6 +639,10 @@
     Spotify has not reported any top artists for your account yet.
   {%- elif key == "spotify.recommendations" -%}
     No Spotify recommendations available yet. Submit the form above to fetch suggestions.
+  {%- elif key == "settings-history" -%}
+    No configuration changes recorded yet.
+  {%- elif key == "settings-artist-preferences" -%}
+    No artist preferences have been configured.
   {%- else -%}
     {{ key }}
   {%- endif -%}
