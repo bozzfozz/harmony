@@ -156,6 +156,8 @@ Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions
 | Metrics-Link | GET `/api/v1/metrics` | Standard-Link (öffnet neuen Tab) | — | 5xx ⇒ Hinweis |
 | Spotify/Soulseek Health | GET `/api/v1/health/spotify`, `/api/v1/health/soulseek` | `load`, `hx-trigger="every 60s"` | Badges | Status ≠ ok ⇒ Rot |【F:app/routers/health_router.py†L15-L33】
 
+- ✅ `/ui/system` lädt Liveness-, Readiness- und Integrationskarten als HTMX-Fragmente (`/ui/system/<fragment>`), zeigt Service-Credential-Badges auf Basis von `evaluate_all_service_health` und bietet CSRF-geschützte Secret-Validierung pro Provider (nur `admin`).【F:app/ui/router.py†L233-L408】【F:app/ui/templates/pages/system.j2†L1-L94】
+
 Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SPOTIFY` aktiv ist; Upload-Aktionen selbst werden zusätzlich von `UI_FEATURE_IMPORTS` gesteuert.
 
 ### Fehler- und Toast-Behandlung

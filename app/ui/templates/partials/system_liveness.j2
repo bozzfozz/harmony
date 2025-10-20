@@ -1,0 +1,19 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+<div class="system-card__body">
+  <div class="system-card__status">
+    {{ status_badges.render_badge(status_badge) }}
+    <span class="system-card__status-text">{{ status_text }}</span>
+  </div>
+  <dl class="system-card__details">
+    <div class="system-card__detail">
+      <dt>{{ strings.system_field_label("version") }}</dt>
+      <dd>{{ version if version else strings.system_field_placeholder() }}</dd>
+    </div>
+    <div class="system-card__detail">
+      <dt>{{ strings.system_field_label("uptime") }}</dt>
+      <dd>{{ uptime_text if uptime_text else strings.system_field_placeholder() }}</dd>
+    </div>
+  </dl>
+</div>

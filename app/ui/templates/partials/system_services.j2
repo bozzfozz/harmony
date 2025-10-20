@@ -1,0 +1,25 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+<div class="system-card__body">
+  {% if services %}
+    <ul class="system-card__list">
+      {% for service in services %}
+        <li class="system-card__list-item">
+          <div class="system-card__service">
+            <span class="system-card__item-name">{{ service.service }}</span>
+            {{ status_badges.render_badge(service.badge) }}
+          </div>
+          {% if service.missing %}
+            <p class="system-card__note">{{ strings.system_service_missing(service.missing) }}</p>
+          {% endif %}
+          {% if service.optional_missing %}
+            <p class="system-card__note system-card__note--optional">{{ strings.system_service_optional(service.optional_missing) }}</p>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="system-card__empty">{{ strings.system_empty_state("services") }}</p>
+  {% endif %}
+</div>
