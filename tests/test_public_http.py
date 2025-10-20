@@ -7,6 +7,7 @@ import pytest
 os.environ.setdefault("SLSKD_API_KEY", "test-key")
 
 from app.main import app  # noqa: E402  pylint: disable=wrong-import-position
+from app.ui.assets import asset_url
 
 
 @pytest.fixture(scope="module")
@@ -44,3 +45,13 @@ def test_api_404_remains_json_response(client: TestClient) -> None:
     error_payload = payload.get("error")
     assert isinstance(error_payload, dict)
     assert error_payload.get("code")
+
+
+def test_ui_static_assets_are_versioned_and_cached(client: TestClient) -> None:
+    url = asset_url("css/app.css")
+    assert "?v=" in url
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert response.headers.get("cache-control") == "max-age=86400, immutable"

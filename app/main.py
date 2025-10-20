@@ -13,6 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
@@ -53,6 +55,16 @@ logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(UTC)
 _APP_LISTEN_HOST = "0.0.0.0"
 _LIVE_HEALTH_PATH = "/live"
+
+
+class ImmutableStaticFiles(StaticFiles):
+    cache_control_header = "max-age=86400, immutable"
+
+    async def get_response(self, path: str, scope: Scope) -> Response:  # type: ignore[override]
+        response = await super().get_response(path, scope)
+        if response.status_code < 400:
+            response.headers.setdefault("Cache-Control", self.cache_control_header)
+        return response
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
@@ -717,7 +729,7 @@ app = FastAPI(
 
 app.mount(
     "/ui/static",
-    StaticFiles(directory=Path(__file__).resolve().parent / "ui" / "static"),
+    ImmutableStaticFiles(directory=Path(__file__).resolve().parent / "ui" / "static"),
     name="ui-static",
 )
 
