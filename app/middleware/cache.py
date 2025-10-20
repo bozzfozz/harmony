@@ -372,9 +372,22 @@ class CacheMiddleware(BaseHTTPMiddleware):
     def _ensure_headers(self, response: Response, rule: CacheRule | None = None) -> Response:
         if self._vary_headers:
             response.headers.setdefault("Vary", ", ".join(self._vary_headers))
+        if self._requires_no_store(response):
+            response.headers["Cache-Control"] = "no-store"
+            return response
         ttl, stale = self._resolve_durations(rule)
         response.headers.setdefault("Cache-Control", self._build_cache_control(ttl, stale))
         return response
+
+    @staticmethod
+    def _requires_no_store(response: Response) -> bool:
+        media_type = (response.media_type or "").lower()
+        if media_type.startswith("text/html"):
+            return True
+        content_type = response.headers.get("content-type")
+        if content_type and "text/html" in content_type.lower():
+            return True
+        return False
 
     def _ensure_head_semantics(self, response: Response, method: str) -> Response:
         if method != "HEAD":
