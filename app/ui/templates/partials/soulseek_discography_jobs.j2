@@ -1,0 +1,25 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/alerts.j2" as alert_macros %}
+{% import "partials/tables.j2" as tables %}
+
+{% if alerts %}
+  {{ alert_macros.render_alerts(alerts) }}
+{% endif %}
+
+<div class="table-controls">
+  <div class="table-controls__group">
+    <button type="button"
+            hx-get="{{ modal_url }}"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+            data-test="soulseek-discography-open-modal">
+      {{ strings.button_label("soulseek.discography.new_job") }}
+    </button>
+  </div>
+</div>
+
+{% if fragment %}
+  {{ tables.render_table_fragment(fragment) }}
+{% else %}
+  <p class="empty-state">{{ strings.soulseek_discography_loading() }}</p>
+{% endif %}
