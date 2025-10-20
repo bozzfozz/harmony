@@ -1,8 +1,13 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
-{% set fragment_target = fragment.pagination.target if fragment.pagination else "#hx-soulseek-downloads" %}
-{% set fragment_swap = fragment.pagination.swap if fragment.pagination else "outerHTML" %}
+{% set default_fragment_selector = "#" + fragment.identifier %}
+{% set action_target = fragment.data_attributes.get("action-target", default_fragment_selector) %}
+{% set action_swap = fragment.data_attributes.get("action-swap", "outerHTML") %}
+{% set modal_target = fragment.data_attributes.get("modal-target", "#modal-root") %}
+{% set modal_swap = fragment.data_attributes.get("modal-swap", "innerHTML") %}
+{% set fragment_target = fragment.pagination.target if fragment.pagination else action_target %}
+{% set fragment_swap = fragment.pagination.swap if fragment.pagination else action_swap %}
 
 {% if active_url and all_url and refresh_url %}
   <div class="table-controls">

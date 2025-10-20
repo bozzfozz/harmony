@@ -102,8 +102,59 @@
   {{ labels.get(key, key) }}
 {%- endmacro %}
 
-{% macro button_label(key) -%}
+{% macro soulseek_downloads_asset_label(asset) -%}
   {%- set labels = {
+    "lyrics": "Lyrics",
+    "metadata": "Metadata",
+    "artwork": "Artwork",
+  } -%}
+  {{ labels.get(asset, asset) }}
+{%- endmacro %}
+
+{% macro soulseek_downloads_asset_slug(asset) -%}
+  {%- set labels = {
+    "lyrics": "lyrics",
+    "metadata": "metadata",
+    "artwork": "artwork",
+  } -%}
+  {{ labels.get(asset, asset) }}
+{%- endmacro %}
+
+{% macro soulseek_downloads_asset_action_label(asset, action) -%}
+  {%- set asset_label = soulseek_downloads_asset_label(asset) -%}
+  {%- set asset_slug = soulseek_downloads_asset_slug(asset) -%}
+  {%- if action == "view" -%}
+    View {{ asset_slug }}
+  {%- elif action == "refresh" -%}
+    Refresh {{ asset_slug }}
+  {%- elif action == "delete" -%}
+    Remove {{ asset_slug }}
+  {%- else -%}
+    {{ action }} {{ asset_slug }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro soulseek_downloads_asset_status(asset, status) -%}
+  {%- set asset_label = soulseek_downloads_asset_label(asset) -%}
+  {%- if status in ("done", "completed", "ready", "available") -%}
+    {{ asset_label }} ready
+  {%- elif status in ("pending", "queued") -%}
+    {{ asset_label }} pending
+  {%- elif status in ("running", "processing") -%}
+    {{ asset_label }} processing
+  {%- elif status in ("failed", "error", "unavailable") -%}
+    {{ asset_label }} failed
+  {%- else -%}
+    {{ asset_label }} status unknown
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro button_label(key) -%}
+  {%- set parts = key.split(".") -%}
+  {%- if key.count(".") == 3 and parts[0] == "soulseek" and parts[1] == "downloads" and parts[2] in ("lyrics", "metadata", "artwork") -%}
+    {{ soulseek_downloads_asset_action_label(parts[2], parts[3]) }}
+  {%- else -%}
+    {%- set labels = {
     "login.submit": "Login",
     "logout": "Logout",
     "dashboard.action.operator": "Operator action",
@@ -141,12 +192,6 @@
     "soulseek.downloads.requeue": "Requeue",
     "soulseek.downloads.cancel": "Cancel",
     "soulseek.downloads.refresh": "Refresh",
-    "soulseek.downloads.lyrics.view": "View lyrics",
-    "soulseek.downloads.lyrics.refresh": "Refresh lyrics",
-    "soulseek.downloads.metadata.view": "View metadata",
-    "soulseek.downloads.metadata.refresh": "Refresh metadata",
-    "soulseek.downloads.artwork.view": "View artwork",
-    "soulseek.downloads.artwork.refresh": "Refresh artwork",
     "soulseek.downloads.show_active": "Active downloads",
     "soulseek.downloads.show_all": "All downloads",
     "soulseek.downloads.cleanup": "Remove completed downloads",
@@ -165,7 +210,8 @@
     "settings.artist_preferences.disable": "Disable",
     "settings.artist_preferences.remove": "Remove",
   } -%}
-  {{ labels.get(key, key) }}
+    {{ labels.get(key, key) }}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro link_text(key) -%}
@@ -372,7 +418,11 @@
 {%- endmacro %}
 
 {% macro table_header(key) -%}
-  {%- set labels = {
+  {%- set parts = key.split(".") -%}
+  {%- if key.count(".") == 2 and parts[0] == "soulseek" and parts[1] == "downloads" and parts[2] in ("lyrics", "metadata", "artwork") -%}
+    {{ soulseek_downloads_asset_label(parts[2]) }}
+  {%- else -%}
+    {%- set labels = {
     "dashboard.features.name": "Feature",
     "dashboard.features.status": "Status",
     "soulseek.providers.name": "Provider",
@@ -406,9 +456,6 @@
     "soulseek.downloads.next_retry": "Next retry",
     "soulseek.downloads.last_error": "Last error",
     "soulseek.downloads.live": "Live queue",
-    "soulseek.downloads.lyrics": "Lyrics",
-    "soulseek.downloads.metadata": "Metadata",
-    "soulseek.downloads.artwork": "Artwork",
     "soulseek.downloads.requeue": "Requeue",
     "soulseek.downloads.cancel": "Cancel",
     "jobs.name": "Job",
@@ -474,7 +521,8 @@
     "settings.artist_preferences.selected": "Selected",
     "settings.artist_preferences.actions": "Actions",
   } -%}
-  {{ labels.get(key, key) }}
+    {{ labels.get(key, key) }}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro caption(key) -%}
@@ -503,7 +551,11 @@
 {%- endmacro %}
 
 {% macro table_cell(key) -%}
-  {%- set labels = {
+  {%- set parts = key.split(".") -%}
+  {%- if key.count(".") == 4 and parts[0] == "soulseek" and parts[1] == "downloads" and parts[3] == "status" and parts[2] in ("lyrics", "metadata", "artwork") -%}
+    {{ soulseek_downloads_asset_status(parts[2], parts[4]) }}
+  {%- else -%}
+    {%- set labels = {
     "feature.spotify": "Spotify tools",
     "feature.soulseek": "Soulseek tools",
     "feature.dlq": "DLQ tools",
@@ -533,7 +585,8 @@
     "settings.artist_preferences.state.enabled": "Enabled",
     "settings.artist_preferences.state.disabled": "Disabled",
   } -%}
-  {{ labels.get(key, key) }}
+    {{ labels.get(key, key) }}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro role_name(role) -%}
