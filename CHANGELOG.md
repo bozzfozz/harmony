@@ -1,5 +1,6 @@
 ## v2.0.0 — unreleased
 - feat(ui): introduce an admin landing page with quick links to system diagnostics and settings.
+- feat(ui): add admin settings console with history tracking and artist preference management.
 - Governance: §14e in AGENTS.md präzisiert (Exitcodes, Variablen, Zeitlimits, Matrix, Glossar).
 - Tooling: scripts/dev/supply_guard.sh hinzugefügt, Makefile-Targets und pre-commit Hook ergänzt.
 - fix(supply-guard): NPM Off-Registry-Erkennung ohne Look-Ahead; keine `grep`-Warnungen mehr.
