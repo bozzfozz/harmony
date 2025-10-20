@@ -12,7 +12,7 @@ from fastapi import Request
 from starlette.datastructures import URL
 
 from app.api.search import DEFAULT_SOURCES
-from app.config import SecurityConfig, SoulseekConfig
+from app.config import SecurityConfig, SoulseekConfig, get_env
 from app.integrations.health import IntegrationHealth
 from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
 from app.ui.formatters import format_datetime_display
@@ -112,6 +112,50 @@ class LayoutContext:
     alerts: Sequence[AlertMessage] = field(default_factory=tuple)
     head_meta: Sequence[MetaTag] = field(default_factory=tuple)
     modals: Sequence[ModalDefinition] = field(default_factory=tuple)
+
+
+@dataclass(slots=True)
+class ScriptResource:
+    uses_cdn: bool
+    cdn_url: str | None
+    integrity: str | None
+    crossorigin: str | None
+    local_asset_path: str
+
+
+@dataclass(slots=True)
+class UiAssetConfig:
+    htmx: ScriptResource
+
+
+# CDN metadata aligns with HTMX v1.9.10 from the official distribution.
+_HTMX_CDN_URL = "https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js"
+_HTMX_CDN_INTEGRITY = "sha384-ylwRez2oJ6TP2RFxYDs2fzGEylh4G6dkprdFM5lTyBC0bY4Z1cdqUPVHtVHCnRvW"
+_CDN_CROSSORIGIN = "anonymous"
+_HTMX_LOCAL_PATH = "js/htmx.min.js"
+
+
+def _parse_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_ui_assets() -> UiAssetConfig:
+    allow_cdn = _parse_bool(get_env("UI_ALLOW_CDN"))
+    cdn_url = get_env("UI_HTMX_CDN_URL") or _HTMX_CDN_URL
+    cdn_integrity = get_env("UI_HTMX_CDN_SRI") or _HTMX_CDN_INTEGRITY
+
+    uses_cdn = allow_cdn and bool(cdn_url) and bool(cdn_integrity)
+
+    resource = ScriptResource(
+        uses_cdn=uses_cdn,
+        cdn_url=cdn_url if uses_cdn else None,
+        integrity=cdn_integrity if uses_cdn else None,
+        crossorigin=_CDN_CROSSORIGIN if uses_cdn else None,
+        local_asset_path=_HTMX_LOCAL_PATH,
+    )
+    return UiAssetConfig(htmx=resource)
 
 
 @dataclass(slots=True)
@@ -4207,6 +4251,9 @@ __all__ = [
     "ActionButton",
     "SuggestedTask",
     "CallToActionCard",
+    "ScriptResource",
+    "UiAssetConfig",
+    "get_ui_assets",
     "AsyncFragment",
     "AlertMessage",
     "CheckboxGroup",
