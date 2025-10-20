@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -31,3 +33,24 @@ def test_api_logging_middleware_handles_sync_exception_handlers() -> None:
 
     assert response.status_code == 418
     assert response.json() == {"message": "boom", "exc": "_CustomError"}
+
+
+def test_api_logging_middleware_preserves_api_component(caplog) -> None:
+    app = FastAPI()
+
+    @app.get("/status")
+    def _status() -> dict[str, bool]:  # pragma: no cover - invoked via test client
+        return {"ok": True}
+
+    app.add_middleware(APILoggingMiddleware)
+    client = TestClient(app)
+
+    with caplog.at_level(logging.INFO):
+        response = client.get("/status", headers={"User-Agent": "pytest-agent"})
+
+    assert response.status_code == 200
+    record = next(
+        record for record in caplog.records if getattr(record, "event", "") == "api.request"
+    )
+    assert record.component == "api"
+    assert not hasattr(record, "user_agent")

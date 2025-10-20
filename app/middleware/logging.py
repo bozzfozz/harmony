@@ -51,15 +51,19 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
+            path = request.url.path
+            component = "ui" if path.startswith("/ui") else self._component
             payload: dict[str, Any] = {
-                "component": self._component,
+                "component": component,
                 "status": "ok" if status_code < 400 else "error",
                 "method": request.method,
-                "path": request.url.path,
+                "path": path,
                 "status_code": status_code,
                 "duration_ms": round(duration_ms, 3),
                 "entity_id": getattr(request.state, "request_id", None),
             }
+            if component == "ui":
+                payload["user_agent"] = request.headers.get("user-agent")
             if error is not None:
                 payload["error"] = error.__class__.__name__
             log_event(self._logger, "api.request", **payload)
