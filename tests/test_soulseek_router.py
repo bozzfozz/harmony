@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 import importlib.util
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -134,9 +135,13 @@ def soulseek_client() -> Iterator[TestClient]:
 
     client = TestClient(app)
     with client as test_client:
-        test_client.app.state.sync_worker = _StubSyncWorker()
-        test_client.app.state.lyrics_worker = _StubLyricsWorker()
-        test_client.app.state.rich_metadata_worker = _StubMetadataWorker()
+        sync_worker = _StubSyncWorker()
+        lyrics_worker = _StubLyricsWorker()
+        metadata_worker = _StubMetadataWorker()
+
+        test_client.app.state.sync_worker = sync_worker
+        test_client.app.state.lyrics_worker = lyrics_worker
+        test_client.app.state.rich_metadata_worker = metadata_worker
         test_client.app.state.feature_flags = config.features
         test_client.app.state.soulseek_client = client_stub
         yield test_client
@@ -603,6 +608,84 @@ def test_lyrics_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> No
     assert response.status_code == 400
     lyrics_worker: _StubLyricsWorker = soulseek_client.app.state.lyrics_worker
     assert not lyrics_worker.calls
+
+
+def test_download_lyrics_returns_file_content(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    lyrics_dir = _downloads_dir()
+    lyrics_path = lyrics_dir / f"lyrics-{uuid4().hex}.lrc"
+    lyrics_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_content = "[00:00.00] sample lyrics"
+
+    try:
+        lyrics_path.write_text(sample_content, encoding="utf-8")
+        download = download_factory(
+            state="completed",
+            progress=1.0,
+            has_lyrics=True,
+            lyrics_status="done",
+            lyrics_path=str(lyrics_path),
+        )
+
+        response = soulseek_client.get(f"/soulseek/download/{download.id}/lyrics")
+
+        assert response.status_code == 200
+        assert response.text == sample_content
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    finally:
+        if lyrics_path.exists():
+            lyrics_path.unlink()
+
+
+def test_lyrics_refresh_enqueues_job(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"track-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+    download = download_factory(
+        state="completed",
+        progress=1.0,
+        filename=str(audio_path),
+    )
+
+    response = soulseek_client.post(f"/soulseek/download/{download.id}/lyrics/refresh")
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "queued"}
+
+    lyrics_worker = soulseek_client.app.state.lyrics_worker
+    assert isinstance(lyrics_worker, _StubLyricsWorker)
+    assert len(lyrics_worker.calls) == 1
+    call_download_id, call_filename, track_info = lyrics_worker.calls[0]
+    expected_path = str(audio_path.resolve())
+
+    assert call_download_id == download.id
+    assert call_filename == expected_path
+    assert track_info["download_id"] == download.id
+    assert track_info["filename"] == expected_path
+
+
+def test_lyrics_refresh_returns_503_when_worker_missing(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"missing-worker-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    download = download_factory(
+        state="completed",
+        progress=1.0,
+        filename=str(audio_path),
+    )
+
+    soulseek_client.app.state.lyrics_worker = None
+
+    response = soulseek_client.post(f"/soulseek/download/{download.id}/lyrics/refresh")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Lyrics worker unavailable"}
 
 
 def test_metadata_refresh_rejects_invalid_paths(soulseek_client: TestClient) -> None:
