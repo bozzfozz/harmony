@@ -45,6 +45,8 @@ from app.ui.context import (
     build_soulseek_download_metadata_modal_context,
     build_soulseek_page_context,
     build_soulseek_status_context,
+    build_soulseek_user_directory_context,
+    build_soulseek_user_profile_context,
     build_spotify_account_context,
     build_spotify_artists_context,
     build_spotify_backfill_context,
@@ -85,6 +87,10 @@ from app.ui.services import (
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
     SpotifyTrackDetail,
+    SoulseekUserDirectoryEntry,
+    SoulseekUserDirectoryListing,
+    SoulseekUserFileEntry,
+    SoulseekUserProfile,
     WatchlistRow,
     ArtistPreferenceRow,
     SettingRow,
@@ -169,7 +175,7 @@ def test_login_template_renders_error_and_form() -> None:
     assert 'id="login-form"' in html
     assert 'data-role="anonymous"' in html
     assert '<main role="main"' in html
-    assert '<footer' in html
+    assert "<footer" in html
     assert "nav-home" not in html
     assert f'href="{asset_url("css/app.css")}"' in html
     assert f'src="{asset_url("js/htmx.min.js")}"' in html
@@ -204,7 +210,7 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "nav-admin" in html
     assert 'role="navigation"' in html
     assert '<main role="main"' in html
-    assert '<footer' in html
+    assert "<footer" in html
     assert 'id="features-table"' in html
     assert "status-badge--success" in html
     assert "status-badge--muted" in html
@@ -279,6 +285,111 @@ def test_soulseek_status_template_includes_navigation_oob_snippet() -> None:
     snippet_index = html.index('data-test="nav-soulseek-status"')
     window = html[max(0, snippet_index - 120) : snippet_index + 120]
     assert "status-badge--success" in window
+
+
+def test_soulseek_user_info_template_renders_profile() -> None:
+    request = _make_request("/ui/soulseek/user/info")
+    profile = SoulseekUserProfile(
+        username="alice",
+        address={"ip": "127.0.0.1", "port": "5030"},
+        info={"shared": "42"},
+    )
+    context = build_soulseek_user_profile_context(
+        request,
+        username="alice",
+        profile=profile,
+    )
+    template = templates.get_template("partials/soulseek_user_info.j2")
+    html = template.render(**context)
+    assert 'value="alice"' in html
+    assert "127.0.0.1" in html
+    assert "shared" in html
+    assert "Lookup user" in html
+
+
+def test_soulseek_user_info_template_displays_help_without_username() -> None:
+    request = _make_request("/ui/soulseek/user/info")
+    context = build_soulseek_user_profile_context(
+        request,
+        username=None,
+        profile=None,
+    )
+    template = templates.get_template("partials/soulseek_user_info.j2")
+    html = template.render(**context)
+    assert 'data-test="soulseek-user-info-help"' in html
+    assert "Lookup user" in html
+
+
+def test_soulseek_user_info_template_shows_missing_message_for_empty_profile() -> None:
+    request = _make_request("/ui/soulseek/user/info")
+    profile = SoulseekUserProfile(username="alice", address={}, info={})
+    context = build_soulseek_user_profile_context(
+        request,
+        username="alice",
+        profile=profile,
+    )
+    template = templates.get_template("partials/soulseek_user_info.j2")
+    html = template.render(**context)
+    assert 'data-test="soulseek-user-info-missing"' in html
+    assert "alice" in html
+
+
+def test_soulseek_user_directory_template_renders_listing() -> None:
+    request = _make_request("/ui/soulseek/user/directory")
+    listing = SoulseekUserDirectoryListing(
+        username="alice",
+        current_path="Music",
+        parent_path=None,
+        directories=(SoulseekUserDirectoryEntry(name="Albums", path="Music/Albums"),),
+        files=(
+            SoulseekUserFileEntry(name="track.flac", path="Music/track.flac", size_bytes=1_024),
+        ),
+    )
+    context = build_soulseek_user_directory_context(
+        request,
+        username="alice",
+        path="Music",
+        listing=listing,
+    )
+    template = templates.get_template("partials/soulseek_user_directory.j2")
+    html = template.render(**context)
+    assert "Browse directory" in html
+    assert "Albums" in html
+    assert "track.flac" in html
+
+
+def test_soulseek_user_directory_template_shows_help_without_username() -> None:
+    request = _make_request("/ui/soulseek/user/directory")
+    context = build_soulseek_user_directory_context(
+        request,
+        username=None,
+        path=None,
+        listing=None,
+    )
+    template = templates.get_template("partials/soulseek_user_directory.j2")
+    html = template.render(**context)
+    assert 'data-test="soulseek-user-directory-help"' in html
+
+
+def test_soulseek_user_directory_template_shows_empty_message_for_username() -> None:
+    request = _make_request("/ui/soulseek/user/directory")
+    listing = SoulseekUserDirectoryListing(
+        username="alice",
+        current_path=None,
+        parent_path=None,
+        directories=(),
+        files=(),
+    )
+    context = build_soulseek_user_directory_context(
+        request,
+        username="alice",
+        path=None,
+        listing=listing,
+    )
+    template = templates.get_template("partials/soulseek_user_directory.j2")
+    html = template.render(**context)
+    assert 'data-test="soulseek-user-directory-empty"' in html
+    assert "alice" in html
 
 
 def test_spotify_page_template_renders_sections() -> None:
@@ -1048,17 +1159,23 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'hx-get="/ui/soulseek/configuration"' in html
     assert 'hx-get="/ui/soulseek/uploads"' in html
     assert 'hx-get="/ui/soulseek/downloads"' in html
+    assert 'hx-get="/ui/soulseek/user/info"' in html
+    assert 'hx-get="/ui/soulseek/user/directory"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert html.count('hx-trigger="load, every 30s"') == 2
-    assert html.count('hx-trigger="load"') >= 1
+    assert html.count('hx-trigger="load"') >= 3
     assert 'data-fragment="soulseek-status"' in html
     assert 'data-fragment="soulseek-configuration"' in html
     assert 'data-fragment="soulseek-uploads"' in html
     assert 'data-fragment="soulseek-downloads"' in html
+    assert 'data-fragment="soulseek-user-info"' in html
+    assert 'data-fragment="soulseek-user-directory"' in html
     assert "Checking Soulseek connection…" in html
     assert "Loading Soulseek configuration…" in html
     assert "Loading active Soulseek uploads…" in html
     assert "Loading active Soulseek downloads…" in html
+    assert "Fetching Soulseek user profile…" in html
+    assert "Browsing Soulseek user directory…" in html
     assert 'data-test="soulseek-tasks"' in html
     assert 'data-test="soulseek-task-daemon"' in html
     assert 'data-test="soulseek-task-api-key"' in html
@@ -1184,8 +1301,11 @@ def test_base_layout_uses_cdn_htmx_when_enabled() -> None:
         html = template.render(request=request, layout=layout)
 
     assert "https://unpkg.com/htmx.org" in html
-    assert "integrity=\"sha384-ylwRez2oJ6TP2RFxYDs2fzGEylh4G6dkprdFM5lTyBC0bY4Z1cdqUPVHtVHCnRvW\"" in html
-    assert "crossorigin=\"anonymous\"" in html
+    assert (
+        'integrity="sha384-ylwRez2oJ6TP2RFxYDs2fzGEylh4G6dkprdFM5lTyBC0bY4Z1cdqUPVHtVHCnRvW"'
+        in html
+    )
+    assert 'crossorigin="anonymous"' in html
     assert f'data-fallback src="{fallback_asset}"' in html
 
 

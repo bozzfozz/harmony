@@ -34,6 +34,10 @@ from app.ui.services import (
     SearchResultsPage,
     SoulseekUiService,
     SoulseekUploadRow,
+    SoulseekUserDirectoryEntry,
+    SoulseekUserDirectoryListing,
+    SoulseekUserFileEntry,
+    SoulseekUserProfile,
     SpotifyArtistRow,
     SpotifyAccountSummary,
     SpotifyBackfillSnapshot,
@@ -131,6 +135,8 @@ def _admin_env() -> dict[str, str]:
         "/ui/soulseek/config",
         "/ui/soulseek/uploads",
         "/ui/soulseek/downloads",
+        "/ui/soulseek/user/info",
+        "/ui/soulseek/user/directory",
     ),
 )
 def test_soulseek_fragments_forbidden_for_read_only(monkeypatch, path: str) -> None:
@@ -912,6 +918,28 @@ class _StubSoulseekUiService:
         self.upload_calls: list[bool] = []
         self.cancelled: list[str] = []
         self._delegate_service: SoulseekUiService | None = None
+        self.profile = SoulseekUserProfile(
+            username="alice",
+            address={"ip": "127.0.0.1", "port": "5030"},
+            info={"shared": "42"},
+        )
+        self.profile_exception: Exception | None = None
+        self.profile_calls: list[str] = []
+        self.directory_listing = SoulseekUserDirectoryListing(
+            username="alice",
+            current_path="Music",
+            parent_path=None,
+            directories=(SoulseekUserDirectoryEntry(name="Albums", path="Music/Albums"),),
+            files=(
+                SoulseekUserFileEntry(
+                    name="track.flac",
+                    path="Music/track.flac",
+                    size_bytes=1_048_576,
+                ),
+            ),
+        )
+        self.directory_exception: Exception | None = None
+        self.directory_calls: list[tuple[str, str | None]] = []
 
     async def status(self) -> StatusResponse:
         if self.status_exception:
@@ -943,6 +971,23 @@ class _StubSoulseekUiService:
         if self.cancel_exception:
             raise self.cancel_exception
         self.cancelled.append(upload_id)
+
+    async def user_profile(self, *, username: str) -> SoulseekUserProfile:
+        if self.profile_exception:
+            raise self.profile_exception
+        self.profile_calls.append(username)
+        return self.profile
+
+    async def user_directory(
+        self,
+        *,
+        username: str,
+        path: str | None = None,
+    ) -> SoulseekUserDirectoryListing:
+        if self.directory_exception:
+            raise self.directory_exception
+        self.directory_calls.append((username, path))
+        return self.directory_listing
 
     def suggested_tasks(
         self,
@@ -1150,7 +1195,7 @@ def test_soulseek_uploads_fragment_success(monkeypatch) -> None:
             assert "Cancel upload" in body
             assert "hx-soulseek-uploads" in body
             assert "Remove completed uploads" in body
-            assert 'hx-post="http://testserver/ui/soulseek/uploads/cleanup"' in body
+            assert 'hx-post="/ui/soulseek/uploads/cleanup"' in body
             _assert_button_enabled(body, "soulseek-upload-cancel")
             _assert_button_enabled(body, "soulseek-uploads-cleanup")
             assert stub.upload_calls == [False]
@@ -1236,6 +1281,125 @@ def test_soulseek_upload_cancel_success(monkeypatch) -> None:
             assert "No uploads are currently in progress." in response.text
             assert stub.cancelled == ["upload-1"]
             assert stub.upload_calls == [False]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_info_fragment_success(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            body = response.text
+            assert "Lookup user" in body
+            assert "127.0.0.1" in body
+            assert "5030" in body
+            assert "track.flac" not in body
+            assert stub.profile_calls == ["alice"]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_info_fragment_handles_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.profile_exception = HTTPException(status_code=502, detail="profile error")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=502)
+            assert "profile error" in response.text
+            assert 'hx-target="#hx-soulseek-user-info"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_info_fragment_handles_unexpected_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.profile_exception = RuntimeError("boom")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Soulseek user profile." in response.text
+            assert 'hx-target="#hx-soulseek-user-info"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_directory_fragment_success(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/directory",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            body = response.text
+            assert "Browse directory" in body
+            assert "Albums" in body
+            assert "track.flac" in body
+            assert stub.directory_calls == [("alice", None)]
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_directory_fragment_handles_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.directory_exception = HTTPException(status_code=503, detail="dir error")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/directory",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=503)
+            assert "dir error" in response.text
+            assert 'hx-target="#hx-soulseek-user-directory"' in response.text
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
+def test_soulseek_user_directory_fragment_handles_unexpected_error(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.directory_exception = RuntimeError("boom")
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/directory",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response, status_code=500)
+            assert "Unable to load Soulseek user directory." in response.text
+            assert 'hx-target="#hx-soulseek-user-directory"' in response.text
     finally:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
@@ -1904,7 +2068,7 @@ def test_soulseek_download_metadata_refresh_success(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert calls == [21]
-            assert 'soulseek-download-metadata-actions-21' in response.text
+            assert "soulseek-download-metadata-actions-21" in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
         app.dependency_overrides.pop(get_soulseek_client, None)
@@ -1994,7 +2158,7 @@ def test_soulseek_download_artwork_refresh_success(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert calls == [17]
-            assert 'soulseek-download-artwork-actions-17' in response.text
+            assert "soulseek-download-artwork-actions-17" in response.text
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
         app.dependency_overrides.pop(get_soulseek_client, None)

@@ -107,4 +107,38 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(downloads_fragment.loading_key) }}</p>
     </div>
   </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ user_info_fragment.identifier }}-heading">
+    <h3 id="{{ user_info_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_user_profile_heading() }}</h3>
+    <div id="{{ user_info_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ user_info_fragment.identifier }}-heading"
+         data-fragment="soulseek-user-info"
+         hx-get="{{ user_info_fragment.url }}"
+         hx-trigger="{{ user_info_fragment.trigger }}"
+         hx-target="{{ user_info_fragment.target }}"
+         hx-swap="{{ user_info_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_info_fragment.loading_key) }}</p>
+      {% include "partials/soulseek_user_info.j2" with lookup_url=user_info_fragment.url, username="", profile=None, address_items=(), info_items=(), has_profile=False %}
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="{{ user_directory_fragment.identifier }}-heading">
+    <h3 id="{{ user_directory_fragment.identifier }}-heading" class="page-section__title">{{ strings.soulseek_user_directory_heading() }}</h3>
+    <div id="{{ user_directory_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="{{ user_directory_fragment.identifier }}-heading"
+         data-fragment="soulseek-user-directory"
+         hx-get="{{ user_directory_fragment.url }}"
+         hx-trigger="{{ user_directory_fragment.trigger }}"
+         hx-target="{{ user_directory_fragment.target }}"
+         hx-swap="{{ user_directory_fragment.swap }}">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(user_directory_fragment.loading_key) }}</p>
+      {% include "partials/soulseek_user_directory.j2" with browse_url=user_directory_fragment.url, username="", path=None, directories=(), files=(), parent_url=None, has_listing=False %}
+    </div>
+  </section>
 {% endblock %}

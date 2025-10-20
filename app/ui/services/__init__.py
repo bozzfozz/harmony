@@ -20,7 +20,15 @@ from .settings import (
     SettingsUiService,
     get_settings_ui_service,
 )
-from .soulseek import SoulseekUiService, SoulseekUploadRow, get_soulseek_ui_service
+from .soulseek import (
+    SoulseekUiService,
+    SoulseekUploadRow,
+    SoulseekUserDirectoryEntry,
+    SoulseekUserDirectoryListing,
+    SoulseekUserFileEntry,
+    SoulseekUserProfile,
+    get_soulseek_ui_service,
+)
 from .spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
@@ -92,6 +100,10 @@ __all__ = [
     "get_settings_ui_service",
     "SoulseekUiService",
     "SoulseekUploadRow",
+    "SoulseekUserProfile",
+    "SoulseekUserDirectoryEntry",
+    "SoulseekUserFileEntry",
+    "SoulseekUserDirectoryListing",
     "get_soulseek_ui_service",
     "SpotifyArtistRow",
     "SpotifyAccountSummary",

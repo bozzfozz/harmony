@@ -1,0 +1,89 @@
+{% import "partials/_strings.j2" as strings %}
+
+<form class="form soulseek-user-form"
+      method="get"
+      action="{{ browse_url }}"
+      hx-get="{{ browse_url }}"
+      hx-target="#hx-soulseek-user-directory"
+      hx-swap="outerHTML"
+      data-test="soulseek-user-directory-form">
+  <div class="form-field">
+    <label for="soulseek-user-directory-username">{{ strings.form_label("soulseek.user.username") }}</label>
+    <input type="text"
+           id="soulseek-user-directory-username"
+           name="username"
+           value="{{ username }}"
+           required
+           autocomplete="off" />
+  </div>
+  <div class="form-field">
+    <label for="soulseek-user-directory-path">{{ strings.form_label("soulseek.user.path") }}</label>
+    <input type="text"
+           id="soulseek-user-directory-path"
+           name="path"
+           value="{{ path if path else "" }}"
+           autocomplete="off" />
+  </div>
+  <button type="submit">{{ strings.button_label("soulseek.user.browse") }}</button>
+</form>
+
+{% if has_listing %}
+  <div class="soulseek-directory-context" data-test="soulseek-user-directory-context">
+    {% if path %}
+      <p class="soulseek-directory-path">{{ strings.soulseek_user_directory_path(path) }}</p>
+    {% endif %}
+    {% if parent_url %}
+      <button type="button"
+              class="soulseek-directory-parent"
+              hx-get="{{ parent_url }}"
+              hx-target="#hx-soulseek-user-directory"
+              hx-swap="outerHTML"
+              data-test="soulseek-user-directory-parent">{{ strings.soulseek_user_directory_parent() }}</button>
+    {% endif %}
+  </div>
+  <div class="soulseek-directory-list" data-test="soulseek-user-directories">
+    <h4>{{ strings.soulseek_user_directories_heading() }}</h4>
+    {% if directories %}
+      <ul class="soulseek-directory-items">
+        {% for entry in directories %}
+          <li>
+            <button type="button"
+                    hx-get="{{ entry.url }}"
+                    hx-target="#hx-soulseek-user-directory"
+                    hx-swap="outerHTML"
+                    data-test="soulseek-user-directory-entry">{{ entry.name }}</button>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p data-test="soulseek-user-directories-empty">{{ strings.soulseek_user_directories_empty() }}</p>
+    {% endif %}
+  </div>
+  <div class="soulseek-directory-files" data-test="soulseek-user-files">
+    <h4>{{ strings.soulseek_user_files_heading() }}</h4>
+    {% if files %}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ strings.soulseek_user_files_name() }}</th>
+            <th scope="col">{{ strings.soulseek_user_files_size() }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in files %}
+            <tr>
+              <td>{{ file.name }}</td>
+              <td>{{ file.size if file.size else strings.soulseek_user_files_unknown_size() }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p data-test="soulseek-user-files-empty">{{ strings.soulseek_user_files_empty() }}</p>
+    {% endif %}
+  </div>
+{% elif username %}
+  <p class="soulseek-directory-empty" data-test="soulseek-user-directory-empty">{{ strings.soulseek_user_directory_empty(username) }}</p>
+{% else %}
+  <p class="soulseek-directory-help" data-test="soulseek-user-directory-help">{{ strings.soulseek_user_directory_help() }}</p>
+{% endif %}

@@ -1,0 +1,57 @@
+{% import "partials/_strings.j2" as strings %}
+
+<form class="form soulseek-user-form"
+      method="get"
+      action="{{ lookup_url }}"
+      hx-get="{{ lookup_url }}"
+      hx-target="#hx-soulseek-user-info"
+      hx-swap="outerHTML"
+      data-test="soulseek-user-info-form">
+  <div class="form-field">
+    <label for="soulseek-user-info-username">{{ strings.form_label("soulseek.user.username") }}</label>
+    <input type="text"
+           id="soulseek-user-info-username"
+           name="username"
+           value="{{ username }}"
+           required
+           autocomplete="off" />
+  </div>
+  <button type="submit">{{ strings.button_label("soulseek.user.lookup") }}</button>
+</form>
+
+{% if has_profile %}
+  <section class="soulseek-user-section" data-test="soulseek-user-address">
+    <h4>{{ strings.soulseek_user_address_heading() }}</h4>
+    {% if address_items %}
+      <dl class="definition-list">
+        {% for key, value in address_items %}
+          <div>
+            <dt>{{ key }}</dt>
+            <dd>{{ value }}</dd>
+          </div>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p data-test="soulseek-user-address-empty">{{ strings.soulseek_user_address_empty() }}</p>
+    {% endif %}
+  </section>
+  <section class="soulseek-user-section" data-test="soulseek-user-info">
+    <h4>{{ strings.soulseek_user_info_heading() }}</h4>
+    {% if info_items %}
+      <dl class="definition-list">
+        {% for key, value in info_items %}
+          <div>
+            <dt>{{ key }}</dt>
+            <dd>{{ value }}</dd>
+          </div>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p data-test="soulseek-user-info-empty">{{ strings.soulseek_user_info_empty(username) }}</p>
+    {% endif %}
+  </section>
+{% elif username %}
+  <p class="soulseek-user-empty" data-test="soulseek-user-info-missing">{{ strings.soulseek_user_profile_missing(username) }}</p>
+{% else %}
+  <p class="soulseek-user-help" data-test="soulseek-user-info-help">{{ strings.soulseek_user_profile_help() }}</p>
+{% endif %}

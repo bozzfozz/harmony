@@ -78,6 +78,8 @@ from app.ui.context import (
     build_soulseek_page_context,
     build_soulseek_status_context,
     build_soulseek_uploads_context,
+    build_soulseek_user_directory_context,
+    build_soulseek_user_profile_context,
     build_spotify_account_context,
     build_spotify_artists_context,
     build_spotify_backfill_context,
@@ -2919,6 +2921,150 @@ async def soulseek_downloads_cleanup(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
+
+@router.get(
+    "/soulseek/user/info",
+    include_in_schema=False,
+    name="soulseek_user_info_fragment",
+)
+async def soulseek_user_info_fragment(
+    request: Request,
+    username: str | None = Query(None),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    trimmed = (username or "").strip()
+    profile = None
+    if trimmed:
+        try:
+            profile = await service.user_profile(username=trimmed)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "Unable to load user profile."
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_info",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_info")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_info",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user profile.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-info",
+                retry_label_key="soulseek.retry",
+            )
+
+    context = build_soulseek_user_profile_context(
+        request,
+        username=trimmed,
+        profile=profile,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.user_info",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_user_info.j2",
+        context,
+    )
+
+
+@router.get(
+    "/soulseek/user/directory",
+    include_in_schema=False,
+    name="soulseek_user_directory_fragment",
+)
+async def soulseek_user_directory_fragment(
+    request: Request,
+    username: str | None = Query(None),
+    path: str | None = Query(None),
+    session: UiSession = Depends(require_operator_with_feature("soulseek")),
+    service: SoulseekUiService = Depends(get_soulseek_ui_service),
+) -> Response:
+    trimmed = (username or "").strip()
+    listing = None
+    if trimmed:
+        try:
+            listing = await service.user_directory(username=trimmed, path=path)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "Unable to load user directory."
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_directory",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(exc.status_code),
+            )
+            return _render_alert_fragment(
+                request,
+                detail,
+                status_code=exc.status_code,
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
+        except Exception:
+            logger.exception("ui.fragment.soulseek.user_directory")
+            log_event(
+                logger,
+                "ui.fragment.soulseek.user_directory",
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error="unexpected",
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load Soulseek user directory.",
+                retry_url=str(request.url),
+                retry_target="#hx-soulseek-user-directory",
+                retry_label_key="soulseek.retry",
+            )
+
+    context = build_soulseek_user_directory_context(
+        request,
+        username=trimmed,
+        path=path,
+        listing=listing,
+    )
+    log_event(
+        logger,
+        "ui.fragment.soulseek.user_directory",
+        component="ui.router",
+        status="success",
+        role=session.role,
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/soulseek_user_directory.j2",
+        context,
+    )
 
 
 @router.post(
