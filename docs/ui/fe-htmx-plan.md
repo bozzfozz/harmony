@@ -181,7 +181,7 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 
 ## Assets & Static Files
 - `/static/css/app.css`: Basis-Styles, Fokus-Indikatoren, Layout (≤20 KB). Optional leichtgewichtiges Framework lokal eingebettet; externe Styles nur wenn `UI_ALLOW_CDN=true` gesetzt ist und SRI nach `docs/ui/csp.md` erfolgt.
-- `/static/js/htmx.min.js`: standardmäßig lokal gebündelt (Version mit bekannter Prüfsumme). Bei aktiviertem CDN darf `https://unpkg.com/htmx.org` genutzt werden.
+- `/static/js/htmx.min.js`: standardmäßig lokal gebündelt (Version mit bekannter Prüfsumme). Bei aktiviertem CDN darf `https://unpkg.com/htmx.org` genutzt werden. Das Fallback-Bundle darf komprimiert (gzip) höchstens 20 KB übertragen, damit das Gesamtbudget von <100 KB für initiales HTML+CSS+JS eingehalten bleibt.
 - Iconset: SVG-Sprite unter `/static/icons.svg`.
 - Cache-Control: statische Assets `max-age=86400`, `immutable`; HTML ohne Cache; API nutzt bestehende Cache-Header (z. B. Playlist-ETags).【F:app/api/spotify.py†L173-L196】
 - Aktivierung per `app.mount("/static", StaticFiles(...))` (neuer Schritt im späteren Task) inklusive Digest-Busting über Query-Parameter.
