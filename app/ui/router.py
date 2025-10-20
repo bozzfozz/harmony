@@ -37,6 +37,7 @@ from app.ui.context import (
     FormDefinition,
     LayoutContext,
     SuggestedTask,
+    get_ui_assets,
     attach_secret_result,
     build_activity_fragment_context,
     build_activity_page_context,
@@ -141,6 +142,7 @@ router = APIRouter(prefix="/ui", tags=["UI"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 templates.env.globals["asset_url"] = asset_url
+templates.env.globals["get_ui_assets"] = get_ui_assets
 
 
 @dataclass(slots=True)

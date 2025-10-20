@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, datetime
+import os
 from typing import Any
 
 from jinja2 import Template
 from starlette.requests import Request
 
+from app.config import override_runtime_env
 from app.integrations.health import IntegrationHealth
 from app.schemas import StatusResponse
 from app.ui.assets import asset_url
@@ -86,6 +89,20 @@ from app.ui.services import (
     SettingsOverview,
 )
 from app.ui.session import UiFeatures, UiSession
+
+
+@contextmanager
+def _runtime_env(overrides: dict[str, str] | None = None) -> Any:
+    try:
+        if overrides is None:
+            override_runtime_env(dict(os.environ))
+        else:
+            merged = dict(os.environ)
+            merged.update(overrides)
+            override_runtime_env(merged)
+        yield
+    finally:
+        override_runtime_env(None)
 
 
 def _make_request(path: str) -> Request:
@@ -1028,6 +1045,37 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert "alert alert--warning" in html
     assert "Check status" in html
     assert '<meta name="csrf-token" content="token" />' in html
+
+
+def test_base_layout_uses_local_htmx_when_cdn_disabled() -> None:
+    request = _make_request("/ui")
+    layout = LayoutContext(page_id="dashboard", role="operator")
+    template = templates.get_template("layouts/base.j2")
+
+    local_asset = asset_url("js/htmx.min.js")
+
+    with _runtime_env({"UI_ALLOW_CDN": "false"}):
+        html = template.render(request=request, layout=layout)
+
+    assert "https://unpkg.com/htmx.org" not in html
+    assert f'src="{local_asset}"' in html
+    assert "data-fallback" not in html
+
+
+def test_base_layout_uses_cdn_htmx_when_enabled() -> None:
+    request = _make_request("/ui")
+    layout = LayoutContext(page_id="dashboard", role="operator")
+    template = templates.get_template("layouts/base.j2")
+
+    fallback_asset = asset_url("js/htmx.min.js")
+
+    with _runtime_env({"UI_ALLOW_CDN": "true"}):
+        html = template.render(request=request, layout=layout)
+
+    assert "https://unpkg.com/htmx.org" in html
+    assert "integrity=\"sha384-ylwRez2oJ6TP2RFxYDs2fzGEylh4G6dkprdFM5lTyBC0bY4Z1cdqUPVHtVHCnRvW\"" in html
+    assert "crossorigin=\"anonymous\"" in html
+    assert f'data-fallback src="{fallback_asset}"' in html
 
 
 def test_primary_nav_renders_soulseek_success_badge() -> None:

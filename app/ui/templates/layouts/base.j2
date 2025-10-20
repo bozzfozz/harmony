@@ -33,7 +33,13 @@
       <div id="modal-root" data-role="modal-container"></div>
     {% endblock %}
     {% block scripts %}
-      <script src="{{ asset_url('js/htmx.min.js') }}" defer></script>
+      {% set ui_assets = get_ui_assets() %}
+      {% if ui_assets.htmx.uses_cdn %}
+        <script src="{{ ui_assets.htmx.cdn_url }}" integrity="{{ ui_assets.htmx.integrity }}" crossorigin="{{ ui_assets.htmx.crossorigin }}" defer></script>
+        <script data-fallback src="{{ asset_url(ui_assets.htmx.local_asset_path) }}" defer></script>
+      {% else %}
+        <script src="{{ asset_url(ui_assets.htmx.local_asset_path) }}" defer></script>
+      {% endif %}
       <script src="{{ asset_url('js/ui-bootstrap.js') }}" defer></script>
     {% endblock %}
   </body>
