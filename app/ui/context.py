@@ -3076,7 +3076,7 @@ def build_soulseek_user_directory_context(
         "listing": listing,
         "parent_path": parent_path,
         "parent_url": parent_url,
-        "has_listing": bool(listing and (directories or files)),
+        "has_listing": bool(listing),
     }
     context.update(_build_user_status_context(status, browsing_status))
     return context
