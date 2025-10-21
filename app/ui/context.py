@@ -428,16 +428,16 @@ class AsyncFragment:
 @dataclass(slots=True)
 class SpotifyTimeRangeOption:
     value: str
-    label: str
+    label_key: str
     url: str
     active: bool
     test_id: str
 
 
 _SPOTIFY_TIME_RANGE_LABELS: Mapping[str, str] = {
-    "short_term": "Last 4 weeks",
-    "medium_term": "Last 6 months",
-    "long_term": "All time",
+    "short_term": "spotify.time_range.short",
+    "medium_term": "spotify.time_range.medium",
+    "long_term": "spotify.time_range.long",
 }
 
 
@@ -455,12 +455,12 @@ def _build_time_range_options(
         base_raw = fallback_path
     base_url = URL(str(base_raw))
     options: list[SpotifyTimeRangeOption] = []
-    for value, label in _SPOTIFY_TIME_RANGE_LABELS.items():
+    for value, label_key in _SPOTIFY_TIME_RANGE_LABELS.items():
         option_url = base_url.include_query_params(time_range=value)
         options.append(
             SpotifyTimeRangeOption(
                 value=value,
-                label=label,
+                label_key=label_key,
                 url=str(option_url),
                 active=value == selected,
                 test_id=f"{fragment_id}-range-{value}",
