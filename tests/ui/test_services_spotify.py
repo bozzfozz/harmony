@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Mapping
@@ -21,6 +22,7 @@ from app.services.free_ingest_service import (
     JobStatus,
     PlaylistValidationError,
 )
+from app.services.oauth_service import OAuthStartResponse
 from app.services.spotify_domain_service import SpotifyServiceStatus
 from app.ui.context import (
     build_spotify_playlist_items_context,
@@ -319,6 +321,45 @@ async def test_reset_scopes_uses_oauth_and_clears_token_setting() -> None:
     assert summary is None
     assert oauth.reset_calls == [None]
     assert read_setting("SPOTIFY_TOKEN_INFO") is None
+
+
+def test_start_oauth_logs_redacted_metadata() -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    oauth_response = OAuthStartResponse(
+        provider="spotify",
+        authorization_url="https://accounts.spotify.com/authorize?state=state-token",
+        state="state-token",
+        code_challenge_method="S256",
+        expires_at=datetime(2024, 1, 1, tzinfo=UTC),
+        redirect_uri="https://example/callback",
+        manual_completion_available=False,
+        manual_completion_url=None,
+    )
+    oauth_service = Mock()
+    oauth_service.start.return_value = oauth_response
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=Mock(),
+        oauth_service=oauth_service,
+        db_session=Mock(),
+    )
+
+    with patch("app.ui.services.spotify.logger") as mock_logger:
+        authorization_url = service.start_oauth()
+
+    assert authorization_url == oauth_response.authorization_url
+    oauth_service.start.assert_called_once_with(request)
+    mock_logger.info.assert_called_once()
+    log_call = mock_logger.info.call_args
+    assert log_call.args[0] == "spotify.ui.oauth.start"
+    extra = log_call.kwargs["extra"]
+    expected_fingerprint = hashlib.sha256(oauth_response.state.encode("utf-8")).hexdigest()[:12]
+    assert extra["state_fingerprint"] == expected_fingerprint
+    assert extra["manual_completion_available"] is False
+    assert extra["redirect_uri"] == oauth_response.redirect_uri
+    assert "authorization_url" not in extra
 
 
 def test_build_top_tracks_context_adds_detail_action() -> None:

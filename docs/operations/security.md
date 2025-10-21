@@ -41,6 +41,8 @@
 
 ## Logging & Monitoring
 - Login attempts log user identifier (hash/fingerprint) and result without exposing the API key.
+- Spotify OAuth initiation logs now include only hashed state fingerprints; full authorization URLs/state tokens never appear in
+  structured logs.
 - CSRF failures produce structured warnings with request metadata to support incident analysis.
 - Session issuance and revocation expose Prometheus counters (`ui_sessions_created_total{role="…"}` and `ui_sessions_terminated_total{role="…",reason="…"}`) exported via `/api/v1/metrics`.
 

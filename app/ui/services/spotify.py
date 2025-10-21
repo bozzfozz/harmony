@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import json
 from time import perf_counter
 from typing import Any, Callable, Final, TypeVar
@@ -1464,10 +1465,20 @@ class SpotifyUiService:
 
     def start_oauth(self) -> str:
         response = self._oauth.start(self._request)
-        logger.info(
-            "spotify.ui.oauth.start",
-            extra={"authorization_url": response.authorization_url},
-        )
+        state = response.state
+        if state:
+            state_fingerprint = hashlib.sha256(state.encode("utf-8")).hexdigest()[:12]
+        else:
+            state_fingerprint = None
+        extra: dict[str, object] = {
+            "manual_completion_available": response.manual_completion_available,
+            "redirect_uri": response.redirect_uri,
+        }
+        if state_fingerprint is not None:
+            extra["state_fingerprint"] = state_fingerprint
+        if response.manual_completion_url:
+            extra["manual_completion_url"] = response.manual_completion_url
+        logger.info("spotify.ui.oauth.start", extra=extra)
         return response.authorization_url
 
     async def submit_free_ingest(
