@@ -1023,6 +1023,14 @@
 
 {% macro spotify_recommendations_hint() %}Provide up to five combined artist, track, or genre seeds to fetch Spotify recommendations.{% endmacro %}
 
+{% macro spotify_recommendations_stored_defaults(seed_artists, seed_tracks, seed_genres) -%}
+  {%- set placeholder = system_field_placeholder() -%}
+  {%- set artists_text = seed_artists if seed_artists else placeholder -%}
+  {%- set tracks_text = seed_tracks if seed_tracks else placeholder -%}
+  {%- set genres_text = seed_genres if seed_genres else placeholder -%}
+  Stored defaults: {{ artists_text }}, {{ tracks_text }}, {{ genres_text }}
+{%- endmacro %}
+
 {% macro spotify_recommendations_seed_heading() %}Seed summary{% endmacro %}
 
 {% macro spotify_recommendations_seed_type(seed_type) -%}

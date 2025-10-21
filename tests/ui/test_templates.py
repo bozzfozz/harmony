@@ -711,6 +711,12 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
         },
         form_errors={"limit": "Enter a number between 1 and 100."},
         alerts=(AlertMessage(level="warning", text="Example warning"),),
+        seed_defaults={
+            "seed_artists": "artist-default",
+            "seed_tracks": "",
+            "seed_genres": "jazz",
+        },
+        show_admin_controls=True,
     )
     template = templates.get_template("partials/spotify_recommendations.j2")
     html = template.render(**context)
@@ -744,6 +750,8 @@ def test_spotify_recommendations_partial_renders_form_and_results() -> None:
     assert 'data-count="2"' in html
     assert 'class="table-external-link-hint"' in html
     assert 'data-test="spotify-recommendation-link-track-1"' in html
+    assert "Stored defaults: artist-default, —, jazz" in html
+    assert 'class="spotify-recommendations__admin-note"' in html
 
 
 def test_spotify_recommendations_partial_hides_queue_when_imports_disabled() -> None:
