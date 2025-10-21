@@ -128,7 +128,14 @@ class DownloadsUiService:
     @staticmethod
     def _to_row(entry: DownloadEntryResponse) -> DownloadRow:
         progress_value = entry.progress
-        progress = float(progress_value) if progress_value is not None else None
+        progress: float | None
+        if progress_value is None:
+            progress = None
+        else:
+            numeric = float(progress_value)
+            if numeric > 1.0:
+                numeric /= 100.0
+            progress = max(0.0, min(numeric, 1.0))
 
         live_metadata = entry.live_queue if isinstance(entry.live_queue, Mapping) else None
 
