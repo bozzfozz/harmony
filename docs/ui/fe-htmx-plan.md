@@ -158,7 +158,7 @@ Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions
 
 - ✅ `/ui/system` lädt Liveness-, Readiness- und Integrationskarten als HTMX-Fragmente (`/ui/system/<fragment>`), zeigt Service-Credential-Badges auf Basis von `evaluate_all_service_health` und bietet CSRF-geschützte Secret-Validierung pro Provider (nur `admin`).【F:app/ui/router.py†L233-L408】【F:app/ui/templates/pages/system.j2†L1-L94】
 
-Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SPOTIFY` aktiv ist; Upload-Aktionen selbst werden zusätzlich von `UI_FEATURE_IMPORTS` gesteuert.
+Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SPOTIFY` aktiv ist; Upload-Aktionen selbst werden zusätzlich von `UI_FEATURE_IMPORTS` gesteuert. Die Dropzone zeigt Dateiname und Uploadstatus in einer `aria-live="polite"`-Region an, verhindert Mehrfachdateien und lässt sich per Tastatur (`Enter`/`Space`) triggern.
 
 ### Fehler- und Toast-Behandlung
 - `app/ui/static/js/htmx-error-handler.js` registriert einen globalen Listener auf `htmx:responseError`, injiziert HTML-Antworten (`partials/alerts_fragment.j2`/`partials/async_error.j2`) in `[data-role="alert-region"]` und stellt die Funktion `handleHtmxError(event)` für Template-Hooks bereit.

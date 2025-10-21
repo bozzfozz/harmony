@@ -43,11 +43,31 @@
         hx-encoding="multipart/form-data">
     <input type="hidden" name="csrftoken" value="{{ form.csrf_token }}" />
     <label for="ingest_file">{{ strings.form_label("spotify.free_ingest.upload_file") }}</label>
+    <div class="spotify-free-ingest__dropzone"
+         id="spotify-free-ingest-dropzone"
+         role="button"
+         tabindex="0"
+         data-test="spotify-free-ingest-dropzone"
+         aria-describedby="spotify-free-ingest-upload-help"
+         data-default-message="{{ strings.spotify_free_ingest_drop_default_message() }}"
+         data-selected-message="{{ strings.spotify_free_ingest_drop_selected_message() }}"
+         data-uploading-message="{{ strings.spotify_free_ingest_drop_uploading_message() }}"
+         data-multiple-message="{{ strings.spotify_free_ingest_drop_multiple_error() }}"
+         data-busy-message="{{ strings.spotify_free_ingest_drop_busy_message() }}"
+         data-error-message="{{ strings.spotify_free_ingest_drop_generic_error() }}">
+      <span class="spotify-free-ingest__dropzone-label">{{ strings.spotify_free_ingest_drop_hint() }}</span>
+      <span class="spotify-free-ingest__dropzone-status"
+            data-role="status"
+            data-test="spotify-free-ingest-dropzone-status"
+            aria-live="polite"
+            aria-atomic="true"></span>
+    </div>
     <input id="ingest_file"
            type="file"
            name="file"
            accept=".txt,.m3u,.m3u8" />
-    <p class="form-field__help">{{ strings.form_help("spotify.free_ingest.upload_file") }}</p>
+    <p id="spotify-free-ingest-upload-help"
+       class="form-field__help">{{ strings.form_help("spotify.free_ingest.upload_file") }}</p>
     {% if form.upload_error %}
       <p class="form-field__error">{{ form.upload_error }}</p>
     {% endif %}
