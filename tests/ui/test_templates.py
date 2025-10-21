@@ -485,9 +485,10 @@ def test_spotify_page_template_renders_sections() -> None:
     assert 'hx-target="#hx-spotify-free-ingest"' in html
     assert 'hx-target="#hx-spotify-backfill"' in html
     assert 'hx-trigger="load, every 60s"' in html
-    assert 'hx-trigger="load, every 30s"' in html
-    assert 'hx-trigger="load, every 15s"' in html
-    assert html.count('hx-trigger="load"') >= 4
+    assert 'hx-trigger="revealed, every 30s"' in html
+    assert 'hx-trigger="revealed, every 15s"' in html
+    assert 'hx-trigger="load"' in html
+    assert html.count('hx-trigger="revealed"') >= 6
     assert 'hx-swap="innerHTML"' in html
     assert 'role="status"' in html
     assert html.count('role="region"') >= 7
