@@ -219,6 +219,7 @@
     "spotify.playlists.force_sync": "Force sync",
     "spotify.free_ingest.submit": "Submit ingest request",
     "spotify.free_ingest.upload_file": "Upload track file",
+    "spotify.runbook.open": "Open Spotify runbook",
     "fragments.retry": "Retry",
     "soulseek.uploads.cancel": "Cancel upload",
     "soulseek.uploads.refresh": "Refresh",
@@ -267,6 +268,13 @@
     "system.metrics": "Open metrics",
   } -%}
   {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro button_tooltip(key) -%}
+  {%- set tooltips = {
+    "spotify.runbook.open": "Open the Spotify runbook documentation in a new tab.",
+  } -%}
+  {{ tooltips.get(key, key) }}
 {%- endmacro %}
 
 {% macro admin_page_intro() %}Access key administration tools to manage system health and configuration.{% endmacro %}

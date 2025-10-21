@@ -620,16 +620,34 @@ class FeatureFlags:
 @dataclass(slots=True, frozen=True)
 class UiConfig:
     live_updates: Literal["polling", "sse"]
+    docs_base_url: str | None
 
 
 _UI_LIVE_UPDATE_MODES: frozenset[str] = frozenset({"polling", "sse"})
 _DEFAULT_UI_LIVE_UPDATES = "polling"
 
 
+def _normalize_docs_base_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    parsed = urlparse(cleaned)
+    if not parsed.scheme or not parsed.netloc:
+        logger.warning(
+            "Invalid UI_DOCS_BASE_URL value %s; falling back to API base path.",
+            value,
+        )
+        return None
+    return cleaned.rstrip("/")
+
+
 def _parse_ui_config(env: Mapping[str, Any]) -> UiConfig:
+    docs_base_url = _normalize_docs_base_url(_env_value(env, "UI_DOCS_BASE_URL"))
     raw_mode = _env_value(env, "UI_LIVE_UPDATES")
     if raw_mode is None or not raw_mode.strip():
-        return UiConfig(live_updates=_DEFAULT_UI_LIVE_UPDATES)
+        return UiConfig(live_updates=_DEFAULT_UI_LIVE_UPDATES, docs_base_url=docs_base_url)
 
     normalized = raw_mode.strip().lower()
     if normalized not in _UI_LIVE_UPDATE_MODES:
@@ -639,7 +657,10 @@ def _parse_ui_config(env: Mapping[str, Any]) -> UiConfig:
             _DEFAULT_UI_LIVE_UPDATES,
         )
         normalized = _DEFAULT_UI_LIVE_UPDATES
-    return UiConfig(live_updates=normalized)  # type: ignore[arg-type]
+    return UiConfig(  # type: ignore[arg-type]
+        live_updates=normalized,
+        docs_base_url=docs_base_url,
+    )
 
 
 @dataclass(slots=True)
@@ -1277,6 +1298,11 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
                 "UI_LIVE_UPDATES",
                 _DEFAULT_UI_LIVE_UPDATES,
                 "Live update transport for UI fragments (polling or SSE).",
+            ),
+            ConfigTemplateEntry(
+                "UI_DOCS_BASE_URL",
+                "",
+                "Base URL hosting documentation linked from the UI.",
             ),
         ),
     ),
