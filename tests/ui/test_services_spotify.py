@@ -21,6 +21,7 @@ from app.services.free_ingest_service import (
     JobStatus,
     PlaylistValidationError,
 )
+from app.services.spotify_domain_service import SpotifyServiceStatus
 from app.ui.context import (
     build_spotify_playlist_items_context,
     build_spotify_recommendations_context,
@@ -127,7 +128,8 @@ def test_oauth_health_keeps_redirect_when_manual_enabled() -> None:
     assert health.ttl_seconds == 0
 
 
-def test_list_followed_artists_normalizes_payload() -> None:
+@pytest.mark.asyncio
+async def test_list_followed_artists_normalizes_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -153,7 +155,7 @@ def test_list_followed_artists_normalizes_payload() -> None:
         db_session=Mock(),
     )
 
-    rows = service.list_followed_artists()
+    rows = await service.list_followed_artists()
 
     assert rows == (
         SpotifyArtistRow(
@@ -168,7 +170,35 @@ def test_list_followed_artists_normalizes_payload() -> None:
     spotify_service.get_followed_artists.assert_called_once_with()
 
 
-def test_account_returns_summary_with_defaults() -> None:
+@pytest.mark.asyncio
+async def test_status_uses_executor(monkeypatch) -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    payload = SpotifyServiceStatus(
+        status="connected", free_available=True, pro_available=True, authenticated=True
+    )
+    spotify_service.get_status.return_value = payload
+    executor = AsyncMock(return_value=payload)
+    monkeypatch.setattr("app.ui.services.spotify._run_in_executor", executor)
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    result = await service.status()
+
+    assert result.status == payload.status
+    executor.assert_awaited_once()
+    call_args = executor.await_args
+    assert call_args.args[0] is spotify_service.get_status
+
+
+@pytest.mark.asyncio
+async def test_account_returns_summary_with_defaults() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -188,7 +218,7 @@ def test_account_returns_summary_with_defaults() -> None:
         db_session=Mock(),
     )
 
-    summary = service.account()
+    summary = await service.account()
 
     assert summary == SpotifyAccountSummary(
         display_name="Example User",
@@ -200,7 +230,8 @@ def test_account_returns_summary_with_defaults() -> None:
     spotify_service.get_current_user.assert_called_once_with()
 
 
-def test_account_handles_missing_profile() -> None:
+@pytest.mark.asyncio
+async def test_account_handles_missing_profile() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -218,7 +249,7 @@ def test_account_handles_missing_profile() -> None:
         db_session=Mock(),
     )
 
-    summary = service.account()
+    summary = await service.account()
 
     assert summary == SpotifyAccountSummary(
         display_name="user-123",
@@ -229,7 +260,8 @@ def test_account_handles_missing_profile() -> None:
     )
 
 
-def test_refresh_account_clears_token_setting() -> None:
+@pytest.mark.asyncio
+async def test_refresh_account_clears_token_setting() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -252,7 +284,7 @@ def test_refresh_account_clears_token_setting() -> None:
 
     write_setting("SPOTIFY_TOKEN_INFO", '{"access_token": "value"}')
 
-    summary = service.refresh_account()
+    summary = await service.refresh_account()
 
     assert summary == SpotifyAccountSummary(
         display_name="Example User",
@@ -265,7 +297,8 @@ def test_refresh_account_clears_token_setting() -> None:
     assert oauth.reset_calls == []
 
 
-def test_reset_scopes_uses_oauth_and_clears_token_setting() -> None:
+@pytest.mark.asyncio
+async def test_reset_scopes_uses_oauth_and_clears_token_setting() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -281,7 +314,7 @@ def test_reset_scopes_uses_oauth_and_clears_token_setting() -> None:
 
     write_setting("SPOTIFY_TOKEN_INFO", '{"access_token": "value"}')
 
-    summary = service.reset_scopes()
+    summary = await service.reset_scopes()
 
     assert summary is None
     assert oauth.reset_calls == [None]
@@ -539,7 +572,8 @@ def test_build_saved_tracks_context_formats_added_timestamp() -> None:
     assert added_cell.text == "2024-01-31 18:45"
 
 
-def test_track_detail_combines_metadata_and_features() -> None:
+@pytest.mark.asyncio
+async def test_track_detail_combines_metadata_and_features() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -571,7 +605,7 @@ def test_track_detail_combines_metadata_and_features() -> None:
         db_session=Mock(),
     )
 
-    detail = service.track_detail(" track-123 ")
+    detail = await service.track_detail(" track-123 ")
 
     assert detail.track_id == "track-123"
     assert detail.name == "Example Track"
@@ -587,7 +621,8 @@ def test_track_detail_combines_metadata_and_features() -> None:
     assert detail.features["mode"] == 1
 
 
-def test_track_detail_handles_missing_payload() -> None:
+@pytest.mark.asyncio
+async def test_track_detail_handles_missing_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -601,7 +636,7 @@ def test_track_detail_handles_missing_payload() -> None:
         db_session=Mock(),
     )
 
-    detail = service.track_detail("track-999")
+    detail = await service.track_detail("track-999")
 
     assert detail.name is None
     assert detail.artists == ()
@@ -609,7 +644,8 @@ def test_track_detail_handles_missing_payload() -> None:
     assert detail.features is None
 
 
-def test_track_detail_rejects_empty_identifier() -> None:
+@pytest.mark.asyncio
+async def test_track_detail_rejects_empty_identifier() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     service = SpotifyUiService(
@@ -621,10 +657,11 @@ def test_track_detail_rejects_empty_identifier() -> None:
     )
 
     with pytest.raises(ValueError):
-        service.track_detail(" ")
+        await service.track_detail(" ")
 
 
-def test_list_saved_tracks_normalizes_payload() -> None:
+@pytest.mark.asyncio
+async def test_list_saved_tracks_normalizes_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -662,7 +699,7 @@ def test_list_saved_tracks_normalizes_payload() -> None:
         db_session=Mock(),
     )
 
-    rows, total = service.list_saved_tracks(limit=1, offset=0)
+    rows, total = await service.list_saved_tracks(limit=1, offset=0)
 
     assert total == 2
     assert rows == (
@@ -678,7 +715,8 @@ def test_list_saved_tracks_normalizes_payload() -> None:
     spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=0)
 
 
-def test_list_saved_tracks_applies_offset() -> None:
+@pytest.mark.asyncio
+async def test_list_saved_tracks_applies_offset() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -699,7 +737,7 @@ def test_list_saved_tracks_applies_offset() -> None:
         db_session=Mock(),
     )
 
-    rows, total = service.list_saved_tracks(limit=1, offset=1)
+    rows, total = await service.list_saved_tracks(limit=1, offset=1)
 
     assert total == 2
     assert len(rows) == 1
@@ -707,7 +745,34 @@ def test_list_saved_tracks_applies_offset() -> None:
     spotify_service.get_saved_tracks.assert_called_once_with(limit=1, offset=1)
 
 
-def test_playlist_items_normalizes_tracks_and_metadata() -> None:
+@pytest.mark.asyncio
+async def test_list_saved_tracks_uses_executor(monkeypatch) -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    payload = {"items": [], "total": 0}
+    executor = AsyncMock(return_value=payload)
+    monkeypatch.setattr("app.ui.services.spotify._run_in_executor", executor)
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    rows, total = await service.list_saved_tracks(limit=25, offset=5)
+
+    assert rows == ()
+    assert total == 0
+    executor.assert_awaited_once()
+    call_args = executor.await_args
+    assert call_args.args[0] is spotify_service.get_saved_tracks
+    assert call_args.kwargs == {"limit": 25, "offset": 5}
+
+
+@pytest.mark.asyncio
+async def test_playlist_items_normalizes_tracks_and_metadata() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     playlist_track = ProviderTrack(
@@ -740,7 +805,7 @@ def test_playlist_items_normalizes_tracks_and_metadata() -> None:
         db_session=Mock(),
     )
 
-    rows, total, page_limit, page_offset = service.playlist_items(
+    rows, total, page_limit, page_offset = await service.playlist_items(
         " playlist-1 ", limit=150, offset=10
     )
 
@@ -768,7 +833,8 @@ def test_playlist_items_normalizes_tracks_and_metadata() -> None:
     spotify_service.get_playlist_items.assert_called_once_with("playlist-1", limit=100, offset=10)
 
 
-def test_playlist_items_validates_identifier_and_applies_bounds() -> None:
+@pytest.mark.asyncio
+async def test_playlist_items_validates_identifier_and_applies_bounds() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -782,9 +848,11 @@ def test_playlist_items_validates_identifier_and_applies_bounds() -> None:
     )
 
     with pytest.raises(ValueError):
-        service.playlist_items("   ", limit=10, offset=0)
+        await service.playlist_items("   ", limit=10, offset=0)
 
-    rows, total, page_limit, page_offset = service.playlist_items("playlist-2", limit=0, offset=-5)
+    rows, total, page_limit, page_offset = await service.playlist_items(
+        "playlist-2", limit=0, offset=-5
+    )
 
     assert rows == ()
     assert total == 0
@@ -793,7 +861,8 @@ def test_playlist_items_validates_identifier_and_applies_bounds() -> None:
     spotify_service.get_playlist_items.assert_called_once_with("playlist-2", limit=1, offset=0)
 
 
-def test_recommendations_normalizes_rows_and_seeds() -> None:
+@pytest.mark.asyncio
+async def test_recommendations_normalizes_rows_and_seeds() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -842,7 +911,7 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
     seed_artists = [" artist-1 ", "ARTIST-1", "artist-2"]
     seed_genres = ["rock", " Rock ", "jazz"]
     with patch("app.ui.services.spotify.log_event") as mock_log_event:
-        rows, seeds = service.recommendations(
+        rows, seeds = await service.recommendations(
             seed_tracks=seed_tracks,
             seed_artists=seed_artists,
             seed_genres=seed_genres,
@@ -887,7 +956,8 @@ def test_recommendations_normalizes_rows_and_seeds() -> None:
     assert fields["spotify.recommendations.latency_ms"] >= 0
 
 
-def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
+@pytest.mark.asyncio
+async def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -900,7 +970,7 @@ def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
         db_session=Mock(),
     )
 
-    rows, seeds = service.recommendations(limit=0)
+    rows, seeds = await service.recommendations(limit=0)
 
     assert rows == ()
     assert seeds == ()
@@ -912,7 +982,8 @@ def test_recommendations_clamps_limit_and_handles_empty_payload() -> None:
     )
 
 
-def test_top_tracks_normalizes_payload() -> None:
+@pytest.mark.asyncio
+async def test_top_tracks_normalizes_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -940,7 +1011,7 @@ def test_top_tracks_normalizes_payload() -> None:
         db_session=Mock(),
     )
 
-    rows = service.top_tracks()
+    rows = await service.top_tracks()
 
     assert rows == (
         SpotifyTopTrackRow(
@@ -957,7 +1028,8 @@ def test_top_tracks_normalizes_payload() -> None:
     spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range=None)
 
 
-def test_top_tracks_honours_time_range_and_logs() -> None:
+@pytest.mark.asyncio
+async def test_top_tracks_honours_time_range_and_logs() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -971,7 +1043,7 @@ def test_top_tracks_honours_time_range_and_logs() -> None:
     )
 
     with patch("app.ui.services.spotify.logger") as mock_logger:
-        rows = service.top_tracks(time_range="long_term")
+        rows = await service.top_tracks(time_range="long_term")
 
     assert rows == ()
     spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range="long_term")
@@ -980,7 +1052,8 @@ def test_top_tracks_honours_time_range_and_logs() -> None:
     assert extra["time_range"] == "long_term"
 
 
-def test_top_tracks_invalid_time_range_falls_back_to_default() -> None:
+@pytest.mark.asyncio
+async def test_top_tracks_invalid_time_range_falls_back_to_default() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -994,7 +1067,7 @@ def test_top_tracks_invalid_time_range_falls_back_to_default() -> None:
     )
 
     with patch("app.ui.services.spotify.logger") as mock_logger:
-        rows = service.top_tracks(time_range="unknown")
+        rows = await service.top_tracks(time_range="unknown")
 
     assert rows == ()
     spotify_service.get_top_tracks.assert_called_once_with(limit=20, time_range=None)
@@ -1003,7 +1076,8 @@ def test_top_tracks_invalid_time_range_falls_back_to_default() -> None:
     assert extra["time_range"] == "default"
 
 
-def test_top_artists_normalizes_payload() -> None:
+@pytest.mark.asyncio
+async def test_top_artists_normalizes_payload() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1026,7 +1100,7 @@ def test_top_artists_normalizes_payload() -> None:
         db_session=Mock(),
     )
 
-    rows = service.top_artists()
+    rows = await service.top_artists()
 
     assert rows == (
         SpotifyTopArtistRow(
@@ -1042,7 +1116,8 @@ def test_top_artists_normalizes_payload() -> None:
     spotify_service.get_top_artists.assert_called_once_with(limit=20, time_range=None)
 
 
-def test_top_artists_honours_time_range() -> None:
+@pytest.mark.asyncio
+async def test_top_artists_honours_time_range() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1056,7 +1131,7 @@ def test_top_artists_honours_time_range() -> None:
     )
 
     with patch("app.ui.services.spotify.logger") as mock_logger:
-        rows = service.top_artists(time_range="short_term")
+        rows = await service.top_artists(time_range="short_term")
 
     assert rows == ()
     spotify_service.get_top_artists.assert_called_once_with(limit=20, time_range="short_term")
@@ -1065,7 +1140,8 @@ def test_top_artists_honours_time_range() -> None:
     assert extra["time_range"] == "short_term"
 
 
-def test_save_tracks_filters_and_returns_count() -> None:
+@pytest.mark.asyncio
+async def test_save_tracks_filters_and_returns_count() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1077,13 +1153,14 @@ def test_save_tracks_filters_and_returns_count() -> None:
         db_session=Mock(),
     )
 
-    affected = service.save_tracks([" track-1 ", "track-1", "track-2", " "])
+    affected = await service.save_tracks([" track-1 ", "track-1", "track-2", " "])
 
     assert affected == 2
     spotify_service.save_tracks.assert_called_once_with(("track-1", "track-2"))
 
 
-def test_remove_saved_tracks_requires_identifiers() -> None:
+@pytest.mark.asyncio
+async def test_remove_saved_tracks_requires_identifiers() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1096,7 +1173,7 @@ def test_remove_saved_tracks_requires_identifiers() -> None:
     )
 
     try:
-        service.remove_saved_tracks([" "])
+        await service.remove_saved_tracks([" "])
     except ValueError as exc:
         assert "identifier" in str(exc)
     else:  # pragma: no cover - sanity guard
@@ -1290,7 +1367,8 @@ async def test_free_import_handles_unexpected_error() -> None:
     spotify_service.free_import.assert_awaited_once()
 
 
-def test_free_ingest_job_status_returns_none_without_job_id() -> None:
+@pytest.mark.asyncio
+async def test_free_ingest_job_status_returns_none_without_job_id() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1302,11 +1380,12 @@ def test_free_ingest_job_status_returns_none_without_job_id() -> None:
         db_session=Mock(),
     )
 
-    assert service.free_ingest_job_status(None) is None
+    assert await service.free_ingest_job_status(None) is None
     spotify_service.get_free_ingest_job.assert_not_called()
 
 
-def test_free_ingest_job_status_returns_none_on_error() -> None:
+@pytest.mark.asyncio
+async def test_free_ingest_job_status_returns_none_on_error() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1319,7 +1398,7 @@ def test_free_ingest_job_status_returns_none_on_error() -> None:
         db_session=Mock(),
     )
 
-    assert service.free_ingest_job_status("job-404") is None
+    assert await service.free_ingest_job_status("job-404") is None
     spotify_service.get_free_ingest_job.assert_called_once_with("job-404")
 
 
@@ -1384,7 +1463,8 @@ async def test_run_backfill_respects_cache_toggle() -> None:
     spotify_service.enqueue_backfill.assert_awaited_once_with(job)
 
 
-def test_build_backfill_snapshot_uses_include_cached_flag() -> None:
+@pytest.mark.asyncio
+async def test_build_backfill_snapshot_uses_include_cached_flag() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=400))
     spotify_service = Mock()
@@ -1413,7 +1493,7 @@ def test_build_backfill_snapshot_uses_include_cached_flag() -> None:
         "include_cached_results": False,
     }
 
-    snapshot = service.build_backfill_snapshot(
+    snapshot = await service.build_backfill_snapshot(
         csrf_token="csrf",
         job_id="job-5",
         status_payload=payload,
@@ -1427,7 +1507,8 @@ def test_build_backfill_snapshot_uses_include_cached_flag() -> None:
     assert cache_option.checked is False
 
 
-def test_build_backfill_snapshot_defaults_include_cached() -> None:
+@pytest.mark.asyncio
+async def test_build_backfill_snapshot_defaults_include_cached() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     spotify_service = Mock()
@@ -1440,7 +1521,7 @@ def test_build_backfill_snapshot_defaults_include_cached() -> None:
         db_session=Mock(),
     )
 
-    snapshot = service.build_backfill_snapshot(
+    snapshot = await service.build_backfill_snapshot(
         csrf_token="csrf",
         job_id=None,
         status_payload=None,
@@ -1453,7 +1534,8 @@ def test_build_backfill_snapshot_defaults_include_cached() -> None:
     assert cache_option.checked is True
 
 
-def test_backfill_timeline_surfaces_include_cached() -> None:
+@pytest.mark.asyncio
+async def test_backfill_timeline_surfaces_include_cached() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     record = BackfillJobRecord(
@@ -1483,7 +1565,7 @@ def test_backfill_timeline_surfaces_include_cached() -> None:
         db_session=Mock(),
     )
 
-    timeline = service.backfill_timeline(limit=5)
+    timeline = await service.backfill_timeline(limit=5)
 
     assert len(timeline) == 1
     entry = timeline[0]
@@ -1492,7 +1574,8 @@ def test_backfill_timeline_surfaces_include_cached() -> None:
     spotify_service.list_backfill_jobs.assert_called_once_with(limit=5)
 
 
-def test_backfill_status_includes_cache_flag() -> None:
+@pytest.mark.asyncio
+async def test_backfill_status_includes_cache_flag() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     status_payload = SimpleNamespace(
@@ -1520,14 +1603,15 @@ def test_backfill_status_includes_cache_flag() -> None:
         db_session=Mock(),
     )
 
-    payload = service.backfill_status("job-7")
+    payload = await service.backfill_status("job-7")
 
     assert payload is not None
     assert payload["include_cached_results"] is False
     spotify_service.get_backfill_status.assert_called_once_with("job-7")
 
 
-def test_free_ingest_job_status_converts_snapshot() -> None:
+@pytest.mark.asyncio
+async def test_free_ingest_job_status_converts_snapshot() -> None:
     request = _make_request()
     config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
     job_status = JobStatus(
@@ -1552,7 +1636,7 @@ def test_free_ingest_job_status_converts_snapshot() -> None:
         db_session=Mock(),
     )
 
-    snapshot = service.free_ingest_job_status("job-9")
+    snapshot = await service.free_ingest_job_status("job-9")
 
     assert isinstance(snapshot, SpotifyFreeIngestJobSnapshot)
     assert snapshot.job_id == "job-9"

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 import json
 from time import perf_counter
-from typing import Any, Final
+from typing import Any, Callable, Final, TypeVar
+
+import anyio
+from functools import partial
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
@@ -42,6 +46,20 @@ from app.ui.formatters import format_datetime_display
 from app.utils.settings_store import delete_setting, read_setting, write_setting
 
 logger = get_logger(__name__)
+
+_T = TypeVar("_T")
+
+
+async def _run_in_executor(
+    func: Callable[..., _T], /, *args: object, **kwargs: object
+) -> _T:
+    call = partial(func, *args, **kwargs)
+    try:
+        return await anyio.to_thread.run_sync(call)
+    except RuntimeError as exc:
+        if exc.args:
+            raise
+        return await asyncio.to_thread(call)
 
 _SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset({"short_term", "medium_term", "long_term"})
 _RECOMMENDATION_SEED_SETTINGS_KEY: Final[str] = "spotify.recommendations.seed_defaults"
@@ -335,8 +353,10 @@ class SpotifyUiService:
         self._free_ingest_result: SpotifyFreeIngestResult | None = None
         self._free_ingest_error: str | None = None
 
-    def status(self) -> SpotifyStatus:
-        payload: SpotifyServiceStatus = self._spotify.get_status()
+    async def status(self) -> SpotifyStatus:
+        payload: SpotifyServiceStatus = await _run_in_executor(
+            self._spotify.get_status
+        )
         logger.debug(
             "spotify.ui.status",
             extra={
@@ -374,13 +394,15 @@ class SpotifyUiService:
             ttl_seconds=int(ttl_seconds or 0),
         )
 
-    def list_playlists(
+    async def list_playlists(
         self,
         *,
         owner: str | None = None,
         sync_status: str | None = None,
     ) -> Sequence[SpotifyPlaylistRow]:
-        playlists = self._spotify.list_playlists(self._db)
+        playlists = await _run_in_executor(
+            self._spotify.list_playlists, self._db
+        )
         owner_filter = self._normalise_filter(owner)
         status_filter = self._normalise_filter(sync_status)
         rows = [
@@ -409,8 +431,10 @@ class SpotifyUiService:
         )
         return tuple(rows)
 
-    def playlist_filters(self) -> SpotifyPlaylistFilters:
-        playlists = self._spotify.list_playlists(self._db)
+    async def playlist_filters(self) -> SpotifyPlaylistFilters:
+        playlists = await _run_in_executor(
+            self._spotify.list_playlists, self._db
+        )
         owners: set[str] = set()
         statuses: set[str] = set()
 
@@ -456,7 +480,7 @@ class SpotifyUiService:
         duration_ms = round((perf_counter() - started) * 1_000, 3)
         logger.info("spotify.ui.playlists.force_sync", extra={"duration_ms": duration_ms})
 
-    def playlist_items(
+    async def playlist_items(
         self,
         playlist_id: str,
         *,
@@ -469,8 +493,11 @@ class SpotifyUiService:
 
         page_limit = max(1, min(int(limit), 100))
         page_offset = max(0, int(offset))
-        result = self._spotify.get_playlist_items(
-            playlist_key, limit=page_limit, offset=page_offset
+        result = await _run_in_executor(
+            self._spotify.get_playlist_items,
+            playlist_key,
+            limit=page_limit,
+            offset=page_offset,
         )
 
         rows: list[SpotifyPlaylistItemRow] = []
@@ -671,8 +698,8 @@ class SpotifyUiService:
 
         return True
 
-    def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
-        raw_payload = self._spotify.get_followed_artists()
+    async def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
+        raw_payload = await _run_in_executor(self._spotify.get_followed_artists)
         entries: Sequence[Mapping[str, object]]
         if isinstance(raw_payload, Sequence):
             entries = [entry for entry in raw_payload if isinstance(entry, Mapping)]
@@ -748,7 +775,7 @@ class SpotifyUiService:
         except ValueError:
             return None
 
-    def list_saved_tracks(
+    async def list_saved_tracks(
         self,
         *,
         limit: int,
@@ -756,7 +783,9 @@ class SpotifyUiService:
     ) -> tuple[Sequence[SpotifySavedTrackRow], int]:
         page_limit = max(1, min(int(limit), 50))
         page_offset = max(0, int(offset))
-        payload = self._spotify.get_saved_tracks(limit=page_limit, offset=page_offset)
+        payload = await _run_in_executor(
+            self._spotify.get_saved_tracks, limit=page_limit, offset=page_offset
+        )
         items = payload.get("items") if isinstance(payload, Mapping) else []
         total_raw = payload.get("total") if isinstance(payload, Mapping) else None
         total_count = int(total_raw or 0)
@@ -870,19 +899,19 @@ class SpotifyUiService:
             line = f"{line} ({album_name})"
         return line
 
-    def save_tracks(self, track_ids: Sequence[str]) -> int:
+    async def save_tracks(self, track_ids: Sequence[str]) -> int:
         cleaned = self._clean_track_ids(track_ids)
         if not cleaned:
             raise ValueError("At least one Spotify track identifier is required.")
-        self._spotify.save_tracks(cleaned)
+        await _run_in_executor(self._spotify.save_tracks, cleaned)
         logger.info("spotify.ui.saved_tracks.save", extra={"count": len(cleaned)})
         return len(cleaned)
 
-    def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
+    async def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
         cleaned = self._clean_track_ids(track_ids)
         if not cleaned:
             raise ValueError("At least one Spotify track identifier is required.")
-        self._spotify.remove_saved_tracks(cleaned)
+        await _run_in_executor(self._spotify.remove_saved_tracks, cleaned)
         logger.info("spotify.ui.saved_tracks.remove", extra={"count": len(cleaned)})
         return len(cleaned)
 
@@ -935,7 +964,9 @@ class SpotifyUiService:
         skipped: list[str] = []
         for track_id in cleaned:
             try:
-                detail = self._spotify.get_track_details(track_id)
+                detail = await _run_in_executor(
+                    self._spotify.get_track_details, track_id
+                )
             except AppError:
                 raise
             except Exception:
@@ -1279,7 +1310,7 @@ class SpotifyUiService:
             return "Invalid playlist links provided."
         return f"Invalid playlist links: {joined}"
 
-    def recommendations(
+    async def recommendations(
         self,
         *,
         seed_tracks: Sequence[str] | None = None,
@@ -1293,7 +1324,8 @@ class SpotifyUiService:
         cleaned_genres = self._clean_seed_values(seed_genres or ())
         started = perf_counter()
         try:
-            payload = self._spotify.get_recommendations(
+            payload = await _run_in_executor(
+                self._spotify.get_recommendations,
                 seed_tracks=cleaned_tracks or None,
                 seed_artists=cleaned_artists or None,
                 seed_genres=cleaned_genres or None,
@@ -1348,8 +1380,8 @@ class SpotifyUiService:
         )
         return tuple(rows), tuple(seeds)
 
-    def account(self) -> SpotifyAccountSummary | None:
-        profile = self._spotify.get_current_user()
+    async def account(self) -> SpotifyAccountSummary | None:
+        profile = await _run_in_executor(self._spotify.get_current_user)
         if not isinstance(profile, Mapping):
             return None
 
@@ -1389,19 +1421,19 @@ class SpotifyUiService:
             country=country,
         )
 
-    def refresh_account(self) -> SpotifyAccountSummary | None:
+    async def refresh_account(self) -> SpotifyAccountSummary | None:
         self._clear_cached_tokens()
-        summary = self.account()
+        summary = await self.account()
         logger.info(
             "spotify.ui.account.refresh",
             extra={"has_summary": summary is not None},
         )
         return summary
 
-    def reset_scopes(self) -> SpotifyAccountSummary | None:
+    async def reset_scopes(self) -> SpotifyAccountSummary | None:
         self._clear_cached_tokens()
         self._oauth.reset_scopes()
-        summary = self.account()
+        summary = await self.account()
         logger.info(
             "spotify.ui.account.reset_scopes",
             extra={"has_summary": summary is not None},
@@ -1543,11 +1575,15 @@ class SpotifyUiService:
             return self._remember_free_ingest_result(error_result, error_message=message)
         return await self.free_import(tracks=tracks)
 
-    def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
+    async def free_ingest_job_status(
+        self, job_id: str | None
+    ) -> SpotifyFreeIngestJobSnapshot | None:
         if not job_id:
             return None
         try:
-            status = self._spotify.get_free_ingest_job(job_id)
+            status = await _run_in_executor(
+                self._spotify.get_free_ingest_job, job_id
+            )
         except Exception:
             logger.exception("spotify.ui.free_ingest.status_error")
             return None
@@ -1562,9 +1598,11 @@ class SpotifyUiService:
         expand_playlists: bool,
         include_cached_results: bool,
     ) -> str:
-        if not self._spotify.is_authenticated():
+        authenticated = await _run_in_executor(self._spotify.is_authenticated)
+        if not authenticated:
             raise PermissionError("Spotify authentication required")
-        job = self._spotify.create_backfill_job(
+        job = await _run_in_executor(
+            self._spotify.create_backfill_job,
             max_items=max_items,
             expand_playlists=expand_playlists,
             include_cached_results=include_cached_results,
@@ -1581,7 +1619,7 @@ class SpotifyUiService:
         )
         return job.id
 
-    def top_tracks(
+    async def top_tracks(
         self,
         *,
         limit: int = 20,
@@ -1589,7 +1627,11 @@ class SpotifyUiService:
     ) -> Sequence[SpotifyTopTrackRow]:
         page_limit = max(1, min(int(limit), 50))
         resolved_time_range = _normalise_time_range(time_range)
-        items = self._spotify.get_top_tracks(limit=page_limit, time_range=resolved_time_range)
+        items = await _run_in_executor(
+            self._spotify.get_top_tracks,
+            limit=page_limit,
+            time_range=resolved_time_range,
+        )
         rows: list[SpotifyTopTrackRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1666,19 +1708,23 @@ class SpotifyUiService:
         )
         return tuple(rows)
 
-    def track_detail(self, track_id: str) -> SpotifyTrackDetail:
+    async def track_detail(self, track_id: str) -> SpotifyTrackDetail:
         track_key = str(track_id or "").strip()
         if not track_key:
             raise ValueError("A Spotify track identifier is required.")
 
-        detail_payload = self._spotify.get_track_details(track_key)
+        detail_payload = await _run_in_executor(
+            self._spotify.get_track_details, track_key
+        )
         detail: Mapping[str, Any] | None
         if isinstance(detail_payload, Mapping):
             detail = dict(detail_payload)
         else:
             detail = None
 
-        features_payload = self._spotify.get_audio_features(track_key)
+        features_payload = await _run_in_executor(
+            self._spotify.get_audio_features, track_key
+        )
         features: Mapping[str, Any] | None
         if isinstance(features_payload, Mapping):
             features = dict(features_payload)
@@ -1770,7 +1816,7 @@ class SpotifyUiService:
             features=features,
         )
 
-    def top_artists(
+    async def top_artists(
         self,
         *,
         limit: int = 20,
@@ -1778,7 +1824,11 @@ class SpotifyUiService:
     ) -> Sequence[SpotifyTopArtistRow]:
         page_limit = max(1, min(int(limit), 50))
         resolved_time_range = _normalise_time_range(time_range)
-        items = self._spotify.get_top_artists(limit=page_limit, time_range=resolved_time_range)
+        items = await _run_in_executor(
+            self._spotify.get_top_artists,
+            limit=page_limit,
+            time_range=resolved_time_range,
+        )
         rows: list[SpotifyTopArtistRow] = []
         if isinstance(items, Sequence):
             for index, entry in enumerate(items, start=1):
@@ -1846,16 +1896,17 @@ class SpotifyUiService:
         )
         return tuple(rows)
 
-    def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
+    async def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
         if not job_id:
             return None
-        status = self._spotify.get_backfill_status(job_id)
+        status = await _run_in_executor(self._spotify.get_backfill_status, job_id)
         return self._serialise_backfill_status(status)
 
-    def pause_backfill(self, job_id: str) -> Mapping[str, object]:
-        if not self._spotify.is_authenticated():
+    async def pause_backfill(self, job_id: str) -> Mapping[str, object]:
+        authenticated = await _run_in_executor(self._spotify.is_authenticated)
+        if not authenticated:
             raise PermissionError("Spotify authentication required")
-        status = self._spotify.pause_backfill(job_id)
+        status = await _run_in_executor(self._spotify.pause_backfill, job_id)
         logger.info(
             "spotify.ui.backfill.pause",
             extra={"job_id": job_id, "state": getattr(status, "state", None)},
@@ -1865,10 +1916,11 @@ class SpotifyUiService:
             raise LookupError(job_id)
         return payload
 
-    def resume_backfill(self, job_id: str) -> Mapping[str, object]:
-        if not self._spotify.is_authenticated():
+    async def resume_backfill(self, job_id: str) -> Mapping[str, object]:
+        authenticated = await _run_in_executor(self._spotify.is_authenticated)
+        if not authenticated:
             raise PermissionError("Spotify authentication required")
-        status = self._spotify.resume_backfill(job_id)
+        status = await _run_in_executor(self._spotify.resume_backfill, job_id)
         logger.info(
             "spotify.ui.backfill.resume",
             extra={"job_id": job_id, "state": getattr(status, "state", None)},
@@ -1878,10 +1930,11 @@ class SpotifyUiService:
             raise LookupError(job_id)
         return payload
 
-    def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
-        if not self._spotify.is_authenticated():
+    async def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
+        authenticated = await _run_in_executor(self._spotify.is_authenticated)
+        if not authenticated:
             raise PermissionError("Spotify authentication required")
-        status = self._spotify.cancel_backfill(job_id)
+        status = await _run_in_executor(self._spotify.cancel_backfill, job_id)
         logger.info(
             "spotify.ui.backfill.cancel",
             extra={"job_id": job_id, "state": getattr(status, "state", None)},
@@ -1891,11 +1944,13 @@ class SpotifyUiService:
             raise LookupError(job_id)
         return payload
 
-    def backfill_timeline(self, *, limit: int = 10) -> Sequence[SpotifyBackfillTimelineEntry]:
+    async def backfill_timeline(
+        self, *, limit: int = 10
+    ) -> Sequence[SpotifyBackfillTimelineEntry]:
         resolved_limit = max(1, min(int(limit or 0), 25))
         try:
-            jobs: Sequence[BackfillJobRecord] = self._spotify.list_backfill_jobs(
-                limit=resolved_limit
+            jobs: Sequence[BackfillJobRecord] = await _run_in_executor(
+                self._spotify.list_backfill_jobs, limit=resolved_limit
             )
         except Exception:
             logger.exception("spotify.ui.backfill.timeline_error")
@@ -1933,7 +1988,7 @@ class SpotifyUiService:
         )
         return tuple(entries)
 
-    def build_backfill_snapshot(
+    async def build_backfill_snapshot(
         self,
         *,
         csrf_token: str,
@@ -1942,6 +1997,7 @@ class SpotifyUiService:
     ) -> SpotifyBackfillSnapshot:
         raw_default = getattr(self._config.spotify, "backfill_max_items", None)
         default_max = int(raw_default) if raw_default else None
+        can_run = bool(await _run_in_executor(self._spotify.is_authenticated))
         expand = bool(status_payload.get("expand_playlists")) if status_payload else True
         include_cached = True
         if status_payload is not None:
@@ -1980,7 +2036,7 @@ class SpotifyUiService:
         can_cancel = state in {"running", "queued", "paused"}
         return SpotifyBackfillSnapshot(
             csrf_token=csrf_token,
-            can_run=self._spotify.is_authenticated(),
+            can_run=can_run,
             default_max_items=default_max,
             expand_playlists=expand,
             include_cached_results=include_cached,

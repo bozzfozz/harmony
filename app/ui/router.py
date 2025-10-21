@@ -328,7 +328,7 @@ async def _handle_backfill_action(
     session: UiSession,
     service: SpotifyUiService,
     *,
-    action: Callable[[SpotifyUiService, str], Mapping[str, object]],
+    action: Callable[[SpotifyUiService, str], Awaitable[Mapping[str, object]]],
     success_message: str,
     event_key: str,
 ) -> Response:
@@ -342,7 +342,7 @@ async def _handle_backfill_action(
         )
 
     try:
-        status_payload = action(service, job_id)
+        status_payload = await action(service, job_id)
     except PermissionError as exc:
         logger.warning("spotify.ui.backfill.denied", extra={"error": str(exc)})
         return _render_alert_fragment(
@@ -378,7 +378,7 @@ async def _handle_backfill_action(
     await set_spotify_backfill_job_id(request, session, job_id)
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    snapshot = service.build_backfill_snapshot(
+    snapshot = await service.build_backfill_snapshot(
         csrf_token=csrf_token,
         job_id=job_id,
         status_payload=status_payload,
@@ -794,7 +794,7 @@ def _recommendations_unexpected_response(
     )
 
 
-def _execute_recommendations_request(
+async def _execute_recommendations_request(
     *,
     service: SpotifyUiService,
     form_data: RecommendationsFormData,
@@ -826,7 +826,7 @@ def _execute_recommendations_request(
         limit_value=form_data.limit,
     )
     try:
-        rows, seeds = service.recommendations(
+        rows, seeds = await service.recommendations(
             seed_tracks=form_data.track_seeds,
             seed_artists=form_data.artist_seeds,
             seed_genres=form_data.genre_seeds,
@@ -908,7 +908,7 @@ def _finalize_recommendations_success(
     return response
 
 
-def _fetch_recommendation_rows(
+async def _fetch_recommendation_rows(
     *,
     request: Request,
     session: UiSession,
@@ -930,7 +930,7 @@ def _fetch_recommendation_rows(
         genre_seeds=parsed_form.genre_seeds,
         limit_value=parsed_form.limit,
     )
-    result, error_response = _execute_recommendations_request(
+    result, error_response = await _execute_recommendations_request(
         service=service,
         form_data=parsed_form,
         request=request,
@@ -1179,7 +1179,7 @@ async def _process_recommendations_submission(
             show_admin_controls=show_admin_controls,
         )
 
-    normalised_values, result, error_response = _fetch_recommendation_rows(
+    normalised_values, result, error_response = await _fetch_recommendation_rows(
         request=request,
         session=session,
         service=service,
@@ -4660,7 +4660,7 @@ async def spotify_oauth_manual(
     )
     context = build_spotify_status_context(
         request,
-        status=service.status(),
+        status=await service.status(),
         oauth=service.oauth_health(),
         manual_form=manual_form,
         csrf_token=csrf_token,
@@ -4744,7 +4744,7 @@ async def spotify_free_ingest_run(
         stored_job_id = result.job_id
         await set_spotify_free_ingest_job_id(request, session, result.job_id)
 
-    job_status = service.free_ingest_job_status(stored_job_id)
+    job_status = await service.free_ingest_job_status(stored_job_id)
 
     context = build_spotify_free_ingest_context(
         request,
@@ -4845,7 +4845,7 @@ async def spotify_free_ingest_upload(
         stored_job_id = result.job_id
         await set_spotify_free_ingest_job_id(request, session, result.job_id)
 
-    job_status = service.free_ingest_job_status(stored_job_id)
+    job_status = await service.free_ingest_job_status(stored_job_id)
 
     context = build_spotify_free_ingest_context(
         request,
@@ -4940,8 +4940,8 @@ async def spotify_backfill_run(
     await set_spotify_backfill_job_id(request, session, job_id)
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    status_payload = service.backfill_status(job_id)
-    snapshot = service.build_backfill_snapshot(
+    status_payload = await service.backfill_status(job_id)
+    snapshot = await service.build_backfill_snapshot(
         csrf_token=csrf_token,
         job_id=job_id,
         status_payload=status_payload,
@@ -5115,7 +5115,7 @@ async def spotify_free_ingest_fragment(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     job_id = await get_spotify_free_ingest_job_id(request, session)
-    job_status = service.free_ingest_job_status(job_id)
+    job_status = await service.free_ingest_job_status(job_id)
     context = build_spotify_free_ingest_context(
         request,
         csrf_token=csrf_token,
@@ -5140,7 +5140,7 @@ async def spotify_account_fragment(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        summary = service.account()
+        summary = await service.account()
     except Exception:
         logger.exception("ui.fragment.spotify.account")
         return _render_alert_fragment(
@@ -5203,7 +5203,7 @@ async def spotify_account_refresh(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        summary = service.refresh_account()
+        summary = await service.refresh_account()
     except Exception:
         logger.exception("ui.fragment.spotify.account.refresh")
         return _render_alert_fragment(
@@ -5272,7 +5272,7 @@ async def spotify_account_reset_scopes(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        summary = service.reset_scopes()
+        summary = await service.reset_scopes()
     except Exception:
         logger.exception("ui.fragment.spotify.account.reset_scopes")
         return _render_alert_fragment(
@@ -5324,7 +5324,7 @@ async def spotify_top_tracks_fragment(
 ) -> Response:
     time_range = _extract_time_range(request)
     try:
-        tracks = service.top_tracks(time_range=time_range)
+        tracks = await service.top_tracks(time_range=time_range)
     except Exception:
         logger.exception("ui.fragment.spotify.top_tracks")
         return _render_alert_fragment(
@@ -5369,7 +5369,7 @@ async def spotify_top_artists_fragment(
 ) -> Response:
     time_range = _extract_time_range(request)
     try:
-        artists = service.top_artists(time_range=time_range)
+        artists = await service.top_artists(time_range=time_range)
     except Exception:
         logger.exception("ui.fragment.spotify.top_artists")
         return _render_alert_fragment(
@@ -5406,13 +5406,13 @@ async def spotify_backfill_fragment(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     job_id = await get_spotify_backfill_job_id(request, session)
-    status_payload = service.backfill_status(job_id)
-    snapshot = service.build_backfill_snapshot(
+    status_payload = await service.backfill_status(job_id)
+    snapshot = await service.build_backfill_snapshot(
         csrf_token=csrf_token,
         job_id=job_id,
         status_payload=status_payload,
     )
-    timeline = service.backfill_timeline(limit=_SPOTIFY_BACKFILL_TIMELINE_LIMIT)
+    timeline = await service.backfill_timeline(limit=_SPOTIFY_BACKFILL_TIMELINE_LIMIT)
     context = build_spotify_backfill_context(request, snapshot=snapshot, timeline=timeline)
     response = templates.TemplateResponse(
         request,
@@ -5431,7 +5431,7 @@ async def spotify_artists_fragment(
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
-        artists = service.list_followed_artists()
+        artists = await service.list_followed_artists()
     except Exception:
         logger.exception("ui.fragment.spotify.artists")
         return _render_alert_fragment(
@@ -5465,8 +5465,8 @@ async def spotify_playlists_fragment(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        filter_options = service.playlist_filters()
-        playlists = service.list_playlists(
+        filter_options = await service.playlist_filters()
+        playlists = await service.list_playlists(
             owner=owner_filter,
             sync_status=status_filter,
         )
@@ -5517,8 +5517,8 @@ async def spotify_playlists_filter(
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
-        filter_options = service.playlist_filters()
-        playlists = service.list_playlists(
+        filter_options = await service.playlist_filters()
+        playlists = await service.list_playlists(
             owner=owner_filter,
             sync_status=status_filter,
         )
@@ -5570,8 +5570,8 @@ async def spotify_playlists_refresh(
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
         await service.refresh_playlists()
-        filter_options = service.playlist_filters()
-        playlists = service.list_playlists(
+        filter_options = await service.playlist_filters()
+        playlists = await service.list_playlists(
             owner=owner_filter,
             sync_status=status_filter,
         )
@@ -5628,8 +5628,8 @@ async def spotify_playlists_force_sync(
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
         await service.force_sync_playlists()
-        filter_options = service.playlist_filters()
-        playlists = service.list_playlists(
+        filter_options = await service.playlist_filters()
+        playlists = await service.list_playlists(
             owner=owner_filter,
             sync_status=status_filter,
         )
@@ -5678,7 +5678,7 @@ async def spotify_playlist_items_fragment(
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
-        rows, total, page_limit, page_offset = service.playlist_items(
+        rows, total, page_limit, page_offset = await service.playlist_items(
             playlist_id, limit=limit, offset=offset
         )
     except ValueError as exc:
@@ -5809,7 +5809,7 @@ async def spotify_saved_tracks_fragment(
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
-        rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+        rows, total = await service.list_saved_tracks(limit=limit, offset=offset)
     except ValueError as exc:
         return _render_alert_fragment(
             request,
@@ -5927,11 +5927,11 @@ async def spotify_saved_tracks_action(
 
     try:
         if action_key == "save":
-            affected = service.save_tracks(extracted_ids)
+            affected = await service.save_tracks(extracted_ids)
             event_name = "ui.spotify.saved.save"
             failure_message = "Unable to save Spotify tracks."
         elif action_key == "remove":
-            affected = service.remove_saved_tracks(extracted_ids)
+            affected = await service.remove_saved_tracks(extracted_ids)
             event_name = "ui.spotify.saved.remove"
             failure_message = "Unable to remove Spotify tracks."
         else:
@@ -5968,10 +5968,10 @@ async def spotify_saved_tracks_action(
             failure_message,
         )
 
-    rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+    rows, total = await service.list_saved_tracks(limit=limit, offset=offset)
     if total and offset >= total:
         offset = max(total - (total % limit or limit), 0)
-        rows, total = service.list_saved_tracks(limit=limit, offset=offset)
+        rows, total = await service.list_saved_tracks(limit=limit, offset=offset)
 
     csrf_manager = get_csrf_manager(request)
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
@@ -6015,7 +6015,7 @@ async def spotify_track_detail_modal(
     service: SpotifyUiService = Depends(get_spotify_ui_service),
 ) -> Response:
     try:
-        detail = service.track_detail(track_id)
+        detail = await service.track_detail(track_id)
     except ValueError as exc:
         return _render_alert_fragment(
             request,
@@ -6062,7 +6062,7 @@ async def spotify_status_fragment(
     )
     context = build_spotify_status_context(
         request,
-        status=service.status(),
+        status=await service.status(),
         oauth=service.oauth_health(),
         manual_form=manual_form,
         csrf_token=csrf_token,

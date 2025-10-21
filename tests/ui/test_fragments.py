@@ -8,11 +8,13 @@ import json
 import re
 from types import SimpleNamespace
 from typing import Any, Sequence
+from unittest.mock import AsyncMock, Mock
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.testclient import TestClient
 import pytest
+from starlette.requests import Request
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
@@ -57,6 +59,7 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
+    SpotifyUiService,
     SpotifyStatus,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
@@ -77,6 +80,29 @@ from tests.ui.test_ui_auth import _assert_html_response, _create_client
 
 def _cookies_header(client: TestClient) -> str:
     return "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+
+
+class _StubOAuthService:
+    def __init__(self, payload: Mapping[str, object]) -> None:
+        self._payload = payload
+
+    def health(self) -> Mapping[str, object]:
+        return self._payload
+
+    def reset_scopes(self) -> None:  # pragma: no cover - trivial stub
+        return None
+
+
+def _make_request() -> Request:
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "path": "/ui/spotify",
+        "headers": [],
+    }
+    return Request(scope)
 
 
 def _login(client: TestClient, api_key: str = "primary-key") -> None:
@@ -518,13 +544,13 @@ class _StubSpotifyService:
         self.queue_recommendation_calls: list[tuple[str, ...]] = []
         self.queue_recommendation_exception: Exception | None = None
 
-    def status(self) -> SpotifyStatus:
+    async def status(self) -> SpotifyStatus:
         return self._status
 
     def oauth_health(self) -> SpotifyOAuthHealth:
         return self._oauth
 
-    def list_playlists(
+    async def list_playlists(
         self,
         *,
         owner: str | None = None,
@@ -535,7 +561,7 @@ class _StubSpotifyService:
         self.list_playlists_calls.append((owner, sync_status))
         return tuple(self.playlists)
 
-    def playlist_filters(self) -> SpotifyPlaylistFilters:
+    async def playlist_filters(self) -> SpotifyPlaylistFilters:
         if self.playlist_filters_exception:
             raise self.playlist_filters_exception
         return self.filter_options
@@ -546,7 +572,7 @@ class _StubSpotifyService:
     async def force_sync_playlists(self) -> None:
         self.force_sync_calls.append(None)
 
-    def playlist_items(
+    async def playlist_items(
         self, playlist_id: str, *, limit: int, offset: int
     ) -> tuple[Sequence[SpotifyPlaylistItemRow], int, int, int]:
         self.playlist_items_calls.append((playlist_id, limit, offset))
@@ -561,12 +587,12 @@ class _StubSpotifyService:
             self.playlist_items_page_offset,
         )
 
-    def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
+    async def list_followed_artists(self) -> Sequence[SpotifyArtistRow]:
         if isinstance(self.artists, Exception):
             raise self.artists
         return tuple(self.artists)
 
-    def top_tracks(
+    async def top_tracks(
         self,
         *,
         limit: int = 20,
@@ -577,7 +603,7 @@ class _StubSpotifyService:
             raise self.top_tracks_rows
         return tuple(self.top_tracks_rows)
 
-    def top_artists(
+    async def top_artists(
         self,
         *,
         limit: int = 20,
@@ -588,7 +614,7 @@ class _StubSpotifyService:
             raise self.top_artists_rows
         return tuple(self.top_artists_rows)
 
-    def recommendations(
+    async def recommendations(
         self,
         *,
         seed_tracks: Sequence[str] | None = None,
@@ -638,7 +664,7 @@ class _StubSpotifyService:
             raise exc
         return self.queue_result
 
-    def list_saved_tracks(
+    async def list_saved_tracks(
         self, *, limit: int, offset: int
     ) -> tuple[Sequence[SpotifySavedTrackRow], int]:
         self.list_saved_calls.append((limit, offset))
@@ -653,24 +679,24 @@ class _StubSpotifyService:
         end = max(start, min(start + max(limit, 0), len(self.saved_tracks_rows)))
         return tuple(self.saved_tracks_rows[start:end]), total
 
-    def track_detail(self, track_id: str) -> SpotifyTrackDetail:
+    async def track_detail(self, track_id: str) -> SpotifyTrackDetail:
         self.track_detail_calls.append(track_id)
         if self.track_detail_exception:
             raise self.track_detail_exception
         return self.track_detail_result
 
-    def account(self) -> SpotifyAccountSummary | None:
+    async def account(self) -> SpotifyAccountSummary | None:
         if self.account_exception:
             raise self.account_exception
         return self.account_summary
 
-    def refresh_account(self) -> SpotifyAccountSummary | None:
+    async def refresh_account(self) -> SpotifyAccountSummary | None:
         self.refresh_account_calls.append(None)
-        return self.account()
+        return await self.account()
 
-    def reset_scopes(self) -> SpotifyAccountSummary | None:
+    async def reset_scopes(self) -> SpotifyAccountSummary | None:
         self.reset_scopes_calls.append(None)
-        return self.account()
+        return await self.account()
 
     async def manual_complete(self, *, redirect_url: str) -> SpotifyManualResult:
         if self.manual_exception:
@@ -695,7 +721,7 @@ class _StubSpotifyService:
         self.run_calls.append((max_items, expand_playlists, include_cached_results))
         return self.run_backfill_job_id
 
-    def save_tracks(self, track_ids: Sequence[str]) -> int:
+    async def save_tracks(self, track_ids: Sequence[str]) -> int:
         if self.save_exception:
             raise self.save_exception
         cleaned = tuple(track_ids)
@@ -714,7 +740,7 @@ class _StubSpotifyService:
         self.saved_tracks_total = len(self.saved_tracks_rows)
         return len(cleaned)
 
-    def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
+    async def remove_saved_tracks(self, track_ids: Sequence[str]) -> int:
         if self.remove_exception:
             raise self.remove_exception
         cleaned = tuple(track_ids)
@@ -734,11 +760,11 @@ class _StubSpotifyService:
         self.queue_calls.append(cleaned)
         return self.queue_result
 
-    def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
+    async def backfill_status(self, job_id: str | None) -> Mapping[str, object] | None:
         self.backfill_status_calls.append(job_id)
         return self.backfill_status_payload
 
-    def build_backfill_snapshot(
+    async def build_backfill_snapshot(
         self,
         *,
         csrf_token: str,
@@ -748,25 +774,27 @@ class _StubSpotifyService:
         self.backfill_snapshot_calls.append((csrf_token, job_id, status_payload))
         return self.snapshot
 
-    def pause_backfill(self, job_id: str) -> Mapping[str, object]:
+    async def pause_backfill(self, job_id: str) -> Mapping[str, object]:
         self.pause_backfill_calls.append(job_id)
         if self.pause_backfill_exception:
             raise self.pause_backfill_exception
         return self.pause_backfill_result or self._default_backfill_payload(job_id, "paused")
 
-    def resume_backfill(self, job_id: str) -> Mapping[str, object]:
+    async def resume_backfill(self, job_id: str) -> Mapping[str, object]:
         self.resume_backfill_calls.append(job_id)
         if self.resume_backfill_exception:
             raise self.resume_backfill_exception
         return self.resume_backfill_result or self._default_backfill_payload(job_id, "queued")
 
-    def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
+    async def cancel_backfill(self, job_id: str) -> Mapping[str, object]:
         self.cancel_backfill_calls.append(job_id)
         if self.cancel_backfill_exception:
             raise self.cancel_backfill_exception
         return self.cancel_backfill_result or self._default_backfill_payload(job_id, "cancelled")
 
-    def backfill_timeline(self, *, limit: int = 10) -> Sequence[SpotifyBackfillTimelineEntry]:
+    async def backfill_timeline(
+        self, *, limit: int = 10
+    ) -> Sequence[SpotifyBackfillTimelineEntry]:
         self.backfill_timeline_calls.append(limit)
         return tuple(self.backfill_timeline_entries)
 
@@ -839,7 +867,9 @@ class _StubSpotifyService:
         self._free_ingest_error_store = None
         return result, error
 
-    def free_ingest_job_status(self, job_id: str | None) -> SpotifyFreeIngestJobSnapshot | None:
+    async def free_ingest_job_status(
+        self, job_id: str | None
+    ) -> SpotifyFreeIngestJobSnapshot | None:
         self.free_ingest_status_calls.append(job_id)
         return self.free_ingest_status_result
 
@@ -3642,6 +3672,40 @@ def test_spotify_saved_tracks_fragment_renders_table(monkeypatch) -> None:
             assert stub.list_saved_calls == [(25, 0)]
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_fragment_uses_executor(monkeypatch) -> None:
+    request = _make_request()
+    config = SimpleNamespace(spotify=SimpleNamespace(backfill_max_items=None))
+    spotify_service = Mock()
+    spotify_service.get_saved_tracks.return_value = {"items": [], "total": 0}
+    executor = AsyncMock(return_value={"items": [], "total": 0})
+    monkeypatch.setattr("app.ui.services.spotify._run_in_executor", executor)
+
+    service = SpotifyUiService(
+        request=request,
+        config=config,
+        spotify_service=spotify_service,
+        oauth_service=_StubOAuthService({}),
+        db_session=Mock(),
+    )
+
+    app.dependency_overrides[get_spotify_ui_service] = lambda: service
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/saved",
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+    executor.assert_awaited()
+    args = executor.await_args
+    assert args.args[0] is spotify_service.get_saved_tracks
+    assert args.kwargs == {"limit": 25, "offset": 0}
 
 
 def test_spotify_top_tracks_fragment_renders_table(monkeypatch) -> None:
