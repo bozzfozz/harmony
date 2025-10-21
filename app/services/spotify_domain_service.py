@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import inspect
@@ -181,35 +182,37 @@ class SpotifyDomainService:
 
         return True
 
+    async def _run_free_healthcheck_probe(self, timeout_seconds: float) -> None:
+        client = self._build_soulseek_health_client()
+        try:
+            await asyncio.wait_for(client.get_download_status(), timeout=timeout_seconds)
+        finally:
+            close_callable = getattr(client, "close", None)
+            if callable(close_callable):
+                result = close_callable()
+                if inspect.isawaitable(result):
+                    await result
+
     def _perform_free_healthcheck(self) -> None:
-        """Attempt to contact Soulseek if the runtime allows synchronous waits."""
+        """Attempt to contact Soulseek regardless of the current event loop state."""
 
         timeout_seconds = self._resolve_free_health_timeout()
+
+        async def _run_probe() -> None:
+            await self._run_free_healthcheck_probe(timeout_seconds)
 
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-
-            async def _run_probe() -> None:
-                client = self._build_soulseek_health_client()
-                try:
-                    await asyncio.wait_for(client.get_download_status(), timeout=timeout_seconds)
-                finally:
-                    close_callable = getattr(client, "close", None)
-                    if callable(close_callable):
-                        result = close_callable()
-                        if inspect.isawaitable(result):
-                            await result
-
             asyncio.run(_run_probe())
-        else:
-            logger.debug(
-                "spotify.free_ingest.healthcheck.skipped",
-                extra={
-                    "event": "spotify.free_ingest.healthcheck.skipped",
-                    "component": "service.spotify",
-                },
-            )
+            return
+
+        def _run_probe_sync() -> None:
+            asyncio.run(_run_probe())
+
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="spotify-free-healthcheck") as executor:
+            future = executor.submit(_run_probe_sync)
+            future.result()
 
     def _build_soulseek_health_client(self) -> SoulseekClient:
         return SoulseekClient(self._config.soulseek)

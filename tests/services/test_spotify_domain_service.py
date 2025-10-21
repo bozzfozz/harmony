@@ -23,22 +23,26 @@ class _StubSoulseekClient:
 
 
 class _HealthySoulseek:
+    def __init__(self) -> None:
+        self.closed = False
+
     async def get_download_status(self) -> dict[str, str]:
         return {"status": "ok"}
 
     async def close(self) -> None:
-        return None
+        self.closed = True
 
 
 class _FailingSoulseek:
     def __init__(self, error: Exception) -> None:
         self._error = error
+        self.closed = False
 
     async def get_download_status(self) -> dict[str, str]:
         raise self._error
 
     async def close(self) -> None:
-        return None
+        self.closed = True
 
 
 def _make_service(*, authenticated: bool = True) -> SpotifyDomainService:
@@ -58,8 +62,12 @@ def test_get_status_reports_free_available_when_health_check_succeeds(
 ) -> None:
     service = _make_service(authenticated=True)
 
+    clients: list[_HealthySoulseek] = []
+
     def _build_health_client() -> _HealthySoulseek:
-        return _HealthySoulseek()
+        client = _HealthySoulseek()
+        clients.append(client)
+        return client
 
     monkeypatch.setattr(service, "_build_soulseek_health_client", _build_health_client)
 
@@ -69,6 +77,8 @@ def test_get_status_reports_free_available_when_health_check_succeeds(
     assert status.authenticated is True
     assert status.pro_available is True
     assert status.status == "connected"
+    assert len(clients) == 1
+    assert clients[0].closed is True
 
 
 def test_get_status_free_unavailable_without_api_key(
@@ -104,4 +114,50 @@ def test_get_status_logs_error_when_health_check_fails(
     status = service.get_status()
 
     assert status.free_available is False
+    assert any(record.reason == "healthcheck_failed" for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_get_status_health_check_runs_with_active_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _make_service(authenticated=True)
+
+    clients: list[_HealthySoulseek] = []
+
+    def _build_health_client() -> _HealthySoulseek:
+        client = _HealthySoulseek()
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(service, "_build_soulseek_health_client", _build_health_client)
+
+    status = service.get_status()
+
+    assert status.free_available is True
+    assert len(clients) == 1
+    assert clients[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_get_status_health_check_failure_with_active_loop(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = _make_service(authenticated=True)
+
+    clients: list[_FailingSoulseek] = []
+
+    def _build_health_client() -> _FailingSoulseek:
+        client = _FailingSoulseek(RuntimeError("probe failed"))
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(service, "_build_soulseek_health_client", _build_health_client)
+
+    caplog.set_level("ERROR")
+    status = service.get_status()
+
+    assert status.free_available is False
+    assert len(clients) == 1
+    assert clients[0].closed is True
     assert any(record.reason == "healthcheck_failed" for record in caplog.records)
