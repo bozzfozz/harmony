@@ -25,8 +25,10 @@ from app.routers.soulseek_router import (
     soulseek_uploads,
     soulseek_user_address,
     soulseek_user_browse,
+    soulseek_user_browsing_status,
     soulseek_user_directory,
     soulseek_user_info,
+    soulseek_user_status,
 )
 from app.schemas import StatusResponse
 from app.ui.context import SuggestedTask, _normalise_status
@@ -215,23 +217,25 @@ class SoulseekUiService:
 
         payload = await soulseek_user_status(username=trimmed, client=self._client)
         mapping = payload if isinstance(payload, Mapping) else {}
-        state_raw = mapping.get("status") or mapping.get("state") or "unknown"
+        state_raw = self._first_present(mapping, ("status", "state"), default="unknown")
         state = _normalise_status(str(state_raw)) if state_raw is not None else "unknown"
-        message_raw = (
-            mapping.get("message") or mapping.get("status_message") or mapping.get("detail")
+        message_raw = self._first_present(
+            mapping,
+            ("message", "status_message", "detail"),
         )
         message = str(message_raw).strip() if isinstance(message_raw, str) else None
         if message == "":
             message = None
-        shared_files = self._coerce_int(
-            mapping.get("shared_files")
-            or mapping.get("shared")
-            or mapping.get("shared_count")
-            or mapping.get("files")
+        shared_files_raw = self._first_present(
+            mapping,
+            ("shared_files", "shared", "shared_count", "files"),
         )
-        average_speed = self._coerce_float(
-            mapping.get("average_speed") or mapping.get("avg_speed") or mapping.get("speed")
+        shared_files = self._coerce_int(shared_files_raw)
+        average_speed_raw = self._first_present(
+            mapping,
+            ("average_speed", "avg_speed", "speed"),
         )
+        average_speed = self._coerce_float(average_speed_raw)
         status = SoulseekUserStatus(
             username=trimmed,
             state=state or "unknown",
@@ -263,19 +267,24 @@ class SoulseekUiService:
 
         payload = await soulseek_user_browsing_status(username=trimmed, client=self._client)
         mapping = payload if isinstance(payload, Mapping) else {}
-        state_raw = mapping.get("status") or mapping.get("state") or "unknown"
+        state_raw = self._first_present(mapping, ("status", "state"), default="unknown")
         state = _normalise_status(str(state_raw)) if state_raw is not None else "unknown"
-        message_raw = (
-            mapping.get("message") or mapping.get("status_message") or mapping.get("detail")
+        message_raw = self._first_present(
+            mapping,
+            ("message", "status_message", "detail"),
         )
         message = str(message_raw).strip() if isinstance(message_raw, str) else None
         if message == "":
             message = None
-        progress = self._coerce_progress(mapping.get("progress") or mapping.get("percent"))
-        queue_position = self._coerce_int(mapping.get("queue_position") or mapping.get("position"))
-        queue_length = self._coerce_int(
-            mapping.get("queue_length") or mapping.get("queue_size") or mapping.get("total")
+        progress_raw = self._first_present(mapping, ("progress", "percent"))
+        progress = self._coerce_progress(progress_raw)
+        queue_position_raw = self._first_present(mapping, ("queue_position", "position"))
+        queue_position = self._coerce_int(queue_position_raw)
+        queue_length_raw = self._first_present(
+            mapping,
+            ("queue_length", "queue_size", "total"),
         )
+        queue_length = self._coerce_int(queue_length_raw)
         status = SoulseekUserBrowsingStatus(
             username=trimmed,
             state=state or "unknown",
@@ -438,6 +447,20 @@ class SoulseekUiService:
             },
         )
         return limited
+
+    @staticmethod
+    def _first_present(
+        mapping: Mapping[str, Any],
+        keys: Iterable[str],
+        *,
+        default: Any | None = None,
+    ) -> Any:
+        sentinel = object()
+        for key in keys:
+            value = mapping.get(key, sentinel)
+            if value is not sentinel:
+                return value
+        return default
 
     @staticmethod
     def _extract_uploads(payload: Any) -> Sequence[Any]:
