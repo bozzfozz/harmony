@@ -64,6 +64,22 @@ engineering implementation notes remain documented in
 - **Observability hooks:** Uses ETag/Last-Modified headers to avoid redundant
   fetches; any `304` responses are logged as debug events for cache auditing.
 
+### Playlist Sync Status Policy
+- **Data source:** `PlaylistSyncWorker` stores `sync_status`,
+  `sync_status_reason`, and `synced_at` in each playlist's metadata. The
+  `synced_at` timestamp is persisted in ISO format (UTC) for downstream audits.
+- **Fresh (`sync_status=fresh`):** The most recent Spotify snapshot matches the
+  previously stored snapshot, and the worker has re-synced the playlist within
+  the two-hour service-level window.
+- **Stale (`sync_status=stale`):** Any of the following: the Spotify snapshot ID
+  differs from the prior value (`sync_status_reason=snapshot_changed`), Spotify
+  omits the snapshot (`missing_snapshot`), the elapsed time between successive
+  worker runs exceeds two hours (`sync_gap`), or the playlist was already marked
+  stale by dependent workflows (`previously_stale`).
+- **Follow-up actions:** Use "force sync" to prioritise a refresh when
+  `sync_status_reason` is `snapshot_changed` or `missing_snapshot`. Investigate
+  worker health if `sync_gap` appears, as it signals the SLA was missed.
+
 ## Recommendations Card
 - **What it shows:** Track suggestions based on configured seeds (tracks,
   artists, genres) using `GET /api/v1/spotify/recommendations`.

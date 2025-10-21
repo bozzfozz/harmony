@@ -24,6 +24,8 @@ from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 logger = get_logger(__name__)
 
 _UPDATED_AT_INCREMENT = timedelta(microseconds=1)
+# TODO: parameterise once operations finalise environment-specific sync SLAs.
+_PLAYLIST_SYNC_STALE_AFTER = timedelta(hours=2)
 
 
 class PlaylistCacheInvalidator:
@@ -238,13 +240,18 @@ class PlaylistSyncWorker:
                             candidate=timestamp,
                             floor=last_assigned,
                         )
-                        playlist.metadata_json = self._build_playlist_metadata(payload)
+                        playlist.metadata_json = self._build_playlist_metadata(
+                            payload,
+                            synced_at=timestamp,
+                        )
                         session.add(playlist)
                     else:
                         playlist.name = str(name)
                         playlist.track_count = track_count
                         playlist.metadata_json = self._build_playlist_metadata(
-                            payload, previous=playlist.metadata_json
+                            payload,
+                            previous=playlist.metadata_json,
+                            synced_at=timestamp,
                         )
                         playlist.updated_at = self._compute_next_updated_at(
                             previous=playlist.updated_at,
@@ -333,10 +340,12 @@ class PlaylistSyncWorker:
         payload: Mapping[str, Any],
         *,
         previous: Mapping[str, Any] | None = None,
+        synced_at: datetime | None = None,
     ) -> dict[str, Any] | None:
         metadata: dict[str, Any] = dict(previous or {})
         prior_snapshot = PlaylistSyncWorker._clean_text(metadata.get("snapshot_id"))
         prior_status = PlaylistSyncWorker._clean_text(metadata.get("sync_status"))
+        prior_synced_at = PlaylistSyncWorker._parse_synced_at(metadata.get("synced_at"))
 
         owner_payload = payload.get("owner")
         if isinstance(owner_payload, Mapping):
@@ -361,6 +370,8 @@ class PlaylistSyncWorker:
         snapshot_id = PlaylistSyncWorker._clean_text(payload.get("snapshot_id"))
         if snapshot_id:
             metadata["snapshot_id"] = snapshot_id
+        elif "snapshot_id" in metadata:
+            metadata.pop("snapshot_id", None)
 
         public_value = payload.get("public")
         if isinstance(public_value, bool):
@@ -370,15 +381,27 @@ class PlaylistSyncWorker:
         if isinstance(collaborative, bool):
             metadata["collaborative"] = collaborative
 
-        sync_status = PlaylistSyncWorker._derive_sync_status(
+        sync_status, sync_reason = PlaylistSyncWorker._derive_sync_status(
             snapshot_id=snapshot_id,
             previous_snapshot=prior_snapshot,
             previous_status=prior_status,
+            current_synced_at=synced_at,
+            previous_synced_at=prior_synced_at,
         )
         if sync_status:
             metadata["sync_status"] = sync_status
+        else:
+            metadata.pop("sync_status", None)
 
-        # TODO: clarify sync semantics with product; snapshot heuristic used for now.
+        if sync_reason:
+            metadata["sync_status_reason"] = sync_reason
+        else:
+            metadata.pop("sync_status_reason", None)
+
+        if synced_at is not None:
+            metadata["synced_at"] = PlaylistSyncWorker._format_synced_at(synced_at)
+        elif "synced_at" in metadata:
+            metadata.pop("synced_at", None)
 
         return metadata or None
 
@@ -388,13 +411,28 @@ class PlaylistSyncWorker:
         snapshot_id: str | None,
         previous_snapshot: str | None,
         previous_status: str | None,
-    ) -> str | None:
+        current_synced_at: datetime | None,
+        previous_synced_at: datetime | None,
+    ) -> tuple[str | None, str | None]:
         if snapshot_id:
             if previous_snapshot and previous_snapshot != snapshot_id:
-                return "stale"
-            return "fresh"
+                return "stale", "snapshot_changed"
 
-        return previous_status or None
+            if PlaylistSyncWorker._sync_gap_exceeded(previous_synced_at, current_synced_at):
+                return "stale", "sync_gap"
+
+            return "fresh", "synced_recently"
+
+        if previous_snapshot:
+            return "stale", "missing_snapshot"
+
+        if PlaylistSyncWorker._sync_gap_exceeded(previous_synced_at, current_synced_at):
+            return "stale", "sync_gap"
+
+        if previous_status == "stale":
+            return "stale", "previously_stale"
+
+        return "stale", "missing_snapshot"
 
     @staticmethod
     def _extract_int(value: Any, key: str | None = None) -> int | None:
@@ -407,6 +445,30 @@ class PlaylistSyncWorker:
             return int(target)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _format_synced_at(value: datetime) -> str:
+        return value.replace(microsecond=0).isoformat()
+
+    @staticmethod
+    def _parse_synced_at(value: Any) -> datetime | None:
+        if isinstance(value, datetime):
+            return value
+        if not isinstance(value, str):
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _sync_gap_exceeded(previous: datetime | None, current: datetime | None) -> bool:
+        if previous is None or current is None:
+            return False
+        delta = current - previous
+        if delta <= timedelta(0):
+            return False
+        return delta > _PLAYLIST_SYNC_STALE_AFTER
 
     @staticmethod
     def _clean_text(value: Any) -> str | None:

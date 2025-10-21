@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from app.core.spotify_client import SpotifyClient
 from app.db import init_db, session_scope
 from app.models import Playlist
-from app.workers.playlist_sync_worker import PlaylistSyncWorker
+from app.workers.playlist_sync_worker import (
+    PlaylistSyncWorker,
+    _PLAYLIST_SYNC_STALE_AFTER,
+)
 
 
 def _worker() -> PlaylistSyncWorker:
@@ -40,6 +43,8 @@ def test_persist_playlists_populates_metadata() -> None:
         assert record.metadata_json["followers"] == 42
         assert record.metadata_json["snapshot_id"] == "snapshot-1"
         assert record.metadata_json["sync_status"] == "fresh"
+        assert record.metadata_json["sync_status_reason"] == "synced_recently"
+        assert record.metadata_json["synced_at"] == timestamp.isoformat()
 
 
 def test_persist_playlists_marks_stale_on_snapshot_change() -> None:
@@ -64,4 +69,64 @@ def test_persist_playlists_marks_stale_on_snapshot_change() -> None:
         assert record is not None
         assert record.metadata_json["followers"] == 7
         assert record.metadata_json["sync_status"] == "stale"
+        assert record.metadata_json["sync_status_reason"] == "snapshot_changed"
         assert record.metadata_json["snapshot_id"] == "snapshot-2"
+        assert record.metadata_json["synced_at"] == timestamp.isoformat()
+
+
+def test_persist_playlists_marks_stale_when_snapshot_missing() -> None:
+    init_db()
+    worker = _worker()
+    timestamp = datetime(2023, 9, 1, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+    base_payload = {
+        "id": "playlist-3",
+        "name": "Lo-Fi",
+        "tracks": {"total": 8},
+        "snapshot_id": "snapshot-1",
+    }
+    worker._persist_playlists([base_payload], timestamp, None)
+
+    missing_snapshot = dict(base_payload)
+    missing_snapshot.pop("snapshot_id")
+    worker._persist_playlists([missing_snapshot], timestamp, None)
+
+    with session_scope() as session:
+        record = session.get(Playlist, "playlist-3")
+        assert record is not None
+        assert record.metadata_json["sync_status"] == "stale"
+        assert record.metadata_json["sync_status_reason"] == "missing_snapshot"
+        assert record.metadata_json.get("snapshot_id") is None
+
+
+def test_persist_playlists_marks_stale_when_sync_gap_exceeds_window() -> None:
+    init_db()
+    worker = _worker()
+    base = datetime(2023, 9, 1, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+    payload = {
+        "id": "playlist-4",
+        "name": "Morning Mix",
+        "tracks": {"total": 20},
+        "snapshot_id": "snapshot-1",
+    }
+
+    worker._persist_playlists([payload], base, None)
+
+    late = base + _PLAYLIST_SYNC_STALE_AFTER + timedelta(minutes=1)
+    worker._persist_playlists([payload], late, None)
+
+    with session_scope() as session:
+        record = session.get(Playlist, "playlist-4")
+        assert record is not None
+        assert record.metadata_json["sync_status"] == "stale"
+        assert record.metadata_json["sync_status_reason"] == "sync_gap"
+        assert record.metadata_json["synced_at"] == late.isoformat()
+
+    catch_up = late + timedelta(minutes=5)
+    worker._persist_playlists([payload], catch_up, None)
+
+    with session_scope() as session:
+        record = session.get(Playlist, "playlist-4")
+        assert record is not None
+        assert record.metadata_json["sync_status"] == "fresh"
+        assert record.metadata_json["sync_status_reason"] == "synced_recently"
+        assert record.metadata_json["synced_at"] == catch_up.isoformat()
