@@ -73,7 +73,7 @@ common interventions stay discoverable without leaving the UI.
   feed the same fragment.
 
 ## Related Implementation References
-- UI router endpoints and role gates live in [`app/ui/router.py`](../../app/ui/router.py).
+- UI router endpoints and role gates live in [`app/ui/routes`](../../app/ui/routes).
 - Aggregated Soulseek data and helper models live in
   [`app/ui/services/soulseek.py`](../../app/ui/services/soulseek.py).
 - HTMX fragment wiring (IDs, polling, targets) is defined in

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -128,6 +128,43 @@ def _parse_form_body(raw_body: bytes) -> dict[str, str]:
     return {key: (values[0].strip() if values else "") for key, values in parsed.items()}
 
 
+def _extract_download_refresh_params(
+    request: Request, values: Mapping[str, str]
+) -> tuple[int, int, bool]:
+    def _parse_int(
+        value: str | None,
+        *,
+        default: int,
+        minimum: int,
+        maximum: int,
+    ) -> int:
+        if value is None or not value.strip():
+            return default
+        try:
+            parsed = int(value)
+        except ValueError:
+            return default
+        return max(min(parsed, maximum), minimum)
+
+    limit_value = _parse_int(
+        values.get("limit") or request.query_params.get("limit"),
+        default=20,
+        minimum=1,
+        maximum=100,
+    )
+    offset_value = _parse_int(
+        values.get("offset") or request.query_params.get("offset"),
+        default=0,
+        minimum=0,
+        maximum=10_000,
+    )
+    scope_raw = (values.get("scope") or request.query_params.get("scope") or "").lower()
+    include_all = scope_raw in {"all", "true", "1", "yes"}
+    if not include_all:
+        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
+    return limit_value, offset_value, include_all
+
+
 __all__ = [
     "logger",
     "templates",
@@ -139,4 +176,5 @@ __all__ = [
     "_render_alert_fragment",
     "_ensure_csrf_token",
     "_parse_form_body",
+    "_extract_download_refresh_params",
 ]
