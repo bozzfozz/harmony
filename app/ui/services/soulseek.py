@@ -320,14 +320,20 @@ class SoulseekUiService:
         if not trimmed:
             raise ValueError("username is required")
 
-        if path:
+        normalised_path = path.strip() if isinstance(path, str) else None
+        if normalised_path == "":
+            normalised_path = None
+
+        if normalised_path is not None:
             payload = await soulseek_user_directory(
                 username=trimmed,
-                path=path,
+                path=normalised_path,
                 client=self._client,
             )
             current_path = (
-                str(payload.get("path") or path).strip() if isinstance(payload, Mapping) else path
+                str(payload.get("path") or normalised_path).strip()
+                if isinstance(payload, Mapping)
+                else normalised_path
             )
         else:
             payload = await soulseek_user_browse(username=trimmed, client=self._client)
