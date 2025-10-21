@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import secrets
-from typing import Awaitable, Callable, Literal
+from typing import Literal
 
 from fastapi import HTTPException, Request, Response, status
 
@@ -15,6 +16,8 @@ from app.dependencies import get_app_config
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.metrics import counter
+
+from .session_store import StoredUiSession, UiSessionStore
 
 RoleName = Literal["read_only", "operator", "admin"]
 
@@ -117,7 +120,7 @@ class UiSession:
 
 
 class UiSessionManager:
-    """In-memory UI session registry with API-key validation."""
+    """Durable UI session registry with API-key validation."""
 
     def __init__(
         self,
@@ -127,13 +130,14 @@ class UiSessionManager:
         role_overrides: dict[str, RoleName],
         session_ttl: timedelta,
         features: UiFeatures,
+        store: UiSessionStore | None = None,
     ) -> None:
         self._security = security
         self._role_default = role_default
         self._role_overrides = role_overrides
         self._session_ttl = session_ttl
         self._features = features
-        self._sessions: dict[str, UiSession] = {}
+        self._store = store or UiSessionStore()
         self._lock = asyncio.Lock()
 
     async def create_session(self, api_key: str) -> UiSession:
@@ -177,7 +181,7 @@ class UiSessionManager:
             last_seen_at=issued_at,
         )
         async with self._lock:
-            self._sessions[identifier] = session
+            self._store.create_session(self._stored_from_session(session))
         log_event(
             logger,
             "ui.login",
@@ -195,9 +199,9 @@ class UiSessionManager:
 
     async def invalidate(self, identifier: str, *, reason: str = "logout") -> None:
         async with self._lock:
-            session = self._sessions.pop(identifier, None)
-        if session is not None:
-            _record_session_termination(session, reason=reason)
+            stored = self._store.delete_session(identifier)
+        if stored is not None:
+            _record_session_termination(self._session_from_stored(stored), reason=reason)
 
     def cookie_max_age(self) -> int:
         return int(self._session_ttl.total_seconds())
@@ -209,14 +213,12 @@ class UiSessionManager:
                 return None
             return session.jobs.spotify_free_ingest_job_id
 
-    async def set_spotify_free_ingest_job_id(
-        self, identifier: str, job_id: str | None
-    ) -> None:
+    async def set_spotify_free_ingest_job_id(self, identifier: str, job_id: str | None) -> None:
         async with self._lock:
             session = self._get_active_session(identifier)
             if session is None:
                 return
-            session.jobs.spotify_free_ingest_job_id = job_id
+            self._store.set_spotify_free_ingest_job_id(identifier, job_id)
 
     async def get_spotify_backfill_job_id(self, identifier: str) -> str | None:
         async with self._lock:
@@ -230,15 +232,47 @@ class UiSessionManager:
             session = self._get_active_session(identifier)
             if session is None:
                 return
-            session.jobs.spotify_backfill_job_id = job_id
+            self._store.set_spotify_backfill_job_id(identifier, job_id)
 
     async def clear_job_state(self, identifier: str) -> None:
         async with self._lock:
             session = self._get_active_session(identifier)
             if session is None:
                 return
-            session.jobs.spotify_free_ingest_job_id = None
-            session.jobs.spotify_backfill_job_id = None
+            self._store.clear_job_state(identifier)
+
+    def _stored_from_session(self, session: UiSession) -> StoredUiSession:
+        return StoredUiSession(
+            identifier=session.identifier,
+            role=session.role,
+            fingerprint=session.fingerprint,
+            issued_at=session.issued_at,
+            last_seen_at=session.last_seen_at,
+            feature_spotify=session.features.spotify,
+            feature_soulseek=session.features.soulseek,
+            feature_dlq=session.features.dlq,
+            feature_imports=session.features.imports,
+            spotify_free_ingest_job_id=session.jobs.spotify_free_ingest_job_id,
+            spotify_backfill_job_id=session.jobs.spotify_backfill_job_id,
+        )
+
+    def _session_from_stored(self, stored: StoredUiSession) -> UiSession:
+        session = UiSession(
+            identifier=stored.identifier,
+            role=stored.role,  # type: ignore[arg-type]
+            features=UiFeatures(
+                spotify=stored.feature_spotify,
+                soulseek=stored.feature_soulseek,
+                dlq=stored.feature_dlq,
+                imports=stored.feature_imports,
+            ),
+            fingerprint=stored.fingerprint,
+            issued_at=stored.issued_at,
+            last_seen_at=stored.last_seen_at,
+        )
+        session.jobs.spotify_free_ingest_job_id = stored.spotify_free_ingest_job_id
+        session.jobs.spotify_backfill_job_id = stored.spotify_backfill_job_id
+        return session
 
     def _is_valid_key(self, candidate: str) -> bool:
         return any(
@@ -256,14 +290,18 @@ class UiSessionManager:
         return session.last_seen_at + self._session_ttl < datetime.now(tz=UTC)
 
     def _get_active_session(self, identifier: str) -> UiSession | None:
-        session = self._sessions.get(identifier)
-        if session is None:
+        stored = self._store.get_session(identifier)
+        if stored is None:
             return None
+        session = self._session_from_stored(stored)
         if self._is_expired(session):
-            del self._sessions[identifier]
-            _record_session_termination(session, reason="expired")
+            removed = self._store.delete_session(identifier)
+            if removed is not None:
+                _record_session_termination(self._session_from_stored(removed), reason="expired")
             return None
-        session.last_seen_at = datetime.now(tz=UTC)
+        now = datetime.now(tz=UTC)
+        self._store.update_last_seen(identifier, now)
+        session.last_seen_at = now
         return session
 
     @property
@@ -359,9 +397,7 @@ def get_session_manager(request: Request) -> UiSessionManager:
     return manager
 
 
-async def get_spotify_free_ingest_job_id(
-    request: Request, session: UiSession
-) -> str | None:
+async def get_spotify_free_ingest_job_id(request: Request, session: UiSession) -> str | None:
     manager = get_session_manager(request)
     return await manager.get_spotify_free_ingest_job_id(session.identifier)
 
@@ -373,9 +409,7 @@ async def set_spotify_free_ingest_job_id(
     await manager.set_spotify_free_ingest_job_id(session.identifier, job_id)
 
 
-async def get_spotify_backfill_job_id(
-    request: Request, session: UiSession
-) -> str | None:
+async def get_spotify_backfill_job_id(request: Request, session: UiSession) -> str | None:
     manager = get_session_manager(request)
     return await manager.get_spotify_backfill_job_id(session.identifier)
 
@@ -436,7 +470,7 @@ def require_feature(feature: Literal["spotify", "soulseek", "dlq", "imports"]):
 
 
 def require_admin_with_feature(
-    feature: Literal["spotify", "soulseek", "dlq", "imports"]
+    feature: Literal["spotify", "soulseek", "dlq", "imports"],
 ) -> Callable[[Request], Awaitable[UiSession]]:
     admin_dependency = require_role("admin")
 
