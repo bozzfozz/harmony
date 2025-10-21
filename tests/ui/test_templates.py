@@ -1467,6 +1467,10 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert 'data-test="nav-home"' in html
     assert "alert alert--warning" in html
     assert "Check status" in html
+    assert (
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+        in html
+    )
     assert '<meta name="csrf-token" content="token" />' in html
     assert 'data-role="alert-region"' in html
     assert 'id="ui-alert-region"' in html
