@@ -133,7 +133,7 @@ def test_build_spotify_page_context_sets_free_ingest_poll_interval() -> None:
     fragment = context["free_ingest_fragment"]
     assert fragment is not None
     assert fragment.poll_interval_seconds == 15
-    assert fragment.trigger == "load, every 15s"
+    assert fragment.trigger == "revealed, every 15s"
 
 
 def test_build_spotify_recommendations_context_disables_queue_forms() -> None:

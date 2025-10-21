@@ -1881,6 +1881,7 @@ def build_spotify_page_context(
         target="#hx-spotify-top-tracks",
         swap="innerHTML",
         loading_key="spotify.top_tracks",
+        load_event="revealed",
     )
 
     try:
@@ -1893,6 +1894,7 @@ def build_spotify_page_context(
         target="#hx-spotify-top-artists",
         swap="innerHTML",
         loading_key="spotify.top_artists",
+        load_event="revealed",
     )
 
     try:
@@ -1905,6 +1907,7 @@ def build_spotify_page_context(
         target="#hx-spotify-recommendations",
         swap="innerHTML",
         loading_key="spotify.recommendations",
+        load_event="revealed",
     )
 
     try:
@@ -1917,6 +1920,7 @@ def build_spotify_page_context(
         target="#hx-spotify-saved",
         swap="innerHTML",
         loading_key="spotify.saved_tracks",
+        load_event="revealed",
     )
 
     try:
@@ -1929,6 +1933,7 @@ def build_spotify_page_context(
         target="#hx-spotify-playlists",
         swap="innerHTML",
         loading_key="spotify.playlists",
+        load_event="revealed",
     )
 
     try:
@@ -1941,6 +1946,7 @@ def build_spotify_page_context(
         target="#hx-spotify-artists",
         swap="innerHTML",
         loading_key="spotify.artists",
+        load_event="revealed",
     )
 
     free_ingest_fragment: AsyncFragment | None = None
@@ -1956,6 +1962,7 @@ def build_spotify_page_context(
             poll_interval_seconds=15,
             swap="innerHTML",
             loading_key="spotify.free_ingest",
+            load_event="revealed",
         )
 
     try:
@@ -1969,6 +1976,7 @@ def build_spotify_page_context(
         poll_interval_seconds=30,
         swap="innerHTML",
         loading_key="spotify.backfill",
+        load_event="revealed",
     )
 
     return {
