@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import textwrap
 from contextlib import contextmanager
 from datetime import UTC, datetime
-import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -1948,9 +1952,275 @@ def test_spotify_free_ingest_partial_renders_form_and_status() -> None:
     assert 'enctype="multipart/form-data"' in html
     assert 'hx-post="/ui/spotify/free/upload"' in html
     assert 'name="file"' in html
+    assert 'data-test="spotify-free-ingest-dropzone"' in html
+    assert 'data-test="spotify-free-ingest-dropzone-status"' in html
+    assert 'data-default-message="Drop a file to upload it via FREE ingest."' in html
+    assert 'data-error-message="Upload failed. Try again with a single file."' in html
+    assert 'aria-describedby="spotify-free-ingest-upload-help"' in html
     assert "Job enqueued" in html
     assert "job-free" in html
     assert "Queued tracks" in html
+
+
+def test_ui_bootstrap_dropzone_handles_drag_and_drop() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    script = textwrap.dedent(
+        """
+        const fs = require('fs');
+        const vm = require('vm');
+
+        function createFileList(files) {
+          const list = { length: files.length, item(index) { return files[index] || null; } };
+          files.forEach((file, index) => {
+            list[index] = file;
+          });
+          return list;
+        }
+
+        const dropzoneListeners = {};
+        const formListeners = {};
+        const fileInputListeners = {};
+
+        function addListener(bucket, type, handler) {
+          if (!bucket[type]) {
+            bucket[type] = [];
+          }
+          bucket[type].push(handler);
+        }
+
+        function runHandlers(bucket, type, event) {
+          (bucket[type] || []).forEach((handler) => handler(event));
+        }
+
+        const dropzoneAttributes = new Map([
+          ['data-default-message', 'Drop a file to upload it via FREE ingest.'],
+          ['data-selected-message', 'Ready to upload __FILENAME__.'],
+          ['data-uploading-message', 'Uploading __FILENAME__…'],
+          ['data-multiple-message', 'Upload one file at a time.'],
+          ['data-busy-message', 'Upload in progress. Please wait…'],
+          ['data-error-message', 'Upload failed. Try again with a single file.'],
+        ]);
+
+        const statusElement = { textContent: '' };
+
+        const dropzone = {
+          id: 'spotify-free-ingest-dropzone',
+          dataset: {},
+          ariaBusy: null,
+          classList: {
+            values: new Set(),
+            add: function () {
+              for (let index = 0; index < arguments.length; index += 1) {
+                this.values.add(arguments[index]);
+              }
+            },
+            remove: function () {
+              for (let index = 0; index < arguments.length; index += 1) {
+                this.values.delete(arguments[index]);
+              }
+            },
+            contains: function (name) {
+              return this.values.has(name);
+            },
+            toArray: function () {
+              return Array.from(this.values.values());
+            },
+          },
+          addEventListener: function (type, handler) {
+            addListener(dropzoneListeners, type, handler);
+          },
+          querySelector: function (selector) {
+            if (selector === '[data-role="status"]') {
+              return statusElement;
+            }
+            return null;
+          },
+          getAttribute: function (name) {
+            return dropzoneAttributes.get(name) || '';
+          },
+          setAttribute: function (name, value) {
+            dropzoneAttributes.set(name, value);
+            if (name === 'aria-busy') {
+              this.ariaBusy = value;
+            }
+          },
+          removeAttribute: function (name) {
+            dropzoneAttributes.delete(name);
+            if (name === 'aria-busy') {
+              this.ariaBusy = null;
+            }
+          },
+          contains: function (target) {
+            return target === this || target === statusElement;
+          },
+        };
+
+        const form = {
+          id: 'spotify-free-ingest-upload-form',
+          dataset: {},
+          addEventListener: function (type, handler) {
+            addListener(formListeners, type, handler);
+          },
+          requestSubmitCalled: false,
+          submitCalled: false,
+          requestSubmit: function () {
+            this.requestSubmitCalled = true;
+          },
+          submit: function () {
+            this.submitCalled = true;
+          },
+        };
+
+        let storedFiles = createFileList([]);
+        const fileInput = {
+          id: 'ingest_file',
+          addEventListener: function (type, handler) {
+            addListener(fileInputListeners, type, handler);
+          },
+          clickCalled: false,
+          click: function () {
+            this.clickCalled = true;
+          },
+        };
+
+        Object.defineProperty(fileInput, 'files', {
+          get: function () {
+            return storedFiles;
+          },
+          set: function (value) {
+            storedFiles = value;
+          },
+        });
+
+        const context = {
+          window: {
+            EventSource: function () {},
+            addEventListener: function () {},
+          },
+          document: {
+            body: { dataset: { liveUpdates: 'none' } },
+            querySelector: function () { return null; },
+            getElementById: function (id) {
+              if (id === 'spotify-free-ingest-dropzone') {
+                return dropzone;
+              }
+              if (id === 'spotify-free-ingest-upload-form') {
+                return form;
+              }
+              if (id === 'ingest_file') {
+                return fileInput;
+              }
+              return null;
+            },
+            addEventListener: function () {},
+          },
+          DataTransfer: function DataTransfer() {
+            this._files = [];
+            const self = this;
+            this.items = {
+              add: function (file) {
+                self._files.push(file);
+              },
+              clear: function () {
+                self._files = [];
+              },
+            };
+          },
+          console: console,
+        };
+
+        context.window.document = context.document;
+
+        Object.defineProperty(context.DataTransfer.prototype, 'files', {
+          get: function () {
+            return createFileList(this._files.slice());
+          },
+        });
+
+        vm.createContext(context);
+        const source = fs.readFileSync('app/ui/static/js/ui-bootstrap.js', 'utf8');
+        vm.runInContext(source, context);
+
+        function trigger(type, event) {
+          runHandlers(dropzoneListeners, type, event);
+          return event;
+        }
+
+        function createDropEvent(files) {
+          return {
+            preventDefault: function () {
+              this.defaultPrevented = true;
+            },
+            defaultPrevented: false,
+            dataTransfer: { files: createFileList(files) },
+          };
+        }
+
+        trigger('dragenter', { preventDefault() {} });
+        const initialStatus = statusElement.textContent;
+
+        const multiEvent = createDropEvent([{ name: 'a.txt' }, { name: 'b.txt' }]);
+        trigger('drop', multiEvent);
+        const afterMultiStatus = statusElement.textContent;
+        const afterMultiClasses = dropzone.classList.toArray();
+
+        const singleFile = { name: 'tracks.txt' };
+        const singleEvent = createDropEvent([singleFile]);
+        trigger('drop', singleEvent);
+
+        const submitted = form.requestSubmitCalled || form.submitCalled;
+        const stored = [];
+        const list = fileInput.files;
+        for (let index = 0; index < list.length; index += 1) {
+          stored.push(list[index].name);
+        }
+
+        const uploadStatus = statusElement.textContent;
+        const uploadClasses = dropzone.classList.toArray();
+        const uploadBusy = dropzone.ariaBusy;
+
+        runHandlers(formListeners, 'htmx:afterSwap', { target: form });
+
+        const resetStatus = statusElement.textContent;
+        const resetClasses = dropzone.classList.toArray();
+
+        console.log(
+          JSON.stringify({
+            initialStatus,
+            afterMulti: { status: afterMultiStatus, classes: afterMultiClasses },
+            single: {
+              status: uploadStatus,
+              classes: uploadClasses,
+              submitted,
+              stored,
+              ariaBusy: uploadBusy,
+            },
+            reset: { status: resetStatus, classes: resetClasses },
+          })
+        );
+        """
+    )
+
+    completed = subprocess.run(
+        ["node", "-e", script],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+
+    payload = json.loads(completed.stdout.strip())
+    assert payload["initialStatus"] == "Drop a file to upload it via FREE ingest."
+    assert payload["afterMulti"]["status"] == "Upload one file at a time."
+    assert "is-error" in payload["afterMulti"]["classes"]
+    assert payload["single"]["status"] == "Uploading “tracks.txt”…"
+    assert "is-uploading" in payload["single"]["classes"]
+    assert payload["single"]["submitted"] is True
+    assert payload["single"]["stored"] == ["tracks.txt"]
+    assert payload["single"]["ariaBusy"] == "true"
+    assert payload["reset"]["status"] == "Drop a file to upload it via FREE ingest."
+    assert "is-uploading" not in payload["reset"]["classes"]
+    assert "is-error" not in payload["reset"]["classes"]
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:

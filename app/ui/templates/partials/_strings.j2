@@ -819,6 +819,20 @@
 
 {% macro spotify_free_ingest_tracks_placeholder() %}Artist - Track title{% endmacro %}
 
+{% macro spotify_free_ingest_drop_hint() %}Drag a playlist export here or use the file picker below.{% endmacro %}
+
+{% macro spotify_free_ingest_drop_default_message() %}Drop a file to upload it via FREE ingest.{% endmacro %}
+
+{% macro spotify_free_ingest_drop_selected_message() %}Ready to upload __FILENAME__.{% endmacro %}
+
+{% macro spotify_free_ingest_drop_uploading_message() %}Uploading __FILENAME__…{% endmacro %}
+
+{% macro spotify_free_ingest_drop_multiple_error() %}Upload one file at a time.{% endmacro %}
+
+{% macro spotify_free_ingest_drop_busy_message() %}Upload in progress. Please wait…{% endmacro %}
+
+{% macro spotify_free_ingest_drop_generic_error() %}Upload failed. Try again with a single file.{% endmacro %}
+
 {% macro spotify_free_ingest_summary_heading() %}Latest submission{% endmacro %}
 
 {% macro spotify_free_ingest_summary_label(key) -%}
