@@ -2078,7 +2078,7 @@ def build_soulseek_page_context(
     )
 
     configuration_url = _safe_url_for(
-        request, "soulseek_configuration_fragment", "/ui/soulseek/configuration"
+        request, "soulseek_configuration_fragment", "/ui/soulseek/config"
     )
     configuration_fragment = AsyncFragment(
         identifier="hx-soulseek-configuration",
