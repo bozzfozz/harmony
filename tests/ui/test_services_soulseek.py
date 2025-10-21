@@ -167,3 +167,49 @@ def test_extract_files_preserves_zero_size_and_renders_zero_bytes() -> None:
 
     sizes = tuple(file.size for file in context["files"])
     assert "0 B" in sizes
+
+
+def test_extract_directories_handles_mapping_payloads() -> None:
+    payload = {
+        "directories": {
+            "music": {
+                "name": "Music",
+                "path": "Music",
+            },
+            "samples": {
+                "path": "Music/Samples",
+            },
+        }
+    }
+
+    directories = SoulseekUiService._extract_directories(payload)
+
+    assert len(directories) == 2
+    names = {entry.name for entry in directories}
+    paths = {entry.path for entry in directories}
+    assert names == {"Music", "Samples"}
+    assert paths == {"Music", "Music/Samples"}
+
+
+def test_extract_files_handles_mapping_payloads() -> None:
+    payload = {
+        "files": {
+            "silence": {
+                "name": "silence.flac",
+                "path": "Music/silence.flac",
+                "size": 0,
+            },
+            "noise": {
+                "filename": "noise.mp3",
+                "size_bytes": 512,
+            },
+        }
+    }
+
+    files = SoulseekUiService._extract_files(payload)
+
+    assert len(files) == 2
+    names = {entry.name for entry in files}
+    sizes = {entry.size_bytes for entry in files}
+    assert names == {"silence.flac", "noise.mp3"}
+    assert sizes == {0, 512}
