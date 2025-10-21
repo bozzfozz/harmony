@@ -5,7 +5,6 @@ from __future__ import annotations
 import gzip
 from pathlib import Path
 
-
 CSS_ASSET = Path("app/ui/static/css/app.css")
 # docs/ui/fe-htmx-plan.md: CSS budget ≤20 KB (uncompressed)
 CSS_BUDGET_BYTES = 20 * 1024
@@ -25,14 +24,12 @@ def test_ui_asset_size_budgets() -> None:
     """Static UI assets should remain within their documented size budgets."""
 
     css_size = CSS_ASSET.stat().st_size
-    assert (
-        css_size <= CSS_BUDGET_BYTES
-    ), f"app.css is {css_size} bytes but the budget is {CSS_BUDGET_BYTES} bytes (≤20 KB)."
+    assert css_size <= CSS_BUDGET_BYTES, (
+        f"app.css is {css_size} bytes but the budget is {CSS_BUDGET_BYTES} bytes (≤20 KB)."
+    )
 
     htmx_gzip_size = _gzip_size(HTMX_ASSET)
-    assert (
-        htmx_gzip_size <= HTMX_GZIP_BUDGET_BYTES
-    ), (
+    assert htmx_gzip_size <= HTMX_GZIP_BUDGET_BYTES, (
         "htmx.min.js (gzip) is"
         f" {htmx_gzip_size} bytes but the budget is {HTMX_GZIP_BUDGET_BYTES} bytes"
         " (≤20 KB gzip)."

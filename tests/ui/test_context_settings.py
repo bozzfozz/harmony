@@ -3,9 +3,8 @@ from types import SimpleNamespace
 
 from starlette.requests import Request
 
-from app.ui.context import (
-    LayoutContext,
-    TableCellForm,
+from app.ui.context.base import LayoutContext, TableCellForm
+from app.ui.context.settings import (
     build_settings_artist_preferences_fragment_context,
     build_settings_form_fragment_context,
     build_settings_history_fragment_context,

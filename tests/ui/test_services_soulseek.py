@@ -8,7 +8,7 @@ import pytest
 
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.schemas import StatusResponse
-from app.ui.context import build_soulseek_user_directory_context
+from app.ui.context.soulseek import build_soulseek_user_directory_context
 from app.ui.services.soulseek import (
     SoulseekUiService,
     SoulseekUserDirectoryListing,
@@ -206,7 +206,9 @@ def test_user_directory_context_marks_listing_present_even_when_empty() -> None:
 async def test_user_directory_trims_provided_path(monkeypatch) -> None:
     recorded: dict[str, object] = {}
 
-    async def _fake_user_directory(*, username: str, path: str, client: object) -> Mapping[str, object]:
+    async def _fake_user_directory(
+        *, username: str, path: str, client: object
+    ) -> Mapping[str, object]:
         recorded["username"] = username
         recorded["path"] = path
         return {

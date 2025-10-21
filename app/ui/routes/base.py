@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.logging_events import log_event
-from app.ui.context import build_dashboard_page_context, build_login_page_context
+from app.ui.context.auth import build_login_page_context
+from app.ui.context.dashboard import build_dashboard_page_context
 from app.ui.csrf import (
     attach_csrf_cookie,
     clear_csrf_cookie,

@@ -12,9 +12,8 @@ from fastapi.responses import RedirectResponse
 from app.api.spotify import _parse_multipart_file
 from app.errors import AppError
 from app.logging_events import log_event
-from app.ui.context import (
-    AlertMessage,
-    FormDefinition,
+from app.ui.context.base import AlertMessage, FormDefinition
+from app.ui.context.spotify import (
     build_spotify_account_context,
     build_spotify_artists_context,
     build_spotify_backfill_context,
@@ -56,7 +55,6 @@ from app.ui.session import (
     set_spotify_free_ingest_job_id,
 )
 
-
 _SPOTIFY_TIME_RANGES = frozenset({"short_term", "medium_term", "long_term"})
 _DEFAULT_TIME_RANGE = "medium_term"
 
@@ -80,6 +78,7 @@ class RecommendationsFormData:
     general_error: bool
     action: str
     queue_track_ids: tuple[str, ...]
+
 
 async def _handle_backfill_action(
     request: Request,
@@ -165,6 +164,7 @@ async def _handle_backfill_action(
     )
     return response
 
+
 def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
     def _coerce(
         raw: str | None,
@@ -227,6 +227,7 @@ def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
     )
     return limit, offset
 
+
 def _persist_saved_tracks_pagination(response: Response, *, limit: int, offset: int) -> None:
     response.set_cookie(
         _SAVED_TRACKS_LIMIT_COOKIE,
@@ -245,11 +246,13 @@ def _persist_saved_tracks_pagination(response: Response, *, limit: int, offset: 
         path="/ui/spotify",
     )
 
+
 def _extract_time_range(request: Request) -> str:
     value = request.query_params.get("time_range")
     if value in _SPOTIFY_TIME_RANGES:
         return value
     return _DEFAULT_TIME_RANGE
+
 
 def _split_seed_ids(raw_value: str) -> list[str]:
     cleaned: list[str] = []
@@ -264,6 +267,7 @@ def _split_seed_ids(raw_value: str) -> list[str]:
         cleaned.append(candidate)
         seen.add(lowered)
     return cleaned
+
 
 def _split_seed_genres(raw_value: str) -> list[str]:
     entries: list[str] = []
@@ -281,6 +285,7 @@ def _split_seed_genres(raw_value: str) -> list[str]:
             seen.add(lowered)
     return entries
 
+
 def _split_ingest_lines(raw_value: str) -> list[str]:
     entries: list[str] = []
     normalised = raw_value.replace("\r", "\n")
@@ -291,12 +296,14 @@ def _split_ingest_lines(raw_value: str) -> list[str]:
         entries.append(candidate)
     return entries
 
+
 def _ensure_imports_feature_enabled(session: UiSession) -> None:
     if not session.features.imports:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The requested UI feature is disabled.",
         )
+
 
 def _render_recommendations_response(
     request: Request,
@@ -338,6 +345,7 @@ def _render_recommendations_response(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
 
 def _parse_recommendations_form(
     form: Mapping[str, Sequence[str]],
@@ -421,6 +429,7 @@ def _parse_recommendations_form(
         queue_track_ids=tuple(queue_ids),
     )
 
+
 def _recommendations_value_error_response(
     *,
     request: Request,
@@ -457,6 +466,7 @@ def _recommendations_value_error_response(
         status_code=status.HTTP_400_BAD_REQUEST,
     )
 
+
 def _recommendations_app_error_response(
     *,
     request: Request,
@@ -491,6 +501,7 @@ def _recommendations_app_error_response(
         show_admin_controls=show_admin_controls,
         status_code=status_code,
     )
+
 
 def _recommendations_unexpected_response(
     *,
@@ -530,6 +541,7 @@ def _recommendations_unexpected_response(
         show_admin_controls=show_admin_controls,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
+
 
 async def _execute_recommendations_request(
     *,
@@ -591,6 +603,7 @@ async def _execute_recommendations_request(
             form_values=form_values,
         )
 
+
 def _build_recommendation_form_values(
     *,
     artist_seeds: Sequence[str],
@@ -604,6 +617,7 @@ def _build_recommendation_form_values(
         "seed_genres": ", ".join(genre_seeds),
         "limit": str(limit_value),
     }
+
 
 def _finalize_recommendations_success(
     *,
@@ -642,6 +656,7 @@ def _finalize_recommendations_success(
     )
     return response
 
+
 async def _fetch_recommendation_rows(
     *,
     request: Request,
@@ -678,6 +693,7 @@ async def _fetch_recommendation_rows(
     )
     return normalised_values, result, error_response
 
+
 def _render_recommendations_form(
     *,
     request: Request,
@@ -706,9 +722,11 @@ def _render_recommendations_form(
         status_code=status_code,
     )
 
+
 def _ensure_admin(show_admin_controls: bool) -> None:
     if not show_admin_controls:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted.")
+
 
 async def _handle_queue_action(
     *,
@@ -817,6 +835,7 @@ async def _handle_queue_action(
     )
     return None
 
+
 def _handle_defaults_action(
     *,
     action: str,
@@ -843,6 +862,7 @@ def _handle_defaults_action(
             )
         return current_defaults
     return current_defaults
+
 
 async def _process_recommendations_submission(
     *,
@@ -937,6 +957,7 @@ async def _process_recommendations_submission(
         show_admin_controls=show_admin_controls,
     )
 
+
 async def _read_recommendations_form(request: Request) -> Mapping[str, Sequence[str]]:
     raw_body = await request.body()
     try:
@@ -946,11 +967,13 @@ async def _read_recommendations_form(request: Request) -> Mapping[str, Sequence[
     values = parse_qs(payload)
     return {key: list(entries) for key, entries in values.items()}
 
+
 def _normalize_playlist_filter(value: str | None) -> str | None:
     if value is None:
         return None
     candidate = value.strip()
     return candidate or None
+
 
 async def _read_playlist_filter_form(request: Request) -> dict[str, str]:
     raw_body = await request.body()
@@ -970,6 +993,7 @@ async def _read_playlist_filter_form(request: Request) -> dict[str, str]:
         "owner": _first("owner"),
         "status": _first("status"),
     }
+
 
 def _render_spotify_playlists_fragment_response(
     *,
@@ -1015,6 +1039,7 @@ def _render_spotify_playlists_fragment_response(
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
 
+
 @router.get("/spotify", include_in_schema=False)
 async def spotify_page(
     request: Request,
@@ -1035,6 +1060,7 @@ async def spotify_page(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
 
 @router.post(
     "/spotify/oauth/start",
@@ -1065,6 +1091,7 @@ async def spotify_oauth_start(
         role=session.role,
     )
     return response
+
 
 @router.post(
     "/spotify/oauth/manual",
@@ -1123,6 +1150,7 @@ async def spotify_oauth_manual(
         role=session.role,
     )
     return response
+
 
 @router.post(
     "/spotify/free/run",
@@ -1213,6 +1241,7 @@ async def spotify_free_ingest_run(
             job_id=result.job_id,
         )
     return response
+
 
 @router.post(
     "/spotify/free/upload",
@@ -1314,6 +1343,7 @@ async def spotify_free_ingest_upload(
         )
     return response
 
+
 @router.post(
     "/spotify/backfill/run",
     include_in_schema=False,
@@ -1407,6 +1437,7 @@ async def spotify_backfill_run(
     )
     return response
 
+
 @router.post(
     "/spotify/backfill/pause",
     include_in_schema=False,
@@ -1425,6 +1456,7 @@ async def spotify_backfill_pause(
         success_message="Backfill job {job_id} paused.",
         event_key="ui.spotify.backfill.pause",
     )
+
 
 @router.post(
     "/spotify/backfill/resume",
@@ -1445,6 +1477,7 @@ async def spotify_backfill_resume(
         event_key="ui.spotify.backfill.resume",
     )
 
+
 @router.post(
     "/spotify/backfill/cancel",
     include_in_schema=False,
@@ -1463,6 +1496,7 @@ async def spotify_backfill_cancel(
         success_message="Backfill job {job_id} cancelled.",
         event_key="ui.spotify.backfill.cancel",
     )
+
 
 @router.get(
     "/spotify/free",
@@ -1493,6 +1527,7 @@ async def spotify_free_ingest_fragment(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
 
 @router.get("/spotify/account", include_in_schema=False, name="spotify_account_fragment")
 async def spotify_account_fragment(
@@ -1550,6 +1585,7 @@ async def spotify_account_fragment(
         count=len(context["fields"]),
     )
     return response
+
 
 @router.post(
     "/spotify/account/refresh",
@@ -1612,6 +1648,7 @@ async def spotify_account_refresh(
         count=len(context["fields"]),
     )
     return response
+
 
 @router.post(
     "/spotify/account/reset-scopes",
@@ -1676,6 +1713,7 @@ async def spotify_account_reset_scopes(
     )
     return response
 
+
 @router.get("/spotify/top/tracks", include_in_schema=False, name="spotify_top_tracks_fragment")
 async def spotify_top_tracks_fragment(
     request: Request,
@@ -1720,6 +1758,7 @@ async def spotify_top_tracks_fragment(
     )
     return response
 
+
 @router.get("/spotify/top/artists", include_in_schema=False, name="spotify_top_artists_fragment")
 async def spotify_top_artists_fragment(
     request: Request,
@@ -1755,6 +1794,7 @@ async def spotify_top_artists_fragment(
         context,
     )
 
+
 @router.get("/spotify/backfill", include_in_schema=False, name="spotify_backfill_fragment")
 async def spotify_backfill_fragment(
     request: Request,
@@ -1780,6 +1820,7 @@ async def spotify_backfill_fragment(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
 
 @router.get("/spotify/artists", include_in_schema=False, name="spotify_artists_fragment")
 async def spotify_artists_fragment(
@@ -1809,6 +1850,7 @@ async def spotify_artists_fragment(
         "partials/spotify_artists.j2",
         context,
     )
+
 
 @router.get("/spotify/playlists", include_in_schema=False, name="spotify_playlists_fragment")
 async def spotify_playlists_fragment(
@@ -1854,6 +1896,7 @@ async def spotify_playlists_fragment(
         status_filter=status_filter,
     )
     return response
+
 
 @router.post(
     "/spotify/playlists/filter",
@@ -1906,6 +1949,7 @@ async def spotify_playlists_filter(
     )
     return response
 
+
 @router.post(
     "/spotify/playlists/refresh",
     include_in_schema=False,
@@ -1957,6 +2001,7 @@ async def spotify_playlists_refresh(
         status_filter=status_filter,
     )
     return response
+
 
 @router.post(
     "/spotify/playlists/force-sync",
@@ -2015,6 +2060,7 @@ async def spotify_playlists_force_sync(
     )
     return response
 
+
 @router.get(
     "/spotify/playlists/{playlist_id}/tracks",
     include_in_schema=False,
@@ -2069,6 +2115,7 @@ async def spotify_playlist_items_fragment(
         context,
     )
 
+
 @router.get(
     "/spotify/recommendations",
     include_in_schema=False,
@@ -2100,6 +2147,7 @@ async def spotify_recommendations_fragment(
         count=0,
     )
     return response
+
 
 @router.post(
     "/spotify/recommendations",
@@ -2148,6 +2196,7 @@ async def spotify_recommendations_submit(
         seed_defaults=seed_defaults,
         show_admin_controls=show_admin_controls,
     )
+
 
 @router.get("/spotify/saved", include_in_schema=False, name="spotify_saved_tracks_fragment")
 async def spotify_saved_tracks_fragment(
@@ -2200,6 +2249,7 @@ async def spotify_saved_tracks_fragment(
         count=len(context["fragment"].table.rows),
     )
     return response
+
 
 @router.api_route(
     "/spotify/saved/{action}",
@@ -2350,6 +2400,7 @@ async def spotify_saved_tracks_action(
     )
     return response
 
+
 @router.get(
     "/spotify/tracks/{track_id}",
     include_in_schema=False,
@@ -2392,6 +2443,7 @@ async def spotify_track_detail_modal(
     )
     return response
 
+
 @router.get("/spotify/status", include_in_schema=False, name="spotify_status_fragment")
 async def spotify_status_fragment(
     request: Request,
@@ -2429,4 +2481,5 @@ async def spotify_status_fragment(
     )
     return response
 
-__all__ = ['router']
+
+__all__ = ["router"]

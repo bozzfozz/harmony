@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from app.ui.session import fingerprint_api_key
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
 

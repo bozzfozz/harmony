@@ -2,10 +2,8 @@ from datetime import UTC, datetime
 
 from starlette.requests import Request
 
-from app.ui.context import (
-    ReadinessItem,
-    SecretValidationResultView,
-    ServiceHealthView,
+from app.ui.context.base import ReadinessItem, SecretValidationResultView, ServiceHealthView
+from app.ui.context.system import (
     attach_secret_result,
     build_system_integrations_context,
     build_system_liveness_context,

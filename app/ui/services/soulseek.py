@@ -32,7 +32,7 @@ from app.routers.soulseek_router import (
     soulseek_user_status,
 )
 from app.schemas import StatusResponse
-from app.ui.context import SuggestedTask, _normalise_status
+from app.ui.context.base import SuggestedTask, _normalise_status
 
 logger = get_logger(__name__)
 
@@ -593,13 +593,9 @@ class SoulseekUiService:
             return ()
         if isinstance(candidate, Mapping):
             return candidate.values()
-        if isinstance(candidate, Sequence) and not isinstance(
-            candidate, (str, bytes, bytearray)
-        ):
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes, bytearray)):
             return candidate
-        if isinstance(candidate, Iterable) and not isinstance(
-            candidate, (str, bytes, bytearray)
-        ):
+        if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes, bytearray)):
             return candidate
         return ()
 

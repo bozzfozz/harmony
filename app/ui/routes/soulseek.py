@@ -26,11 +26,8 @@ from app.routers.soulseek_router import (
     soulseek_requeue_download,
 )
 from app.schemas import DiscographyDownloadRequest
-from app.ui.context import (
-    AlertMessage,
-    LayoutContext,
-    SuggestedTask,
-    build_primary_navigation,
+from app.ui.context.base import AlertMessage, LayoutContext, SuggestedTask, build_primary_navigation
+from app.ui.context.soulseek import (
     build_soulseek_config_context,
     build_soulseek_discography_jobs_context,
     build_soulseek_discography_modal_context,
@@ -61,7 +58,6 @@ from app.ui.services import (
     get_soulseek_ui_service,
 )
 from app.ui.session import UiSession, require_admin_with_feature, require_operator_with_feature
-
 
 router = APIRouter()
 

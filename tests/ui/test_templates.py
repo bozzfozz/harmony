@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
-import os
-import subprocess
-import textwrap
 from contextlib import contextmanager
 from datetime import UTC, datetime
+import json
+import os
 from pathlib import Path
+import subprocess
+import textwrap
 from types import SimpleNamespace
 from typing import Any
 
@@ -17,7 +17,8 @@ from app.config import override_runtime_env
 from app.integrations.health import IntegrationHealth
 from app.schemas import DownloadEntryResponse, StatusResponse
 from app.ui.assets import asset_url
-from app.ui.context import (
+from app.ui.context.auth import build_login_page_context
+from app.ui.context.base import (
     AlertMessage,
     AsyncFragment,
     FormDefinition,
@@ -32,19 +33,26 @@ from app.ui.context import (
     TableDefinition,
     TableFragment,
     TableRow,
+)
+from app.ui.context.dashboard import build_dashboard_page_context
+from app.ui.context.operations import (
     build_activity_fragment_context,
     build_activity_page_context,
-    build_dashboard_page_context,
     build_downloads_fragment_context,
     build_downloads_page_context,
     build_jobs_page_context,
-    build_login_page_context,
     build_operations_page_context,
-    build_search_page_context,
+    build_watchlist_fragment_context,
+    build_watchlist_page_context,
+)
+from app.ui.context.search import build_search_page_context
+from app.ui.context.settings import (
     build_settings_artist_preferences_fragment_context,
     build_settings_form_fragment_context,
     build_settings_history_fragment_context,
     build_settings_page_context,
+)
+from app.ui.context.soulseek import (
     build_soulseek_discography_jobs_context,
     build_soulseek_discography_modal_context,
     build_soulseek_download_artwork_modal_context,
@@ -55,6 +63,8 @@ from app.ui.context import (
     build_soulseek_status_context,
     build_soulseek_user_directory_context,
     build_soulseek_user_profile_context,
+)
+from app.ui.context.spotify import (
     build_spotify_account_context,
     build_spotify_artists_context,
     build_spotify_backfill_context,
@@ -68,8 +78,6 @@ from app.ui.context import (
     build_spotify_top_artists_context,
     build_spotify_top_tracks_context,
     build_spotify_track_detail_context,
-    build_watchlist_fragment_context,
-    build_watchlist_page_context,
 )
 from app.ui.routes.shared import templates
 from app.ui.services import (
@@ -79,12 +87,12 @@ from app.ui.services import (
     SettingRow,
     SettingsHistoryRow,
     SettingsOverview,
+    SoulseekUserBrowsingStatus,
     SoulseekUserDirectoryEntry,
     SoulseekUserDirectoryListing,
     SoulseekUserFileEntry,
     SoulseekUserProfile,
     SoulseekUserStatus,
-    SoulseekUserBrowsingStatus,
     SpotifyAccountSummary,
     SpotifyArtistRow,
     SpotifyBackfillOption,

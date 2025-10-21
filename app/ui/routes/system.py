@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.errors import AppError
-from app.ui.context import (
+from app.ui.context.system import (
     attach_secret_result,
     build_system_integrations_context,
     build_system_liveness_context,

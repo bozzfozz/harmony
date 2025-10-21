@@ -4,7 +4,7 @@ from app.config import AppConfig
 from app.dependencies import get_app_config
 from app.errors import AppError
 from app.logging_events import log_event
-from app.ui.context import build_jobs_fragment_context, build_jobs_page_context
+from app.ui.context.operations import build_jobs_fragment_context, build_jobs_page_context
 from app.ui.csrf import attach_csrf_cookie, get_csrf_manager
 from app.ui.routes.shared import (
     _ensure_csrf_token,
@@ -15,7 +15,6 @@ from app.ui.routes.shared import (
 )
 from app.ui.services import JobsUiService, get_jobs_ui_service
 from app.ui.session import UiSession, require_role
-
 
 router = APIRouter()
 
