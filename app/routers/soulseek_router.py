@@ -71,6 +71,7 @@ def _translate_error(message: str, exc: SoulseekClientError) -> HTTPException:
     status_code = getattr(exc, "status_code", None)
     payload = getattr(exc, "payload", None)
     status_display = status_code if status_code is not None else "unknown"
+    error_detail: Any = payload if payload is not None else message
     logger.error(
         "%s (status=%s, payload=%r): %s",
         message,
@@ -79,18 +80,20 @@ def _translate_error(message: str, exc: SoulseekClientError) -> HTTPException:
         exc,
     )
     if status_code is None:
-        return HTTPException(status_code=502, detail=message)
+        return HTTPException(status_code=502, detail=error_detail)
 
     translated_codes: dict[int, int] = {
+        401: 401,
+        403: 403,
         404: 404,
         408: 408,
         429: 429,
     }
     if status_code in translated_codes:
-        return HTTPException(status_code=translated_codes[status_code], detail=message)
+        return HTTPException(status_code=translated_codes[status_code], detail=error_detail)
 
     if 500 <= status_code < 600:
-        return HTTPException(status_code=status_code, detail=message)
+        return HTTPException(status_code=status_code, detail=error_detail)
 
     return HTTPException(status_code=502, detail=message)
 
