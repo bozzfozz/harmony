@@ -20,6 +20,7 @@ subsystems.
 ## Operations & Maintenance
 - [HDM runbook](operations/runbooks/hdm.md) – operational procedures, recovery steps and checklists.
 - [docs/operations/local-workflow.md](operations/local-workflow.md) – local operator workflows.
+- [docs/operations/security.md](operations/security.md) – UI session lifecycle, roles and CDN configuration knobs.
 - [docs/operations/db.md](operations/db.md) & [docs/operations/dlq.md](operations/dlq.md) – datastore and dead-letter queue care.
 - [docs/operations/repo_maintenance.md](operations/repo_maintenance.md) – repository quality gates and release duties.
 - [docs/troubleshooting.md](troubleshooting.md) – incident triage and recovery hints.
