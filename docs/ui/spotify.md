@@ -37,6 +37,9 @@ engineering implementation notes remain documented in
   prerequisites are missing (base URL or API key) or when the daemon health
   check fails. Inspect application logs for
   `spotify.free_ingest.unavailable` entries to identify the reason.
+- **FREE status latency:** The Soulseek health probe is cached for roughly
+  60 seconds. Expect a brief delay after updating Soulseek credentials before
+  the badge reflects the new state.
 - **Observability hooks:** Uses `GET /api/v1/spotify/status` with 60‑second
   polling; structured logs emit `oauth.service` events when state changes.
 

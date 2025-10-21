@@ -6,8 +6,9 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+import hashlib
 import inspect
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -64,6 +65,19 @@ class SpotifyServiceStatus:
     free_available: bool
     pro_available: bool
     authenticated: bool
+
+
+@dataclass(slots=True)
+class _FreeHealthCacheEntry:
+    """Cached outcome for the FREE ingest health probe."""
+
+    fingerprint: str
+    timestamp: float
+    available: bool
+
+
+_FREE_HEALTH_CACHE_ATTR = "_spotify_free_health_cache"
+_FREE_HEALTH_CACHE_TTL_SECONDS = 60.0
 
 
 class SpotifyDomainService:
@@ -167,19 +181,29 @@ class SpotifyDomainService:
         base_url = getattr(soulseek_config, "base_url", "")
         if not isinstance(base_url, str) or not base_url.strip():
             self._log_free_ingest_issue(reason="missing_base_url", level="warning")
+            self._clear_free_health_cache()
             return False
 
         api_key = getattr(soulseek_config, "api_key", None)
         if not isinstance(api_key, str) or not api_key.strip():
             self._log_free_ingest_issue(reason="missing_api_key", level="warning")
+            self._clear_free_health_cache()
             return False
+
+        fingerprint = self._fingerprint_free_credentials(base_url, api_key)
+        cached_entry = self._get_free_health_cache_entry()
+
+        if cached_entry and self._is_cache_entry_valid(cached_entry, fingerprint):
+            return cached_entry.available
 
         try:
             self._perform_free_healthcheck()
         except Exception as exc:  # pragma: no cover - defensive
             self._log_free_ingest_issue(reason="healthcheck_failed", level="error", error=exc)
+            self._store_free_health_result(fingerprint, False)
             return False
 
+        self._store_free_health_result(fingerprint, True)
         return True
 
     async def _run_free_healthcheck_probe(self, timeout_seconds: float) -> None:
@@ -210,7 +234,9 @@ class SpotifyDomainService:
         def _run_probe_sync() -> None:
             asyncio.run(_run_probe())
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="spotify-free-healthcheck") as executor:
+        with ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="spotify-free-healthcheck"
+        ) as executor:
             future = executor.submit(_run_probe_sync)
             future.result()
 
@@ -234,6 +260,54 @@ class SpotifyDomainService:
         if error is not None:
             payload["error"] = str(error)
         log_method("spotify.free_ingest.unavailable", extra=payload)
+
+    def _get_free_health_cache_entry(self) -> _FreeHealthCacheEntry | None:
+        state = self._state
+        if state is None:
+            return None
+        entry = getattr(state, _FREE_HEALTH_CACHE_ATTR, None)
+        if isinstance(entry, _FreeHealthCacheEntry):
+            return entry
+        return None
+
+    def _store_free_health_result(self, fingerprint: str, available: bool) -> None:
+        state = self._state
+        if state is None:
+            return
+        entry = _FreeHealthCacheEntry(
+            fingerprint=fingerprint,
+            timestamp=monotonic(),
+            available=available,
+        )
+        setattr(state, _FREE_HEALTH_CACHE_ATTR, entry)
+
+    def _clear_free_health_cache(self) -> None:
+        state = self._state
+        if state is None:
+            return
+        if hasattr(state, _FREE_HEALTH_CACHE_ATTR):
+            delattr(state, _FREE_HEALTH_CACHE_ATTR)
+
+    def _is_cache_entry_valid(self, entry: _FreeHealthCacheEntry, fingerprint: str) -> bool:
+        if entry.fingerprint != fingerprint:
+            return False
+        ttl = self._free_health_cache_ttl_seconds()
+        if ttl <= 0:
+            return False
+        age = monotonic() - entry.timestamp
+        return age < ttl
+
+    def _free_health_cache_ttl_seconds(self) -> float:
+        return _FREE_HEALTH_CACHE_TTL_SECONDS
+
+    def _fingerprint_free_credentials(self, base_url: str, api_key: str) -> str:
+        normalized_url = base_url.strip()
+        normalized_key = api_key.strip()
+        hasher = hashlib.blake2b(digest_size=16)
+        hasher.update(normalized_url.encode("utf-8"))
+        hasher.update(b"|")
+        hasher.update(normalized_key.encode("utf-8"))
+        return hasher.hexdigest()
 
     def is_authenticated(self) -> bool:
         if not self._pro_available or self._spotify is None:

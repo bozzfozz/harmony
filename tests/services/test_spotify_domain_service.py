@@ -161,3 +161,42 @@ async def test_get_status_health_check_failure_with_active_loop(
     assert len(clients) == 1
     assert clients[0].closed is True
     assert any(record.reason == "healthcheck_failed" for record in caplog.records)
+
+
+def test_get_status_reuses_cached_free_health_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _make_service(authenticated=True)
+
+    call_count = 0
+
+    class _CountingSoulseek(_HealthySoulseek):
+        async def get_download_status(self) -> dict[str, str]:
+            nonlocal call_count
+            call_count += 1
+            return await super().get_download_status()
+
+    def _build_health_client() -> _CountingSoulseek:
+        return _CountingSoulseek()
+
+    monkeypatch.setattr(service, "_build_soulseek_health_client", _build_health_client)
+
+    timeline = iter([0.0, 30.0, 61.0, 120.0])
+    last_value = 120.0
+
+    def _fake_monotonic() -> float:
+        nonlocal last_value
+        try:
+            last_value = next(timeline)
+        except StopIteration:
+            pass
+        return last_value
+
+    monkeypatch.setattr("app.services.spotify_domain_service.monotonic", _fake_monotonic)
+
+    first = service.get_status()
+    second = service.get_status()
+    third = service.get_status()
+
+    assert call_count == 2
+    assert first.free_available is True
+    assert second.free_available is True
+    assert third.free_available is True
