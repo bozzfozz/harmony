@@ -419,20 +419,40 @@ def test_soulseek_user_directory_template_shows_help_without_username() -> None:
     assert 'data-test="soulseek-user-directory-help"' in html
 
 
-def test_soulseek_user_directory_template_shows_empty_message_for_username() -> None:
+def test_soulseek_user_directory_template_shows_empty_sections_for_empty_listing() -> None:
     request = _make_request("/ui/soulseek/user/directory")
     listing = SoulseekUserDirectoryListing(
         username="alice",
-        current_path=None,
-        parent_path=None,
+        current_path="Music/Albums",
+        parent_path="Music",
         directories=(),
         files=(),
     )
     context = build_soulseek_user_directory_context(
         request,
         username="alice",
-        path=None,
+        path="Music/Albums",
         listing=listing,
+        status=None,
+        browsing_status=None,
+    )
+    template = templates.get_template("partials/soulseek_user_directory.j2")
+    html = template.render(**context)
+    assert 'data-test="soulseek-user-directory-context"' in html
+    assert 'data-test="soulseek-user-directory-parent"' in html
+    assert 'data-test="soulseek-user-directories-empty"' in html
+    assert 'data-test="soulseek-user-files-empty"' in html
+    assert 'data-test="soulseek-user-directory-empty"' not in html
+    assert "Music/Albums" in html
+
+
+def test_soulseek_user_directory_template_shows_empty_message_when_listing_missing() -> None:
+    request = _make_request("/ui/soulseek/user/directory")
+    context = build_soulseek_user_directory_context(
+        request,
+        username="alice",
+        path=None,
+        listing=None,
         status=None,
         browsing_status=None,
     )

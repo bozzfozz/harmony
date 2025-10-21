@@ -172,6 +172,35 @@ def test_extract_files_preserves_zero_size_and_renders_zero_bytes() -> None:
     assert "0 B" in sizes
 
 
+def test_user_directory_context_marks_listing_present_even_when_empty() -> None:
+    listing = SoulseekUserDirectoryListing(
+        username="alice",
+        current_path="Music/Albums",
+        parent_path="Music",
+        directories=(),
+        files=(),
+    )
+
+    class _DummyRequest:
+        def url_for(self, name: str, **kwargs: object) -> str:
+            raise RuntimeError("no routes")
+
+    context = build_soulseek_user_directory_context(
+        _DummyRequest(),
+        username="alice",
+        path="Music/Albums",
+        listing=listing,
+        status=None,
+        browsing_status=None,
+    )
+
+    assert context["has_listing"] is True
+    assert context["parent_path"] == "Music"
+    assert context["parent_url"] == "/ui/soulseek/user/directory?username=alice&path=Music"
+    assert context["directories"] == ()
+    assert context["files"] == ()
+
+
 def test_extract_directories_handles_mapping_payloads() -> None:
     payload = {
         "directories": {
