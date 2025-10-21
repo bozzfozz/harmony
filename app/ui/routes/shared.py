@@ -7,13 +7,15 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
-from fastapi import Request
+from fastapi import Request, Response, status
 from fastapi.templating import Jinja2Templates
 
 from app.logging import get_logger
 from app.ui.assets import asset_url
-from app.ui.context import get_ui_assets
+from app.ui.context import AlertMessage, get_ui_assets
+from app.ui.session import UiSession
 
 logger = get_logger("app.ui.router")
 
@@ -69,4 +71,54 @@ async def _ui_event_stream(
         return
 
 
-__all__ = ["logger", "templates", "_LiveFragmentBuilder", "_ui_event_stream"]
+def _render_alert_fragment(
+    request: Request,
+    message: str,
+    *,
+    status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+    retry_url: str | None = None,
+    retry_target: str | None = None,
+    retry_label_key: str = "fragments.retry",
+) -> Response:
+    alert = AlertMessage(level="error", text=message or "An unexpected error occurred.")
+    context = {
+        "request": request,
+        "alerts": (alert,),
+        "retry_url": retry_url,
+        "retry_target": retry_target,
+        "retry_label_key": retry_label_key,
+    }
+    return templates.TemplateResponse(
+        request,
+        "partials/async_error.j2",
+        context,
+        status_code=status_code,
+    )
+
+
+def _ensure_csrf_token(request: Request, session: UiSession, manager) -> tuple[str, bool]:
+    token = request.cookies.get("csrftoken")
+    if token:
+        return token, False
+    issued = manager.issue(session)
+    return issued, True
+
+
+def _parse_form_body(raw_body: bytes) -> dict[str, str]:
+    try:
+        payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        payload = ""
+    parsed = parse_qs(payload)
+    return {key: (values[0].strip() if values else "") for key, values in parsed.items()}
+
+
+__all__ = [
+    "logger",
+    "templates",
+    "_LiveFragmentBuilder",
+    "_ui_event_stream",
+    "_render_alert_fragment",
+    "_ensure_csrf_token",
+    "_parse_form_body",
+]

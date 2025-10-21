@@ -1637,7 +1637,7 @@ def test_soulseek_uploads_cleanup_success(monkeypatch) -> None:
     async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
         calls.append(client)
 
-    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_uploads", _fake_cleanup)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_remove_completed_uploads", _fake_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1668,7 +1668,7 @@ def test_soulseek_uploads_cleanup_failure(monkeypatch) -> None:
     async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
         raise HTTPException(status_code=503, detail="unavailable")
 
-    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_uploads", _fail_cleanup)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_remove_completed_uploads", _fail_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -1900,7 +1900,7 @@ def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
     def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
-    monkeypatch.setattr("app.ui.router._load_discography_jobs", _fake_load)
+    monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -1922,7 +1922,7 @@ def test_soulseek_discography_jobs_fragment_failure(monkeypatch) -> None:
     def _raise_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         raise RuntimeError("database offline")
 
-    monkeypatch.setattr("app.ui.router._load_discography_jobs", _raise_load)
+    monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _raise_load)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -1975,8 +1975,8 @@ def test_soulseek_discography_jobs_submit_success(monkeypatch) -> None:
     def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
-    monkeypatch.setattr("app.ui.router._load_discography_jobs", _fake_load)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
     calls: list[Any] = []
 
     async def _fake_download(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
@@ -1984,7 +1984,7 @@ def test_soulseek_discography_jobs_submit_success(monkeypatch) -> None:
         return SimpleNamespace(job_id="job-11", status="queued")
 
     monkeypatch.setattr(
-        "app.ui.router.soulseek_discography_download",
+        "app.ui.routes.soulseek.soulseek_discography_download",
         _fake_download,
         raising=False,
     )
@@ -2036,13 +2036,13 @@ def test_soulseek_discography_jobs_submit_validation_error(monkeypatch) -> None:
 
 
 def test_soulseek_discography_jobs_submit_http_exception(monkeypatch) -> None:
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     async def _raise_download(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
         raise HTTPException(status_code=503, detail="discography worker offline")
 
     monkeypatch.setattr(
-        "app.ui.router.soulseek_discography_download",
+        "app.ui.routes.soulseek.soulseek_discography_download",
         _raise_download,
         raising=False,
     )
@@ -2068,13 +2068,13 @@ def test_soulseek_discography_jobs_submit_http_exception(monkeypatch) -> None:
 
 
 def test_soulseek_discography_jobs_submit_unexpected_error(monkeypatch) -> None:
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     async def _boom(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
         raise RuntimeError("crash")
 
     monkeypatch.setattr(
-        "app.ui.router.soulseek_discography_download",
+        "app.ui.routes.soulseek.soulseek_discography_download",
         _boom,
         raising=False,
     )
@@ -2147,9 +2147,9 @@ def test_soulseek_download_lyrics_modal_renders_modal(monkeypatch) -> None:
         },
     )()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
     monkeypatch.setattr(
-        "app.ui.router.api_soulseek_download_lyrics",
+        "app.ui.routes.soulseek.api_soulseek_download_lyrics",
         lambda **_: PlainTextResponse("Line 1\nLine 2"),
     )
 
@@ -2178,9 +2178,9 @@ def test_soulseek_download_lyrics_modal_pending(monkeypatch) -> None:
         },
     )()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
     monkeypatch.setattr(
-        "app.ui.router.api_soulseek_download_lyrics",
+        "app.ui.routes.soulseek.api_soulseek_download_lyrics",
         lambda **_: JSONResponse({"status": "pending"}, status_code=202),
     )
 
@@ -2198,7 +2198,7 @@ def test_soulseek_download_lyrics_modal_pending(monkeypatch) -> None:
 def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
     download = type("Download", (), {"id": 51, "filename": "meta.flac"})()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
     metadata = type(
         "Metadata",
         (),
@@ -2211,7 +2211,7 @@ def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
             "copyright": "2024",
         },
     )()
-    monkeypatch.setattr("app.ui.router.api_soulseek_download_metadata", lambda **_: metadata)
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_download_metadata", lambda **_: metadata)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -2229,12 +2229,12 @@ def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
 def test_soulseek_download_metadata_modal_handles_error(monkeypatch) -> None:
     download = type("Download", (), {"id": 77, "filename": "error.flac"})()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
 
     def _raise_metadata(**_: object) -> None:
         raise HTTPException(status_code=500, detail="metadata failure")
 
-    monkeypatch.setattr("app.ui.router.api_soulseek_download_metadata", _raise_metadata)
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_download_metadata", _raise_metadata)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -2258,12 +2258,12 @@ def test_soulseek_download_artwork_modal_renders_modal(monkeypatch) -> None:
         },
     )()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
 
     async def _noop_artwork(**_: object) -> None:
         return None
 
-    monkeypatch.setattr("app.ui.router.api_soulseek_download_artwork", _noop_artwork)
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_download_artwork", _noop_artwork)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -2290,12 +2290,12 @@ def test_soulseek_download_artwork_modal_handles_error(monkeypatch) -> None:
         },
     )()
     stub_session = _StubDbSession(download)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(stub_session))
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session))
 
     def _raise_artwork(**_: object) -> None:
         raise HTTPException(status_code=404, detail="missing artwork")
 
-    monkeypatch.setattr("app.ui.router.api_soulseek_download_artwork", _raise_artwork)
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_download_artwork", _raise_artwork)
 
     with _create_client(monkeypatch) as client:
         _login(client)
@@ -2333,7 +2333,7 @@ def test_soulseek_download_requeue_success(monkeypatch) -> None:
     async def _fake_requeue(*, download_id: int, request: Any, session: Any) -> None:  # type: ignore[override]
         calls.append(download_id)
 
-    monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fake_requeue)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_requeue_download", _fake_requeue)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2363,7 +2363,7 @@ def test_soulseek_download_requeue_failure(monkeypatch) -> None:
     async def _fail_requeue(*, download_id: int, request: Any, session: Any) -> None:  # type: ignore[override]
         raise HTTPException(status_code=409, detail="conflict")
 
-    monkeypatch.setattr("app.ui.router.soulseek_requeue_download", _fail_requeue)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_requeue_download", _fail_requeue)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2393,7 +2393,7 @@ def test_soulseek_download_cancel_success(monkeypatch) -> None:
     async def _fake_cancel(*, download_id: int, session: Any, client: Any) -> None:  # type: ignore[override]
         calls.append(download_id)
 
-    monkeypatch.setattr("app.ui.router.soulseek_cancel", _fake_cancel)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_cancel", _fake_cancel)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2423,7 +2423,7 @@ def test_soulseek_download_cancel_failure(monkeypatch) -> None:
     async def _fail_cancel(*, download_id: int, session: Any, client: Any) -> None:  # type: ignore[override]
         raise HTTPException(status_code=404, detail="missing")
 
-    monkeypatch.setattr("app.ui.router.soulseek_cancel", _fail_cancel)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_cancel", _fail_cancel)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2454,8 +2454,8 @@ def test_soulseek_download_lyrics_refresh_success(monkeypatch) -> None:
     async def _refresh(**_: object) -> None:
         calls.append(11)
 
-    monkeypatch.setattr("app.ui.router.api_refresh_download_lyrics", _refresh)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.api_refresh_download_lyrics", _refresh)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2512,8 +2512,8 @@ def test_soulseek_download_metadata_refresh_success(monkeypatch) -> None:
     async def _refresh_metadata(**_: object) -> None:
         calls.append(21)
 
-    monkeypatch.setattr("app.ui.router.api_refresh_download_metadata", _refresh_metadata)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.api_refresh_download_metadata", _refresh_metadata)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2546,8 +2546,8 @@ def test_soulseek_download_metadata_refresh_failure(monkeypatch) -> None:
     async def _refresh_metadata_fail(**_: object) -> None:
         raise HTTPException(status_code=503, detail="metadata refresh failed")
 
-    monkeypatch.setattr("app.ui.router.api_refresh_download_metadata", _refresh_metadata_fail)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.api_refresh_download_metadata", _refresh_metadata_fail)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2602,8 +2602,8 @@ def test_soulseek_download_artwork_refresh_success(monkeypatch) -> None:
     async def _refresh_artwork(**_: object) -> None:
         calls.append(17)
 
-    monkeypatch.setattr("app.ui.router.api_soulseek_refresh_artwork", _refresh_artwork)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_refresh_artwork", _refresh_artwork)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2636,8 +2636,8 @@ def test_soulseek_download_artwork_refresh_failure(monkeypatch) -> None:
     async def _refresh_fail(**_: object) -> None:
         raise HTTPException(status_code=502, detail="artwork refresh failed")
 
-    monkeypatch.setattr("app.ui.router.api_soulseek_refresh_artwork", _refresh_fail)
-    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_refresh_artwork", _refresh_fail)
+    monkeypatch.setattr("app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(object()))
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2666,7 +2666,7 @@ def test_soulseek_downloads_cleanup_success(monkeypatch) -> None:
     async def _fake_cleanup(*, client: object) -> None:  # type: ignore[override]
         calls.append(client)
 
-    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_downloads", _fake_cleanup)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_remove_completed_downloads", _fake_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
@@ -2700,7 +2700,7 @@ def test_soulseek_downloads_cleanup_failure(monkeypatch) -> None:
     async def _fail_cleanup(*, client: object) -> None:  # type: ignore[override]
         raise HTTPException(status_code=502, detail="cleanup failed")
 
-    monkeypatch.setattr("app.ui.router.soulseek_remove_completed_downloads", _fail_cleanup)
+    monkeypatch.setattr("app.ui.routes.soulseek.soulseek_remove_completed_downloads", _fail_cleanup)
 
     try:
         with _create_client(monkeypatch, extra_env=_admin_env()) as client:
