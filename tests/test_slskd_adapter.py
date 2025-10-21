@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.integrations.base import TrackCandidate
-from app.integrations.slskd_adapter import _sort_candidates
+from app.integrations.slskd_adapter import (
+    _build_candidate,
+    _iter_files,
+    _parse_retry_after_ms,
+    _sort_candidates,
+)
 
 
 def _candidate(
@@ -57,3 +64,84 @@ def test_sort_candidates_preserves_seeder_priority_over_bitrate() -> None:
     ranked = _sort_candidates([higher_bitrate, more_seeders], ranking)
 
     assert [candidate.title for candidate in ranked] == ["more_seeders", "higher_bitrate"]
+
+
+def test_iter_files_enriches_username_and_traverses_nested_payloads() -> None:
+    payload = {
+        "results": [
+            {
+                "username": "alice",
+                "files": [
+                    {"filename": "track-one.mp3", "bitrate": 320},
+                    {"filename": "track-two.flac", "bitrate": 1000, "username": "bob"},
+                ],
+            }
+        ]
+    }
+
+    files = list(_iter_files(payload))
+
+    assert files[0]["filename"] == "track-one.mp3"
+    assert files[0]["username"] == "alice"
+    assert files[1]["filename"] == "track-two.flac"
+    assert files[1]["username"] == "bob"
+
+
+def test_iter_files_handles_mixed_collections_and_plain_entries() -> None:
+    payload = [
+        {"matches": {"files": [{"filename": "one.ogg"}]}},
+        {"tracks": [{"user": "carol", "files": {"filename": "two.wav"}}]},
+        {"filename": "three.mp3", "bitrate": 256},
+    ]
+
+    files = list(_iter_files(payload))
+
+    filenames = {item["filename"] for item in files}
+
+    assert filenames == {"one.ogg", "two.wav", "three.mp3"}
+    usernames = {item.get("username") for item in files}
+    assert "carol" in usernames
+
+
+def test_build_candidate_normalizes_and_enriches_metadata() -> None:
+    entry = {
+        "title": "Song Title",
+        "artist": "Artist Name",
+        "filename": "Artist - Song Title.flac",
+        "bitrate": "256",
+        "size": "4096",
+        "seeders": "3",
+        "user": "dj",
+        "album": "Album Name",
+        "genres": ["Rock", ""],
+        "year": "2001",
+        "path": "/music/song.flac",
+    }
+
+    candidate = _build_candidate(entry)
+
+    assert candidate.title == "Song Title"
+    assert candidate.artist == "Artist Name"
+    assert candidate.format == "FLAC"
+    assert candidate.bitrate_kbps == 256
+    assert candidate.size_bytes == 4096
+    assert candidate.seeders == 3
+    assert candidate.username == "dj"
+    assert candidate.availability == pytest.approx(0.6)
+    assert candidate.download_uri == "/music/song.flac"
+    assert candidate.metadata["filename"] == "Artist - Song Title.flac"
+    assert "genres" in candidate.metadata
+    assert candidate.metadata["year"] == 2001
+
+
+@pytest.mark.parametrize(
+    "headers, expected",
+    [
+        ({"Retry-After": "120"}, 120_000),
+        ({"Retry-After": "-5"}, 0),
+        ({"Retry-After": "soon"}, None),
+        ({}, None),
+    ],
+)
+def test_parse_retry_after_ms(headers: dict[str, str], expected: int | None) -> None:
+    assert _parse_retry_after_ms(headers) == expected
