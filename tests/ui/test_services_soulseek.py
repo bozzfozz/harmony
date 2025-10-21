@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from types import SimpleNamespace
 
@@ -298,3 +299,39 @@ async def test_user_browsing_status_preserves_zero_values(monkeypatch) -> None:
     assert result.progress == 0.0
     assert result.queue_position == 0
     assert result.queue_length == 0
+
+
+@pytest.mark.asyncio
+async def test_user_profile_requests_address_and_info_concurrently(monkeypatch) -> None:
+    address_started = asyncio.Event()
+    info_started = asyncio.Event()
+
+    async def _fake_user_address(*, username: str, client: object) -> Mapping[str, object]:
+        assert username == "alice"
+        address_started.set()
+        await asyncio.wait_for(info_started.wait(), timeout=0.2)
+        return {"city": "Test"}
+
+    async def _fake_user_info(*, username: str, client: object) -> Mapping[str, object]:
+        assert username == "alice"
+        info_started.set()
+        await asyncio.wait_for(address_started.wait(), timeout=0.2)
+        return {"bio": "Hello"}
+
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_address",
+        _fake_user_address,
+    )
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_info",
+        _fake_user_info,
+    )
+    service = _make_service()
+
+    profile = await service.user_profile(username=" alice ")
+
+    assert address_started.is_set() is True
+    assert info_started.is_set() is True
+    assert profile.username == "alice"
+    assert profile.address == {"city": "Test"}
+    assert profile.info == {"bio": "Hello"}
