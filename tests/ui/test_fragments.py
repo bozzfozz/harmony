@@ -3287,6 +3287,12 @@ def test_search_results_app_error(monkeypatch) -> None:
 
 def test_spotify_status_fragment_renders_forms(monkeypatch) -> None:
     stub = _StubSpotifyService()
+    stub._status = SpotifyStatus(
+        status="connected",
+        free_available=False,
+        pro_available=True,
+        authenticated=True,
+    )
     app.dependency_overrides[get_spotify_ui_service] = lambda: stub
     try:
         with _create_client(monkeypatch) as client:
@@ -3299,6 +3305,12 @@ def test_spotify_status_fragment_renders_forms(monkeypatch) -> None:
             assert "spotify-oauth-start" in response.text
             assert "spotify-manual-form" in response.text
             assert "Redirect URI" in response.text
+            match = re.search(
+                r'status-badge--(?P<variant>[a-z]+)"\s+data-test="spotify-status-free"',
+                response.text,
+            )
+            assert match is not None
+            assert match.group("variant") == "muted"
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 
