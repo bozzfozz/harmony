@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -552,14 +552,29 @@ class SoulseekUiService:
         return normalised
 
     @staticmethod
-    def _extract_directories(payload: Any) -> tuple[SoulseekUserDirectoryEntry, ...]:
-        directories_raw: Sequence[Any] = ()
+    def _iter_collection(payload: Any, key: str) -> Iterable[Any]:
         if isinstance(payload, Mapping):
-            directories_raw = payload.get("directories") or ()
-        elif isinstance(payload, Sequence):
-            directories_raw = payload
+            candidate = payload.get(key)
+        else:
+            candidate = payload
+        if candidate is None:
+            return ()
+        if isinstance(candidate, Mapping):
+            return candidate.values()
+        if isinstance(candidate, Sequence) and not isinstance(
+            candidate, (str, bytes, bytearray)
+        ):
+            return candidate
+        if isinstance(candidate, Iterable) and not isinstance(
+            candidate, (str, bytes, bytearray)
+        ):
+            return candidate
+        return ()
+
+    @staticmethod
+    def _extract_directories(payload: Any) -> tuple[SoulseekUserDirectoryEntry, ...]:
         entries: list[SoulseekUserDirectoryEntry] = []
-        for item in directories_raw:
+        for item in SoulseekUiService._iter_collection(payload, "directories"):
             if not isinstance(item, Mapping):
                 continue
             raw_path = item.get("path") or item.get("name") or ""
@@ -574,13 +589,8 @@ class SoulseekUiService:
 
     @staticmethod
     def _extract_files(payload: Any) -> tuple[SoulseekUserFileEntry, ...]:
-        files_raw: Sequence[Any] = ()
-        if isinstance(payload, Mapping):
-            files_raw = payload.get("files") or ()
-        elif isinstance(payload, Sequence):
-            files_raw = payload
         entries: list[SoulseekUserFileEntry] = []
-        for item in files_raw:
+        for item in SoulseekUiService._iter_collection(payload, "files"):
             if not isinstance(item, Mapping):
                 continue
             raw_name = (
