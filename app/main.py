@@ -45,7 +45,7 @@ from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.path_safety import allowed_download_roots
-from app.ui.router import router as ui_router
+from app.ui.routes import router as ui_router
 from app.ui.session import register_ui_session_metrics
 from app.utils.settings_store import ensure_default_settings
 from app.workers.artwork_worker import ArtworkWorker

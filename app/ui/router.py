@@ -5,15 +5,13 @@ import asyncio
 from dataclasses import dataclass, replace
 from datetime import datetime
 import json
-from pathlib import Path
 import re
 import time
-from typing import Any, AsyncGenerator, Awaitable, Literal
+from typing import Any, Awaitable, Literal
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse, StreamingResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -29,7 +27,6 @@ from app.dependencies import (
     get_soulseek_client,
 )
 from app.errors import AppError
-from app.logging import get_logger
 from app.logging_events import log_event
 from app.models import DiscographyJob, Download
 from app.routers.soulseek_router import (
@@ -47,7 +44,6 @@ from app.routers.soulseek_router import (
 from app.schemas import DiscographyDownloadRequest, SoulseekDownloadRequest
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
 from app.services.download_service import DownloadService
-from app.ui.assets import asset_url
 from app.ui.context import (
     AlertMessage,
     FormDefinition,
@@ -62,7 +58,6 @@ from app.ui.context import (
     build_downloads_page_context,
     build_jobs_fragment_context,
     build_jobs_page_context,
-    build_login_page_context,
     build_operations_page_context,
     build_primary_navigation,
     build_search_page_context,
@@ -106,10 +101,10 @@ from app.ui.context import (
     build_system_service_health_context,
     build_watchlist_fragment_context,
     build_watchlist_page_context,
-    get_ui_assets,
     select_system_secret_card,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
+from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream, logger, templates
 from app.ui.services import (
     ActivityUiService,
     DownloadsUiService,
@@ -152,8 +147,6 @@ from app.ui.session import (
     set_spotify_free_ingest_job_id,
 )
 
-logger = get_logger(__name__)
-
 _SPOTIFY_TIME_RANGES = frozenset({"short_term", "medium_term", "long_term"})
 _DEFAULT_TIME_RANGE = "medium_term"
 
@@ -161,11 +154,7 @@ _SAVED_TRACKS_LIMIT_COOKIE = "spotify_saved_tracks_limit"
 _SAVED_TRACKS_OFFSET_COOKIE = "spotify_saved_tracks_offset"
 _SPOTIFY_BACKFILL_TIMELINE_LIMIT = 10
 
-router = APIRouter(prefix="/ui", tags=["UI"])
-
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
-templates.env.globals["asset_url"] = asset_url
-templates.env.globals["get_ui_assets"] = get_ui_assets
+router = APIRouter()
 
 
 _DISCOGRAPHY_JOB_LIMIT = 20
@@ -221,52 +210,6 @@ def _resolve_live_updates_mode(config: AppConfig) -> Literal["polling", "sse"]:
     if mode == _LIVE_UPDATES_SSE:
         return _LIVE_UPDATES_SSE
     return _LIVE_UPDATES_POLLING
-
-
-@dataclass(slots=True)
-class _LiveFragmentBuilder:
-    name: str
-    interval: float
-    build: Callable[[], Awaitable[dict[str, Any] | None]]
-
-
-async def _ui_event_stream(
-    request: Request, builders: Sequence[_LiveFragmentBuilder]
-) -> AsyncGenerator[str, None]:
-    if not builders:
-        yield ": no-fragments\n\n"
-        return
-
-    next_run = {builder.name: 0.0 for builder in builders}
-    try:
-        while True:
-            if await request.is_disconnected():
-                break
-            now = time.monotonic()
-            emitted = False
-            for builder in builders:
-                target_time = next_run[builder.name]
-                if now < target_time:
-                    continue
-                next_run[builder.name] = now + builder.interval
-                try:
-                    payload = await builder.build()
-                except Exception:  # pragma: no cover - defensive guard
-                    logger.exception("ui.events.build_failed", extra={"event": builder.name})
-                    continue
-                if not payload:
-                    continue
-                payload.setdefault("event", builder.name)
-                data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-                yield f"event: fragment\ndata: {data}\n\n"
-                emitted = True
-            if emitted:
-                await asyncio.sleep(0.25)
-                continue
-            sleep_for = min(max(next_run[name] - now, 0.0) for name in next_run)
-            await asyncio.sleep(min(sleep_for, 1.0) if sleep_for > 0 else 0.5)
-    except asyncio.CancelledError:  # pragma: no cover - cancellation boundary
-        return
 
 
 def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[DiscographyJob]:
@@ -1406,84 +1349,6 @@ async def _render_search_results_fragment(
     )
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
-    return response
-
-
-@router.get("/login", include_in_schema=False)
-async def login_form(request: Request) -> Response:
-    manager = get_session_manager(request)
-    existing_id = request.cookies.get("ui_session")
-    if existing_id:
-        existing = await manager.get_session(existing_id)
-        if existing is not None:
-            return RedirectResponse("/ui", status_code=status.HTTP_303_SEE_OTHER)
-    context = build_login_page_context(request, error=None)
-    return templates.TemplateResponse(request, "pages/login.j2", context)
-
-
-@router.post("/login", include_in_schema=False)
-async def login_action(request: Request) -> Response:
-    raw_body = await request.body()
-    try:
-        payload = raw_body.decode("utf-8")
-    except UnicodeDecodeError:
-        payload = ""
-    values = parse_qs(payload)
-    api_key = values.get("api_key", [""])[0]
-    manager = get_session_manager(request)
-    try:
-        session = await manager.create_session(api_key)
-    except HTTPException as exc:
-        if exc.status_code in {status.HTTP_400_BAD_REQUEST, status.HTTP_503_SERVICE_UNAVAILABLE}:
-            message = exc.detail
-        else:
-            message = "Login failed."
-        status_code = (
-            exc.status_code
-            if exc.status_code != status.HTTP_401_UNAUTHORIZED
-            else status.HTTP_400_BAD_REQUEST
-        )
-        context = build_login_page_context(request, error=message)
-        return templates.TemplateResponse(
-            request,
-            "pages/login.j2",
-            context,
-            status_code=status_code,
-        )
-
-    response = RedirectResponse("/ui", status_code=status.HTTP_303_SEE_OTHER)
-    attach_session_cookie(response, session, manager)
-    csrf_manager = get_csrf_manager(request)
-    attach_csrf_cookie(response, session, csrf_manager)
-    log_event(
-        logger,
-        "ui.session.created",
-        component="ui.router",
-        status="success",
-        role=session.role,
-    )
-    response.headers.setdefault("HX-Redirect", "/ui")
-    return response
-
-
-@router.get("/", include_in_schema=False)
-async def dashboard(
-    request: Request,
-    session: UiSession = Depends(require_session),
-) -> Response:
-    csrf_manager = get_csrf_manager(request)
-    csrf_token = csrf_manager.issue(session)
-    context = build_dashboard_page_context(
-        request,
-        session=session,
-        csrf_token=csrf_token,
-    )
-    response = templates.TemplateResponse(
-        request,
-        "pages/dashboard.j2",
-        context,
-    )
-    attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
 
 
