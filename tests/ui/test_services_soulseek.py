@@ -202,6 +202,39 @@ def test_user_directory_context_marks_listing_present_even_when_empty() -> None:
     assert context["files"] == ()
 
 
+@pytest.mark.asyncio
+async def test_user_directory_trims_provided_path(monkeypatch) -> None:
+    recorded: dict[str, object] = {}
+
+    async def _fake_user_directory(*, username: str, path: str, client: object) -> Mapping[str, object]:
+        recorded["username"] = username
+        recorded["path"] = path
+        return {
+            "path": path,
+            "directories": (),
+            "files": (),
+        }
+
+    async def _unexpected_browse(**_: object) -> Mapping[str, object]:
+        raise AssertionError("browse should not be invoked when path is provided")
+
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_directory",
+        _fake_user_directory,
+    )
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_browse",
+        _unexpected_browse,
+    )
+    service = _make_service()
+
+    listing = await service.user_directory(username=" alice ", path="  Music/Albums  ")
+
+    assert recorded["username"] == "alice"
+    assert recorded["path"] == "Music/Albums"
+    assert listing.current_path == "Music/Albums"
+
+
 def test_extract_directories_handles_mapping_payloads() -> None:
     payload = {
         "directories": {
