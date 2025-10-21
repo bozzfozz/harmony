@@ -11,7 +11,7 @@ from starlette.requests import Request
 
 from app.config import override_runtime_env
 from app.integrations.health import IntegrationHealth
-from app.schemas import StatusResponse
+from app.schemas import DownloadEntryResponse, StatusResponse
 from app.ui.assets import asset_url
 from app.ui.context import (
     AlertMessage,
@@ -31,6 +31,7 @@ from app.ui.context import (
     build_activity_fragment_context,
     build_activity_page_context,
     build_dashboard_page_context,
+    build_downloads_fragment_context,
     build_downloads_page_context,
     build_jobs_page_context,
     build_login_page_context,
@@ -69,6 +70,8 @@ from app.ui.context import (
 from app.ui.router import templates
 from app.ui.services import (
     ArtistPreferenceRow,
+    DownloadPage,
+    DownloadsUiService,
     SettingRow,
     SettingsHistoryRow,
     SettingsOverview,
@@ -1021,6 +1024,31 @@ def test_downloads_template_mounts_polling_fragment() -> None:
     assert 'hx-trigger="load, every 15s"' in html
     assert 'hx-target="#hx-downloads-table"' in html
     assert "Back to operations overview" in html
+
+
+def test_downloads_fragment_renders_progress_percentage() -> None:
+    request = _make_request("/ui/downloads")
+    entry = DownloadEntryResponse.model_validate(
+        {
+            "id": 1,
+            "filename": "track.flac",
+            "progress": 50.0,
+            "created_at": "2024-01-01T12:00:00Z",
+            "updated_at": "2024-01-01T12:10:00Z",
+            "priority": 1,
+            "username": "dj",
+            "state": "downloading",
+        }
+    )
+    row = DownloadsUiService._to_row(entry)
+    assert row.progress == 0.5
+
+    page = DownloadPage(items=[row], limit=10, offset=0, has_next=False, has_previous=False)
+    context = build_downloads_fragment_context(request, page=page)
+    template = templates.get_template("partials/downloads_table.j2")
+    html = template.render(**context)
+
+    assert "50%" in html
 
 
 def test_jobs_template_mounts_polling_fragment() -> None:
