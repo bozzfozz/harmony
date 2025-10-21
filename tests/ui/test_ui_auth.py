@@ -275,7 +275,7 @@ class _JobTrackingSpotifyService:
         self._stored_error = None
         return result, error
 
-    def free_ingest_job_status(self, job_id: str | None):
+    async def free_ingest_job_status(self, job_id: str | None) -> None:
         self.free_ingest_status_calls.append(job_id)
         return None
 
