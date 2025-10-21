@@ -315,14 +315,17 @@ def _build_candidate(entry: Mapping[str, Any]) -> TrackCandidate:
 def _sort_candidates(
     candidates: list[TrackCandidate], preferred_formats: Mapping[str, int]
 ) -> list[TrackCandidate]:
-    def sort_key(candidate: TrackCandidate) -> tuple[int, int, int, str]:
+    def sort_key(candidate: TrackCandidate) -> tuple[int, int, int, int, str]:
         format_rank = preferred_formats.get(
             (candidate.format or "").upper(), len(preferred_formats)
         )
         seeders = -(candidate.seeders or 0)
+        bitrate = (
+            -candidate.bitrate_kbps if candidate.bitrate_kbps is not None else 0
+        )
         size = candidate.size_bytes if candidate.size_bytes is not None else 1_000_000_000
         title = candidate.title.lower()
-        return (format_rank, seeders, size, title)
+        return (format_rank, seeders, bitrate, size, title)
 
     return sorted(candidates, key=sort_key)
 
