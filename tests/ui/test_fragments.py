@@ -1351,6 +1351,45 @@ def test_soulseek_user_info_fragment_success(monkeypatch) -> None:
         app.dependency_overrides.pop(get_soulseek_ui_service, None)
 
 
+def test_soulseek_user_info_fragment_displays_zero_values(monkeypatch) -> None:
+    stub = _StubSoulseekUiService()
+    stub.user_status_result = SoulseekUserStatus(
+        username="alice",
+        state="online",
+        message=None,
+        shared_files=0,
+        average_speed_bps=0.0,
+    )
+    stub.user_browsing_status_result = SoulseekUserBrowsingStatus(
+        username="alice",
+        state="queued",
+        progress=0.0,
+        queue_position=0,
+        queue_length=0,
+        message=None,
+    )
+    app.dependency_overrides[get_soulseek_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/soulseek/user/info",
+                params={"username": "alice"},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            body = response.text
+            assert 'data-test="soulseek-user-status-shared"' in body
+            assert "0 shared files reported." in body
+            assert 'data-test="soulseek-user-browse-progress"' in body
+            assert "Browse progress: 0%" in body
+            assert 'data-test="soulseek-user-browse-queue"' in body
+            assert "Queue position 0" in body
+            assert 'Queue position 0 of' not in body
+    finally:
+        app.dependency_overrides.pop(get_soulseek_ui_service, None)
+
+
 def test_soulseek_user_info_fragment_handles_error(monkeypatch) -> None:
     stub = _StubSoulseekUiService()
     stub.profile_exception = HTTPException(status_code=502, detail="profile error")

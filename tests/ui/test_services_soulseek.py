@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
+
+import pytest
 
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.schemas import StatusResponse
@@ -213,3 +216,56 @@ def test_extract_files_handles_mapping_payloads() -> None:
     sizes = {entry.size_bytes for entry in files}
     assert names == {"silence.flac", "noise.mp3"}
     assert sizes == {0, 512}
+
+
+@pytest.mark.asyncio
+async def test_user_status_preserves_zero_values(monkeypatch) -> None:
+    async def _fake_user_status(*, username: str, client: object) -> Mapping[str, object]:
+        assert username == "alice"
+        return {
+            "state": "Online",
+            "status_message": " ",
+            "shared_count": 0,
+            "avg_speed": 0,
+        }
+
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_status",
+        _fake_user_status,
+    )
+    service = _make_service()
+
+    result = await service.user_status(username="alice")
+
+    assert result.state == "online"
+    assert result.shared_files == 0
+    assert result.average_speed_bps == 0.0
+
+
+@pytest.mark.asyncio
+async def test_user_browsing_status_preserves_zero_values(monkeypatch) -> None:
+    async def _fake_browsing_status(
+        *,
+        username: str,
+        client: object,
+    ) -> Mapping[str, object]:
+        assert username == "alice"
+        return {
+            "state": "Queued",
+            "percent": 0,
+            "position": 0,
+            "queue_size": 0,
+        }
+
+    monkeypatch.setattr(
+        "app.ui.services.soulseek.soulseek_user_browsing_status",
+        _fake_browsing_status,
+    )
+    service = _make_service()
+
+    result = await service.user_browsing_status(username="alice")
+
+    assert result.state == "queued"
+    assert result.progress == 0.0
+    assert result.queue_position == 0
+    assert result.queue_length == 0
