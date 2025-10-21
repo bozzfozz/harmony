@@ -585,6 +585,26 @@ async def test_soulseek_upload_detail_error(upload_client_mock: Mock) -> None:
 
 
 @pytest.mark.asyncio()
+@pytest.mark.parametrize("status_code", [401, 403])
+async def test_soulseek_upload_detail_auth_error_propagates_status_and_detail(
+    upload_client_mock: Mock, status_code: int
+) -> None:
+    payload = {"detail": f"auth-{status_code}"}
+    upload_client_mock.get_upload.side_effect = SoulseekClientError(
+        "auth error",
+        status_code=status_code,
+        payload=payload,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _soulseek_module.soulseek_upload_detail("upload-auth", client=upload_client_mock)
+
+    assert exc_info.value.status_code == status_code
+    assert exc_info.value.detail == payload
+    upload_client_mock.get_upload.assert_awaited_once_with("upload-auth")
+
+
+@pytest.mark.asyncio()
 async def test_soulseek_uploads_success(upload_client_mock: Mock) -> None:
     expected = [{"id": "u1"}, {"id": "u2"}]
     upload_client_mock.get_uploads.return_value = expected
