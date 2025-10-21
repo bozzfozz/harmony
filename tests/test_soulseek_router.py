@@ -506,33 +506,38 @@ def test_discography_download_rejects_missing_artist_id(
         assert session.query(DiscographyJob).count() == 0
 
 
-def test_discography_download_logs_worker_failure(
+def test_discography_download_marks_job_failed_when_worker_enqueue_errors(
     soulseek_client: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     error = RuntimeError("discography worker offline")
     failing_worker = _FailingDiscographyWorker(error)
     soulseek_client.app.state.discography_worker = failing_worker
     caplog.set_level("ERROR")
+    artist_id = "artist-500"
 
     response = soulseek_client.post(
         "/soulseek/discography/download",
-        json={"artist_id": "artist-500", "artist_name": "Offline"},
+        json={"artist_id": artist_id, "artist_name": "Offline"},
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "pending"
-    job_id = payload["job_id"]
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Failed to enqueue discography job"}
 
     worker = soulseek_client.app.state.discography_worker
     assert isinstance(worker, _FailingDiscographyWorker)
-    assert worker.job_ids == [job_id]
 
     with session_scope() as session:
-        job = session.get(DiscographyJob, job_id)
-        assert job is not None
-        assert job.status == "pending"
+        job = (
+            session.query(DiscographyJob)
+            .filter(DiscographyJob.artist_id == artist_id)
+            .one()
+        )
+        assert job.status == "failed"
+        job_id = job.id
         session.delete(job)
+        session.commit()
+
+    assert worker.job_ids == [job_id]
 
     error_messages = [record.message for record in caplog.records if record.levelname == "ERROR"]
     assert any(

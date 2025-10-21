@@ -663,6 +663,13 @@ async def soulseek_discography_download(
         await enqueue(job.id)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Failed to enqueue discography job %s: %s", job.id, exc)
+        job.status = "failed"
+        session.add(job)
+        session.commit()
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to enqueue discography job",
+        ) from exc
 
     return DiscographyJobResponse(job_id=job.id, status=job.status)
 
