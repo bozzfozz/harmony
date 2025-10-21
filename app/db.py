@@ -166,6 +166,7 @@ def init_db() -> None:
             raise RuntimeError("Database engine was not initialised before bootstrap.")
 
         from app import models  # noqa: F401
+        from app.ui import session_store  # noqa: F401
 
         Base.metadata.create_all(bind=_engine, checkfirst=True)
         apply_schema_migrations(_engine)

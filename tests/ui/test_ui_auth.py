@@ -1,18 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import os
 import re
-from collections.abc import Sequence
-
-import pytest
 
 from fastapi.testclient import TestClient
-
-
-def _assert_html_response(response, status_code: int = 200) -> None:
-    assert response.status_code == status_code
-    content_type = response.headers.get("content-type", "")
-    assert "text/html" in content_type
+import pytest
 
 from app.config import override_runtime_env
 from app.dependencies import get_app_config
@@ -27,6 +20,12 @@ from app.ui.session import fingerprint_api_key, register_ui_session_metrics
 from app.utils import metrics
 
 _CSRF_META_PATTERN = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
+
+
+def _assert_html_response(response, status_code: int = 200) -> None:
+    assert response.status_code == status_code
+    content_type = response.headers.get("content-type", "")
+    assert "text/html" in content_type
 
 
 def _create_client(monkeypatch, extra_env: dict[str, str] | None = None) -> TestClient:
@@ -208,22 +207,31 @@ def test_session_metrics_increment_on_login_logout(monkeypatch) -> None:
     register_ui_session_metrics()
 
     with _create_client(monkeypatch) as client:
-        assert _metric_value(
-            "ui_sessions_created_total",
-            {"role": "operator"},
-        ) == 0.0
-        assert _metric_value(
-            "ui_sessions_terminated_total",
-            {"role": "operator", "reason": "logout"},
-        ) == 0.0
+        assert (
+            _metric_value(
+                "ui_sessions_created_total",
+                {"role": "operator"},
+            )
+            == 0.0
+        )
+        assert (
+            _metric_value(
+                "ui_sessions_terminated_total",
+                {"role": "operator", "reason": "logout"},
+            )
+            == 0.0
+        )
 
         login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
         assert login.status_code == 303
 
-        assert _metric_value(
-            "ui_sessions_created_total",
-            {"role": "operator"},
-        ) == 1.0
+        assert (
+            _metric_value(
+                "ui_sessions_created_total",
+                {"role": "operator"},
+            )
+            == 1.0
+        )
 
         token = client.cookies.get("csrftoken")
         assert token
@@ -236,10 +244,13 @@ def test_session_metrics_increment_on_login_logout(monkeypatch) -> None:
         )
         assert logout.status_code == 303
 
-        assert _metric_value(
-            "ui_sessions_terminated_total",
-            {"role": "operator", "reason": "logout"},
-        ) == 1.0
+        assert (
+            _metric_value(
+                "ui_sessions_terminated_total",
+                {"role": "operator", "reason": "logout"},
+            )
+            == 1.0
+        )
 
 
 class _JobTrackingSpotifyService:
@@ -329,3 +340,35 @@ def test_sessions_keep_independent_free_ingest_jobs(monkeypatch) -> None:
             assert stub.free_import_result.job_id not in fragment_two.text
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_session_survives_manager_recreation(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert login.status_code == 303
+        manager_one = getattr(client.app.state, "ui_session_manager", None)
+        assert manager_one is not None
+
+        cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+        client.app.state.ui_session_manager = None
+
+        dashboard = client.get("/ui/", headers={"Cookie": cookie_header})
+        _assert_html_response(dashboard)
+        manager_two = getattr(client.app.state, "ui_session_manager", None)
+        assert manager_two is not None
+        assert manager_two is not manager_one
+
+
+def test_session_persists_across_clients(monkeypatch) -> None:
+    with _create_client(monkeypatch) as first_client:
+        login = first_client.post(
+            "/ui/login",
+            data={"api_key": "primary-key"},
+            follow_redirects=False,
+        )
+        assert login.status_code == 303
+        cookie_header = "; ".join(f"{name}={value}" for name, value in first_client.cookies.items())
+
+    with _create_client(monkeypatch) as second_client:
+        response = second_client.get("/ui/", headers={"Cookie": cookie_header})
+        _assert_html_response(response)
