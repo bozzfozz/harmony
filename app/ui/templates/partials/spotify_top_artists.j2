@@ -2,7 +2,7 @@
 {% import "partials/tables.j2" as tables %}
 
 {% if time_range_options %}
-  <div class="spotify-time-range" role="group" aria-label="Time range">
+  <div class="spotify-time-range" role="group" aria-label="{{ strings.spotify_time_range_group_label() }}">
     {% for option in time_range_options %}
       <button type="button"
               class="spotify-time-range__button{% if option.active %} is-active{% endif %}"
@@ -11,7 +11,7 @@
               hx-swap="outerHTML"
               aria-pressed="{{ 'true' if option.active else 'false' }}"
               data-test="{{ option.test_id }}">
-        {{ option.label }}
+        {{ strings.spotify_time_range_option_label(option.label_key) }}
       </button>
     {% endfor %}
   </div>

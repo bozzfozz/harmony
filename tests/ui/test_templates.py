@@ -592,6 +592,12 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
         offset=0,
         time_range="medium_term",
     )
+    options = context["time_range_options"]
+    assert [option.label_key for option in options] == [
+        "spotify.time_range.short",
+        "spotify.time_range.medium",
+        "spotify.time_range.long",
+    ]
     template = templates.get_template("partials/spotify_top_tracks.j2")
     html = template.render(**context)
 
@@ -612,6 +618,10 @@ def test_spotify_top_tracks_partial_renders_table() -> None:
     assert 'hx-get="/ui/spotify/top/tracks?time_range=short_term"' in html
     assert 'hx-get="/ui/spotify/top/tracks?time_range=long_term"' in html
     assert 'aria-pressed="true"' in html
+    assert 'aria-label="Time range"' in html
+    assert "Last 4 weeks" in html
+    assert "Last 6 months" in html
+    assert "All time" in html
 
 
 def test_spotify_top_artists_partial_renders_table() -> None:
@@ -632,6 +642,12 @@ def test_spotify_top_artists_partial_renders_table() -> None:
         artists=artists,
         time_range="long_term",
     )
+    options = context["time_range_options"]
+    assert [option.label_key for option in options] == [
+        "spotify.time_range.short",
+        "spotify.time_range.medium",
+        "spotify.time_range.long",
+    ]
     template = templates.get_template("partials/spotify_top_artists.j2")
     html = template.render(**context)
 
@@ -646,6 +662,10 @@ def test_spotify_top_artists_partial_renders_table() -> None:
     assert 'hx-get="/ui/spotify/top/artists?time_range=medium_term"' in html
     assert 'data-test="spotify-top-artist-link-cell-artist-1"' in html
     assert 'data-test="spotify-top-artist-link-artist-1"' in html
+    assert 'aria-label="Time range"' in html
+    assert "Last 4 weeks" in html
+    assert "Last 6 months" in html
+    assert "All time" in html
 
 
 def test_spotify_recommendations_partial_renders_form_and_results() -> None:

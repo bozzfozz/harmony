@@ -255,6 +255,22 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro spotify_time_range_group_label() -%}
+  {%- set labels = {
+    "spotify.time_range.group": "Time range",
+  } -%}
+  {{ labels.get("spotify.time_range.group", "spotify.time_range.group") }}
+{%- endmacro %}
+
+{% macro spotify_time_range_option_label(key) -%}
+  {%- set labels = {
+    "spotify.time_range.short": "Last 4 weeks",
+    "spotify.time_range.medium": "Last 6 months",
+    "spotify.time_range.long": "All time",
+  } -%}
+  {{ labels.get(key, key) }}
+{%- endmacro %}
+
 {% macro link_text(key) -%}
   {%- set labels = {
     "operations.back_to_dashboard": "Back to dashboard",
