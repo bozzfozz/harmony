@@ -7,11 +7,18 @@ from fastapi.responses import RedirectResponse
 
 from app.logging_events import log_event
 from app.ui.context import build_dashboard_page_context, build_login_page_context
-from app.ui.csrf import attach_csrf_cookie, get_csrf_manager
+from app.ui.csrf import (
+    attach_csrf_cookie,
+    clear_csrf_cookie,
+    enforce_csrf,
+    get_csrf_manager,
+)
 from app.ui.routes.shared import logger, templates
 from app.ui.session import (
     UiSession,
     attach_session_cookie,
+    clear_session_cookie,
+    clear_spotify_job_state,
     get_session_manager,
     require_session,
 )
@@ -94,6 +101,25 @@ async def dashboard(
         context,
     )
     attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.post(
+    "/logout",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+)
+async def logout(
+    request: Request,
+    session: UiSession = Depends(require_session),
+) -> Response:
+    manager = get_session_manager(request)
+    await clear_spotify_job_state(request, session)
+    await manager.invalidate(session.identifier)
+    response = RedirectResponse("/ui/login", status_code=status.HTTP_303_SEE_OTHER)
+    clear_session_cookie(response)
+    clear_csrf_cookie(response)
+    response.headers.setdefault("HX-Redirect", "/ui/login")
     return response
 
 

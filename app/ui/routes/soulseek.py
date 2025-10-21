@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -48,6 +48,7 @@ from app.ui.context import (
 from app.ui.csrf import attach_csrf_cookie, enforce_csrf, get_csrf_manager
 from app.ui.routes.shared import (
     _ensure_csrf_token,
+    _extract_download_refresh_params,
     _parse_form_body,
     _render_alert_fragment,
     logger,
@@ -74,43 +75,6 @@ def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[Discogra
         if limit:
             query = query.limit(limit)
         return list(query.all())
-
-
-def _extract_download_refresh_params(
-    request: Request, values: Mapping[str, str]
-) -> tuple[int, int, bool]:
-    def _parse_int(
-        value: str | None,
-        *,
-        default: int,
-        minimum: int,
-        maximum: int,
-    ) -> int:
-        if value is None or not value.strip():
-            return default
-        try:
-            parsed = int(value)
-        except ValueError:
-            return default
-        return max(min(parsed, maximum), minimum)
-
-    limit_value = _parse_int(
-        values.get("limit") or request.query_params.get("limit"),
-        default=20,
-        minimum=1,
-        maximum=100,
-    )
-    offset_value = _parse_int(
-        values.get("offset") or request.query_params.get("offset"),
-        default=0,
-        minimum=0,
-        maximum=10_000,
-    )
-    scope_raw = (values.get("scope") or request.query_params.get("scope") or "").lower()
-    include_all = scope_raw in {"all", "true", "1", "yes"}
-    if not include_all:
-        include_all = request.query_params.get("all", "").lower() in {"1", "true", "all", "yes"}
-    return limit_value, offset_value, include_all
 
 
 @router.get("/soulseek", include_in_schema=False)
@@ -2300,8 +2264,6 @@ async def soulseek_uploads_cleanup(
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
-
-
 
 
 __all__ = ["router"]
