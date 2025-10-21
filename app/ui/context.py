@@ -13,6 +13,7 @@ from starlette.datastructures import URL
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig, get_env
+from app.dependencies import get_app_config
 from app.integrations.health import IntegrationHealth
 from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
 from app.ui.formatters import format_datetime_display
@@ -3252,7 +3253,73 @@ def build_soulseek_download_artwork_modal_context(
     }
 
 
-SPOTIFY_RUNBOOK_URL = "/docs/operations/runbooks/hdm.md"
+_SPOTIFY_RUNBOOK_PATH = "/docs/operations/runbooks/hdm.md"
+
+
+def _get_request_state(request: Request) -> Any | None:
+    scope_app = request.scope.get("app")
+    if scope_app is None:
+        return None
+    return getattr(scope_app, "state", None)
+
+
+def _resolve_docs_base_url(request: Request) -> str | None:
+    state = _get_request_state(request)
+    if state is not None:
+        config_snapshot = getattr(state, "config_snapshot", None)
+        if config_snapshot is not None:
+            ui_config = getattr(config_snapshot, "ui", None)
+            docs_base_url = getattr(ui_config, "docs_base_url", None)
+            if isinstance(docs_base_url, str) and docs_base_url:
+                return docs_base_url
+    docs_base_url = get_app_config().ui.docs_base_url
+    if isinstance(docs_base_url, str) and docs_base_url:
+        return docs_base_url
+    return None
+
+
+def _resolve_api_base_path(request: Request) -> str:
+    state = _get_request_state(request)
+    if state is not None:
+        base_path = getattr(state, "api_base_path", None)
+        if isinstance(base_path, str):
+            return base_path
+    return get_app_config().api_base_path
+
+
+def _compose_prefixed_path(base_path: str, suffix: str) -> str:
+    normalized = (base_path or "").strip()
+    if not normalized or normalized == "/":
+        return suffix
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    normalized = normalized.rstrip("/")
+    return f"{normalized}{suffix}"
+
+
+def _join_external_url(base_url: str, suffix: str) -> str:
+    base = base_url.rstrip("/")
+    path = suffix.lstrip("/")
+    return f"{base}/{path}"
+
+
+def _build_spotify_runbook_url(request: Request) -> str:
+    docs_base_url = _resolve_docs_base_url(request)
+    if docs_base_url:
+        return _join_external_url(docs_base_url, _SPOTIFY_RUNBOOK_PATH)
+    prefixed_path = _compose_prefixed_path(
+        _resolve_api_base_path(request), _SPOTIFY_RUNBOOK_PATH
+    )
+    base_url = request.base_url
+    if isinstance(base_url, URL) and base_url.netloc:
+        return str(
+            base_url.replace(
+                path=prefixed_path.lstrip("/"),
+                query="",
+                fragment="",
+            )
+        )
+    return prefixed_path
 
 
 def build_spotify_status_context(
@@ -3314,7 +3381,7 @@ def build_spotify_status_context(
         "csrf_token": csrf_token,
         "status_label_key": status_label_key,
         "manual_redirect_url": manual_redirect_url,
-        "runbook_url": SPOTIFY_RUNBOOK_URL,
+        "runbook_url": _build_spotify_runbook_url(request),
     }
 
 

@@ -126,13 +126,15 @@ def _runtime_env(overrides: dict[str, str] | None = None) -> Any:
         override_runtime_env(None)
 
 
-def _make_request(path: str) -> Request:
+def _make_request(path: str, *, app_state: Any | None = None) -> Request:
     scope = {
         "type": "http",
         "method": "GET",
         "path": path,
         "headers": [],
     }
+    if app_state is not None:
+        scope["app"] = SimpleNamespace(state=app_state)
     return Request(scope)
 
 
@@ -1643,9 +1645,55 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert "Redirect URI" in html
     assert "Manual session timeout" in html
     assert 'name="redirect_url" value=' not in html
+    assert context["runbook_url"] == "/api/v1/docs/operations/runbooks/hdm.md"
     assert f'href="{context["runbook_url"]}"' in html
-    assert "Runbook öffnen" in html
+    assert "Open Spotify runbook" in html
+    assert (
+        'title="Open the Spotify runbook documentation in a new tab."' in html
+    )
     assert 'target="_blank"' in html
+
+
+def test_spotify_status_context_uses_docs_base_url() -> None:
+    app_state = SimpleNamespace(
+        api_base_path="/api/legacy",
+        config_snapshot=SimpleNamespace(
+            ui=SimpleNamespace(docs_base_url="https://docs.example.com/harmony"),
+        ),
+    )
+    request = _make_request("/ui/spotify/status", app_state=app_state)
+    status = SpotifyStatus(
+        status="unauthenticated",
+        free_available=True,
+        pro_available=True,
+        authenticated=False,
+    )
+    oauth = SpotifyOAuthHealth(
+        manual_enabled=True,
+        redirect_uri="http://localhost/callback",
+        public_host_hint=None,
+        active_transactions=0,
+        ttl_seconds=300,
+    )
+    manual_form = FormDefinition(
+        identifier="spotify-manual-form",
+        method="post",
+        action="/ui/spotify/oauth/manual",
+        submit_label_key="spotify.manual.submit",
+    )
+
+    context = build_spotify_status_context(
+        request,
+        status=status,
+        oauth=oauth,
+        manual_form=manual_form,
+        csrf_token="csrf-token",
+    )
+
+    assert (
+        context["runbook_url"]
+        == "https://docs.example.com/harmony/docs/operations/runbooks/hdm.md"
+    )
 
 
 def test_spotify_status_partial_marks_free_ingest_disabled() -> None:
