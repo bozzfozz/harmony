@@ -17,6 +17,7 @@
 - feat(middleware): request-id, structured logging, optional auth/rate limiting, ETag cache, CORS/GZip and unified error mapping [CODX-P0-MW-104]
 - refactor(core): DTO-basierte Matching-Engine mit konfigurierbaren Schwellen, deterministischem Ranking und neuen Core-Tests [CODX-CORE-REF-311]
 - docs(architecture): add overview, contracts, diagrams, ADR template [CODX-ARCH-DOC-301]
+- docs(operations): capture UI session timeout defaults and CDN override guidance for the FastAPI UI.
 - docs: enable Codex full write mode (default implement) [CODX-POL-092]
 - docs: enable Auto-FAST-TRACK for CODX-ORCH-* tasks in AGENTS.md [CODX-DOC-102]
 - chore(db): align the legacy migration environment and queue job schema with the
