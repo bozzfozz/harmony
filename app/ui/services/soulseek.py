@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -190,8 +191,10 @@ class SoulseekUiService:
         if not trimmed:
             raise ValueError("username is required")
 
-        address_raw = await soulseek_user_address(username=trimmed, client=self._client)
-        info_raw = await soulseek_user_info(username=trimmed, client=self._client)
+        address_raw, info_raw = await asyncio.gather(
+            soulseek_user_address(username=trimmed, client=self._client),
+            soulseek_user_info(username=trimmed, client=self._client),
+        )
 
         profile = SoulseekUserProfile(
             username=trimmed,
