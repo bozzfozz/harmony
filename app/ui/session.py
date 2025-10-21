@@ -14,6 +14,7 @@ from app.config import SecurityConfig, get_env
 from app.dependencies import get_app_config
 from app.logging import get_logger
 from app.logging_events import log_event
+from app.utils.metrics import counter
 
 RoleName = Literal["read_only", "operator", "admin"]
 
@@ -26,6 +27,65 @@ _ROLE_ORDER: dict[RoleName, int] = {
 _SESSION_COOKIE = "ui_session"
 
 logger = get_logger(__name__)
+
+_SESSION_CREATED_METRIC_NAME = "ui_sessions_created_total"
+_SESSION_CREATED_METRIC_DOC = "Total number of Harmony UI sessions successfully created"
+_SESSION_TERMINATED_METRIC_NAME = "ui_sessions_terminated_total"
+_SESSION_TERMINATED_METRIC_DOC = "Total number of Harmony UI sessions terminated grouped by reason"
+
+
+def register_ui_session_metrics() -> None:
+    """Register Prometheus metrics tracking UI session lifecycle events."""
+
+    counter(
+        _SESSION_CREATED_METRIC_NAME,
+        _SESSION_CREATED_METRIC_DOC,
+        label_names=("role",),
+    )
+    counter(
+        _SESSION_TERMINATED_METRIC_NAME,
+        _SESSION_TERMINATED_METRIC_DOC,
+        label_names=("role", "reason"),
+    )
+
+
+def _session_created_counter():
+    return counter(
+        _SESSION_CREATED_METRIC_NAME,
+        _SESSION_CREATED_METRIC_DOC,
+        label_names=("role",),
+    )
+
+
+def _session_terminated_counter():
+    return counter(
+        _SESSION_TERMINATED_METRIC_NAME,
+        _SESSION_TERMINATED_METRIC_DOC,
+        label_names=("role", "reason"),
+    )
+
+
+def _record_session_created(role: RoleName) -> None:
+    _session_created_counter().labels(role=role).inc()
+
+
+def _record_session_termination(session: UiSession, *, reason: str) -> None:
+    if reason == "logout":
+        component = "ui.router"
+        status = "success"
+    else:
+        component = "ui.session"
+        status = reason
+
+    log_event(
+        logger,
+        "ui.session.ended",
+        component=component,
+        status=status,
+        role=session.role,
+        reason=reason,
+    )
+    _session_terminated_counter().labels(role=session.role, reason=reason).inc()
 
 
 @dataclass(slots=True, frozen=True)
@@ -126,15 +186,18 @@ class UiSessionManager:
             fingerprint=fingerprint,
             role=role,
         )
+        _record_session_created(role)
         return session
 
     async def get_session(self, identifier: str) -> UiSession | None:
         async with self._lock:
             return self._get_active_session(identifier)
 
-    async def invalidate(self, identifier: str) -> None:
+    async def invalidate(self, identifier: str, *, reason: str = "logout") -> None:
         async with self._lock:
-            self._sessions.pop(identifier, None)
+            session = self._sessions.pop(identifier, None)
+        if session is not None:
+            _record_session_termination(session, reason=reason)
 
     def cookie_max_age(self) -> int:
         return int(self._session_ttl.total_seconds())
@@ -198,6 +261,7 @@ class UiSessionManager:
             return None
         if self._is_expired(session):
             del self._sessions[identifier]
+            _record_session_termination(session, reason="expired")
             return None
         session.last_seen_at = datetime.now(tz=UTC)
         return session
@@ -446,6 +510,7 @@ __all__ = [
     "require_feature",
     "require_operator_with_feature",
     "require_session",
+    "register_ui_session_metrics",
     "set_spotify_backfill_job_id",
     "set_spotify_free_ingest_job_id",
 ]

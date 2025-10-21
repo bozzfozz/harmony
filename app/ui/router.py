@@ -4590,13 +4590,6 @@ async def logout(
     response = RedirectResponse("/ui/login", status_code=status.HTTP_303_SEE_OTHER)
     clear_session_cookie(response)
     clear_csrf_cookie(response)
-    log_event(
-        logger,
-        "ui.session.ended",
-        component="ui.router",
-        status="success",
-        role=session.role,
-    )
     response.headers.setdefault("HX-Redirect", "/ui/login")
     return response
 
