@@ -247,6 +247,25 @@ class _StubSessionContext:
         return False
 
 
+def _make_discography_job(
+    identifier: int,
+    *,
+    artist_id: str | None = None,
+    artist_name: str | None = None,
+    status: str = "queued",
+) -> SimpleNamespace:
+    created = datetime(2024, 1, 1, tzinfo=UTC)
+    updated = datetime(2024, 1, 2, tzinfo=UTC)
+    return SimpleNamespace(
+        id=identifier,
+        artist_id=artist_id or f"soulseek:{identifier}",
+        artist_name=artist_name or f"Artist {identifier}",
+        status=status,
+        created_at=created,
+        updated_at=updated,
+    )
+
+
 class _StubSearchService:
     def __init__(self, result: SearchResultsPage | Exception) -> None:
         self._result = result
@@ -1843,6 +1862,247 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
             assert 'hx-push-url="/ui/soulseek/downloads?limit=50&offset=50&all=1"' in html
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
+    jobs = [_make_discography_job(7, artist_name="Artist Seven", artist_id="soulseek:artist-7")]
+
+    def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+        return jobs
+
+    monkeypatch.setattr("app.ui.router._load_discography_jobs", _fake_load)
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/soulseek/discography/jobs", headers=headers)
+        _assert_html_response(response)
+        html = response.text
+        assert 'data-test="soulseek-discography-open-modal"' in html
+        assert 'hx-target="#modal-root"' in html
+        assert "/ui/soulseek/discography/jobs/modal" in html
+        assert 'id="hx-soulseek-discography-jobs"' in html
+        assert 'data-count="1"' in html
+        assert 'data-test="soulseek-discography-job-7"' in html
+        assert 'data-test="soulseek-discography-job-7-status"' in html
+        assert "Artist Seven (soulseek:artist-7)" in html
+
+
+def test_soulseek_discography_jobs_fragment_failure(monkeypatch) -> None:
+    def _raise_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+        raise RuntimeError("database offline")
+
+    monkeypatch.setattr("app.ui.router._load_discography_jobs", _raise_load)
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/soulseek/discography/jobs", headers=headers)
+        _assert_html_response(response, status_code=500)
+        html = response.text
+        assert "Unable to load discography jobs." in html
+        assert 'data-test="fragment-retry"' in html
+        assert 'hx-target="#hx-soulseek-discography-jobs"' in html
+
+
+def test_soulseek_discography_jobs_fragment_feature_disabled(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_SOULSEEK": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/soulseek/discography/jobs", headers=headers)
+        _assert_json_error(response, status_code=404)
+
+
+def test_soulseek_discography_job_modal_success(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.get("/ui/soulseek/discography/jobs/modal", headers=headers)
+        _assert_html_response(response)
+        html = response.text
+        token = headers["X-CSRF-Token"]
+        assert 'data-test="soulseek-discography-modal"' in html
+        assert 'hx-target="#hx-soulseek-discography-jobs"' in html
+        assert "/ui/soulseek/discography/jobs" in html
+        assert f'value="{token}"' in html
+        assert 'data-test="soulseek-discography-artist-id"' in html
+        assert 'data-test="soulseek-discography-artist-name"' in html
+
+
+def test_soulseek_discography_job_modal_feature_disabled(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_SOULSEEK": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/soulseek/discography/jobs/modal", headers=headers)
+        _assert_json_error(response, status_code=404)
+
+
+def test_soulseek_discography_jobs_submit_success(monkeypatch) -> None:
+    jobs = [_make_discography_job(11, artist_name="Artist Eleven", artist_id="soulseek:artist-11")]
+
+    def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+        return jobs
+
+    monkeypatch.setattr("app.ui.router._load_discography_jobs", _fake_load)
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+    calls: list[Any] = []
+
+    async def _fake_download(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
+        calls.append(payload)
+        return SimpleNamespace(job_id="job-11", status="queued")
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_discography_download",
+        _fake_download,
+        raising=False,
+    )
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={
+                "csrftoken": headers["X-CSRF-Token"],
+                "artist_id": "soulseek:artist-11",
+                "artist_name": "Artist Eleven",
+            },
+            headers=headers,
+        )
+        _assert_html_response(response)
+        html = response.text
+        assert calls and calls[0].artist_id == "soulseek:artist-11"
+        assert calls[0].artist_name == "Artist Eleven"
+        assert "Queued discography download for Artist Eleven." in html
+        assert 'id="hx-soulseek-discography-jobs"' in html
+        assert 'data-count="1"' in html
+        assert 'data-test="soulseek-discography-job-11-status"' in html
+        assert "Artist Eleven (soulseek:artist-11)" in html
+
+
+def test_soulseek_discography_jobs_submit_validation_error(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={
+                "csrftoken": headers["X-CSRF-Token"],
+                "artist_id": " ",
+                "artist_name": "Ignored",
+            },
+            headers=headers,
+        )
+        _assert_html_response(response, status_code=400)
+        assert response.headers["HX-Retarget"] == "#modal-root"
+        assert response.headers["HX-Reswap"] == "innerHTML"
+        html = response.text
+        assert 'data-test="soulseek-discography-artist-id-error"' in html
+        assert "An artist ID is required." in html
+        assert 'hx-target="#hx-soulseek-discography-jobs"' in html
+        assert "/ui/soulseek/discography/jobs" in html
+
+
+def test_soulseek_discography_jobs_submit_http_exception(monkeypatch) -> None:
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+
+    async def _raise_download(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
+        raise HTTPException(status_code=503, detail="discography worker offline")
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_discography_download",
+        _raise_download,
+        raising=False,
+    )
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={
+                "csrftoken": headers["X-CSRF-Token"],
+                "artist_id": "soulseek:artist-1",
+                "artist_name": "Artist One",
+            },
+            headers=headers,
+        )
+        _assert_html_response(response, status_code=503)
+        assert response.headers["HX-Retarget"] == "#modal-root"
+        assert response.headers["HX-Reswap"] == "innerHTML"
+        html = response.text
+        assert 'data-test="soulseek-discography-artist-id-error"' in html
+        assert "discography worker offline" in html
+
+
+def test_soulseek_discography_jobs_submit_unexpected_error(monkeypatch) -> None:
+    monkeypatch.setattr("app.ui.router.session_scope", lambda: _StubSessionContext(object()))
+
+    async def _boom(*, payload: Any, request: Any, session: Any) -> Any:  # type: ignore[override]
+        raise RuntimeError("crash")
+
+    monkeypatch.setattr(
+        "app.ui.router.soulseek_discography_download",
+        _boom,
+        raising=False,
+    )
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={
+                "csrftoken": headers["X-CSRF-Token"],
+                "artist_id": "soulseek:artist-2",
+                "artist_name": "Artist Two",
+            },
+            headers=headers,
+        )
+        _assert_html_response(response, status_code=500)
+        assert response.headers["HX-Retarget"] == "#modal-root"
+        assert response.headers["HX-Reswap"] == "innerHTML"
+        html = response.text
+        assert 'data-test="soulseek-discography-artist-id-error"' in html
+        assert "Unable to queue the discography job." in html
+
+
+def test_soulseek_discography_jobs_submit_missing_csrf_token(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={"artist_id": "soulseek:artist-3", "artist_name": "Artist Three"},
+            headers=headers,
+        )
+        _assert_json_error(response, status_code=403)
+        payload = response.json()
+        assert payload.get("error", {}).get("message") == "Missing CSRF token."
+
+
+def test_soulseek_discography_jobs_submit_feature_disabled(monkeypatch) -> None:
+    extra_env = {"UI_FEATURE_SOULSEEK": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        _login(client)
+        headers = _csrf_headers(client)
+        response = client.post(
+            "/ui/soulseek/discography/jobs",
+            data={
+                "csrftoken": headers["X-CSRF-Token"],
+                "artist_id": "soulseek:artist-4",
+                "artist_name": "Artist Four",
+            },
+            headers=headers,
+        )
+        _assert_json_error(response, status_code=404)
+        payload = response.json()
+        assert (
+            payload.get("error", {}).get("message")
+            == "The requested UI feature is disabled."
+        )
 
 
 def test_soulseek_download_lyrics_modal_renders_modal(monkeypatch) -> None:
