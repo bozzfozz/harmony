@@ -6,12 +6,13 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import parse_qs
 
 from fastapi import Request, Response, status
 from fastapi.templating import Jinja2Templates
 
+from app.config import AppConfig
 from app.logging import get_logger
 from app.ui.assets import asset_url
 from app.ui.context import AlertMessage, get_ui_assets
@@ -23,6 +24,20 @@ logger = get_logger("app.ui.router")
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 templates.env.globals["asset_url"] = asset_url
 templates.env.globals["get_ui_assets"] = get_ui_assets
+
+
+_LIVE_UPDATES_POLLING: Literal["polling"] = "polling"
+_LIVE_UPDATES_SSE: Literal["sse"] = "sse"
+
+
+def _resolve_live_updates_mode(config: AppConfig) -> Literal["polling", "sse"]:
+    ui_config = getattr(config, "ui", None)
+    if ui_config is None:
+        return _LIVE_UPDATES_POLLING
+    mode = getattr(ui_config, "live_updates", _LIVE_UPDATES_POLLING)
+    if mode == _LIVE_UPDATES_SSE:
+        return _LIVE_UPDATES_SSE
+    return _LIVE_UPDATES_POLLING
 
 
 @dataclass(slots=True)
@@ -116,6 +131,9 @@ def _parse_form_body(raw_body: bytes) -> dict[str, str]:
 __all__ = [
     "logger",
     "templates",
+    "_LIVE_UPDATES_POLLING",
+    "_LIVE_UPDATES_SSE",
+    "_resolve_live_updates_mode",
     "_LiveFragmentBuilder",
     "_ui_event_stream",
     "_render_alert_fragment",

@@ -4,7 +4,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from app.errors import AppError, ErrorCode
-from app.ui.router import get_system_ui_service
+from app.ui.routes.system import get_system_ui_service
 from app.ui.services.system import (
     IntegrationProviderStatus,
     IntegrationSummary,

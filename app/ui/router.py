@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime
 import json
-from typing import Any, Literal
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -27,7 +25,6 @@ from app.services.download_service import DownloadService
 from app.ui.context import (
     AlertMessage,
     LayoutContext,
-    attach_secret_result,
     build_activity_fragment_context,
     build_activity_page_context,
     build_admin_page_context,
@@ -36,7 +33,6 @@ from app.ui.context import (
     build_downloads_page_context,
     build_jobs_fragment_context,
     build_jobs_page_context,
-    build_operations_page_context,
     build_primary_navigation,
     build_search_page_context,
     build_search_results_context,
@@ -44,24 +40,15 @@ from app.ui.context import (
     build_settings_form_fragment_context,
     build_settings_history_fragment_context,
     build_settings_page_context,
-    build_system_integrations_context,
-    build_system_liveness_context,
-    build_system_page_context,
-    build_system_readiness_context,
-    build_system_secret_card_context,
-    build_system_secret_cards,
-    build_system_service_health_context,
     build_watchlist_fragment_context,
     build_watchlist_page_context,
-    select_system_secret_card,
 )
 from app.ui.csrf import attach_csrf_cookie, clear_csrf_cookie, enforce_csrf, get_csrf_manager
 from app.ui.routes.shared import (
-    _LiveFragmentBuilder,
     _ensure_csrf_token,
     _parse_form_body,
     _render_alert_fragment,
-    _ui_event_stream,
+    _resolve_live_updates_mode,
     logger,
     templates,
 )
@@ -72,14 +59,12 @@ from app.ui.services import (
     SearchUiService,
     SettingsOverview,
     SettingsUiService,
-    SystemUiService,
     WatchlistUiService,
     get_activity_ui_service,
     get_downloads_ui_service,
     get_jobs_ui_service,
     get_search_ui_service,
     get_settings_ui_service,
-    get_system_ui_service,
     get_watchlist_ui_service,
 )
 from app.ui.session import (
@@ -94,21 +79,6 @@ from app.ui.session import (
 )
 
 router = APIRouter()
-
-_LIVE_UPDATES_POLLING: Literal["polling"] = "polling"
-_LIVE_UPDATES_SSE: Literal["sse"] = "sse"
-
-
-
-
-def _resolve_live_updates_mode(config: AppConfig) -> Literal["polling", "sse"]:
-    ui_config = getattr(config, "ui", None)
-    if ui_config is None:
-        return _LIVE_UPDATES_POLLING
-    mode = getattr(ui_config, "live_updates", _LIVE_UPDATES_POLLING)
-    if mode == _LIVE_UPDATES_SSE:
-        return _LIVE_UPDATES_SSE
-    return _LIVE_UPDATES_POLLING
 
 
 
@@ -629,427 +599,6 @@ async def settings_artist_preferences_save(
         "partials/settings_artist_preferences.j2",
         context,
     )
-
-
-@router.get("/system", include_in_schema=False, name="system_page")
-async def system_page(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-) -> Response:
-    csrf_manager = get_csrf_manager(request)
-    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    context = build_system_page_context(
-        request,
-        session=session,
-        csrf_token=csrf_token,
-    )
-    response = templates.TemplateResponse(
-        request,
-        "pages/system.j2",
-        context,
-    )
-    if issued:
-        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
-    return response
-
-
-@router.get(
-    "/system/liveness",
-    include_in_schema=False,
-    name="system_liveness_fragment",
-)
-async def system_liveness_fragment(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-    service: SystemUiService = Depends(get_system_ui_service),
-) -> Response:
-    try:
-        summary = await service.fetch_liveness(request)
-    except AppError as exc:
-        message = exc.message or "Unable to load liveness information."
-        return _render_alert_fragment(
-            request,
-            message,
-            status_code=status.HTTP_200_OK,
-            retry_url="/ui/system/liveness",
-            retry_target="#hx-system-liveness",
-        )
-    except Exception:
-        logger.exception("system.ui.liveness.fragment")
-        return _render_alert_fragment(
-            request,
-            "Failed to load liveness information.",
-            retry_url="/ui/system/liveness",
-            retry_target="#hx-system-liveness",
-        )
-
-    context = build_system_liveness_context(request, summary=summary)
-    return templates.TemplateResponse(
-        request,
-        "partials/system_liveness.j2",
-        context,
-    )
-
-
-@router.get(
-    "/system/readiness",
-    include_in_schema=False,
-    name="system_readiness_fragment",
-)
-async def system_readiness_fragment(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-    service: SystemUiService = Depends(get_system_ui_service),
-) -> Response:
-    try:
-        summary = await service.fetch_readiness(request)
-    except AppError as exc:
-        message = exc.message or "Unable to load readiness information."
-        return _render_alert_fragment(
-            request,
-            message,
-            status_code=status.HTTP_200_OK,
-            retry_url="/ui/system/readiness",
-            retry_target="#hx-system-readiness",
-        )
-    except Exception:
-        logger.exception("system.ui.readiness.fragment")
-        return _render_alert_fragment(
-            request,
-            "Failed to load readiness information.",
-            retry_url="/ui/system/readiness",
-            retry_target="#hx-system-readiness",
-        )
-
-    context = build_system_readiness_context(request, summary=summary)
-    return templates.TemplateResponse(
-        request,
-        "partials/system_readiness.j2",
-        context,
-    )
-
-
-@router.get(
-    "/system/integrations",
-    include_in_schema=False,
-    name="system_integrations_fragment",
-)
-async def system_integrations_fragment(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-    service: SystemUiService = Depends(get_system_ui_service),
-) -> Response:
-    try:
-        summary = await service.fetch_integrations()
-    except AppError as exc:
-        message = exc.message or "Unable to load integration status."
-        return _render_alert_fragment(
-            request,
-            message,
-            status_code=status.HTTP_200_OK,
-            retry_url="/ui/system/integrations",
-            retry_target="#hx-system-integrations",
-        )
-    except Exception:
-        logger.exception("system.ui.integrations.fragment")
-        return _render_alert_fragment(
-            request,
-            "Failed to load integration status.",
-            retry_url="/ui/system/integrations",
-            retry_target="#hx-system-integrations",
-        )
-
-    context = build_system_integrations_context(request, summary=summary)
-    return templates.TemplateResponse(
-        request,
-        "partials/system_integrations.j2",
-        context,
-    )
-
-
-@router.get(
-    "/system/services",
-    include_in_schema=False,
-    name="system_services_fragment",
-)
-async def system_services_fragment(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-    service: SystemUiService = Depends(get_system_ui_service),
-) -> Response:
-    try:
-        badges = await service.fetch_service_badges()
-    except AppError as exc:
-        message = exc.message or "Failed to load service health."
-        return _render_alert_fragment(
-            request,
-            message,
-            status_code=status.HTTP_200_OK,
-            retry_url="/ui/system/services",
-            retry_target="#hx-system-services",
-        )
-    except Exception:
-        logger.exception("system.ui.services.fragment")
-        return _render_alert_fragment(
-            request,
-            "Failed to load service health.",
-            retry_url="/ui/system/services",
-            retry_target="#hx-system-services",
-        )
-
-    context = build_system_service_health_context(request, badges=badges)
-    return templates.TemplateResponse(
-        request,
-        "partials/system_services.j2",
-        context,
-    )
-
-
-@router.get(
-    "/system/secrets/{provider}",
-    include_in_schema=False,
-    name="system_secret_card",
-)
-async def system_secret_card(
-    provider: str,
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-) -> Response:
-    cards = build_system_secret_cards()
-    card = select_system_secret_card(cards, provider)
-    if card is None:
-        return _render_alert_fragment(
-            request,
-            "Unknown secret provider requested.",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    csrf_manager = get_csrf_manager(request)
-    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    context = build_system_secret_card_context(
-        request,
-        card=card,
-        csrf_token=csrf_token,
-    )
-    response = templates.TemplateResponse(
-        request,
-        "partials/system_secret_card.j2",
-        context,
-    )
-    if issued:
-        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
-    return response
-
-
-@router.post(
-    "/system/secrets/{provider}",
-    include_in_schema=False,
-    name="system_validate_secret",
-    dependencies=[Depends(enforce_csrf)],
-)
-async def system_validate_secret(
-    provider: str,
-    request: Request,
-    session: UiSession = Depends(require_admin_with_feature("imports")),
-    service: SystemUiService = Depends(get_system_ui_service),
-    db_session: Session = Depends(get_db),
-) -> Response:
-    cards = build_system_secret_cards()
-    base_card = select_system_secret_card(cards, provider)
-    if base_card is None:
-        return _render_alert_fragment(
-            request,
-            "Unknown secret provider requested.",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    target_selector = f"#{base_card.target_id}"
-
-    form_values = _parse_form_body(await request.body())
-    override_value = form_values.get("value", "")
-    override_value = override_value.strip() or None
-
-    try:
-        result = await service.validate_secret(
-            request,
-            provider=provider,
-            override=override_value,
-            session=db_session,
-        )
-    except AppError as exc:
-        message = exc.message or "Secret validation failed."
-        return _render_alert_fragment(
-            request,
-            message,
-            status_code=status.HTTP_200_OK,
-            retry_url=f"/ui/system/secrets/{base_card.provider}",
-            retry_target=target_selector,
-        )
-    except Exception:
-        logger.exception("system.ui.secret.validate")
-        return _render_alert_fragment(
-            request,
-            "Secret validation failed.",
-            retry_url=f"/ui/system/secrets/{base_card.provider}",
-            retry_target=target_selector,
-        )
-
-    updated_card = attach_secret_result(base_card, result)
-    csrf_manager = get_csrf_manager(request)
-    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    context = build_system_secret_card_context(
-        request,
-        card=updated_card,
-        csrf_token=csrf_token,
-    )
-    response = templates.TemplateResponse(
-        request,
-        "partials/system_secret_card.j2",
-        context,
-    )
-    if issued:
-        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
-    return response
-
-
-@router.get("/events", include_in_schema=False, name="ui_events")
-async def ui_events(
-    request: Request,
-    session: UiSession = Depends(require_session),
-    downloads_service: DownloadsUiService = Depends(get_downloads_ui_service),
-    jobs_service: JobsUiService = Depends(get_jobs_ui_service),
-    watchlist_service: WatchlistUiService = Depends(get_watchlist_ui_service),
-    activity_service: ActivityUiService = Depends(get_activity_ui_service),
-    config: AppConfig = Depends(get_app_config),
-) -> Response:
-    if _resolve_live_updates_mode(config) != _LIVE_UPDATES_SSE:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Live updates via SSE are disabled.",
-        )
-
-    csrf_token = request.cookies.get("csrftoken", "")
-
-    def _render_fragment(
-        event_name: str,
-        template_name: str,
-        context: Mapping[str, Any],
-    ) -> dict[str, Any] | None:
-        fragment = context.get("fragment")
-        if fragment is None:
-            return None
-        template = templates.get_template(template_name)
-        html = template.render(context)
-        data_attributes = dict(getattr(fragment, "data_attributes", {}))
-        return {
-            "event": event_name,
-            "fragment_id": fragment.identifier,
-            "html": html,
-            "data_attributes": data_attributes,
-        }
-
-    builders: list[_LiveFragmentBuilder] = []
-
-    if session.features.dlq and session.allows("operator"):
-
-        async def _build_downloads() -> dict[str, Any] | None:
-            page = downloads_service.list_downloads(
-                limit=20,
-                offset=0,
-                include_all=False,
-                status_filter=None,
-            )
-            context = build_downloads_fragment_context(
-                request,
-                page=page,
-                status_filter=None,
-                include_all=False,
-            )
-            context["csrf_token"] = csrf_token
-            return _render_fragment("downloads", "partials/downloads_table.j2", context)
-
-        async def _build_jobs() -> dict[str, Any] | None:
-            jobs = await jobs_service.list_jobs(request)
-            context = build_jobs_fragment_context(
-                request,
-                jobs=jobs,
-            )
-            return _render_fragment("jobs", "partials/jobs_fragment.j2", context)
-
-        builders.append(
-            _LiveFragmentBuilder(name="downloads", interval=15.0, build=_build_downloads)
-        )
-        builders.append(_LiveFragmentBuilder(name="jobs", interval=15.0, build=_build_jobs))
-
-    if session.allows("operator"):
-
-        async def _build_watchlist() -> dict[str, Any] | None:
-            table = watchlist_service.list_entries(request)
-            context = build_watchlist_fragment_context(
-                request,
-                entries=table.entries,
-            )
-            return _render_fragment("watchlist", "partials/watchlist_table.j2", context)
-
-        builders.append(
-            _LiveFragmentBuilder(name="watchlist", interval=30.0, build=_build_watchlist)
-        )
-
-    async def _build_activity() -> dict[str, Any] | None:
-        page = activity_service.list_activity(
-            limit=50,
-            offset=0,
-            type_filter=None,
-            status_filter=None,
-        )
-        context = build_activity_fragment_context(
-            request,
-            items=page.items,
-            limit=page.limit,
-            offset=page.offset,
-            total_count=page.total_count,
-            type_filter=page.type_filter,
-            status_filter=page.status_filter,
-        )
-        return _render_fragment("activity", "partials/activity_table.j2", context)
-
-    builders.append(_LiveFragmentBuilder(name="activity", interval=60.0, build=_build_activity))
-
-    logger.info(
-        "ui.events.start",
-        extra={"role": session.role, "fragments": [builder.name for builder in builders]},
-    )
-
-    stream = _ui_event_stream(request, builders)
-    headers = {
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-    }
-    return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
-
-
-@router.get("/operations", include_in_schema=False, name="operations_page")
-async def operations_page(
-    request: Request,
-    session: UiSession = Depends(require_role("operator")),
-    config: AppConfig = Depends(get_app_config),
-) -> Response:
-    csrf_manager = get_csrf_manager(request)
-    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
-    context = build_operations_page_context(
-        request,
-        session=session,
-        csrf_token=csrf_token,
-        live_updates_mode=_resolve_live_updates_mode(config),
-    )
-    response = templates.TemplateResponse(
-        request,
-        "pages/operations.j2",
-        context,
-    )
-    if issued:
-        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
-    return response
 
 
 @router.get("/downloads", include_in_schema=False, name="downloads_page")
