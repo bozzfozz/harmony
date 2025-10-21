@@ -1,16 +1,15 @@
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/alerts.j2" as alerts %}
 
-{{ alerts.render_alerts(alert_messages) }}
-
-<div class="spotify-free-ingest">
+<div id="hx-import-result" class="spotify-free-ingest">
+  {{ alerts.render_alerts(alert_messages) }}
   <p class="spotify-free-ingest__hint">{{ strings.spotify_free_ingest_description() }}</p>
   <form id="spotify-free-ingest-form"
         method="post"
         action="/ui/spotify/free/run"
         hx-post="/ui/spotify/free/run"
-        hx-target="closest .async-fragment"
-        hx-swap="innerHTML">
+        hx-target="#hx-import-result"
+        hx-swap="outerHTML">
     <input type="hidden" name="csrftoken" value="{{ form.csrf_token }}" />
     <label for="playlist_links">{{ strings.form_label("spotify.free_ingest.playlist_links") }}</label>
     <textarea id="playlist_links"
@@ -38,8 +37,8 @@
         action="/ui/spotify/free/upload"
         enctype="multipart/form-data"
         hx-post="/ui/spotify/free/upload"
-        hx-target="closest .async-fragment"
-        hx-swap="innerHTML"
+        hx-target="#hx-import-result"
+        hx-swap="outerHTML"
         hx-encoding="multipart/form-data">
     <input type="hidden" name="csrftoken" value="{{ form.csrf_token }}" />
     <label for="ingest_file">{{ strings.form_label("spotify.free_ingest.upload_file") }}</label>

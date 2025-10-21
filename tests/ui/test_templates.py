@@ -1947,6 +1947,9 @@ def test_spotify_free_ingest_partial_renders_form_and_status() -> None:
     html = template.render(**context)
 
     assert 'id="spotify-free-ingest-form"' in html
+    assert 'id="hx-import-result"' in html
+    assert html.count('hx-target="#hx-import-result"') == 2
+    assert html.count('hx-swap="outerHTML"') == 2
     assert 'hx-post="/ui/spotify/free/run"' in html
     assert 'id="spotify-free-ingest-upload-form"' in html
     assert 'enctype="multipart/form-data"' in html

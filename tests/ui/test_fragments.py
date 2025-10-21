@@ -5077,6 +5077,8 @@ def test_spotify_free_ingest_fragment_renders_form(monkeypatch) -> None:
             )
             _assert_html_response(response)
             assert "spotify-free-ingest-form" in response.text
+            assert 'id="hx-import-result"' in response.text
+            assert 'hx-target="#hx-import-result"' in response.text
             assert "job-free" in response.text
             assert stub.free_ingest_status_calls[-1] is None
     finally:
@@ -5144,6 +5146,7 @@ def test_spotify_free_ingest_run_returns_fragment(monkeypatch) -> None:
                 headers=headers,
             )
             _assert_html_response(response)
+            assert 'hx-target="#hx-import-result"' in response.text
             assert "job-free" in response.text
             assert "Queued tracks" in response.text
             assert stub.free_import_calls == [
@@ -5167,6 +5170,7 @@ def test_spotify_free_ingest_run_requires_input(monkeypatch) -> None:
                 headers=headers,
             )
             _assert_html_response(response)
+            assert 'hx-target="#hx-import-result"' in response.text
             assert "Provide at least one playlist link or track entry." in response.text
             assert stub.free_import_calls == []
     finally:
@@ -5205,6 +5209,7 @@ def test_spotify_free_ingest_upload_returns_fragment(monkeypatch) -> None:
                 headers=headers,
             )
             _assert_html_response(response)
+            assert 'hx-target="#hx-import-result"' in response.text
             assert "Free ingest job job-free enqueued." in response.text
             assert stub.free_upload_calls[0][0] == "tracks.txt"
             assert stub.free_import_calls == [(tuple(), ("Artist - Track",))]
