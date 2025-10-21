@@ -348,7 +348,15 @@ async def refresh_download_lyrics(
     track_info.setdefault("filename", str(resolved_path))
     track_info.setdefault("download_id", download.id)
 
-    await worker.enqueue(download.id, str(resolved_path), track_info)
+    try:
+        await worker.enqueue(download.id, str(resolved_path), track_info)
+    except Exception as exc:
+        logger.error(
+            "Failed to refresh lyrics for download %s: %s",
+            download.id,
+            exc,
+        )
+        raise HTTPException(status_code=502, detail="Failed to refresh lyrics") from exc
 
     download.lyrics_status = "pending"
     download.has_lyrics = False

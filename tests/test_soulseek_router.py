@@ -117,6 +117,18 @@ class _StubLyricsWorker:
         self.calls.append((download_id, filename, track_info))
 
 
+class _FailingLyricsWorker(_StubLyricsWorker):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self._error = error
+
+    async def enqueue(
+        self, download_id: int | None, filename: str, track_info: dict[str, Any]
+    ) -> None:
+        await super().enqueue(download_id, filename, track_info)
+        raise self._error
+
+
 class _StubMetadataWorker:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
@@ -920,6 +932,36 @@ def test_lyrics_refresh_returns_503_when_worker_missing(
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Lyrics worker unavailable"}
+
+
+def test_lyrics_refresh_returns_502_when_worker_enqueue_fails(
+    soulseek_client: TestClient, download_factory: Callable[..., Download]
+) -> None:
+    downloads_dir = _downloads_dir()
+    audio_path = downloads_dir / f"lyrics-worker-failure-{uuid4().hex}.mp3"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    download = download_factory(
+        state="completed",
+        progress=1.0,
+        filename=str(audio_path),
+        has_lyrics=True,
+        lyrics_status="done",
+    )
+
+    failing_worker = _FailingLyricsWorker(RuntimeError("enqueue failed"))
+    soulseek_client.app.state.lyrics_worker = failing_worker
+
+    response = soulseek_client.post(f"/soulseek/download/{download.id}/lyrics/refresh")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Failed to refresh lyrics"}
+    assert len(failing_worker.calls) == 1
+
+    with session_scope() as session:
+        refreshed = session.get(Download, download.id)
+        assert refreshed is not None
+        assert refreshed.lyrics_status == "done"
+        assert refreshed.has_lyrics is True
 
 
 def test_artwork_detail_rejects_invalid_paths(soulseek_client: TestClient) -> None:
