@@ -46,6 +46,7 @@ from app.services.secret_validation import SecretValidationService
 from app.utils.activity import activity_manager
 from app.utils.path_safety import allowed_download_roots
 from app.ui.router import router as ui_router
+from app.ui.session import register_ui_session_metrics
 from app.utils.settings_store import ensure_default_settings
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
@@ -549,6 +550,7 @@ async def _stop_background_workers(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = get_app_config()
+    register_ui_session_metrics()
     _configure_application(config)
     app.state.config_snapshot = config
 

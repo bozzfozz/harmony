@@ -23,7 +23,8 @@ from app.ui.services import (
     SpotifyFreeIngestSkipped,
     get_spotify_ui_service,
 )
-from app.ui.session import fingerprint_api_key
+from app.ui.session import fingerprint_api_key, register_ui_session_metrics
+from app.utils import metrics
 
 _CSRF_META_PATTERN = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
 
@@ -45,6 +46,15 @@ def _create_client(monkeypatch, extra_env: dict[str, str] | None = None) -> Test
     config = get_app_config()
     assert config.security.api_keys
     return TestClient(app)
+
+
+def _metric_value(name: str, labels: dict[str, str]) -> float:
+    registry = metrics.get_registry()
+    for family in registry.collect():
+        for sample in family.samples:
+            if sample.name == name and sample.labels == labels:
+                return float(sample.value)
+    return 0.0
 
 
 def test_login_page_renders_html(monkeypatch) -> None:
@@ -191,6 +201,45 @@ def test_logout_form_token(monkeypatch) -> None:
         )
         assert submission.status_code == 303
         assert submission.headers["location"] == "/ui/login"
+
+
+def test_session_metrics_increment_on_login_logout(monkeypatch) -> None:
+    metrics.reset_registry()
+    register_ui_session_metrics()
+
+    with _create_client(monkeypatch) as client:
+        assert _metric_value(
+            "ui_sessions_created_total",
+            {"role": "operator"},
+        ) == 0.0
+        assert _metric_value(
+            "ui_sessions_terminated_total",
+            {"role": "operator", "reason": "logout"},
+        ) == 0.0
+
+        login = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert login.status_code == 303
+
+        assert _metric_value(
+            "ui_sessions_created_total",
+            {"role": "operator"},
+        ) == 1.0
+
+        token = client.cookies.get("csrftoken")
+        assert token
+        token = token.replace('"', "")
+        cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
+        logout = client.post(
+            "/ui/logout",
+            follow_redirects=False,
+            headers={"X-CSRF-Token": token, "Cookie": cookie_header},
+        )
+        assert logout.status_code == 303
+
+        assert _metric_value(
+            "ui_sessions_terminated_total",
+            {"role": "operator", "reason": "logout"},
+        ) == 1.0
 
 
 class _JobTrackingSpotifyService:

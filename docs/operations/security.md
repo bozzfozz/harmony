@@ -42,7 +42,7 @@
 ## Logging & Monitoring
 - Login attempts log user identifier (hash/fingerprint) and result without exposing the API key.
 - CSRF failures produce structured warnings with request metadata to support incident analysis.
-- Session issuance and revocation expose counters for monitoring.
+- Session issuance and revocation expose Prometheus counters (`ui_sessions_created_total{role="…"}` and `ui_sessions_terminated_total{role="…",reason="…"}`) exported via `/api/v1/metrics`.
 
 ## Operational Checklist
 1. Ensure TLS termination so that `Secure` cookies are honored end-to-end.
