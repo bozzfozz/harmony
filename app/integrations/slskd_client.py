@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -354,13 +356,34 @@ def _parse_retry_after_ms(headers: Mapping[str, Any]) -> int | None:
     value = headers.get("Retry-After") if isinstance(headers, Mapping) else None
     if value is None:
         return None
-    if isinstance(value, int | float):
-        return max(0, int(value * 1000))
-    try:
-        numeric = int(str(value).strip())
-    except (TypeError, ValueError):
+
+    delay_seconds: float | None = None
+
+    if isinstance(value, (int, float)):
+        delay_seconds = float(value)
+    else:
+        value_str = str(value).strip()
+        if not value_str:
+            return None
+
+        try:
+            delay_seconds = float(value_str)
+        except ValueError:
+            try:
+                target_dt = parsedate_to_datetime(value_str)
+            except (TypeError, ValueError):
+                return None
+            if target_dt is None:
+                return None
+            if target_dt.tzinfo is None:
+                target_dt = target_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delay_seconds = (target_dt - now).total_seconds()
+
+    if delay_seconds is None:
         return None
-    return max(0, numeric * 1000)
+
+    return max(0, int(delay_seconds * 1000))
 
 
 __all__ = [
