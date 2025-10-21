@@ -1287,7 +1287,7 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'data-test="nav-soulseek-status"' in html
     assert "status-badge--success" in html
     assert 'hx-get="/ui/soulseek/status"' in html
-    assert 'hx-get="/ui/soulseek/configuration"' in html
+    assert 'hx-get="/ui/soulseek/config"' in html
     assert 'hx-get="/ui/soulseek/uploads"' in html
     assert 'hx-get="/ui/soulseek/downloads"' in html
     assert 'hx-get="/ui/soulseek/discography/jobs"' in html
