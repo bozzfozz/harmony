@@ -123,7 +123,7 @@ Der Zugriff auf die Seite setzt mindestens die Rolle `operator` voraus; Sessions
 | DLQ Übersicht | GET `/api/v1/dlq` (mit Queryparametern) | `load`, `hx-trigger="every 15s"`, Filter `hx-get` | `#hx-dlq-table` | 503 ⇒ Fehlerhinweis |【F:app/routers/dlq_router.py†L170-L197】
 | DLQ Requeue/Purge | POST `/api/v1/dlq/requeue` / `/api/v1/dlq/purge` | Checkbox-Auswahl `hx-post` (nur `admin`) | `hx-swap-oob` Counters, Tabellen-Refresh | Konflikte ⇒ Fehlermeldung |【F:app/routers/dlq_router.py†L200-L239】
 | Metadata-Job | POST `/api/v1/metadata/update`, GET `/api/v1/metadata/status`, POST `/api/v1/metadata/stop` | Buttons mit `hx-post`, Polling alle 15s (`stop` nur `admin`) | `#hx-metadata-card` | 503 ⇒ Worker offline Hinweis |【F:app/routers/metadata_router.py†L19-L77】
-| Soulseek Queue | GET `/api/v1/soulseek/downloads` | Tab-Ladevorgang, `hx-trigger="every 15s"` | `#hx-soulseek-queue` | 5xx ⇒ Fehlerbanner |【F:app/routers/soulseek_router.py†L623-L633】
+| Soulseek Queue | GET `/api/v1/downloads` | Tab-Ladevorgang, `hx-trigger="every 30s"` | `#hx-soulseek-downloads` | 5xx ⇒ Fehlerbanner; Kontext siehe `build_soulseek_page_context` (Fragment) & `DownloadsUiService.list_downloads` (Adapter) |【F:app/ui/context.py†L2098-L2105】【F:app/ui/services/downloads.py†L64-L109】
 | Soulseek Requeue/Cancel | POST `/api/v1/soulseek/downloads/{id}/requeue`, DELETE `/api/v1/soulseek/download/{id}` | Action-Buttons (nur `admin` für Requeue/Stop) | Zeilen-Update, `hx-swap-oob` Stats | 409/503 ⇒ Toast |【F:app/routers/soulseek_router.py†L635-L719】
 
 ### Watchlist (/ui/watchlist)
