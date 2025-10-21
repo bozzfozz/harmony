@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 
 from starlette.requests import Request
 
-from app.ui.context import CallToActionCard, build_admin_page_context
+from app.ui.context.admin import build_admin_page_context
+from app.ui.context.base import CallToActionCard
 from app.ui.session import UiFeatures, UiSession
 
 

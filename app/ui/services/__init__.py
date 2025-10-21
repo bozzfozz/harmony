@@ -34,8 +34,8 @@ from .soulseek import (
 from .spotify import (
     SpotifyAccountSummary,
     SpotifyArtistRow,
-    SpotifyBackfillSnapshot,
     SpotifyBackfillOption,
+    SpotifyBackfillSnapshot,
     SpotifyBackfillTimelineEntry,
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -51,10 +51,10 @@ from .spotify import (
     SpotifyRecommendationRow,
     SpotifyRecommendationSeed,
     SpotifySavedTrackRow,
-    SpotifyTrackDetail,
+    SpotifyStatus,
     SpotifyTopArtistRow,
     SpotifyTopTrackRow,
-    SpotifyStatus,
+    SpotifyTrackDetail,
     SpotifyUiService,
     get_spotify_ui_service,
 )

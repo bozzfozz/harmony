@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
+import subprocess
 
 
 def test_polling_controller_node_suite() -> None:

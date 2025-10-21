@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Response
 
-from app.ui.context import build_admin_page_context
+from app.ui.context.admin import build_admin_page_context
 from app.ui.csrf import attach_csrf_cookie, get_csrf_manager
 from app.ui.routes.shared import _ensure_csrf_token, templates
 from app.ui.session import UiSession, require_role
-
 
 router = APIRouter()
 

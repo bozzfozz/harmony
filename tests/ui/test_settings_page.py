@@ -1,10 +1,10 @@
-import re
 from datetime import datetime, timezone
+import re
 from types import SimpleNamespace
 
-import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+import pytest
 
 from app.ui.services import get_settings_ui_service
 from app.ui.services.settings import (

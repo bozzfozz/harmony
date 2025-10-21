@@ -4,14 +4,13 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 import hashlib
 import json
 from time import perf_counter
 from typing import Any, Callable, Final, TypeVar
 
 import anyio
-from functools import partial
-
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
@@ -51,9 +50,7 @@ logger = get_logger(__name__)
 _T = TypeVar("_T")
 
 
-async def _run_in_executor(
-    func: Callable[..., _T], /, *args: object, **kwargs: object
-) -> _T:
+async def _run_in_executor(func: Callable[..., _T], /, *args: object, **kwargs: object) -> _T:
     call = partial(func, *args, **kwargs)
     try:
         return await anyio.to_thread.run_sync(call)
@@ -61,6 +58,7 @@ async def _run_in_executor(
         if exc.args:
             raise
         return await asyncio.to_thread(call)
+
 
 _SPOTIFY_TIME_RANGES: Final[frozenset[str]] = frozenset({"short_term", "medium_term", "long_term"})
 _RECOMMENDATION_SEED_SETTINGS_KEY: Final[str] = "spotify.recommendations.seed_defaults"
@@ -355,9 +353,7 @@ class SpotifyUiService:
         self._free_ingest_error: str | None = None
 
     async def status(self) -> SpotifyStatus:
-        payload: SpotifyServiceStatus = await _run_in_executor(
-            self._spotify.get_status
-        )
+        payload: SpotifyServiceStatus = await _run_in_executor(self._spotify.get_status)
         logger.debug(
             "spotify.ui.status",
             extra={
@@ -401,9 +397,7 @@ class SpotifyUiService:
         owner: str | None = None,
         sync_status: str | None = None,
     ) -> Sequence[SpotifyPlaylistRow]:
-        playlists = await _run_in_executor(
-            self._spotify.list_playlists, self._db
-        )
+        playlists = await _run_in_executor(self._spotify.list_playlists, self._db)
         owner_filter = self._normalise_filter(owner)
         status_filter = self._normalise_filter(sync_status)
         rows = [
@@ -433,9 +427,7 @@ class SpotifyUiService:
         return tuple(rows)
 
     async def playlist_filters(self) -> SpotifyPlaylistFilters:
-        playlists = await _run_in_executor(
-            self._spotify.list_playlists, self._db
-        )
+        playlists = await _run_in_executor(self._spotify.list_playlists, self._db)
         owners: set[str] = set()
         statuses: set[str] = set()
 
@@ -965,9 +957,7 @@ class SpotifyUiService:
         skipped: list[str] = []
         for track_id in cleaned:
             try:
-                detail = await _run_in_executor(
-                    self._spotify.get_track_details, track_id
-                )
+                detail = await _run_in_executor(self._spotify.get_track_details, track_id)
             except AppError:
                 raise
             except Exception:
@@ -1592,9 +1582,7 @@ class SpotifyUiService:
         if not job_id:
             return None
         try:
-            status = await _run_in_executor(
-                self._spotify.get_free_ingest_job, job_id
-            )
+            status = await _run_in_executor(self._spotify.get_free_ingest_job, job_id)
         except Exception:
             logger.exception("spotify.ui.free_ingest.status_error")
             return None
@@ -1724,18 +1712,14 @@ class SpotifyUiService:
         if not track_key:
             raise ValueError("A Spotify track identifier is required.")
 
-        detail_payload = await _run_in_executor(
-            self._spotify.get_track_details, track_key
-        )
+        detail_payload = await _run_in_executor(self._spotify.get_track_details, track_key)
         detail: Mapping[str, Any] | None
         if isinstance(detail_payload, Mapping):
             detail = dict(detail_payload)
         else:
             detail = None
 
-        features_payload = await _run_in_executor(
-            self._spotify.get_audio_features, track_key
-        )
+        features_payload = await _run_in_executor(self._spotify.get_audio_features, track_key)
         features: Mapping[str, Any] | None
         if isinstance(features_payload, Mapping):
             features = dict(features_payload)
@@ -1955,9 +1939,7 @@ class SpotifyUiService:
             raise LookupError(job_id)
         return payload
 
-    async def backfill_timeline(
-        self, *, limit: int = 10
-    ) -> Sequence[SpotifyBackfillTimelineEntry]:
+    async def backfill_timeline(self, *, limit: int = 10) -> Sequence[SpotifyBackfillTimelineEntry]:
         resolved_limit = max(1, min(int(limit or 0), 25))
         try:
             jobs: Sequence[BackfillJobRecord] = await _run_in_executor(

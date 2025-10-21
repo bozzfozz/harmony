@@ -6,7 +6,7 @@ from app.dependencies import get_app_config
 from app.errors import AppError
 from app.logging_events import log_event
 from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
-from app.ui.context import (
+from app.ui.context.operations import (
     build_watchlist_fragment_context,
     build_watchlist_page_context,
 )
@@ -21,7 +21,6 @@ from app.ui.routes.shared import (
 )
 from app.ui.services import WatchlistUiService, get_watchlist_ui_service
 from app.ui.session import UiSession, require_role
-
 
 router = APIRouter()
 

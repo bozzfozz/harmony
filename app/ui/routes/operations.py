@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from app.config import AppConfig
 from app.dependencies import get_app_config
-from app.ui.context import build_operations_page_context
+from app.ui.context.operations import build_operations_page_context
 from app.ui.csrf import attach_csrf_cookie, get_csrf_manager
 from app.ui.routes.shared import _ensure_csrf_token, _resolve_live_updates_mode, templates
 from app.ui.session import UiSession, require_role

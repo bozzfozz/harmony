@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime
+import hashlib
 from types import SimpleNamespace
 from typing import Mapping
 from unittest.mock import AsyncMock, Mock, patch
@@ -24,7 +24,7 @@ from app.services.free_ingest_service import (
 )
 from app.services.oauth_service import OAuthStartResponse
 from app.services.spotify_domain_service import SpotifyServiceStatus
-from app.ui.context import (
+from app.ui.context.spotify import (
     build_spotify_playlist_items_context,
     build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,

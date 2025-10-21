@@ -13,8 +13,8 @@ from app.errors import AppError
 from app.logging_events import log_event
 from app.schemas import SoulseekDownloadRequest
 from app.services.download_service import DownloadService
-from app.ui.context import (
-    AlertMessage,
+from app.ui.context.base import AlertMessage
+from app.ui.context.search import (
     build_search_page_context,
     build_search_results_context,
 )
@@ -27,7 +27,6 @@ from app.ui.routes.shared import (
 )
 from app.ui.services import SearchUiService, get_search_ui_service
 from app.ui.session import UiSession, require_role
-
 
 router = APIRouter()
 

@@ -1,12 +1,11 @@
-from datetime import datetime
 from dataclasses import replace
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.logging_events import log_event
-from app.ui.context import (
-    AlertMessage,
-    LayoutContext,
+from app.ui.context.base import AlertMessage, LayoutContext
+from app.ui.context.settings import (
     build_settings_artist_preferences_fragment_context,
     build_settings_form_fragment_context,
     build_settings_history_fragment_context,
@@ -22,7 +21,6 @@ from app.ui.routes.shared import (
 )
 from app.ui.services import SettingsOverview, SettingsUiService, get_settings_ui_service
 from app.ui.session import UiSession, require_role
-
 
 router = APIRouter()
 

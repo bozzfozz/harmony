@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from starlette.requests import Request
 
-from app.ui.context import (
+from app.ui.context.operations import (
     build_activity_page_context,
     build_downloads_page_context,
     build_operations_page_context,

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+import json
 from pathlib import Path
+import time
 from typing import Any, Literal
 from urllib.parse import parse_qs
 
@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import AppConfig
 from app.logging import get_logger
 from app.ui.assets import asset_url
-from app.ui.context import AlertMessage, get_ui_assets
+from app.ui.context.base import AlertMessage, get_ui_assets
 from app.ui.session import UiSession
 
 logger = get_logger("app.ui.router")

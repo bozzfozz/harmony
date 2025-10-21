@@ -77,4 +77,4 @@ common interventions stay discoverable without leaving the UI.
 - Aggregated Soulseek data and helper models live in
   [`app/ui/services/soulseek.py`](../../app/ui/services/soulseek.py).
 - HTMX fragment wiring (IDs, polling, targets) is defined in
-  [`app/ui/context.py`](../../app/ui/context.py).
+  [`app/ui/context/soulseek.py`](../../app/ui/context/soulseek.py).

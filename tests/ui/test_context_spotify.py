@@ -4,16 +4,15 @@ from datetime import UTC, datetime
 
 from starlette.requests import Request
 
-from app.ui.context import (
-    AlertMessage,
-    build_spotify_page_context,
+from app.ui.context.base import AlertMessage
+from app.ui.context.spotify import (
     build_spotify_free_ingest_context,
     build_spotify_free_ingest_form_context,
     build_spotify_free_ingest_status_context,
+    build_spotify_page_context,
     build_spotify_recommendations_context,
     build_spotify_saved_tracks_context,
 )
-from app.ui.session import UiFeatures, UiSession
 from app.ui.services import (
     SpotifyFreeIngestAccepted,
     SpotifyFreeIngestJobCounts,
@@ -23,6 +22,7 @@ from app.ui.services import (
     SpotifyRecommendationRow,
     SpotifySavedTrackRow,
 )
+from app.ui.session import UiFeatures, UiSession
 
 
 def _make_request(path: str = "/ui/spotify/free") -> Request:
