@@ -71,7 +71,7 @@ from app.ui.context import (
     build_watchlist_fragment_context,
     build_watchlist_page_context,
 )
-from app.ui.router import templates
+from app.ui.routes.shared import templates
 from app.ui.services import (
     ArtistPreferenceRow,
     DownloadPage,
@@ -1467,10 +1467,7 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert 'data-test="nav-home"' in html
     assert "alert alert--warning" in html
     assert "Check status" in html
-    assert (
-        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-        in html
-    )
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1" />' in html
     assert '<meta name="csrf-token" content="token" />' in html
     assert 'data-role="alert-region"' in html
     assert 'id="ui-alert-region"' in html
@@ -1680,9 +1677,7 @@ def test_spotify_status_partial_renders_forms_and_badges() -> None:
     assert context["runbook_url"] == "/api/v1/docs/operations/runbooks/hdm.md"
     assert f'href="{context["runbook_url"]}"' in html
     assert "Open Spotify runbook" in html
-    assert (
-        'title="Open the Spotify runbook documentation in a new tab."' in html
-    )
+    assert 'title="Open the Spotify runbook documentation in a new tab."' in html
     assert 'target="_blank"' in html
 
 
@@ -1723,8 +1718,7 @@ def test_spotify_status_context_uses_docs_base_url() -> None:
     )
 
     assert (
-        context["runbook_url"]
-        == "https://docs.example.com/harmony/docs/operations/runbooks/hdm.md"
+        context["runbook_url"] == "https://docs.example.com/harmony/docs/operations/runbooks/hdm.md"
     )
 
 

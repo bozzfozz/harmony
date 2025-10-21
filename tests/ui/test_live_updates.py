@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 import pytest
 
-from app.ui.router import _LiveFragmentBuilder, _ui_event_stream
+from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream
 from tests.ui.test_operations_pages import _cookies_header
 from tests.ui.test_ui_auth import _create_client
 
