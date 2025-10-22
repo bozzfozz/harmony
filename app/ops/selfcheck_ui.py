@@ -8,8 +8,19 @@ from typing import Any, Sequence
 UI_ROOT = Path(__file__).resolve().parent.parent / "ui"
 
 REQUIRED_PAGE_TEMPLATES: tuple[str, ...] = (
+    "pages/activity.j2",
+    "pages/admin.j2",
     "pages/dashboard.j2",
+    "pages/downloads.j2",
+    "pages/jobs.j2",
     "pages/login.j2",
+    "pages/operations.j2",
+    "pages/search.j2",
+    "pages/settings.j2",
+    "pages/soulseek.j2",
+    "pages/spotify.j2",
+    "pages/system.j2",
+    "pages/watchlist.j2",
 )
 
 REQUIRED_LAYOUT_TEMPLATES: tuple[str, ...] = ("layouts/base.j2",)
@@ -26,7 +37,37 @@ REQUIRED_PARTIAL_TEMPLATES: tuple[str, ...] = (
     "partials/modals.j2",
     "partials/nav.j2",
     "partials/search_results.j2",
+    "partials/settings_artist_preferences.j2",
+    "partials/settings_form.j2",
+    "partials/settings_history.j2",
+    "partials/soulseek_config.j2",
+    "partials/soulseek_discography_jobs.j2",
+    "partials/soulseek_discography_modal.j2",
+    "partials/soulseek_download_artwork.j2",
+    "partials/soulseek_download_lyrics.j2",
+    "partials/soulseek_download_metadata.j2",
+    "partials/soulseek_status.j2",
+    "partials/soulseek_uploads.j2",
+    "partials/soulseek_user_directory.j2",
+    "partials/soulseek_user_info.j2",
+    "partials/spotify_account.j2",
+    "partials/spotify_artists.j2",
+    "partials/spotify_backfill.j2",
+    "partials/spotify_free_ingest.j2",
+    "partials/spotify_playlist_items.j2",
+    "partials/spotify_playlists.j2",
+    "partials/spotify_recommendations.j2",
+    "partials/spotify_saved_tracks.j2",
+    "partials/spotify_status.j2",
+    "partials/spotify_top_artists.j2",
+    "partials/spotify_top_tracks.j2",
+    "partials/spotify_track_detail.j2",
     "partials/status_badges.j2",
+    "partials/system_integrations.j2",
+    "partials/system_liveness.j2",
+    "partials/system_readiness.j2",
+    "partials/system_secret_card.j2",
+    "partials/system_services.j2",
     "partials/tables.j2",
     "partials/watchlist_table.j2",
 )
@@ -39,8 +80,11 @@ REQUIRED_TEMPLATE_FILES: tuple[str, ...] = (
 
 REQUIRED_STATIC_ASSETS: tuple[str, ...] = (
     "css/app.css",
-    "js/htmx.min.js",
     "icons.svg",
+    "js/htmx-error-handler.js",
+    "js/htmx.min.js",
+    "js/polling-controller.js",
+    "js/ui-bootstrap.js",
 )
 
 
