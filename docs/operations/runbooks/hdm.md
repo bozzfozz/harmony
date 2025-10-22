@@ -76,8 +76,37 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
    automatisch schließen und `GET /spotify/status` `authorized: true`
    melden. In Logs erscheint `oauth.service: authorization completed`.
 4. **Backfill beobachten:** Prüfen Sie `GET /api/v1/backfill/status` sowie die
-   Worker-Logs (`download`, `watchlist`). Der Flow ist abgeschlossen, wenn neue
-   Tasks mit Spotify-Metadaten ohne Fehler persistiert sind.
+  Worker-Logs (`download`, `watchlist`). Der Flow ist abgeschlossen, wenn neue
+  Tasks mit Spotify-Metadaten ohne Fehler persistiert sind.
+5. **Manuellen Sync über das Dashboard anstoßen (optional):**
+   1. Melden Sie sich mit einem Operator-Account in der UI an. Der Button
+      erscheint nur, wenn die Feature-Flags `UI_FEATURE_SPOTIFY=true` und
+      `UI_FEATURE_SOULSEEK=true` aktiv sind.
+   2. Öffnen Sie die Dashboard-Ansicht. Im Abschnitt „Dashboard actions“
+      befinden sich der Button **Trigger sync** sowie der Bereich „Manual sync
+      status“.
+   3. Klicken Sie auf **Trigger sync** und bestätigen Sie den Dialog „Trigger a
+      manual sync run now?“. Während der Request läuft, deaktiviert die UI den
+      Button (`aria-busy`).
+   4. Beobachten Sie das Alert-Fragment über den Karten: erfolgreiche Läufe
+      zeigen eine grüne Toast-Meldung, Fehler erscheinen rot.
+
+   - Das Panel „Manual sync status“ aktualisiert sich automatisch per
+     Out-of-band-Swap (HTMX) und zeigt Zeitstempel sowie Resultate der letzten
+     Ausführung.
+   - Der Status-Badge signalisiert `Success`, `Partial` oder `Failed`. `Partial`
+     bedeutet, dass mindestens ein Subsystem Warnungen oder Fehler meldete.
+   - Unter „Source status“ sehen Sie pro Quelle (z. B. Playlists, Library Scan,
+     Auto Sync) den Rückgabestatus aus der API (`results`).
+   - „Key metrics“ listet Zähler wie `tracks_synced`, `tracks_skipped` und
+     `errors`.
+   - „Warnings“ zeigt Normalisierungen aus `errors` (etwa fehlende Secrets);
+     beheben Sie die Ursache und triggern Sie den Sync erneut.
+   - Jede Ausführung erzeugt einen Logeintrag `ui.action.dashboard_sync` im
+     Logger `app.ui.router` inklusive `status`, `results` und `errors`.
+   - Falls der Button nicht sichtbar ist oder HTMX-Requests blockiert werden,
+     führen Sie `POST /api/v1/sync` direkt mit API-Key aus und prüfen Sie
+     anschließend das Dashboard erneut.
 
 ## Monitoring & Observability
 
@@ -88,6 +117,7 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
 | `oauth.exchange.error` | Logs | 0; jede Erhöhung prüfen |
 | `spotify.api.errors` | Logs (`integrations.spotify`) | 0 für 2xx-Calls, Retry-Warnungen toleriert |
 | `backfill.jobs.queued` | Orchestrator-Metrik (Logs) | kurzfristige Peaks ok, < 200 langfristig |
+| `ui.action.dashboard_sync` | UI-Logs (`app.ui.router`) | Jeder manuelle Lauf sollte `status=success` loggen; Einträge mit `status=error` untersuchen |
 
 Weitere Details zu Logging-Konventionen stehen in
 [../../observability.md](../../observability.md).

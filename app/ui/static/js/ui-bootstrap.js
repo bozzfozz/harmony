@@ -23,6 +23,87 @@
     }
   }
 
+  var ACTION_BUTTON_SELECTOR = '[data-role="dashboard-action-button"]';
+
+  var matchesSelector = function (element, selector) {
+    if (!element || !selector) {
+      return false;
+    }
+    if (typeof element.matches === 'function') {
+      return element.matches(selector);
+    }
+    var legacyMatches = element.msMatchesSelector || element.webkitMatchesSelector;
+    if (typeof legacyMatches === 'function') {
+      return legacyMatches.call(element, selector);
+    }
+    return false;
+  };
+
+  var setButtonBusy = function (button, busy) {
+    if (!button) {
+      return;
+    }
+    if (busy) {
+      button.setAttribute('aria-busy', 'true');
+      button.setAttribute('disabled', 'disabled');
+    } else {
+      button.removeAttribute('aria-busy');
+      button.removeAttribute('disabled');
+    }
+  };
+
+  var applySwap = function (button, attribute) {
+    if (!button) {
+      return;
+    }
+    var value = button.getAttribute(attribute);
+    if (value) {
+      button.setAttribute('hx-swap', value);
+    }
+  };
+
+  body.addEventListener('htmx:beforeRequest', function (event) {
+    var detail = event.detail;
+    if (!detail) {
+      return;
+    }
+    var element = detail.elt;
+    if (!matchesSelector(element, ACTION_BUTTON_SELECTOR)) {
+      return;
+    }
+    applySwap(element, 'data-success-swap');
+    setButtonBusy(element, true);
+  });
+
+  body.addEventListener('htmx:afterRequest', function (event) {
+    var detail = event.detail;
+    if (!detail) {
+      return;
+    }
+    var element = detail.elt;
+    if (!matchesSelector(element, ACTION_BUTTON_SELECTOR)) {
+      return;
+    }
+    setButtonBusy(element, false);
+    applySwap(element, 'data-success-swap');
+  });
+
+  body.addEventListener('htmx:beforeSwap', function (event) {
+    var detail = event.detail;
+    if (!detail) {
+      return;
+    }
+    var element = detail.elt;
+    if (!matchesSelector(element, ACTION_BUTTON_SELECTOR)) {
+      return;
+    }
+    if (detail.isError) {
+      applySwap(element, 'data-error-swap');
+    } else {
+      applySwap(element, 'data-success-swap');
+    }
+  });
+
   var initSpotifyFreeIngestDropzone = function () {
     var dropzone = document.getElementById('spotify-free-ingest-dropzone');
     if (!dropzone) {

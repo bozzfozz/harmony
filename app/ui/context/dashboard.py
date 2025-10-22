@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
@@ -13,6 +13,7 @@ from app.ui.services.dashboard import (
     DashboardStatusSummary,
     DashboardWorkerStatus,
 )
+from app.ui.services.sync import SyncActionResult
 from app.ui.session import UiFeatures, UiSession
 
 from .base import (
@@ -21,6 +22,7 @@ from .base import (
     LayoutContext,
     MetaTag,
     StatusBadge,
+    StatusVariant,
     TableCell,
     TableDefinition,
     TableRow,
@@ -75,6 +77,31 @@ class DashboardWorkerView:
     meta: str | None
 
 
+@dataclass(slots=True)
+class DashboardActionMetric:
+    label: str
+    value: str
+    test_id: str | None = None
+
+
+@dataclass(slots=True)
+class DashboardActionResultView:
+    label: str
+    badge: StatusBadge
+    test_id: str | None = None
+
+
+@dataclass(slots=True)
+class DashboardActionState:
+    status_badge: StatusBadge
+    message: str
+    timestamp: str | None
+    results: Sequence[DashboardActionResultView]
+    metrics: Sequence[DashboardActionMetric]
+    errors: Sequence[str]
+    has_data: bool = False
+
+
 def build_dashboard_page_context(
     request: Request,
     *,
@@ -82,20 +109,28 @@ def build_dashboard_page_context(
     csrf_token: str,
 ) -> Mapping[str, Any]:
     actions: list[ActionButton] = []
+    sync_state = build_dashboard_action_state_idle()
 
-    if session.allows("operator"):
-        actions.append(
-            ActionButton(
-                identifier="operator-action",
-                label_key="dashboard.action.operator",
-            )
+    if (
+        session.allows("operator")
+        and session.features.spotify
+        and session.features.soulseek
+    ):
+        sync_url = _safe_url_for(
+            request,
+            "dashboard_sync_action",
+            "/ui/dashboard/sync",
         )
-
-    if session.allows("admin"):
         actions.append(
             ActionButton(
-                identifier="admin-action",
-                label_key="dashboard.action.admin",
+                identifier="dashboard-sync-action",
+                label_key="dashboard.action.sync",
+                url=sync_url,
+                method="post",
+                confirm_text="Trigger a manual sync run now?",
+                target="#ui-alert-region",
+                success_swap="innerHTML",
+                error_swap="innerHTML",
             )
         )
 
@@ -168,6 +203,7 @@ def build_dashboard_page_context(
         "health_fragment": health_fragment,
         "workers_fragment": workers_fragment,
         "activity_fragment": activity_fragment,
+        "sync_state": sync_state,
     }
 
 
@@ -291,6 +327,219 @@ def build_dashboard_workers_fragment_context(
     }
 
 
+def build_dashboard_action_state_idle() -> DashboardActionState:
+    """Return the placeholder state for the dashboard action panel."""
+
+    badge = StatusBadge(
+        label_key="dashboard.sync.status.idle",
+        variant="muted",
+        test_id="dashboard-sync-status",
+    )
+    return DashboardActionState(
+        status_badge=badge,
+        message="Manual sync has not been triggered yet.",
+        timestamp=None,
+        results=(),
+        metrics=(),
+        errors=(),
+        has_data=False,
+    )
+
+
+def build_dashboard_action_state_from_sync(
+    result: SyncActionResult,
+) -> DashboardActionState:
+    """Build a rendered view model from a sync trigger payload."""
+
+    timestamp = format_datetime_display(datetime.now(tz=UTC))
+    results = _build_sync_results(result.results)
+    metrics = _build_sync_metrics(result.counters)
+    errors = _build_sync_errors(result.errors)
+    summary = _compose_sync_summary(result.message, len(results), len(errors))
+    badge = _overall_sync_badge(len(results), len(errors))
+    return DashboardActionState(
+        status_badge=badge,
+        message=summary,
+        timestamp=timestamp,
+        results=tuple(results),
+        metrics=tuple(metrics),
+        errors=tuple(errors),
+        has_data=True,
+    )
+
+
+def build_dashboard_action_state_from_error(
+    message: str,
+    *,
+    meta: Mapping[str, Any] | None = None,
+) -> DashboardActionState:
+    """Create a sync panel state describing an error condition."""
+
+    timestamp = format_datetime_display(datetime.now(tz=UTC))
+    errors = _format_sync_error_meta(meta)
+    if not errors:
+        errors = [message]
+    badge = StatusBadge(
+        label_key="dashboard.sync.status.failed",
+        variant="danger",
+        test_id="dashboard-sync-status",
+    )
+    return DashboardActionState(
+        status_badge=badge,
+        message=message,
+        timestamp=timestamp,
+        results=(),
+        metrics=(),
+        errors=tuple(errors),
+        has_data=True,
+    )
+
+
+_SYNC_SOURCE_LABELS: Mapping[str, str] = {
+    "playlists": "Playlists",
+    "library_scan": "Library scan",
+    "auto_sync": "Auto sync",
+}
+
+_SYNC_METRIC_LABELS: Mapping[str, str] = {
+    "tracks_synced": "Tracks synced",
+    "tracks_skipped": "Tracks skipped",
+    "errors": "Reported errors",
+}
+
+_SYNC_RESULT_BADGES: Mapping[str, tuple[str, StatusVariant]] = {
+    "completed": ("dashboard.sync.result.completed", "success"),
+    "success": ("dashboard.sync.result.completed", "success"),
+    "running": ("dashboard.sync.result.running", "muted"),
+    "queued": ("dashboard.sync.result.queued", "muted"),
+    "pending": ("dashboard.sync.result.queued", "muted"),
+    "failed": ("dashboard.sync.result.failed", "danger"),
+    "error": ("dashboard.sync.result.failed", "danger"),
+}
+
+
+def _build_sync_results(results: Mapping[str, str]) -> list[DashboardActionResultView]:
+    items: list[DashboardActionResultView] = []
+    for name, status_text in sorted(results.items()):
+        slug = _slugify(str(name))
+        test_id = f"dashboard-sync-result-{slug}"
+        badge = _sync_result_badge(status_text, test_id=test_id)
+        label = _format_sync_source_label(name)
+        items.append(
+            DashboardActionResultView(
+                label=label,
+                badge=badge,
+                test_id=test_id,
+            )
+        )
+    return items
+
+
+def _build_sync_metrics(counters: Mapping[str, int]) -> list[DashboardActionMetric]:
+    metrics: list[DashboardActionMetric] = []
+    for key, value in sorted(counters.items()):
+        slug = _slugify(str(key))
+        metrics.append(
+            DashboardActionMetric(
+                label=_format_sync_metric_label(key),
+                value=str(value),
+                test_id=f"dashboard-sync-metric-{slug}",
+            )
+        )
+    return metrics
+
+
+def _build_sync_errors(errors: Mapping[str, str]) -> list[str]:
+    messages: list[str] = []
+    for name, detail in sorted(errors.items()):
+        label = _format_sync_source_label(name)
+        text = detail.strip() if isinstance(detail, str) else str(detail or "")
+        messages.append(f"{label}: {text}" if text else label)
+    return messages
+
+
+def _format_sync_source_label(name: Any) -> str:
+    normalized = str(name or "").strip().lower()
+    if normalized in _SYNC_SOURCE_LABELS:
+        return _SYNC_SOURCE_LABELS[normalized]
+    fallback = normalized.replace("_", " ").strip()
+    return fallback.title() if fallback else "Source"
+
+
+def _format_sync_metric_label(name: Any) -> str:
+    normalized = str(name or "").strip().lower()
+    return _SYNC_METRIC_LABELS.get(normalized, normalized.replace("_", " ").title() or "Value")
+
+
+def _sync_result_badge(status: str, *, test_id: str) -> StatusBadge:
+    normalized = (status or "").strip().lower()
+    label_key, variant = _SYNC_RESULT_BADGES.get(
+        normalized,
+        ("dashboard.sync.result.unknown", "muted"),
+    )
+    return StatusBadge(label_key=label_key, variant=variant, test_id=test_id)
+
+
+def _overall_sync_badge(results_count: int, error_count: int) -> StatusBadge:
+    if results_count and error_count:
+        label_key = "dashboard.sync.status.partial"
+        variant: StatusVariant = "muted"
+    elif results_count:
+        label_key = "dashboard.sync.status.success"
+        variant = "success"
+    elif error_count:
+        label_key = "dashboard.sync.status.failed"
+        variant = "danger"
+    else:
+        label_key = "dashboard.sync.status.idle"
+        variant = "muted"
+    return StatusBadge(label_key=label_key, variant=variant, test_id="dashboard-sync-status")
+
+
+def _compose_sync_summary(message: str, results_count: int, error_count: int) -> str:
+    base = (message or "Manual sync triggered").strip()
+    details: list[str] = []
+    if results_count:
+        details.append(_pluralize(results_count, "source updated", "sources updated"))
+    if error_count:
+        details.append(_pluralize(error_count, "warning"))
+    if not details:
+        return base
+    normalized_base = base.rstrip(". ")
+    return f"{normalized_base} — {', '.join(details)}."
+
+
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    term = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {term}"
+
+
+def _format_sync_error_meta(meta: Mapping[str, Any] | None) -> list[str]:
+    if not meta:
+        return []
+    missing = meta.get("missing")
+    if not isinstance(missing, Mapping):
+        return []
+    messages: list[str] = []
+    for service, details in sorted(missing.items()):
+        label = _format_sync_source_label(service)
+        detail_text = _join_meta_details(details)
+        if detail_text:
+            messages.append(f"{label}: missing {detail_text}")
+        else:
+            messages.append(f"{label}: missing credentials")
+    return messages
+
+
+def _join_meta_details(details: Any) -> str:
+    if isinstance(details, str):
+        return details.strip()
+    if isinstance(details, Sequence) and not isinstance(details, (str, bytes)):
+        parts = [str(item).strip() for item in details if str(item).strip()]
+        return ", ".join(sorted(parts))
+    return ""
+
+
 def _build_features_table(features: UiFeatures) -> TableDefinition:
     feature_rows = [
         ("feature.spotify", features.spotify, "spotify"),
@@ -346,8 +595,14 @@ __all__ = [
     "DashboardIssueView",
     "DashboardStatusView",
     "DashboardWorkerView",
+    "DashboardActionMetric",
+    "DashboardActionResultView",
+    "DashboardActionState",
     "build_dashboard_health_fragment_context",
     "build_dashboard_page_context",
     "build_dashboard_status_fragment_context",
     "build_dashboard_workers_fragment_context",
+    "build_dashboard_action_state_idle",
+    "build_dashboard_action_state_from_sync",
+    "build_dashboard_action_state_from_error",
 ]

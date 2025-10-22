@@ -1,2 +1,5 @@
 {% import "partials/alerts.j2" as alert_macros %}
 {{ alert_macros.render_alerts(alerts) }}
+{% if sync_state %}
+  {% include "partials/dashboard_action_state.j2" with sync_state=sync_state, swap_mode="outerHTML" %}
+{% endif %}

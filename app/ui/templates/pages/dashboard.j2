@@ -98,14 +98,28 @@
     </div>
   </section>
 
-  {% if actions %}
-    <section>
-      <h3>{{ strings.dashboard_actions_heading() }}</h3>
+  <section class="page-section page-section--card" aria-labelledby="dashboard-actions-heading">
+    <h3 id="dashboard-actions-heading" class="page-section__title">{{ strings.dashboard_actions_heading() }}</h3>
+    {% if actions %}
       <div class="dashboard-actions">
         {% for action in actions %}
-          <button id="{{ action.identifier }}" type="button">{{ strings.button_label(action.label_key) }}</button>
+          <button id="{{ action.identifier }}"
+                  class="dashboard-action-button"
+                  type="button"
+                  {{ ('hx-' ~ action.method) }}="{{ action.url }}"
+                  hx-target="{{ action.target }}"
+                  hx-swap="{{ action.success_swap }}"
+                  hx-on="htmx:responseError:handleHtmxError(event)"
+                  data-role="dashboard-action-button"
+                  data-success-swap="{{ action.success_swap }}"
+                  data-error-swap="{{ action.error_swap }}"
+                  {% if action.confirm_text %}hx-confirm="{{ action.confirm_text }}"{% endif %}>
+            {{ strings.button_label(action.label_key) }}
+          </button>
         {% endfor %}
       </div>
-    </section>
-  {% endif %}
+    {% endif %}
+    <h4 class="dashboard-action-state__title">{{ strings.dashboard_sync_heading() }}</h4>
+    {% include "partials/dashboard_action_state.j2" with sync_state=sync_state %}
+  </section>
 {% endblock %}

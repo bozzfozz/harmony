@@ -236,8 +236,10 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert 'id="features-table"' in html
     assert "status-badge--success" in html
     assert "status-badge--muted" in html
-    assert "operator-action" in html
-    assert "admin-action" in html
+    assert "dashboard-sync-action" in html
+    assert "dashboard-action-state" in html
+    assert "/ui/dashboard/sync" in html
+    assert 'data-role="dashboard-action-button"' in html
     assert "Welcome" in html
     assert "Current role: Admin" in html
     assert 'hx-get="/ui/dashboard/status"' in html

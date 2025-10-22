@@ -195,6 +195,7 @@
     "logout": "Logout",
     "dashboard.action.operator": "Operator action",
     "dashboard.action.admin": "Admin action",
+    "dashboard.action.sync": "Trigger sync",
     "spotify.connect": "Connect",
     "spotify.manual.submit": "Complete manually",
     "spotify.backfill.run": "Start backfill",
@@ -499,6 +500,15 @@
     "system.status.passing": "Passing",
     "system.status.pending": "Pending",
     "system.status.n-a": "Not available",
+    "dashboard.sync.status.idle": "Idle",
+    "dashboard.sync.status.success": "Success",
+    "dashboard.sync.status.failed": "Failed",
+    "dashboard.sync.status.partial": "Partial",
+    "dashboard.sync.result.completed": "Completed",
+    "dashboard.sync.result.running": "Running",
+    "dashboard.sync.result.queued": "Queued",
+    "dashboard.sync.result.failed": "Failed",
+    "dashboard.sync.result.unknown": "Unknown",
     "soulseek.downloads.status.queued": "Queued",
     "soulseek.downloads.status.pending": "Pending",
     "soulseek.downloads.status.running": "Running",
@@ -711,6 +721,16 @@
 {% macro dashboard_features_heading() %}Feature availability{% endmacro %}
 
 {% macro dashboard_actions_heading() %}Available actions{% endmacro %}
+
+{% macro dashboard_sync_heading() %}Manual sync status{% endmacro %}
+
+{% macro dashboard_sync_sources_heading() %}Source status{% endmacro %}
+
+{% macro dashboard_sync_metrics_heading() %}Key metrics{% endmacro %}
+
+{% macro dashboard_sync_warnings_heading() %}Warnings{% endmacro %}
+
+{% macro dashboard_sync_updated(timestamp) %}Updated {{ timestamp }}{% endmacro %}
 
 {% macro dashboard_activity_heading() %}Recent activity{% endmacro %}
 
