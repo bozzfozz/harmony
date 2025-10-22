@@ -112,7 +112,7 @@ async def ui_events(
     if session.allows("operator"):
 
         async def _build_watchlist() -> dict[str, Any] | None:
-            table = watchlist_service.list_entries(request)
+            table = await watchlist_service.list_entries_async(request)
             context = build_watchlist_fragment_context(
                 request,
                 entries=table.entries,

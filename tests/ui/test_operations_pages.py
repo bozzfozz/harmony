@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
 
+from app.main import app
+from app.ui.services import get_watchlist_ui_service
 from app.ui.session import fingerprint_api_key
+from tests.ui.test_fragments import _StubWatchlistService
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
 
 
@@ -109,3 +112,23 @@ def test_watchlist_page_renders_form(monkeypatch) -> None:
         html = response.text
         assert 'id="watchlist-create-form"' in html
         assert 'hx-post="/ui/watchlist"' in html
+
+
+def test_watchlist_table_uses_async_service(monkeypatch) -> None:
+    stub = _StubWatchlistService()
+
+    def _sync_fail(_: object) -> None:
+        raise AssertionError("synchronous list_entries should not be invoked")
+
+    stub.list_entries = _sync_fail  # type: ignore[assignment]
+    app.dependency_overrides[get_watchlist_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/watchlist/table", headers=headers)
+            _assert_html_response(response)
+    finally:
+        app.dependency_overrides.pop(get_watchlist_ui_service, None)
+
+    assert "list" in stub.async_calls

@@ -47,6 +47,7 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
             assert "Paused" in html
             assert 'data-test="watchlist-resume-spotify-artist-stub"' in html
             assert _watchlist_stub.paused == ["spotify:artist:stub"]
+            assert "pause" in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -68,6 +69,7 @@ def test_watchlist_pause_app_error(monkeypatch, _watchlist_stub: _StubWatchlistS
             )
             _assert_html_response(response, status_code=status.HTTP_502_BAD_GATEWAY)
             assert "Unable to pause entry." in response.text
+            assert "pause" in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -97,6 +99,7 @@ def test_watchlist_resume_success(monkeypatch) -> None:
             assert "Active" in html
             assert 'data-test="watchlist-pause-spotify-artist-paused"' in html
             assert stub.resumed == ["spotify:artist:paused"]
+            assert "resume" in stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -119,6 +122,7 @@ def test_watchlist_resume_app_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
             assert "Unable to resume entry." in response.text
+            assert "resume" in stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -152,6 +156,7 @@ def test_watchlist_delete_success(monkeypatch) -> None:
             assert "spotify:artist:delete" not in html
             assert "spotify:artist:keep" in html
             assert stub.deleted == ["spotify:artist:delete"]
+            assert "delete" in stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -174,6 +179,7 @@ def test_watchlist_delete_app_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=status.HTTP_502_BAD_GATEWAY)
             assert "Unable to delete entry." in response.text
+            assert "delete" in stub.async_calls
     finally:
         _reset_watchlist_override()
 
@@ -196,5 +202,6 @@ def test_watchlist_priority_app_error(monkeypatch) -> None:
             )
             _assert_html_response(response, status_code=status.HTTP_409_CONFLICT)
             assert "Priority update failed." in response.text
+            assert "update" in stub.async_calls
     finally:
         _reset_watchlist_override()

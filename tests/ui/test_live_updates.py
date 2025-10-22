@@ -217,7 +217,15 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
             return ()
 
     class _StubWatchlistService:
+        def __init__(self) -> None:
+            self.async_calls: list[str] = []
+
         def list_entries(self, request: Any) -> WatchlistTable:
+            raise AssertionError("synchronous list_entries should not be used")
+
+        async def list_entries_async(self, request: Any) -> WatchlistTable:
+            self.async_calls.append("list")
+            await asyncio.sleep(0)
             return WatchlistTable(entries=())
 
     class _StubActivityService:
@@ -238,10 +246,11 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
                 status_filter=status_filter,
             )
 
+    watchlist_stub = _StubWatchlistService()
     overrides = {
         get_downloads_ui_service: lambda: _StubDownloadsService(),
         get_jobs_ui_service: lambda: _StubJobsService(),
-        get_watchlist_ui_service: lambda: _StubWatchlistService(),
+        get_watchlist_ui_service: lambda: watchlist_stub,
         get_activity_ui_service: lambda: _StubActivityService(),
     }
 
@@ -280,3 +289,4 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
     assert html.strip().startswith("<")
     assert fragment_id in html
     assert "<div" in html
+    assert "list" in watchlist_stub.async_calls

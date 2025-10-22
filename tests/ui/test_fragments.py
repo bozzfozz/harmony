@@ -1031,17 +1031,30 @@ class _StubWatchlistService:
         self.resume_exception: Exception | None = None
         self.delete_exception: Exception | None = None
         self.update_exception: Exception | None = None
+        self.async_calls: list[str] = []
+        self.sync_calls: list[str] = []
 
-    def list_entries(self, request) -> WatchlistTable:  # type: ignore[override]
+    def _make_table(self) -> WatchlistTable:
         return WatchlistTable(entries=tuple(self.entries))
 
-    def create_entry(
+    def list_entries(self, request) -> WatchlistTable:  # type: ignore[override]
+        self.sync_calls.append("list")
+        return self._make_table()
+
+    async def list_entries_async(self, request) -> WatchlistTable:
+        self.async_calls.append("list")
+        await asyncio.sleep(0)
+        return self._make_table()
+
+    async def create_entry(
         self,
         request,
         *,
         artist_key: str,
         priority: int | None = None,
     ) -> WatchlistTable:
+        self.async_calls.append("create")
+        await asyncio.sleep(0)
         row = WatchlistRow(
             artist_key=artist_key,
             priority=priority if priority is not None else 0,
@@ -1049,15 +1062,17 @@ class _StubWatchlistService:
         )
         self.entries.insert(0, row)
         self.created.append(artist_key)
-        return WatchlistTable(entries=tuple(self.entries))
+        return self._make_table()
 
-    def update_priority(
+    async def update_priority(
         self,
         request,
         *,
         artist_key: str,
         priority: int,
     ) -> WatchlistTable:
+        self.async_calls.append("update")
+        await asyncio.sleep(0)
         if self.update_exception:
             raise self.update_exception
         self.updated.append((artist_key, priority))
@@ -1067,9 +1082,11 @@ class _StubWatchlistService:
             state_key="watchlist.state.active",
         )
         self.entries = [row] + [entry for entry in self.entries if entry.artist_key != artist_key]
-        return WatchlistTable(entries=tuple(self.entries))
+        return self._make_table()
 
     async def pause_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        self.async_calls.append("pause")
+        await asyncio.sleep(0)
         if self.pause_exception:
             raise self.pause_exception
         self.paused.append(artist_key)
@@ -1087,9 +1104,11 @@ class _StubWatchlistService:
             else:
                 updated.append(entry)
         self.entries = updated
-        return WatchlistTable(entries=tuple(self.entries))
+        return self._make_table()
 
     async def resume_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        self.async_calls.append("resume")
+        await asyncio.sleep(0)
         if self.resume_exception:
             raise self.resume_exception
         self.resumed.append(artist_key)
@@ -1107,14 +1126,16 @@ class _StubWatchlistService:
             else:
                 updated.append(entry)
         self.entries = updated
-        return WatchlistTable(entries=tuple(self.entries))
+        return self._make_table()
 
     async def delete_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        self.async_calls.append("delete")
+        await asyncio.sleep(0)
         if self.delete_exception:
             raise self.delete_exception
         self.deleted.append(artist_key)
         self.entries = [entry for entry in self.entries if entry.artist_key != artist_key]
-        return WatchlistTable(entries=tuple(self.entries))
+        return self._make_table()
 
 
 class _StubSoulseekUiService:
@@ -3153,6 +3174,7 @@ def test_watchlist_fragment_success(monkeypatch) -> None:
             assert 'data-test="watchlist-resume-spotify-artist-2"' in response.text
             assert 'data-test="watchlist-delete-spotify-artist-1"' in response.text
             assert 'name="csrftoken"' in response.text
+            assert "list" in stub.async_calls
     finally:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
@@ -3187,6 +3209,7 @@ def test_watchlist_create_success(monkeypatch) -> None:
             assert "<table" in html
             assert "data-count" in html
             assert stub.created == ["spotify:artist:42"]
+            assert "create" in stub.async_calls
     finally:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
@@ -3239,6 +3262,7 @@ def test_watchlist_priority_success(monkeypatch) -> None:
             assert "spotify:artist:10" in response.text
             assert "7" in response.text
             assert stub.updated == [("spotify:artist:10", 7)]
+            assert "update" in stub.async_calls
     finally:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
 
