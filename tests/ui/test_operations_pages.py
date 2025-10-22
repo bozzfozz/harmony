@@ -26,6 +26,14 @@ def test_operations_page_renders_fragments(monkeypatch) -> None:
         assert "/ui/activity/table" in html
         assert 'data-live-updates="polling"' in html
         assert "data-live-source" not in html
+        assert 'class="layout-dashboard"' in html
+        assert 'class="layout-dashboard__kpis"' in html
+        assert 'class="kpi-grid"' in html
+        assert 'class="layout-dashboard__secondary"' in html
+        assert 'class="sidebar-sections"' in html
+        assert 'class="sidebar-section__title"' in html
+        assert "Operations overview" in html
+        assert 'class="layout-dashboard__modal-container"' in html
 
 
 def test_operations_page_exposes_sse_mode(monkeypatch) -> None:

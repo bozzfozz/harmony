@@ -335,7 +335,7 @@ async def search_download_action(
         level="success",
         text=f"Queued download request for {filename}.",
     )
-    context = {"request": request, "alerts": (alert,)}
+    context = {"request": request, "alerts": (alert,), "sync_state": None}
     log_event(
         logger,
         "ui.fragment.search.download",

@@ -34,6 +34,7 @@ from app.ui.context.base import (
     TableFragment,
     TableRow,
 )
+from app.ui.context.common import DetailPanel, KpiCard, SidebarItem, SidebarSection
 from app.ui.context.dashboard import build_dashboard_page_context
 from app.ui.context.downloads import (
     build_downloads_fragment_context,
@@ -253,6 +254,13 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert 'hx-get="/ui/activity/table"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert 'hx-target="#hx-activity-table"' in html
+    assert 'class="layout-dashboard"' in html
+    assert 'class="layout-dashboard__kpis"' in html
+    assert 'aria-label="Key performance indicators"' in html
+    assert 'class="layout-dashboard__body"' in html
+    assert 'class="layout-dashboard__primary"' in html
+    assert 'class="layout-dashboard__secondary"' in html
+    assert 'class="layout-dashboard__modal-container"' in html
 
 
 def test_dashboard_template_hides_operator_navigation_for_read_only_sessions() -> None:
@@ -279,6 +287,7 @@ def test_dashboard_template_hides_operator_navigation_for_read_only_sessions() -
     assert 'data-test="nav-spotify"' not in html
     assert 'data-test="nav-soulseek"' not in html
     assert 'data-test="nav-operator"' not in html
+    assert 'class="layout-dashboard"' in html
 
 
 def test_soulseek_status_template_includes_navigation_oob_snippet() -> None:
@@ -1074,6 +1083,16 @@ def test_operations_template_renders_enabled_sections() -> None:
     assert 'data-test="operations-live-updates-kpi"' in html
     assert "Live updates" in html
     assert "HTMX polling" in html
+    assert 'class="layout-dashboard"' in html
+    assert 'class="layout-dashboard__kpis"' in html
+    assert 'class="kpi-grid"' in html
+    assert 'class="layout-dashboard__body"' in html
+    assert 'class="layout-dashboard__primary"' in html
+    assert 'class="layout-dashboard__secondary"' in html
+    assert 'class="sidebar-sections"' in html
+    assert 'class="sidebar-section__title"' in html
+    assert "Operations overview" in html
+    assert 'class="layout-dashboard__modal-container"' in html
 
 
 def test_operations_template_skips_dlq_sections_when_disabled() -> None:
@@ -1089,6 +1108,8 @@ def test_operations_template_skips_dlq_sections_when_disabled() -> None:
     assert 'data-fragment="operations-activity"' in html
     assert 'data-test="operations-downloads-link"' not in html
     assert 'data-test="operations-jobs-link"' not in html
+    assert 'class="layout-dashboard__kpis"' in html
+    assert 'class="sidebar-sections"' in html
 
 
 def test_downloads_template_mounts_polling_fragment() -> None:
@@ -1101,6 +1122,15 @@ def test_downloads_template_mounts_polling_fragment() -> None:
     assert "/ui/downloads/table" in html
     assert 'hx-trigger="load, every 15s"' in html
     assert 'hx-target="#hx-downloads-table"' in html
+    assert 'class="layout-two-column"' in html
+    assert 'class="layout-two-column__sidebar"' in html
+    assert 'aria-label="Sidebar navigation"' in html
+    assert 'class="layout-two-column__content"' in html
+    assert 'class="layout-two-column__modal-container"' in html
+    assert 'class="sidebar-sections"' in html
+    assert 'class="sidebar-section__title"' in html
+    assert "Operations overview" in html
+    assert 'data-test="operations-downloads-link"' in html
     assert "Back to operations overview" in html
 
 
@@ -1145,6 +1175,13 @@ def test_jobs_template_mounts_polling_fragment() -> None:
     assert "/ui/jobs/table" in html
     assert 'hx-trigger="load, every 15s"' in html
     assert 'hx-target="#hx-jobs-table"' in html
+    assert 'class="layout-two-column"' in html
+    assert 'class="layout-two-column__sidebar"' in html
+    assert 'class="layout-two-column__content"' in html
+    assert 'class="layout-two-column__modal-container"' in html
+    assert 'class="sidebar-sections"' in html
+    assert "Operations overview" in html
+    assert 'data-test="operations-jobs-link"' in html
 
 
 def test_watchlist_template_renders_form_and_fragment() -> None:
@@ -1344,6 +1381,12 @@ def test_soulseek_page_template_renders_fragments() -> None:
     assert 'data-test="soulseek-task-api-key"' in html
     assert "Completion: 50%" in html
     assert html.count("task-list__item--completed") >= 1
+    assert 'class="layout-detail"' in html
+    assert 'class="layout-detail__header"' in html
+    assert 'class="layout-detail__body"' in html
+    assert 'class="layout-detail__primary"' in html
+    assert 'class="layout-detail__secondary"' in html
+    assert 'class="layout-detail__modal-container"' in html
 
 
 def test_soulseek_discography_jobs_partial_renders_rows() -> None:
@@ -2361,6 +2404,132 @@ def test_ui_bootstrap_dropzone_handles_drag_and_drop() -> None:
     assert payload["reset"]["status"] == "Drop a file to upload it via FREE ingest."
     assert "is-uploading" not in payload["reset"]["classes"]
     assert "is-error" not in payload["reset"]["classes"]
+
+
+def test_layout_blocks_render_kpi_cards_with_content() -> None:
+    cards = (
+        KpiCard(
+            identifier="kpi-downloads",
+            title="Downloads queued",
+            value="128",
+            change="+12 vs last hour",
+            change_variant="positive",
+            description="Current queue depth.",
+            badge_label="Healthy",
+            badge_variant="success",
+            test_id="kpi-downloads-card",
+        ),
+        KpiCard(
+            identifier="kpi-errors",
+            title="Failed jobs",
+            value="3",
+            change="-2 vs yesterday",
+            change_variant="negative",
+        ),
+    )
+
+    html = _render_inline(
+        "{% import 'components/layout_blocks.j2' as layout_blocks %}"
+        '{{ layout_blocks.render_kpi_cards(cards, "No KPI data.") }}',
+        cards=cards,
+    )
+
+    assert 'class="kpi-grid"' in html
+    assert 'role="list"' in html
+    assert html.count('class="kpi-card"') == 2
+    assert 'id="kpi-downloads"' in html
+    assert 'data-test="kpi-downloads-card"' in html
+    assert "kpi-card__badge--success" in html
+    assert "kpi-card__change--positive" in html
+    assert "kpi-card__description" in html
+    assert "Current queue depth." in html
+    assert 'id="kpi-errors"' in html
+    assert 'data-test="kpi-errors"' in html
+    assert "kpi-card__change--negative" in html
+    assert html.count("kpi-card__badge--") == 1
+
+
+def test_layout_blocks_render_sidebar_sections_with_items() -> None:
+    sections = (
+        SidebarSection(
+            identifier="ops-navigation",
+            title="Operations overview",
+            description="Navigate quickly.",
+            items=(
+                SidebarItem(
+                    identifier="link-dashboard",
+                    label="Dashboard",
+                    href="/ui",
+                    description="Primary landing page.",
+                    test_id="sidebar-dashboard-link",
+                ),
+                SidebarItem(
+                    identifier="link-downloads",
+                    label="Downloads",
+                    href="/ui/downloads",
+                    description="Manage queue.",
+                ),
+            ),
+        ),
+        SidebarSection(
+            identifier="ops-metadata",
+            title="Live updates",
+            body="<p>Streaming data keeps this view in sync.</p>",
+        ),
+    )
+
+    html = _render_inline(
+        "{% import 'components/layout_blocks.j2' as layout_blocks %}"
+        '{{ layout_blocks.render_sidebar_sections(sections, "No sidebar content.") }}',
+        sections=sections,
+    )
+
+    assert 'class="sidebar-sections"' in html
+    assert html.count('class="sidebar-section"') == 2
+    assert 'aria-labelledby="ops-navigation-title"' in html
+    assert "Operations overview" in html
+    assert "Navigate quickly." in html
+    assert 'class="sidebar-section__list"' in html
+    assert 'data-test="sidebar-dashboard-link"' in html
+    assert "Primary landing page." in html
+    assert 'href="/ui/downloads"' in html
+    assert 'class="sidebar-section__body"' in html
+    assert "Streaming data keeps this view in sync." in html
+
+
+def test_layout_blocks_render_detail_panels() -> None:
+    panels = (
+        DetailPanel(
+            identifier="panel-status",
+            title="Status summary",
+            subtitle="Updated moments ago",
+            body="<p>Primary content</p>",
+            footer="<p><small>Footer note</small></p>",
+        ),
+        DetailPanel(
+            identifier="panel-tasks",
+            title="Next tasks",
+            body="<ul><li>Item one</li><li>Item two</li></ul>",
+        ),
+    )
+
+    html = _render_inline(
+        "{% import 'components/layout_blocks.j2' as layout_blocks %}"
+        '{{ layout_blocks.render_detail_panels(panels, "No panels.") }}',
+        panels=panels,
+    )
+
+    assert 'class="detail-panels"' in html
+    assert html.count('class="detail-panel"') == 2
+    assert 'id="panel-status-title"' in html
+    assert 'class="detail-panel__subtitle"' in html
+    assert "Updated moments ago" in html
+    assert 'class="detail-panel__body"' in html
+    assert "Primary content" in html
+    assert 'class="detail-panel__footer"' in html
+    assert "Footer note" in html
+    assert 'id="panel-tasks-title"' in html
+    assert "Item two" in html
 
 
 def test_table_fragment_renders_badge_and_pagination() -> None:
