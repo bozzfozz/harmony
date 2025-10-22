@@ -1,5 +1,6 @@
-{% extends "layouts/base.j2" %}
+{% extends "layouts/dashboard.j2" %}
 {% import "partials/_strings.j2" as strings %}
+{% import "partials/modals.j2" as modals %}
 
 {% block header_actions %}
   <form id="logout-form" method="post" action="/ui/logout">
@@ -18,120 +19,121 @@
   </section>
 {% endblock %}
 
-{% block main %}
+{% block dashboard_primary %}
+  {% set overview_sections = [] %}
   {% if downloads_fragment %}
-    <section class="page-section page-section--card" aria-labelledby="{{ downloads_fragment.identifier }}-heading">
-      <header class="page-section__header">
-        <h3 id="{{ downloads_fragment.identifier }}-heading" class="page-section__title">
-          {{ strings.section_heading("downloads") }}
-        </h3>
-        <a class="page-section__link" href="{{ downloads_page_url }}">
-          {{ strings.link_text("operations.view_downloads") }}
-        </a>
-      </header>
-      <p class="page-section__description">{{ strings.downloads_page_intro() }}</p>
-      <div id="{{ downloads_fragment.identifier }}"
-           class="async-fragment"
-           role="region"
-           aria-live="polite"
-           aria-labelledby="{{ downloads_fragment.identifier }}-heading"
-           data-fragment="operations-downloads"
-           {% if downloads_fragment.event_name %}data-live-event="{{ downloads_fragment.event_name }}"{% endif %}
-          hx-get="{{ downloads_fragment.url }}"
-          hx-trigger="{{ downloads_fragment.trigger }}"
-          hx-target="{{ downloads_fragment.target }}"
-          hx-swap="{{ downloads_fragment.swap }}"
-          hx-on="htmx:responseError:handleHtmxError(event)">
-        <p class="async-fragment__placeholder">
-          {{ strings.fragment_loading(downloads_fragment.loading_key) }}
-        </p>
-      </div>
-    </section>
+    {% set overview_sections = overview_sections + [{
+      "fragment": downloads_fragment,
+      "section_key": "downloads",
+      "description": strings.downloads_page_intro(),
+      "data_fragment": "operations-downloads",
+    }] %}
   {% endif %}
 
   {% if jobs_fragment %}
-    <section class="page-section page-section--card" aria-labelledby="{{ jobs_fragment.identifier }}-heading">
+    {% set overview_sections = overview_sections + [{
+      "fragment": jobs_fragment,
+      "section_key": "jobs",
+      "description": strings.jobs_page_intro(),
+      "data_fragment": "operations-jobs",
+    }] %}
+  {% endif %}
+
+  {% set overview_sections = overview_sections + [
+    {
+      "fragment": watchlist_fragment,
+      "section_key": "watchlist",
+      "description": strings.watchlist_page_intro(),
+      "data_fragment": "operations-watchlist",
+    },
+    {
+      "fragment": activity_fragment,
+      "section_key": "activity",
+      "description": strings.activity_page_intro(),
+      "data_fragment": "operations-activity",
+    },
+  ] %}
+
+  {% for section in overview_sections %}
+    {% set fragment = section["fragment"] %}
+    <section class="page-section page-section--card" aria-labelledby="{{ fragment.identifier }}-heading">
       <header class="page-section__header">
-        <h3 id="{{ jobs_fragment.identifier }}-heading" class="page-section__title">
-          {{ strings.section_heading("jobs") }}
+        <h3 id="{{ fragment.identifier }}-heading" class="page-section__title">
+          {{ strings.section_heading(section["section_key"]) }}
         </h3>
-        <a class="page-section__link" href="{{ jobs_page_url }}">
-          {{ strings.link_text("operations.view_jobs") }}
-        </a>
       </header>
-      <p class="page-section__description">{{ strings.jobs_page_intro() }}</p>
-      <div id="{{ jobs_fragment.identifier }}"
+      {% if section["description"] %}
+        <p class="page-section__description">{{ section["description"] }}</p>
+      {% endif %}
+      <div id="{{ fragment.identifier }}"
            class="async-fragment"
            role="region"
            aria-live="polite"
-           aria-labelledby="{{ jobs_fragment.identifier }}-heading"
-           data-fragment="operations-jobs"
-           {% if jobs_fragment.event_name %}data-live-event="{{ jobs_fragment.event_name }}"{% endif %}
-          hx-get="{{ jobs_fragment.url }}"
-          hx-trigger="{{ jobs_fragment.trigger }}"
-          hx-target="{{ jobs_fragment.target }}"
-          hx-swap="{{ jobs_fragment.swap }}"
+           aria-labelledby="{{ fragment.identifier }}-heading"
+           data-fragment="{{ section["data_fragment"] }}"
+           {% if fragment.event_name %}data-live-event="{{ fragment.event_name }}"{% endif %}
+          hx-get="{{ fragment.url }}"
+          hx-trigger="{{ fragment.trigger }}"
+          hx-target="{{ fragment.target }}"
+          hx-swap="{{ fragment.swap }}"
           hx-on="htmx:responseError:handleHtmxError(event)">
         <p class="async-fragment__placeholder">
-          {{ strings.fragment_loading(jobs_fragment.loading_key) }}
+          {{ strings.fragment_loading(fragment.loading_key) }}
         </p>
       </div>
     </section>
+  {% endfor %}
+{% endblock %}
+
+{% block dashboard_secondary %}
+  {% set operations_links = [] %}
+  {% if downloads_fragment %}
+    {% set operations_links = operations_links + [{
+      "identifier": "operations-downloads-link",
+      "href": downloads_page_url,
+      "label": strings.link_text("operations.view_downloads"),
+    }] %}
   {% endif %}
+  {% if jobs_fragment %}
+    {% set operations_links = operations_links + [{
+      "identifier": "operations-jobs-link",
+      "href": jobs_page_url,
+      "label": strings.link_text("operations.view_jobs"),
+    }] %}
+  {% endif %}
+  {% set operations_links = operations_links + [
+    {
+      "identifier": "operations-watchlist-link",
+      "href": watchlist_page_url,
+      "label": strings.link_text("operations.view_watchlist"),
+    },
+    {
+      "identifier": "operations-activity-link",
+      "href": activity_page_url,
+      "label": strings.link_text("operations.view_activity"),
+    },
+  ] %}
 
-  <section class="page-section page-section--card" aria-labelledby="{{ watchlist_fragment.identifier }}-heading">
-    <header class="page-section__header">
-      <h3 id="{{ watchlist_fragment.identifier }}-heading" class="page-section__title">
-        {{ strings.section_heading("watchlist") }}
+  <div class="sidebar-sections">
+    <section class="sidebar-section" aria-labelledby="operations-navigation-title">
+      <h3 id="operations-navigation-title" class="sidebar-section__title">
+        {{ strings.section_heading("operations") }}
       </h3>
-      <a class="page-section__link" href="{{ watchlist_page_url }}">
-        {{ strings.link_text("operations.view_watchlist") }}
-      </a>
-    </header>
-    <p class="page-section__description">{{ strings.watchlist_page_intro() }}</p>
-    <div id="{{ watchlist_fragment.identifier }}"
-         class="async-fragment"
-         role="region"
-         aria-live="polite"
-         aria-labelledby="{{ watchlist_fragment.identifier }}-heading"
-         data-fragment="operations-watchlist"
-         {% if watchlist_fragment.event_name %}data-live-event="{{ watchlist_fragment.event_name }}"{% endif %}
-        hx-get="{{ watchlist_fragment.url }}"
-        hx-trigger="{{ watchlist_fragment.trigger }}"
-        hx-target="{{ watchlist_fragment.target }}"
-        hx-swap="{{ watchlist_fragment.swap }}"
-        hx-on="htmx:responseError:handleHtmxError(event)">
-      <p class="async-fragment__placeholder">
-        {{ strings.fragment_loading(watchlist_fragment.loading_key) }}
-      </p>
-    </div>
-  </section>
+      <ul class="sidebar-section__list">
+        {% for link in operations_links %}
+          <li class="sidebar-section__list-item">
+            <a href="{{ link["href"] }}" data-test="{{ link["identifier"] }}">
+              {{ link["label"] }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
+{% endblock %}
 
-  <section class="page-section page-section--card" aria-labelledby="{{ activity_fragment.identifier }}-heading">
-    <header class="page-section__header">
-      <h3 id="{{ activity_fragment.identifier }}-heading" class="page-section__title">
-        {{ strings.section_heading("activity") }}
-      </h3>
-      <a class="page-section__link" href="{{ activity_page_url }}">
-        {{ strings.link_text("operations.view_activity") }}
-      </a>
-    </header>
-    <p class="page-section__description">{{ strings.activity_page_intro() }}</p>
-    <div id="{{ activity_fragment.identifier }}"
-         class="async-fragment"
-         role="region"
-         aria-live="polite"
-         aria-labelledby="{{ activity_fragment.identifier }}-heading"
-         data-fragment="operations-activity"
-         {% if activity_fragment.event_name %}data-live-event="{{ activity_fragment.event_name }}"{% endif %}
-        hx-get="{{ activity_fragment.url }}"
-        hx-trigger="{{ activity_fragment.trigger }}"
-        hx-target="{{ activity_fragment.target }}"
-        hx-swap="{{ activity_fragment.swap }}"
-        hx-on="htmx:responseError:handleHtmxError(event)">
-      <p class="async-fragment__placeholder">
-        {{ strings.fragment_loading(activity_fragment.loading_key) }}
-      </p>
-    </div>
-  </section>
+{% block modals %}
+  {{ modals.render_modals(layout.modals) }}
+  <div id="modal-root" data-role="modal-container"></div>
+  {% block dashboard_modals %}{% endblock %}
 {% endblock %}
