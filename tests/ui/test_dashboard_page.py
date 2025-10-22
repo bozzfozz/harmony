@@ -9,6 +9,7 @@ import pytest
 from app.errors import AppError, ErrorCode
 from app.main import app
 from app.ui.context.dashboard import build_dashboard_page_context
+from app.ui.context.common import KpiCard, SidebarSection
 from app.ui.services import (
     DashboardConnectionStatus,
     DashboardHealthIssue,
@@ -105,6 +106,10 @@ def test_dashboard_page_context_includes_async_fragments() -> None:
     assert status_fragment.swap == "innerHTML"
     assert health_fragment.poll_interval_seconds == 60
     assert workers_fragment.poll_interval_seconds == 45
+    assert isinstance(context["kpi_cards"], tuple)
+    assert all(isinstance(card, KpiCard) for card in context["kpi_cards"])
+    assert isinstance(context["sidebar_sections"], tuple)
+    assert all(isinstance(section, SidebarSection) for section in context["sidebar_sections"])
 
 
 def test_dashboard_status_fragment_success(monkeypatch, _stub_service) -> None:

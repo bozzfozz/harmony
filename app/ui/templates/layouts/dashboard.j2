@@ -1,4 +1,5 @@
 {% extends "layouts/base.j2" %}
+{% import "partials/modals.j2" as modals %}
 
 {% block main %}
   <div class="layout-dashboard">
@@ -20,6 +21,7 @@
 {% endblock %}
 
 {% block modals %}
-  {{ super() }}
+  {{ modals.render_modals(layout.modals) }}
+  <div id="modal-root" data-role="modal-container"></div>
   {% block dashboard_modals %}{% endblock %}
 {% endblock %}

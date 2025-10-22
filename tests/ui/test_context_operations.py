@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from starlette.requests import Request
 
+from app.ui.context.common import KpiCard, SidebarItem, SidebarSection
 from app.ui.context.operations import (
     build_activity_page_context,
     build_downloads_page_context,
@@ -45,6 +46,31 @@ def test_operations_page_context_includes_fragments_for_enabled_features() -> No
     assert context["watchlist_fragment"].poll_interval_seconds == 30
     assert context["activity_fragment"].poll_interval_seconds == 60
     assert context["dashboard_url"] == "/ui"
+    kpi_cards = context["kpi_cards"]
+    assert isinstance(kpi_cards, tuple)
+    assert len(kpi_cards) == 1
+    card = kpi_cards[0]
+    assert isinstance(card, KpiCard)
+    assert card.value == "Polling"
+    assert card.badge_label == "Interval"
+    assert card.badge_variant == "muted"
+    sidebar_sections = context["sidebar_sections"]
+    assert isinstance(sidebar_sections, tuple)
+    assert all(isinstance(section, SidebarSection) for section in sidebar_sections)
+    navigation_section = next(
+        section for section in sidebar_sections if section.identifier == "operations-navigation"
+    )
+    assert any(
+        isinstance(item, SidebarItem) and item.href == "/ui/downloads"
+        for item in navigation_section.items
+    )
+    assert any(item.href == "/ui/jobs" for item in navigation_section.items)
+    assert any(item.href == "/ui/watchlist" for item in navigation_section.items)
+    assert any(item.href == "/ui/activity" for item in navigation_section.items)
+    live_updates_section = next(
+        section for section in sidebar_sections if section.identifier == "operations-live-updates"
+    )
+    assert "HTMX polling" in (live_updates_section.description or "")
 
 
 def test_operations_page_context_omits_dlq_sections_when_disabled() -> None:
@@ -57,6 +83,39 @@ def test_operations_page_context_omits_dlq_sections_when_disabled() -> None:
     assert context["jobs_fragment"] is None
     assert context["watchlist_fragment"].poll_interval_seconds == 30
     assert context["activity_fragment"].poll_interval_seconds == 60
+    navigation_section = next(
+        section
+        for section in context["sidebar_sections"]
+        if section.identifier == "operations-navigation"
+    )
+    identifiers = {item.identifier for item in navigation_section.items}
+    assert "operations-downloads-link" not in identifiers
+    assert "operations-jobs-link" not in identifiers
+    assert "operations-watchlist-link" in identifiers
+    assert "operations-activity-link" in identifiers
+
+
+def test_operations_page_context_uses_sse_metadata() -> None:
+    request = _make_request("/ui/operations")
+    session = _make_session()
+
+    context = build_operations_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        live_updates_mode="sse",
+    )
+
+    card = context["kpi_cards"][0]
+    assert card.value == "Streaming"
+    assert card.badge_label == "Real-time"
+    assert card.badge_variant == "success"
+    live_updates_section = next(
+        section
+        for section in context["sidebar_sections"]
+        if section.identifier == "operations-live-updates"
+    )
+    assert "Server-sent events" in (live_updates_section.description or "")
 
 
 def test_downloads_page_context_sets_operations_navigation() -> None:
