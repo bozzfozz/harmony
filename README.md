@@ -4,12 +4,14 @@ Harmony is a FastAPI backend that unifies Spotify metadata, Soulseek downloads a
 post-processing into a single automation-friendly music hub. The unified container
 exposes the API on **port 8080** and stores all state in SQLite.
 
-> **Frontend status:** The legacy static bundle has been removed. A new server-side
-> rendered UI (FastAPI + Jinja2 + HTMX) is planned under `/ui`; implementation follows the
-> published specifications. See [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the
-> sitemap & HTMX contracts, [`docs/operations/security.md`](docs/operations/security.md) for
-> session/role details, and [`docs/ui/csp.md`](docs/ui/csp.md) for CSP guidance. No Node.js
-> toolchain is required.
+> **Frontend status:** Harmony ships a server-side rendered FastAPI + Jinja2 + HTMX UI
+> under `/ui`. Operators can reach dashboards, operations, downloads, jobs, watchlists,
+> settings and system panels via the `/ui/...` routes defined in
+> [`app/ui/routes`](app/ui/routes). Reference [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md)
+> for the sitemap & fragment contracts, [`docs/operations/security.md`](docs/operations/security.md)
+> for session and role guidance, [`docs/ui/csp.md`](docs/ui/csp.md) for CSP controls, and
+> [`docs/ui/spotify.md`](docs/ui/spotify.md) plus [`docs/ui/soulseek.md`](docs/ui/soulseek.md)
+> for feature-specific flows. No Node.js toolchain is required.
 
 ## Highlights
 
