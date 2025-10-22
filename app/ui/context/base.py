@@ -187,6 +187,7 @@ class SecretValidationResultView:
 @dataclass(slots=True)
 class SecretValidationCard:
     identifier: str
+    slug: str
     provider: str
     title_key: str
     description_key: str
