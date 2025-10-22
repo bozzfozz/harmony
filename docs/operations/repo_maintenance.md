@@ -48,5 +48,7 @@ pre-commit run --hook-stage push
 ## Operational Ownership
 
 - **Primary Owner:** Team Platform Engineering.
+- **PagerDuty-Rotation:** `PD/Harmony-Platform`.
+- **Spotify-Produkt-Owner Kontakt:** Platform Engineering – Spotify Integrationen (Slack `#harmony-platform`).
 - **Escalation:** Melde Probleme im Channel `#harmony-platform` und verweise auf Logs aus `make all`.
 - **Monitoring:** Stichprobenartig die ersten PRs nach Tooling-Updates prüfen, damit Laufzeiten und Anforderungen realistisch bleiben.

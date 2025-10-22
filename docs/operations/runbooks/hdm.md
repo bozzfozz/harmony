@@ -197,8 +197,8 @@ Das frühere statische Frontend wurde entfernt. Der Runbook-Fokus liegt auf API 
 
 ## Eskalation
 
-- **SRE-Rotation:** TODO (PagerDuty-Handle aktualisieren).
-- **Produkt-Owner Spotify:** TODO (Ansprechpartner: Spotify Verantwortliche).
+- **SRE-Rotation:** `PD/Harmony-Platform` (PagerDuty).
+- **Produkt-Owner Spotify:** Platform Engineering – Spotify Integrationen (Slack `#harmony-platform`).
 - **Vendor:** Spotify Support (Dashboard → _Contact Us_ → „Production Outage“).
 
 Alle Eskalationen sollten in der zentralen Incident-Dokumentation referenziert
