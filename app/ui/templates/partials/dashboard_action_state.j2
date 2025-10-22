@@ -1,0 +1,54 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_macros %}
+<div id="dashboard-action-state"
+     class="dashboard-action-state"
+     aria-live="polite"
+     aria-atomic="true"
+     data-has-data="{{ 'true' if sync_state.has_data else 'false' }}"
+     {% if swap_mode %}hx-swap-oob="{{ swap_mode }}"{% endif %}>
+  <div class="dashboard-action-state__header">
+    {{ status_macros.render_badge(sync_state.status_badge) }}
+    <p class="dashboard-action-state__message">{{ sync_state.message }}</p>
+  </div>
+  {% if sync_state.timestamp %}
+    <p class="dashboard-action-state__timestamp">{{ strings.dashboard_sync_updated(sync_state.timestamp) }}</p>
+  {% endif %}
+  {% if sync_state.results %}
+    <div class="dashboard-action-state__results">
+      <h4 class="dashboard-action-state__section-title">{{ strings.dashboard_sync_sources_heading() }}</h4>
+      <ul class="dashboard-action-state__result-list">
+        {% for result in sync_state.results %}
+          <li class="dashboard-action-state__result-item"
+              {% if result.test_id %}data-test="{{ result.test_id }}"{% endif %}>
+            <span class="dashboard-action-state__result-label">{{ result.label }}</span>
+            {{ status_macros.render_badge(result.badge) }}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {% if sync_state.metrics %}
+    <div class="dashboard-action-state__metrics">
+      <h4 class="dashboard-action-state__section-title">{{ strings.dashboard_sync_metrics_heading() }}</h4>
+      <dl class="dashboard-action-state__metric-list">
+        {% for metric in sync_state.metrics %}
+          <div class="dashboard-action-state__metric-item"
+               {% if metric.test_id %}data-test="{{ metric.test_id }}"{% endif %}>
+            <dt>{{ metric.label }}</dt>
+            <dd>{{ metric.value }}</dd>
+          </div>
+        {% endfor %}
+      </dl>
+    </div>
+  {% endif %}
+  {% if sync_state.errors %}
+    <div class="dashboard-action-state__errors">
+      <h4 class="dashboard-action-state__section-title">{{ strings.dashboard_sync_warnings_heading() }}</h4>
+      <ul class="dashboard-action-state__error-list">
+        {% for error in sync_state.errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>

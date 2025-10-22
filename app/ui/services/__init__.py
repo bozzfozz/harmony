@@ -19,6 +19,7 @@ from .search import (
     SearchUiService,
     get_search_ui_service,
 )
+from .sync import SyncActionResult, SyncUiService, get_sync_ui_service
 from .settings import (
     ArtistPreferenceRow,
     ArtistPreferenceTable,
@@ -108,6 +109,9 @@ __all__ = [
     "SearchResultsPage",
     "SearchUiService",
     "get_search_ui_service",
+    "SyncActionResult",
+    "SyncUiService",
+    "get_sync_ui_service",
     "SettingRow",
     "SettingsOverview",
     "SettingsHistoryRow",

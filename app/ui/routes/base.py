@@ -8,11 +8,14 @@ from fastapi.responses import RedirectResponse
 from app.errors import AppError
 from app.logging_events import log_event
 from app.ui.context.auth import build_login_page_context
+from app.ui.context.base import AlertMessage
 from app.ui.context.dashboard import (
     build_dashboard_health_fragment_context,
     build_dashboard_page_context,
     build_dashboard_status_fragment_context,
     build_dashboard_workers_fragment_context,
+    build_dashboard_action_state_from_error,
+    build_dashboard_action_state_from_sync,
 )
 from app.ui.csrf import (
     attach_csrf_cookie,
@@ -21,7 +24,12 @@ from app.ui.csrf import (
     get_csrf_manager,
 )
 from app.ui.routes.shared import _render_alert_fragment, logger, templates
-from app.ui.services import DashboardUiService, get_dashboard_ui_service
+from app.ui.services import (
+    DashboardUiService,
+    SyncUiService,
+    get_dashboard_ui_service,
+    get_sync_ui_service,
+)
 from app.ui.session import (
     UiSession,
     attach_session_cookie,
@@ -29,6 +37,7 @@ from app.ui.session import (
     clear_spotify_job_state,
     get_session_manager,
     require_session,
+    require_role,
 )
 
 router = APIRouter()
@@ -292,6 +301,96 @@ async def dashboard_workers_fragment(
     return templates.TemplateResponse(
         request,
         "partials/dashboard_workers.j2",
+        context,
+    )
+
+
+@router.post(
+    "/dashboard/sync",
+    include_in_schema=False,
+    name="dashboard_sync_action",
+    dependencies=[Depends(enforce_csrf)],
+)
+async def dashboard_sync_action(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+    service: SyncUiService = Depends(get_sync_ui_service),
+) -> Response:
+    try:
+        result = await service.trigger_manual_sync(request)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.action.dashboard_sync",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            http_status=exc.http_status,
+            meta=exc.meta,
+        )
+        alert = AlertMessage(level="error", text=exc.message or "Unable to trigger manual sync.")
+        sync_state = build_dashboard_action_state_from_error(alert.text, meta=exc.meta)
+        context = {
+            "request": request,
+            "alerts": (alert,),
+            "sync_state": sync_state,
+        }
+        return templates.TemplateResponse(
+            request,
+            "partials/alerts_fragment.j2",
+            context,
+            status_code=status.HTTP_200_OK,
+        )
+    except Exception:
+        logger.exception("ui.action.dashboard_sync")
+        log_event(
+            logger,
+            "ui.action.dashboard_sync",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        alert = AlertMessage(level="error", text="Failed to trigger manual sync.")
+        sync_state = build_dashboard_action_state_from_error(alert.text)
+        context = {
+            "request": request,
+            "alerts": (alert,),
+            "sync_state": sync_state,
+        }
+        return templates.TemplateResponse(
+            request,
+            "partials/alerts_fragment.j2",
+            context,
+            status_code=status.HTTP_200_OK,
+        )
+
+    alert = AlertMessage(level="success", text=result.message or "Manual sync triggered.")
+    sync_state = build_dashboard_action_state_from_sync(result)
+    log_event(
+        logger,
+        "ui.action.dashboard_sync",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        status_code=result.status_code,
+        results=len(result.results),
+        errors=len(result.errors),
+        meta={
+            "results": dict(result.results),
+            "errors": dict(result.errors),
+            "counters": dict(result.counters),
+        },
+    )
+    context = {
+        "request": request,
+        "alerts": (alert,),
+        "sync_state": sync_state,
+    }
+    return templates.TemplateResponse(
+        request,
+        "partials/alerts_fragment.j2",
         context,
     )
 

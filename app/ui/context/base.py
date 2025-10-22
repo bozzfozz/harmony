@@ -123,6 +123,12 @@ class FormDefinition:
 class ActionButton:
     identifier: str
     label_key: str
+    url: str
+    method: HxMethod = "post"
+    confirm_text: str | None = None
+    target: str = "#ui-alert-region"
+    success_swap: str = "innerHTML"
+    error_swap: str = "innerHTML"
 
 
 @dataclass(slots=True)
