@@ -25,7 +25,7 @@ from app.ui.routes.shared import (
     templates,
 )
 from app.ui.services import SystemUiService, get_system_ui_service
-from app.ui.session import UiSession, require_admin_with_feature, require_role
+from app.ui.session import UiSession, require_role
 
 router = APIRouter()
 
@@ -249,7 +249,7 @@ async def system_secret_card(
 async def system_validate_secret(
     provider: str,
     request: Request,
-    session: UiSession = Depends(require_admin_with_feature("imports")),
+    session: UiSession = Depends(require_role("admin")),
     service: SystemUiService = Depends(get_system_ui_service),
     db_session: Session = Depends(get_db),
 ) -> Response:
