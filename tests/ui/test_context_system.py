@@ -57,6 +57,15 @@ def test_build_system_page_context_registers_fragments() -> None:
     assert len(context["secret_cards"]) == 2
 
 
+def test_build_system_page_context_uses_metrics_fallback() -> None:
+    request = _make_request()
+    session = _make_session()
+
+    context = build_system_page_context(request, session=session, csrf_token="token")
+
+    assert context["metrics_url"] == "/api/v1/metrics"
+
+
 def test_build_system_liveness_context_formats_badge() -> None:
     record = LivenessRecord(status="ok", ok=True, version="1.0.0", uptime_seconds=3600.0)
     context = build_system_liveness_context(_make_request(), summary=record)
