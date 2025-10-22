@@ -1107,11 +1107,17 @@ def test_downloads_fragment_renders_progress_percentage() -> None:
     assert row.progress == 0.5
 
     page = DownloadPage(items=[row], limit=10, offset=0, has_next=False, has_previous=False)
-    context = build_downloads_fragment_context(request, page=page)
+    context = build_downloads_fragment_context(
+        request,
+        page=page,
+        csrf_token="token",
+    )
     template = templates.get_template("partials/downloads_table.j2")
     html = template.render(**context)
 
     assert "50%" in html
+    assert 'data-test="download-priority-input-1"' in html
+    assert 'data-test="download-cancel-1"' in html
 
 
 def test_jobs_template_mounts_polling_fragment() -> None:
