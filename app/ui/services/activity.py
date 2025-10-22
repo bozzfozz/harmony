@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -54,6 +55,24 @@ class ActivityUiService:
             limit=limit,
             offset=offset,
             total_count=total_count,
+            type_filter=type_filter,
+            status_filter=status_filter,
+        )
+
+    async def list_activity_async(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        type_filter: str | None,
+        status_filter: str | None,
+    ) -> ActivityPage:
+        """Fetch activity entries without blocking the event loop."""
+
+        return await asyncio.to_thread(
+            self.list_activity,
+            limit=limit,
+            offset=offset,
             type_filter=type_filter,
             status_filter=status_filter,
         )
