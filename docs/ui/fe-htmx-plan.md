@@ -1,9 +1,61 @@
 # FastAPI + Jinja2 + HTMX Frontend Plan
 
-## Kontext & Ziele
-- Ein neues serverseitig gerendertes UI wird unter `/ui` aufgebaut, ohne bestehende API-Kontrakte zu brechen. FastAPI bleibt der App-Server; Templates werden mit Jinja2 gerendert und dynamische Aktualisierungen via HTMX umgesetzt.
-- Das UI muss administrative Flows für Suche, Downloads, Watchlist, Spotify-Integration, Systemstatus und Warteschlangen sichtbar machen, basierend auf den vorhandenen REST-Endpunkten unter `/api/v1` und `/api/health`.【F:app/api/router_registry.py†L37-L223】【F:app/api/health.py†L10-L27】
-- Zielgruppe sind interne Operatoren; Authentisierung nutzt bestehende Session-/API-Key-Mechanismen der `SecurityConfig`. Das Frontend darf keine zusätzlichen Build-Toolchains einführen.
+## Architektur & Leitplanken
+
+### Zielbild
+- Ein serverseitig gerendertes UI unter `/ui` ersetzt fehlende Operator-Tools, ohne bestehende API-Kontrakte zu brechen. FastAPI rendert Jinja2-Templates und liefert HTMX-Fragmente für Teilaktualisierungen.【F:app/ui/routes/downloads.py†L1-L115】
+- Der Funktionsumfang deckt Suche, Downloads, Watchlists, Spotify-Verwaltung, Systemeinsicht und Warteschlangen auf Basis der bestehenden REST-Endpunkte unter `/api/v1` sowie `/api/health` ab.【F:app/api/router_registry.py†L37-L223】【F:app/api/health.py†L10-L27】
+- Zielnutzer sind interne Operator:innen; Authentisierung nutzt Session- und API-Key-Mechanismen der bestehenden `SecurityConfig`. Keine zusätzliche Frontend-Build-Toolchain oder Client-State-Frameworks.
+
+### Stack-Übersicht
+- **Server-Layer:** FastAPI-Router unter `app/ui/routes` orchestrieren Session-Checks, Feature-Flags und Kontextaufbau je Seite. Fehlerpfade werden zentral über `_render_alert_fragment` bzw. strukturierte Logevents gehärtet.【F:app/ui/routes/downloads.py†L28-L115】
+- **Template-Layer:** `layouts/base.j2` definiert globale Slots (`head_extras`, `page_header`, `main`, `footer`, `modals`, `scripts`) und kümmert sich um Asset-Bootstrap, Navigation sowie Alert-Regionen.【F:app/ui/templates/layouts/base.j2†L1-L55】
+- **Layout-Spezialisierungen:** `layouts/dashboard.j2`, `layouts/two_column.j2` und `layouts/detail.j2` kapseln wiederkehrende Seitenstrukturen inkl. Modals und aria-Rollen.【F:app/ui/templates/layouts/dashboard.j2†L1-L27】【F:app/ui/templates/layouts/two_column.j2†L1-L21】【F:app/ui/templates/layouts/detail.j2†L1-L26】
+- **Kontext-Objekte:** Slots-basierte Dataclasses (z. B. `LayoutContext`, `NavigationContext`, `FormDefinition`) liefern stark typisierte Werte für Templates und sichern minimale Speicherfußabdrücke.【F:app/ui/context/base.py†L19-L160】
+- **Assets & Interaktion:** HTMX und UI-Bootstrap-Skripte werden zentral geladen; Polling-Intervalle und Ziel-IDs werden pro Fragment vereinbart, wobei `hx-target`-IDs das Schema `hx-<bereich>-<entity>` beibehalten.
+
+### Layout-Vererbung & Beispiel
+- Jede Seite im Ordner `templates/pages` erweitert exakt ein Layout und füllt dessen Pflicht-Blöcke (`main` bzw. layout-spezifische Slots). Zusatzmodals werden über `block ..._modals` verdrahtet.
+- Fragment-Templates in `templates/partials` liefern HTMX-Antworten, teilen sich jedoch den gleichen Kontextbaum wie ihre aufrufenden Seiten.
+
+```mermaid
+graph TD
+  base["layouts/base.j2"]
+  dashboard["layouts/dashboard.j2"]
+  twoColumn["layouts/two_column.j2"]
+  detail["layouts/detail.j2"]
+  operations["pages/operations.j2"]
+  dashboardPage["pages/dashboard.j2"]
+  downloads["pages/downloads.j2"]
+  watchlist["pages/watchlist.j2"]
+  settings["pages/settings.j2"]
+  spotify["pages/spotify.j2"]
+
+  base --> dashboard
+  base --> twoColumn
+  base --> detail
+  dashboard --> dashboardPage
+  dashboard --> operations
+  twoColumn --> downloads
+  twoColumn --> watchlist
+  twoColumn --> settings
+  detail --> spotify
+```
+
+### Block- & Namenskonventionen
+- Globale Blöcke heißen `head_extras`, `page_header`, `main`, `footer`, `modals`, `scripts`. Layouts führen zusätzliche Slots ein (`dashboard_*`, `sidebar`, `detail_*`).
+- `hx-target`-/Element-IDs folgen `hx-<bereich>-<entity>` (z. B. `hx-downloads-table`), `data-test` Attribute spiegeln Identifier aus dem Kontext.
+- Template-Dateien nutzen `kebab-case` mit `.j2`-Endung; Seiten werden unter `templates/pages/<slug>.j2` abgelegt, Fragmente unter `templates/partials/<name>.j2`.
+
+### Kontextaufbau & Datenfluss
+- Routen erzeugen Kontext-Dictionaries per `build_*_page_context` oder `build_*_fragment_context`. Diese Funktionen kapseln API-Aufrufe, wandeln Domain-Objekte in Template-Dataclasses und liefern `layout`, `page`, `fragment` oder `forms` Schlüssel konsistent aus.【F:app/ui/routes/downloads.py†L28-L115】
+- `LayoutContext.page_id` bestimmt Seitentitel, aktive Navigation sowie Berechtigungsprüfungen. Jede neue Seite MUSS einen eindeutigen `page_id` setzen und passende Navigationseinträge liefern.【F:app/ui/context/base.py†L62-L70】
+- Feature-Flags und Rollenchecks erfolgen vor dem Rendern; Fragment-Routen spiegeln dieselben Guards, um direkte HTMX-Calls abzusichern.【F:app/ui/routes/downloads.py†L38-L115】
+
+### HTMX-Interaktionsmuster
+- Polling-Frequenzen (`hx-trigger="every Ns"`) sind pro Fragment dokumentiert und sollten Logging-Events (`log_event(..., component="ui.fragment.*")`) schreiben, um Observability zu sichern.【F:app/ui/routes/downloads.py†L72-L115】
+- Fehlerpfade rendern Alerts über `_render_alert_fragment` und liefern passende HTTP-Statuscodes, damit HTMX das Swapping respektiert.【F:app/ui/routes/downloads.py†L57-L115】
+- CSRF-Tokens werden beim ersten Render über `attach_csrf_cookie` gesetzt und in Formular-Fragmente gespiegelt; neue POST/PATCH/DELETE-Fragmente müssen `Depends(enforce_csrf)` nutzen.【F:app/ui/routes/downloads.py†L1-L200】
 
 ## Sitemap
 ```
@@ -44,36 +96,92 @@
 ## Template-Architektur
 ```
 templates/
-  base.html                 – HTML5-Grundgerüst, globale Blöcke: head_extras, nav, main, footer, scripts
   layouts/
-    dashboard.html          – erweitert base, stellt KPI-Karten & Polling-Slots bereit
-    two_column.html         – generisches Layout für Seiten mit Sidebar/Content
-    detail.html             – für modale Detailansichten (e.g. Downloads, Watchlist)
+    base.j2           – Grundgerüst mit Navigation, Alerts & Script-Bootstrap
+    dashboard.j2      – KPI- und Primär/Secondary-Spalten für Startseiten
+    two_column.j2     – Sidebar-Layout für Management-Ansichten
+    detail.j2         – Fokus-Layout für Detail-/Inspektionsseiten
+  pages/
+    dashboard.j2
+    operations.j2
+    downloads.j2
+    jobs.j2
+    watchlist.j2
+    search.j2
+    settings.j2
+    system.j2
+    spotify.j2
+    activity.j2
+    admin.j2
+    login.j2
+    soulseek.j2
   partials/
-    alerts.html             – Flash-/Toast-Komponenten mit ARIA-Live
-    _strings.j2             – Zentrale Sammlung englischer UI-Texte
-    status_badges.j2        – Makro-Sammlung für Statusindikatoren (Dashboard, System, Soulseek)
-    nav/
-      primary_nav.html      – Hauptnavigation mit aktiven Zuständen
-    tables/
-      downloads_table.html  – Tabellengerüst + hx-target Slots
-      activity_table.html   – Aktivitätseinträge mit Paginierung
-      watchlist_table.html  – Watchlist-Einträge & Inline-Formulare
-    forms/
-      search_form.html      – Suche mit Quellen-Filtern
-      watchlist_form.html   – Neuer Watchlist-Eintrag
-      settings_form.html    – Key/Value-Formular mit CSRF
-    modals/
-      confirm_modal.html    – Bestätigungsdialoge (Delete, Retry)
-    status/
-      service_badge.html    – Badge-Komponente für Gesundheitszustände
-      job_card.html         – Job-Status (Metadata, Sync)
+    alerts.j2
+    alerts_fragment.j2
+    status_badges.j2
+    nav.j2
+    tables.j2
+    downloads_table.j2
+    watchlist_table.j2
+    activity_table.j2
+    dashboard_status.j2
+    system_integrations.j2
+    settings_form.j2
+    _strings.j2
+  components/
+    layout_blocks.j2  – Makros für KPI-Karten, Sidebar-Sections & Detail-Panels
 ```
 
-### Block- & Namenskonventionen
-- Jinja-Blöcke folgen `block head_extras`, `block page_header`, `block main`.
-- Partials im `partials/`-Verzeichnis werden über `{% include "partials/..." %}` eingebunden und akzeptieren Context-Variablen (`title`, `rows`, `hx_target_id`).
-- IDs für HTMX-Targets nutzen das Schema `hx-{bereich}-{entity}`, z. B. `hx-downloads-table`.
+### Layout-Erweiterung in Seiten
+```jinja
+{# pages/downloads.j2 #}
+{% extends "layouts/two_column.j2" %}
+{% import "components/layout_blocks.j2" as layout_blocks %}
+
+{% block sidebar %}
+  {{ layout_blocks.render_sidebar_sections(sidebar_sections, None) }}
+{% endblock %}
+
+{% block content %}
+  <div id="{{ downloads_fragment.identifier }}"
+       hx-get="{{ downloads_fragment.url }}"
+       hx-trigger="{{ downloads_fragment.trigger }}"
+       hx-target="{{ downloads_fragment.target }}"
+       hx-swap="{{ downloads_fragment.swap }}">
+    ...
+  </div>
+{% endblock %}
+```
+
+## Coding-Guidelines für neue UI-Seiten
+
+### Benennung & Struktur
+- Neue Seiten liegen unter `templates/pages/<slug>.j2` und spiegeln die Route (`/ui/<slug>`). Verwendet `kebab-case` und importiert benötigte Makros explizit, wie in `pages/downloads.j2` demonstriert.【F:app/ui/templates/pages/downloads.j2†L1-L37】
+- Jeder Kontext setzt einen eindeutigen `LayoutContext.page_id`, damit `_strings.page_title` und Navigation korrekt funktionieren.【F:app/ui/context/base.py†L62-L70】【F:app/ui/templates/partials/_strings.j2†L1-L28】
+
+### Layout & Slots
+- Seiten müssen exakt ein Layout (`layouts/dashboard.j2`, `two_column.j2`, `detail.j2`) erweitern und dessen Pflicht-Blöcke füllen. Optionale Slots wie `dashboard_secondary` oder `two_column_modal_container` bleiben leer, wenn sie nicht genutzt werden.【F:app/ui/templates/layouts/dashboard.j2†L1-L27】【F:app/ui/templates/layouts/two_column.j2†L1-L21】【F:app/ui/templates/layouts/detail.j2†L1-L26】
+- Globale Erweiterungen (`head_extras`, `header_actions`, `modals`, `scripts`) werden nur überschrieben, wenn die Seite zusätzlichen Inhalt benötigt; Basiskomponenten wie Navigation oder Alerts dürfen nicht entfernt werden.【F:app/ui/templates/layouts/base.j2†L1-L55】
+
+### Kontext-Builders & Dataclasses
+- Pro Seite existiert ein `build_*_page_context` in `app/ui/context/<feature>.py`, das `LayoutContext`, Fragment-Definitionen und URLs liefert. Diese Funktionen kapseln alle Ableitungen von Domain-Objekten und halten den Rückgabewert als Mapping mit `request`, `layout`, `session` sowie feature-spezifischen Schlüsseln konsistent.【F:app/ui/context/downloads.py†L28-L72】
+- Neue Kontext-Dataclasses nutzen `@dataclass(slots=True)` und wohnen in `app/ui/context/base.py`, damit Templates typsichere Attribute und minimale Speicherabdrücke erhalten.【F:app/ui/context/base.py†L19-L160】
+
+### Strings & Texte
+- Alle sichtbaren Strings kommen aus `_strings.j2`; neue Keys folgen dem Namensschema `<bereich>.<purpose>` und werden von Makros (`page_title`, `section_heading`, `nav_label`, `form_label`) konsumiert.【F:app/ui/templates/partials/_strings.j2†L1-L83】
+- Temporäre Texte in Partials werden ebenfalls zentralisiert; Inline-Strings in Templates gelten als Drift und müssen nachgezogen werden.
+
+### HTMX & Fehlerbehandlung
+- HTMX-IDs folgen `hx-<bereich>-<entity>`, Polling-Trigger werden im Kontext hinterlegt (`fragment.trigger`). Fragments liefern bei Fehlern `partials/async_error.j2` über `_render_alert_fragment`, damit Swaps konsistent bleiben.【F:app/ui/context/downloads.py†L75-L120】【F:app/ui/routes/shared.py†L64-L102】
+- SSE-/Polling-Modi werden über `_resolve_live_updates_mode` ermittelt; neue Seiten sollen Polling-Intervalle und eventuelle SSE-Quellen über den Kontext konfigurierbar halten.【F:app/ui/routes/shared.py†L20-L47】【F:app/ui/routes/downloads.py†L28-L115】
+
+### Navigation, Feature-Flags & Sicherheit
+- Routen validieren Rollen über `require_role` und prüfen Feature-Flags (`session.features.*`) vor jedem Render oder Mutations-Call; Fragment-Endpunkte spiegeln dieselben Guards.【F:app/ui/routes/downloads.py†L28-L115】【F:app/ui/session.py†L96-L179】
+- Formulare mit schreibenden Aktionen nutzen `Depends(enforce_csrf)` und geben `csrftoken`-Hidden-Fields zurück. Neue POST/PATCH/DELETE-Aktionen ohne CSRF-Abgleich sind unzulässig.【F:app/ui/routes/downloads.py†L1-L200】
+
+### Observability & Logging
+- Jeder Fragment-Handler schreibt strukturierte `log_event`-Einträge mit `component="ui.fragment.<name>"` und `status` (`success`/`error`), damit das Monitoring Polling-Drift erkennt.【F:app/ui/routes/downloads.py†L72-L115】
+- Langlaufende Aufgaben (z. B. SSE-Builders) loggen Fehler innerhalb des Builders; neue Hintergrund-Streams müssen denselben Guard respektieren, um das Event-Loop nicht zu blockieren.【F:app/ui/routes/shared.py†L34-L63】
 
 ## Internationalisierung & Strings
 - Phase 1 liefert ausschließlich englische Texte. Alle UI-Strings liegen in `templates/partials/_strings.j2` und werden über Jinja-Makros eingebunden.
