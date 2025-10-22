@@ -1,5 +1,6 @@
-{% extends "layouts/base.j2" %}
+{% extends "layouts/two_column.j2" %}
 {% import "partials/_strings.j2" as strings %}
+{% import "components/layout_blocks.j2" as layout_blocks %}
 
 {% block header_actions %}
   <form id="logout-form" method="post" action="/ui/logout">
@@ -18,7 +19,13 @@
   </section>
 {% endblock %}
 
-{% block main %}
+{% block sidebar %}
+  {% if sidebar_sections %}
+    {{ layout_blocks.render_sidebar_sections(sidebar_sections, None) }}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
   <section class="page-section page-section--card" aria-labelledby="{{ downloads_fragment.identifier }}-heading">
     <h3 id="{{ downloads_fragment.identifier }}-heading" class="page-section__title">
       {{ strings.section_heading(layout.page_id) }}

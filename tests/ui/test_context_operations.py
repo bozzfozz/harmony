@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 from starlette.requests import Request
 
 from app.ui.context.common import KpiCard, SidebarItem, SidebarSection
+from app.ui.context.downloads import build_downloads_page_context
+from app.ui.context.jobs import build_jobs_page_context
 from app.ui.context.operations import (
     build_activity_page_context,
-    build_downloads_page_context,
-    build_jobs_page_context,
     build_operations_page_context,
     build_watchlist_page_context,
 )
