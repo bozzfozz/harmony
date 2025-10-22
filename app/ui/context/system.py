@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi import Request
 
+from app.api.router_registry import compose_prefix
+from app.dependencies import get_app_config
 from app.ui.formatters import format_datetime_display
 from app.ui.services.system import (
     IntegrationSummary,
@@ -37,6 +39,17 @@ from .base import (
     _safe_url_for,
     _system_status_badge,
 )
+
+
+def _resolve_api_base_path(request: Request) -> str:
+    scope_app = request.scope.get("app")
+    if scope_app is not None:
+        state = getattr(scope_app, "state", None)
+        if state is not None:
+            base_path = getattr(state, "api_base_path", None)
+            if isinstance(base_path, str):
+                return base_path
+    return get_app_config().api_base_path
 
 
 def _build_secret_cards() -> tuple[SecretValidationCard, ...]:
@@ -182,7 +195,8 @@ def build_system_page_context(
     )
 
     secret_cards = build_system_secret_cards()
-    metrics_url = _safe_url_for(request, "get_metrics", "/api/system/metrics")
+    metrics_fallback = compose_prefix(_resolve_api_base_path(request), "/metrics")
+    metrics_url = _safe_url_for(request, "get_metrics", metrics_fallback)
 
     return {
         "request": request,
