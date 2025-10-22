@@ -47,7 +47,15 @@ class WatchlistUiService:
         logger.debug("watchlist.ui.list", extra={"count": len(rows)})
         return WatchlistTable(entries=rows)
 
-    def create_entry(
+    async def list_entries_async(self, request: Request) -> WatchlistTable:
+        """Asynchronous wrapper for ``list_entries`` using a worker thread."""
+
+        def _run() -> WatchlistTable:
+            return self.list_entries(request)
+
+        return await asyncio.to_thread(_run)
+
+    async def create_entry(
         self,
         request: Request,
         *,
@@ -58,18 +66,22 @@ class WatchlistUiService:
             artist_key=artist_key,
             priority=priority if priority is not None else 0,
         )
-        watchlist_api.create_watchlist_entry(
-            payload=payload,
-            request=request,
-            service=self._service,
-        )
+
+        def _run() -> None:
+            watchlist_api.create_watchlist_entry(
+                payload=payload,
+                request=request,
+                service=self._service,
+            )
+
+        await asyncio.to_thread(_run)
         logger.info(
             "watchlist.ui.create",
             extra={"artist_key": artist_key, "priority": payload.priority},
         )
-        return self.list_entries(request)
+        return await self.list_entries_async(request)
 
-    def update_priority(
+    async def update_priority(
         self,
         request: Request,
         *,
@@ -77,17 +89,21 @@ class WatchlistUiService:
         priority: int,
     ) -> WatchlistTable:
         payload = WatchlistPriorityUpdate(priority=priority)
-        watchlist_api.update_watchlist_priority(
-            artist_key=artist_key,
-            payload=payload,
-            request=request,
-            service=self._service,
-        )
+
+        def _run() -> None:
+            watchlist_api.update_watchlist_priority(
+                artist_key=artist_key,
+                payload=payload,
+                request=request,
+                service=self._service,
+            )
+
+        await asyncio.to_thread(_run)
         logger.info(
             "watchlist.ui.priority",
             extra={"artist_key": artist_key, "priority": priority},
         )
-        return self.list_entries(request)
+        return await self.list_entries_async(request)
 
     async def pause_entry(self, request: Request, *, artist_key: str) -> WatchlistTable:
         payload = WatchlistPauseRequest()

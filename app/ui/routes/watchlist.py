@@ -59,7 +59,7 @@ async def watchlist_table(
     limit = request.query_params.get("limit")
     offset = request.query_params.get("offset")
     try:
-        table = service.list_entries(request)
+        table = await service.list_entries_async(request)
     except Exception:
         logger.exception("ui.fragment.watchlist")
         log_event(
@@ -123,7 +123,7 @@ async def watchlist_priority_update(
         )
 
     try:
-        table = service.update_priority(
+        table = await service.update_priority(
             request,
             artist_key=artist_key,
             priority=payload.priority,
@@ -420,7 +420,7 @@ async def watchlist_create(
         )
 
     try:
-        table = service.create_entry(
+        table = await service.create_entry(
             request,
             artist_key=payload.artist_key,
             priority=payload.priority,
