@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -106,6 +108,24 @@ class DownloadsUiService:
             offset=offset,
             has_next=has_next,
             has_previous=has_previous,
+        )
+
+    async def list_downloads_async(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        """Run :meth:`list_downloads` in a background executor."""
+
+        return await asyncio.to_thread(
+            self.list_downloads,
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
         )
 
     def update_priority(self, *, download_id: int, priority: int) -> DownloadRow:
