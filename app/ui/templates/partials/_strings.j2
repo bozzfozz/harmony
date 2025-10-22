@@ -250,9 +250,20 @@
     "settings.artist_preferences.enable": "Enable",
     "settings.artist_preferences.disable": "Disable",
     "settings.artist_preferences.remove": "Remove",
+    "watchlist.priority.update": "Update priority",
+    "watchlist.pause": "Pause",
+    "watchlist.resume": "Resume",
+    "watchlist.delete": "Remove",
   } -%}
     {{ labels.get(key, key) }}
   {%- endif -%}
+{%- endmacro %}
+
+{% macro aria_label(key) -%}
+  {%- set labels = {
+    "watchlist.priority.input": "Priority",
+  } -%}
+  {{ labels.get(key, key) }}
 {%- endmacro %}
 
 {% macro spotify_time_range_group_label() -%}
@@ -516,6 +527,7 @@
     "watchlist.artist": "Artist",
     "watchlist.priority": "Priority",
     "watchlist.state": "State",
+    "watchlist.actions": "Actions",
     "downloads.id": "ID",
     "downloads.filename": "Filename",
     "downloads.status": "Status",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -11,6 +12,7 @@ from app.logging import get_logger
 from app.schemas.watchlist import (
     WatchlistEntryCreate,
     WatchlistEntryResponse,
+    WatchlistPauseRequest,
     WatchlistPriorityUpdate,
 )
 from app.services.watchlist_service import WatchlistService
@@ -25,6 +27,7 @@ class WatchlistRow:
     artist_key: str
     priority: int
     state_key: str
+    paused: bool = False
 
 
 @dataclass(slots=True)
@@ -86,6 +89,45 @@ class WatchlistUiService:
         )
         return self.list_entries(request)
 
+    async def pause_entry(self, request: Request, *, artist_key: str) -> WatchlistTable:
+        payload = WatchlistPauseRequest()
+
+        def _run() -> WatchlistTable:
+            watchlist_api.pause_watchlist_entry(
+                artist_key=artist_key,
+                payload=payload,
+                request=request,
+                service=self._service,
+            )
+            logger.info("watchlist.ui.pause", extra={"artist_key": artist_key})
+            return self.list_entries(request)
+
+        return await asyncio.to_thread(_run)
+
+    async def resume_entry(self, request: Request, *, artist_key: str) -> WatchlistTable:
+        def _run() -> WatchlistTable:
+            watchlist_api.resume_watchlist_entry(
+                artist_key=artist_key,
+                request=request,
+                service=self._service,
+            )
+            logger.info("watchlist.ui.resume", extra={"artist_key": artist_key})
+            return self.list_entries(request)
+
+        return await asyncio.to_thread(_run)
+
+    async def delete_entry(self, request: Request, *, artist_key: str) -> WatchlistTable:
+        def _run() -> WatchlistTable:
+            watchlist_api.delete_watchlist_entry(
+                artist_key=artist_key,
+                request=request,
+                service=self._service,
+            )
+            logger.info("watchlist.ui.delete", extra={"artist_key": artist_key})
+            return self.list_entries(request)
+
+        return await asyncio.to_thread(_run)
+
     @staticmethod
     def _to_row(entry: WatchlistEntryResponse) -> WatchlistRow:
         payload = entry.model_dump()
@@ -95,6 +137,7 @@ class WatchlistUiService:
             artist_key=str(payload.get("artist_key", "")),
             priority=int(payload.get("priority", 0)),
             state_key=state_key,
+            paused=paused,
         )
 
 

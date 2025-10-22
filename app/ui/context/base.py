@@ -237,6 +237,22 @@ class TableFragment:
 
 
 @dataclass(slots=True)
+class TableCellInput:
+    name: str
+    input_type: str
+    value: str | None = None
+    aria_label_key: str | None = None
+    min: str | None = None
+    max: str | None = None
+    step: str | None = None
+    test_id: str | None = None
+    include_value: bool = False
+    include_min: bool = False
+    include_max: bool = False
+    include_step: bool = False
+
+
+@dataclass(slots=True)
 class TableCellForm:
     action: str
     method: ButtonMethod
@@ -247,6 +263,7 @@ class TableCellForm:
     disabled: bool = False
     hx_method: HxMethod = "post"
     test_id: str | None = None
+    inputs: Sequence[TableCellInput] = field(default_factory=tuple)
 
 
 @dataclass(slots=True)
@@ -487,6 +504,7 @@ __all__ = [
     "TableDefinition",
     "PaginationContext",
     "TableFragment",
+    "TableCellInput",
     "TableCellForm",
     "AsyncFragment",
     "ReadinessItem",

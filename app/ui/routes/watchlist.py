@@ -55,6 +55,9 @@ async def watchlist_table(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_token = request.cookies.get("csrftoken", "")
+    limit = request.query_params.get("limit")
+    offset = request.query_params.get("offset")
     try:
         table = service.list_entries(request)
     except Exception:
@@ -74,6 +77,9 @@ async def watchlist_table(
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
+        csrf_token=csrf_token,
+        limit=limit,
+        offset=offset,
     )
     log_event(
         logger,
@@ -94,6 +100,7 @@ async def watchlist_table(
     "/watchlist/{artist_key}/priority",
     include_in_schema=False,
     dependencies=[Depends(enforce_csrf)],
+    name="watchlist_priority_update",
 )
 async def watchlist_priority_update(
     request: Request,
@@ -103,6 +110,8 @@ async def watchlist_priority_update(
 ) -> Response:
     values = _parse_form_body(await request.body())
     priority_raw = values.get("priority", "")
+    limit = values.get("limit")
+    offset = values.get("offset")
 
     try:
         payload = WatchlistPriorityUpdate.model_validate({"priority": priority_raw})
@@ -151,6 +160,9 @@ async def watchlist_priority_update(
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
+        csrf_token=request.cookies.get("csrftoken", ""),
+        limit=limit,
+        offset=offset,
     )
     log_event(
         logger,
@@ -159,6 +171,222 @@ async def watchlist_priority_update(
         status="success",
         role=session.role,
         count=len(context["fragment"].table.rows),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_table.j2",
+        context,
+    )
+
+
+@router.post(
+    "/watchlist/{artist_key}/pause",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+    name="watchlist_pause",
+)
+async def watchlist_pause(
+    request: Request,
+    artist_key: str,
+    session: UiSession = Depends(require_role("operator")),
+    service: WatchlistUiService = Depends(get_watchlist_ui_service),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit = values.get("limit")
+    offset = values.get("offset")
+
+    try:
+        table = await service.pause_entry(request, artist_key=artist_key)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            action="pause",
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.watchlist.pause")
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            action="pause",
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to pause the watchlist entry.",
+        )
+
+    context = build_watchlist_fragment_context(
+        request,
+        entries=table.entries,
+        csrf_token=request.cookies.get("csrftoken", ""),
+        limit=limit,
+        offset=offset,
+    )
+    log_event(
+        logger,
+        "ui.fragment.watchlist",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        action="pause",
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_table.j2",
+        context,
+    )
+
+
+@router.post(
+    "/watchlist/{artist_key}/resume",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+    name="watchlist_resume",
+)
+async def watchlist_resume(
+    request: Request,
+    artist_key: str,
+    session: UiSession = Depends(require_role("operator")),
+    service: WatchlistUiService = Depends(get_watchlist_ui_service),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit = values.get("limit")
+    offset = values.get("offset")
+
+    try:
+        table = await service.resume_entry(request, artist_key=artist_key)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            action="resume",
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.watchlist.resume")
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            action="resume",
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to resume the watchlist entry.",
+        )
+
+    context = build_watchlist_fragment_context(
+        request,
+        entries=table.entries,
+        csrf_token=request.cookies.get("csrftoken", ""),
+        limit=limit,
+        offset=offset,
+    )
+    log_event(
+        logger,
+        "ui.fragment.watchlist",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        action="resume",
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_table.j2",
+        context,
+    )
+
+
+@router.post(
+    "/watchlist/{artist_key}/delete",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_csrf)],
+    name="watchlist_delete",
+)
+async def watchlist_delete(
+    request: Request,
+    artist_key: str,
+    session: UiSession = Depends(require_role("operator")),
+    service: WatchlistUiService = Depends(get_watchlist_ui_service),
+) -> Response:
+    values = _parse_form_body(await request.body())
+    limit = values.get("limit")
+    offset = values.get("offset")
+
+    try:
+        table = await service.delete_entry(request, artist_key=artist_key)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+            action="delete",
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=exc.http_status,
+        )
+    except Exception:
+        logger.exception("ui.fragment.watchlist.delete")
+        log_event(
+            logger,
+            "ui.fragment.watchlist",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+            action="delete",
+        )
+        return _render_alert_fragment(
+            request,
+            "Failed to remove the watchlist entry.",
+        )
+
+    context = build_watchlist_fragment_context(
+        request,
+        entries=table.entries,
+        csrf_token=request.cookies.get("csrftoken", ""),
+        limit=limit,
+        offset=offset,
+    )
+    log_event(
+        logger,
+        "ui.fragment.watchlist",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["fragment"].table.rows),
+        action="delete",
     )
     return templates.TemplateResponse(
         request,
@@ -229,6 +457,9 @@ async def watchlist_create(
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
+        csrf_token=request.cookies.get("csrftoken", ""),
+        limit=None,
+        offset=None,
     )
     log_event(
         logger,
