@@ -146,5 +146,4 @@ FEATURE_RATE_LIMITING=true
 ## Weiterführende Ressourcen
 
 - [`README.md`](../README.md) – vollständige ENV-Referenz inklusive Frontend-Variablen.
-- [`docs/ops/runtime-config.md`](ops/runtime-config.md) – Laufzeitkonfiguration & Prioritätenmatrix.
-- [`reports/analysis/config_matrix.md`](../reports/analysis/config_matrix.md) – Detailanalyse der Konfigurationsquellen.
+- [`docs/ops/runtime-config.md`](ops/runtime-config.md) – Laufzeitkonfiguration, Prioritätenmatrix und Detailanalyse der Konfigurationsquellen (ersetzt den früheren `config_matrix`-Report).
