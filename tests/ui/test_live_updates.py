@@ -113,13 +113,13 @@ async def test_ui_event_stream_renders_downloads_fragment(monkeypatch) -> None:
             context = build_downloads_fragment_context(
                 request,
                 page=page,
+                csrf_token="token",
                 status_filter=None,
                 include_all=False,
             )
-            context["csrf_token"] = "token"
             fragment = context["fragment"]
             template = templates.get_template("partials/downloads_table.j2")
-            html = template.render(context)
+            html = template.render(**context)
             return {
                 "event": "downloads",
                 "fragment_id": fragment.identifier,

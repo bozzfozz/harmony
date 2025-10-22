@@ -237,6 +237,10 @@
     "soulseek.user.browse": "Browse directory",
     "soulseek.discography.new_job": "Queue discography job",
     "soulseek.discography.submit": "Queue job",
+    "downloads.priority.update": "Update priority",
+    "downloads.retry": "Retry download",
+    "downloads.cancel": "Cancel download",
+    "downloads.export": "Export downloads",
     "watchlist.create": "Add artist",
     "operations.view_details": "Open details",
     "system.health.refresh": "Refresh",
@@ -262,6 +266,7 @@
 {% macro aria_label(key) -%}
   {%- set labels = {
     "watchlist.priority.input": "Priority",
+    "downloads.priority.input": "Priority",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}
@@ -535,6 +540,7 @@
     "downloads.priority": "Priority",
     "downloads.user": "User",
     "downloads.updated": "Updated",
+    "downloads.actions": "Actions",
     "soulseek.uploads.id": "ID",
     "soulseek.uploads.user": "User",
     "soulseek.uploads.filename": "File",

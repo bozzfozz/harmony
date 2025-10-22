@@ -208,6 +208,13 @@ class _RecordingDownloadsService:
         self.list_exception: Exception | None = None
         self.update_exception: Exception | None = None
         self.updated: list[tuple[int, int]] = []
+        self.retry_exception: Exception | None = None
+        self.cancel_exception: Exception | None = None
+        self.export_exception: Exception | None = None
+        self.retried: list[int] = []
+        self.cancelled: list[int] = []
+        self.export_calls: list[dict[str, Any]] = []
+        self.export_response: PlainTextResponse | None = None
 
     def list_downloads(
         self,
@@ -250,6 +257,67 @@ class _RecordingDownloadsService:
                 artwork_path=None,
             )
         return new_row
+
+    async def retry_download(
+        self,
+        *,
+        download_id: int,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        if self.retry_exception:
+            raise self.retry_exception
+        self.retried.append(download_id)
+        return self.list_downloads(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
+        )
+
+    async def cancel_download(
+        self,
+        *,
+        download_id: int,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        if self.cancel_exception:
+            raise self.cancel_exception
+        self.cancelled.append(download_id)
+        self.page.items = [row for row in self.page.items if row.identifier != download_id]
+        return self.list_downloads(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
+        )
+
+    def export_downloads(
+        self,
+        *,
+        format: str,
+        status_filter: str | None,
+        from_time: str | None = None,
+        to_time: str | None = None,
+    ) -> PlainTextResponse:
+        if self.export_exception:
+            raise self.export_exception
+        self.export_calls.append(
+            {
+                "format": format,
+                "status_filter": status_filter,
+                "from": from_time,
+                "to": to_time,
+            }
+        )
+        if self.export_response is not None:
+            return self.export_response
+        return PlainTextResponse("id,filename\n", media_type="text/csv")
 
 
 class _StubDbSession:

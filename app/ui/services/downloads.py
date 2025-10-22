@@ -145,6 +145,100 @@ class DownloadsUiService:
         )
         return self._to_row(updated)
 
+    async def retry_download(
+        self,
+        *,
+        download_id: int,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        """Retry a download and return the refreshed page payload."""
+
+        download_router = import_module("app.routers.download_router")
+        await download_router.retry_download(
+            download_id=download_id,
+            service=self._service,
+        )
+        logger.info(
+            "downloads.ui.retry",
+            extra={
+                "download_id": download_id,
+                "limit": limit,
+                "offset": offset,
+                "include_all": include_all,
+                "status_filter": status_filter,
+            },
+        )
+        return await self.list_downloads_async(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
+        )
+
+    async def cancel_download(
+        self,
+        *,
+        download_id: int,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        """Cancel a download and return refreshed table data."""
+
+        download_router = import_module("app.routers.download_router")
+        await download_router.cancel_download(
+            download_id=download_id,
+            service=self._service,
+        )
+        logger.info(
+            "downloads.ui.cancel",
+            extra={
+                "download_id": download_id,
+                "limit": limit,
+                "offset": offset,
+                "include_all": include_all,
+                "status_filter": status_filter,
+            },
+        )
+        return await self.list_downloads_async(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
+        )
+
+    def export_downloads(
+        self,
+        *,
+        format: str,
+        status_filter: str | None,
+        from_time: str | None = None,
+        to_time: str | None = None,
+    ) -> Any:
+        """Delegate download exports to the router and return the response."""
+
+        download_router = import_module("app.routers.download_router")
+        logger.info(
+            "downloads.ui.export",
+            extra={
+                "format": format,
+                "status_filter": status_filter,
+                "from": from_time,
+                "to": to_time,
+            },
+        )
+        return download_router.export_downloads(
+            format=format,
+            status_filter=status_filter,
+            from_time=from_time,
+            to_time=to_time,
+            service=self._service,
+        )
+
     @staticmethod
     def _to_row(entry: DownloadEntryResponse) -> DownloadRow:
         progress_value = entry.progress

@@ -8,6 +8,7 @@
 {% set modal_swap = fragment.data_attributes.get("modal-swap", "innerHTML") %}
 {% set fragment_target = fragment.pagination.target if fragment.pagination else action_target %}
 {% set fragment_swap = fragment.pagination.swap if fragment.pagination else action_swap %}
+{% set status_value = status_filter or fragment.data_attributes.get("status") %}
 
 {% if active_url and all_url and refresh_url %}
   <div class="table-controls">
@@ -34,31 +35,52 @@
               hx-swap="{{ fragment_swap }}">
         {{ strings.button_label("soulseek.downloads.refresh") }}
       </button>
-      <form method="post"
-            action="{{ cleanup_url }}"
-            hx-delete="{{ cleanup_url }}"
-            hx-target="{{ cleanup_target }}"
-            hx-swap="{{ cleanup_swap }}">
-        <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
-        {% if fragment.data_attributes.get("limit") %}
+      {% if cleanup_url %}
+        <form method="post"
+              action="{{ cleanup_url }}"
+              hx-delete="{{ cleanup_url }}"
+              hx-target="{{ cleanup_target }}"
+              hx-swap="{{ cleanup_swap }}">
+          <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+          {% if fragment.data_attributes.get("limit") %}
+            <input type="hidden"
+                   name="limit"
+                   value="{{ fragment.data_attributes.get("limit") }}" />
+          {% endif %}
+          {% if fragment.data_attributes.get("offset") %}
+            <input type="hidden"
+                   name="offset"
+                   value="{{ fragment.data_attributes.get("offset") }}" />
+          {% endif %}
           <input type="hidden"
-                 name="limit"
-                 value="{{ fragment.data_attributes.get("limit") }}" />
-        {% endif %}
-        {% if fragment.data_attributes.get("offset") %}
-          <input type="hidden"
-                 name="offset"
-                 value="{{ fragment.data_attributes.get("offset") }}" />
-        {% endif %}
-        <input type="hidden"
-               name="scope"
-               value="{{ "all" if include_all else "active" }}" />
-        <button type="submit"
-                data-test="soulseek-downloads-cleanup"
-                {% if cleanup_disabled %}disabled{% endif %}>
-          {{ strings.button_label("soulseek.downloads.cleanup") }}
-        </button>
-      </form>
+                 name="scope"
+                 value="{{ "all" if include_all else "active" }}" />
+          {% if status_value %}
+            <input type="hidden" name="status" value="{{ status_value }}" />
+          {% endif %}
+          <button type="submit"
+                  data-test="soulseek-downloads-cleanup"
+                  {% if cleanup_disabled %}disabled{% endif %}>
+            {{ strings.button_label("soulseek.downloads.cleanup") }}
+          </button>
+        </form>
+      {% endif %}
+      {% if export_url %}
+        <form method="post"
+              action="{{ export_url }}"
+              target="_blank">
+          <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
+          <input type="hidden" name="format" value="csv" />
+          <input type="hidden" name="scope" value="{{ "all" if include_all else "active" }}" />
+          {% if status_value %}
+            <input type="hidden" name="status" value="{{ status_value }}" />
+          {% endif %}
+          <button type="submit"
+                  data-test="download-export">
+            {{ strings.button_label("downloads.export") }}
+          </button>
+        </form>
+      {% endif %}
     </div>
   </div>
 {% endif %}

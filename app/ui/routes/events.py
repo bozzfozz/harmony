@@ -87,10 +87,10 @@ async def ui_events(
             context = build_downloads_fragment_context(
                 request,
                 page=page,
+                csrf_token=csrf_token,
                 status_filter=None,
                 include_all=False,
             )
-            context["csrf_token"] = csrf_token
             return _render_fragment("downloads", "partials/downloads_table.j2", context)
 
         async def _build_jobs() -> dict[str, Any] | None:
