@@ -7,6 +7,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.config import DEFAULT_PLAYLIST_SYNC_STALE_AFTER
 from app.core.spotify_client import SpotifyClient
 from app.db import session_scope
 from app.logging import get_logger
@@ -24,8 +25,6 @@ from app.utils.worker_health import mark_worker_status, record_worker_heartbeat
 logger = get_logger(__name__)
 
 _UPDATED_AT_INCREMENT = timedelta(microseconds=1)
-# TODO: parameterise once operations finalise environment-specific sync SLAs.
-_PLAYLIST_SYNC_STALE_AFTER = timedelta(hours=2)
 
 
 class PlaylistCacheInvalidator:
@@ -129,12 +128,15 @@ class PlaylistSyncWorker:
         interval_seconds: float = 900.0,
         *,
         response_cache: ResponseCache | None = None,
+        stale_after: timedelta = DEFAULT_PLAYLIST_SYNC_STALE_AFTER,
     ) -> None:
         self._client = spotify_client
         self._interval = interval_seconds
         self._task: asyncio.Task[None] | None = None
         self._running = False
         self._response_cache = response_cache
+        seconds = max(0.0, float(stale_after.total_seconds()))
+        self._stale_after = timedelta(seconds=seconds)
 
     async def start(self) -> None:
         if self._task is None or self._task.done():
@@ -335,8 +337,8 @@ class PlaylistSyncWorker:
 
         return max(track_count, 0)
 
-    @staticmethod
     def _build_playlist_metadata(
+        self,
         payload: Mapping[str, Any],
         *,
         previous: Mapping[str, Any] | None = None,
@@ -381,7 +383,7 @@ class PlaylistSyncWorker:
         if isinstance(collaborative, bool):
             metadata["collaborative"] = collaborative
 
-        sync_status, sync_reason = PlaylistSyncWorker._derive_sync_status(
+        sync_status, sync_reason = self._derive_sync_status(
             snapshot_id=snapshot_id,
             previous_snapshot=prior_snapshot,
             previous_status=prior_status,
@@ -405,8 +407,8 @@ class PlaylistSyncWorker:
 
         return metadata or None
 
-    @staticmethod
     def _derive_sync_status(
+        self,
         *,
         snapshot_id: str | None,
         previous_snapshot: str | None,
@@ -418,7 +420,7 @@ class PlaylistSyncWorker:
             if previous_snapshot and previous_snapshot != snapshot_id:
                 return "stale", "snapshot_changed"
 
-            if PlaylistSyncWorker._sync_gap_exceeded(previous_synced_at, current_synced_at):
+            if self._sync_gap_exceeded(previous_synced_at, current_synced_at):
                 return "stale", "sync_gap"
 
             return "fresh", "synced_recently"
@@ -426,7 +428,7 @@ class PlaylistSyncWorker:
         if previous_snapshot:
             return "stale", "missing_snapshot"
 
-        if PlaylistSyncWorker._sync_gap_exceeded(previous_synced_at, current_synced_at):
+        if self._sync_gap_exceeded(previous_synced_at, current_synced_at):
             return "stale", "sync_gap"
 
         if previous_status == "stale":
@@ -461,14 +463,13 @@ class PlaylistSyncWorker:
         except ValueError:
             return None
 
-    @staticmethod
-    def _sync_gap_exceeded(previous: datetime | None, current: datetime | None) -> bool:
+    def _sync_gap_exceeded(self, previous: datetime | None, current: datetime | None) -> bool:
         if previous is None or current is None:
             return False
         delta = current - previous
         if delta <= timedelta(0):
             return False
-        return delta > _PLAYLIST_SYNC_STALE_AFTER
+        return delta > self._stale_after
 
     @staticmethod
     def _clean_text(value: Any) -> str | None:

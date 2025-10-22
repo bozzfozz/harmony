@@ -745,6 +745,7 @@ class SpotifyDomainService:
             spotify_client,
             interval_seconds=900.0,
             response_cache=response_cache,
+            stale_after=self._config.playlist_sync.stale_after,
         )
         setattr(self._state, "playlist_worker", worker)
         return worker

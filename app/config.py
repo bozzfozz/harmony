@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import timedelta
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -420,6 +421,11 @@ class SpotifyConfig:
     free_accept_user_urls: bool
     backfill_max_items: int
     backfill_cache_ttl_seconds: int
+
+
+@dataclass(slots=True)
+class PlaylistSyncConfig:
+    stale_after: timedelta
 
 
 @dataclass(slots=True)
@@ -934,6 +940,7 @@ class AppConfig:
     artwork: ArtworkConfig
     ingest: IngestConfig
     free_ingest: FreeIngestConfig
+    playlist_sync: PlaylistSyncConfig
     features: FeatureFlags
     ui: UiConfig
     artist_sync: ArtistSyncConfig
@@ -1180,6 +1187,8 @@ DEFAULT_INGEST_BATCH_SIZE = 500
 DEFAULT_INGEST_MAX_PENDING_JOBS = 100
 DEFAULT_BACKFILL_MAX_ITEMS = 2_000
 DEFAULT_BACKFILL_CACHE_TTL = 604_800
+DEFAULT_PLAYLIST_SYNC_STALE_AFTER_HOURS = 2.0
+DEFAULT_PLAYLIST_SYNC_STALE_AFTER = timedelta(hours=DEFAULT_PLAYLIST_SYNC_STALE_AFTER_HOURS)
 DEFAULT_API_BASE_PATH = "/api/v1"
 DEFAULT_ALLOWLIST_SUFFIXES = (
     "/health",
@@ -1516,6 +1525,11 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
                 "BACKFILL_CACHE_TTL_SEC",
                 DEFAULT_BACKFILL_CACHE_TTL,
                 "Cache TTL for backfill lookups (seconds).",
+            ),
+            ConfigTemplateEntry(
+                "PLAYLIST_SYNC_STALE_AFTER_HOURS",
+                DEFAULT_PLAYLIST_SYNC_STALE_AFTER_HOURS,
+                "Hours before playlist metadata is considered stale.",
             ),
         ),
     ),
@@ -2926,6 +2940,13 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         ),
     )
 
+    stale_after_hours = _bounded_float(
+        _env_value(env, "PLAYLIST_SYNC_STALE_AFTER_HOURS"),
+        default=DEFAULT_PLAYLIST_SYNC_STALE_AFTER_HOURS,
+        minimum=0.0,
+    )
+    playlist_sync = PlaylistSyncConfig(stale_after=timedelta(hours=stale_after_hours))
+
     api_base_path = _normalise_base_path(_env_value(env, "API_BASE_PATH"))
     oauth_public_base = _normalise_prefix(
         _env_value(env, "OAUTH_PUBLIC_BASE")
@@ -3307,6 +3328,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         artwork=artwork_config,
         ingest=ingest,
         free_ingest=free_ingest,
+        playlist_sync=playlist_sync,
         features=features,
         ui=ui_config,
         artist_sync=artist_sync_config,
