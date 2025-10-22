@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import json
+import re
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 
@@ -18,6 +19,8 @@ from .base import (
     PaginationContext,
     StatusBadge,
     TableCell,
+    TableCellForm,
+    TableCellInput,
     TableDefinition,
     TableFragment,
     TableRow,
@@ -370,22 +373,121 @@ def build_activity_fragment_context(
     return {"request": request, "fragment": fragment}
 
 
+def _normalize_artist_key_for_id(value: str) -> str:
+    candidate = value.lower()
+    candidate = re.sub(r"[^a-z0-9]+", "-", candidate)
+    candidate = candidate.strip("-")
+    return candidate or "entry"
+
+
+def _normalise_paging_param(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    return candidate or None
+
+
+def _build_watchlist_hidden_fields(
+    csrf_token: str,
+    limit: str | None,
+    offset: str | None,
+) -> dict[str, str]:
+    fields: dict[str, str] = {"csrftoken": csrf_token}
+    if limit is not None:
+        fields["limit"] = limit
+    if offset is not None:
+        fields["offset"] = offset
+    return fields
+
+
+def _build_watchlist_row(
+    entry: "WatchlistRow",
+    hidden_fields: Mapping[str, str],
+) -> TableRow:
+    slug = _normalize_artist_key_for_id(entry.artist_key)
+    priority_input = TableCellInput(
+        name="priority",
+        input_type="number",
+        value=str(entry.priority),
+        aria_label_key="watchlist.priority.input",
+        min="0",
+        test_id=f"watchlist-priority-input-{slug}",
+        include_value=True,
+        include_min=True,
+    )
+    priority_form = TableCellForm(
+        action=f"/ui/watchlist/{entry.artist_key}/priority",
+        method="post",
+        submit_label_key="watchlist.priority.update",
+        hidden_fields=dict(hidden_fields),
+        hx_target="#hx-watchlist-table",
+        hx_swap="outerHTML",
+        test_id=f"watchlist-priority-submit-{slug}",
+        inputs=(priority_input,),
+    )
+
+    action_forms: list[TableCellForm] = []
+    if entry.paused:
+        action_forms.append(
+            TableCellForm(
+                action=f"/ui/watchlist/{entry.artist_key}/resume",
+                method="post",
+                submit_label_key="watchlist.resume",
+                hidden_fields=dict(hidden_fields),
+                hx_target="#hx-watchlist-table",
+                hx_swap="outerHTML",
+                test_id=f"watchlist-resume-{slug}",
+            )
+        )
+    else:
+        action_forms.append(
+            TableCellForm(
+                action=f"/ui/watchlist/{entry.artist_key}/pause",
+                method="post",
+                submit_label_key="watchlist.pause",
+                hidden_fields=dict(hidden_fields),
+                hx_target="#hx-watchlist-table",
+                hx_swap="outerHTML",
+                test_id=f"watchlist-pause-{slug}",
+            )
+        )
+
+    action_forms.append(
+        TableCellForm(
+            action=f"/ui/watchlist/{entry.artist_key}/delete",
+            method="post",
+            submit_label_key="watchlist.delete",
+            hidden_fields=dict(hidden_fields),
+            hx_target="#hx-watchlist-table",
+            hx_swap="outerHTML",
+            test_id=f"watchlist-delete-{slug}",
+        )
+    )
+
+    return TableRow(
+        test_id=f"watchlist-row-{slug}",
+        cells=(
+            TableCell(text=entry.artist_key, test_id=f"watchlist-artist-{slug}"),
+            TableCell(form=priority_form, test_id=f"watchlist-priority-{slug}"),
+            TableCell(text_key=entry.state_key, test_id=f"watchlist-state-{slug}"),
+            TableCell(forms=tuple(action_forms), test_id=f"watchlist-actions-{slug}"),
+        ),
+    )
+
+
 def build_watchlist_fragment_context(
     request: Request,
     *,
     entries: Sequence["WatchlistRow"],
+    csrf_token: str,
+    limit: str | None = None,
+    offset: str | None = None,
 ) -> Mapping[str, Any]:
-    rows: list[TableRow] = []
-    for entry in entries:
-        rows.append(
-            TableRow(
-                cells=(
-                    TableCell(text=entry.artist_key),
-                    TableCell(text=str(entry.priority)),
-                    TableCell(text_key=entry.state_key),
-                )
-            )
-        )
+    limit_value = _normalise_paging_param(limit)
+    offset_value = _normalise_paging_param(offset)
+    hidden_fields = _build_watchlist_hidden_fields(csrf_token, limit_value, offset_value)
+
+    rows = tuple(_build_watchlist_row(entry, hidden_fields) for entry in entries)
 
     table = TableDefinition(
         identifier="watchlist-table",
@@ -393,6 +495,7 @@ def build_watchlist_fragment_context(
             "watchlist.artist",
             "watchlist.priority",
             "watchlist.state",
+            "watchlist.actions",
         ),
         rows=tuple(rows),
         caption_key="watchlist.table.caption",
@@ -402,7 +505,15 @@ def build_watchlist_fragment_context(
         identifier="hx-watchlist-table",
         table=table,
         empty_state_key="watchlist",
-        data_attributes={"count": str(len(rows))},
+        data_attributes={
+            key: value
+            for key, value in (
+                ("count", str(len(rows))),
+                ("limit", limit_value),
+                ("offset", offset_value),
+            )
+            if value is not None
+        },
     )
 
     return {"request": request, "fragment": fragment}

@@ -886,6 +886,13 @@ class _StubWatchlistService:
         )
         self.updated: list[tuple[str, int]] = []
         self.created: list[str] = []
+        self.paused: list[str] = []
+        self.resumed: list[str] = []
+        self.deleted: list[str] = []
+        self.pause_exception: Exception | None = None
+        self.resume_exception: Exception | None = None
+        self.delete_exception: Exception | None = None
+        self.update_exception: Exception | None = None
 
     def list_entries(self, request) -> WatchlistTable:  # type: ignore[override]
         return WatchlistTable(entries=tuple(self.entries))
@@ -913,6 +920,8 @@ class _StubWatchlistService:
         artist_key: str,
         priority: int,
     ) -> WatchlistTable:
+        if self.update_exception:
+            raise self.update_exception
         self.updated.append((artist_key, priority))
         row = WatchlistRow(
             artist_key=artist_key,
@@ -920,6 +929,53 @@ class _StubWatchlistService:
             state_key="watchlist.state.active",
         )
         self.entries = [row] + [entry for entry in self.entries if entry.artist_key != artist_key]
+        return WatchlistTable(entries=tuple(self.entries))
+
+    async def pause_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        if self.pause_exception:
+            raise self.pause_exception
+        self.paused.append(artist_key)
+        updated: list[WatchlistRow] = []
+        for entry in self.entries:
+            if entry.artist_key == artist_key:
+                updated.append(
+                    WatchlistRow(
+                        artist_key=entry.artist_key,
+                        priority=entry.priority,
+                        state_key="watchlist.state.paused",
+                        paused=True,
+                    )
+                )
+            else:
+                updated.append(entry)
+        self.entries = updated
+        return WatchlistTable(entries=tuple(self.entries))
+
+    async def resume_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        if self.resume_exception:
+            raise self.resume_exception
+        self.resumed.append(artist_key)
+        updated: list[WatchlistRow] = []
+        for entry in self.entries:
+            if entry.artist_key == artist_key:
+                updated.append(
+                    WatchlistRow(
+                        artist_key=entry.artist_key,
+                        priority=entry.priority,
+                        state_key="watchlist.state.active",
+                        paused=False,
+                    )
+                )
+            else:
+                updated.append(entry)
+        self.entries = updated
+        return WatchlistTable(entries=tuple(self.entries))
+
+    async def delete_entry(self, request, *, artist_key: str) -> WatchlistTable:
+        if self.delete_exception:
+            raise self.delete_exception
+        self.deleted.append(artist_key)
+        self.entries = [entry for entry in self.entries if entry.artist_key != artist_key]
         return WatchlistTable(entries=tuple(self.entries))
 
 
@@ -2941,6 +2997,7 @@ def test_watchlist_fragment_success(monkeypatch) -> None:
                 artist_key="spotify:artist:2",
                 priority=2,
                 state_key="watchlist.state.paused",
+                paused=True,
             ),
         ),
     )
@@ -2953,6 +3010,11 @@ def test_watchlist_fragment_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert "hx-watchlist-table" in response.text
             assert "spotify:artist:1" in response.text
+            assert 'data-test="watchlist-priority-input-spotify-artist-1"' in response.text
+            assert 'data-test="watchlist-pause-spotify-artist-1"' in response.text
+            assert 'data-test="watchlist-resume-spotify-artist-2"' in response.text
+            assert 'data-test="watchlist-delete-spotify-artist-1"' in response.text
+            assert 'name="csrftoken"' in response.text
     finally:
         app.dependency_overrides.pop(get_watchlist_ui_service, None)
 

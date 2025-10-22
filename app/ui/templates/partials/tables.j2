@@ -20,8 +20,21 @@
     {% for name, value in form.hidden_fields.items() %}
       <input type="hidden" name="{{ name }}" value="{{ value }}" />
     {% endfor %}
+    {% for input in form.inputs %}
+      <input type="{{ input.input_type }}"
+             name="{{ input.name }}"
+             {% if input.include_value %}value="{{ input.value }}"{% endif %}
+             {% if input.include_min %}min="{{ input.min }}"{% endif %}
+             {% if input.include_max %}max="{{ input.max }}"{% endif %}
+             {% if input.include_step %}step="{{ input.step }}"{% endif %}
+             {% if input.aria_label_key %}
+               aria-label="{{ strings.aria_label(input.aria_label_key) }}"
+             {% endif %}
+             {% if input.test_id %}data-test="{{ input.test_id }}"{% endif %} />
+    {% endfor %}
     <button type="submit"
             {% if form.test_id %}data-test="{{ form.test_id }}"{% endif %}
+            aria-label="{{ strings.button_label(form.submit_label_key) }}"
             {% if form.disabled %}disabled{% endif %}>
       {{ strings.button_label(form.submit_label_key) }}
     </button>

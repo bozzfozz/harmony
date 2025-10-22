@@ -1631,7 +1631,13 @@ def test_watchlist_fragment_template_renders_rows() -> None:
             state_key="watchlist.state.paused",
         ),
     ]
-    context = build_watchlist_fragment_context(request, entries=entries)
+    context = build_watchlist_fragment_context(
+        request,
+        entries=entries,
+        csrf_token="csrf-token",
+        limit=None,
+        offset=None,
+    )
     template = templates.get_template("partials/watchlist_table.j2")
     html = template.render(**context)
 

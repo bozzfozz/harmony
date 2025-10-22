@@ -113,6 +113,9 @@ async def ui_events(
             context = build_watchlist_fragment_context(
                 request,
                 entries=table.entries,
+                csrf_token=csrf_token,
+                limit=None,
+                offset=None,
             )
             return _render_fragment("watchlist", "partials/watchlist_table.j2", context)
 
