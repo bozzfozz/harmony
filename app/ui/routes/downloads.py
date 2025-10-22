@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.config import AppConfig
@@ -70,7 +72,7 @@ async def downloads_table(
         )
 
     try:
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit,
             offset=offset,
             include_all=include_all,
@@ -165,11 +167,12 @@ async def downloads_priority_update(
         status_filter = None
 
     try:
-        service.update_priority(
+        await asyncio.to_thread(
+            service.update_priority,
             download_id=download_id,
             priority=priority_value,
         )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
