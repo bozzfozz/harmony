@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.db import Base, session_scope
@@ -135,10 +135,99 @@ class UiSessionStore:
         )
 
 
+class UiLoginAttemptRecord(Base):
+    __tablename__ = "ui_login_attempts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scope = Column(String(32), nullable=False, index=True)
+    key = Column(String(128), nullable=False, index=True)
+    occurred_at = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class UiLoginAttemptStore:
+    def __init__(self, *, session_factory: SessionFactory | None = None) -> None:
+        self._session_factory = session_factory or session_scope
+
+    def count_recent_attempts(
+        self,
+        scope: str,
+        key: str,
+        *,
+        now: datetime,
+        window: timedelta,
+    ) -> tuple[int, datetime | None]:
+        cutoff = now - window
+        with self._session_factory() as db_session:
+            self._prune_older(db_session, scope, key, cutoff)
+            result = db_session.execute(
+                select(
+                    func.count(UiLoginAttemptRecord.id),
+                    func.min(UiLoginAttemptRecord.occurred_at),
+                ).where(
+                    UiLoginAttemptRecord.scope == scope,
+                    UiLoginAttemptRecord.key == key,
+                    UiLoginAttemptRecord.occurred_at >= cutoff,
+                )
+            ).one()
+            count = int(result[0])
+            oldest: datetime | None = result[1]
+            return count, _as_utc(oldest) if oldest is not None else None
+
+    def record_attempt(
+        self,
+        scope: str,
+        key: str,
+        *,
+        now: datetime,
+        window: timedelta,
+    ) -> tuple[int, datetime | None]:
+        cutoff = now - window
+        with self._session_factory() as db_session:
+            self._prune_older(db_session, scope, key, cutoff)
+            db_session.add(
+                UiLoginAttemptRecord(
+                    scope=scope,
+                    key=key,
+                    occurred_at=now,
+                )
+            )
+            db_session.flush()
+            result = db_session.execute(
+                select(
+                    func.count(UiLoginAttemptRecord.id),
+                    func.min(UiLoginAttemptRecord.occurred_at),
+                ).where(
+                    UiLoginAttemptRecord.scope == scope,
+                    UiLoginAttemptRecord.key == key,
+                    UiLoginAttemptRecord.occurred_at >= cutoff,
+                )
+            ).one()
+            count = int(result[0])
+            oldest: datetime | None = result[1]
+            return count, _as_utc(oldest) if oldest is not None else None
+
+    @staticmethod
+    def _prune_older(
+        db_session: Session,
+        scope: str,
+        key: str,
+        cutoff: datetime,
+    ) -> None:
+        db_session.execute(
+            delete(UiLoginAttemptRecord).where(
+                UiLoginAttemptRecord.scope == scope,
+                UiLoginAttemptRecord.key == key,
+                UiLoginAttemptRecord.occurred_at < cutoff,
+            )
+        )
+
+
 __all__ = [
     "StoredUiSession",
     "UiSessionStore",
     "UiSessionRecord",
+    "UiLoginAttemptRecord",
+    "UiLoginAttemptStore",
 ]
 
 

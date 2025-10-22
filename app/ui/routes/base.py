@@ -65,8 +65,9 @@ async def login_action(request: Request) -> Response:
     values = parse_qs(payload)
     api_key = values.get("api_key", [""])[0]
     manager = get_session_manager(request)
+    remote_address = request.client.host if request.client else None
     try:
-        session = await manager.create_session(api_key)
+        session = await manager.create_session(api_key, remote_address=remote_address)
     except HTTPException as exc:
         if exc.status_code in {status.HTTP_400_BAD_REQUEST, status.HTTP_503_SERVICE_UNAVAILABLE}:
             message = exc.detail
@@ -78,12 +79,16 @@ async def login_action(request: Request) -> Response:
             else status.HTTP_400_BAD_REQUEST
         )
         context = build_login_page_context(request, error=message)
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request,
             "pages/login.j2",
             context,
             status_code=status_code,
         )
+        if exc.headers:
+            for key, value in exc.headers.items():
+                response.headers.setdefault(key, value)
+        return response
 
     response = RedirectResponse("/ui", status_code=status.HTTP_303_SEE_OTHER)
     attach_session_cookie(response, session, manager)
