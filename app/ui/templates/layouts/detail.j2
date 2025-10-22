@@ -1,0 +1,25 @@
+{% extends "layouts/base.j2" %}
+
+{% block main %}
+  <article class="layout-detail">
+    <header class="layout-detail__header">
+      {% block detail_header %}{% endblock %}
+    </header>
+    <div class="layout-detail__body">
+      <section class="layout-detail__primary" aria-label="Detail content">
+        {% block detail_primary %}{% endblock %}
+      </section>
+      <aside class="layout-detail__secondary" aria-label="Related metadata">
+        {% block detail_secondary %}{% endblock %}
+      </aside>
+    </div>
+  </article>
+  <div class="layout-detail__modal-container" data-role="modal-container">
+    {% block detail_modal_container %}{% endblock %}
+  </div>
+{% endblock %}
+
+{% block modals %}
+  {{ super() }}
+  {% block detail_modals %}{% endblock %}
+{% endblock %}

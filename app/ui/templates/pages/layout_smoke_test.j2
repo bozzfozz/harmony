@@ -1,0 +1,102 @@
+{% extends "layouts/dashboard.j2" %}
+{% import "components/layout_blocks.j2" as layout_blocks %}
+
+{% block page_header %}
+  <section class="page-section">
+    <h2>Layout smoke test</h2>
+    <p>This template exercises the dashboard layout blocks.</p>
+  </section>
+{% endblock %}
+
+{% set kpi_cards = [
+  {
+    "identifier": "kpi-downloads",
+    "title": "Downloads queued",
+    "value": "128",
+    "change": "+12 vs last hour",
+    "change_variant": "positive",
+    "description": "Current download backlog across all sources.",
+    "badge_label": "Healthy",
+    "badge_variant": "success",
+    "test_id": "kpi-downloads-card"
+  },
+  {
+    "identifier": "kpi-ingest",
+    "title": "Imports completed",
+    "value": "42",
+    "change": "-3 vs last hour",
+    "change_variant": "negative",
+    "description": "Successful ingest runs in the past 60 minutes.",
+    "badge_label": "Watch",
+    "badge_variant": "warning",
+    "test_id": "kpi-ingest-card"
+  }
+] %}
+
+{% set sidebar_sections = [
+  {
+    "identifier": "smoke-links",
+    "title": "Quick links",
+    "items": [
+      {
+        "identifier": "link-dashboard",
+        "label": "Back to dashboard",
+        "href": "/ui",
+        "description": "Primary operator landing page."
+      },
+      {
+        "identifier": "link-downloads",
+        "label": "Manage downloads",
+        "href": "/ui/downloads",
+        "description": "Inspect active and completed downloads."
+      }
+    ]
+  },
+  {
+    "identifier": "smoke-metadata",
+    "title": "Metadata",
+    "body": "<p>Auxiliary information shown in a sidebar slot.</p>"
+  }
+] %}
+
+{% set detail_panels = [
+  {
+    "identifier": "smoke-panel-activity",
+    "title": "Recent activity",
+    "subtitle": "Illustrative fragment",
+    "body": "<p>Use this area to display live fragments or tables.</p>",
+    "footer": "<p><small>Updated a moment ago.</small></p>"
+  },
+  {
+    "identifier": "smoke-panel-tasks",
+    "title": "Next tasks",
+    "body": "<ul><li>Verify layout wiring</li><li>Connect real data</li></ul>"
+  }
+] %}
+
+{% block dashboard_kpis %}
+  {{ layout_blocks.render_kpi_cards(kpi_cards, "No KPI data available.") }}
+{% endblock %}
+
+{% block dashboard_primary %}
+  {{ layout_blocks.render_detail_panels(detail_panels, "Primary content is empty.") }}
+{% endblock %}
+
+{% block dashboard_secondary %}
+  {{ layout_blocks.render_sidebar_sections(sidebar_sections, "No sidebar entries.") }}
+{% endblock %}
+
+{% block dashboard_modal_container %}
+  <div class="layout-smoke__modal-placeholder" aria-live="polite">
+    <p>Inline modal container reserved for HTMX responses.</p>
+  </div>
+{% endblock %}
+
+{% block dashboard_modals %}
+  <div class="modal" id="smoke-modal" role="dialog" aria-modal="true" hidden>
+    <div class="modal__content">
+      <h3>Smoke modal</h3>
+      <p>This static modal validates the wiring of the dashboard layout modal slot.</p>
+    </div>
+  </div>
+{% endblock %}
