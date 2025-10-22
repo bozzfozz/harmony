@@ -47,6 +47,29 @@ def _create_client(monkeypatch, extra_env: dict[str, str] | None = None) -> Test
     return TestClient(app)
 
 
+def _cookie_header(response, name: str) -> str:
+    header_values: list[str] = []
+    headers = response.headers
+    if hasattr(headers, "get_list"):
+        header_values.extend(headers.get_list("set-cookie"))
+    elif hasattr(headers, "getlist"):
+        header_values.extend(headers.getlist("set-cookie"))
+    else:
+        value = headers.get("set-cookie")
+        if value is not None:
+            header_values.append(value)
+    if not header_values and hasattr(headers, "raw"):
+        header_values.extend(
+            value.decode("latin-1")
+            for key, value in headers.raw
+            if key.decode("latin-1").lower() == "set-cookie"
+        )
+    for header in header_values:
+        if header.startswith(f"{name}="):
+            return header
+    raise AssertionError(f"Cookie {name!r} not set")
+
+
 def _metric_value(name: str, labels: dict[str, str]) -> float:
     registry = metrics.get_registry()
     for family in registry.collect():
@@ -93,6 +116,26 @@ def test_login_success(monkeypatch) -> None:
     assert meta_token is not None
     assert dashboard_token in meta_token.group(1)
     assert 'name="csrftoken"' in body
+
+
+def test_login_sets_secure_cookies_by_default(monkeypatch) -> None:
+    with _create_client(monkeypatch) as client:
+        response = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert response.status_code == 303
+        session_cookie = _cookie_header(response, "ui_session")
+        csrf_cookie = _cookie_header(response, "csrftoken")
+        assert "secure" in session_cookie.lower()
+        assert "secure" in csrf_cookie.lower()
+
+
+def test_login_allows_insecure_cookies(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env={"UI_COOKIES_SECURE": "false"}) as client:
+        response = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert response.status_code == 303
+        session_cookie = _cookie_header(response, "ui_session")
+        csrf_cookie = _cookie_header(response, "csrftoken")
+        assert "secure" not in session_cookie.lower()
+        assert "secure" not in csrf_cookie.lower()
 
 
 def test_login_failure(monkeypatch) -> None:

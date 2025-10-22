@@ -75,7 +75,7 @@ from app.ui.services import (
 )
 from app.ui.session import fingerprint_api_key
 from app.utils.activity import activity_manager
-from tests.ui.test_ui_auth import _assert_html_response, _create_client
+from tests.ui.test_ui_auth import _assert_html_response, _cookie_header, _create_client
 
 
 def _cookies_header(client: TestClient) -> str:
@@ -953,6 +953,7 @@ class _StubSoulseekUiService:
             allowed_origins=(),
             _require_auth_default=True,
             _rate_limiting_default=True,
+            ui_cookies_secure=True,
         )
         self.status_exception: Exception | None = None
         self.health_exception: Exception | None = None
@@ -4275,6 +4276,66 @@ def test_spotify_saved_tracks_action_save_success(monkeypatch) -> None:
             _assert_html_response(response)
             assert "Track track-99" in response.text
             assert stub.save_calls == [("track-99",)]
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_pagination_cookies_secure(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.saved_tracks_rows = [
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track",
+            artists=("Artist",),
+            album="Album",
+            added_at=datetime(2023, 1, 1, 12, 0),
+        )
+    ]
+    stub.saved_tracks_total = len(stub.saved_tracks_rows)
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 15, "offset": 5},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            limit_cookie = _cookie_header(response, "spotify_saved_tracks_limit")
+            offset_cookie = _cookie_header(response, "spotify_saved_tracks_offset")
+            assert "secure" in limit_cookie.lower()
+            assert "secure" in offset_cookie.lower()
+    finally:
+        app.dependency_overrides.pop(get_spotify_ui_service, None)
+
+
+def test_spotify_saved_tracks_pagination_allows_insecure_cookies(monkeypatch) -> None:
+    stub = _StubSpotifyService()
+    stub.saved_tracks_rows = [
+        SpotifySavedTrackRow(
+            identifier="track-1",
+            name="Track",
+            artists=("Artist",),
+            album="Album",
+            added_at=datetime(2023, 1, 1, 12, 0),
+        )
+    ]
+    stub.saved_tracks_total = len(stub.saved_tracks_rows)
+    app.dependency_overrides[get_spotify_ui_service] = lambda: stub
+    try:
+        with _create_client(monkeypatch, extra_env={"UI_COOKIES_SECURE": "false"}) as client:
+            _login(client)
+            response = client.get(
+                "/ui/spotify/saved",
+                params={"limit": 15, "offset": 5},
+                headers={"Cookie": _cookies_header(client)},
+            )
+            _assert_html_response(response)
+            limit_cookie = _cookie_header(response, "spotify_saved_tracks_limit")
+            offset_cookie = _cookie_header(response, "spotify_saved_tracks_offset")
+            assert "secure" not in limit_cookie.lower()
+            assert "secure" not in offset_cookie.lower()
     finally:
         app.dependency_overrides.pop(get_spotify_ui_service, None)
 

@@ -506,21 +506,22 @@ def require_operator_with_feature(
 def attach_session_cookie(
     response: Response, session: UiSession, manager: UiSessionManager
 ) -> None:
+    secure = manager.security.ui_cookies_secure
     response.set_cookie(
         _SESSION_COOKIE,
         session.identifier,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         max_age=manager.cookie_max_age(),
     )
 
 
-def clear_session_cookie(response: Response) -> None:
+def clear_session_cookie(response: Response, *, secure: bool) -> None:
     response.delete_cookie(
         _SESSION_COOKIE,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
     )
 
