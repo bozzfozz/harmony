@@ -167,3 +167,23 @@ def test_secret_validation_updates_card(monkeypatch) -> None:
         assert "system-secret-card__status" in response.text
         assert "Live value" in response.text
     client.app.dependency_overrides.pop(get_system_ui_service, None)
+
+
+def test_secret_validation_allows_admin_when_imports_disabled(monkeypatch) -> None:
+    stub = _StubSystemService()
+    extra_env = {"UI_ROLE_DEFAULT": "admin", "UI_FEATURE_IMPORTS": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        client.app.dependency_overrides[get_system_ui_service] = lambda: stub
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        page = client.get("/ui/system", headers=headers)
+        _assert_html_response(page)
+        token = _extract_csrf_token(page.text)
+        post_headers = {
+            "Cookie": _cookies_header(client),
+            "X-CSRF-Token": token,
+        }
+        response = client.post("/ui/system/secrets/spotify", headers=post_headers)
+        _assert_html_response(response)
+        assert "system-secret-card__status" in response.text
+    client.app.dependency_overrides.pop(get_system_ui_service, None)
