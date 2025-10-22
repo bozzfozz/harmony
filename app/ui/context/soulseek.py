@@ -1007,6 +1007,8 @@ def build_soulseek_downloads_context(
         "cleanup_swap": pagination.swap if pagination else "outerHTML",
         "cleanup_disabled": not can_manage_downloads,
         "can_manage_downloads": can_manage_downloads,
+        "status_filter": None,
+        "export_url": None,
     }
 
 
