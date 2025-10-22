@@ -27,6 +27,20 @@ from .base import (
     _build_primary_navigation,
     _safe_url_for,
 )
+from .common import KpiCard, SidebarItem, SidebarSection
+
+_OPERATIONS_NAV_TITLE = "Operations overview"
+_OPERATIONS_LIVE_UPDATES_TITLE = "Live updates"
+_DOWNLOADS_LINK_LABEL = "View download queue"
+_JOBS_LINK_LABEL = "View orchestrator jobs"
+_WATCHLIST_LINK_LABEL = "Manage watchlist"
+_ACTIVITY_LINK_LABEL = "View activity log"
+_LIVE_UPDATES_STREAMING_VALUE = "Streaming"
+_LIVE_UPDATES_POLLING_VALUE = "Polling"
+_LIVE_UPDATES_STREAMING_DESCRIPTION = "Server-sent events keep this overview in sync in real time."
+_LIVE_UPDATES_POLLING_DESCRIPTION = "HTMX polling refreshes the overview on a schedule."
+_LIVE_UPDATES_STREAMING_BADGE = "Real-time"
+_LIVE_UPDATES_POLLING_BADGE = "Interval"
 
 if TYPE_CHECKING:
     from app.ui.services import DownloadPage, OrchestratorJob, WatchlistRow
@@ -91,6 +105,24 @@ def build_operations_page_context(
         event_name="activity" if use_sse else None,
     )
 
+    kpi_cards = _build_operations_kpi_cards(live_updates_mode)
+    dashboard_url = "/ui"
+    downloads_page_url = "/ui/downloads"
+    jobs_page_url = "/ui/jobs"
+    watchlist_page_url = "/ui/watchlist"
+    activity_page_url = "/ui/activity"
+    sidebar_sections = _build_operations_sidebar_sections(
+        downloads_fragment=downloads_fragment,
+        jobs_fragment=jobs_fragment,
+        watchlist_fragment=watchlist_fragment,
+        activity_fragment=activity_fragment,
+        live_updates_mode=live_updates_mode,
+        downloads_page_url=downloads_page_url,
+        jobs_page_url=jobs_page_url,
+        watchlist_page_url=watchlist_page_url,
+        activity_page_url=activity_page_url,
+    )
+
     return {
         "request": request,
         "layout": layout,
@@ -100,11 +132,13 @@ def build_operations_page_context(
         "jobs_fragment": jobs_fragment,
         "watchlist_fragment": watchlist_fragment,
         "activity_fragment": activity_fragment,
-        "dashboard_url": "/ui",
-        "downloads_page_url": "/ui/downloads",
-        "jobs_page_url": "/ui/jobs",
-        "watchlist_page_url": "/ui/watchlist",
-        "activity_page_url": "/ui/activity",
+        "dashboard_url": dashboard_url,
+        "downloads_page_url": downloads_page_url,
+        "jobs_page_url": jobs_page_url,
+        "watchlist_page_url": watchlist_page_url,
+        "activity_page_url": activity_page_url,
+        "kpi_cards": kpi_cards,
+        "sidebar_sections": sidebar_sections,
     }
 
 
@@ -271,6 +305,144 @@ def build_activity_page_context(
         "activity_fragment": activity_fragment,
         "operations_url": "/ui/operations",
     }
+
+
+def _build_operations_kpi_cards(
+    live_updates_mode: Literal["polling", "sse"],
+) -> tuple[KpiCard, ...]:
+    """Return KPI cards summarising operations overview state."""
+
+    if live_updates_mode == "sse":
+        value = _LIVE_UPDATES_STREAMING_VALUE
+        description = _LIVE_UPDATES_STREAMING_DESCRIPTION
+        badge_label = _LIVE_UPDATES_STREAMING_BADGE
+        badge_variant = "success"
+    else:
+        value = _LIVE_UPDATES_POLLING_VALUE
+        description = _LIVE_UPDATES_POLLING_DESCRIPTION
+        badge_label = _LIVE_UPDATES_POLLING_BADGE
+        badge_variant = "muted"
+
+    card = KpiCard(
+        identifier="operations-live-updates",
+        title=_OPERATIONS_LIVE_UPDATES_TITLE,
+        value=value,
+        description=description,
+        badge_label=badge_label,
+        badge_variant=badge_variant,
+        test_id="operations-live-updates-kpi",
+    )
+    return (card,)
+
+
+def _build_operations_sidebar_sections(
+    *,
+    downloads_fragment: AsyncFragment | None,
+    jobs_fragment: AsyncFragment | None,
+    watchlist_fragment: AsyncFragment,
+    activity_fragment: AsyncFragment,
+    live_updates_mode: Literal["polling", "sse"],
+    downloads_page_url: str,
+    jobs_page_url: str,
+    watchlist_page_url: str,
+    activity_page_url: str,
+) -> tuple[SidebarSection, ...]:
+    """Assemble sidebar sections for the operations overview."""
+
+    sections: list[SidebarSection] = []
+
+    navigation = _build_operations_navigation_section(
+        downloads_fragment=downloads_fragment,
+        jobs_fragment=jobs_fragment,
+        watchlist_fragment=watchlist_fragment,
+        activity_fragment=activity_fragment,
+        downloads_page_url=downloads_page_url,
+        jobs_page_url=jobs_page_url,
+        watchlist_page_url=watchlist_page_url,
+        activity_page_url=activity_page_url,
+    )
+    if navigation is not None:
+        sections.append(navigation)
+
+    sections.append(_build_operations_live_updates_section(live_updates_mode))
+
+    return tuple(sections)
+
+
+def _build_operations_navigation_section(
+    *,
+    downloads_fragment: AsyncFragment | None,
+    jobs_fragment: AsyncFragment | None,
+    watchlist_fragment: AsyncFragment,
+    activity_fragment: AsyncFragment,
+    downloads_page_url: str,
+    jobs_page_url: str,
+    watchlist_page_url: str,
+    activity_page_url: str,
+) -> SidebarSection | None:
+    items: list[SidebarItem] = []
+
+    if downloads_fragment is not None:
+        items.append(
+            SidebarItem(
+                identifier="operations-downloads-link",
+                label=_DOWNLOADS_LINK_LABEL,
+                href=downloads_page_url,
+                test_id="operations-downloads-link",
+            )
+        )
+    if jobs_fragment is not None:
+        items.append(
+            SidebarItem(
+                identifier="operations-jobs-link",
+                label=_JOBS_LINK_LABEL,
+                href=jobs_page_url,
+                test_id="operations-jobs-link",
+            )
+        )
+
+    if watchlist_fragment is not None:
+        items.append(
+            SidebarItem(
+                identifier="operations-watchlist-link",
+                label=_WATCHLIST_LINK_LABEL,
+                href=watchlist_page_url,
+                test_id="operations-watchlist-link",
+            )
+        )
+    if activity_fragment is not None:
+        items.append(
+            SidebarItem(
+                identifier="operations-activity-link",
+                label=_ACTIVITY_LINK_LABEL,
+                href=activity_page_url,
+                test_id="operations-activity-link",
+            )
+        )
+
+    if not items:
+        return None
+
+    return SidebarSection(
+        identifier="operations-navigation",
+        title=_OPERATIONS_NAV_TITLE,
+        items=tuple(items),
+    )
+
+
+def _build_operations_live_updates_section(
+    live_updates_mode: Literal["polling", "sse"],
+) -> SidebarSection:
+    description = (
+        _LIVE_UPDATES_STREAMING_DESCRIPTION
+        if live_updates_mode == "sse"
+        else _LIVE_UPDATES_POLLING_DESCRIPTION
+    )
+    return SidebarSection(
+        identifier="operations-live-updates",
+        title=_OPERATIONS_LIVE_UPDATES_TITLE,
+        description=description,
+    )
 
 
 def _format_activity_cell(value: Any) -> str:

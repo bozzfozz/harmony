@@ -1,6 +1,7 @@
 {% extends "layouts/dashboard.j2" %}
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
+{% import "components/layout_blocks.j2" as layout_blocks %}
 
 {% block header_actions %}
   <form id="logout-form" method="post" action="/ui/logout">
@@ -17,6 +18,9 @@
 {% endblock %}
 
 {% block dashboard_kpis %}
+  {% if kpi_cards %}
+    {{ layout_blocks.render_kpi_cards(kpi_cards, None) }}
+  {% endif %}
   <section class="page-section page-section--card" aria-labelledby="dashboard-status-heading">
     <header class="page-section__header">
       <h3 id="dashboard-status-heading" class="page-section__title">{{ strings.dashboard_status_heading() }}</h3>
@@ -110,7 +114,7 @@
           <button id="{{ action.identifier }}"
                   class="dashboard-action-button"
                   type="button"
-                  {{ ('hx-' ~ action.method) }}="{{ action.url }}"
+                  {{ 'hx-' + action.method }}="{{ action.url }}"
                   hx-target="{{ action.target }}"
                   hx-swap="{{ action.success_swap }}"
                   hx-on="htmx:responseError:handleHtmxError(event)"
@@ -124,6 +128,9 @@
       </div>
     {% endif %}
     <h4 class="dashboard-action-state__title">{{ strings.dashboard_sync_heading() }}</h4>
-    {% include "partials/dashboard_action_state.j2" with sync_state=sync_state %}
+    {% include "partials/dashboard_action_state.j2" with sync_state=sync_state, swap_mode=None %}
   </section>
+  {% if sidebar_sections %}
+    {{ layout_blocks.render_sidebar_sections(sidebar_sections, None) }}
+  {% endif %}
 {% endblock %}

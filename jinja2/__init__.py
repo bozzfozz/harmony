@@ -327,7 +327,7 @@ class Template:
             parent_template = self.environment.get_template(self.parent)
             block_map = dict(parent_template.blocks)
             block_map.update(self.blocks)
-            return parent_template._render(runtime_context, block_map)
+            return parent_template._render_with_parents(runtime_context, block_map)
         block_map = dict(self.blocks)
         return self._render(runtime_context, block_map)
 
@@ -338,6 +338,23 @@ class Template:
             if rendered:
                 output.append(rendered)
         return "".join(output)
+
+    def _render_with_parents(
+        self,
+        context: RuntimeContext,
+        blocks: dict[str, BlockNode],
+    ) -> str:
+        for node in self.body:
+            if isinstance(node, ImportNode | SetNode):
+                node.render(context, self.blocks)
+        if self.parent is None:
+            merged_blocks = dict(self.blocks)
+            merged_blocks.update(blocks)
+            return self._render(context, merged_blocks)
+        parent_template = self.environment.get_template(self.parent)
+        merged_blocks = dict(parent_template.blocks)
+        merged_blocks.update(blocks)
+        return parent_template._render_with_parents(context, merged_blocks)
 
 
 class Environment:

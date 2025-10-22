@@ -62,7 +62,13 @@
     }
   };
 
-  body.addEventListener('htmx:beforeRequest', function (event) {
+  var addBodyListener = function (eventName, handler) {
+    if (typeof body.addEventListener === 'function') {
+      body.addEventListener(eventName, handler);
+    }
+  };
+
+  addBodyListener('htmx:beforeRequest', function (event) {
     var detail = event.detail;
     if (!detail) {
       return;
@@ -75,7 +81,7 @@
     setButtonBusy(element, true);
   });
 
-  body.addEventListener('htmx:afterRequest', function (event) {
+  addBodyListener('htmx:afterRequest', function (event) {
     var detail = event.detail;
     if (!detail) {
       return;
@@ -88,7 +94,7 @@
     applySwap(element, 'data-success-swap');
   });
 
-  body.addEventListener('htmx:beforeSwap', function (event) {
+  addBodyListener('htmx:beforeSwap', function (event) {
     var detail = event.detail;
     if (!detail) {
       return;

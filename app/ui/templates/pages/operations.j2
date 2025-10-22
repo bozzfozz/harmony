@@ -1,6 +1,7 @@
 {% extends "layouts/dashboard.j2" %}
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/modals.j2" as modals %}
+{% import "components/layout_blocks.j2" as layout_blocks %}
 
 {% block header_actions %}
   <form id="logout-form" method="post" action="/ui/logout">
@@ -17,6 +18,12 @@
       <a href="{{ dashboard_url }}">{{ strings.link_text("operations.back_to_dashboard") }}</a>
     </p>
   </section>
+{% endblock %}
+
+{% block dashboard_kpis %}
+  {% if kpi_cards %}
+    {{ layout_blocks.render_kpi_cards(kpi_cards, None) }}
+  {% endif %}
 {% endblock %}
 
 {% block dashboard_primary %}
@@ -86,50 +93,9 @@
 {% endblock %}
 
 {% block dashboard_secondary %}
-  {% set operations_links = [] %}
-  {% if downloads_fragment %}
-    {% set operations_links = operations_links + [{
-      "identifier": "operations-downloads-link",
-      "href": downloads_page_url,
-      "label": strings.link_text("operations.view_downloads"),
-    }] %}
+  {% if sidebar_sections %}
+    {{ layout_blocks.render_sidebar_sections(sidebar_sections, None) }}
   {% endif %}
-  {% if jobs_fragment %}
-    {% set operations_links = operations_links + [{
-      "identifier": "operations-jobs-link",
-      "href": jobs_page_url,
-      "label": strings.link_text("operations.view_jobs"),
-    }] %}
-  {% endif %}
-  {% set operations_links = operations_links + [
-    {
-      "identifier": "operations-watchlist-link",
-      "href": watchlist_page_url,
-      "label": strings.link_text("operations.view_watchlist"),
-    },
-    {
-      "identifier": "operations-activity-link",
-      "href": activity_page_url,
-      "label": strings.link_text("operations.view_activity"),
-    },
-  ] %}
-
-  <div class="sidebar-sections">
-    <section class="sidebar-section" aria-labelledby="operations-navigation-title">
-      <h3 id="operations-navigation-title" class="sidebar-section__title">
-        {{ strings.section_heading("operations") }}
-      </h3>
-      <ul class="sidebar-section__list">
-        {% for link in operations_links %}
-          <li class="sidebar-section__list-item">
-            <a href="{{ link["href"] }}" data-test="{{ link["identifier"] }}">
-              {{ link["label"] }}
-            </a>
-          </li>
-        {% endfor %}
-      </ul>
-    </section>
-  </div>
 {% endblock %}
 
 {% block modals %}

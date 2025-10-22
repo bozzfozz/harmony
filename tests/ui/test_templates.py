@@ -1069,6 +1069,9 @@ def test_operations_template_renders_enabled_sections() -> None:
     assert "/ui/activity/table" in html
     assert "View download queue" in html
     assert "Manage watchlist" in html
+    assert 'data-test="operations-live-updates-kpi"' in html
+    assert "Live updates" in html
+    assert "HTMX polling" in html
 
 
 def test_operations_template_skips_dlq_sections_when_disabled() -> None:
@@ -1082,6 +1085,8 @@ def test_operations_template_skips_dlq_sections_when_disabled() -> None:
     assert 'data-fragment="operations-jobs"' not in html
     assert 'data-fragment="operations-watchlist"' in html
     assert 'data-fragment="operations-activity"' in html
+    assert 'data-test="operations-downloads-link"' not in html
+    assert 'data-test="operations-jobs-link"' not in html
 
 
 def test_downloads_template_mounts_polling_fragment() -> None:

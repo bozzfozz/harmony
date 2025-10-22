@@ -32,6 +32,7 @@ from .base import (
     _safe_url_for,
     _system_status_badge,
 )
+from .common import KpiCard, SidebarSection
 
 
 @dataclass(slots=True)
@@ -111,11 +112,7 @@ def build_dashboard_page_context(
     actions: list[ActionButton] = []
     sync_state = build_dashboard_action_state_idle()
 
-    if (
-        session.allows("operator")
-        and session.features.spotify
-        and session.features.soulseek
-    ):
+    if session.allows("operator") and session.features.spotify:
         sync_url = _safe_url_for(
             request,
             "dashboard_sync_action",
@@ -192,6 +189,9 @@ def build_dashboard_page_context(
         poll_interval_seconds=60,
     )
 
+    kpi_cards = _build_dashboard_kpi_cards(session)
+    sidebar_sections = _build_dashboard_sidebar_sections(session)
+
     return {
         "request": request,
         "layout": layout,
@@ -204,6 +204,8 @@ def build_dashboard_page_context(
         "workers_fragment": workers_fragment,
         "activity_fragment": activity_fragment,
         "sync_state": sync_state,
+        "kpi_cards": kpi_cards,
+        "sidebar_sections": sidebar_sections,
     }
 
 
@@ -570,6 +572,25 @@ def _build_features_table(features: UiFeatures) -> TableDefinition:
         rows=tuple(rows),
         caption_key="dashboard.features.caption",
     )
+
+
+def _build_dashboard_kpi_cards(session: UiSession) -> tuple[KpiCard, ...]:
+    """Return KPI card view models for the dashboard layout."""
+
+    # No aggregated dashboard metrics are available yet. Return an empty tuple to
+    # keep the layout contract stable for future extensions.
+    return ()
+
+
+def _build_dashboard_sidebar_sections(session: UiSession) -> tuple[SidebarSection, ...]:
+    """Return sidebar sections for the dashboard layout.
+
+    The dashboard currently renders bespoke action controls. Providing an empty
+    tuple ensures the template can conditionally mount shared sidebar sections
+    without adding placeholder markup.
+    """
+
+    return ()
 
 
 def _format_last_seen(last_seen: str | None) -> str | None:
