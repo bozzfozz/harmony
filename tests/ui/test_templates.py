@@ -1494,10 +1494,38 @@ def test_base_layout_renders_navigation_and_alerts() -> None:
     assert 'data-test="nav-home"' in html
     assert "alert alert--warning" in html
     assert "Check status" in html
+    assert 'data-live-updates="polling"' in html
+    assert "data-live-source" not in html
     assert '<meta name="viewport" content="width=device-width, initial-scale=1" />' in html
     assert '<meta name="csrf-token" content="token" />' in html
     assert 'data-role="alert-region"' in html
     assert 'id="ui-alert-region"' in html
+
+
+def test_base_layout_renders_live_updates_source_when_provided() -> None:
+    request = _make_request("/ui")
+    layout = LayoutContext(
+        page_id="operations",
+        role="operator",
+        navigation=NavigationContext(
+            primary=(
+                NavItem(
+                    label_key="nav.operations",
+                    href="/ui/operations",
+                    active=True,
+                    test_id="nav-operations",
+                ),
+            ),
+        ),
+        live_updates_mode="sse",
+        live_updates_source="/ui/events",
+    )
+    template = templates.get_template("layouts/base.j2")
+    html = template.render(request=request, layout=layout)
+
+    assert 'data-live-updates="sse"' in html
+    assert 'data-live-source="/ui/events"' in html
+    assert 'data-test="nav-operations"' in html
 
 
 def test_base_layout_uses_local_htmx_when_cdn_disabled() -> None:

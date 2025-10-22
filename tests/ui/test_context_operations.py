@@ -6,6 +6,7 @@ from app.ui.context.common import KpiCard, SidebarItem, SidebarSection
 from app.ui.context.operations import (
     build_activity_page_context,
     build_downloads_page_context,
+    build_jobs_page_context,
     build_operations_page_context,
     build_watchlist_page_context,
 )
@@ -35,7 +36,10 @@ def test_operations_page_context_includes_fragments_for_enabled_features() -> No
 
     context = build_operations_page_context(request, session=session, csrf_token="token")
 
-    assert context["layout"].page_id == "operations"
+    layout = context["layout"]
+    assert layout.page_id == "operations"
+    assert layout.live_updates_mode == "polling"
+    assert layout.live_updates_source is None
     downloads_fragment = context["downloads_fragment"]
     assert downloads_fragment is not None
     assert downloads_fragment.poll_interval_seconds == 15
@@ -110,6 +114,9 @@ def test_operations_page_context_uses_sse_metadata() -> None:
     assert card.value == "Streaming"
     assert card.badge_label == "Real-time"
     assert card.badge_variant == "success"
+    layout = context["layout"]
+    assert layout.live_updates_mode == "sse"
+    assert layout.live_updates_source == "/ui/events"
     live_updates_section = next(
         section
         for section in context["sidebar_sections"]
@@ -124,9 +131,52 @@ def test_downloads_page_context_sets_operations_navigation() -> None:
 
     context = build_downloads_page_context(request, session=session, csrf_token="token")
 
-    assert context["layout"].page_id == "downloads"
+    layout = context["layout"]
+    assert layout.page_id == "downloads"
+    assert layout.live_updates_mode == "polling"
+    assert layout.live_updates_source is None
     assert context["downloads_fragment"].url.endswith("/ui/downloads/table")
     navigation = context["layout"].navigation.primary
+    assert any(item.href == "/ui/operations" and item.active for item in navigation)
+
+
+def test_downloads_page_context_uses_sse_source() -> None:
+    request = _make_request("/ui/downloads")
+    session = _make_session()
+
+    context = build_downloads_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        live_updates_mode="sse",
+    )
+
+    layout = context["layout"]
+    assert layout.live_updates_mode == "sse"
+    assert layout.live_updates_source == "/ui/events"
+    fragment = context["downloads_fragment"]
+    assert fragment.event_name == "downloads"
+    assert fragment.poll_interval_seconds is None
+
+
+def test_jobs_page_context_uses_sse_source() -> None:
+    request = _make_request("/ui/jobs")
+    session = _make_session()
+
+    context = build_jobs_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        live_updates_mode="sse",
+    )
+
+    layout = context["layout"]
+    assert layout.live_updates_mode == "sse"
+    assert layout.live_updates_source == "/ui/events"
+    fragment = context["jobs_fragment"]
+    assert fragment.event_name == "jobs"
+    assert fragment.poll_interval_seconds is None
+    navigation = layout.navigation.primary
     assert any(item.href == "/ui/operations" and item.active for item in navigation)
 
 
@@ -143,6 +193,25 @@ def test_watchlist_page_context_exposes_form_fields() -> None:
     assert any(field.name == "priority" for field in form.fields)
 
 
+def test_watchlist_page_context_uses_sse_source() -> None:
+    request = _make_request("/ui/watchlist")
+    session = _make_session()
+
+    context = build_watchlist_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        live_updates_mode="sse",
+    )
+
+    layout = context["layout"]
+    assert layout.live_updates_mode == "sse"
+    assert layout.live_updates_source == "/ui/events"
+    fragment = context["watchlist_fragment"]
+    assert fragment.event_name == "watchlist"
+    assert fragment.poll_interval_seconds is None
+
+
 def test_activity_page_context_highlights_operations_navigation() -> None:
     request = _make_request("/ui/activity")
     session = _make_session(role="read_only")
@@ -153,3 +222,22 @@ def test_activity_page_context_highlights_operations_navigation() -> None:
     assert context["activity_fragment"].poll_interval_seconds == 60
     # read_only role should still retain navigation context, even if the operations tab is absent
     assert context["layout"].navigation.primary[0].href == "/ui"
+
+
+def test_activity_page_context_uses_sse_source() -> None:
+    request = _make_request("/ui/activity")
+    session = _make_session()
+
+    context = build_activity_page_context(
+        request,
+        session=session,
+        csrf_token="token",
+        live_updates_mode="sse",
+    )
+
+    layout = context["layout"]
+    assert layout.live_updates_mode == "sse"
+    assert layout.live_updates_source == "/ui/events"
+    fragment = context["activity_fragment"]
+    assert fragment.event_name == "activity"
+    assert fragment.poll_interval_seconds is None

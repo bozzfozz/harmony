@@ -24,6 +24,8 @@ def test_operations_page_renders_fragments(monkeypatch) -> None:
         assert "/ui/jobs/table" in html
         assert "/ui/watchlist/table" in html
         assert "/ui/activity/table" in html
+        assert 'data-live-updates="polling"' in html
+        assert "data-live-source" not in html
 
 
 def test_operations_page_exposes_sse_mode(monkeypatch) -> None:
@@ -34,6 +36,7 @@ def test_operations_page_exposes_sse_mode(monkeypatch) -> None:
         _assert_html_response(response)
         html = response.text
         assert 'data-live-updates="sse"' in html
+        assert 'data-live-source="/ui/events"' in html
         assert 'data-live-event="downloads"' in html
         assert "/ui/events" in html
 
