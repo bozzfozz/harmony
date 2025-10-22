@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+import math
 import hashlib
 import hmac
 import secrets
@@ -17,7 +18,7 @@ from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.metrics import counter
 
-from .session_store import StoredUiSession, UiSessionStore
+from .session_store import StoredUiSession, UiLoginAttemptStore, UiSessionStore
 
 RoleName = Literal["read_only", "operator", "admin"]
 
@@ -35,6 +36,8 @@ _SESSION_CREATED_METRIC_NAME = "ui_sessions_created_total"
 _SESSION_CREATED_METRIC_DOC = "Total number of Harmony UI sessions successfully created"
 _SESSION_TERMINATED_METRIC_NAME = "ui_sessions_terminated_total"
 _SESSION_TERMINATED_METRIC_DOC = "Total number of Harmony UI sessions terminated grouped by reason"
+
+_RATE_LIMIT_DETAIL = "Too many invalid login attempts. Please try again later."
 
 
 def register_ui_session_metrics() -> None:
@@ -91,6 +94,95 @@ def _record_session_termination(session: UiSession, *, reason: str) -> None:
     _session_terminated_counter().labels(role=session.role, reason=reason).inc()
 
 
+def _utcnow() -> datetime:
+    return datetime.now(tz=UTC)
+
+
+@dataclass(slots=True, frozen=True)
+class UiLoginRateLimitConfig:
+    attempts: int
+    window: timedelta
+
+
+class UiLoginRateLimitError(Exception):
+    def __init__(self, *, retry_after: float | None = None) -> None:
+        super().__init__("Login rate limit exceeded.")
+        value = retry_after or 0.0
+        self.retry_after = value if value > 0 else 0.0
+
+
+class UiLoginRateLimiter:
+    def __init__(
+        self,
+        *,
+        store: UiLoginAttemptStore,
+        config: UiLoginRateLimitConfig,
+    ) -> None:
+        self._store = store
+        self._config = config
+
+    def ensure_can_attempt(self, remote_address: str | None, fingerprint: str) -> None:
+        if self._config.attempts <= 0:
+            return
+        now = _utcnow()
+        for scope, key in self._iter_keys(remote_address, fingerprint):
+            count, oldest = self._store.count_recent_attempts(
+                scope,
+                key,
+                now=now,
+                window=self._config.window,
+            )
+            if count >= self._config.attempts:
+                raise UiLoginRateLimitError(
+                    retry_after=self._retry_after(now, oldest),
+                )
+
+    def record_failure(self, remote_address: str | None, fingerprint: str) -> None:
+        if self._config.attempts <= 0:
+            return
+        now = _utcnow()
+        triggered = False
+        retry_after = 0.0
+        for scope, key in self._iter_keys(remote_address, fingerprint):
+            count, oldest = self._store.record_attempt(
+                scope,
+                key,
+                now=now,
+                window=self._config.window,
+            )
+            if count > self._config.attempts:
+                triggered = True
+                retry_after = max(retry_after, self._retry_after(now, oldest))
+        if triggered:
+            raise UiLoginRateLimitError(retry_after=retry_after)
+
+    def _iter_keys(
+        self, remote_address: str | None, fingerprint: str
+    ) -> tuple[tuple[str, str], ...]:
+        keys: list[tuple[str, str]] = []
+        remote = self._normalize_remote(remote_address)
+        if remote:
+            keys.append(("remote", remote))
+        fp = fingerprint.strip()
+        if fp:
+            keys.append(("fingerprint", fp))
+        return tuple(keys)
+
+    @staticmethod
+    def _normalize_remote(remote: str | None) -> str | None:
+        if remote is None:
+            return None
+        normalized = remote.strip()
+        return normalized or None
+
+    def _retry_after(self, now: datetime, oldest: datetime | None) -> float:
+        if oldest is None:
+            return self._config.window.total_seconds()
+        elapsed = (now - oldest).total_seconds()
+        remaining = self._config.window.total_seconds() - elapsed
+        return remaining if remaining > 0 else 0.0
+
+
 @dataclass(slots=True, frozen=True)
 class UiFeatures:
     spotify: bool
@@ -131,6 +223,7 @@ class UiSessionManager:
         session_ttl: timedelta,
         features: UiFeatures,
         store: UiSessionStore | None = None,
+        login_limiter: UiLoginRateLimiter | None = None,
     ) -> None:
         self._security = security
         self._role_default = role_default
@@ -138,11 +231,18 @@ class UiSessionManager:
         self._session_ttl = session_ttl
         self._features = features
         self._store = store or UiSessionStore()
+        self._login_limiter = login_limiter
         self._lock = asyncio.Lock()
 
-    async def create_session(self, api_key: str) -> UiSession:
+    async def create_session(
+        self, api_key: str, *, remote_address: str | None = None
+    ) -> UiSession:
         normalized = api_key.strip()
+        fingerprint = fingerprint_api_key(normalized)
+
+        self._enforce_login_rate_limit(remote_address, fingerprint)
         if not normalized:
+            self._register_login_failure(remote_address, fingerprint)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="An API key is required.",
@@ -155,23 +255,23 @@ class UiSessionManager:
             )
 
         if not self._is_valid_key(normalized):
-            fingerprint = fingerprint_api_key(normalized)
+            self._register_login_failure(remote_address, fingerprint)
             log_event(
                 logger,
                 "ui.login",  # pragma: no cover - logging
                 component="ui.session",
                 status="denied",
                 fingerprint=fingerprint,
+                remote_address=self._normalize_remote(remote_address),
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="The provided API key is not valid.",
             )
 
-        fingerprint = fingerprint_api_key(normalized)
         role = self._resolve_role(fingerprint)
         identifier = secrets.token_urlsafe(32)
-        issued_at = datetime.now(tz=UTC)
+        issued_at = _utcnow()
         session = UiSession(
             identifier=identifier,
             role=role,
@@ -304,9 +404,55 @@ class UiSessionManager:
         session.last_seen_at = now
         return session
 
+    def _enforce_login_rate_limit(self, remote_address: str | None, fingerprint: str) -> None:
+        if self._login_limiter is None:
+            return
+        try:
+            self._login_limiter.ensure_can_attempt(remote_address, fingerprint)
+        except UiLoginRateLimitError as exc:
+            self._log_rate_limited(fingerprint, remote_address)
+            raise self._rate_limit_exception(exc) from exc
+
+    def _register_login_failure(self, remote_address: str | None, fingerprint: str) -> None:
+        if self._login_limiter is None:
+            return
+        try:
+            self._login_limiter.record_failure(remote_address, fingerprint)
+        except UiLoginRateLimitError as exc:
+            self._log_rate_limited(fingerprint, remote_address)
+            raise self._rate_limit_exception(exc) from exc
+
     @property
     def security(self) -> SecurityConfig:
         return self._security
+
+    @staticmethod
+    def _normalize_remote(remote: str | None) -> str | None:
+        if remote is None:
+            return None
+        cleaned = remote.strip()
+        return cleaned or None
+
+    def _rate_limit_exception(self, error: UiLoginRateLimitError) -> HTTPException:
+        retry_after = int(math.ceil(error.retry_after)) if error.retry_after > 0 else 0
+        headers: dict[str, str] | None = None
+        if retry_after > 0:
+            headers = {"Retry-After": str(retry_after)}
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_RATE_LIMIT_DETAIL,
+            headers=headers,
+        )
+
+    def _log_rate_limited(self, fingerprint: str, remote_address: str | None) -> None:
+        log_event(
+            logger,
+            "ui.login",  # pragma: no cover - logging
+            component="ui.session",
+            status="rate_limited",
+            fingerprint=fingerprint,
+            remote_address=self._normalize_remote(remote_address),
+        )
 
 
 def fingerprint_api_key(api_key: str) -> str:
@@ -358,6 +504,18 @@ def _as_bool(value: str | None, *, default: bool) -> bool:
     return default
 
 
+def _as_int(value: str | None, *, default: int) -> int:
+    if value is None:
+        return default
+    cleaned = value.strip()
+    if not cleaned:
+        return default
+    try:
+        return int(cleaned)
+    except ValueError:
+        return default
+
+
 def _resolve_session_ttl() -> timedelta:
     raw = get_env("UI_SESSION_TTL_MINUTES")
     minutes = 480
@@ -372,18 +530,37 @@ def _resolve_session_ttl() -> timedelta:
     return timedelta(minutes=minutes)
 
 
+def _resolve_login_rate_limit_config() -> UiLoginRateLimitConfig | None:
+    limit = _as_int(get_env("UI_LOGIN_RATE_LIMIT_ATTEMPTS"), default=6)
+    window_seconds = _as_int(get_env("UI_LOGIN_RATE_LIMIT_WINDOW_SECONDS"), default=300)
+    if limit <= 0 or window_seconds <= 0:
+        return None
+    return UiLoginRateLimitConfig(
+        attempts=limit,
+        window=timedelta(seconds=window_seconds),
+    )
+
+
 def build_session_manager(config: SecurityConfig | None = None) -> UiSessionManager:
     security = config or get_app_config().security
     role_default = _parse_role(get_env("UI_ROLE_DEFAULT"), fallback="operator")
     overrides = _load_role_overrides(role_default)
     features = _load_features()
     ttl = _resolve_session_ttl()
+    rate_limit_config = _resolve_login_rate_limit_config()
+    login_limiter: UiLoginRateLimiter | None = None
+    if rate_limit_config is not None:
+        login_limiter = UiLoginRateLimiter(
+            store=UiLoginAttemptStore(),
+            config=rate_limit_config,
+        )
     return UiSessionManager(
         security,
         role_default=role_default,
         role_overrides=overrides,
         session_ttl=ttl,
         features=features,
+        login_limiter=login_limiter,
     )
 
 

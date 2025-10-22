@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import os
 import re
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 import pytest
@@ -415,3 +416,56 @@ def test_session_persists_across_clients(monkeypatch) -> None:
     with _create_client(monkeypatch) as second_client:
         response = second_client.get("/ui/", headers={"Cookie": cookie_header})
         _assert_html_response(response)
+
+
+def test_login_rate_limit_repeated_invalid(monkeypatch) -> None:
+    current = [datetime(2024, 1, 1, tzinfo=UTC)]
+
+    def fake_now() -> datetime:
+        return current[0]
+
+    monkeypatch.setattr("app.ui.session._utcnow", fake_now)
+    env = {
+        "UI_LOGIN_RATE_LIMIT_ATTEMPTS": "2",
+        "UI_LOGIN_RATE_LIMIT_WINDOW_SECONDS": "60",
+    }
+    with _create_client(monkeypatch, extra_env=env) as client:
+        first = client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        assert first.status_code == 400
+
+        second = client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        assert second.status_code == 400
+
+        third = client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        assert third.status_code == 429
+        assert third.headers.get("retry-after") == "60"
+
+
+def test_login_rate_limit_recovers_after_timeout(monkeypatch) -> None:
+    current = [datetime(2024, 1, 1, tzinfo=UTC)]
+
+    def fake_now() -> datetime:
+        return current[0]
+
+    monkeypatch.setattr("app.ui.session._utcnow", fake_now)
+    env = {
+        "UI_LOGIN_RATE_LIMIT_ATTEMPTS": "2",
+        "UI_LOGIN_RATE_LIMIT_WINDOW_SECONDS": "60",
+    }
+    with _create_client(monkeypatch, extra_env=env) as client:
+        client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        limited = client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        assert limited.status_code == 429
+
+        current[0] = current[0] + timedelta(seconds=61)
+
+        retry = client.post("/ui/login", data={"api_key": "wrong"}, follow_redirects=False)
+        assert retry.status_code == 400
+
+        success = client.post(
+            "/ui/login",
+            data={"api_key": "primary-key"},
+            follow_redirects=False,
+        )
+        assert success.status_code == 303
