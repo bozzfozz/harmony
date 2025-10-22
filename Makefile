@@ -32,9 +32,12 @@ ui-smoke:
 
 all:
 	@set -euo pipefail; \
-		ruff format --check .; \
-		ruff check --output-format=github .; \
-		pytest -q
+		$(MAKE) fmt; \
+		$(MAKE) lint; \
+		$(MAKE) dep-sync; \
+		$(MAKE) be-verify; \
+		$(MAKE) supply-guard; \
+		$(MAKE) smoke
 
 lint-fix:
 	@set -euo pipefail; \
