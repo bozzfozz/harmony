@@ -64,7 +64,10 @@ async def ui_events(
         if fragment is None:
             return None
         template = templates.get_template(template_name)
-        html = template.render(context)
+        render_context = dict(context)
+        if "request" in context:
+            render_context["request"] = context["request"]
+        html = template.render(**render_context)
         data_attributes = dict(getattr(fragment, "data_attributes", {}))
         return {
             "event": event_name,

@@ -1,4 +1,5 @@
 ## v2.0.0 — unreleased
+- fix(ui): render live update fragments with full template context so SSE payloads expose HTML markup and remain compatible with request-aware templates.
 - feat(ui): introduce an admin landing page with quick links to system diagnostics and settings.
 - feat(ui): add admin settings console with history tracking and artist preference management.
 - Governance: §14e in AGENTS.md präzisiert (Exitcodes, Variablen, Zeitlimits, Matrix, Glossar).

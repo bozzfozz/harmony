@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -8,6 +9,15 @@ from app.models import Download
 from app.services.download_service import DownloadService
 from app.ui.context.downloads import build_downloads_fragment_context
 from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream, templates
+from app.ui.services import (
+    ActivityPage,
+    DownloadPage,
+    WatchlistTable,
+    get_activity_ui_service,
+    get_downloads_ui_service,
+    get_jobs_ui_service,
+    get_watchlist_ui_service,
+)
 from app.ui.services.downloads import DownloadsUiService
 from tests.ui.test_operations_pages import _cookies_header
 from tests.ui.test_ui_auth import _create_client
@@ -140,3 +150,91 @@ async def test_ui_event_stream_renders_downloads_fragment(monkeypatch) -> None:
         assert "event: fragment" in chunk
         assert "hx-downloads-table" in chunk
         assert '"html"' in chunk
+
+
+def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
+    class _StubDownloadsService:
+        async def list_downloads_async(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            include_all: bool,
+            status_filter: str | None,
+        ) -> DownloadPage:
+            return DownloadPage(
+                items=(),
+                limit=limit,
+                offset=offset,
+                has_next=False,
+                has_previous=False,
+            )
+
+    class _StubJobsService:
+        async def list_jobs(self, request: Any) -> tuple[Any, ...]:
+            return ()
+
+    class _StubWatchlistService:
+        def list_entries(self, request: Any) -> WatchlistTable:
+            return WatchlistTable(entries=())
+
+    class _StubActivityService:
+        def list_activity(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            type_filter: str | None,
+            status_filter: str | None,
+        ) -> ActivityPage:
+            return ActivityPage(
+                items=(),
+                limit=limit,
+                offset=offset,
+                total_count=0,
+                type_filter=type_filter,
+                status_filter=status_filter,
+            )
+
+    overrides = {
+        get_downloads_ui_service: lambda: _StubDownloadsService(),
+        get_jobs_ui_service: lambda: _StubJobsService(),
+        get_watchlist_ui_service: lambda: _StubWatchlistService(),
+        get_activity_ui_service: lambda: _StubActivityService(),
+    }
+
+    captured_payloads: list[dict[str, Any]] = []
+
+    async def _capture_stream(request: Any, builders: list[_LiveFragmentBuilder]):
+        for builder in builders:
+            payload = await builder.build()
+            if not payload:
+                continue
+            captured_payloads.append(payload)
+            data = json.dumps(payload, ensure_ascii=False)
+            yield f"event: fragment\ndata: {data}\n\n"
+
+    monkeypatch.setattr("app.ui.routes.events._ui_event_stream", _capture_stream)
+
+    with _create_client(monkeypatch, extra_env={"UI_LIVE_UPDATES": "SSE"}) as client:
+        try:
+            client.app.dependency_overrides.update(overrides)
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/events", headers=headers)
+            assert response.status_code == 200
+            body = response.text
+            assert "event: fragment" in body
+            assert "data:" in body
+        finally:
+            client.app.dependency_overrides.clear()
+
+    assert captured_payloads, "expected at least one SSE payload"
+    payload = captured_payloads[0]
+    html = payload.get("html")
+    assert isinstance(html, str)
+    fragment_id = payload.get("fragment_id")
+    assert isinstance(fragment_id, str)
+    assert html.strip().startswith("<")
+    assert fragment_id in html
+    assert "<div" in html
