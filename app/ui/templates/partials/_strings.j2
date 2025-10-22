@@ -714,6 +714,40 @@
 
 {% macro dashboard_activity_heading() %}Recent activity{% endmacro %}
 
+{% macro dashboard_status_heading() %}System overview{% endmacro %}
+
+{% macro dashboard_health_heading() %}Service health{% endmacro %}
+
+{% macro dashboard_workers_heading() %}Worker status{% endmacro %}
+
+{% macro dashboard_status_version_label() %}Version{% endmacro %}
+
+{% macro dashboard_status_uptime_label() %}Uptime{% endmacro %}
+
+{% macro dashboard_status_readiness_label() %}Readiness{% endmacro %}
+
+{% macro dashboard_status_connections_heading() %}Connections{% endmacro %}
+
+{% macro dashboard_status_issues_heading() %}Readiness issues{% endmacro %}
+
+{% macro dashboard_health_liveness_label() %}Liveness{% endmacro %}
+
+{% macro dashboard_health_readiness_label() %}Readiness{% endmacro %}
+
+{% macro dashboard_health_issues_heading() %}Health issues{% endmacro %}
+
+{% macro dashboard_health_ok_message() %}All health checks are passing.{% endmacro %}
+
+{% macro dashboard_workers_empty() %}Worker status is not available yet.{% endmacro %}
+
+{% macro dashboard_worker_status(status_text) %}Status: {{ status_text }}{% endmacro %}
+
+{% macro dashboard_worker_queue(queue_size) %}Queue size: {{ queue_size }}{% endmacro %}
+
+{% macro dashboard_worker_seen(timestamp) %}Last seen: {{ timestamp }}{% endmacro %}
+
+{% macro dashboard_issue_text(component, message) %}{{ component }} — {{ message }}{% endmacro %}
+
 {% macro loading_placeholder() %}Loading…{% endmacro %}
 
 {% macro activity_empty_state() %}No recent activity recorded yet.{% endmacro %}

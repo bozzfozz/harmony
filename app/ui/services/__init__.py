@@ -1,6 +1,15 @@
 """UI service layer wrapping backend operations for fragments and forms."""
 
 from .activity import ActivityPage, ActivityUiService, get_activity_ui_service
+from .dashboard import (
+    DashboardConnectionStatus,
+    DashboardHealthIssue,
+    DashboardHealthSummary,
+    DashboardStatusSummary,
+    DashboardUiService,
+    DashboardWorkerStatus,
+    get_dashboard_ui_service,
+)
 from .downloads import DownloadPage, DownloadRow, DownloadsUiService, get_downloads_ui_service
 from .jobs import JobsUiService, OrchestratorJob, get_jobs_ui_service
 from .search import (
@@ -77,6 +86,13 @@ from .watchlist import (
 )
 
 __all__ = [
+    "DashboardConnectionStatus",
+    "DashboardHealthIssue",
+    "DashboardHealthSummary",
+    "DashboardStatusSummary",
+    "DashboardUiService",
+    "DashboardWorkerStatus",
+    "get_dashboard_ui_service",
     "ActivityPage",
     "ActivityUiService",
     "get_activity_ui_service",

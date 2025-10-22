@@ -17,20 +17,87 @@
 {% endblock %}
 
 {% block main %}
+  <section class="page-section page-section--card" aria-labelledby="dashboard-status-heading">
+    <header class="page-section__header">
+      <h3 id="dashboard-status-heading" class="page-section__title">{{ strings.dashboard_status_heading() }}</h3>
+    </header>
+    <div id="{{ status_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="dashboard-status-heading"
+         data-fragment="dashboard-status"
+         hx-get="{{ status_fragment.url }}"
+         hx-trigger="{{ status_fragment.trigger }}"
+         hx-target="{{ status_fragment.target }}"
+         hx-swap="{{ status_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(status_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="dashboard-health-heading">
+    <header class="page-section__header">
+      <h3 id="dashboard-health-heading" class="page-section__title">{{ strings.dashboard_health_heading() }}</h3>
+    </header>
+    <div id="{{ health_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="dashboard-health-heading"
+         data-fragment="dashboard-health"
+         hx-get="{{ health_fragment.url }}"
+         hx-trigger="{{ health_fragment.trigger }}"
+         hx-target="{{ health_fragment.target }}"
+         hx-swap="{{ health_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(health_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
+  <section class="page-section page-section--card" aria-labelledby="dashboard-workers-heading">
+    <header class="page-section__header">
+      <h3 id="dashboard-workers-heading" class="page-section__title">{{ strings.dashboard_workers_heading() }}</h3>
+    </header>
+    <div id="{{ workers_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="dashboard-workers-heading"
+         data-fragment="dashboard-workers"
+         hx-get="{{ workers_fragment.url }}"
+         hx-trigger="{{ workers_fragment.trigger }}"
+         hx-target="{{ workers_fragment.target }}"
+         hx-swap="{{ workers_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(workers_fragment.loading_key) }}</p>
+    </div>
+  </section>
+
   <section>
     <h3>{{ strings.dashboard_features_heading() }}</h3>
     {{ tables.render_table(features_table) }}
   </section>
-  <section>
-    <h3>{{ strings.dashboard_activity_heading() }}</h3>
+
+  <section class="page-section page-section--card" aria-labelledby="dashboard-activity-heading">
+    <header class="page-section__header">
+      <h3 id="dashboard-activity-heading" class="page-section__title">{{ strings.dashboard_activity_heading() }}</h3>
+    </header>
     <div id="{{ activity_fragment.identifier }}"
+         class="async-fragment"
+         role="region"
+         aria-live="polite"
+         aria-labelledby="dashboard-activity-heading"
+         data-fragment="dashboard-activity"
          hx-get="{{ activity_fragment.url }}"
          hx-trigger="{{ activity_fragment.trigger }}"
          hx-target="{{ activity_fragment.target }}"
-         hx-swap="{{ activity_fragment.swap }}">
-      <p>{{ strings.fragment_loading(activity_fragment.loading_key) }}</p>
+         hx-swap="{{ activity_fragment.swap }}"
+         hx-on="htmx:responseError:handleHtmxError(event)">
+      <p class="async-fragment__placeholder">{{ strings.fragment_loading(activity_fragment.loading_key) }}</p>
     </div>
   </section>
+
   {% if actions %}
     <section>
       <h3>{{ strings.dashboard_actions_heading() }}</h3>
