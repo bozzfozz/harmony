@@ -35,12 +35,14 @@ from app.ui.context.base import (
     TableRow,
 )
 from app.ui.context.dashboard import build_dashboard_page_context
+from app.ui.context.downloads import (
+    build_downloads_fragment_context,
+    build_downloads_page_context,
+)
+from app.ui.context.jobs import build_jobs_page_context
 from app.ui.context.operations import (
     build_activity_fragment_context,
     build_activity_page_context,
-    build_downloads_fragment_context,
-    build_downloads_page_context,
-    build_jobs_page_context,
     build_operations_page_context,
     build_watchlist_fragment_context,
     build_watchlist_page_context,

@@ -8,10 +8,10 @@ from fastapi.responses import StreamingResponse
 
 from app.config import AppConfig
 from app.dependencies import get_app_config
+from app.ui.context.downloads import build_downloads_fragment_context
+from app.ui.context.jobs import build_jobs_fragment_context
 from app.ui.context.operations import (
     build_activity_fragment_context,
-    build_downloads_fragment_context,
-    build_jobs_fragment_context,
     build_watchlist_fragment_context,
 )
 from app.ui.routes.shared import (

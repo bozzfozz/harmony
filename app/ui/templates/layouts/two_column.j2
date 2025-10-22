@@ -15,6 +15,7 @@
 {% endblock %}
 
 {% block modals %}
-  {{ super() }}
+  {{ modals.render_modals(layout.modals) }}
+  <div id="modal-root" data-role="modal-container"></div>
   {% block two_column_modals %}{% endblock %}
 {% endblock %}

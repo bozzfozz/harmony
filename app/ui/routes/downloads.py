@@ -4,7 +4,7 @@ from app.config import AppConfig
 from app.dependencies import get_app_config
 from app.errors import AppError
 from app.logging_events import log_event
-from app.ui.context.operations import (
+from app.ui.context.downloads import (
     build_downloads_fragment_context,
     build_downloads_page_context,
 )

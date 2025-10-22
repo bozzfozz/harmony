@@ -6,7 +6,7 @@ import pytest
 from app.db import get_session, session_scope
 from app.models import Download
 from app.services.download_service import DownloadService
-from app.ui.context.operations import build_downloads_fragment_context
+from app.ui.context.downloads import build_downloads_fragment_context
 from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream, templates
 from app.ui.services.downloads import DownloadsUiService
 from tests.ui.test_operations_pages import _cookies_header
