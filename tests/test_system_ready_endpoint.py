@@ -31,10 +31,17 @@ def test_ready_endpoint_success_has_no_migrations_key() -> None:
     result = ReadinessResult(
         ok=True,
         database="up",
-        dependencies={"spotify": "up", "orchestrator:job:sync": "idle"},
+        dependencies={
+            "spotify": "up",
+            "orchestrator:job:sync": "idle",
+            "orchestrator:job:artist_sync": "idle",
+        },
     )
     service = StubHealthService(result)
-    app = _create_app(service, orchestrator_status={"enabled_jobs": {"sync": True}})
+    app = _create_app(
+        service,
+        orchestrator_status={"enabled_jobs": {"artist_sync": True, "sync": True}},
+    )
     client = TestClient(app)
 
     response = client.get("/ready")
@@ -48,23 +55,31 @@ def test_ready_endpoint_success_has_no_migrations_key() -> None:
             "deps": {"spotify": "up"},
             "orchestrator": {
                 "components": {},
-                "jobs": {"sync": "idle"},
-                "enabled_jobs": {"sync": True},
+                "jobs": {"artist_sync": "idle", "sync": "idle"},
+                "enabled_jobs": {"artist_sync": True, "sync": True},
             },
         },
         "error": None,
     }
     assert "migrations" not in response.text
+    jobs = payload["data"]["orchestrator"]["jobs"]
+    assert "artist_sync" in jobs and jobs["artist_sync"] == "idle"
+    enabled_jobs = payload["data"]["orchestrator"]["enabled_jobs"]
+    assert "artist_sync" in enabled_jobs and enabled_jobs["artist_sync"] is True
 
 
 def test_ready_endpoint_failure_returns_503_without_migrations() -> None:
     result = ReadinessResult(
         ok=False,
         database="down",
-        dependencies={"spotify": "down", "orchestrator:worker": "down"},
+        dependencies={
+            "spotify": "down",
+            "orchestrator:worker": "down",
+            "orchestrator:job:artist_sync": "down",
+        },
     )
     service = StubHealthService(result)
-    app = _create_app(service, orchestrator_status={"enabled_jobs": {}})
+    app = _create_app(service, orchestrator_status={"enabled_jobs": {"artist_sync": False}})
     client = TestClient(app)
 
     response = client.get("/ready")
@@ -76,11 +91,15 @@ def test_ready_endpoint_failure_returns_503_without_migrations() -> None:
     assert error["code"] == "DEPENDENCY_ERROR"
     meta = error.get("meta", {})
     assert meta["db"] == "down"
-    assert meta["deps"] == {"spotify": "down", "orchestrator:worker": "down"}
+    assert meta["deps"] == {
+        "spotify": "down",
+        "orchestrator:worker": "down",
+        "orchestrator:job:artist_sync": "down",
+    }
     assert meta["orchestrator"] == {
         "components": {"worker": "down"},
-        "jobs": {},
-        "enabled_jobs": {},
+        "jobs": {"artist_sync": "down"},
+        "enabled_jobs": {"artist_sync": False},
     }
     assert "migrations" not in response.text
     assert "migrations" not in meta
