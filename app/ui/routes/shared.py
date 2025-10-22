@@ -28,6 +28,8 @@ templates.env.globals["get_ui_assets"] = get_ui_assets
 
 _LIVE_UPDATES_POLLING: Literal["polling"] = "polling"
 _LIVE_UPDATES_SSE: Literal["sse"] = "sse"
+_LIVE_UPDATES_HEARTBEAT_INTERVAL = 15.0
+_LIVE_UPDATES_HEARTBEAT_COMMENT = ": keep-alive\n\n"
 
 
 def _resolve_live_updates_mode(config: AppConfig) -> Literal["polling", "sse"]:
@@ -55,6 +57,7 @@ async def _ui_event_stream(
         return
 
     next_run = {builder.name: 0.0 for builder in builders}
+    last_emitted_at = time.monotonic()
     try:
         while True:
             if await request.is_disconnected():
@@ -77,9 +80,14 @@ async def _ui_event_stream(
                 data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
                 yield f"event: fragment\ndata: {data}\n\n"
                 emitted = True
+                last_emitted_at = time.monotonic()
             if emitted:
                 await asyncio.sleep(0.25)
                 continue
+            now = time.monotonic()
+            if now - last_emitted_at >= _LIVE_UPDATES_HEARTBEAT_INTERVAL:
+                yield _LIVE_UPDATES_HEARTBEAT_COMMENT
+                last_emitted_at = now
             sleep_for = min(max(next_run[name] - now, 0.0) for name in next_run)
             await asyncio.sleep(min(sleep_for, 1.0) if sleep_for > 0 else 0.5)
     except asyncio.CancelledError:  # pragma: no cover - cancellation boundary

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any
 
@@ -66,6 +67,47 @@ async def test_ui_event_stream_emits_payload() -> None:
     assert chunk is not None
     assert "event: fragment" in chunk
     assert "hx-downloads-table" in chunk
+
+
+@pytest.mark.asyncio
+async def test_ui_event_stream_emits_heartbeat_when_idle(monkeypatch) -> None:
+    fake_time = 0.0
+    real_sleep = asyncio.sleep
+
+    async def _fast_sleep(duration: float) -> None:
+        nonlocal fake_time
+        fake_time += duration
+        await real_sleep(0)
+
+    def _fake_monotonic() -> float:
+        return fake_time
+
+    monkeypatch.setattr("app.ui.routes.shared.time.monotonic", _fake_monotonic)
+    monkeypatch.setattr("app.ui.routes.shared.asyncio.sleep", _fast_sleep)
+
+    async def _idle_builder() -> None:
+        return None
+
+    builder = _LiveFragmentBuilder(name="idle", interval=100.0, build=_idle_builder)
+
+    class _StubRequest:
+        def __init__(self) -> None:
+            self.cookies = {}
+            self._calls = 0
+
+        async def is_disconnected(self) -> bool:
+            self._calls += 1
+            return self._calls > 200
+
+    request = _StubRequest()
+    stream = _ui_event_stream(request, [builder])
+
+    async for chunk in stream:
+        if chunk == ": keep-alive\n\n":
+            break
+        pytest.fail(f"unexpected event chunk: {chunk!r}")
+    else:  # pragma: no cover - defensive guard if generator exhausts early
+        pytest.fail("event stream terminated without heartbeat")
 
 
 @pytest.mark.asyncio
