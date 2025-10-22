@@ -127,7 +127,7 @@ async def ui_events(
         )
 
     async def _build_activity() -> dict[str, Any] | None:
-        page = activity_service.list_activity(
+        page = await activity_service.list_activity_async(
             limit=50,
             offset=0,
             type_filter=None,

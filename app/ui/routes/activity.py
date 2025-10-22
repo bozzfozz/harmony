@@ -57,7 +57,7 @@ async def activity_table(
     service: ActivityUiService = Depends(get_activity_ui_service),
 ) -> Response:
     try:
-        page = service.list_activity(
+        page = await service.list_activity_async(
             limit=limit,
             offset=offset,
             type_filter=type_filter,

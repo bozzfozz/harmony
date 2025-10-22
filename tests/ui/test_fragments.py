@@ -203,6 +203,21 @@ class _StubActivityService:
             raise self.exception
         return self.page
 
+    async def list_activity_async(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        type_filter: str | None,
+        status_filter: str | None,
+    ) -> ActivityPage:
+        return self.list_activity(
+            limit=limit,
+            offset=offset,
+            type_filter=type_filter,
+            status_filter=status_filter,
+        )
+
 
 class _RecordingDownloadsService:
     def __init__(self, page: DownloadPage) -> None:
