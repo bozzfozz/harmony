@@ -46,7 +46,6 @@ subsystems.
 
 ## Testing & Quality
 - [docs/testing.md](testing.md) – testing strategy and suites.
-- [reports/code_health_report.md](../reports/code_health_report.md) – code quality baseline.
 
 ## Integrations & Extensions
 - [docs/auth/spotify.md](auth/spotify.md) – Spotify OAuth setup for PRO mode.
