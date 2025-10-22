@@ -1,0 +1,92 @@
+{% macro render_kpi_cards(cards, empty_message=None) -%}
+  <div class="kpi-grid" role="list">
+    {%- if cards %}
+      {%- for card in cards %}
+        <article class="kpi-card" role="listitem"
+                 id="{{ card.identifier }}"
+                 data-test="{{ card.test_id if card.test_id else card.identifier }}">
+          <header class="kpi-card__header">
+            <h3 class="kpi-card__title">{{ card.title }}</h3>
+            {%- if card.badge_label %}
+              <span class="kpi-card__badge kpi-card__badge--{{ card.badge_variant or 'neutral' }}">
+                {{ card.badge_label }}
+              </span>
+            {%- endif %}
+          </header>
+          <p class="kpi-card__value">{{ card.value }}</p>
+          {%- if card.change %}
+            <p class="kpi-card__change kpi-card__change--{{ card.change_variant or 'neutral' }}">
+              {{ card.change }}
+            </p>
+          {%- endif %}
+          {%- if card.description %}
+            <p class="kpi-card__description">{{ card.description }}</p>
+          {%- endif %}
+        </article>
+      {%- endfor %}
+    {%- elif empty_message %}
+      <p class="kpi-grid__empty">{{ empty_message }}</p>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+
+{% macro render_sidebar_sections(sections, empty_message=None) -%}
+  <div class="sidebar-sections">
+    {%- if sections %}
+      {%- for section in sections %}
+        <section class="sidebar-section" aria-labelledby="{{ section.identifier }}-title">
+          <h3 id="{{ section.identifier }}-title" class="sidebar-section__title">
+            {{ section.title }}
+          </h3>
+          {%- if section.description %}
+            <p class="sidebar-section__description">{{ section.description }}</p>
+          {%- endif %}
+          {%- if section.items %}
+            <ul class="sidebar-section__list">
+              {%- for item in section.items %}
+                <li class="sidebar-section__list-item">
+                  <a href="{{ item.href }}" data-test="{{ item.test_id if item.test_id else item.identifier }}">
+                    {{ item.label }}
+                  </a>
+                  {%- if item.description %}
+                    <p class="sidebar-section__item-description">{{ item.description }}</p>
+                  {%- endif %}
+                </li>
+              {%- endfor %}
+            </ul>
+          {%- endif %}
+          {%- if section.body %}
+            <div class="sidebar-section__body">{{ section.body | safe }}</div>
+          {%- endif %}
+        </section>
+      {%- endfor %}
+    {%- elif empty_message %}
+      <p class="sidebar-sections__empty">{{ empty_message }}</p>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+
+{% macro render_detail_panels(panels, empty_message=None) -%}
+  <div class="detail-panels">
+    {%- if panels %}
+      {%- for panel in panels %}
+        <section class="detail-panel" aria-labelledby="{{ panel.identifier }}-title">
+          <header class="detail-panel__header">
+            <h3 id="{{ panel.identifier }}-title" class="detail-panel__title">{{ panel.title }}</h3>
+            {%- if panel.subtitle %}
+              <p class="detail-panel__subtitle">{{ panel.subtitle }}</p>
+            {%- endif %}
+          </header>
+          <div class="detail-panel__body">{{ panel.body | safe }}</div>
+          {%- if panel.footer %}
+            <footer class="detail-panel__footer">{{ panel.footer | safe }}</footer>
+          {%- endif %}
+        </section>
+      {%- endfor %}
+    {%- elif empty_message %}
+      <p class="detail-panels__empty">{{ empty_message }}</p>
+    {%- endif %}
+  </div>
+{%- endmacro %}

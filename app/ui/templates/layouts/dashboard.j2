@@ -1,0 +1,25 @@
+{% extends "layouts/base.j2" %}
+
+{% block main %}
+  <div class="layout-dashboard">
+    <section class="layout-dashboard__kpis" aria-label="Key performance indicators">
+      {% block dashboard_kpis %}{% endblock %}
+    </section>
+    <div class="layout-dashboard__body">
+      <section class="layout-dashboard__primary" aria-label="Primary dashboard content">
+        {% block dashboard_primary %}{% endblock %}
+      </section>
+      <aside class="layout-dashboard__secondary" aria-label="Secondary dashboard content">
+        {% block dashboard_secondary %}{% endblock %}
+      </aside>
+    </div>
+  </div>
+  <div class="layout-dashboard__modal-container" data-role="modal-container">
+    {% block dashboard_modal_container %}{% endblock %}
+  </div>
+{% endblock %}
+
+{% block modals %}
+  {{ super() }}
+  {% block dashboard_modals %}{% endblock %}
+{% endblock %}
