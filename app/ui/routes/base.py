@@ -5,16 +5,23 @@ from urllib.parse import parse_qs
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
+from app.errors import AppError
 from app.logging_events import log_event
 from app.ui.context.auth import build_login_page_context
-from app.ui.context.dashboard import build_dashboard_page_context
+from app.ui.context.dashboard import (
+    build_dashboard_health_fragment_context,
+    build_dashboard_page_context,
+    build_dashboard_status_fragment_context,
+    build_dashboard_workers_fragment_context,
+)
 from app.ui.csrf import (
     attach_csrf_cookie,
     clear_csrf_cookie,
     enforce_csrf,
     get_csrf_manager,
 )
-from app.ui.routes.shared import logger, templates
+from app.ui.routes.shared import _render_alert_fragment, logger, templates
+from app.ui.services import DashboardUiService, get_dashboard_ui_service
 from app.ui.session import (
     UiSession,
     attach_session_cookie,
@@ -103,6 +110,190 @@ async def dashboard(
     )
     attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     return response
+
+
+@router.get(
+    "/dashboard/status",
+    include_in_schema=False,
+    name="dashboard_status_fragment",
+)
+async def dashboard_status_fragment(
+    request: Request,
+    session: UiSession = Depends(require_session),
+    service: DashboardUiService = Depends(get_dashboard_ui_service),
+) -> Response:
+    try:
+        summary = await service.fetch_status(request)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.dashboard_status",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=status.HTTP_200_OK,
+            retry_url="/ui/dashboard/status",
+            retry_target="#hx-dashboard-status",
+        )
+    except Exception:
+        logger.exception("ui.fragment.dashboard_status")
+        log_event(
+            logger,
+            "ui.fragment.dashboard_status",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load dashboard status.",
+            retry_url="/ui/dashboard/status",
+            retry_target="#hx-dashboard-status",
+        )
+
+    context = build_dashboard_status_fragment_context(request, summary=summary)
+    log_event(
+        logger,
+        "ui.fragment.dashboard_status",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        connections=len(summary.connections),
+        readiness_issues=len(summary.readiness_issues),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/dashboard_status.j2",
+        context,
+    )
+
+
+@router.get(
+    "/dashboard/health",
+    include_in_schema=False,
+    name="dashboard_health_fragment",
+)
+async def dashboard_health_fragment(
+    request: Request,
+    session: UiSession = Depends(require_session),
+    service: DashboardUiService = Depends(get_dashboard_ui_service),
+) -> Response:
+    try:
+        summary = await service.fetch_health(request)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.dashboard_health",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=status.HTTP_200_OK,
+            retry_url="/ui/dashboard/health",
+            retry_target="#hx-dashboard-health",
+        )
+    except Exception:
+        logger.exception("ui.fragment.dashboard_health")
+        log_event(
+            logger,
+            "ui.fragment.dashboard_health",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load dashboard health information.",
+            retry_url="/ui/dashboard/health",
+            retry_target="#hx-dashboard-health",
+        )
+
+    context = build_dashboard_health_fragment_context(request, summary=summary)
+    log_event(
+        logger,
+        "ui.fragment.dashboard_health",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        issues=len(summary.issues),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/dashboard_health.j2",
+        context,
+    )
+
+
+@router.get(
+    "/dashboard/workers",
+    include_in_schema=False,
+    name="dashboard_workers_fragment",
+)
+async def dashboard_workers_fragment(
+    request: Request,
+    session: UiSession = Depends(require_session),
+    service: DashboardUiService = Depends(get_dashboard_ui_service),
+) -> Response:
+    try:
+        workers = await service.fetch_workers(request)
+    except AppError as exc:
+        log_event(
+            logger,
+            "ui.fragment.dashboard_workers",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error=exc.code,
+        )
+        return _render_alert_fragment(
+            request,
+            exc.message,
+            status_code=status.HTTP_200_OK,
+            retry_url="/ui/dashboard/workers",
+            retry_target="#hx-dashboard-workers",
+        )
+    except Exception:
+        logger.exception("ui.fragment.dashboard_workers")
+        log_event(
+            logger,
+            "ui.fragment.dashboard_workers",
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="unexpected",
+        )
+        return _render_alert_fragment(
+            request,
+            "Unable to load worker information.",
+            retry_url="/ui/dashboard/workers",
+            retry_target="#hx-dashboard-workers",
+        )
+
+    context = build_dashboard_workers_fragment_context(request, workers=workers)
+    log_event(
+        logger,
+        "ui.fragment.dashboard_workers",
+        component="ui.router",
+        status="success",
+        role=session.role,
+        count=len(context["workers"]),
+    )
+    return templates.TemplateResponse(
+        request,
+        "partials/dashboard_workers.j2",
+        context,
+    )
 
 
 @router.post(

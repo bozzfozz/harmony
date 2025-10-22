@@ -240,6 +240,12 @@ def test_dashboard_template_renders_navigation_and_features() -> None:
     assert "admin-action" in html
     assert "Welcome" in html
     assert "Current role: Admin" in html
+    assert 'hx-get="/ui/dashboard/status"' in html
+    assert 'hx-target="#hx-dashboard-status"' in html
+    assert 'hx-get="/ui/dashboard/health"' in html
+    assert 'hx-target="#hx-dashboard-health"' in html
+    assert 'hx-get="/ui/dashboard/workers"' in html
+    assert 'hx-target="#hx-dashboard-workers"' in html
     assert 'hx-get="/ui/activity/table"' in html
     assert 'hx-trigger="load, every 60s"' in html
     assert 'hx-target="#hx-activity-table"' in html

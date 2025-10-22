@@ -1,0 +1,33 @@
+{% import "partials/_strings.j2" as strings %}
+{% import "partials/status_badges.j2" as status_badges %}
+
+<div class="system-card__body">
+  <dl class="system-card__details">
+    <div class="system-card__detail">
+      <dt>{{ strings.dashboard_health_liveness_label() }}</dt>
+      <dd>
+        {{ status_badges.render_badge(health.liveness_badge) }}
+        <span class="system-card__status-text">{{ health.liveness_text }}</span>
+      </dd>
+    </div>
+    <div class="system-card__detail">
+      <dt>{{ strings.dashboard_health_readiness_label() }}</dt>
+      <dd>
+        {{ status_badges.render_badge(health.readiness_badge) }}
+        <span class="system-card__status-text">{{ health.readiness_text }}</span>
+      </dd>
+    </div>
+  </dl>
+  {% if health.issues %}
+    <div class="system-card__section">
+      <h4 class="system-card__section-title">{{ strings.dashboard_health_issues_heading() }}</h4>
+      <ul class="system-card__note-list">
+        {% for issue in health.issues %}
+          <li class="system-card__note">{{ strings.dashboard_issue_text(issue.component, issue.message) }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% else %}
+    <p class="system-card__empty">{{ strings.dashboard_health_ok_message() }}</p>
+  {% endif %}
+</div>

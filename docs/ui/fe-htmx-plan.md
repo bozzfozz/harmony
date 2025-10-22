@@ -52,6 +52,7 @@ templates/
   partials/
     alerts.html             – Flash-/Toast-Komponenten mit ARIA-Live
     _strings.j2             – Zentrale Sammlung englischer UI-Texte
+    status_badges.j2        – Makro-Sammlung für Statusindikatoren (Dashboard, System, Soulseek)
     nav/
       primary_nav.html      – Hauptnavigation mit aktiven Zuständen
     tables/
@@ -84,9 +85,9 @@ templates/
 ### Dashboard (/ui)
 | Interaktion | API-Aufruf | Trigger | Target & Swap | Fehlerpfad |
 |-------------|------------|---------|---------------|------------|
-| Systemstatus laden | GET `/api/v1/status` | `hx-trigger="load, every 30s"` | `#hx-dashboard-status`, `hx-swap="innerHTML"` | Anzeige Warn-Banner bei `status != ok`【F:app/api/system.py†L344-L368】 |
-| Dienste-Health | GET `/api/v1/health` | `hx-trigger="load, every 60s"` | `#hx-service-health`, `hx-swap="innerHTML"` | Fehlermeldungsliste bei `ok=false`【F:app/api/system.py†L106-L191】 |
-| Orchestrator manuell starten | POST `/api/v1/sync` | Button `hx-post`, `hx-confirm` | Toast via `hx-swap-oob`, aktualisiert Jobs-Karten | 503 ⇒ Modal mit fehlenden Credentials【F:app/routers/sync_router.py†L26-L106】 |
+| Statusübersicht | GET `/ui/dashboard/status` → `/api/v1/status` | `load, every 30s` | `#hx-dashboard-status`, `hx-swap="innerHTML"` | `_render_alert_fragment` mit Retry-Schaltfläche【F:app/ui/routes/base.py†L86-L153】 |
+| Health-Checks | GET `/ui/dashboard/health` → `/api/health/{live,ready}` | `load, every 60s` | `#hx-dashboard-health`, `hx-swap="innerHTML"` | `_render_alert_fragment`, Logging `ui.fragment.dashboard_health`【F:app/ui/routes/base.py†L156-L215】 |
+| Worker-Übersicht | GET `/ui/dashboard/workers` → `/api/v1/status` | `load, every 45s` | `#hx-dashboard-workers`, `hx-swap="innerHTML"` | `_render_alert_fragment` inkl. Retry-Link【F:app/ui/routes/base.py†L218-L273】 |
 
 ### Spotify (/ui/spotify)
 Die Spotify-Seite bündelt nun Status, OAuth-Flows, Playlist-Verwaltung sowie die FREE-Ingest-Uploads.
