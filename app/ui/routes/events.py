@@ -78,7 +78,7 @@ async def ui_events(
     if session.features.dlq and session.allows("operator"):
 
         async def _build_downloads() -> dict[str, Any] | None:
-            page = downloads_service.list_downloads(
+            page = await downloads_service.list_downloads_async(
                 limit=20,
                 offset=0,
                 include_all=False,

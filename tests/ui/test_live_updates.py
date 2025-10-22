@@ -1,9 +1,14 @@
-import json
+from typing import Any
 
 from fastapi.testclient import TestClient
 import pytest
 
-from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream
+from app.db import get_session, session_scope
+from app.models import Download
+from app.services.download_service import DownloadService
+from app.ui.context.operations import build_downloads_fragment_context
+from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream, templates
+from app.ui.services.downloads import DownloadsUiService
 from tests.ui.test_operations_pages import _cookies_header
 from tests.ui.test_ui_auth import _create_client
 
@@ -51,3 +56,87 @@ async def test_ui_event_stream_emits_payload() -> None:
     assert chunk is not None
     assert "event: fragment" in chunk
     assert "hx-downloads-table" in chunk
+
+
+@pytest.mark.asyncio
+async def test_ui_event_stream_renders_downloads_fragment(monkeypatch) -> None:
+    class _StubTransfersApi:
+        async def get_download_queue(self, download_id: int) -> dict[str, Any]:
+            return {"download_id": download_id, "status": "running"}
+
+    with _create_client(monkeypatch, extra_env={"UI_LIVE_UPDATES": "SSE"}):
+        with session_scope() as session:
+            session.add(
+                Download(
+                    filename="active.flac",
+                    state="queued",
+                    progress=0.5,
+                    priority=5,
+                    username="tester",
+                )
+            )
+
+        db_session = get_session()
+
+        async def _session_runner(func):
+            return func(db_session)
+
+        downloads_service = DownloadsUiService(
+            DownloadService(
+                session=db_session,
+                session_runner=_session_runner,
+                transfers=_StubTransfersApi(),
+            )
+        )
+
+        class _StubRequest:
+            def __init__(self) -> None:
+                self.cookies = {"csrftoken": "token"}
+                self._calls = 0
+
+            async def is_disconnected(self) -> bool:
+                self._calls += 1
+                return self._calls > 1
+
+            def url_for(self, *args: Any, **kwargs: Any) -> str:
+                raise RuntimeError("routing unavailable")
+
+        request = _StubRequest()
+
+        async def _build_downloads() -> dict[str, Any] | None:
+            page = await downloads_service.list_downloads_async(
+                limit=20,
+                offset=0,
+                include_all=False,
+                status_filter=None,
+            )
+            context = build_downloads_fragment_context(
+                request,
+                page=page,
+                status_filter=None,
+                include_all=False,
+            )
+            context["csrf_token"] = "token"
+            fragment = context["fragment"]
+            template = templates.get_template("partials/downloads_table.j2")
+            html = template.render(context)
+            return {
+                "event": "downloads",
+                "fragment_id": fragment.identifier,
+                "html": html,
+                "data_attributes": dict(fragment.data_attributes),
+            }
+
+        builder = _LiveFragmentBuilder(name="downloads", interval=0.1, build=_build_downloads)
+        stream = _ui_event_stream(request, [builder])
+        chunk = None
+        try:
+            async for chunk in stream:
+                break
+        finally:
+            db_session.close()
+
+        assert chunk is not None
+        assert "event: fragment" in chunk
+        assert "hx-downloads-table" in chunk
+        assert '"html"' in chunk
