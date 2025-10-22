@@ -4,8 +4,12 @@ from fastapi import status
 from fastapi.responses import PlainTextResponse
 import pytest
 
+from app.db import get_session, init_db, session_scope
+from app.dependencies import get_download_service
 from app.errors import AppError, ErrorCode
 from app.main import app
+from app.models import Download
+from app.services.download_service import DownloadService
 from app.ui.services import DownloadPage, DownloadRow, get_downloads_ui_service
 from tests.ui.test_fragments import (
     _RecordingDownloadsService,
@@ -44,6 +48,61 @@ def _override_downloads(stub: _RecordingDownloadsService) -> None:
 
 def _reset_downloads_override() -> None:
     app.dependency_overrides.pop(get_downloads_ui_service, None)
+
+
+def test_downloads_table_real_service(monkeypatch) -> None:
+    init_db()
+    with session_scope() as session:
+        record = Download(
+            filename="omega.flac",
+            state="queued",
+            progress=0.25,
+            priority=2,
+            username="dj",
+        )
+        session.add(record)
+        session.flush()
+        download_id = record.id
+
+    class _StubTransfersApi:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        async def get_download_queue(self, identifier: int) -> dict[str, object]:
+            self.calls.append(identifier)
+            return {"status": "queued", "download_id": identifier}
+
+    transfers = _StubTransfersApi()
+
+    async def _override_get_download_service():
+        db_session = get_session()
+
+        async def _runner(func):
+            return func(db_session)
+
+        service = DownloadService(
+            session=db_session,
+            session_runner=_runner,
+            transfers=transfers,
+        )
+        try:
+            yield service
+        finally:
+            db_session.close()
+
+    app.dependency_overrides[get_download_service] = _override_get_download_service
+
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            headers = _csrf_headers(client)
+            response = client.get("/ui/downloads/table", headers=headers)
+            _assert_html_response(response)
+            assert "omega.flac" in response.text
+    finally:
+        app.dependency_overrides.pop(get_download_service, None)
+
+    assert transfers.calls == [download_id]
 
 
 def test_downloads_priority_update_success(

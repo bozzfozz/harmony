@@ -18,11 +18,14 @@ from starlette.requests import Request
 
 from app.api.search import DEFAULT_SOURCES
 from app.config import SecurityConfig, SoulseekConfig
+from app.db import get_session, init_db, session_scope
 from app.dependencies import get_download_service, get_soulseek_client
 from app.errors import AppError, ErrorCode, ValidationAppError
 from app.integrations.health import IntegrationHealth, ProviderHealth
 from app.main import app
+from app.models import Download
 from app.schemas import StatusResponse
+from app.services.download_service import DownloadService
 from app.services.watchlist_service import WatchlistService
 from app.ui.services import (
     ActivityPage,
@@ -228,6 +231,21 @@ class _RecordingDownloadsService:
             raise self.list_exception
         return self.page
 
+    async def list_downloads_async(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        include_all: bool,
+        status_filter: str | None,
+    ) -> DownloadPage:
+        return self.list_downloads(
+            limit=limit,
+            offset=offset,
+            include_all=include_all,
+            status_filter=status_filter,
+        )
+
     def update_priority(self, *, download_id: int, priority: int) -> DownloadRow:
         if self.update_exception:
             raise self.update_exception
@@ -318,6 +336,58 @@ class _RecordingDownloadsService:
         if self.export_response is not None:
             return self.export_response
         return PlainTextResponse("id,filename\n", media_type="text/csv")
+
+
+@pytest.mark.asyncio
+async def test_download_service_handles_running_event_loop() -> None:
+    init_db()
+    with session_scope() as session:
+        download = Download(
+            filename="loop.flac",
+            state="queued",
+            progress=0.5,
+            priority=4,
+            username="tester",
+        )
+        session.add(download)
+        session.flush()
+        download_id = download.id
+
+    class _StubTransfersApi:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        async def get_download_queue(self, identifier: int) -> dict[str, Any]:
+            self.calls.append(identifier)
+            return {"status": "running", "download_id": identifier}
+
+    transfers = _StubTransfersApi()
+    db_session = get_session()
+
+    async def _runner(func):
+        return func(db_session)
+
+    service = DownloadService(
+        session=db_session,
+        session_runner=_runner,
+        transfers=transfers,
+    )
+
+    try:
+        records = service.list_downloads(
+            include_all=True,
+            status_filter=None,
+            limit=10,
+            offset=0,
+        )
+    finally:
+        db_session.close()
+
+    assert transfers.calls == [download_id]
+    assert getattr(records[0], "live_queue", None) == {
+        "status": "running",
+        "download_id": download_id,
+    }
 
 
 class _StubDbSession:

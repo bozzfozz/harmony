@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-import asyncio
 from typing import Any
 
 from fastapi import status
@@ -126,7 +127,7 @@ class DownloadService:
         metadata: dict[int, Mapping[str, Any]] = {}
         if active:
             try:
-                metadata = asyncio.run(self._collect_live_queue_metadata(tuple(active)))
+                metadata = self._collect_live_queue_metadata_blocking(tuple(active))
             except TransfersApiError as exc:
                 logger.debug(
                     "downloads.live_queue.fetch_failed",
@@ -165,6 +166,23 @@ class DownloadService:
             if payload is not None:
                 metadata[download_id] = payload
         return metadata
+
+    def _collect_live_queue_metadata_blocking(
+        self, downloads: Sequence[Download]
+    ) -> dict[int, Mapping[str, Any]]:
+        downloads_tuple = tuple(downloads)
+
+        async def _collect() -> dict[int, Mapping[str, Any]]:
+            return await self._collect_live_queue_metadata(downloads_tuple)
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(_collect())
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(lambda: asyncio.run(_collect()))
+            return future.result()
 
     # ------------------------------------------------------------------
     # Query helpers
