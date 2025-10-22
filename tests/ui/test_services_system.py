@@ -56,8 +56,12 @@ async def test_fetch_readiness_normalises_dependencies(monkeypatch) -> None:
                 "deps": {"redis": "down", "api": "up"},
                 "orchestrator": {
                     "components": {"scheduler": "enabled"},
-                    "jobs": {"sync": "disabled"},
-                    "enabled_jobs": {"sync": False, "match": True},
+                    "jobs": {"artist_sync": "enabled", "sync": "disabled"},
+                    "enabled_jobs": {
+                        "artist_sync": True,
+                        "sync": False,
+                        "match": True,
+                    },
                 },
             },
         }
@@ -72,7 +76,7 @@ async def test_fetch_readiness_normalises_dependencies(monkeypatch) -> None:
     assert record.error_message == "dependency failure"
     assert [item.name for item in record.dependencies] == ["api", "redis"]
     assert [item.status for item in record.dependencies] == ["up", "down"]
-    assert list(record.enabled_jobs.keys()) == ["match", "sync"]
+    assert list(record.enabled_jobs.keys()) == ["artist_sync", "match", "sync"]
 
 
 @pytest.mark.asyncio
