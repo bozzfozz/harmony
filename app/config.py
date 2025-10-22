@@ -1001,6 +1001,7 @@ class SecurityConfig:
     allowed_origins: tuple[str, ...]
     _require_auth_default: bool
     _rate_limiting_default: bool
+    ui_cookies_secure: bool
     _require_auth_override: bool | None = None
     _rate_limiting_override: bool | None = None
 
@@ -1303,6 +1304,11 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
                 "UI_DOCS_BASE_URL",
                 "",
                 "Base URL hosting documentation linked from the UI.",
+            ),
+            ConfigTemplateEntry(
+                "UI_COOKIES_SECURE",
+                True,
+                "Emit Secure cookies for UI session, CSRF and pagination state.",
             ),
         ),
     ),
@@ -3199,6 +3205,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     security_profile, security_defaults = _resolve_security_profile(env)
     require_auth_override = _parse_bool_override(_env_value(env, "FEATURE_REQUIRE_AUTH"))
     rate_limit_override = _parse_bool_override(_env_value(env, "FEATURE_RATE_LIMITING"))
+    ui_cookies_secure = _as_bool(_env_value(env, "UI_COOKIES_SECURE"), default=True)
     rate_limit_enabled = (
         security_defaults.rate_limiting if rate_limit_override is None else rate_limit_override
     )
@@ -3286,6 +3293,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         allowed_origins=middleware_config.cors.allowed_origins,
         _require_auth_default=security_defaults.require_auth,
         _rate_limiting_default=security_defaults.rate_limiting,
+        ui_cookies_secure=ui_cookies_secure,
         _require_auth_override=require_auth_override,
         _rate_limiting_override=rate_limit_override,
     )

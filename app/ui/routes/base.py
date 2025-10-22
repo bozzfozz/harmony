@@ -117,9 +117,10 @@ async def logout(
     manager = get_session_manager(request)
     await clear_spotify_job_state(request, session)
     await manager.invalidate(session.identifier)
+    cookies_secure = manager.security.ui_cookies_secure
     response = RedirectResponse("/ui/login", status_code=status.HTTP_303_SEE_OTHER)
-    clear_session_cookie(response)
-    clear_csrf_cookie(response)
+    clear_session_cookie(response, secure=cookies_secure)
+    clear_csrf_cookie(response, secure=cookies_secure)
     response.headers.setdefault("HX-Redirect", "/ui/login")
     return response
 

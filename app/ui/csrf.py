@@ -25,6 +25,7 @@ _FORM_FIELD: Final[str] = "csrftoken"
 @dataclass(slots=True)
 class CsrfManager:
     secret: bytes
+    cookies_secure: bool
 
     def issue(self, session: UiSession) -> str:
         nonce = secrets.token_urlsafe(24)
@@ -51,20 +52,22 @@ class CsrfManager:
         return payload.decode("utf-8").startswith(expected_session)
 
 
-def build_csrf_manager(secret: str | None) -> CsrfManager:
+def build_csrf_manager(secret: str | None, *, cookies_secure: bool = True) -> CsrfManager:
     material = (secret or "").encode("utf-8")
     if not material:
         material = secrets.token_bytes(32)
     derived = hashlib.sha256(material).digest()
-    return CsrfManager(secret=derived)
+    return CsrfManager(secret=derived, cookies_secure=cookies_secure)
 
 
 def get_csrf_manager(request: Request) -> CsrfManager:
     manager: CsrfManager | None = getattr(request.app.state, "ui_csrf_manager", None)
-    if manager is None:
-        security = get_session_manager(request).security
+    session_manager = get_session_manager(request)
+    security = session_manager.security
+    cookies_secure = security.ui_cookies_secure
+    if manager is None or manager.cookies_secure != cookies_secure:
         key_source = ":".join(security.api_keys) if security.api_keys else None
-        manager = build_csrf_manager(key_source)
+        manager = build_csrf_manager(key_source, cookies_secure=cookies_secure)
         request.app.state.ui_csrf_manager = manager
     return manager
 
@@ -81,17 +84,17 @@ def attach_csrf_cookie(
         _CSRF_COOKIE,
         issued_token,
         httponly=False,
-        secure=True,
+        secure=manager.cookies_secure,
         samesite="lax",
     )
     return issued_token
 
 
-def clear_csrf_cookie(response: Response) -> None:
+def clear_csrf_cookie(response: Response, *, secure: bool) -> None:
     response.delete_cookie(
         _CSRF_COOKIE,
         httponly=False,
-        secure=True,
+        secure=secure,
         samesite="lax",
     )
 

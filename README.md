@@ -67,11 +67,16 @@ deployments. Key options:
 | --- | --- | --- | --- |
 | `HARMONY_API_KEYS` | _(empty)_ | Enables API key authentication. | Recommended when Harmony is reachable from untrusted networks. |
 | `ALLOWED_ORIGINS` | `*` | CORS allowlist for the browser UI. | Set to your public base URL when tightening CORS. |
+| `UI_COOKIES_SECURE` | `true` | Marks UI session, CSRF and pagination cookies as `Secure`. | Keep enabled behind TLS; set to `false` only for local HTTP testing. |
 | `DOWNLOADS_DIR` | `/data/downloads` | Workspace for HDM downloads. | Override when the downloads path differs from the default mount. |
 | `MUSIC_DIR` | `/data/music` | Target library for organised media. | Override when the music library lives elsewhere. |
 | `harmony.yml` | auto-generated | YAML file under `/data` containing every tunable variable. | Edit to persist configuration between restarts. |
 
 All other knobs are documented in [`docs/configuration.md`](docs/configuration.md).
+
+Harmony expects the UI to sit behind HTTPS so that `Secure` cookies are honoured end-to-end.
+For ad-hoc local development without TLS you can disable the flag via
+`UI_COOKIES_SECURE=false`; keep the instance on a trusted network when doing so.
 
 ## Health checks
 

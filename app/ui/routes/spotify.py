@@ -47,6 +47,7 @@ from app.ui.services import (
 )
 from app.ui.session import (
     UiSession,
+    get_session_manager,
     get_spotify_backfill_job_id,
     get_spotify_free_ingest_job_id,
     require_operator_with_feature,
@@ -228,12 +229,15 @@ def _extract_saved_tracks_pagination(request: Request) -> tuple[int, int]:
     return limit, offset
 
 
-def _persist_saved_tracks_pagination(response: Response, *, limit: int, offset: int) -> None:
+def _persist_saved_tracks_pagination(
+    request: Request, response: Response, *, limit: int, offset: int
+) -> None:
+    cookies_secure = get_session_manager(request).security.ui_cookies_secure
     response.set_cookie(
         _SAVED_TRACKS_LIMIT_COOKIE,
         str(limit),
         httponly=True,
-        secure=True,
+        secure=cookies_secure,
         samesite="lax",
         path="/ui/spotify",
     )
@@ -241,7 +245,7 @@ def _persist_saved_tracks_pagination(response: Response, *, limit: int, offset: 
         _SAVED_TRACKS_OFFSET_COOKIE,
         str(offset),
         httponly=True,
-        secure=True,
+        secure=cookies_secure,
         samesite="lax",
         path="/ui/spotify",
     )
@@ -2237,7 +2241,7 @@ async def spotify_saved_tracks_fragment(
         "partials/spotify_saved_tracks.j2",
         context,
     )
-    _persist_saved_tracks_pagination(response, limit=limit, offset=offset)
+    _persist_saved_tracks_pagination(request, response, limit=limit, offset=offset)
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     log_event(
@@ -2387,7 +2391,7 @@ async def spotify_saved_tracks_action(
         "partials/spotify_saved_tracks.j2",
         context,
     )
-    _persist_saved_tracks_pagination(response, limit=limit, offset=offset)
+    _persist_saved_tracks_pagination(request, response, limit=limit, offset=offset)
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
     log_event(
