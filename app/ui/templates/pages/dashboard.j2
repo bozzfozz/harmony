@@ -1,4 +1,4 @@
-{% extends "layouts/base.j2" %}
+{% extends "layouts/dashboard.j2" %}
 {% import "partials/_strings.j2" as strings %}
 {% import "partials/tables.j2" as tables %}
 
@@ -16,7 +16,7 @@
   </section>
 {% endblock %}
 
-{% block main %}
+{% block dashboard_kpis %}
   <section class="page-section page-section--card" aria-labelledby="dashboard-status-heading">
     <header class="page-section__header">
       <h3 id="dashboard-status-heading" class="page-section__title">{{ strings.dashboard_status_heading() }}</h3>
@@ -73,7 +73,9 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(workers_fragment.loading_key) }}</p>
     </div>
   </section>
+{% endblock %}
 
+{% block dashboard_primary %}
   <section>
     <h3>{{ strings.dashboard_features_heading() }}</h3>
     {{ tables.render_table(features_table) }}
@@ -97,7 +99,9 @@
       <p class="async-fragment__placeholder">{{ strings.fragment_loading(activity_fragment.loading_key) }}</p>
     </div>
   </section>
+{% endblock %}
 
+{% block dashboard_secondary %}
   <section class="page-section page-section--card" aria-labelledby="dashboard-actions-heading">
     <h3 id="dashboard-actions-heading" class="page-section__title">{{ strings.dashboard_actions_heading() }}</h3>
     {% if actions %}
