@@ -53,7 +53,7 @@ class _StubSystemService:
             ServiceHealthBadge(service="spotify", status="ok", missing=(), optional_missing=()),
         )
         self.secret_result = SecretValidationRecord(
-            provider="spotify",
+            provider="spotify_client_secret",
             mode="live",
             valid=True,
             validated_at=self._now(),
@@ -98,6 +98,7 @@ def test_system_page_renders_for_operator(monkeypatch) -> None:
         assert 'id="hx-system-liveness"' in html
         assert 'id="system-liveness-refresh"' in html
         assert 'hx-get="/ui/system/integrations"' in html
+        assert 'hx-post="/ui/system/secrets/spotify_client_secret"' in html
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
 
@@ -142,7 +143,7 @@ def test_secret_validation_requires_admin(monkeypatch) -> None:
         client.app.dependency_overrides[get_system_ui_service] = lambda: stub
         _login(client)
         headers = {"Cookie": _cookies_header(client)}
-        response = client.post("/ui/system/secrets/spotify", headers=headers)
+        response = client.post("/ui/system/secrets/spotify_client_secret", headers=headers)
         assert response.status_code == status.HTTP_403_FORBIDDEN
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
@@ -161,7 +162,9 @@ def test_secret_validation_updates_card(monkeypatch) -> None:
             "X-CSRF-Token": token,
         }
         response = client.post(
-            "/ui/system/secrets/spotify", headers=post_headers, data={"value": "override"}
+            "/ui/system/secrets/spotify_client_secret",
+            headers=post_headers,
+            data={"value": "override"},
         )
         _assert_html_response(response)
         assert "system-secret-card__status" in response.text
@@ -183,7 +186,7 @@ def test_secret_validation_allows_admin_when_imports_disabled(monkeypatch) -> No
             "Cookie": _cookies_header(client),
             "X-CSRF-Token": token,
         }
-        response = client.post("/ui/system/secrets/spotify", headers=post_headers)
+        response = client.post("/ui/system/secrets/spotify_client_secret", headers=post_headers)
         _assert_html_response(response)
         assert "system-secret-card__status" in response.text
     client.app.dependency_overrides.pop(get_system_ui_service, None)

@@ -54,12 +54,22 @@ def _resolve_api_base_path(request: Request) -> str:
 
 def _build_secret_cards() -> tuple[SecretValidationCard, ...]:
     providers = (
-        ("spotify", "system.secrets.spotify.title", "system.secrets.spotify.description"),
-        ("soulseek", "system.secrets.soulseek.title", "system.secrets.soulseek.description"),
+        (
+            "spotify",
+            "spotify_client_secret",
+            "system.secrets.spotify.title",
+            "system.secrets.spotify.description",
+        ),
+        (
+            "soulseek",
+            "slskd_api_key",
+            "system.secrets.soulseek.title",
+            "system.secrets.soulseek.description",
+        ),
     )
     cards: list[SecretValidationCard] = []
-    for provider, title_key, description_key in providers:
-        identifier = f"system-secret-{provider}"
+    for slug, provider, title_key, description_key in providers:
+        identifier = f"system-secret-{slug}"
         form = FormDefinition(
             identifier=f"{identifier}-form",
             method="post",
@@ -77,6 +87,7 @@ def _build_secret_cards() -> tuple[SecretValidationCard, ...]:
         cards.append(
             SecretValidationCard(
                 identifier=identifier,
+                slug=slug,
                 provider=provider,
                 title_key=title_key,
                 description_key=description_key,
@@ -326,7 +337,7 @@ def select_system_secret_card(
 ) -> SecretValidationCard | None:
     normalized = provider.strip().lower()
     for card in cards:
-        if card.provider == normalized:
+        if card.provider == normalized or card.slug == normalized:
             return card
     return None
 

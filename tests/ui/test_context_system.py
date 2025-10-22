@@ -55,6 +55,10 @@ def test_build_system_page_context_registers_fragments() -> None:
     assert context["readiness_fragment"].url.endswith("/ui/system/readiness")
     assert context["services_form"].action.endswith("/ui/system/services")
     assert len(context["secret_cards"]) == 2
+    spotify_card = context["secret_cards"][0]
+    assert spotify_card.slug == "spotify"
+    assert spotify_card.provider == "spotify_client_secret"
+    assert spotify_card.form.action.endswith("/ui/system/secrets/spotify_client_secret")
 
 
 def test_build_system_page_context_uses_metrics_fallback() -> None:
@@ -135,11 +139,12 @@ def test_build_system_service_health_context_formats_missing() -> None:
 
 def test_secret_card_helpers_attach_results() -> None:
     cards = build_system_secret_cards()
-    spotify_card = select_system_secret_card(cards, "spotify")
+    spotify_card = select_system_secret_card(cards, "spotify_client_secret")
     assert spotify_card is not None
+    assert select_system_secret_card(cards, "spotify") is spotify_card
 
     record = SecretValidationRecord(
-        provider="spotify",
+        provider="spotify_client_secret",
         mode="live",
         valid=True,
         validated_at=datetime(2024, 1, 1, tzinfo=UTC),
