@@ -202,7 +202,11 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 ### Frontend-Assets
 
-Das frühere statische Frontend wurde entfernt. Der Runbook-Fokus liegt auf API und Hintergrunddiensten, bis das neue SSR-Interface verfügbar ist.
+Das frühere statische Frontend wurde entfernt. Die serverseitig gerenderten
+`/ui`-Dashboards liefern jetzt die HDM-Oberflächen; Architektur und Fragmente
+sind im [FastAPI + Jinja2 + HTMX plan](../../ui/fe-htmx-plan.md) dokumentiert,
+während die konkreten OAuth- und Monitoring-Flows im
+[Spotify UI Operations Guide](../../ui/spotify.md) beschrieben sind.
 
 ## Eskalation
 
