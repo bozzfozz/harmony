@@ -21,7 +21,7 @@ docker run -d \
   -p 8080:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
-  ghcr.io/bozzfozz/harmony:latest
+  ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
 - Harmony creates missing directories on start-up and keeps the SQLite database at
@@ -52,7 +52,7 @@ Both commands must return HTTP 200. The ready endpoint prints dependency details
 ```yaml
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:latest
+    image: ghcr.io/bozzfozz/harmony:1.0.0
     container_name: harmony
     environment:
       TZ: Etc/UTC
@@ -81,6 +81,10 @@ it to adjust defaults and commit the file to source control if desired. Supply
 to tighten security. Add further overrides as needed (for example,
 `OAUTH_SPLIT_MODE=true` plus a `/data/runtime/oauth_state` mount when running OAuth
 flows across multiple containers).
+
+The published release identifier comes from [`app/version.py`](../../app/version.py)
+and is exposed via the `/live` probe. Pin your deployments to `1.0.0` (or the
+current constant) instead of `latest` to ensure reproducible upgrades.
 
 Bring the stack up with:
 
