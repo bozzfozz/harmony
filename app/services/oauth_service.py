@@ -104,14 +104,16 @@ class ManualRateLimiter:
         self._limit = max(1, limit)
         self._window = max(1.0, window_seconds)
         self._hits: dict[str, list[float]] = {}
+        self._lock = Lock()
 
     def check(self, key: str) -> None:
-        now = time.monotonic()
-        entries = self._hits.setdefault(key, [])
-        entries[:] = [timestamp for timestamp in entries if now - timestamp <= self._window]
-        if len(entries) >= self._limit:
-            raise RuntimeError("rate limited")
-        entries.append(now)
+        with self._lock:
+            now = time.monotonic()
+            entries = self._hits.setdefault(key, [])
+            entries[:] = [timestamp for timestamp in entries if now - timestamp <= self._window]
+            if len(entries) >= self._limit:
+                raise RuntimeError("rate limited")
+            entries.append(now)
 
 
 class OAuthService:
