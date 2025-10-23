@@ -174,6 +174,34 @@ def test_pause_and_resume_entry_persist_state(
     )
 
 
+def test_pause_entry_normalises_non_utc_resume(
+    watchlist_service: WatchlistService, log_events: list[tuple[str, dict[str, Any]]]
+) -> None:
+    entry = watchlist_service.create_entry(artist_key="spotify:offset", priority=1)
+    resume_local = datetime.fromisoformat("2031-08-12T08:15:00-05:00")
+
+    del log_events[:]
+
+    paused = watchlist_service.pause_entry(
+        artist_key=entry.artist_key,
+        resume_at=resume_local,
+    )
+
+    expected_utc = resume_local.astimezone(UTC)
+    assert paused.resume_at == expected_utc
+
+    assert log_events[0] == (
+        "service.call",
+        {
+            "component": "service.watchlist",
+            "operation": "pause",
+            "status": "ok",
+            "entity_id": entry.artist_key,
+            "resume_at": expected_utc.isoformat().replace("+00:00", "Z"),
+        },
+    )
+
+
 def test_remove_entry_missing_raises_not_found(
     watchlist_service: WatchlistService, log_events: list[tuple[str, dict[str, Any]]]
 ) -> None:

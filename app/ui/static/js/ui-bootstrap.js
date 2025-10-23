@@ -62,11 +62,223 @@
     }
   };
 
-  var addBodyListener = function (eventName, handler) {
+  var addBodyListener = function (eventName, handler, options) {
     if (typeof body.addEventListener === 'function') {
-      body.addEventListener(eventName, handler);
+      body.addEventListener(eventName, handler, options);
     }
   };
+
+  var WATCHLIST_CREATE_FORM_SELECTOR = '#watchlist-create-form';
+  var WATCHLIST_PAUSE_BUTTON_SELECTOR = 'button[data-test^="watchlist-pause-"]';
+  var WATCHLIST_RESUME_INPUT_NAME = 'resume_at';
+  var WATCHLIST_RESUME_TEMP_ATTR = 'data-watchlist-resume-temp';
+  var DATETIME_LOCAL_PATTERN =
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2})(\.\d{1,6})?)?$/;
+
+  var padTwo = function (value) {
+    var stringValue = String(Math.abs(value));
+    if (stringValue.length >= 2) {
+      return stringValue.slice(-2);
+    }
+    return (value < 0 ? '0' + stringValue : '0' + stringValue).slice(-2);
+  };
+
+  var toIsoWithOffset = function (value) {
+    if (typeof value !== 'string' || !value) {
+      return null;
+    }
+
+    var match = value.match(DATETIME_LOCAL_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    var datePart = match[1];
+    var timePart = match[2];
+    if (match[3]) {
+      timePart += ':' + match[3];
+    }
+    if (match[4]) {
+      timePart += match[4];
+    }
+
+    var timePieces = match[2].split(':');
+    var year = parseInt(datePart.slice(0, 4), 10);
+    var month = parseInt(datePart.slice(5, 7), 10) - 1;
+    var day = parseInt(datePart.slice(8, 10), 10);
+    var hour = parseInt(timePieces[0], 10);
+    var minute = parseInt(timePieces[1], 10);
+    var second = match[3] ? parseInt(match[3], 10) : 0;
+    var millisecond = 0;
+    if (match[4]) {
+      var fraction = match[4].slice(1, 4);
+      while (fraction.length < 3) {
+        fraction += '0';
+      }
+      millisecond = parseInt(fraction, 10);
+      if (isNaN(millisecond)) {
+        millisecond = 0;
+      }
+    }
+
+    var localDate = new Date(
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      isNaN(second) ? 0 : second,
+      millisecond
+    );
+    if (isNaN(localDate.getTime())) {
+      return null;
+    }
+
+    var offsetMinutes = -localDate.getTimezoneOffset();
+    var sign = offsetMinutes >= 0 ? '+' : '-';
+    var absoluteOffset = Math.abs(offsetMinutes);
+    var hoursOffset = padTwo(Math.floor(absoluteOffset / 60));
+    var minutesOffset = padTwo(absoluteOffset % 60);
+    return datePart + 'T' + timePart + sign + hoursOffset + ':' + minutesOffset;
+  };
+
+  var shouldNormaliseWatchlistForm = function (form, submitEvent) {
+    if (!form) {
+      return false;
+    }
+    if (matchesSelector(form, WATCHLIST_CREATE_FORM_SELECTOR)) {
+      return true;
+    }
+    if (submitEvent && submitEvent.submitter && submitEvent.submitter.getAttribute) {
+      var submitTestId = submitEvent.submitter.getAttribute('data-test');
+      if (submitTestId && submitTestId.indexOf('watchlist-pause-') === 0) {
+        return true;
+      }
+    }
+    return Boolean(form.querySelector(WATCHLIST_PAUSE_BUTTON_SELECTOR));
+  };
+
+  var cleanupWatchlistResumeAt = function (form) {
+    if (!form) {
+      return;
+    }
+
+    var resumeInput = form.querySelector(
+      'input[data-watchlist-resume-original-name]'
+    );
+    if (resumeInput && resumeInput.dataset) {
+      var originalName = resumeInput.dataset.watchlistResumeOriginalName;
+      if (originalName && resumeInput.name !== originalName) {
+        resumeInput.name = originalName;
+      }
+      delete resumeInput.dataset.watchlistResumeOriginalName;
+    }
+
+    var tempInputs = form.querySelectorAll('input[' + WATCHLIST_RESUME_TEMP_ATTR + ']');
+    tempInputs.forEach(function (element) {
+      if (element && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+    });
+
+    if (form.dataset) {
+      delete form.dataset.watchlistResumePrepared;
+    }
+  };
+
+  var prepareWatchlistResumeAt = function (form, submitEvent) {
+    if (!shouldNormaliseWatchlistForm(form, submitEvent)) {
+      return;
+    }
+
+    cleanupWatchlistResumeAt(form);
+
+    var resumeInput = form.querySelector('input[name="' + WATCHLIST_RESUME_INPUT_NAME + '"]');
+    if (!resumeInput) {
+      return;
+    }
+
+    var value = resumeInput.value;
+    if (typeof value !== 'string' || !value) {
+      return;
+    }
+
+    var isoValue = toIsoWithOffset(value);
+    if (!isoValue) {
+      return;
+    }
+
+    var originalName = resumeInput.getAttribute('name');
+    if (!originalName) {
+      return;
+    }
+
+    if (resumeInput.dataset) {
+      resumeInput.dataset.watchlistResumeOriginalName = originalName;
+    }
+    resumeInput.removeAttribute('name');
+
+    var hiddenInput = document.createElement('input');
+    hiddenInput.setAttribute('type', 'hidden');
+    hiddenInput.setAttribute('name', originalName);
+    hiddenInput.setAttribute('value', isoValue);
+    hiddenInput.setAttribute(WATCHLIST_RESUME_TEMP_ATTR, 'true');
+    form.appendChild(hiddenInput);
+
+    if (form.dataset) {
+      form.dataset.watchlistResumePrepared = 'true';
+    }
+  };
+
+  var resolveOwningForm = function (element) {
+    if (!element) {
+      return null;
+    }
+    if (element.tagName === 'FORM') {
+      return element;
+    }
+    if (typeof element.closest === 'function') {
+      return element.closest('form');
+    }
+    return null;
+  };
+
+  var handleWatchlistCleanup = function (event) {
+    var detail = event.detail;
+    if (!detail) {
+      return;
+    }
+
+    var form = resolveOwningForm(detail.elt);
+    if (!form) {
+      return;
+    }
+
+    if (form.dataset && form.dataset.watchlistResumePrepared !== 'true') {
+      var hasTemp = form.querySelector('input[' + WATCHLIST_RESUME_TEMP_ATTR + ']');
+      if (!hasTemp && !matchesSelector(form, WATCHLIST_CREATE_FORM_SELECTOR)) {
+        return;
+      }
+    }
+
+    cleanupWatchlistResumeAt(form);
+  };
+
+  addBodyListener(
+    'submit',
+    function (event) {
+      var target = event.target;
+      if (!target || target.tagName !== 'FORM') {
+        return;
+      }
+      prepareWatchlistResumeAt(target, event);
+    },
+    true
+  );
+
+  addBodyListener('htmx:afterRequest', handleWatchlistCleanup);
+  addBodyListener('htmx:sendError', handleWatchlistCleanup);
+  addBodyListener('htmx:responseError', handleWatchlistCleanup);
 
   addBodyListener('htmx:beforeRequest', function (event) {
     var detail = event.detail;

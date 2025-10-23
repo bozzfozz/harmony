@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import status
 
@@ -45,7 +45,7 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
                     "limit": "25",
                     "offset": "5",
                     "reason": "Maintenance window",
-                    "resume_at": "2024-05-01T09:30",
+                    "resume_at": "2024-05-01T09:30:00-04:00",
                 },
                 headers=_csrf_headers(client),
             )
@@ -54,9 +54,13 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
             assert "Paused" in html
             assert 'data-test="watchlist-resume-spotify-artist-stub"' in html
             assert _watchlist_stub.paused == ["spotify:artist:stub"]
-            assert _watchlist_stub.pause_payloads == [
-                ("Maintenance window", datetime.fromisoformat("2024-05-01T09:30"))
-            ]
+            stored_reason, stored_resume = _watchlist_stub.pause_payloads[0]
+            assert stored_reason == "Maintenance window"
+            assert stored_resume is not None
+            assert stored_resume.tzinfo is not None
+            assert stored_resume.astimezone(UTC) == datetime(
+                2024, 5, 1, 13, 30, tzinfo=UTC
+            )
             assert "pause" in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
