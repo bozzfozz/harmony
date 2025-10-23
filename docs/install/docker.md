@@ -86,10 +86,12 @@ services:
 
 The host paths under `/mnt/...` are only examples—point them at your persistent
 storage and library directories. Harmony boots without additional environment
-variables. The generated `/data/harmony.yml` contains every tunable value; edit
-it to adjust defaults and commit the file to source control if desired. Supply
-`HARMONY_API_KEYS` or `ALLOWED_ORIGINS` via a `.env` file or the CLI when you want
-to tighten security. Add further overrides as needed (for example,
+variables, leaving API keys disabled by default. Keep the compose stack on a
+trusted network or set `HARMONY_API_KEYS` in a `.env` file (or inline) before
+publishing the service. The generated `/data/harmony.yml` contains every tunable
+value; edit it to adjust defaults and commit the file to source control if
+desired. Supply `ALLOWED_ORIGINS` alongside the keys when you want to tighten
+security. Add further overrides as needed (for example,
 `OAUTH_SPLIT_MODE=true` plus a `/data/runtime/oauth_state` mount when running OAuth
 flows across multiple containers).
 
