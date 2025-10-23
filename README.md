@@ -47,6 +47,9 @@ docker run -d \
 - Optional security hardening:
   - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
   - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
+  - `PUID`/`PGID` (default `1000`) align the container user and group with the mounted
+    volumes. The entrypoint prepares the directories and then drops privileges to the
+    configured IDs before starting Uvicorn.
   - Provide them via `-e ...` flags or a `.env` file when exposing Harmony
     beyond trusted networks.
 - On first start the container writes `/data/harmony.yml` with every supported

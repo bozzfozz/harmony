@@ -88,8 +88,8 @@ configuration payloads. They follow the rules below:
 
 | Variable | Default | Example | Notes |
 | --- | --- | --- | --- |
-| `PUID` | `1000` | `1000` | User ID applied to mounted volumes (entrypoint helper). |
-| `PGID` | `1000` | `1000` | Group ID applied to mounted volumes. |
+| `PUID` | `1000` | `1000` | User ID applied to mounted volumes; the entrypoint switches to this identity before launching Harmony. |
+| `PGID` | `1000` | `1000` | Group ID applied to mounted volumes; the entrypoint switches to this identity before launching Harmony. |
 | `UMASK` | `007` | `002` | Filesystem mask enforced by the entrypoint. |
 
 ## Spotify & OAuth
