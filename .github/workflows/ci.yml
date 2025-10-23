@@ -41,6 +41,9 @@ jobs:
           pip install -r requirements-dev.txt -r requirements-test.txt
           pip install -e .
 
+      - name: Validate documentation references
+        run: make docs-verify
+
       - name: Check formatting (make fmt)
         run: |
           make fmt
