@@ -21,6 +21,7 @@ Im Standardlauf kontrolliert der Guard aktuell folgende Gruppen:
 2. Ganze Verzeichnisbäume
    - `docs/operations/` (inkl. aller Runbooks)
    - `docs/process/` (Prozessdokumentation, inkl. dieser Datei)
+   - `reports/` (operative Reports wie `reports/api/*` und `reports/ui/*`)
 
 ## Broken Links beheben
 

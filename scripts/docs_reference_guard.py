@@ -51,6 +51,7 @@ DEFAULT_DOC_DIRECTORIES = [
     Path("docs/process"),
     Path("docs/ui"),
     Path("docs/user"),
+    Path("reports"),
 ]
 
 
