@@ -62,11 +62,15 @@ class WatchlistUiService:
         *,
         artist_key: str,
         priority: int | None = None,
+        pause_reason: str | None = None,
+        resume_at: datetime | None = None,
     ) -> WatchlistTable:
         payload = WatchlistEntryCreate(
             artist_key=artist_key,
             priority=priority if priority is not None else 0,
         )
+
+        pause_requested = pause_reason is not None or resume_at is not None
 
         def _run() -> None:
             watchlist_api.create_watchlist_entry(
@@ -78,8 +82,19 @@ class WatchlistUiService:
         await asyncio.to_thread(_run)
         logger.info(
             "watchlist.ui.create",
-            extra={"artist_key": artist_key, "priority": payload.priority},
+            extra={
+                "artist_key": artist_key,
+                "priority": payload.priority,
+                "pause_requested": pause_requested,
+            },
         )
+        if pause_requested:
+            return await self.pause_entry(
+                request,
+                artist_key=artist_key,
+                reason=pause_reason,
+                resume_at=resume_at,
+            )
         return await self.list_entries_async(request)
 
     async def update_priority(

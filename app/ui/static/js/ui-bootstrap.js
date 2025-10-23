@@ -280,6 +280,72 @@
   addBodyListener('htmx:sendError', handleWatchlistCleanup);
   addBodyListener('htmx:responseError', handleWatchlistCleanup);
 
+  addBodyListener('htmx:configRequest', function (event) {
+    var detail = event.detail;
+    if (!detail || !detail.parameters) {
+      return;
+    }
+
+    var form = resolveOwningForm(detail.elt);
+    if (!shouldNormaliseWatchlistForm(form)) {
+      return;
+    }
+
+    var reasonInput = null;
+    if (form) {
+      reasonInput = form.querySelector('input[name="pause_reason"]');
+      if (!reasonInput) {
+        reasonInput = form.querySelector('input[name="reason"]');
+      }
+    }
+
+    if (reasonInput && typeof reasonInput.name === 'string') {
+      var reasonValue = '';
+      if (typeof reasonInput.value === 'string') {
+        reasonValue = reasonInput.value.trim();
+      }
+      if (reasonValue) {
+        detail.parameters[reasonInput.name] = reasonValue;
+      } else {
+        delete detail.parameters[reasonInput.name];
+      }
+    }
+
+    var resumeParameterName = WATCHLIST_RESUME_INPUT_NAME;
+    var preparedResume = form
+      ? form.querySelector('input[' + WATCHLIST_RESUME_TEMP_ATTR + ']')
+      : null;
+
+    if (preparedResume && preparedResume.name) {
+      resumeParameterName = preparedResume.name;
+      if (typeof preparedResume.value === 'string' && preparedResume.value) {
+        detail.parameters[resumeParameterName] = preparedResume.value;
+      } else {
+        delete detail.parameters[resumeParameterName];
+      }
+      return;
+    }
+
+    if (!form) {
+      delete detail.parameters[resumeParameterName];
+      return;
+    }
+
+    var resumeInput = form.querySelector(
+      'input[name="' + WATCHLIST_RESUME_INPUT_NAME + '"]'
+    );
+    if (resumeInput && typeof resumeInput.value === 'string') {
+      var resumeValue = resumeInput.value.trim();
+      if (resumeValue) {
+        detail.parameters[resumeInput.name || resumeParameterName] = resumeValue;
+      } else {
+        delete detail.parameters[resumeInput.name || resumeParameterName];
+      }
+    } else {
+      delete detail.parameters[resumeParameterName];
+    }
+  });
+
   addBodyListener('htmx:beforeRequest', function (event) {
     var detail = event.detail;
     if (!detail) {
