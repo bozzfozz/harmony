@@ -37,11 +37,6 @@ dependencies = [
 [project.scripts]
 harmony-selfcheck = "app.ops.selfcheck:main"
 
-[project.urls]
-Homepage = "https://github.com/bozzfozz/harmony"
-Documentation = "https://github.com/bozzfozz/harmony#readme"
-Issues = "https://github.com/bozzfozz/harmony/issues"
-
 [tool.setuptools]
 include-package-data = true
 
