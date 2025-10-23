@@ -307,3 +307,111 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
     assert "<div" in html
     assert "list" in watchlist_stub.async_calls
     assert activity_stub.async_calls, "expected async list_activity to be invoked"
+
+
+def test_ui_events_stream_omits_dlq_fragments_when_flag_disabled(monkeypatch) -> None:
+    class _FailingDownloadsService:
+        async def list_downloads_async(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            include_all: bool,
+            status_filter: str | None,
+        ) -> DownloadPage:
+            raise AssertionError("downloads fragment should be disabled when DLQ flag is false")
+
+    class _FailingJobsService:
+        async def list_jobs(self, request: Any) -> tuple[Any, ...]:
+            raise AssertionError("jobs fragment should be disabled when DLQ flag is false")
+
+    class _StubWatchlistService:
+        def __init__(self) -> None:
+            self.async_calls: list[str] = []
+
+        def list_entries(self, request: Any) -> WatchlistTable:
+            raise AssertionError("synchronous watchlist access should not be used")
+
+        async def list_entries_async(self, request: Any) -> WatchlistTable:
+            self.async_calls.append("list")
+            await asyncio.sleep(0)
+            return WatchlistTable(entries=())
+
+    class _StubActivityService:
+        def __init__(self) -> None:
+            self.async_calls: list[tuple[int, int, str | None, str | None]] = []
+
+        def list_activity(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            type_filter: str | None,
+            status_filter: str | None,
+        ) -> ActivityPage:
+            raise AssertionError("synchronous activity access should not be used")
+
+        async def list_activity_async(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            type_filter: str | None,
+            status_filter: str | None,
+        ) -> ActivityPage:
+            self.async_calls.append((limit, offset, type_filter, status_filter))
+            await asyncio.sleep(0)
+            return ActivityPage(
+                items=(),
+                limit=limit,
+                offset=offset,
+                total_count=0,
+                type_filter=type_filter,
+                status_filter=status_filter,
+            )
+
+    watchlist_stub = _StubWatchlistService()
+    activity_stub = _StubActivityService()
+    overrides = {
+        get_downloads_ui_service: lambda: _FailingDownloadsService(),
+        get_jobs_ui_service: lambda: _FailingJobsService(),
+        get_watchlist_ui_service: lambda: watchlist_stub,
+        get_activity_ui_service: lambda: activity_stub,
+    }
+
+    captured_payloads: list[dict[str, Any]] = []
+    captured_builder_names: list[str] = []
+
+    async def _capture_stream(request: Any, builders: list[_LiveFragmentBuilder]):
+        captured_builder_names.extend(builder.name for builder in builders)
+        for builder in builders:
+            payload = await builder.build()
+            if not payload:
+                continue
+            captured_payloads.append(payload)
+            data = json.dumps(payload, ensure_ascii=False)
+            yield f"event: fragment\ndata: {data}\n\n"
+
+    monkeypatch.setattr("app.ui.routes.events._ui_event_stream", _capture_stream)
+
+    extra_env = {"UI_LIVE_UPDATES": "SSE", "UI_FEATURE_DLQ": "false"}
+    with _create_client(monkeypatch, extra_env=extra_env) as client:
+        try:
+            client.app.dependency_overrides.update(overrides)
+            _login(client)
+            headers = {"Cookie": _cookies_header(client)}
+            response = client.get("/ui/events", headers=headers)
+            assert response.status_code == 200
+            body = response.text
+            assert "event: fragment" in body
+            assert "data:" in body
+        finally:
+            client.app.dependency_overrides.clear()
+
+    assert captured_builder_names == ["watchlist", "activity"]
+    assert captured_payloads, "expected SSE payloads when DLQ flag disabled"
+    assert all(payload.get("event") in {"watchlist", "activity"} for payload in captured_payloads)
+    assert {payload["event"] for payload in captured_payloads} == {"watchlist", "activity"}
+    assert len(captured_payloads) == 2
+    assert "list" in watchlist_stub.async_calls
+    assert activity_stub.async_calls, "expected async list_activity to be invoked"
