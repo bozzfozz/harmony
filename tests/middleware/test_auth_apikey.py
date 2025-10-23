@@ -110,7 +110,7 @@ def test_missing_api_key_uses_app_state_override(caplog: pytest.LogCaptureFixtur
     assert response.json() == {
         "ok": False,
         "error": {
-            "code": "INTERNAL_ERROR",
+            "code": "AUTH_REQUIRED",
             "message": "An API key is required to access this resource.",
         },
     }
@@ -134,7 +134,7 @@ def test_middleware_logs_misconfiguration(caplog: pytest.LogCaptureFixture) -> N
     assert response.json() == {
         "ok": False,
         "error": {
-            "code": "INTERNAL_ERROR",
+            "code": "AUTH_REQUIRED",
             "message": "An API key is required to access this resource.",
         },
     }
@@ -147,18 +147,28 @@ def test_middleware_logs_misconfiguration(caplog: pytest.LogCaptureFixture) -> N
     assert record.method == "GET"
 
 
-def test_invalid_api_key_returns_forbidden(caplog: pytest.LogCaptureFixture) -> None:
+@pytest.mark.parametrize(
+    "headers",
+    (
+        {"X-API-Key": "secondary"},
+        {"Authorization": "ApiKey secondary"},
+        {"Authorization": "Bearer secondary"},
+    ),
+)
+def test_invalid_api_key_returns_forbidden(
+    headers: Mapping[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
     security = _security_config(require_auth_default=True, api_keys=("primary",))
     app = _create_app(security=security)
 
     with TestClient(app) as client, caplog.at_level(logging.INFO):
-        response = client.get("/protected", headers={"X-API-Key": "secondary"})
+        response = client.get("/protected", headers=headers)
 
     assert response.status_code == 403
     assert response.json() == {
         "ok": False,
         "error": {
-            "code": "INTERNAL_ERROR",
+            "code": "AUTH_REQUIRED",
             "message": "The provided API key is not valid.",
         },
     }
@@ -169,3 +179,30 @@ def test_invalid_api_key_returns_forbidden(caplog: pytest.LogCaptureFixture) -> 
     assert record.status == "error"
     assert record.path == "/protected"
     assert record.method == "GET"
+
+
+@pytest.mark.parametrize(
+    "headers",
+    (
+        {},
+        {"Authorization": "Basic secret"},
+        {"Authorization": "ApiKey "},
+        {"Authorization": "Bearer "},
+        {"X-API-Key": ""},
+    ),
+)
+def test_missing_api_key_variants_return_unauthorized(headers: Mapping[str, str]) -> None:
+    security = _security_config(require_auth_default=True, api_keys=("primary",))
+    app = _create_app(security=security)
+
+    with TestClient(app) as client:
+        response = client.get("/protected", headers=headers)
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "ok": False,
+        "error": {
+            "code": "AUTH_REQUIRED",
+            "message": "An API key is required to access this resource.",
+        },
+    }
