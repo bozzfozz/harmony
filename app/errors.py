@@ -106,6 +106,8 @@ class AuthenticationRequiredError(AppError):
         meta: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> None:
+        if headers is None and status_code == status.HTTP_401_UNAUTHORIZED:
+            headers = {"WWW-Authenticate": "APIKey"}
         super().__init__(
             message=message,
             code=ErrorCode.AUTH_REQUIRED,
