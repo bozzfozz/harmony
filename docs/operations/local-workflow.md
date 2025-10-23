@@ -1,6 +1,6 @@
 # Lokaler Workflow ohne zentrale Build-Pipeline
 
-Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen basieren auf nachvollziehbaren Logs der folgenden Skripte und Makefile-Targets.
+Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend prüft der GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows/ci.yml) jede Pull-Request sowie Pushes auf `main` mit denselben Kern-Gates, damit Beitragsende ihre lokalen Logs direkt mit den CI-Ergebnissen abgleichen können.
 
 ## Pflichtkommandos
 
@@ -19,6 +19,17 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
 
 **Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all`) mit einem Fehler abgebrochen.
+
+## GitHub Actions `backend-ci`
+
+Der Workflow stellt sicher, dass jede Änderung im Repository die wichtigsten Backend-Gates durchläuft:
+
+- **Format-Check:** `make fmt` läuft im Check-Modus (`git diff --exit-code` beendet den Lauf bei Formatierungsdrift).
+- **Linting & Typen:** `make lint` deckt Ruff und MyPy ab.
+- **Tests mit Coverage:** `make test` läuft mit `PYTEST_ADDOPTS=--cov=app --cov-report=xml --junitxml=...` und erzeugt `reports/ci/coverage.xml` sowie `reports/ci/pytest-junit.xml` für Artefakt-Uploads.
+- **Smoke-Test:** `make smoke` startet den FastAPI-Server inklusive Health-Ping.
+
+Die hochgeladenen Artefakte (`pytest-junit`, `coverage-xml`) erleichtern Reviews und dokumentieren fehlgeschlagene Läufe. Beitragsende sollten vor jedem Push dieselben Targets lokal ausführen und die erzeugten Logs im PR referenzieren.
 
 Der Readiness-Self-Check überwacht zusätzlich alle Pflicht-Templates sowie `app/ui/static/css/app.css`, `app/ui/static/js/htmx.min.js` und `app/ui/static/icons.svg`. Fehlt eines dieser Artefakte, melden `/api/health/ready`, `/api/system/ready` und `/api/system/status` einen degradierten Zustand.
 
