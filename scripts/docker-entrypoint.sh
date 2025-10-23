@@ -203,6 +203,87 @@ LIVE_PATH = os.environ.get("APP_LIVE_PATH", "/live")
 _MODULE_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_.]*$")
 
 
+def _parse_owner(value: str | None, *, kind: str, fallback: int) -> int:
+    if value is None or value == "":
+        return fallback
+    try:
+        candidate = int(value, 10)
+    except ValueError as exc:  # pragma: no cover - config validation at runtime
+        print(
+            f"[entrypoint] Invalid {kind} value '{value}': {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if candidate < 0:
+        print(
+            f"[entrypoint] Invalid {kind} value '{value}': must be non-negative",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return candidate
+
+
+def _drop_privileges(target_uid: int, target_gid: int) -> None:
+    current_uid = os.getuid()
+    current_gid = os.getgid()
+    if (current_uid, current_gid) == (target_uid, target_gid):
+        print(
+            f"[entrypoint] running as requested identity {current_uid}:{current_gid}"
+        )
+        return
+    if current_uid != 0:
+        print(
+            "[entrypoint] insufficient permissions to change identity "
+            f"{current_uid}:{current_gid} -> {target_uid}:{target_gid}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(
+        f"[entrypoint] switching identity {current_uid}:{current_gid} -> {target_uid}:{target_gid}"
+    )
+    try:
+        if hasattr(os, "setgroups"):
+            os.setgroups([target_gid])
+    except OSError as exc:
+        print(
+            "[entrypoint] failed to drop supplementary groups "
+            f"for {target_gid}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        os.setgid(target_gid)
+    except OSError as exc:
+        print(
+            f"[entrypoint] failed to setgid({target_gid}): {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        os.setuid(target_uid)
+    except OSError as exc:
+        print(
+            f"[entrypoint] failed to setuid({target_uid}): {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    final_uid = os.getuid()
+    final_gid = os.getgid()
+    if (final_uid, final_gid) != (target_uid, target_gid):
+        print(
+            "[entrypoint] privilege drop verification failed: "
+            f"expected {target_uid}:{target_gid}, got {final_uid}:{final_gid}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(
+        f"[entrypoint] switched identity to {final_uid}:{final_gid}")
+
+
 def _combine_extra_args(argv: List[str]) -> List[str]:
     extras: List[str] = []
     extra_env = os.environ.get("UVICORN_EXTRA_ARGS")
@@ -266,6 +347,13 @@ def _resolve_port() -> int:
 
 
 def main(argv: List[str]) -> None:
+    target_uid = _parse_owner(
+        os.environ.get("PUID"), kind="PUID", fallback=os.getuid()
+    )
+    target_gid = _parse_owner(
+        os.environ.get("PGID"), kind="PGID", fallback=os.getgid()
+    )
+    _drop_privileges(target_uid, target_gid)
     extras = _sanitize_extra_args(_combine_extra_args(argv))
     port = _resolve_port()
     print(f"[entrypoint] resolved APP_PORT={port}")
