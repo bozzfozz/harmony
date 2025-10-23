@@ -25,7 +25,7 @@ async def call_provider():
 
 async def safe_call():
     def classify(err: Exception) -> RetryDirective:
-        return RetryDirective(retry=isinstance(err, TimeoutError))
+        return RetryDirective(retry=isinstance(err, TimeoutError), error=err)
 
     return await with_retry(
         call_provider,

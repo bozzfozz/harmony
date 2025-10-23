@@ -92,19 +92,19 @@ class ArtistGateway:
                 artist_id=artist_identifier,
                 name=artist_identifier,
             )
-        except ProviderGatewayError as error:
+        except ProviderGatewayError as gateway_error:
             return ArtistGatewayResult(
                 provider=provider_label,
                 artist=None,
                 releases=tuple(),
-                error=error,
-                retryable=self._is_retryable(error),
+                error=gateway_error,
+                retryable=self._is_retryable(gateway_error),
             )
 
         if artist is not None and artist.source:
             provider_label = artist.source
 
-        error: ProviderGatewayError | None = None
+        release_error: ProviderGatewayError | None = None
         releases: tuple[ProviderRelease, ...] = ()
         if artist is not None:
             release_identifier = artist.source_id or artist_identifier
@@ -115,8 +115,8 @@ class ArtistGateway:
                         release_identifier,
                         limit=limit,
                     )
-                except ProviderGatewayError as release_error:
-                    error = release_error
+                except ProviderGatewayError as fetched_error:
+                    release_error = fetched_error
                 else:
                     releases = tuple(release_list)
 
@@ -124,8 +124,8 @@ class ArtistGateway:
             provider=provider_label,
             artist=artist,
             releases=releases,
-            error=error,
-            retryable=self._is_retryable(error),
+            error=release_error,
+            retryable=self._is_retryable(release_error),
         )
 
     @staticmethod

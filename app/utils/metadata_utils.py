@@ -236,9 +236,9 @@ def _normalise_text(value: Any) -> str | None:
                 return nested
     if isinstance(value, list):
         for item in value:
-            text = _normalise_text(item)
-            if text:
-                return text
+            candidate = _normalise_text(item)
+            if candidate:
+                return candidate
     return None
 
 

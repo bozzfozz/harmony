@@ -25,6 +25,24 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _coerce_int(value: object | None, *, default: int | None = None) -> int | None:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(text)
+        except ValueError:
+            return default
+    return default
+
+
 @dataclass(slots=True)
 class DownloadSidecar:
     """Persisted state for an in-flight download."""
@@ -65,18 +83,19 @@ class DownloadSidecar:
                 updated = _now()
         else:
             updated = _now()
+        attempt_value = _coerce_int(payload.get("attempt"), default=1)
+        attempt = attempt_value if attempt_value and attempt_value > 0 else 1
+        bytes_written_value = _coerce_int(payload.get("bytes_written"))
         return cls(
             path=path,
             batch_id=str(payload.get("batch_id")),
             item_id=str(payload.get("item_id")),
             dedupe_key=str(payload.get("dedupe_key")),
-            attempt=int(payload.get("attempt", 1)),
+            attempt=attempt,
             status=str(payload.get("status", "pending")),
             source_path=str(payload.get("source_path")) if payload.get("source_path") else None,
             final_path=str(payload.get("final_path")) if payload.get("final_path") else None,
-            bytes_written=int(payload.get("bytes_written"))
-            if payload.get("bytes_written") is not None
-            else None,
+            bytes_written=bytes_written_value,
             download_id=str(payload.get("download_id")) if payload.get("download_id") else None,
             updated_at=updated,
         )

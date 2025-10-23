@@ -44,6 +44,12 @@ scenario.
 
 ## Running the suite
 
+Run the static type checks before executing tests:
+
+```bash
+mypy --config-file mypy.ini
+```
+
 Execute the full backend suite locally via:
 
 ```bash

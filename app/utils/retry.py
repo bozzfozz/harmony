@@ -16,8 +16,8 @@ class RetryDirective:
     """Instruction returned from ``classify_err`` for ``with_retry``."""
 
     retry: bool
+    error: Exception
     delay_override_ms: int | None = None
-    error: Exception | None = None
 
 
 AsyncFactory = Callable[[], Awaitable[T]]
@@ -48,7 +48,7 @@ def exp_backoff_delays(base_ms: int, max_attempts: int, jitter_pct: int) -> list
 
 def _resolve_directive(result: RetryDirective | bool, error: Exception) -> RetryDirective:
     if isinstance(result, RetryDirective):
-        resolved_error = result.error if result.error is not None else error
+        resolved_error = result.error
         return RetryDirective(
             retry=bool(result.retry),
             delay_override_ms=(
@@ -103,7 +103,10 @@ async def with_retry(
             directive = _resolve_directive(classify_err(exc), exc)
             should_retry = directive.retry and attempt < max_attempts
             if not should_retry:
-                raise directive.error from exc if directive.error is not exc else exc
+                final_error = directive.error
+                if final_error is exc:
+                    raise exc
+                raise final_error from exc
 
             delay_ms = directive.delay_override_ms
             if delay_ms is None:

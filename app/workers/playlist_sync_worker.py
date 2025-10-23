@@ -321,12 +321,13 @@ class PlaylistSyncWorker:
 
         track_count: int = 0
         tracks = payload.get("tracks")
-        if isinstance(tracks, dict):
-            total = tracks.get("total")
-            try:
-                track_count = int(total)
-            except (TypeError, ValueError):
-                track_count = 0
+        if isinstance(tracks, Mapping):
+            total_value = tracks.get("total")
+            if isinstance(total_value, (int, float, str)):
+                try:
+                    track_count = int(total_value)
+                except (TypeError, ValueError):
+                    track_count = 0
         elif isinstance(tracks, Iterable) and not isinstance(tracks, str | bytes):
             track_count = sum(1 for _ in tracks)
         else:

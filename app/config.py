@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
@@ -630,7 +630,7 @@ class UiConfig:
 
 
 _UI_LIVE_UPDATE_MODES: frozenset[str] = frozenset({"polling", "sse"})
-_DEFAULT_UI_LIVE_UPDATES = "polling"
+_DEFAULT_UI_LIVE_UPDATES: Literal["polling"] = "polling"
 
 
 def _normalize_docs_base_url(value: str | None) -> str | None:
@@ -663,8 +663,9 @@ def _parse_ui_config(env: Mapping[str, Any]) -> UiConfig:
             _DEFAULT_UI_LIVE_UPDATES,
         )
         normalized = _DEFAULT_UI_LIVE_UPDATES
-    return UiConfig(  # type: ignore[arg-type]
-        live_updates=normalized,
+    live_mode = cast(Literal["polling", "sse"], normalized)
+    return UiConfig(
+        live_updates=live_mode,
         docs_base_url=docs_base_url,
     )
 

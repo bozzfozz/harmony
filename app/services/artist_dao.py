@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 import hashlib
 import json
+from typing import SupportsInt
 
 from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -78,10 +79,24 @@ def _normalise_datetime(value: datetime | None) -> datetime | None:
 def _coerce_int(value: object | None) -> int | None:
     if value is None:
         return None
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+    if isinstance(value, SupportsInt):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _coerce_date(value: object | None) -> date | None:

@@ -39,10 +39,17 @@ class SearchQuery(BaseModel):
     @field_validator("sources", mode="before")
     @classmethod
     def _normalise_sources(cls, value: Sequence[str] | None) -> list[SourceEnum]:
-        if value in (None, "", []):
+        if value is None:
             return [SourceEnum.SPOTIFY, SourceEnum.SOULSEEK]
+
+        items: Sequence[str]
+        if isinstance(value, str):
+            items = [value]
+        else:
+            items = value
+
         normalised: list[SourceEnum] = []
-        for item in value:
+        for item in items:
             candidate = str(item).strip().lower()
             if not candidate:
                 continue
@@ -65,10 +72,17 @@ class SearchQuery(BaseModel):
     @field_validator("format_priority", mode="before")
     @classmethod
     def _normalise_formats(cls, value: Sequence[str] | None) -> list[str] | None:
-        if value in (None, ""):
+        if value is None:
             return None
+
+        items: Sequence[str]
+        if isinstance(value, str):
+            items = [value]
+        else:
+            items = value
+
         formatted: list[str] = []
-        for item in value:
+        for item in items:
             if not item:
                 continue
             candidate = str(item).strip().upper()

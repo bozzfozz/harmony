@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import asyncio
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -48,8 +49,10 @@ def _normalise_status(value: str) -> str:
 async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
     check = getattr(provider, "check_health", None)
     if check is None:
-        details: MutableMapping[str, Any] = {"reason": "unsupported"}
-        return ProviderHealth(provider=provider.name, status="degraded", details=details)
+        detail_payload: MutableMapping[str, Any] = {"reason": "unsupported"}
+        return ProviderHealth(
+            provider=provider.name, status="degraded", details=detail_payload
+        )
 
     try:
         result = check()
@@ -68,22 +71,23 @@ async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
         )
 
     status: str
-    details: Mapping[str, Any]
+    detail_mapping: Mapping[str, Any]
     if isinstance(result, ProviderHealth):
         status = result.status
-        details = result.details
+        detail_mapping = result.details
     elif isinstance(result, Mapping):
         status = _normalise_status(str(result.get("status", "unknown")))
-        details = result.get("details") if isinstance(result.get("details"), Mapping) else {}
+        raw_details = result.get("details")
+        detail_mapping = dict(raw_details) if isinstance(raw_details, Mapping) else {}
     elif isinstance(result, bool):
         status = "ok" if result else "down"
-        details = {}
+        detail_mapping = {}
     else:
         status = _normalise_status(str(result))
-        details = {}
+        detail_mapping = {}
 
     status = _normalise_status(status)
-    return ProviderHealth(provider=provider.name, status=status, details=details)
+    return ProviderHealth(provider=provider.name, status=status, details=detail_mapping)
 
 
 def _overall_status(reports: Sequence[ProviderHealth]) -> str:

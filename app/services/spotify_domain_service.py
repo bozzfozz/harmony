@@ -152,7 +152,8 @@ class SpotifyDomainService:
 
     def get_status(self) -> SpotifyServiceStatus:
         free_available = self._resolve_free_availability()
-        pro_usable = self._pro_available and self._spotify is not None
+        spotify = self._spotify
+        pro_usable = self._pro_available and spotify is not None
         if not pro_usable:
             return SpotifyServiceStatus(
                 status="unconfigured",
@@ -162,7 +163,8 @@ class SpotifyDomainService:
             )
 
         try:
-            authenticated = bool(self._spotify.is_authenticated())
+            assert spotify is not None
+            authenticated = bool(spotify.is_authenticated())
         except Exception:  # pragma: no cover - defensive guard
             authenticated = False
 
@@ -376,9 +378,12 @@ class SpotifyDomainService:
             tracks_payload = entry.get("tracks")
             if isinstance(tracks_payload, list):
                 track_items = [track for track in tracks_payload if isinstance(track, dict)]
-            elif isinstance(tracks_payload, dict):
-                raw_items = tracks_payload.get("items") if isinstance(tracks_payload, dict) else []
-                track_items = [track for track in raw_items if isinstance(track, dict)]
+            elif isinstance(tracks_payload, Mapping):
+                raw_items = tracks_payload.get("items")
+                if isinstance(raw_items, list):
+                    track_items = [track for track in raw_items if isinstance(track, dict)]
+                else:
+                    track_items = []
             else:
                 track_items = []
             albums.append({"album": album_data, "tracks": track_items})
@@ -586,11 +591,21 @@ class SpotifyDomainService:
             seed_genres=list(seed_genres) if seed_genres else None,
             limit=limit,
         )
-        tracks = response.get("tracks") if isinstance(response, dict) else []
-        seeds = response.get("seeds") if isinstance(response, dict) else []
+        tracks_payload = response.get("tracks") if isinstance(response, Mapping) else []
+        seeds_payload = response.get("seeds") if isinstance(response, Mapping) else []
+        track_entries = (
+            [track for track in tracks_payload if isinstance(track, dict)]
+            if isinstance(tracks_payload, list)
+            else []
+        )
+        seed_entries = (
+            [seed for seed in seeds_payload if isinstance(seed, dict)]
+            if isinstance(seeds_payload, list)
+            else []
+        )
         return {
-            "tracks": [track for track in tracks if isinstance(track, dict)],
-            "seeds": [seed for seed in seeds if isinstance(seed, dict)],
+            "tracks": track_entries,
+            "seeds": seed_entries,
         }
 
     # FREE ingest -------------------------------------------------------

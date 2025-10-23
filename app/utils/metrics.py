@@ -7,7 +7,9 @@ from threading import RLock
 from typing import Final
 
 try:  # pragma: no cover - exercised indirectly in tests
-    from prometheus_client import CollectorRegistry, Counter, Histogram
+    from prometheus_client import CollectorRegistry as PromCollectorRegistry
+    from prometheus_client import Counter as PromCounter
+    from prometheus_client import Histogram as PromHistogram
 except ModuleNotFoundError:  # pragma: no cover - fallback for offline environments
 
     class Sample:
@@ -24,7 +26,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
         def __init__(self, samples: list[Sample]) -> None:
             self.samples = samples
 
-    class CollectorRegistry:  # type: ignore[override]
+    class FallbackCollectorRegistry:  # type: ignore[override]
         def __init__(self) -> None:
             self._metrics: list[object] = []
 
@@ -43,7 +45,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
     class _CounterChild:
         __slots__ = ("_parent", "_labels")
 
-        def __init__(self, parent: Counter, labels: tuple[str, ...]) -> None:
+        def __init__(self, parent: "FallbackCounter", labels: tuple[str, ...]) -> None:
             self._parent = parent
             self._labels = labels
 
@@ -52,13 +54,13 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
                 self._parent._values.get(self._labels, 0.0) + amount
             )
 
-    class Counter:  # type: ignore[override]
+    class FallbackCounter:  # type: ignore[override]
         def __init__(
             self,
             name: str,
             documentation: str,
             labelnames: tuple[str, ...] | tuple[str, ...] = (),
-            registry: CollectorRegistry | None = None,
+            registry: FallbackCollectorRegistry | None = None,
         ) -> None:
             self._name = name
             self._labelnames = tuple(labelnames or ())
@@ -86,7 +88,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
     class _HistogramChild:
         __slots__ = ("_parent", "_labels")
 
-        def __init__(self, parent: Histogram, labels: tuple[str, ...]) -> None:
+        def __init__(self, parent: "FallbackHistogram", labels: tuple[str, ...]) -> None:
             self._parent = parent
             self._labels = labels
 
@@ -95,14 +97,14 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
             store["count"] += 1.0
             store["sum"] += float(value)
 
-    class Histogram:  # type: ignore[override]
+    class FallbackHistogram:  # type: ignore[override]
         def __init__(
             self,
             name: str,
             documentation: str,
             labelnames: tuple[str, ...] | tuple[str, ...] = (),
             buckets: tuple[float, ...] | None = None,
-            registry: CollectorRegistry | None = None,
+            registry: FallbackCollectorRegistry | None = None,
         ) -> None:
             self._name = name
             self._labelnames = tuple(labelnames or ())
@@ -138,6 +140,14 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for offline environme
                 )
             return samples
 
+    PromCollectorRegistry = FallbackCollectorRegistry
+    PromCounter = FallbackCounter
+    PromHistogram = FallbackHistogram
+
+CollectorRegistry = PromCollectorRegistry
+Counter = PromCounter
+Histogram = PromHistogram
+
 
 __all__ = [
     "get_registry",
@@ -160,12 +170,12 @@ _DEFAULT_BUCKETS: Final[tuple[float, ...]] = (
 )
 
 _registry_lock = RLock()
-_registry: CollectorRegistry = CollectorRegistry()
-_counters: dict[tuple[str, tuple[str, ...]], Counter] = {}
-_histograms: dict[tuple[str, tuple[str, ...]], Histogram] = {}
+_registry: PromCollectorRegistry = PromCollectorRegistry()
+_counters: dict[tuple[str, tuple[str, ...]], PromCounter] = {}
+_histograms: dict[tuple[str, tuple[str, ...]], PromHistogram] = {}
 
 
-def get_registry() -> CollectorRegistry:
+def get_registry() -> PromCollectorRegistry:
     """Return the shared Prometheus registry used for Harmony metrics."""
 
     return _registry
@@ -176,7 +186,7 @@ def reset_registry() -> None:
 
     global _registry
     with _registry_lock:
-        _registry = CollectorRegistry()
+        _registry = PromCollectorRegistry()
         _counters.clear()
         _histograms.clear()
 
@@ -186,7 +196,7 @@ def counter(
     documentation: str,
     *,
     label_names: Sequence[str] | None = None,
-) -> Counter:
+) -> PromCounter:
     """Return (or create) a labelled Prometheus counter registered globally."""
 
     labels = tuple(label_names or ())
@@ -194,7 +204,7 @@ def counter(
     with _registry_lock:
         metric = _counters.get(cache_key)
         if metric is None:
-            metric = Counter(
+            metric = PromCounter(
                 name,
                 documentation,
                 labelnames=labels,
@@ -210,7 +220,7 @@ def histogram(
     *,
     label_names: Sequence[str] | None = None,
     buckets: Sequence[float] | None = None,
-) -> Histogram:
+) -> PromHistogram:
     """Return (or create) a labelled Prometheus histogram."""
 
     labels = tuple(label_names or ())
@@ -218,7 +228,7 @@ def histogram(
     with _registry_lock:
         metric = _histograms.get(cache_key)
         if metric is None:
-            metric = Histogram(
+            metric = PromHistogram(
                 name,
                 documentation,
                 labelnames=labels,

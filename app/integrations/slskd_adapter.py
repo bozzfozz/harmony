@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from types import MappingProxyType
 from typing import Any
@@ -352,6 +352,16 @@ class SlskdAdapter(TrackProvider):
     client: httpx.AsyncClient | None = None
     search_path: str = _DEFAULT_SEARCH_PATH
     health_path: str = _DEFAULT_HEALTH_PATH
+    _base_url: str = field(init=False, repr=False)
+    _timeout_ms: int = field(init=False, repr=False)
+    _preferred_formats: tuple[str, ...] = field(init=False, repr=False)
+    _format_ranking: Mapping[str, int] = field(init=False, repr=False)
+    _max_results: int = field(init=False, repr=False)
+    _headers: Mapping[str, str] = field(init=False, repr=False)
+    _client: httpx.AsyncClient = field(init=False, repr=False)
+    _owns_client: bool = field(init=False, repr=False)
+    _search_path: str = field(init=False, repr=False)
+    _health_path: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         normalized_base = _normalize_base_url(self.base_url)

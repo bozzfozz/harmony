@@ -7,6 +7,8 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,7 +40,7 @@ class WatchlistService:
     """Manage watchlist entries and expose CRUD operations to the API layer."""
 
     session_factory: SessionFactory = field(default=session_scope, repr=False)
-    _logger: any = field(default_factory=lambda: get_logger(__name__), init=False, repr=False)
+    _logger: Any = field(default_factory=lambda: get_logger(__name__), init=False, repr=False)
 
     def reset(self) -> None:
         """Reset persisted watchlist entries (primarily used in tests)."""

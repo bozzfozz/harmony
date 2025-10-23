@@ -8,9 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import random
-from typing import (
-    Any,
-)
+from typing import Any, Protocol, TypeAlias, cast
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +19,9 @@ from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.orchestrator.handlers import (
     SyncHandlerDeps,
+    ArtworkService,
+    LyricsService,
+    MetadataService,
     calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
     extract_basic_metadata,
     extract_ingest_item_id,
@@ -65,10 +66,18 @@ AsyncEnqueue = Callable[[str, Mapping[str, Any]], Awaitable[QueueJobDTO]]
 AsyncFetchReady = Callable[[str], Awaitable[list[QueueJobDTO]]]
 AsyncLease = Callable[[int, str, int | None], Awaitable[QueueJobDTO | None]]
 AsyncComplete = Callable[[int, str, Mapping[str, Any] | None], Awaitable[bool]]
-AsyncFail = Callable[
-    [int, str, str | None, int | None, datetime | None, str | None],
-    Awaitable[bool],
-]
+class AsyncFail(Protocol):
+    def __call__(
+        self,
+        job_id: int,
+        job_type: str,
+        error: str | None = ...,
+        *,
+        retry_in: int | None = ...,
+        available_at: datetime | None = ...,
+        stop_reason: str | None = ...,
+    ) -> Awaitable[bool]:
+        ...
 AsyncRelease = Callable[[str], Awaitable[None]]
 
 
@@ -135,7 +144,7 @@ ALLOWED_STATES = {
 DEFAULT_CONCURRENCY = 2
 DEFAULT_IDLE_POLL = 15.0
 
-RetryConfig = RetryPolicy
+RetryConfig: TypeAlias = RetryPolicy
 
 
 def _safe_int(value: str | None, default: int) -> int:
@@ -266,9 +275,9 @@ class SyncWorker:
     def _build_handler_deps(self) -> SyncHandlerDeps:
         return SyncHandlerDeps(
             soulseek_client=self._client,
-            metadata_service=self._metadata_worker,
-            artwork_service=self._artwork,
-            lyrics_service=self._lyrics,
+            metadata_service=cast(MetadataService | None, self._metadata_worker),
+            artwork_service=cast(ArtworkService | None, self._artwork),
+            lyrics_service=cast(LyricsService | None, self._lyrics),
             music_dir=self._music_dir,
             retry_policy_provider=self._retry_provider,
             rng=self._retry_rng,
@@ -523,7 +532,7 @@ class SyncWorker:
             await self._complete_job(
                 job.id,
                 self._job_type,
-                result_payload=None,
+                None,
             )
             increment_counter("metrics.sync.jobs_completed")
             self._record_heartbeat()
@@ -627,10 +636,13 @@ class SyncWorker:
     def _peek_queue_entry(self) -> _PriorityQueueEntry | None:
         if self._queue.empty():
             return None
-        try:
-            queue_priority, sequence, job = self._queue._queue[0]
-        except IndexError:  # pragma: no cover - defensive
+        internal_queue = cast(
+            list[tuple[int, int, QueueJobDTO | None]],
+            getattr(self._queue, "_queue", []),
+        )
+        if not internal_queue:
             return None
+        queue_priority, sequence, job = internal_queue[0]
         if job is None:
             return None
         return _PriorityQueueEntry(queue_priority, sequence, job)

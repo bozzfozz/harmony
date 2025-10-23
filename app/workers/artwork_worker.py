@@ -512,7 +512,7 @@ class ArtworkWorker:
         )
 
         try:
-            inferred = artwork_utils.infer_spotify_album_id(context)
+            inferred = artwork_utils.infer_spotify_album_id(cast(Download, context))
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.debug("Album inference failed for download %s: %s", context.id, exc)
         else:
@@ -712,28 +712,28 @@ class ArtworkWorker:
         download: DownloadContext | None,
     ) -> Iterable[Mapping[str, Any]]:
         sources: list[Mapping[str, Any]] = []
-        for payload in (job.metadata,):
-            if isinstance(payload, Mapping) and payload not in sources:
-                sources.append(payload)
-                nested = payload.get("metadata")
-                if isinstance(nested, Mapping):
-                    sources.append(nested)
+        for metadata_payload in (job.metadata,):
+            if isinstance(metadata_payload, Mapping) and metadata_payload not in sources:
+                sources.append(metadata_payload)
+                nested_metadata = metadata_payload.get("metadata")
+                if isinstance(nested_metadata, Mapping):
+                    sources.append(nested_metadata)
 
         if download and download.request_payload:
-            payload = download.request_payload
-            if isinstance(payload, Mapping) and payload not in sources:
-                sources.append(payload)
-                nested = payload.get("metadata")
-                if isinstance(nested, Mapping):
-                    sources.append(nested)
+            request_payload = download.request_payload
+            if isinstance(request_payload, Mapping) and request_payload not in sources:
+                sources.append(request_payload)
+                nested_request = request_payload.get("metadata")
+                if isinstance(nested_request, Mapping):
+                    sources.append(nested_request)
 
-            track_payload = payload.get("track") if isinstance(payload, Mapping) else None
-            if isinstance(track_payload, Mapping):
-                sources.append(track_payload)
+                track_payload = request_payload.get("track")
+                if isinstance(track_payload, Mapping):
+                    sources.append(track_payload)
 
-            file_payload = payload.get("file") if isinstance(payload, Mapping) else None
-            if isinstance(file_payload, Mapping):
-                sources.append(file_payload)
+                file_payload = request_payload.get("file")
+                if isinstance(file_payload, Mapping):
+                    sources.append(file_payload)
 
         return sources
 
