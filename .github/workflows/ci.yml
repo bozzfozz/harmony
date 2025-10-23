@@ -1,0 +1,80 @@
+name: backend-ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-test.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt -r requirements-test.txt
+          pip install -e .
+
+      - name: Check formatting (make fmt)
+        run: |
+          make fmt
+          git diff --exit-code
+
+      - name: Run lint (make lint)
+        run: make lint
+
+      - name: Run tests (make test)
+        env:
+          PYTEST_ADDOPTS: >
+            --cov=app
+            --cov-report=xml:reports/ci/coverage.xml
+            --cov-report=term
+            --junitxml=reports/ci/pytest-junit.xml
+        run: |
+          mkdir -p reports/ci
+          make test
+
+      - name: Run backend smoke checks (make smoke)
+        run: make smoke
+
+      - name: Upload pytest JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-junit
+          path: reports/ci/pytest-junit.xml
+          if-no-files-found: warn
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: reports/ci/coverage.xml
+          if-no-files-found: warn
