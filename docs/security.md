@@ -45,6 +45,7 @@ For a complete list of security-related environment variables refer to the
 
 ## Security scans
 
-Führe `pip-audit -r requirements.txt` lokal aus, wenn du zusätzliche Security-Nachweise benötigst. Dokumentiere Ausnahmen im PR.
+Führe `pip-audit -r requirements.txt` lokal aus, wenn du zusätzliche Security-Nachweise für die Runtime-Pins benötigst. Dokumentiere
+Ausnahmen im PR.
 
 Zusätzliche Security-Tasks oder Toolchain-Anpassungen werden im Repository über reguläre CODX-Issues und Policies in [`AGENTS.md`](../AGENTS.md) gesteuert.

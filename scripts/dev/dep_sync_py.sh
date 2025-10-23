@@ -28,5 +28,8 @@ if ! command -v pip-extra-reqs >/dev/null 2>&1; then
   fi
   echo "[dep-sync] pip-extra-reqs not installed; skipping extra-requirements scan." >&2
 else
-  pip-extra-reqs --requirements-file requirements.txt app tests
+  requirements_args=(--requirements-file requirements.txt)
+  [[ -f requirements-test.txt ]] && requirements_args+=(--requirements-file requirements-test.txt)
+  [[ -f requirements-dev.txt ]] && requirements_args+=(--requirements-file requirements-dev.txt)
+  pip-extra-reqs "${requirements_args[@]}" app tests
 fi

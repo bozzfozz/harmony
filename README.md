@@ -117,6 +117,22 @@ documentation hub in [`docs/README.md`](docs/README.md). Highlights include:
 - [`docs/install/docker.md`](docs/install/docker.md)
 - [`docs/troubleshooting.md`](docs/troubleshooting.md)
 
+## Dependency management
+
+Runtime dependencies are pinned in [`requirements.txt`](requirements.txt) and power the
+production Docker image. Local development installs the runtime stack first, then tooling
+and test libraries:
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt -r requirements-test.txt
+```
+
+`requirements-dev.txt` provides linting and static-analysis tools, while
+`requirements-test.txt` contains pytest and asyncio fixtures for the test suite. Regenerate
+the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
+are introduced.
+
 ## Support & policies
 
 - Operations & incidents: see the [HDM runbook](docs/operations/runbooks/hdm.md) and
