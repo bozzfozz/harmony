@@ -17,7 +17,7 @@ from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
 from app.db import SessionCallable, get_session, run_session
-from app.errors import AppError, ErrorCode
+from app.errors import AuthenticationRequiredError
 from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
 from app.logging import get_logger
@@ -264,10 +264,8 @@ def require_api_key(request: Request, *, force: bool = False) -> None:
                 "method": request.method,
             },
         )
-        raise AppError(
+        raise AuthenticationRequiredError(
             "An API key is required to access this resource.",
-            code=ErrorCode.INTERNAL_ERROR,
-            http_status=status.HTTP_401_UNAUTHORIZED,
         )
 
     presented_key = _extract_presented_key(request)
@@ -280,10 +278,8 @@ def require_api_key(request: Request, *, force: bool = False) -> None:
                 "method": request.method,
             },
         )
-        raise AppError(
+        raise AuthenticationRequiredError(
             "An API key is required to access this resource.",
-            code=ErrorCode.INTERNAL_ERROR,
-            http_status=status.HTTP_401_UNAUTHORIZED,
         )
 
     for valid_key in security.api_keys:
@@ -298,8 +294,7 @@ def require_api_key(request: Request, *, force: bool = False) -> None:
             "method": request.method,
         },
     )
-    raise AppError(
+    raise AuthenticationRequiredError(
         "The provided API key is not valid.",
-        code=ErrorCode.INTERNAL_ERROR,
-        http_status=status.HTTP_403_FORBIDDEN,
+        status_code=status.HTTP_403_FORBIDDEN,
     )
