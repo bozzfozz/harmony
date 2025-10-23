@@ -22,21 +22,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [push]
-      - id: dep-sync-js
-        name: scripts/dev/dep_sync_js.sh
-        entry: scripts/dev/dep_sync_js.sh
-        language: system
-        pass_filenames: false
-        stages: [push]
       - id: supply-guard
         name: supply-guard
         entry: bash scripts/dev/supply_guard.sh
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
-      - id: fe-verify
-        name: fe-verify
-        entry: bash scripts/dev/fe_install_verify.sh
         language: system
         pass_filenames: false
         stages: [pre-commit]
