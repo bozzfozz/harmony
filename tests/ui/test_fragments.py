@@ -1040,6 +1040,7 @@ class _StubWatchlistService:
         self.updated: list[tuple[str, int]] = []
         self.created: list[str] = []
         self.paused: list[str] = []
+        self.pause_payloads: list[tuple[str | None, datetime | None]] = []
         self.resumed: list[str] = []
         self.deleted: list[str] = []
         self.pause_exception: Exception | None = None
@@ -1099,9 +1100,17 @@ class _StubWatchlistService:
         self.entries = [row] + [entry for entry in self.entries if entry.artist_key != artist_key]
         return self._make_table()
 
-    async def pause_entry(self, request, *, artist_key: str) -> WatchlistTable:
+    async def pause_entry(
+        self,
+        request,
+        *,
+        artist_key: str,
+        reason: str | None = None,
+        resume_at: datetime | None = None,
+    ) -> WatchlistTable:
         self.async_calls.append("pause")
         await asyncio.sleep(0)
+        self.pause_payloads.append((reason, resume_at))
         if self.pause_exception:
             raise self.pause_exception
         self.paused.append(artist_key)
@@ -3186,6 +3195,8 @@ def test_watchlist_fragment_success(monkeypatch) -> None:
             assert "spotify:artist:1" in response.text
             assert 'data-test="watchlist-priority-input-spotify-artist-1"' in response.text
             assert 'data-test="watchlist-pause-spotify-artist-1"' in response.text
+            assert 'data-test="watchlist-pause-reason-spotify-artist-1"' in response.text
+            assert 'data-test="watchlist-pause-resume-at-spotify-artist-1"' in response.text
             assert 'data-test="watchlist-resume-spotify-artist-2"' in response.text
             assert 'data-test="watchlist-delete-spotify-artist-1"' in response.text
             assert 'name="csrftoken"' in response.text

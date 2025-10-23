@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pytest
+from datetime import datetime
+
 from fastapi import status
 
 from app.errors import AppError, ErrorCode
@@ -39,7 +41,12 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
             _login(client)
             response = client.post(
                 "/ui/watchlist/spotify:artist:stub/pause",
-                data={"limit": "25", "offset": "5"},
+                data={
+                    "limit": "25",
+                    "offset": "5",
+                    "reason": "Maintenance window",
+                    "resume_at": "2024-05-01T09:30",
+                },
                 headers=_csrf_headers(client),
             )
             _assert_html_response(response)
@@ -47,6 +54,9 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
             assert "Paused" in html
             assert 'data-test="watchlist-resume-spotify-artist-stub"' in html
             assert _watchlist_stub.paused == ["spotify:artist:stub"]
+            assert _watchlist_stub.pause_payloads == [
+                ("Maintenance window", datetime.fromisoformat("2024-05-01T09:30"))
+            ]
             assert "pause" in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
@@ -64,12 +74,33 @@ def test_watchlist_pause_app_error(monkeypatch, _watchlist_stub: _StubWatchlistS
             _login(client)
             response = client.post(
                 "/ui/watchlist/spotify:artist:stub/pause",
-                data={},
+                data={"reason": "Investigation"},
                 headers=_csrf_headers(client),
             )
             _assert_html_response(response, status_code=status.HTTP_502_BAD_GATEWAY)
             assert "Unable to pause entry." in response.text
+            assert _watchlist_stub.pause_payloads == [("Investigation", None)]
             assert "pause" in _watchlist_stub.async_calls
+    finally:
+        _reset_watchlist_override()
+
+
+def test_watchlist_pause_invalid_resume(
+    monkeypatch, _watchlist_stub: _StubWatchlistService
+) -> None:
+    _override_watchlist(_watchlist_stub)
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.post(
+                "/ui/watchlist/spotify:artist:stub/pause",
+                data={"resume_at": "invalid-date"},
+                headers=_csrf_headers(client),
+            )
+            _assert_html_response(response, status_code=status.HTTP_400_BAD_REQUEST)
+            assert "Please provide a valid resume date and time." in response.text
+            assert _watchlist_stub.pause_payloads == []
+            assert "pause" not in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
 

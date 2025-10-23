@@ -87,8 +87,15 @@
     "soulseek.user.path": "Directory path",
     "soulseek.discography.artist_id": "Artist ID",
     "soulseek.discography.artist_name": "Artist name",
+    "watchlist.pause_reason": "Pause reason",
+    "watchlist.resume_at": "Resume at",
   } -%}
   {{ labels.get(key, key) }}
+{%- endmacro %}
+
+{% macro form_optional_hint() -%}
+  {%- set hint = "Optional" -%}
+  {{ hint }}
 {%- endmacro %}
 
 {% macro form_help(key) -%}
@@ -268,6 +275,8 @@
   {%- set labels = {
     "watchlist.priority.input": "Priority",
     "downloads.priority.input": "Priority",
+    "watchlist.pause.reason_input": "Pause reason",
+    "watchlist.pause.resume_at_input": "Resume at",
   } -%}
   {{ labels.get(key, key) }}
 {%- endmacro %}

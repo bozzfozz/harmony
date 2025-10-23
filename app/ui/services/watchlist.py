@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -105,8 +106,15 @@ class WatchlistUiService:
         )
         return await self.list_entries_async(request)
 
-    async def pause_entry(self, request: Request, *, artist_key: str) -> WatchlistTable:
-        payload = WatchlistPauseRequest()
+    async def pause_entry(
+        self,
+        request: Request,
+        *,
+        artist_key: str,
+        reason: str | None = None,
+        resume_at: datetime | None = None,
+    ) -> WatchlistTable:
+        payload = WatchlistPauseRequest(reason=reason, resume_at=resume_at)
 
         def _run() -> WatchlistTable:
             watchlist_api.pause_watchlist_entry(
@@ -115,7 +123,14 @@ class WatchlistUiService:
                 request=request,
                 service=self._service,
             )
-            logger.info("watchlist.ui.pause", extra={"artist_key": artist_key})
+            logger.info(
+                "watchlist.ui.pause",
+                extra={
+                    "artist_key": artist_key,
+                    "has_reason": bool(payload.reason),
+                    "resume_at": payload.resume_at.isoformat() if payload.resume_at else None,
+                },
+            )
             return self.list_entries(request)
 
         return await asyncio.to_thread(_run)
