@@ -93,7 +93,9 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
 | `POST` | `/watchlist` | Fügt Artist zur Watchlist hinzu. |
 | `GET` | `/watchlist` | Listet alle Watchlist-Einträge. |
-| `DELETE` | `/watchlist/{id}` | Entfernt Eintrag (`{id}` = interne Watchlist-ID). |
+| `DELETE` | `/watchlist/{artist_key}` | Entfernt Eintrag (`{artist_key}` = Provider-Präfix plus Künstler-Key). |
+
+> **Hinweis:** `artist_key` muss dem Provider-Schlüssel entsprechen (z. B. `spotify:artist:123`), damit der Backend-Contract erfüllt wird.
 
 ## Settings & System
 
