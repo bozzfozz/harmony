@@ -58,9 +58,7 @@ def test_watchlist_pause_success(monkeypatch, _watchlist_stub: _StubWatchlistSer
             assert stored_reason == "Maintenance window"
             assert stored_resume is not None
             assert stored_resume.tzinfo is not None
-            assert stored_resume.astimezone(UTC) == datetime(
-                2024, 5, 1, 13, 30, tzinfo=UTC
-            )
+            assert stored_resume.astimezone(UTC) == datetime(2024, 5, 1, 13, 30, tzinfo=UTC)
             assert "pause" in _watchlist_stub.async_calls
     finally:
         _reset_watchlist_override()
@@ -215,6 +213,47 @@ def test_watchlist_delete_app_error(monkeypatch) -> None:
             _assert_html_response(response, status_code=status.HTTP_502_BAD_GATEWAY)
             assert "Unable to delete entry." in response.text
             assert "delete" in stub.async_calls
+    finally:
+        _reset_watchlist_override()
+
+
+def test_watchlist_create_with_pause_fields(
+    monkeypatch, _watchlist_stub: _StubWatchlistService
+) -> None:
+    _override_watchlist(_watchlist_stub)
+    try:
+        with _create_client(monkeypatch) as client:
+            _login(client)
+            response = client.post(
+                "/ui/watchlist",
+                data={
+                    "artist_key": "spotify:artist:new",
+                    "priority": "7",
+                    "pause_reason": "Vacation hold",
+                    "resume_at": "2024-06-01T10:30:00-04:00",
+                },
+                headers=_csrf_headers(client),
+            )
+            _assert_html_response(response)
+            html = response.text
+            assert "spotify:artist:new" in html
+            assert "Paused" in html
+            assert 'data-test="watchlist-resume-spotify-artist-new"' in html
+            assert _watchlist_stub.created == ["spotify:artist:new"]
+            assert "create" in _watchlist_stub.async_calls
+            assert "pause" in _watchlist_stub.async_calls
+            stored_reason, stored_resume = _watchlist_stub.pause_payloads[-1]
+            assert stored_reason == "Vacation hold"
+            assert stored_resume is not None
+            assert stored_resume.tzinfo is not None
+            assert stored_resume.astimezone(UTC) == datetime(
+                2024,
+                6,
+                1,
+                14,
+                30,
+                tzinfo=UTC,
+            )
     finally:
         _reset_watchlist_override()
 

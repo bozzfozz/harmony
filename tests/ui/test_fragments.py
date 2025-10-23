@@ -1068,6 +1068,8 @@ class _StubWatchlistService:
         *,
         artist_key: str,
         priority: int | None = None,
+        pause_reason: str | None = None,
+        resume_at: datetime | None = None,
     ) -> WatchlistTable:
         self.async_calls.append("create")
         await asyncio.sleep(0)
@@ -1078,6 +1080,13 @@ class _StubWatchlistService:
         )
         self.entries.insert(0, row)
         self.created.append(artist_key)
+        if pause_reason is not None or resume_at is not None:
+            return await self.pause_entry(
+                request,
+                artist_key=artist_key,
+                reason=pause_reason,
+                resume_at=resume_at,
+            )
         return self._make_table()
 
     async def update_priority(

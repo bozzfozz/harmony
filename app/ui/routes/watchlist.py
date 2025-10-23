@@ -441,11 +441,27 @@ async def watchlist_create(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    pause_payload_raw = {
+        "reason": values.get("pause_reason"),
+        "resume_at": values.get("resume_at") or None,
+    }
+
+    try:
+        pause_payload = WatchlistPauseRequest.model_validate(pause_payload_raw)
+    except ValidationError:
+        return _render_alert_fragment(
+            request,
+            "Please provide a valid resume date and time.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     try:
         table = await service.create_entry(
             request,
             artist_key=payload.artist_key,
             priority=payload.priority,
+            pause_reason=pause_payload.reason,
+            resume_at=pause_payload.resume_at,
         )
     except AppError as exc:
         log_event(
