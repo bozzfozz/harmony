@@ -142,5 +142,5 @@ are introduced.
 
 ## License
 
-No explicit license file is published. Unless otherwise stated, all rights are reserved.
-For usage or redistribution questions contact the maintainers.
+Harmony is licensed under the [MIT License](LICENSE). Refer to the license text for
+permissions, limitations and contributor terms.
