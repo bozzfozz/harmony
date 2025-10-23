@@ -936,6 +936,7 @@ class AppConfig:
     spotify: SpotifyConfig
     oauth: OAuthConfig
     soulseek: SoulseekConfig
+    hdm: HdmConfig
     logging: LoggingConfig
     database: DatabaseConfig
     artwork: ArtworkConfig
@@ -2849,6 +2850,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
 
     logging = LoggingConfig(level=_env_value(env, "HARMONY_LOG_LEVEL") or "INFO")
     database = DatabaseConfig(url=database_url)
+    hdm_config = HdmConfig.from_env(env)
 
     artwork_dir = _env_value(env, "ARTWORK_DIR") or _env_value(env, "HARMONY_ARTWORK_DIR")
     timeout_value = _env_value(env, "ARTWORK_HTTP_TIMEOUT") or _env_value(
@@ -3324,6 +3326,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
         spotify=spotify,
         oauth=oauth_config,
         soulseek=soulseek,
+        hdm=hdm_config,
         logging=logging,
         database=database,
         artwork=artwork_config,
