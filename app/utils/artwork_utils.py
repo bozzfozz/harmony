@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 import importlib.util
 import mimetypes
 import os
@@ -676,7 +676,7 @@ def _extract_spotify_track_id(payload: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _uuid_sequence() -> Iterable[str]:
+def _uuid_sequence() -> Iterator[str]:
     while True:
         yield os.urandom(16).hex()
 

@@ -605,7 +605,8 @@ def from_slskd_artist(payload: Mapping[str, Any] | Any) -> ProviderArtist:
             genres.append(genre)
     images = _collect_image_urls(mapping.get("images") or mapping.get("image"))
 
-    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
+    metadata_source = _extract_mapping(mapping.get("metadata"))
+    metadata = dict(metadata_source) if metadata_source else {}
     aliases = [str(item) for item in _iter_sequence(mapping.get("aliases")) if _coerce_str(item)]
     if aliases and "aliases" not in metadata:
         metadata["aliases"] = aliases
@@ -636,7 +637,8 @@ def from_slskd_release(payload: Mapping[str, Any] | Any, artist_id: str | None) 
     version = _coerce_str(mapping.get("version") or mapping.get("edition"))
     updated_at = _coerce_str(mapping.get("updated_at") or mapping.get("modified_at"))
 
-    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
+    metadata_source = _extract_mapping(mapping.get("metadata"))
+    metadata = dict(metadata_source) if metadata_source else {}
     for key in ("catalog_number", "catalogue_number", "catno"):
         value = mapping.get(key)
         if value is not None and key not in metadata:
@@ -703,7 +705,8 @@ def from_slskd_album_details(
     if total_tracks is None and normalized_tracks:
         total_tracks = len(normalized_tracks)
 
-    metadata = dict(mapping.get("metadata")) if isinstance(mapping.get("metadata"), Mapping) else {}
+    metadata_source = _extract_mapping(mapping.get("metadata"))
+    metadata = dict(metadata_source) if metadata_source else {}
     for key in ("catalog_number", "catalogue_number", "catno"):
         if key in mapping and key not in metadata:
             metadata[key] = mapping[key]

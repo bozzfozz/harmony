@@ -78,7 +78,7 @@ def build_hdm_runtime(config: HdmConfig, soulseek: SoulseekConfig) -> HdmRuntime
 
     if config.idempotency_backend == "sqlite":
         sqlite_path = Path(config.idempotency_sqlite_path).expanduser()
-        idempotency_store = SQLiteIdempotencyStore(sqlite_path)
+        idempotency_store: IdempotencyStore = SQLiteIdempotencyStore(sqlite_path)
     else:
         idempotency_store = InMemoryIdempotencyStore()
     orchestrator = HdmOrchestrator(

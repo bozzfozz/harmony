@@ -180,14 +180,18 @@ def determine_delta(local: ArtistLocalState, remote: ArtistRemoteState) -> Delta
             continue
         seen_remote.add(identity)
         candidates = release_index.get(identity)
-        snapshot = candidates.pop(0) if candidates else None
+        current_snapshot: ReleaseSnapshot | None
+        if candidates:
+            current_snapshot = candidates.pop(0)
+        else:
+            current_snapshot = None
         if candidates is not None and not candidates:
             release_index.pop(identity, None)
-        if snapshot is None:
+        if current_snapshot is None:
             added.append(dto)
             continue
-        if _requires_release_update(snapshot, dto):
-            updated.append(ReleaseUpdate(before=snapshot, after=dto))
+        if _requires_release_update(current_snapshot, dto):
+            updated.append(ReleaseUpdate(before=current_snapshot, after=dto))
 
     removed: list[ReleaseSnapshot] = []
     for remaining in release_index.values():

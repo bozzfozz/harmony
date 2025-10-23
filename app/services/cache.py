@@ -168,9 +168,12 @@ class ResponseCache:
         try:
             async with self._lock:
                 keys = [key for key in self._cache if key.startswith(prefix)]
-                removed = [self._cache.pop(key, None) for key in keys]
-                removed = [entry for entry in removed if entry is not None]
-                count = len(removed)
+                removed_entries: list[CacheEntry] = []
+                for key in keys:
+                    entry = self._cache.pop(key, None)
+                    if entry is not None:
+                        removed_entries.append(entry)
+                count = len(removed_entries)
             operation = "evict" if any((reason, entity_id, path, pattern)) else "invalidate"
             status = "evicted" if count else "noop"
             fields: dict[str, object] = {
@@ -185,8 +188,8 @@ class ResponseCache:
                 fields["reason"] = reason
             if entity_id:
                 fields["entity_id"] = entity_id
-            if removed:
-                template = removed[0].path_template
+            if removed_entries:
+                template = removed_entries[0].path_template
                 if template:
                     fields.setdefault("path_template", template)
             self._log_operation(operation, status, **fields)
@@ -266,8 +269,11 @@ class ResponseCache:
         try:
             async with self._lock:
                 matching_keys = [key for key in self._cache if compiled.search(key)]
-                removed_entries = [self._cache.pop(key, None) for key in matching_keys]
-                removed_entries = [entry for entry in removed_entries if entry is not None]
+                removed_entries: list[CacheEntry] = []
+                for key in matching_keys:
+                    entry = self._cache.pop(key, None)
+                    if entry is not None:
+                        removed_entries.append(entry)
                 count = len(removed_entries)
             operation = "evict" if reason or entity_id else "invalidate"
             status = "evicted" if count else "noop"

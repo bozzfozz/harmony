@@ -324,7 +324,7 @@ def _serialise_details(
             return sorted(_convert(item) for item in value)
         if isinstance(value, datetime):
             return _timestamp_to_utc_isoformat(value)
-        if is_dataclass(value):
+        if is_dataclass(value) and not isinstance(value, type):
             return _convert(asdict(value))
         converter = getattr(value, "as_dict", None)
         if callable(converter):
@@ -358,10 +358,10 @@ def record_activity(
 
 
 WorkerActivityStatus = Literal[
-    WORKER_STARTED,
-    WORKER_STOPPED,
-    WORKER_STALE,
-    WORKER_RESTARTED,
+    "started",
+    "stopped",
+    "stale",
+    "restarted",
 ]
 
 

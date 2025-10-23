@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -60,15 +60,22 @@ class SearchRequest(BaseModel):
     @field_validator("sources", mode="before")
     @classmethod
     def _normalise_sources(cls, value: Sequence[str] | None) -> list[SourceLiteral]:
-        if value in (None, "", []):
+        if value is None:
             return ["spotify", "soulseek"]
+
+        items: Sequence[str]
+        if isinstance(value, str):
+            items = [value]
+        else:
+            items = value
+
         normalised: list[SourceLiteral] = []
-        for entry in value:
+        for entry in items:
             if not entry:
                 continue
             lowered = str(entry).strip().lower()
             if lowered in {"spotify", "soulseek"} and lowered not in normalised:
-                normalised.append(lowered)  # type: ignore[arg-type]
+                normalised.append(cast(SourceLiteral, lowered))
         return normalised or ["spotify", "soulseek"]
 
     @field_validator("genre")
@@ -82,10 +89,17 @@ class SearchRequest(BaseModel):
     @field_validator("format_priority", mode="before")
     @classmethod
     def _normalise_formats(cls, value: Sequence[str] | None) -> list[str] | None:
-        if value in (None, ""):
+        if value is None:
             return None
+
+        items: Sequence[str]
+        if isinstance(value, str):
+            items = [value]
+        else:
+            items = value
+
         normalised: list[str] = []
-        for entry in value:
+        for entry in items:
             if not entry:
                 continue
             formatted = str(entry).strip()

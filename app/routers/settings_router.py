@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Final
 
+from datetime import datetime
+from typing import Final
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -40,7 +43,7 @@ router = APIRouter()
 def get_settings(session: Session = Depends(get_db)) -> SettingsResponse:
     settings = session.execute(select(Setting)).scalars().all()
     settings_dict = {setting.key: setting.value for setting in settings}
-    effective_settings = dict(DEFAULT_SETTINGS)
+    effective_settings: dict[str, str | None] = dict(DEFAULT_SETTINGS)
     effective_settings.update(settings_dict)
     for key in CONFIGURATION_KEYS:
         effective_settings.setdefault(key, None)

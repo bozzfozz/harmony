@@ -69,14 +69,14 @@ def _extract_detail_message(detail: Any, default: str) -> str:
     return default
 
 
-def _extract_detail_meta(detail: Any) -> Mapping[str, Any] | None:
+def _extract_detail_meta(detail: Any) -> dict[str, Any] | None:
     if isinstance(detail, Mapping):
         candidate = detail.get("meta")
         if isinstance(candidate, Mapping):
-            return candidate
+            return dict(candidate)
         extras = {k: v for k, v in detail.items() if k not in {"message", "detail", "error"}}
         if extras:
-            return extras
+            return dict(extras)
     return None
 
 

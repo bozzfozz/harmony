@@ -36,6 +36,7 @@ class IntegrationService:
         if callable(initialise):
             initialise()
         providers = self._registry.track_providers()
+        self._gateway: ProviderGatewayProtocol
         if gateway is None:
             config: ProviderGatewayConfig = self._registry.gateway_config
             self._gateway = ProviderGateway(providers=providers, config=config)

@@ -459,7 +459,7 @@ def _score_and_sort(
     matching_engine: MusicMatchingEngine,
 ) -> list[SearchItem]:
     priority = request.format_priority or []
-    sortable: list[tuple[SearchItem, float, int, int]] = []
+    sortable: list[tuple[SearchItem, float, int, int, int]] = []
 
     for candidate in candidates:
         base_payload = {

@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-AUTOSYNC_BLOCKED = "autosync_blocked"
-SYNC_BLOCKED = "sync_blocked"
-DOWNLOAD_BLOCKED = "download_blocked"
-DOWNLOAD_RETRY_SCHEDULED = "download_retry_scheduled"
-DOWNLOAD_RETRY_FAILED = "download_retry_failed"
-DOWNLOAD_RETRY_COMPLETED = "download_retry_completed"
-WORKER_STARTED = "started"
-WORKER_STOPPED = "stopped"
-WORKER_STALE = "stale"
-WORKER_RESTARTED = "restarted"
+from typing import Final
+
+AUTOSYNC_BLOCKED: Final = "autosync_blocked"
+SYNC_BLOCKED: Final = "sync_blocked"
+DOWNLOAD_BLOCKED: Final = "download_blocked"
+DOWNLOAD_RETRY_SCHEDULED: Final = "download_retry_scheduled"
+DOWNLOAD_RETRY_FAILED: Final = "download_retry_failed"
+DOWNLOAD_RETRY_COMPLETED: Final = "download_retry_completed"
+WORKER_STARTED: Final = "started"
+WORKER_STOPPED: Final = "stopped"
+WORKER_STALE: Final = "stale"
+WORKER_RESTARTED: Final = "restarted"
 
 __all__ = [
     "AUTOSYNC_BLOCKED",

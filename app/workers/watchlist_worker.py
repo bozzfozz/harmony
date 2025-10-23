@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 import time
+from typing import Any, cast
 
 from app.config import WatchlistWorkerConfig, settings
 from app.db_async import get_async_sessionmaker
@@ -140,11 +142,22 @@ class WatchlistWorker:
         start = time.monotonic()
         deadline = start + self._tick_budget_seconds if self._tick_budget_seconds else None
         now = datetime.utcnow()
-        artists = await asyncio.to_thread(
-            self._dao.load_batch,
-            self._config.max_per_tick,
-            cutoff=now,
-        )
+        if self._dao.supports_async:
+            batch = self._dao.load_batch(self._config.max_per_tick, cutoff=now)
+            artists = await cast(
+                Awaitable[list[ArtistWorkflowArtistRow]],
+                batch,
+            )
+        else:
+            sync_loader = cast(
+                Callable[[int, datetime | None], list[ArtistWorkflowArtistRow]],
+                self._dao.load_batch,
+            )
+            artists = await asyncio.to_thread(
+                sync_loader,
+                self._config.max_per_tick,
+                now,
+            )
         if not artists:
             log_event(
                 logger,
@@ -183,7 +196,7 @@ class WatchlistWorker:
 
     async def _enqueue_artist_job(self, artist: ArtistWorkflowArtistRow) -> bool:
         cutoff = artist.last_checked.isoformat() if artist.last_checked else None
-        payload = {"artist_id": int(artist.id)}
+        payload: dict[str, Any] = {"artist_id": int(artist.id)}
         if cutoff:
             payload["cutoff"] = cutoff
         delta_idempotency = f"artist-delta:{artist.id}:{cutoff or 'never'}"

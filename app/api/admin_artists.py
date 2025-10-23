@@ -253,8 +253,8 @@ def _build_context(request: Request) -> AdminContext:
 
 async def _load_local_state(
     dao: ArtistDao, artist_key: str
-) -> tuple[ArtistLocalState, Any, Sequence[ReleaseSnapshot]]:
-    def _load() -> tuple[Any, Sequence[ReleaseSnapshot]]:
+) -> tuple[ArtistLocalState, Any, tuple[ReleaseSnapshot, ...]]:
+    def _load() -> tuple[Any, tuple[ReleaseSnapshot, ...]]:
         artist_row = dao.get_artist(artist_key)
         release_rows = dao.get_artist_releases(artist_key, include_inactive=True)
         snapshots = tuple(ReleaseSnapshot.from_row(row) for row in release_rows)

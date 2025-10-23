@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import Depends, FastAPI, status
@@ -12,7 +13,7 @@ from app.services.oauth_service import OAuthErrorCode, OAuthService
 __all__ = ["app_oauth_callback", "create_callback_app"]
 
 
-def _render_help_page(context: dict[str, Any]) -> str:
+def _render_help_page(context: Mapping[str, Any]) -> str:
     redirect_uri = context.get("redirect_uri") or "http://127.0.0.1:8888/callback"
     host_hint = context.get("public_host_hint")
     manual_url = context.get("manual_url")

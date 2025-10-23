@@ -364,8 +364,10 @@ class BackfillService:
             cached = self._get_cache_entry(key)
             if cached is not None:
                 cache_hit = True
-                track_id, album_id = cached
-                metadata = self._fetch_track_metadata(track_id, album_id, metadata_cache)
+                cached_track_id, cached_album_id = cached
+                metadata = self._fetch_track_metadata(
+                    cached_track_id, cached_album_id, metadata_cache
+                )
 
         if metadata is None:
             cache_hit = False if key else cache_hit
@@ -380,12 +382,12 @@ class BackfillService:
                 return False, cache_hit
 
             metadata = self._extract_track_metadata(track)
-            track_id = metadata.get("track_id")
-            if not track_id:
+            track_id_value = metadata.get("track_id")
+            if not isinstance(track_id_value, str) or not track_id_value:
                 return False, cache_hit
-            metadata_cache[track_id] = metadata
+            metadata_cache[track_id_value] = metadata
             if key:
-                self._store_cache_entry(key, track_id, metadata.get("album_id"))
+                self._store_cache_entry(key, track_id_value, metadata.get("album_id"))
 
         self._update_ingest_item(candidate.id, metadata)
         return True, cache_hit

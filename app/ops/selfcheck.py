@@ -385,8 +385,9 @@ def aggregate_ready(
             )
         else:
             downloads_anchor = Path(downloads_path) if downloads_path else None
+            oauth_state_value = str(oauth_state_path).strip()
             oauth_state_info = check_path_exists_writable(
-                Path(oauth_state_path), anchor=downloads_anchor
+                Path(oauth_state_value), anchor=downloads_anchor
             )
             oauth_state_info["required"] = True
             paths["oauth_state"] = oauth_state_info

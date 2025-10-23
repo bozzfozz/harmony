@@ -81,7 +81,7 @@ def _iter_sequence(obj: Any) -> Iterable[Any]:
     return (obj,)
 
 
-def _normalise_aliases(aliases: Iterable[str]) -> tuple[str, ...]:
+def _normalise_aliases(aliases: Iterable[Any]) -> tuple[str, ...]:
     seen: set[str] = set()
     result: list[str] = []
     for alias in aliases:

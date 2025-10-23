@@ -55,14 +55,14 @@ def to_api_error(exc: Exception, *, provider: str | None = None) -> ApiError:
             details=_details_with_provider(provider, exc.meta),
         )
     if isinstance(exc, TransfersApiError):
-        extra: dict[str, Any] | None = None
+        transfer_details: dict[str, Any] = {}
         if exc.details is not None:
-            extra = dict(exc.details)
+            transfer_details.update(dict(exc.details))
         if exc.status_code is not None:
-            if extra is None:
-                extra = {}
-            extra.setdefault("status_code", exc.status_code)
-        details = _details_with_provider(provider or "slskd", extra)
+            transfer_details.setdefault("status_code", exc.status_code)
+        details = _details_with_provider(
+            provider or "slskd", transfer_details or None
+        )
         return ApiError.from_components(
             code=ErrorCode(exc.code.value),
             message=str(exc),
@@ -79,14 +79,14 @@ def to_api_error(exc: Exception, *, provider: str | None = None) -> ApiError:
             details=details,
         )
     if isinstance(exc, ProviderGatewayRateLimitedError):
-        extra: dict[str, Any] = {}
+        rate_limit_details: dict[str, Any] = {}
         if exc.retry_after_ms is not None:
-            extra["retry_after_ms"] = exc.retry_after_ms
+            rate_limit_details["retry_after_ms"] = exc.retry_after_ms
         if exc.retry_after_header is not None:
-            extra["retry_after_header"] = exc.retry_after_header
+            rate_limit_details["retry_after_header"] = exc.retry_after_header
         if exc.status_code is not None:
-            extra["status_code"] = exc.status_code
-        details = _details_with_provider(provider or exc.provider, extra)
+            rate_limit_details["status_code"] = exc.status_code
+        details = _details_with_provider(provider or exc.provider, rate_limit_details)
         return ApiError.from_components(
             code=ErrorCode.RATE_LIMITED,
             message=str(exc),
