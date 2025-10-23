@@ -49,7 +49,9 @@ def make_entry(path_template: str = "/resource") -> CacheEntry:
     )
 
 
-def make_cache(clock: StubClock, *, max_items: int = 3, default_ttl: float = 30.0, fail_open: bool = True) -> ResponseCache:
+def make_cache(
+    clock: StubClock, *, max_items: int = 3, default_ttl: float = 30.0, fail_open: bool = True
+) -> ResponseCache:
     """Construct a :class:`ResponseCache` bound to the provided clock."""
 
     return ResponseCache(

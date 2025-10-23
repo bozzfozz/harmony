@@ -7,8 +7,8 @@ import pytest
 
 from app.ui.session import (
     UiLoginRateLimitConfig,
-    UiLoginRateLimitError,
     UiLoginRateLimiter,
+    UiLoginRateLimitError,
 )
 
 
@@ -50,11 +50,7 @@ class InMemoryLoginAttemptStore:
         self._attempts[(scope, key)] = ordered
 
     def _prune(self, scope: str, key: str, cutoff: datetime) -> list[datetime]:
-        entries = [
-            ts
-            for ts in self._attempts.get((scope, key), [])
-            if ts >= cutoff
-        ]
+        entries = [ts for ts in self._attempts.get((scope, key), []) if ts >= cutoff]
         self._attempts[(scope, key)] = entries
         return entries
 
@@ -112,10 +108,7 @@ def test_ensure_can_attempt_blocks_after_budget(limiter_fixture) -> None:
     )
     assert count == config.attempts
     assert oldest is not None
-    expected_remaining = (
-        config.window.total_seconds()
-        - (now - oldest).total_seconds()
-    )
+    expected_remaining = config.window.total_seconds() - (now - oldest).total_seconds()
     assert exc.value.retry_after == pytest.approx(expected_remaining)
 
 

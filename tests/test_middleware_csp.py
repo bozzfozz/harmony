@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 import importlib
 import os
-from collections.abc import Iterator
 
 from fastapi.testclient import TestClient
 

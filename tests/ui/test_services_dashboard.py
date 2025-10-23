@@ -104,7 +104,9 @@ def httpx_mock(monkeypatch: pytest.MonkeyPatch) -> _HTTPXMock:
     mock = _HTTPXMock()
 
     class _PatchedAsyncClient:
-        def __init__(self, *args: Any, base_url: Any = None, timeout: Any = None, **kwargs: Any) -> None:
+        def __init__(
+            self, *args: Any, base_url: Any = None, timeout: Any = None, **kwargs: Any
+        ) -> None:
             self._base_url = base_url
             self._timeout = timeout
 
@@ -114,7 +116,9 @@ def httpx_mock(monkeypatch: pytest.MonkeyPatch) -> _HTTPXMock:
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def get(self, url: str, *, headers: Mapping[str, str] | None = None) -> httpx.Response:
+        async def get(
+            self, url: str, *, headers: Mapping[str, str] | None = None
+        ) -> httpx.Response:
             return mock.request("GET", url, base_url=self._base_url, headers=headers)
 
     monkeypatch.setattr(httpx, "AsyncClient", _PatchedAsyncClient)
@@ -251,7 +255,9 @@ async def test_fetch_health_parses_payload(httpx_mock: _HTTPXMock) -> None:
         ],
     }
     httpx_mock.add_response(url="http://testserver/api/health/live", json=live_payload)
-    httpx_mock.add_response(url="http://testserver/api/health/ready", status_code=503, json=ready_payload)
+    httpx_mock.add_response(
+        url="http://testserver/api/health/ready", status_code=503, json=ready_payload
+    )
 
     request = _make_request()
     service = DashboardUiService()
@@ -304,7 +310,9 @@ def test_resolve_base_url_and_headers_raises_when_keys_missing() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_status_raises_dependency_error_on_http_failure(httpx_mock: _HTTPXMock) -> None:
-    httpx_mock.add_response(url="http://testserver/api/status", status_code=502, json={"error": "fail"})
+    httpx_mock.add_response(
+        url="http://testserver/api/status", status_code=502, json={"error": "fail"}
+    )
 
     request = _make_request()
     service = DashboardUiService()

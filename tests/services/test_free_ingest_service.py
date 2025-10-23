@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
-import inspect
 from dataclasses import dataclass
 from datetime import datetime
+import inspect
 from typing import Any, Awaitable, Callable
 
 import pytest
@@ -147,8 +147,17 @@ class FakeSessionRunner:
         return result
 
 
+ServiceBuilderReturn = tuple[
+    FreeIngestService,
+    FakeDatabase,
+    FakeSoulseekClient,
+    FakeSessionRunner,
+]
+ServiceBuilder = Callable[..., ServiceBuilderReturn]
+
+
 @pytest.fixture()
-def service_builder() -> Callable[..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]]:
+def service_builder() -> ServiceBuilder:
     def _builder(
         *,
         max_playlists: int = 4,
@@ -156,7 +165,7 @@ def service_builder() -> Callable[..., tuple[FreeIngestService, FakeDatabase, Fa
         free_batch_size: int = 4,
         ingest_batch_size: int = 4,
         max_pending_jobs: int = 8,
-    ) -> tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]:
+    ) -> ServiceBuilderReturn:
         database = FakeDatabase()
         runner = FakeSessionRunner(database)
         soulseek = FakeSoulseekClient()
@@ -184,7 +193,7 @@ def service_builder() -> Callable[..., tuple[FreeIngestService, FakeDatabase, Fa
 
 @pytest.mark.asyncio
 async def test_submit_raises_for_invalid_playlist_links(
-    service_builder: Callable[..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]]
+    service_builder: ServiceBuilder,
 ) -> None:
     service, database, soulseek, _ = service_builder()
 
@@ -205,7 +214,7 @@ async def test_submit_raises_for_invalid_playlist_links(
 
 @pytest.mark.asyncio
 async def test_submit_normalizes_tracks_and_queues_downloads(
-    service_builder: Callable[..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]]
+    service_builder: ServiceBuilder,
 ) -> None:
     service, database, soulseek, _ = service_builder(
         max_tracks=8,
@@ -257,7 +266,9 @@ async def test_submit_normalizes_tracks_and_queues_downloads(
 
 @pytest.mark.asyncio
 async def test_has_capacity_respects_pending_limit(
-    service_builder: Callable[..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]]
+    service_builder: Callable[
+        ..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]
+    ],
 ) -> None:
     service, database, _, _ = service_builder(max_pending_jobs=2)
 
@@ -288,7 +299,9 @@ async def test_has_capacity_respects_pending_limit(
 
 @pytest.mark.asyncio
 async def test_submit_applies_backpressure_when_capacity_exceeded(
-    service_builder: Callable[..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]]
+    service_builder: Callable[
+        ..., tuple[FreeIngestService, FakeDatabase, FakeSoulseekClient, FakeSessionRunner]
+    ],
 ) -> None:
     service, database, soulseek, _ = service_builder(max_pending_jobs=1)
 
@@ -319,4 +332,3 @@ async def test_submit_applies_backpressure_when_capacity_exceeded(
     assert job.state == IngestJobState.COMPLETED.value
     assert job.skipped_tracks == 1
     assert job.error == "backpressure"
-

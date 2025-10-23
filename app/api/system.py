@@ -21,6 +21,7 @@ from app.dependencies import get_db
 from app.errors import DependencyError
 from app.logging import get_logger
 from app.models import Download, QueueJob, QueueJobStatus
+from app.ops.selfcheck import aggregate_ready
 from app.services.health import HealthService
 from app.services.secret_store import SecretStore
 from app.services.secret_validation import (
@@ -41,7 +42,6 @@ from app.utils.worker_health import (
     read_worker_status,
     resolve_status,
 )
-from app.ops.selfcheck import aggregate_ready
 
 try:  # pragma: no cover - import guarded for environments without psutil
     import psutil as _psutil  # type: ignore

@@ -163,11 +163,11 @@ def _build_report(findings: list[DriftFinding], scanned_documents: list[Path]) -
         header.append("| --- | --- | --- |")
         for finding in sorted(findings, key=lambda item: (str(item.document), item.path)):
             note = f"Missing in routing table (context: {finding.context})"
-            header.append(
-                f"| `{finding.document.as_posix()}` | `{finding.path}` | {note} |"
-            )
+            header.append(f"| `{finding.document.as_posix()}` | `{finding.path}` | {note} |")
         header.append("")
-        header.append("Run `scripts/dev/doc_route_drift.py` after updating documentation or routes to refresh this report.")
+        header.append(
+            "Run `scripts/dev/doc_route_drift.py` after updating documentation or routes to refresh this report."
+        )
     else:
         header.append(
             "No discrepancies detected between the scanned documentation and the FastAPI routing table."  # noqa: E501
@@ -203,7 +203,10 @@ def main() -> int:
     print(f"Wrote {OUTPUT_PATH.relative_to(REPO_ROOT)}")
 
     if findings:
-        print("documentation drift detected; inspect reports/api/doc_route_drift.md for details", file=sys.stderr)
+        print(
+            "documentation drift detected; inspect reports/api/doc_route_drift.md for details",
+            file=sys.stderr,
+        )
         return 1
 
     print("No documentation drift detected.")

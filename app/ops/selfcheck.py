@@ -119,11 +119,7 @@ class ReadyReport:
 
 def _normalise_env(runtime_env: Mapping[str, Any] | None = None) -> dict[str, str]:
     if runtime_env is not None:
-        return {
-            key: str(value)
-            for key, value in runtime_env.items()
-            if value is not None
-        }
+        return {key: str(value) for key, value in runtime_env.items() if value is not None}
     env = load_runtime_env()
     return {key: str(value) for key, value in env.items() if value is not None}
 

@@ -19,7 +19,6 @@ from .search import (
     SearchUiService,
     get_search_ui_service,
 )
-from .sync import SyncActionResult, SyncUiService, get_sync_ui_service
 from .settings import (
     ArtistPreferenceRow,
     ArtistPreferenceTable,
@@ -68,6 +67,7 @@ from .spotify import (
     SpotifyUiService,
     get_spotify_ui_service,
 )
+from .sync import SyncActionResult, SyncUiService, get_sync_ui_service
 from .system import (
     IntegrationProviderStatus,
     IntegrationSummary,

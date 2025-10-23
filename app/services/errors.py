@@ -60,9 +60,7 @@ def to_api_error(exc: Exception, *, provider: str | None = None) -> ApiError:
             transfer_details.update(dict(exc.details))
         if exc.status_code is not None:
             transfer_details.setdefault("status_code", exc.status_code)
-        details = _details_with_provider(
-            provider or "slskd", transfer_details or None
-        )
+        details = _details_with_provider(provider or "slskd", transfer_details or None)
         return ApiError.from_components(
             code=ErrorCode(exc.code.value),
             message=str(exc),

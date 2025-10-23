@@ -7,9 +7,9 @@ from collections import deque
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.config import SoulseekConfig
 from app.core.soulseek_client import SoulseekClient, SoulseekClientError

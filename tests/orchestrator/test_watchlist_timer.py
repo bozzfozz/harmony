@@ -10,9 +10,8 @@ from typing import Any, Iterable
 import pytest
 
 from app.config import WatchlistWorkerConfig
-from app.orchestrator import events as orchestrator_events
+from app.orchestrator import events as orchestrator_events, timer as timer_module
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
-from app.orchestrator import timer as timer_module
 from app.orchestrator.timer import WatchlistTimer
 from app.services.artist_workflow_dao import ArtistWorkflowArtistRow
 
@@ -155,7 +154,9 @@ async def test_start_stop_idempotent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trigger_emits_disabled_event_when_disabled(timer_events: list[dict[str, Any]]) -> None:
+async def test_trigger_emits_disabled_event_when_disabled(
+    timer_events: list[dict[str, Any]],
+) -> None:
     dao = FakeWorkflowDAO([])
     persistence = FakePersistenceModule()
     timer = WatchlistTimer(
@@ -207,7 +208,7 @@ async def test_trigger_idle_when_no_artists(timer_events: list[dict[str, Any]]) 
 
 @pytest.mark.asyncio
 async def test_trigger_enqueues_jobs_and_invokes_callback(
-    timer_events: list[dict[str, Any]]
+    timer_events: list[dict[str, Any]],
 ) -> None:
     artist_with_cutoff = ArtistWorkflowArtistRow(
         id=1,
@@ -252,9 +253,7 @@ async def test_trigger_enqueues_jobs_and_invokes_callback(
     assert first_job.type == ARTIST_REFRESH_JOB_TYPE
     assert first_job.payload["artist_id"] == artist_with_cutoff.id
     assert first_job.payload["cutoff"] == artist_with_cutoff.last_checked.isoformat()
-    expected_delta = (
-        f"{ARTIST_SCAN_JOB_TYPE}:{artist_with_cutoff.id}:{artist_with_cutoff.last_checked.isoformat()}"
-    )
+    expected_delta = f"{ARTIST_SCAN_JOB_TYPE}:{artist_with_cutoff.id}:{artist_with_cutoff.last_checked.isoformat()}"
     assert first_job.payload["delta_idempotency"] == expected_delta
 
     second_job = persistence.enqueued[1]
@@ -269,13 +268,19 @@ async def test_trigger_enqueues_jobs_and_invokes_callback(
 
 @pytest.mark.asyncio
 async def test_trigger_skips_when_lock_contended(timer_events: list[dict[str, Any]]) -> None:
-    dao = FakeWorkflowDAO([[ArtistWorkflowArtistRow(
-        id=1,
-        spotify_artist_id="sp-1",
-        name="Artist",
-        last_checked=None,
-        retry_block_until=None,
-    )]])
+    dao = FakeWorkflowDAO(
+        [
+            [
+                ArtistWorkflowArtistRow(
+                    id=1,
+                    spotify_artist_id="sp-1",
+                    name="Artist",
+                    last_checked=None,
+                    retry_block_until=None,
+                )
+            ]
+        ]
+    )
     persistence = FakePersistenceModule()
     timer = WatchlistTimer(
         config=make_worker_config(),
@@ -324,7 +329,9 @@ async def test_sleep_until_next_uses_configured_jitter(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_stop_waits_for_enqueue_callback_within_grace(timer_events: list[dict[str, Any]]) -> None:
+async def test_stop_waits_for_enqueue_callback_within_grace(
+    timer_events: list[dict[str, Any]],
+) -> None:
     artist = ArtistWorkflowArtistRow(
         id=1,
         spotify_artist_id="sp-1",

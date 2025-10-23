@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import asyncio
 from collections.abc import Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -50,9 +49,7 @@ async def _invoke_health(provider: TrackProvider) -> ProviderHealth:
     check = getattr(provider, "check_health", None)
     if check is None:
         detail_payload: MutableMapping[str, Any] = {"reason": "unsupported"}
-        return ProviderHealth(
-            provider=provider.name, status="degraded", details=detail_payload
-        )
+        return ProviderHealth(provider=provider.name, status="degraded", details=detail_payload)
 
     try:
         result = check()
