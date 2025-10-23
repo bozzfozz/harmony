@@ -1,6 +1,6 @@
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:latest
+    image: ghcr.io/bozzfozz/harmony:1.0.0
     container_name: harmony
     environment:
       TZ: Etc/UTC
