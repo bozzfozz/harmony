@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Mapping
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from contextlib import asynccontextmanager, contextmanager
 from copy import deepcopy
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 import inspect
-from typing import Any
+from typing import Any, Awaitable
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -331,6 +332,16 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
     )
 
 
+@dataclass(frozen=True)
+class LifespanHooks:
+    configure_application: Callable[[AppConfig], None]
+    register_ui_session_metrics: Callable[[], None]
+    start_workers: Callable[[FastAPI, AppConfig, bool, bool], Awaitable[dict[str, bool]]]
+    stop_workers: Callable[[FastAPI], Awaitable[None]]
+    get_soulseek_client: Callable[[], Any]
+    get_provider_registry: Callable[[], Any]
+
+
 async def _start_orchestrator_workers(
     app: FastAPI,
     config: AppConfig,
@@ -550,11 +561,37 @@ async def _stop_background_workers(
     await _stop_orchestrator_workers(app)
 
 
+_default_lifespan_hooks = LifespanHooks(
+    configure_application=_configure_application,
+    register_ui_session_metrics=register_ui_session_metrics,
+    start_workers=_start_orchestrator_workers,
+    stop_workers=_stop_orchestrator_workers,
+    get_soulseek_client=get_soulseek_client,
+    get_provider_registry=get_provider_registry,
+)
+
+_lifespan_hooks = _default_lifespan_hooks
+
+
+@contextmanager
+def override_lifespan_hooks(**overrides: Any) -> Iterator[None]:
+    """Temporarily override lifespan hooks for testing."""
+
+    global _lifespan_hooks
+    original = _lifespan_hooks
+    _lifespan_hooks = replace(_lifespan_hooks, **overrides)
+    try:
+        yield
+    finally:
+        _lifespan_hooks = original
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    hooks = _lifespan_hooks
     config = get_app_config()
-    register_ui_session_metrics()
-    _configure_application(config)
+    hooks.register_ui_session_metrics()
+    hooks.configure_application(config)
     app.state.config_snapshot = config
 
     _apply_security_dependencies(app, config.security)
@@ -605,31 +642,67 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     orchestrator_status["watchlist_timer_expected"] = workers_enabled and timer_env_enabled
 
     worker_status: dict[str, bool] = {}
+    shutdown_invoked = False
 
-    if workers_enabled:
-        worker_status = await _start_orchestrator_workers(
-            app,
-            config,
-            enable_artwork=enable_artwork,
-            enable_lyrics=enable_lyrics,
-        )
-    else:
-        disable_reason = "runtime config"
-        if worker_env.disable_workers:
-            disable_reason = "HARMONY_DISABLE_WORKERS"
-        elif worker_env.enabled_override is not None:
-            disable_reason = "WORKERS_ENABLED override"
-        logger.info("Background workers disabled (%s)", disable_reason)
-        worker_status = {
-            "artwork": False,
-            "lyrics": False,
-            "metadata": False,
-            "metadata_update": False,
-            "import": False,
-            "orchestrator_scheduler": False,
-            "orchestrator_dispatcher": False,
-            "orchestrator_watchlist_timer": False,
-        }
+    async def _shutdown() -> None:
+        nonlocal shutdown_invoked
+        if shutdown_invoked:
+            return
+        shutdown_invoked = True
+        soulseek_client: Any | None = None
+        try:
+            soulseek_client = hooks.get_soulseek_client()
+        except Exception:  # pragma: no cover - defensive shutdown guard
+            logger.exception("Failed to retrieve Soulseek client during shutdown")
+        else:
+            close_callable = getattr(soulseek_client, "close", None)
+            if callable(close_callable):
+                try:
+                    close_result = close_callable()
+                    if inspect.isawaitable(close_result):
+                        await close_result
+                except Exception:  # pragma: no cover - defensive shutdown guard
+                    logger.exception("Failed to close Soulseek client during shutdown")
+        try:
+            registry = hooks.get_provider_registry()
+        except Exception:  # pragma: no cover - defensive shutdown guard
+            logger.exception("Failed to retrieve provider registry during shutdown")
+        else:
+            try:
+                await registry.shutdown()
+            except Exception:  # pragma: no cover - defensive shutdown guard
+                logger.exception("Failed to shutdown provider registry")
+        await hooks.stop_workers(app)
+        logger.info("Harmony application stopped")
+
+    try:
+        if workers_enabled:
+            worker_status = await hooks.start_workers(
+                app,
+                config,
+                enable_artwork=enable_artwork,
+                enable_lyrics=enable_lyrics,
+            )
+        else:
+            disable_reason = "runtime config"
+            if worker_env.disable_workers:
+                disable_reason = "HARMONY_DISABLE_WORKERS"
+            elif worker_env.enabled_override is not None:
+                disable_reason = "WORKERS_ENABLED override"
+            logger.info("Background workers disabled (%s)", disable_reason)
+            worker_status = {
+                "artwork": False,
+                "lyrics": False,
+                "metadata": False,
+                "metadata_update": False,
+                "import": False,
+                "orchestrator_scheduler": False,
+                "orchestrator_dispatcher": False,
+                "orchestrator_watchlist_timer": False,
+            }
+    except Exception:
+        await _shutdown()
+        raise
 
     router_status = {
         "spotify": True,
@@ -693,31 +766,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        soulseek_client: Any | None = None
-        try:
-            soulseek_client = get_soulseek_client()
-        except Exception:  # pragma: no cover - defensive shutdown guard
-            logger.exception("Failed to retrieve Soulseek client during shutdown")
-        else:
-            close_callable = getattr(soulseek_client, "close", None)
-            if callable(close_callable):
-                try:
-                    close_result = close_callable()
-                    if inspect.isawaitable(close_result):
-                        await close_result
-                except Exception:  # pragma: no cover - defensive shutdown guard
-                    logger.exception("Failed to close Soulseek client during shutdown")
-        try:
-            registry = get_provider_registry()
-        except Exception:  # pragma: no cover - defensive shutdown guard
-            logger.exception("Failed to retrieve provider registry during shutdown")
-        else:
-            try:
-                await registry.shutdown()
-            except Exception:  # pragma: no cover - defensive shutdown guard
-                logger.exception("Failed to shutdown provider registry")
-        await _stop_orchestrator_workers(app)
-        logger.info("Harmony application stopped")
+        await _shutdown()
 
 
 _docs_url = router_registry.compose_prefix(_API_BASE_PATH, "/docs")
