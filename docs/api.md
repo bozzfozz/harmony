@@ -93,7 +93,18 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 | `GET` | `/metadata/status` | Liefert `503` und verweist auf deaktivierte Legacy-Pfade. |
 | `POST` | `/watchlist` | Fügt Artist zur Watchlist hinzu. |
 | `GET` | `/watchlist` | Listet alle Watchlist-Einträge. |
+| `PATCH` | `/watchlist/{artist_key}` | Aktualisiert die Priorität (`priority`) eines Eintrags. |
+| `POST` | `/watchlist/{artist_key}/pause` | Pausiert einen Eintrag (`reason`, `resume_at` optional). |
+| `POST` | `/watchlist/{artist_key}/resume` | Hebt die Pause eines Eintrags auf. |
 | `DELETE` | `/watchlist/{id}` | Entfernt Eintrag (`{id}` = interne Watchlist-ID). |
+
+**Payloads & Antworten**
+
+- `PATCH /watchlist/{artist_key}` erwartet JSON `{"priority": <int>}` und antwortet mit `200 OK` sowie dem aktualisierten `WatchlistEntryResponse` (inklusive `priority`, `paused` und Zeitstempeln).
+- `POST /watchlist/{artist_key}/pause` akzeptiert optional `reason` (Text) und `resume_at` (ISO-8601-Zeitstempel) und liefert `200 OK` samt aktualisiertem Eintrag, der `paused=true` und die gesetzten Metadaten enthält.
+- `POST /watchlist/{artist_key}/resume` benötigt keinen Body und gibt `200 OK` mit dem wieder aktiven Eintrag (`paused=false`).
+
+Weitere Details zur Verwendung finden sich in der [Watchlist-UI-Beschreibung](ui/fe-htmx-plan.md#watchlist-uiwatchlist) sowie in der [Watchlist-Worker-Dokumentation](worker_watchlist.md), die die automatisierten Abläufe rund um pausierte und priorisierte Artists erklärt.
 
 ## Settings & System
 
