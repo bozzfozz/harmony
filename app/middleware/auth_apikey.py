@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 import hmac
 
-from fastapi import Request
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from app.config import SecurityConfig
-from app.errors import ErrorCode, to_response
+from app.errors import AuthenticationRequiredError
 from app.logging import get_logger
 from app.logging_events import log_event
 
@@ -75,13 +75,11 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
                 path=path,
                 method=request.method,
             )
-            return to_response(
+            error = AuthenticationRequiredError(
                 message="An API key is required to access this resource.",
-                code=ErrorCode.INTERNAL_ERROR,
-                status_code=401,
-                request_path=path,
-                method=request.method,
+                status_code=status.HTTP_401_UNAUTHORIZED,
             )
+            return error.as_response(request_path=path, method=request.method)
 
         presented_key = _extract_presented_key(request)
         if not presented_key:
@@ -93,13 +91,11 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
                 path=path,
                 method=request.method,
             )
-            return to_response(
+            error = AuthenticationRequiredError(
                 message="An API key is required to access this resource.",
-                code=ErrorCode.INTERNAL_ERROR,
-                status_code=401,
-                request_path=path,
-                method=request.method,
+                status_code=status.HTTP_401_UNAUTHORIZED,
             )
+            return error.as_response(request_path=path, method=request.method)
 
         if not any(hmac.compare_digest(presented_key, key) for key in security_state.api_keys):
             log_event(
@@ -110,13 +106,11 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
                 path=path,
                 method=request.method,
             )
-            return to_response(
+            error = AuthenticationRequiredError(
                 message="The provided API key is not valid.",
-                code=ErrorCode.INTERNAL_ERROR,
-                status_code=403,
-                request_path=path,
-                method=request.method,
+                status_code=status.HTTP_403_FORBIDDEN,
             )
+            return error.as_response(request_path=path, method=request.method)
 
         request.state.api_key = presented_key
         return await call_next(request)

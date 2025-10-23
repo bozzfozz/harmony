@@ -21,6 +21,7 @@ class ErrorCode(str, Enum):
     """Application level error codes exposed via the public API."""
 
     VALIDATION_ERROR = "VALIDATION_ERROR"
+    AUTH_REQUIRED = "AUTH_REQUIRED"
     NOT_FOUND = "NOT_FOUND"
     RATE_LIMITED = "RATE_LIMITED"
     DEPENDENCY_ERROR = "DEPENDENCY_ERROR"
@@ -91,6 +92,26 @@ class ValidationAppError(AppError):
             code=ErrorCode.VALIDATION_ERROR,
             http_status=status_code,
             meta=meta,
+        )
+
+
+class AuthenticationRequiredError(AppError):
+    """Error raised when authentication credentials are missing or invalid."""
+
+    def __init__(
+        self,
+        message: str = "Authentication credentials are required.",
+        *,
+        status_code: int = status.HTTP_401_UNAUTHORIZED,
+        meta: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=ErrorCode.AUTH_REQUIRED,
+            http_status=status_code,
+            meta=meta,
+            headers=headers,
         )
 
 
@@ -286,6 +307,7 @@ def to_response(
 
 
 __all__ = [
+    "AuthenticationRequiredError",
     "AppError",
     "DependencyError",
     "ErrorCode",
