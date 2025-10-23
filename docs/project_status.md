@@ -8,7 +8,7 @@
 ## Qualitätsbaseline
 - GitHub Actions führt im Workflow [`backend-ci`](../.github/workflows/ci.yml) Formatierung, Linting, Typprüfungen, Pytests und Smoke-Checks sequenziell aus (`make fmt`, `make lint`, `make test`, `make smoke`).
 - Die Makefile-Targets [`fmt`, `lint`, `types`, `test`](../Makefile) nutzen die Auto-Repair-Engine, um `ruff`, `mypy` und `pytest` deterministisch zu fahren und bei Bedarf Auto-Fixes zu versuchen.【F:scripts/auto_repair/engine.py†L452-L504】
-- Das neue Target [`make docs-verify`](../Makefile) ruft [`scripts/docs_reference_guard.py`](../scripts/docs_reference_guard.py) auf und bricht, sobald Dokumentation auf nicht existente Pfade verweist. Der Guard deckt neben `CHANGELOG.md` und `docs/project_status.md` jetzt auch zentrale Operator-Guides wie `docs/README.md`, `docs/troubleshooting.md` sowie sämtliche Playbooks unter `docs/operations/` (inkl. `runbooks/hdm.md`) ab.
+- Das neue Target [`make docs-verify`](../Makefile) ruft [`scripts/docs_reference_guard.py`](../scripts/docs_reference_guard.py) auf und bricht, sobald Dokumentation auf nicht existente Pfade verweist. Der Guard deckt neben `README.md`, `CHANGELOG.md` und `docs/project_status.md` jetzt auch zentrale Operator-Guides wie `docs/README.md`, `docs/overview.md`, `docs/architecture.md`, `docs/observability.md`, `docs/security.md`, `docs/testing.md`, `docs/troubleshooting.md` sowie sämtliche Playbooks unter `docs/operations/` (inkl. `runbooks/hdm.md`) ab.
 
 ## Verifizierte Artefakte
 - Ready-/Status-Checks aggregieren Datei-basiertes SQLite, Soulseek-Erreichbarkeit und Idempotency-Konfiguration mit aussagekräftigen Fehlern.【F:app/ops/selfcheck.py†L1-L220】【F:tests/test_ready_check.py†L1-L160】
