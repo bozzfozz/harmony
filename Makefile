@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -41,6 +41,11 @@ all:
 		$(MAKE) be-verify; \
 		$(MAKE) supply-guard; \
 		$(MAKE) smoke
+
+release-check:
+	@set -euo pipefail; \
+		$(MAKE) all; \
+		$(MAKE) ui-smoke
 
 lint-fix:
 	@set -euo pipefail; \

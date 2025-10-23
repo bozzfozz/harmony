@@ -10,6 +10,7 @@ Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beit
 | `make ui-guard` | Verhindert Platzhalterstrings in Templates, blockiert `/api/...` HTMX-Aufrufe und stellt sicher, dass statische Assets vorhanden sind. |
 | `make ui-smoke` | Startet die App lokal und ruft `/live`, `/ui` sowie UI-Fragmente ab; schlägt fehl, wenn HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
+| `make release-check` | Kombiniert `make all` mit einem anschließenden `make ui-smoke` und dient als finales Release-Gate. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
 | `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
 
@@ -41,7 +42,7 @@ pre-commit run --hook-stage push
 ## Release Checklist
 
 1. Versionierung & CHANGELOG aktualisieren.
-2. `make all` und optionale Security-Scans erneut ausführen.
+2. `make release-check` (inkl. UI-Smoketest) und optionale Security-Scans erneut ausführen.
 3. Packaging-Workflow nachvollziehen:
    - `pip install .`
    - `pip wheel . -w dist/`
