@@ -5,3 +5,4 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
 ./scripts/dev/auto_repair.py lint
+./scripts/dev/auto_repair.py types

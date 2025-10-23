@@ -10,13 +10,15 @@ Harmony verlässt sich vollständig auf lokale Gates. Alle Merge-Entscheidungen 
 | `make ui-guard`           | `scripts/dev/ui_guard.sh`           | Durchsucht UI-Templates und statische Assets nach Platzhaltern, verbietet direkte HTMX-Aufrufe auf `/api/...` und prüft, dass die verpflichtenden Dateien unter `app/ui/static/` existieren. |
 | `make ui-smoke`           | `scripts/dev/ui_smoke_local.sh`     | Startet die FastAPI-App lokal, ruft `/live`, `/ui` sowie exemplarische Fragmente auf und bricht ab, wenn die HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
-| `make lint`               | `scripts/dev/lint_py.sh`            | Ruft `ruff check --output-format=concise .` auf. |
+| `make lint`               | `scripts/dev/lint_py.sh`            | Führt `ruff check --output-format=concise .` und `mypy app tests --config-file mypy.ini` aus. |
 | `make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
 | `make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. |
 | `make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
-| `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge. |
+| `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
+
+**Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all`) mit einem Fehler abgebrochen.
 
 Der Readiness-Self-Check überwacht zusätzlich alle Pflicht-Templates sowie `app/ui/static/css/app.css`, `app/ui/static/js/htmx.min.js` und `app/ui/static/icons.svg`. Fehlt eines dieser Artefakte, melden `/api/health/ready`, `/api/system/ready` und `/api/system/status` einen degradierten Zustand.
 

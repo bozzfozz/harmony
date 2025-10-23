@@ -469,6 +469,15 @@ STAGE_DEFINITIONS: dict[str, RepairStage] = {
             ),
         ),
     ),
+    "types": RepairStage(
+        name="types",
+        commands=(
+            RepairCommand(
+                name="mypy",
+                argv=["mypy", "app", "tests", "--config-file", "mypy.ini"],
+            ),
+        ),
+    ),
     "test": RepairStage(
         name="test",
         commands=(
