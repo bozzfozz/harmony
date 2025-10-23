@@ -48,6 +48,9 @@ docker run -d \
   are missing.
 - Mount `/data/downloads` and `/data/music` to persist downloads and the
   organised library.
+- Harmony boots without API keys so the Quickstart stays local-friendly. Restrict
+  the container to trusted networks or define `HARMONY_API_KEYS` before exposing
+  it beyond your LAN.
 - Optional security hardening:
   - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
   - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.

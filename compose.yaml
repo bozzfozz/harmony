@@ -6,6 +6,9 @@ services:
       TZ: Etc/UTC
       PUID: "1000"
       PGID: "1000"
+      # Add `HARMONY_API_KEYS` via an `.env` file or here before exposing Harmony to
+      # untrusted networks. The default stack keeps authentication disabled for
+      # local deployments.
     volumes:
       - /mnt/harmony:/data
       - /mnt/data/downloads:/data/downloads
