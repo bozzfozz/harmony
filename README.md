@@ -139,6 +139,16 @@ pip install -r requirements-dev.txt -r requirements-test.txt
 the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
 are introduced.
 
+## Release gate
+
+Run `make release-check` before tagging or publishing a release. The target executes the
+full backend and UI gate (`make all`), verifies documentation references (`make
+docs-verify`), audits all `requirements*.txt` pins for known vulnerabilities via `make
+pip-audit`, and finishes with the UI smoke test. Ensure the
+[`pip-audit`](https://pypi.org/project/pip-audit/) CLI from
+`requirements-dev.txt` is installed and that network access is available so the security
+scan can complete without downgrading the gate.
+
 ## Support & policies
 
 - Operations & incidents: see the [HDM runbook](docs/operations/runbooks/hdm.md) and

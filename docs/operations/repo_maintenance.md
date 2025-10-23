@@ -10,7 +10,7 @@ Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beit
 | `make ui-guard` | Verhindert Platzhalterstrings in Templates, blockiert `/api/...` HTMX-Aufrufe und stellt sicher, dass statische Assets vorhanden sind. |
 | `make ui-smoke` | Startet die App lokal und ruft `/live`, `/ui` sowie UI-Fragmente ab; schlägt fehl, wenn HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
-| `make release-check` | Kombiniert `make all` mit einem anschließenden `make ui-smoke` und dient als finales Release-Gate. |
+| `make release-check` | Kombiniert `make all`, `make docs-verify`, `make pip-audit` sowie einen abschließenden `make ui-smoke` und dient als finales Release-Gate. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
 | `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
 
@@ -35,14 +35,14 @@ pre-commit run --hook-stage push
 
 ## Manuelle Nightly-/Security-Checks
 
-- Führe `pip-audit -r requirements.txt` (Runtime-Pins) bei Bedarf lokal aus und dokumentiere die Ergebnisse im PR. Entwicklungs-
-  tooling (`requirements-dev.txt`) und Testbibliotheken (`requirements-test.txt`) werden separat installiert.
+- `make release-check` führt `pip-audit` bereits für alle verfügbaren `requirements*.txt`-Dateien aus. Dokumentiere erkannte
+  Schwachstellen direkt im PR, falls der Lauf fehlschlägt.
 - Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
 
 ## Release Checklist
 
 1. Versionierung & CHANGELOG aktualisieren.
-2. `make release-check` (inkl. UI-Smoketest) und optionale Security-Scans erneut ausführen.
+2. `make release-check` (inkl. `docs-verify`, `pip-audit` und UI-Smoketest) und optionale Security-Scans erneut ausführen.
 3. Packaging-Workflow nachvollziehen:
    - `pip install .`
    - `pip wheel . -w dist/`

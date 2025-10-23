@@ -17,9 +17,11 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
-| `make release-check`      | —                                   | Führt `make all` aus und ruft anschließend `make ui-smoke` auf; dient als finales Release-Gate. |
+| `make release-check`      | —                                   | Führt `make all`, anschließend `make docs-verify`, `make pip-audit` und `make ui-smoke` aus; dient als finales Release-Gate. |
 
 **Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all` bzw. `make release-check`) mit einem Fehler abgebrochen.
+
+**Zusatzhinweis:** `make pip-audit` benötigt das gleichnamige CLI aus `requirements-dev.txt` sowie Internetzugang, damit die Sicherheitsprüfung erfolgreich abgeschlossen werden kann.
 
 ### Voraussetzungen für den UI-Smoketest
 

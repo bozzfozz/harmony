@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -26,6 +26,9 @@ doctor:
 docs-verify:
 	@python scripts/docs_reference_guard.py
 
+pip-audit:
+	./scripts/dev/pip_audit.sh
+
 
 ui-guard:
 	./scripts/dev/ui_guard.sh
@@ -45,6 +48,8 @@ all:
 release-check:
 	@set -euo pipefail; \
 		$(MAKE) all; \
+		$(MAKE) docs-verify; \
+		$(MAKE) pip-audit; \
 		$(MAKE) ui-smoke
 
 lint-fix:
