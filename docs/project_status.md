@@ -1,22 +1,20 @@
 # Projektstatus Harmony Backend
 
 ## Gesamtüberblick
-- Observability-Signale wurden repariert: Scheduler-Leases schreiben erneut auf `app.orchestrator.metrics`, die Search-API emittiert `api.request`-Events und die Dokumentation beschreibt die Logger-Verträge. 【F:app/orchestrator/scheduler.py†L1-L180】【F:app/api/search.py†L1-L140】【F:docs/observability.md†L34-L56】
-- Runtime-Diagnosen respektieren Overrides (`/system/stats`), Playlist-Sync invalidiert Caches inkl. Detailpfade und Admin-Fixtures stellen den globalen FastAPI-Zustand nach jedem Test wieder her. 【F:app/api/system.py†L1-L460】【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/api/test_admin_artists.py†L1-L220】
-- Security-Gate basiert nun auf `pip-audit`; das zuvor geplante statische Scanning wurde verworfen. 【F:docs/security.md†L44-L52】
+- Harmony v1.0.0 bündelt das öffentliche FastAPI-API, Health-Surfaces und die Umgebungsprojektion `/env`, damit Deployments SQLite, Soulseek (slskd) und Worker-Zustände ohne interne Router prüfen können.【F:app/main.py†L1-L160】【F:app/api/system.py†L1-L260】【F:tests/test_live_endpoint.py†L1-L36】【F:tests/test_system_ready_endpoint.py†L1-L120】【F:tests/test_ready_check.py†L1-L160】【F:tests/test_env_endpoint.py†L1-L80】
+- Der Harmony Download Manager (HDM) taktet Watchlist-Refreshes und Künstler-Scans über den `WatchlistTimer` und sorgt mit idempotenten Queue-Schreibungen für nachvollziehbare Automatisierung.【F:app/orchestrator/timer.py†L1-L220】【F:app/orchestrator/handlers_artist.py†L1-L200】【F:tests/orchestrator/test_watchlist_timer.py†L1-L200】
+- Die serverseitige `/ui/watchlist`-Oberfläche erlaubt Pause, Resume und Prioritätsanpassungen mit CSRF-Schutz und fragmentbasierter Aktualisierung.【F:app/ui/routes/watchlist.py†L1-L220】【F:tests/ui/test_watchlist_page.py†L1-L160】
 
-## Fertiggestellte Arbeiten
-- **TD-20251008-002 – Orchestrator-Lease-Telemetrie:** Scheduler verwendet wieder den Metrics-Logger; Regressionstest prüft `orchestrator.lease`-Events. 【F:app/orchestrator/scheduler.py†L1-L180】【F:tests/orchestrator/test_scheduler.py†L1-L120】
-- **TD-20251008-003 – Search-API-Request-Telemetrie:** `_emit_api_event` ruft deterministisch `app.logging_events.log_event` und deckt Legacy-Shims ab. 【F:app/api/search.py†L1-L140】【F:tests/routers/test_search_logging.py†L1-L120】
-- **TD-20251008-004 – psutil-Overrides:** Resolver priorisiert Dependency-Overrides, `app.state.psutil` und Kompatibilitäts-Shims. 【F:app/api/system.py†L360-L460】【F:tests/test_system.py†L1-L120】
-- **TD-20251008-005 – Spotify-Status entkoppelt vom Cache:** Cache-Regeln schließen `/spotify/status` vom Response-Cache aus, damit Credential-Änderungen sofort sichtbar bleiben. 【F:app/config.py†L905-L925】【F:app/api/cache_policy.py†L32-L44】
-- **TD-20251008-006 – Playlist-Cache-Invalidierung:** Invalidator leert List- und Detail-Caches inklusive Pfad-Präfixen und protokolliert betroffene IDs. 【F:app/workers/playlist_sync_worker.py†L1-L140】【F:tests/spotify/test_playlist_cache_invalidation.py†L1-L40】
-- **TD-20251008-007 – Admin-Fixture stabilisiert:** Tests deregistrieren Admin-Routen und setzen das OpenAPI-Schema zurück, wodurch Snapshot-Drift vermieden wird. 【F:tests/api/test_admin_artists.py†L1-L220】【F:tests/snapshots/test_openapi_schema.py†L1-L40】
-- **TD-20251008-008 – Ruff-Importregel erzwungen:** Import-Formatierung bereinigt und lokales Gate ergänzt; Dokumentation aktualisiert. 【F:docs/operations/local-workflow.md†L10-L21】
+## Qualitätsbaseline
+- GitHub Actions führt im Workflow [`backend-ci`](../.github/workflows/ci.yml) Formatierung, Linting, Typprüfungen, Pytests und Smoke-Checks sequenziell aus (`make fmt`, `make lint`, `make test`, `make smoke`).
+- Die Makefile-Targets [`fmt`, `lint`, `types`, `test`](../Makefile) nutzen die Auto-Repair-Engine, um `ruff`, `mypy` und `pytest` deterministisch zu fahren und bei Bedarf Auto-Fixes zu versuchen.【F:scripts/auto_repair/engine.py†L452-L504】
+- Das neue Target [`make docs-verify`](../Makefile) ruft [`scripts/docs_reference_guard.py`](../scripts/docs_reference_guard.py) auf und bricht, sobald Dokumentation auf nicht existente Pfade verweist.
 
-## Offene Aufgaben (Priorität ≥ P1)
-- Keine offenen P0/P1-Issues; sicherheitsseitig sind Dependency-Audits verpflichtend, weiteres Scanning bleibt optional. 【F:docs/operations/local-workflow.md†L10-L18】
+## Verifizierte Artefakte
+- Ready-/Status-Checks aggregieren Datei-basiertes SQLite, Soulseek-Erreichbarkeit und Idempotency-Konfiguration mit aussagekräftigen Fehlern.【F:app/ops/selfcheck.py†L1-L220】【F:tests/test_ready_check.py†L1-L160】
+- Soulseek-Downloads werden mit Live-Queue-Metadaten angereichert; Transportfehler degraden zu beobachtbaren Nullwerten statt Hard-Failures.【F:app/services/download_service.py†L1-L200】【F:tests/test_download_service.py†L1-L120】
+- Spotify-Playlist-Sync markiert Snapshots als stale, respektiert konfigurierbare Zeitfenster und das Backfill-API liefert aufbereitete Job-Historie.【F:app/workers/playlist_sync_worker.py†L1-L260】【F:tests/test_playlist_sync_worker.py†L1-L160】【F:app/api/spotify.py†L1-L260】【F:tests/test_spotify_backfill_history.py†L1-L120】
 
 ## Empfohlene nächsten Schritte
-1. Dependency-Audit-Gate (`pip-audit`) regelmäßig prüfen und bei Upstream-Änderungen aktualisieren.
-2. Evaluieren, ob langfristig ein leichtgewichtiges statisches Security-Tool ergänzt werden soll.
+1. Den Referenz-Guard auf weitere Kern-Dokumente (z. B. `docs/overview.md`, `README.md`) ausweiten, sobald deren Pfadkonventionen stabil sind.
+2. UI-Fragmente für weitere HDM-Flows (Downloads, DLQ) mit dedizierten Tests hinterlegen, um die SSR-Oberfläche konsistent abzudecken.
