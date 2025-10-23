@@ -107,6 +107,7 @@ def test_missing_api_key_uses_app_state_override(caplog: pytest.LogCaptureFixtur
         response = client.get("/protected")
 
     assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "APIKey"
     assert response.json() == {
         "ok": False,
         "error": {
@@ -131,6 +132,7 @@ def test_middleware_logs_misconfiguration(caplog: pytest.LogCaptureFixture) -> N
         response = client.get("/protected")
 
     assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "APIKey"
     assert response.json() == {
         "ok": False,
         "error": {
@@ -165,6 +167,7 @@ def test_invalid_api_key_returns_forbidden(
         response = client.get("/protected", headers=headers)
 
     assert response.status_code == 403
+    assert "WWW-Authenticate" not in response.headers
     assert response.json() == {
         "ok": False,
         "error": {
@@ -199,6 +202,7 @@ def test_missing_api_key_variants_return_unauthorized(headers: Mapping[str, str]
         response = client.get("/protected", headers=headers)
 
     assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "APIKey"
     assert response.json() == {
         "ok": False,
         "error": {

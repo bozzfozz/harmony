@@ -77,7 +77,6 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
             )
             error = AuthenticationRequiredError(
                 message="An API key is required to access this resource.",
-                status_code=status.HTTP_401_UNAUTHORIZED,
             )
             return error.as_response(request_path=path, method=request.method)
 
@@ -93,7 +92,6 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
             )
             error = AuthenticationRequiredError(
                 message="An API key is required to access this resource.",
-                status_code=status.HTTP_401_UNAUTHORIZED,
             )
             return error.as_response(request_path=path, method=request.method)
 
