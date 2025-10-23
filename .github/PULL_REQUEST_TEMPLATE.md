@@ -33,5 +33,6 @@
 - [ ] `make foss-scan` ausgeführt (Report ohne Blocker)
 - [ ] `pre-commit run --all-files`
 - [ ] `pre-commit run --hook-stage push`
+- [ ] Architektur-Dokumente geprüft/aktualisiert (siehe `docs/architecture/README.md`)
 - [ ] Wiring-Report und Removal-Report im PR-Body gepflegt
 - [ ] Logs der Pflichtläufe angehängt
