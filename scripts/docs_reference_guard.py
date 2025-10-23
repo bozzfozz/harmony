@@ -14,6 +14,25 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CITATION_PATTERN = re.compile(r"【F:([^†】]+)")
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
+DEFAULT_DOC_PATHS = [
+    Path("README.md"),
+    Path("CHANGELOG.md"),
+    Path("docs/README.md"),
+    Path("docs/overview.md"),
+    Path("docs/architecture.md"),
+    Path("docs/observability.md"),
+    Path("docs/security.md"),
+    Path("docs/testing.md"),
+    Path("docs/project_status.md"),
+    Path("docs/troubleshooting.md"),
+    Path("docs/operations/runbooks/hdm.md"),
+]
+
+DEFAULT_DOC_DIRECTORIES = [
+    Path("docs/operations"),
+    Path("docs/process"),
+]
+
 
 @dataclass(slots=True)
 class Reference:
@@ -27,28 +46,21 @@ class Reference:
 
 
 def _default_paths() -> list[Path]:
-    docs_dir = REPO_ROOT / "docs"
-    operations_dir = docs_dir / "operations"
-
-    base_paths = [
-        REPO_ROOT / "CHANGELOG.md",
-        docs_dir / "README.md",
-        docs_dir / "project_status.md",
-        docs_dir / "troubleshooting.md",
-        operations_dir / "runbooks" / "hdm.md",
-    ]
-
     seen: set[Path] = set()
     resolved: list[Path] = []
 
-    for path in base_paths:
+    for relative_path in DEFAULT_DOC_PATHS:
+        path = (REPO_ROOT / relative_path).resolve()
         if path in seen:
             continue
         seen.add(path)
         resolved.append(path)
 
-    if operations_dir.exists():
-        for path in sorted(operations_dir.glob("**/*.md")):
+    for directory_path in DEFAULT_DOC_DIRECTORIES:
+        directory = (REPO_ROOT / directory_path).resolve()
+        if not directory.exists():
+            continue
+        for path in sorted(directory.glob("**/*.md")):
             if path in seen:
                 continue
             seen.add(path)
