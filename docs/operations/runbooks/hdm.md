@@ -169,7 +169,7 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 2. Öffnen Sie einen SSH-Tunnel: `ssh -N -L 8888:127.0.0.1:8888 user@host`.
 3. Wiederholen Sie den OAuth-Flow oder senden Sie die Redirect-URL an
    `POST /api/v1/oauth/manual`.
-4. Dokumentieren Sie den Remote-Fix im Incident-Log (Ticket, Slack-Thread).
+4. Dokumentieren Sie den Remote-Fix im internen Incident-Journal (siehe privates Ops-Wiki).
 
 ### DLQ und Backfill
 
@@ -206,10 +206,9 @@ Das frühere statische Frontend wurde entfernt. Der Runbook-Fokus liegt auf API 
 
 ## Eskalation
 
-- **SRE-Rotation:** `PD/Harmony-Platform` (PagerDuty).
-- **Produkt-Owner Spotify:** Platform Engineering – Spotify Integrationen (Slack `#harmony-platform`).
-- **Vendor:** Spotify Support (Dashboard → _Contact Us_ → „Production Outage“).
+- **Interne Bereitschaft:** Kontaktieren Sie die im Ops-Kalender hinterlegte HDM-Bereitschaft über die interne Hotline oder das On-Call-Tool. Die Rotation ist ausschließlich im privaten Kalender dokumentiert.
+- **Plattform-Leitung:** Reagiert die Bereitschaft nicht innerhalb von 15 Minuten, informieren Sie die Plattform-Leitung über den internen Incident-Bridge-Anruf (`ops-bridge`).
+- **Vendor-Koordination:** Benötigen Sie Unterstützung durch Spotify, initiiert die Plattform-Leitung den in der privaten Vendor-Playbook-Bibliothek beschriebenen Ablauf.
 
-Alle Eskalationen sollten in der zentralen Incident-Dokumentation referenziert
-werden. Aktualisieren Sie [HDM Audit](../../compliance/hdm_audit.md), sobald neue Kontrollen eingeführt
+Alle Eskalationen sollten im internen Incident-Journal referenziert werden. Aktualisieren Sie [HDM Audit](../../compliance/hdm_audit.md), sobald neue Kontrollen eingeführt
 werden.
