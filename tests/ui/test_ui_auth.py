@@ -123,24 +123,24 @@ def test_login_success(monkeypatch) -> None:
     assert 'name="csrftoken"' in body
 
 
-def test_login_sets_secure_cookies_by_default(monkeypatch) -> None:
+def test_login_sets_insecure_cookies_by_default(monkeypatch) -> None:
     with _create_client(monkeypatch) as client:
-        response = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
-        assert response.status_code == 303
-        session_cookie = _cookie_header(response, "ui_session")
-        csrf_cookie = _cookie_header(response, "csrftoken")
-        assert "secure" in session_cookie.lower()
-        assert "secure" in csrf_cookie.lower()
-
-
-def test_login_allows_insecure_cookies(monkeypatch) -> None:
-    with _create_client(monkeypatch, extra_env={"UI_COOKIES_SECURE": "false"}) as client:
         response = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
         assert response.status_code == 303
         session_cookie = _cookie_header(response, "ui_session")
         csrf_cookie = _cookie_header(response, "csrftoken")
         assert "secure" not in session_cookie.lower()
         assert "secure" not in csrf_cookie.lower()
+
+
+def test_login_allows_secure_cookies(monkeypatch) -> None:
+    with _create_client(monkeypatch, extra_env={"UI_COOKIES_SECURE": "true"}) as client:
+        response = client.post("/ui/login", data={"api_key": "primary-key"}, follow_redirects=False)
+        assert response.status_code == 303
+        session_cookie = _cookie_header(response, "ui_session")
+        csrf_cookie = _cookie_header(response, "csrftoken")
+        assert "secure" in session_cookie.lower()
+        assert "secure" in csrf_cookie.lower()
 
 
 def test_login_failure(monkeypatch) -> None:
