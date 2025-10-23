@@ -313,12 +313,22 @@ class UiSessionManager:
                 return None
             return session.jobs.spotify_free_ingest_job_id
 
-    async def set_spotify_free_ingest_job_id(self, identifier: str, job_id: str | None) -> None:
+    async def set_spotify_free_ingest_job_id(
+        self,
+        identifier: str,
+        job_id: str | None,
+        *,
+        session: UiSession | None = None,
+    ) -> None:
         async with self._lock:
-            session = self._get_active_session(identifier)
-            if session is None:
+            active_session = self._get_active_session(identifier)
+            if active_session is None:
                 return
-            self._store.set_spotify_free_ingest_job_id(identifier, job_id)
+            if not self._store.set_spotify_free_ingest_job_id(identifier, job_id):
+                return
+            active_session.jobs.spotify_free_ingest_job_id = job_id
+            if session is not None and session is not active_session:
+                session.jobs.spotify_free_ingest_job_id = job_id
 
     async def get_spotify_backfill_job_id(self, identifier: str) -> str | None:
         async with self._lock:
@@ -327,19 +337,40 @@ class UiSessionManager:
                 return None
             return session.jobs.spotify_backfill_job_id
 
-    async def set_spotify_backfill_job_id(self, identifier: str, job_id: str | None) -> None:
+    async def set_spotify_backfill_job_id(
+        self,
+        identifier: str,
+        job_id: str | None,
+        *,
+        session: UiSession | None = None,
+    ) -> None:
         async with self._lock:
-            session = self._get_active_session(identifier)
-            if session is None:
+            active_session = self._get_active_session(identifier)
+            if active_session is None:
                 return
-            self._store.set_spotify_backfill_job_id(identifier, job_id)
+            if not self._store.set_spotify_backfill_job_id(identifier, job_id):
+                return
+            active_session.jobs.spotify_backfill_job_id = job_id
+            if session is not None and session is not active_session:
+                session.jobs.spotify_backfill_job_id = job_id
 
-    async def clear_job_state(self, identifier: str) -> None:
+    async def clear_job_state(
+        self,
+        identifier: str,
+        *,
+        session: UiSession | None = None,
+    ) -> None:
         async with self._lock:
-            session = self._get_active_session(identifier)
-            if session is None:
+            active_session = self._get_active_session(identifier)
+            if active_session is None:
                 return
-            self._store.clear_job_state(identifier)
+            if not self._store.clear_job_state(identifier):
+                return
+            active_session.jobs.spotify_free_ingest_job_id = None
+            active_session.jobs.spotify_backfill_job_id = None
+            if session is not None and session is not active_session:
+                session.jobs.spotify_free_ingest_job_id = None
+                session.jobs.spotify_backfill_job_id = None
 
     def _stored_from_session(self, session: UiSession) -> StoredUiSession:
         return StoredUiSession(
@@ -583,7 +614,11 @@ async def set_spotify_free_ingest_job_id(
     request: Request, session: UiSession, job_id: str | None
 ) -> None:
     manager = get_session_manager(request)
-    await manager.set_spotify_free_ingest_job_id(session.identifier, job_id)
+    await manager.set_spotify_free_ingest_job_id(
+        session.identifier,
+        job_id,
+        session=session,
+    )
 
 
 async def get_spotify_backfill_job_id(request: Request, session: UiSession) -> str | None:
@@ -595,12 +630,16 @@ async def set_spotify_backfill_job_id(
     request: Request, session: UiSession, job_id: str | None
 ) -> None:
     manager = get_session_manager(request)
-    await manager.set_spotify_backfill_job_id(session.identifier, job_id)
+    await manager.set_spotify_backfill_job_id(
+        session.identifier,
+        job_id,
+        session=session,
+    )
 
 
 async def clear_spotify_job_state(request: Request, session: UiSession) -> None:
     manager = get_session_manager(request)
-    await manager.clear_job_state(session.identifier)
+    await manager.clear_job_state(session.identifier, session=session)
 
 
 async def require_session(request: Request) -> UiSession:
