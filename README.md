@@ -24,7 +24,9 @@ exposes the API on **port 8080** and stores all state in SQLite.
   provide matching, downloads and metadata enrichment.
 
 See the extended overview in [`docs/overview.md`](docs/overview.md).
-The complete documentation map lives in [`docs/README.md`](docs/README.md).
+Operator-facing documentation is curated in
+[`docs/user/README.md`](docs/user/README.md), while engineering guardrails live
+in [`docs/ai/README.md`](docs/ai/README.md).
 
 ## Quickstart
 
@@ -109,8 +111,9 @@ A complete walkthrough and troubleshooting tips are in
 
 The backend, workers and HDM share one process. HDM coordinates ingest pipelines,
 communicates with Spotify and Soulseek, and publishes structured logs for observability.
-An architectural overview, HDM internals and operational guides are linked from the
-documentation hub in [`docs/README.md`](docs/README.md). Highlights include:
+An architectural overview, HDM internals and operational guides are linked from
+the audience hubs in [`docs/user/README.md`](docs/user/README.md) and
+[`docs/ai/README.md`](docs/ai/README.md). Highlights include:
 
 - [`docs/overview.md`](docs/overview.md)
 - [`docs/architecture/hdm.md`](docs/architecture/hdm.md)
