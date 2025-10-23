@@ -36,7 +36,7 @@ docker run -d \
   -p 8080:8080 \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
-  ghcr.io/bozzfozz/harmony:latest
+  ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
 - The container creates the SQLite database at `/data/harmony.db`.
@@ -59,6 +59,10 @@ A docker compose definition with the same defaults ships in
 [`compose.yaml`](compose.yaml). Adjust the `/mnt/...` host paths to match your
 environment and see [`docs/install/docker.md`](docs/install/docker.md) for
 additional deployment notes.
+
+> The canonical backend version lives in [`app/version.py`](app/version.py).
+> Harmony v**1.0.0** exposes the same number via `/live`, `/env` and the
+> OpenAPI schema so pinned deployments and health checks stay in sync.
 
 ## Minimal configuration
 

@@ -12,5 +12,5 @@
 - `downloads`-Tabelle enthält Status, Fortschritt und Aktualisierungszeitpunkt; Sync-Worker pollt Soulseek für Updates.
 
 ## Dokumentation
-- README um Neuerungen in v1.2.0 ergänzt.
+- README um Neuerungen in v1.0.0 ergänzt.
 - Dokumentation beschreibt den Soulseek-Download-Fortschritt.

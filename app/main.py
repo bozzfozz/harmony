@@ -51,6 +51,7 @@ from app.utils.settings_store import ensure_default_settings
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
+from app.version import __version__
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(UTC)
@@ -725,7 +726,7 @@ _openapi_url = router_registry.compose_prefix(_API_BASE_PATH, "/openapi.json")
 
 app = FastAPI(
     title="Harmony Backend",
-    version="1.4.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url=_docs_url,
     redoc_url=_redoc_url,
@@ -750,7 +751,7 @@ app.state.orchestrator_status = _initial_orchestrator_status(
 )
 app.state.health_service = HealthService(
     start_time=_APP_START_TIME,
-    version=app.version,
+    version=__version__,
     config=_config_snapshot.health,
     session_factory=get_session,
     dependency_probes=_build_dependency_probes(),
@@ -819,7 +820,7 @@ async def environment_info() -> EnvironmentResponse:
             "interval_s": watchlist_timer_config.interval_s,
         },
         build={
-            "version": app.version,
+            "version": __version__,
             "started_at": _APP_START_TIME.isoformat(),
         },
     )
@@ -839,13 +840,13 @@ activity_manager.configure_response_cache(
 
 
 async def root() -> dict[str, str]:
-    return {"status": "ok", "version": app.version}
+    return {"status": "ok", "version": __version__}
 
 
 async def live_probe() -> dict[str, str]:
     """Expose a top-level liveness probe independent of other routers."""
 
-    version = getattr(app, "version", "unknown")
+    version = getattr(app, "version", __version__)
     return {"status": "ok", "version": version}
 
 
