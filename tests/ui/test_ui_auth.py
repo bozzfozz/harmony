@@ -17,7 +17,11 @@ from app.ui.services import (
     SpotifyFreeIngestSkipped,
     get_spotify_ui_service,
 )
-from app.ui.session import fingerprint_api_key, register_ui_session_metrics
+from app.ui.session import (
+    fingerprint_api_key,
+    register_ui_session_metrics,
+    _resolve_login_rate_limit_config,
+)
 from app.utils import metrics
 
 _CSRF_META_PATTERN = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
@@ -416,6 +420,39 @@ def test_session_persists_across_clients(monkeypatch) -> None:
     with _create_client(monkeypatch) as second_client:
         response = second_client.get("/ui/", headers={"Cookie": cookie_header})
         _assert_html_response(response)
+
+
+def test_login_rate_limit_uses_configured_budget(monkeypatch) -> None:
+    base = datetime(2024, 1, 1, tzinfo=UTC)
+    current = [base]
+
+    def fake_now() -> datetime:
+        return current[0]
+
+    monkeypatch.setattr("app.ui.session._utcnow", fake_now)
+
+    with _create_client(monkeypatch) as client:
+        config = _resolve_login_rate_limit_config()
+        assert config is not None
+        attempts = config.attempts
+        window_seconds = int(config.window.total_seconds())
+
+        for _ in range(attempts):
+            current[0] = base
+            response = client.post(
+                "/ui/login",
+                data={"api_key": "wrong"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 400
+
+        limited = client.post(
+            "/ui/login",
+            data={"api_key": "wrong"},
+            follow_redirects=False,
+        )
+        assert limited.status_code == 429
+        assert limited.headers.get("retry-after") == str(window_seconds)
 
 
 def test_login_rate_limit_repeated_invalid(monkeypatch) -> None:
