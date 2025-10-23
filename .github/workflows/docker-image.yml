@@ -35,6 +35,31 @@ jobs:
       - name: Supply guard
         run: make supply-guard
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-test.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt -r requirements-test.txt
+          pip install -e .
+
+      - name: Run release checks (make release-check)
+        env:
+          SLSKD_API_KEY: smoke-key
+        run: |
+          make release-check
+          git diff --exit-code
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

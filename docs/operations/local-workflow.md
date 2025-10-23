@@ -17,8 +17,19 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
+| `make release-check`      | —                                   | Führt `make all` aus und ruft anschließend `make ui-smoke` auf; dient als finales Release-Gate. |
 
-**Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all`) mit einem Fehler abgebrochen.
+**Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all` bzw. `make release-check`) mit einem Fehler abgebrochen.
+
+### Voraussetzungen für den UI-Smoketest
+
+Damit `make ui-smoke` (oder der in `make release-check` integrierte Lauf) zuverlässig grün wird, müssen lokal folgende Bedingungen erfüllt sein:
+
+- **Python-Abhängigkeiten installiert:** `uvicorn` und `httpx` stammen aus den Backend-Requirements. Installiere sie über `pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt` oder `pip install -e .`.
+- **Freier API-Port:** Der Test startet `uvicorn` auf dem per `APP_PORT` (Standard: `8080`) aus `app.config` ermittelten Port. Stelle sicher, dass kein anderes Programm auf diesem Port lauscht oder setze `APP_PORT` vorher auf einen freien Port.
+- **Schreibrechte im Repository:** Das Skript legt Log- und Daten-Dateien unter `.tmp/` an (`ui-smoke.log`, `ui-smoke.db`, Downloads/Music-Verzeichnisse). Für schreibgeschützte Mounts oder temporäre Dateisysteme muss ein alternativer Speicherort per `TMPDIR`/`DOWNLOADS_DIR`/`MUSIC_DIR` konfiguriert werden.
+- **Loopback-Erreichbarkeit:** Der Test ruft das UI über `http://127.0.0.1:${APP_PORT}` auf. Lokale Firewalls oder Container-Netzwerkregeln dürfen Verbindungen zum Loopback-Interface nicht blockieren.
+- **Soulseek-Proxy konfigurieren:** Ohne konfigurierten `SLSKD_API_KEY` bricht der Backend-Start vor dem Smoketest ab. Setze für lokale Läufe einen Dummy-Wert (z. B. `ui-smoke-key`), falls kein echtes SoulseekD-Backend erreichbar ist.
 
 ## GitHub Actions `backend-ci`
 
