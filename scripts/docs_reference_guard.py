@@ -27,7 +27,34 @@ class Reference:
 
 
 def _default_paths() -> list[Path]:
-    return [REPO_ROOT / "CHANGELOG.md", REPO_ROOT / "docs" / "project_status.md"]
+    docs_dir = REPO_ROOT / "docs"
+    operations_dir = docs_dir / "operations"
+
+    base_paths = [
+        REPO_ROOT / "CHANGELOG.md",
+        docs_dir / "README.md",
+        docs_dir / "project_status.md",
+        docs_dir / "troubleshooting.md",
+        operations_dir / "runbooks" / "hdm.md",
+    ]
+
+    seen: set[Path] = set()
+    resolved: list[Path] = []
+
+    for path in base_paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        resolved.append(path)
+
+    if operations_dir.exists():
+        for path in sorted(operations_dir.glob("**/*.md")):
+            if path in seen:
+                continue
+            seen.add(path)
+            resolved.append(path)
+
+    return resolved
 
 
 def _compute_line(text: str, index: int) -> int:
