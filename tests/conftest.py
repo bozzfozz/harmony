@@ -1,8 +1,10 @@
-from collections.abc import Iterator
+import asyncio
 import importlib
+import inspect
 import os
 from pathlib import Path
 import sys
+from collections.abc import Iterator
 
 import pytest
 
@@ -15,6 +17,22 @@ os.environ.setdefault("HARMONY_DISABLE_WORKERS", "true")
 
 override_runtime_env = importlib.import_module("app.config").override_runtime_env
 reset_engine_for_tests = importlib.import_module("app.db").reset_engine_for_tests
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
+    marker = pyfuncitem.get_closest_marker("asyncio")
+    if marker is None:
+        return None
+    test_func = pyfuncitem.obj
+    if not inspect.iscoroutinefunction(test_func):
+        return None
+    fixtureinfo = getattr(pyfuncitem, "_fixtureinfo", None)
+    if fixtureinfo is None:
+        return None
+    kwargs = {name: pyfuncitem.funcargs[name] for name in fixtureinfo.argnames}
+    asyncio.run(test_func(**kwargs))
+    return True
 
 
 @pytest.fixture(autouse=True)
