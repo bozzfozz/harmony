@@ -19,13 +19,18 @@ maintains `harmony.db` inside the `/data` volume.
 docker run -d \
   --name harmony \
   -p 8080:8080 \
+  -v $(pwd)/data:/data \
   -v $(pwd)/data/downloads:/data/downloads \
   -v $(pwd)/data/music:/data/music \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
-- Harmony creates missing directories on start-up and keeps the SQLite database at
-  `/data/harmony.db`.
+- Mount `/data` to persist the SQLite database (`harmony.db`) and generated
+  configuration (`harmony.yml`). Replace `$(pwd)/data` with the host directory
+  that should hold these files.
+- Mount `/data/downloads` and `/data/music` to persist downloads and the
+  organised library.
+- Harmony creates missing directories on start-up.
 - Optional security hardening:
   - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
   - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
@@ -44,6 +49,12 @@ curl -fsS http://127.0.0.1:8080/api/health/ready?verbose=1
 
 Both commands must return HTTP 200. The ready endpoint prints dependency details when
 `verbose=1` is supplied.
+
+To retrofit the `/data` mount on an existing container, create the persistent
+host directory, copy `harmony.db` and `harmony.yml` out of the container
+(`docker cp harmony:/data/harmony.db ./data/ && docker cp harmony:/data/harmony.yml ./data/`),
+stop the container, and restart it with the extra `-v ...:/data` flag. Harmony
+will reuse the copied files on the next boot.
 
 ## Using docker compose
 
