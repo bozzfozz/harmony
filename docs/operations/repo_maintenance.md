@@ -41,8 +41,10 @@ pre-commit run --hook-stage push
 
 1. Versionierung & CHANGELOG aktualisieren.
 2. `make all` und optionale Security-Scans erneut ausführen.
-3. Artefakte erstellen:
-   - Python: `python -m build`
+3. Packaging-Workflow nachvollziehen:
+   - `pip install .`
+   - `pip wheel . -w dist/`
+   - `python -m build`
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership

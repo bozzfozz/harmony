@@ -1,3 +1,62 @@
+[build-system]
+requires = ["setuptools>=65.5", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harmony"
+description = "Automation-friendly FastAPI backend for Spotify metadata, Soulseek downloads, and post-processing."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Harmony Maintainers" },
+]
+license = { text = "All rights reserved" }
+keywords = ["fastapi", "music", "automation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: FastAPI",
+    "Operating System :: OS Independent",
+    "License :: Other/Proprietary License",
+]
+dynamic = ["version"]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "aiohttp",
+    "aiosqlite",
+    "spotipy",
+    "pydantic",
+    "httpx",
+    "psutil",
+    "mutagen",
+    "prometheus-client",
+]
+
+[project.scripts]
+harmony-selfcheck = "app.ops.selfcheck:main"
+
+[project.urls]
+Homepage = "https://github.com/bozzfozz/harmony"
+Documentation = "https://github.com/bozzfozz/harmony#readme"
+Issues = "https://github.com/bozzfozz/harmony/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["app", "app.*", "jinja2"]
+
+[tool.setuptools.package-data]
+app = [
+    "ui/templates/**/*.j2",
+    "ui/static/**/*",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "app.version.__version__" }
+
 [tool.ruff]
 line-length = 100
 src = ["app", "tests"]
@@ -29,4 +88,3 @@ source = ["app"]
 fail_under = 0
 show_missing = true
 skip_covered = false
-
