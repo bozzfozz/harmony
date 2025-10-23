@@ -177,12 +177,21 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 **Schritte:**
 
-1. Greifen Sie die fehlerhaften Items via `scripts/dlq/replay_backfill.py` ab.
+1. Ermitteln Sie die betroffenen Jobs mit `GET /api/v1/dlq` (siehe
+   [DLQ-API-Referenz](../dlq.md#get-apiv1dlq)). Filtern Sie bei Bedarf nach
+   `reason=spotify` und kopieren Sie die `id`-Werte für den Requeue.
 2. Prüfen Sie, ob die OAuth-Token gültig sind (`GET /spotify/status`).
-3. Wiederholen Sie den Backfill mit `POST /api/v1/backfill/retry` oder führen Sie
-   `python scripts/dlq/replay_backfill.py --once` im Container aus.
-4. Schließen Sie den Incident, sobald `reports/dlq/` leer ist und die
-   Metadaten aktualisiert wurden.
+3. Re-queue der Einträge via `POST /api/v1/dlq/requeue` (siehe
+   [Requeue-Endpunkt](../dlq.md#post-apiv1dlqrequeue)) und übergeben Sie die
+   aus Schritt 1 gesammelten IDs. Achten Sie auf `skipped`-Antworten und beheben
+   Sie den gemeldeten Grund, bevor Sie erneut versuchen.
+4. Optional: Entfernen Sie veraltete Einträge mit `POST /api/v1/dlq/purge`, wenn
+   sie nicht mehr benötigt werden (siehe
+   [Purge-Endpunkt](../dlq.md#post-apiv1dlqpurge)).
+5. Beobachten Sie `event=dlq.requeue`/`event=dlq.purge` in den Logs sowie
+   `GET /api/v1/dlq/stats` (siehe [Stats-Endpunkt](../dlq.md#get-apiv1dlqstats))
+   und schließen Sie den Incident, sobald die DLQ leer ist und die Metadaten
+   aktualisiert wurden (`reports/dlq/` bleibt leer).
 
 ## QA & Tests
 
