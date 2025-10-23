@@ -3227,7 +3227,7 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     security_profile, security_defaults = _resolve_security_profile(env)
     require_auth_override = _parse_bool_override(_env_value(env, "FEATURE_REQUIRE_AUTH"))
     rate_limit_override = _parse_bool_override(_env_value(env, "FEATURE_RATE_LIMITING"))
-    ui_cookies_secure = _as_bool(_env_value(env, "UI_COOKIES_SECURE"), default=True)
+    ui_cookies_secure = _as_bool(_env_value(env, "UI_COOKIES_SECURE"), default=False)
     rate_limit_enabled = (
         security_defaults.rate_limiting if rate_limit_override is None else rate_limit_override
     )
