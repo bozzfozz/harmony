@@ -5,7 +5,11 @@ from app.config import AppConfig
 from app.dependencies import get_app_config
 from app.errors import AppError
 from app.logging_events import log_event
-from app.schemas.watchlist import WatchlistEntryCreate, WatchlistPriorityUpdate
+from app.schemas.watchlist import (
+    WatchlistEntryCreate,
+    WatchlistPauseRequest,
+    WatchlistPriorityUpdate,
+)
 from app.ui.context.operations import (
     build_watchlist_fragment_context,
     build_watchlist_page_context,
@@ -194,9 +198,27 @@ async def watchlist_pause(
     values = _parse_form_body(await request.body())
     limit = values.get("limit")
     offset = values.get("offset")
+    pause_payload_raw = {
+        "reason": values.get("reason"),
+        "resume_at": values.get("resume_at") or None,
+    }
 
     try:
-        table = await service.pause_entry(request, artist_key=artist_key)
+        pause_payload = WatchlistPauseRequest.model_validate(pause_payload_raw)
+    except ValidationError:
+        return _render_alert_fragment(
+            request,
+            "Please provide a valid resume date and time.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        table = await service.pause_entry(
+            request,
+            artist_key=artist_key,
+            reason=pause_payload.reason,
+            resume_at=pause_payload.resume_at,
+        )
     except AppError as exc:
         log_event(
             logger,

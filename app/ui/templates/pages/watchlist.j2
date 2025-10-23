@@ -30,8 +30,13 @@
           hx-swap="{{ watchlist_fragment.swap }}">
       <input type="hidden" name="csrftoken" value="{{ csrf_token }}" />
       {% for field in watchlist_form.fields %}
-        <div class="form-field">
-          <label for="{{ field.name }}">{{ strings.form_label(field.label_key) }}</label>
+        <div class="form-field{% if not field.required %} form-field--optional{% endif %}">
+          <label for="{{ field.name }}">
+            {{ strings.form_label(field.label_key) }}
+            {% if not field.required %}
+              <span class="form-field__optional">{{ strings.form_optional_hint() }}</span>
+            {% endif %}
+          </label>
           <input type="{{ field.input_type }}"
                  name="{{ field.name }}"
                  id="{{ field.name }}"

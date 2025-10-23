@@ -171,6 +171,16 @@ def build_watchlist_page_context(
                 input_type="number",
                 label_key="watchlist.priority",
             ),
+            FormField(
+                name="pause_reason",
+                input_type="text",
+                label_key="watchlist.pause_reason",
+            ),
+            FormField(
+                name="resume_at",
+                input_type="datetime-local",
+                label_key="watchlist.resume_at",
+            ),
         ),
     )
 
@@ -423,6 +433,20 @@ def _build_watchlist_row(
                 hx_target="#hx-watchlist-table",
                 hx_swap="outerHTML",
                 test_id=f"watchlist-pause-{slug}",
+                inputs=(
+                    TableCellInput(
+                        name="reason",
+                        input_type="text",
+                        aria_label_key="watchlist.pause.reason_input",
+                        test_id=f"watchlist-pause-reason-{slug}",
+                    ),
+                    TableCellInput(
+                        name="resume_at",
+                        input_type="datetime-local",
+                        aria_label_key="watchlist.pause.resume_at_input",
+                        test_id=f"watchlist-pause-resume-at-{slug}",
+                    ),
+                ),
             )
         )
 
