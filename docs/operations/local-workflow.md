@@ -33,6 +33,12 @@ Der Readiness-Self-Check überwacht zusätzlich alle Pflicht-Templates sowie `ap
    pre-commit install --hook-type pre-push
    pre-commit run --all-files
    ```
+   Die konfigurierten Hooks prüfen aktuell ausschließlich die Python-Toolchain und das Supply-Chain-Guardrail:
+   - `ruff-format` und `ruff` laufen direkt aus dem offiziellen Repository.
+   - `scripts/dev/fmt.sh` und `scripts/dev/dep_sync_py.sh` stellen Formatierung sowie Python-Abhängigkeiten sicher.
+   - `scripts/dev/supply_guard.sh` verhindert eingecheckte Frontend-Build-Artefakte.
+   - `scripts/dev/test_py.sh` wird als Pre-Push-Hook ausgeführt und deckt den Pytest-Lauf ab.
+   Ein dedizierter JavaScript- oder Frontend-Verify-Hook ist derzeit nicht mehr aktiv.
 5. **Kompletter Gate-Lauf:** `make all`
 6. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
 7. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
