@@ -24,9 +24,10 @@ def test_ui_asset_size_budgets() -> None:
     """Static UI assets should remain within their documented size budgets."""
 
     css_size = CSS_ASSET.stat().st_size
-    assert css_size <= CSS_BUDGET_BYTES, (
+    css_budget_message = (
         f"app.css is {css_size} bytes but the budget is {CSS_BUDGET_BYTES} bytes (≤20 KB)."
     )
+    assert css_size <= CSS_BUDGET_BYTES, css_budget_message
 
     htmx_gzip_size = _gzip_size(HTMX_ASSET)
     assert htmx_gzip_size <= HTMX_GZIP_BUDGET_BYTES, (
