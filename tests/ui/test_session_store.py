@@ -148,10 +148,7 @@ def test_ui_session_manager_updates_session_job_state_immediately(
             session=session,
         )
         assert session.jobs.spotify_free_ingest_job_id == "job-free"
-        assert (
-            await manager.get_spotify_free_ingest_job_id(session.identifier)
-            == "job-free"
-        )
+        assert await manager.get_spotify_free_ingest_job_id(session.identifier) == "job-free"
 
         await manager.set_spotify_backfill_job_id(
             session.identifier,
@@ -159,10 +156,7 @@ def test_ui_session_manager_updates_session_job_state_immediately(
             session=session,
         )
         assert session.jobs.spotify_backfill_job_id == "job-backfill"
-        assert (
-            await manager.get_spotify_backfill_job_id(session.identifier)
-            == "job-backfill"
-        )
+        assert await manager.get_spotify_backfill_job_id(session.identifier) == "job-backfill"
 
         await manager.clear_job_state(session.identifier, session=session)
         assert session.jobs.spotify_free_ingest_job_id is None

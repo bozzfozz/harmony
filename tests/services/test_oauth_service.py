@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import sys
-import time
 from threading import Barrier
+import time
 from typing import Any
 
 import pytest

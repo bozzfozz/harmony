@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import datetime, timezone
 
-import pytest
 from fastapi import FastAPI, status as fastapi_status
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api.watchlist import router as watchlist_router
 from app.db import init_db

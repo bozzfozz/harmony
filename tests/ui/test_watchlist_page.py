@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import pytest
 from datetime import UTC, datetime
 
 from fastapi import status
+import pytest
 
 from app.errors import AppError, ErrorCode
 from app.main import app
 from app.ui.services import get_watchlist_ui_service
 from app.ui.services.watchlist import WatchlistRow
-from tests.ui.test_fragments import _StubWatchlistService, _csrf_headers, _login
+from tests.ui.test_fragments import _csrf_headers, _login, _StubWatchlistService
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
 
 

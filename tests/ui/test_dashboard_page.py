@@ -8,8 +8,8 @@ import pytest
 
 from app.errors import AppError, ErrorCode
 from app.main import app
-from app.ui.context.dashboard import build_dashboard_page_context
 from app.ui.context.common import KpiCard, SidebarSection
+from app.ui.context.dashboard import build_dashboard_page_context
 from app.ui.services import (
     DashboardConnectionStatus,
     DashboardHealthIssue,

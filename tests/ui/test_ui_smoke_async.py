@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-import pytest
 from httpx import ASGITransport, AsyncClient
+import pytest
 
 from app.config import override_runtime_env
 from app.dependencies import get_app_config
@@ -62,9 +62,7 @@ async def logged_in_async_client(
     assert response.status_code == 303
     assert async_ui_client.cookies.get("ui_session") is not None
     assert async_ui_client.cookies.get("csrftoken") is not None
-    cookie_header = "; ".join(
-        f"{name}={value}" for name, value in async_ui_client.cookies.items()
-    )
+    cookie_header = "; ".join(f"{name}={value}" for name, value in async_ui_client.cookies.items())
     async_ui_client.headers.setdefault("Cookie", cookie_header)
     yield async_ui_client
 

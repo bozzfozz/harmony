@@ -4,9 +4,9 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-import math
 import hashlib
 import hmac
+import math
 import secrets
 from typing import Literal
 
@@ -234,9 +234,7 @@ class UiSessionManager:
         self._login_limiter = login_limiter
         self._lock = asyncio.Lock()
 
-    async def create_session(
-        self, api_key: str, *, remote_address: str | None = None
-    ) -> UiSession:
+    async def create_session(self, api_key: str, *, remote_address: str | None = None) -> UiSession:
         normalized = api_key.strip()
         fingerprint = fingerprint_api_key(normalized)
 

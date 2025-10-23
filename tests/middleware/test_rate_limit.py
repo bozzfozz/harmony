@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+import pytest
 
 from app.config import RateLimitMiddlewareConfig, SecurityConfig
 from app.middleware.rate_limit import RateLimitMiddleware

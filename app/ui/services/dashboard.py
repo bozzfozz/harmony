@@ -7,8 +7,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 from fastapi import Request, status
+import httpx
 
 from app.dependencies import get_app_config
 from app.errors import AppError, ErrorCode

@@ -9,8 +9,8 @@ from app.services.cache import ResponseCache
 
 from .auth_apikey import ApiKeyAuthMiddleware
 from .cache import CacheMiddleware
-from .csp import ContentSecurityPolicyMiddleware
 from .cors_gzip import install_cors_and_gzip
+from .csp import ContentSecurityPolicyMiddleware
 from .errors import setup_exception_handlers
 from .logging import APILoggingMiddleware
 from .rate_limit import RateLimitMiddleware

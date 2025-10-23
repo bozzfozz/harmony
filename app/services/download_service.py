@@ -147,7 +147,8 @@ class DownloadService:
                 payload = await self._transfers.get_download_queue(download.id)
             except TransfersApiError as exc:
                 logger.debug(
-                    "downloads.live_queue.fetch_failed", extra={"download_id": download.id, "error": str(exc)}
+                    "downloads.live_queue.fetch_failed",
+                    extra={"download_id": download.id, "error": str(exc)},
                 )
                 return download.id, None
             except Exception:

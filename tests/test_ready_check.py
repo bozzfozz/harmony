@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Any
 import socketserver
 import threading
+from typing import Any
 
 import pytest
 

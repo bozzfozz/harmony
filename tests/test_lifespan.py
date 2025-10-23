@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
-from app.main import app, override_lifespan_hooks
 import app.main as app_main
+from app.main import app, override_lifespan_hooks
 
 
 def test_soulseek_client_closed_on_shutdown(monkeypatch) -> None:

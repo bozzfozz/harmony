@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 import os
 import re
-from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 import pytest
@@ -18,9 +18,9 @@ from app.ui.services import (
     get_spotify_ui_service,
 )
 from app.ui.session import (
+    _resolve_login_rate_limit_config,
     fingerprint_api_key,
     register_ui_session_metrics,
-    _resolve_login_rate_limit_config,
 )
 from app.utils import metrics
 

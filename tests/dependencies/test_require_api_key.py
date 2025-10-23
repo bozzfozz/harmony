@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
-import app.dependencies as dependencies_module
 from app.config import SecurityConfig
+import app.dependencies as dependencies_module
 from app.dependencies import require_api_key
 from app.middleware.errors import setup_exception_handlers
 
@@ -38,7 +38,9 @@ def _create_app(monkeypatch: pytest.MonkeyPatch, security: SecurityConfig) -> Fa
     monkeypatch.setattr(dependencies_module, "get_app_config", _get_app_config)
 
     @app.get("/protected")
-    def _protected(_: None = Depends(require_api_key)) -> dict[str, bool]:  # pragma: no cover - exercised in tests
+    def _protected(
+        _: None = Depends(require_api_key),
+    ) -> dict[str, bool]:  # pragma: no cover - exercised in tests
         return {"ok": True}
 
     return app
@@ -78,4 +80,3 @@ def test_invalid_api_key_returns_forbidden(monkeypatch: pytest.MonkeyPatch) -> N
             "message": "The provided API key is not valid.",
         },
     }
-

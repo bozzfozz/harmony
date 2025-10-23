@@ -12,9 +12,9 @@ from app.models import Download
 from app.services.download_service import DownloadService
 from app.ui.services import DownloadPage, DownloadRow, get_downloads_ui_service
 from tests.ui.test_fragments import (
-    _RecordingDownloadsService,
     _csrf_headers,
     _login,
+    _RecordingDownloadsService,
 )
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
 

@@ -55,7 +55,9 @@ def test_activity_manager_record_and_list_persist_events_and_invalidate_cache() 
     assert items[0]["timestamp"] == _iso(timestamp)
 
 
-def test_activity_manager_fetch_uses_page_cache_and_respects_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_activity_manager_fetch_uses_page_cache_and_respects_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     events = [
         (datetime(2024, 1, 1, 9, 30, tzinfo=UTC), "oldest"),
         (datetime(2024, 1, 2, 9, 30, tzinfo=UTC), "middle"),
