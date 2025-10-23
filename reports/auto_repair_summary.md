@@ -2,6 +2,6 @@
 
 - Stage status: success
 - Attempts: 3
-- Mode: STRICT
+- Mode: WARN
 
 No auto-repair actions were required.
