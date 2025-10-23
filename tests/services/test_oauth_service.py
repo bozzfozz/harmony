@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+import sys
 import time
+from threading import Barrier
 from typing import Any
 
 import pytest
@@ -59,7 +63,9 @@ class StubAsyncClient:
     async def __aexit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
         return None
 
-    async def post(self, url: str, *, data: Mapping[str, Any], headers: Mapping[str, Any]) -> StubResponse:
+    async def post(
+        self, url: str, *, data: Mapping[str, Any], headers: Mapping[str, Any]
+    ) -> StubResponse:
         self._calls.append({"url": url, "data": dict(data), "headers": dict(headers)})
         if not self._responses:
             raise AssertionError("Unexpected HTTP call without a stubbed response")
@@ -93,7 +99,9 @@ def frozen_clock() -> FrozenClock:
 @pytest.fixture()
 def store_factory(frozen_clock: FrozenClock) -> Callable[[int], MemoryOAuthTransactionStore]:
     def factory(ttl_seconds: int = 600) -> MemoryOAuthTransactionStore:
-        return MemoryOAuthTransactionStore(ttl=timedelta(seconds=ttl_seconds), now_fn=frozen_clock.now)
+        return MemoryOAuthTransactionStore(
+            ttl=timedelta(seconds=ttl_seconds), now_fn=frozen_clock.now
+        )
 
     return factory
 
@@ -150,8 +158,55 @@ def test_manual_rate_limiter_honours_window(monkeypatch: pytest.MonkeyPatch) -> 
     limiter.check("client")
 
 
+def test_manual_rate_limiter_blocks_concurrent_burst() -> None:
+    """Concurrent bursts should not exceed the configured limit."""
+
+    limit = 3
+    burst = limit * 10
+    limiter = ManualRateLimiter(limit=limit, window_seconds=10.0)
+
+    class SleepingList(list[float]):
+        def append(self, item: float) -> None:  # type: ignore[override]
+            time.sleep(0.001)
+            super().append(item)
+
+    limiter._hits["concurrent-client"] = SleepingList()
+
+    original_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        results = asyncio.run(_run_concurrent_checks(limiter=limiter, burst=burst))
+    finally:
+        sys.setswitchinterval(original_interval)
+
+    allowed = sum(1 for result in results if result == "allowed")
+    failures = [result for result in results if isinstance(result, RuntimeError)]
+    assert allowed + len(failures) == burst
+    assert allowed == limit
+    assert len(failures) == burst - limit
+    assert len(limiter._hits.get("concurrent-client", [])) == limit  # noqa: SLF001
+
+
+async def _run_concurrent_checks(*, limiter: ManualRateLimiter, burst: int) -> list[Any]:
+    loop = asyncio.get_running_loop()
+    results: list[Any] = []
+    with ThreadPoolExecutor(max_workers=burst) as executor:
+        barrier = Barrier(burst)
+
+        def worker() -> str:
+            barrier.wait(timeout=5)
+            limiter.check("concurrent-client")
+            return "allowed"
+
+        futures = [loop.run_in_executor(executor, worker) for _ in range(burst)]
+        results = await asyncio.gather(*futures, return_exceptions=True)
+    return results
+
+
 def test_update_status_record_tracks_transitions(
-    app_config, store_factory: Callable[[int], MemoryOAuthTransactionStore], http_client_stub: StubHttpClientFactory
+    app_config,
+    store_factory: Callable[[int], MemoryOAuthTransactionStore],
+    http_client_stub: StubHttpClientFactory,
 ) -> None:
     store = store_factory()
     service = _build_service(config=app_config, store=store, http_client_factory=http_client_stub)
@@ -346,4 +401,3 @@ async def test_manual_rate_limited_returns_error(
 
     status = service.status(state)
     assert status.status is OAuthSessionStatus.COMPLETED
-
