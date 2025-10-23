@@ -51,13 +51,13 @@ fi
 if command -v ruff >/dev/null 2>&1; then
   log_pass "ruff available"
 else
-  log_fail "ruff missing (install via 'pip install ruff')"
+  log_fail "ruff missing (install via 'pip install -r requirements-dev.txt')"
 fi
 
 if command -v pytest >/dev/null 2>&1; then
   log_pass "pytest available"
 else
-  log_fail "pytest missing (install via 'pip install pytest')"
+  log_fail "pytest missing (install via 'pip install -r requirements-test.txt')"
 fi
 
 check_directory() {
@@ -132,8 +132,8 @@ else
 fi
 
 if command -v pip-audit >/dev/null 2>&1; then
-  if audit_output=$(pip-audit --disable-progress-bar 2>&1); then
-    log_pass "pip-audit"
+  if audit_output=$(pip-audit --disable-progress-bar -r requirements.txt 2>&1); then
+    log_pass "pip-audit (requirements.txt)"
   else
     if printf '%s' "$audit_output" | grep -qiE 'network|connection|timed out|temporary failure|Name or service not known|offline'; then
       log_warn "pip-audit skipped (offline)"
@@ -160,7 +160,10 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
   fi
 
   if command -v pip-extra-reqs >/dev/null 2>&1; then
-    if output=$(pip-extra-reqs --requirements-file requirements.txt app tests 2>&1); then
+    requirements_args=(--requirements-file requirements.txt)
+    [[ -f requirements-test.txt ]] && requirements_args+=(--requirements-file requirements-test.txt)
+    [[ -f requirements-dev.txt ]] && requirements_args+=(--requirements-file requirements-dev.txt)
+    if output=$(pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
       log_pass "pip-extra-reqs"
     else
       log_fail "pip-extra-reqs reported issues"

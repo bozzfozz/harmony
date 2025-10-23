@@ -34,7 +34,8 @@ pre-commit run --hook-stage push
 
 ## Manuelle Nightly-/Security-Checks
 
-- Führe `pip-audit -r requirements.txt` bei Bedarf lokal aus und dokumentiere die Ergebnisse im PR.
+- Führe `pip-audit -r requirements.txt` (Runtime-Pins) bei Bedarf lokal aus und dokumentiere die Ergebnisse im PR. Entwicklungs-
+  tooling (`requirements-dev.txt`) und Testbibliotheken (`requirements-test.txt`) werden separat installiert.
 - Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
 
 ## Release Checklist

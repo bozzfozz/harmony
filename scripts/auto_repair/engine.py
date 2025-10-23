@@ -139,6 +139,7 @@ class PipHashFixer(Fixer):
         requirements_files = [
             REPO_ROOT / "requirements.txt",
             REPO_ROOT / "requirements-dev.txt",
+            REPO_ROOT / "requirements-test.txt",
         ]
         executed: list[str] = []
         for req_file in requirements_files:
