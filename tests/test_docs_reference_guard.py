@@ -17,6 +17,7 @@ def test_default_paths_include_core_docs() -> None:
         guard.REPO_ROOT / "docs" / "architecture.md",
         guard.REPO_ROOT / "docs" / "observability.md",
         guard.REPO_ROOT / "docs" / "security.md",
+        guard.REPO_ROOT / "reports" / "auto_repair_summary.md",
     }
 
     missing = expected_paths.difference(paths)
