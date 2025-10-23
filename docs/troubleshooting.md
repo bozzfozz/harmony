@@ -25,7 +25,8 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
   key/value fields.
 - Use `python -m app.ops.selfcheck --assert-startup` before deployments to validate
   environment configuration and filesystem permissions.
-- Replay DLQ entries via scripts in `scripts/dlq/` if HDM jobs fail repeatedly.
+- Inspect and replay DLQ entries via the `/api/v1/dlq` endpoints (see
+  [DLQ management guide](operations/dlq.md)) if HDM jobs fail repeatedly.
 - Capture the output of `/api/health/ready?verbose=1` and include it when escalating
   incidents.
 
