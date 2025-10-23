@@ -16,5 +16,5 @@
 - Spotify-Playlist-Sync markiert Snapshots als stale, respektiert konfigurierbare Zeitfenster und das Backfill-API liefert aufbereitete Job-Historie.【F:app/workers/playlist_sync_worker.py†L1-L260】【F:tests/test_playlist_sync_worker.py†L1-L160】【F:app/api/spotify.py†L1-L260】【F:tests/test_spotify_backfill_history.py†L1-L120】
 
 ## Empfohlene nächsten Schritte
-1. Den Referenz-Guard auf weitere Kern-Dokumente (z. B. `docs/overview.md`, `README.md`) ausweiten, sobald deren Pfadkonventionen stabil sind.
+1. Den Referenz-Guard, der bereits `README.md`, `docs/overview.md` und weitere Kernleitfäden prüft, um Report-Verzeichnisse wie `reports/auto_repair_summary.md` und `reports/api/doc_route_drift.md` erweitern, damit auch diese Referenzen aufgelöst bleiben.【F:scripts/docs_reference_guard.py†L17-L54】【F:reports/auto_repair_summary.md†L1-L7】【F:reports/api/doc_route_drift.md†L1-L10】
 2. UI-Fragmente für weitere HDM-Flows (Downloads, DLQ) mit dedizierten Tests hinterlegen, um die SSR-Oberfläche konsistent abzudecken.
