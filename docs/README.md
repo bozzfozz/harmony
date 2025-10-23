@@ -1,56 +1,14 @@
 # Harmony Documentation Hub
 
-This index consolidates the most relevant guidance for operating, extending and
-reviewing Harmony. Use it as the entry point before diving into specific
-subsystems.
+Harmony documentation is now organised around audience-specific landing pages.
+Visit the hub that matches your role, then dive into the linked deep dives.
 
-## Overview & Quickstart
-- [Project README](../README.md) – product summary, highlights and quickstart commands.
-- [docs/overview.md](overview.md) – system capabilities and end-to-end flow.
-- [docs/install/docker.md](install/docker.md) – container deployment instructions.
-- [docs/configuration.md](configuration.md) – comprehensive environment variable catalogue.
+## Audience Hubs
+- [User & Operator Hub](user/README.md) – deployment guides, operational
+runbooks, UI walkthroughs and troubleshooting material.
+- [AI & Engineering Hub](ai/README.md) – architecture references, coding
+standards, task templates and contributor guardrails.
 
-## Architecture & Design
-- [docs/architecture/hdm.md](architecture/hdm.md) – Harmony Download Manager internals.
-- [docs/architecture](architecture/) – component diagrams and reference flows.
-- [docs/backend-guidelines.md](backend-guidelines.md) – backend coding standards.
-- [docs/design-guidelines.md](design-guidelines.md) – product principles.
-- SSR UI guidelines will ship with the upcoming FastAPI + Jinja2 + HTMX rewrite.
-
-## Operations & Maintenance
-- [HDM runbook](operations/runbooks/hdm.md) – operational procedures, recovery steps and checklists.
-- [docs/operations/local-workflow.md](operations/local-workflow.md) – local operator workflows.
-- [docs/operations/security.md](operations/security.md) – UI session lifecycle, roles and CDN configuration knobs.
-- [docs/operations/db.md](operations/db.md) & [docs/operations/dlq.md](operations/dlq.md) – datastore and dead-letter queue care.
-- [docs/operations/repo_maintenance.md](operations/repo_maintenance.md) – repository quality gates and release duties.
-- [docs/troubleshooting.md](troubleshooting.md) – incident triage and recovery hints.
-
-## UI & Frontend
-- [docs/ui/spotify.md](ui/spotify.md) – operator-focused guide for the `/ui/spotify` console, card responsibilities and recovery tips.
-- [docs/ui/fe-htmx-plan.md](ui/fe-htmx-plan.md) – implementation roadmap for the server-rendered frontend.
-- [docs/ui/csp.md](ui/csp.md) – content security policy guidance for UI deployments.
-
-## Security & Compliance
-- [SECURITY.md](../SECURITY.md) – threat model, reporting channels and mitigations.
-- [docs/security.md](security.md) & [docs/secrets.md](secrets.md) – secure configuration guidance.
-- [docs/compliance/hdm_audit.md](compliance/hdm_audit.md) – audit trail for HDM controls.
-- [docs/compliance/foss_policy.md](compliance/foss_policy.md) – allowed third-party licenses.
-
-## Observability & Health
-- [docs/health.md](health.md) – API health endpoints and CLI self-checks.
-- [docs/observability.md](observability.md) – logging, metrics and alerting best practices.
-
-## Development Workflow
-- [docs/process/changes_review.md](process/changes_review.md) – historical change review outcomes.
-- [docs/task-template.md](task-template.md) – template for new engineering tasks.
-
-## Testing & Quality
-- [docs/testing.md](testing.md) – testing strategy and suites.
-
-## Integrations & Extensions
-- [docs/auth/spotify.md](auth/spotify.md) – Spotify OAuth setup for PRO mode.
-- [docs/integrations](integrations/) – integration-specific notes and walkthroughs.
-- [docs/workers.md](workers.md) & [docs/worker_watchlist.md](worker_watchlist.md) – worker orchestration and monitoring.
-
-Whenever you add or move documentation, update this hub so contributors can
-locate the latest canonical references.
+## Keeping the index current
+When you introduce new documentation, add it to the appropriate hub so operators
+and internal contributors always land on the freshest guidance.
