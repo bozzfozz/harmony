@@ -81,21 +81,27 @@ class _StubClientFactory:
 
 
 def _default_settings() -> SecretValidationSettings:
-    return SecretValidationSettings(timeout_ms=500, max_requests_per_minute=5, slskd_base_url="http://slskd.local")
+    return SecretValidationSettings(
+        timeout_ms=500, max_requests_per_minute=5, slskd_base_url="http://slskd.local"
+    )
 
 
 def _slskd_store(api_key: str) -> SecretStore:
-    return SecretStore.from_values({
-        "SLSKD_API_KEY": api_key,
-        "SLSKD_URL": "http://slskd.local/api",
-    })
+    return SecretStore.from_values(
+        {
+            "SLSKD_API_KEY": api_key,
+            "SLSKD_URL": "http://slskd.local/api",
+        }
+    )
 
 
 def _spotify_store(client_secret: str, *, client_id: str = "client123") -> SecretStore:
-    return SecretStore.from_values({
-        "SPOTIFY_CLIENT_SECRET": client_secret,
-        "SPOTIFY_CLIENT_ID": client_id,
-    })
+    return SecretStore.from_values(
+        {
+            "SPOTIFY_CLIENT_SECRET": client_secret,
+            "SPOTIFY_CLIENT_ID": client_id,
+        }
+    )
 
 
 @pytest.mark.asyncio
@@ -120,7 +126,9 @@ async def test_validate_slskd_success_returns_live_result() -> None:
 
 @pytest.mark.asyncio
 async def test_validate_slskd_invalid_format_short_circuits() -> None:
-    service = SecretValidationService(settings=_default_settings(), client_factory=_StubClientFactory())
+    service = SecretValidationService(
+        settings=_default_settings(), client_factory=_StubClientFactory()
+    )
     store = _slskd_store("invalid key!!!")
 
     result = await service.validate("slskd_api_key", store=store)
@@ -173,7 +181,9 @@ async def test_validate_slskd_server_error_raises_dependency_error() -> None:
 
 @pytest.mark.asyncio
 async def test_validate_slskd_timeout_falls_back_to_format_result() -> None:
-    timeout = httpx.TimeoutException("timeout", request=httpx.Request("GET", "https://example.test"))
+    timeout = httpx.TimeoutException(
+        "timeout", request=httpx.Request("GET", "https://example.test")
+    )
     factory = _StubClientFactory(get=[timeout])
     service = SecretValidationService(settings=_default_settings(), client_factory=factory)
     store = _slskd_store("ValidKey1234")
@@ -209,7 +219,9 @@ async def test_validate_spotify_success_returns_live_result() -> None:
 
 @pytest.mark.asyncio
 async def test_validate_spotify_invalid_format_short_circuits() -> None:
-    service = SecretValidationService(settings=_default_settings(), client_factory=_StubClientFactory())
+    service = SecretValidationService(
+        settings=_default_settings(), client_factory=_StubClientFactory()
+    )
     store = _spotify_store("invalid secret")
 
     result = await service.validate("spotify_client_secret", store=store)
@@ -234,7 +246,9 @@ async def test_validate_spotify_invalid_credentials_returns_live_failure() -> No
 
 @pytest.mark.asyncio
 async def test_validate_spotify_rate_limit_response_raises_dependency_error() -> None:
-    factory = _StubClientFactory(post=[_make_response(status.HTTP_429_TOO_MANY_REQUESTS, method="POST")])
+    factory = _StubClientFactory(
+        post=[_make_response(status.HTTP_429_TOO_MANY_REQUESTS, method="POST")]
+    )
     service = SecretValidationService(settings=_default_settings(), client_factory=factory)
     store = _spotify_store("SecretAA")
 
@@ -248,7 +262,9 @@ async def test_validate_spotify_rate_limit_response_raises_dependency_error() ->
 
 @pytest.mark.asyncio
 async def test_validate_spotify_server_error_raises_dependency_error() -> None:
-    factory = _StubClientFactory(post=[_make_response(status.HTTP_500_INTERNAL_SERVER_ERROR, method="POST")])
+    factory = _StubClientFactory(
+        post=[_make_response(status.HTTP_500_INTERNAL_SERVER_ERROR, method="POST")]
+    )
     service = SecretValidationService(settings=_default_settings(), client_factory=factory)
     store = _spotify_store("SecretAA")
 
@@ -262,7 +278,9 @@ async def test_validate_spotify_server_error_raises_dependency_error() -> None:
 
 @pytest.mark.asyncio
 async def test_validate_spotify_timeout_falls_back_to_format_result() -> None:
-    timeout = httpx.TimeoutException("timeout", request=httpx.Request("POST", "https://example.test"))
+    timeout = httpx.TimeoutException(
+        "timeout", request=httpx.Request("POST", "https://example.test")
+    )
     factory = _StubClientFactory(post=[timeout])
     service = SecretValidationService(settings=_default_settings(), client_factory=factory)
     store = _spotify_store("SecretAA")
@@ -290,10 +308,16 @@ class _MonotonicStub:
 
 @pytest.mark.asyncio
 async def test_enforce_rate_limit_raises_after_threshold() -> None:
-    factory = _StubClientFactory(get=[_make_response(status.HTTP_200_OK), _make_response(status.HTTP_200_OK)])
+    factory = _StubClientFactory(
+        get=[_make_response(status.HTTP_200_OK), _make_response(status.HTTP_200_OK)]
+    )
     monotonic = _MonotonicStub([0.0, 0.1, 0.2, 1.0, 1.1, 1.2, 2.0])
-    settings = SecretValidationSettings(timeout_ms=500, max_requests_per_minute=2, slskd_base_url="http://slskd.local")
-    service = SecretValidationService(settings=settings, client_factory=factory, monotonic=monotonic)
+    settings = SecretValidationSettings(
+        timeout_ms=500, max_requests_per_minute=2, slskd_base_url="http://slskd.local"
+    )
+    service = SecretValidationService(
+        settings=settings, client_factory=factory, monotonic=monotonic
+    )
     store = _slskd_store("ValidKey1234")
 
     await service.validate("slskd_api_key", store=store)

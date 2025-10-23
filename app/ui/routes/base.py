@@ -10,12 +10,12 @@ from app.logging_events import log_event
 from app.ui.context.auth import build_login_page_context
 from app.ui.context.base import AlertMessage
 from app.ui.context.dashboard import (
+    build_dashboard_action_state_from_error,
+    build_dashboard_action_state_from_sync,
     build_dashboard_health_fragment_context,
     build_dashboard_page_context,
     build_dashboard_status_fragment_context,
     build_dashboard_workers_fragment_context,
-    build_dashboard_action_state_from_error,
-    build_dashboard_action_state_from_sync,
 )
 from app.ui.csrf import (
     attach_csrf_cookie,
@@ -36,8 +36,8 @@ from app.ui.session import (
     clear_session_cookie,
     clear_spotify_job_state,
     get_session_manager,
-    require_session,
     require_role,
+    require_session,
 )
 
 router = APIRouter()

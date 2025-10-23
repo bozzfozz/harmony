@@ -75,6 +75,7 @@ def _sync_dependency_override():
 
 def test_dashboard_sync_action_success(monkeypatch, _sync_dependency_override) -> None:
     with _create_client(monkeypatch) as client:
+
         class StubSyncService:
             async def trigger_manual_sync(self, request) -> SyncActionResult:
                 return SyncActionResult(
@@ -111,10 +112,12 @@ def test_dashboard_sync_action_success(monkeypatch, _sync_dependency_override) -
     assert 'hx-swap-oob="outerHTML"' in html
     assert 'data-test="dashboard-sync-result-playlists"' in html
     assert 'data-test="dashboard-sync-metric-tracks-synced"' in html
-    assert 'dashboard-sync-status' in html
+    assert "dashboard-sync-status" in html
 
     events = [
-        record for record in handler.records if getattr(record, "event", None) == "ui.action.dashboard_sync"
+        record
+        for record in handler.records
+        if getattr(record, "event", None) == "ui.action.dashboard_sync"
     ]
     assert events, "expected sync action log event"
     success_event = events[-1]
@@ -125,6 +128,7 @@ def test_dashboard_sync_action_success(monkeypatch, _sync_dependency_override) -
 
 def test_dashboard_sync_action_failure(monkeypatch, _sync_dependency_override) -> None:
     with _create_client(monkeypatch) as client:
+
         class FailingSyncService:
             async def trigger_manual_sync(self, request) -> SyncActionResult:
                 raise AppError(
@@ -158,12 +162,17 @@ def test_dashboard_sync_action_failure(monkeypatch, _sync_dependency_override) -
     html = response.text
     assert "Sync blocked" in html
     assert 'hx-swap-oob="outerHTML"' in html
-    assert 'missing client_secret' in html.lower()
+    assert "missing client_secret" in html.lower()
 
     events = [
-        record for record in handler.records if getattr(record, "event", None) == "ui.action.dashboard_sync"
+        record
+        for record in handler.records
+        if getattr(record, "event", None) == "ui.action.dashboard_sync"
     ]
     assert events, "expected sync action error log"
     error_event = events[-1]
     assert getattr(error_event, "status", None) == "error"
-    assert getattr(error_event, "error", None) in {ErrorCode.DEPENDENCY_ERROR, ErrorCode.DEPENDENCY_ERROR.value}
+    assert getattr(error_event, "error", None) in {
+        ErrorCode.DEPENDENCY_ERROR,
+        ErrorCode.DEPENDENCY_ERROR.value,
+    }

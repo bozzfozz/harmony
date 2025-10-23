@@ -13,19 +13,19 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 import importlib.util
 from pathlib import Path
-from uuid import uuid4
 from typing import Any
+from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
-from unittest.mock import AsyncMock, Mock
 
 from app.config import load_config
+from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.db import init_db, session_scope
 from app.dependencies import get_app_config, get_db, get_soulseek_client
 from app.models import DiscographyJob, Download
-from app.core.soulseek_client import SoulseekClient, SoulseekClientError
 from app.utils.path_safety import allowed_download_roots
 
 _SOULSEEK_MODULE_SPEC = importlib.util.spec_from_file_location(
@@ -539,11 +539,7 @@ def test_discography_download_marks_job_failed_when_worker_enqueue_errors(
     assert isinstance(worker, _FailingDiscographyWorker)
 
     with session_scope() as session:
-        job = (
-            session.query(DiscographyJob)
-            .filter(DiscographyJob.artist_id == artist_id)
-            .one()
-        )
+        job = session.query(DiscographyJob).filter(DiscographyJob.artist_id == artist_id).one()
         assert job.status == "failed"
         job_id = job.id
         session.delete(job)

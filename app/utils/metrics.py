@@ -7,9 +7,11 @@ from threading import RLock
 from typing import Final
 
 try:  # pragma: no cover - exercised indirectly in tests
-    from prometheus_client import CollectorRegistry as PromCollectorRegistry
-    from prometheus_client import Counter as PromCounter
-    from prometheus_client import Histogram as PromHistogram
+    from prometheus_client import (
+        CollectorRegistry as PromCollectorRegistry,
+        Counter as PromCounter,
+        Histogram as PromHistogram,
+    )
 except ModuleNotFoundError:  # pragma: no cover - fallback for offline environments
 
     class Sample:

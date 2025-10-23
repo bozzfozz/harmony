@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime

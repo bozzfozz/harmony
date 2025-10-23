@@ -320,9 +320,7 @@ def _sort_candidates(
             (candidate.format or "").upper(), len(preferred_formats)
         )
         seeders = -(candidate.seeders or 0)
-        bitrate = (
-            -candidate.bitrate_kbps if candidate.bitrate_kbps is not None else 0
-        )
+        bitrate = -candidate.bitrate_kbps if candidate.bitrate_kbps is not None else 0
         size = candidate.size_bytes if candidate.size_bytes is not None else 1_000_000_000
         title = candidate.title.lower()
         return (format_rank, seeders, bitrate, size, title)

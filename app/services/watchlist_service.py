@@ -6,7 +6,6 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-
 from typing import Any
 
 from sqlalchemy import select

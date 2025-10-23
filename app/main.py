@@ -8,8 +8,8 @@ from contextlib import asynccontextmanager, contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
 import inspect
+from pathlib import Path
 from typing import Any, Awaitable
 
 from fastapi import APIRouter, FastAPI, Request
@@ -44,15 +44,15 @@ from app.schemas.system import EnvironmentResponse
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
 from app.services.secret_validation import SecretValidationService
-from app.utils.activity import activity_manager
-from app.utils.path_safety import allowed_download_roots
 from app.ui.routes import router as ui_router
 from app.ui.session import register_ui_session_metrics
+from app.utils.activity import activity_manager
+from app.utils.path_safety import allowed_download_roots
 from app.utils.settings_store import ensure_default_settings
+from app.version import __version__
 from app.workers.artwork_worker import ArtworkWorker
 from app.workers.lyrics_worker import LyricsWorker
 from app.workers.metadata_worker import MetadataUpdateWorker, MetadataWorker
-from app.version import __version__
 
 logger = get_logger(__name__)
 _APP_START_TIME = datetime.now(UTC)

@@ -4,7 +4,6 @@ from functools import lru_cache
 import hashlib
 from pathlib import Path
 
-
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _STATIC_URL_PREFIX = "/ui/static"
 

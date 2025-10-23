@@ -18,10 +18,10 @@ from app.db import run_session
 from app.logging import get_logger
 from app.models import Download, IngestItemState
 from app.orchestrator.handlers import (
-    SyncHandlerDeps,
     ArtworkService,
     LyricsService,
     MetadataService,
+    SyncHandlerDeps,
     calculate_retry_backoff_seconds as orchestrator_calculate_backoff_seconds,
     extract_basic_metadata,
     extract_ingest_item_id,
@@ -66,6 +66,8 @@ AsyncEnqueue = Callable[[str, Mapping[str, Any]], Awaitable[QueueJobDTO]]
 AsyncFetchReady = Callable[[str], Awaitable[list[QueueJobDTO]]]
 AsyncLease = Callable[[int, str, int | None], Awaitable[QueueJobDTO | None]]
 AsyncComplete = Callable[[int, str, Mapping[str, Any] | None], Awaitable[bool]]
+
+
 class AsyncFail(Protocol):
     def __call__(
         self,
@@ -76,8 +78,9 @@ class AsyncFail(Protocol):
         retry_in: int | None = ...,
         available_at: datetime | None = ...,
         stop_reason: str | None = ...,
-    ) -> Awaitable[bool]:
-        ...
+    ) -> Awaitable[bool]: ...
+
+
 AsyncRelease = Callable[[str], Awaitable[None]]
 
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.spotify import backfill_router, _get_spotify_service
+from app.api.spotify import _get_spotify_service, backfill_router
 from app.services.backfill_service import BackfillJobRecord
 
 

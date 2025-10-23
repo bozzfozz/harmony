@@ -1,4 +1,5 @@
 """Tests for slskd normalizer helpers."""
+
 from __future__ import annotations
 
 import pytest
@@ -138,9 +139,7 @@ def test_from_slskd_album_details_normalizes_tracks_and_metadata() -> None:
     assert details.album.id == "album-001"
     assert details.album.release_date == "2024-03-21"
     assert details.album.total_tracks == 2
-    assert details.album.images == (
-        "https://cdn.example.com/albums/signal-trails.jpg",
-    )
+    assert details.album.images == ("https://cdn.example.com/albums/signal-trails.jpg",)
     assert dict(details.album.metadata)["catalogue_number"] == "CAT-001"
 
     assert len(details.tracks) == 2

@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from app.middleware.csp import ContentSecurityPolicyMiddleware
 
-
 _HTMX_CDN = "https://unpkg.com/htmx.org"
 
 
@@ -70,9 +69,6 @@ def test_multiple_requests_keep_policy_stable() -> None:
     app = create_app(allow_script_cdn=True)
 
     with TestClient(app) as client:
-        headers = [
-            client.get("/").headers["Content-Security-Policy"]
-            for _ in range(3)
-        ]
+        headers = [client.get("/").headers["Content-Security-Policy"] for _ in range(3)]
 
     assert headers[0] == headers[1] == headers[2]

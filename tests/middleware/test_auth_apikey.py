@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
+import logging
 
-import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+import pytest
 
 from app.config import SecurityConfig
 from app.middleware.auth_apikey import ApiKeyAuthMiddleware

@@ -1,10 +1,10 @@
 import asyncio
+from collections.abc import Iterator
 import importlib
 import inspect
 import os
 from pathlib import Path
 import sys
-from collections.abc import Iterator
 
 import pytest
 

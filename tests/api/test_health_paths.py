@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
 

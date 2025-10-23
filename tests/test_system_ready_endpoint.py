@@ -1,9 +1,9 @@
 from contextlib import contextmanager
 from pathlib import Path
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api.system import router as system_router
 from app.ops.selfcheck import ReadyIssue, ReadyReport
