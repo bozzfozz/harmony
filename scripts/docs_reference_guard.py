@@ -15,22 +15,42 @@ CITATION_PATTERN = re.compile(r"【F:([^†】]+)")
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 DEFAULT_DOC_PATHS = [
-    Path("README.md"),
     Path("CHANGELOG.md"),
+    Path("README.md"),
+    Path("docs/CONTRIBUTING.md"),
     Path("docs/README.md"),
-    Path("docs/overview.md"),
+    Path("docs/api.md"),
     Path("docs/architecture.md"),
+    Path("docs/backend-guidelines.md"),
+    Path("docs/code_health_report.md"),
+    Path("docs/configuration.md"),
+    Path("docs/design-guidelines.md"),
+    Path("docs/errors.md"),
+    Path("docs/health.md"),
     Path("docs/observability.md"),
-    Path("docs/security.md"),
-    Path("docs/testing.md"),
-    Path("docs/project_status.md"),
-    Path("docs/troubleshooting.md"),
     Path("docs/operations/runbooks/hdm.md"),
+    Path("docs/overview.md"),
+    Path("docs/project_status.md"),
+    Path("docs/security.md"),
+    Path("docs/secrets.md"),
+    Path("docs/testing.md"),
+    Path("docs/troubleshooting.md"),
+    Path("docs/worker_watchlist.md"),
+    Path("docs/workers.md"),
 ]
 
 DEFAULT_DOC_DIRECTORIES = [
+    Path("docs/ai"),
+    Path("docs/architecture"),
+    Path("docs/auth"),
+    Path("docs/compliance"),
+    Path("docs/install"),
+    Path("docs/integrations"),
     Path("docs/operations"),
+    Path("docs/ops"),
     Path("docs/process"),
+    Path("docs/ui"),
+    Path("docs/user"),
 ]
 
 
