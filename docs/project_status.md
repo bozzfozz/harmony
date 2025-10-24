@@ -17,4 +17,6 @@
 
 ## Empfohlene nächsten Schritte
 1. Den Referenz-Guard, der bereits `README.md`, `docs/overview.md`, operative Playbooks und Reports abdeckt, bei neuen Dokumentationsbäumen frühzeitig erweitern (z. B. zusätzliche `reports/*`-Verzeichnisse), damit alle Referenzen aufgelöst bleiben.【F:scripts/docs_reference_guard.py†L17-L55】【F:reports/auto_repair_summary.md†L1-L7】【F:reports/api/doc_route_drift.md†L1-L10】
-2. UI-Fragmente für weitere HDM-Flows (Downloads, DLQ) mit dedizierten Tests hinterlegen, um die SSR-Oberfläche konsistent abzudecken.
+2. `make release-check` als verpflichtendes Release-Gate automatisieren und die resultierenden Logs dauerhaft versionieren, damit der manuelle Nachweis über Maintainer-Uploads entfällt.【F:docs/operations/repo_maintenance.md†L5-L21】
+3. Den Packaging-Workflow (`pip install .`, `pip wheel`, `python -m build`) pro Release-Kandidat durchlaufen und Artefakte validieren, bevor die finale Freigabe erstellt wird.【F:docs/operations/repo_maintenance.md†L44-L50】
+4. Dashboards und Alerts für die Prometheus-Metriken (`/api/v1/metrics`) sowie die strukturierten Logs (`app.logging_events.log_event`) aufbauen, damit Operations Anomalien frühzeitig erkennt.【F:docs/observability.md†L51-L99】
