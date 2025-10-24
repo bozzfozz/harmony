@@ -38,6 +38,29 @@ def test_ui_events_disabled_without_flag(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ui_event_stream_exits_when_no_builders() -> None:
+    class _StubRequest:
+        def __init__(self) -> None:
+            self.cookies: dict[str, Any] = {}
+            self.is_disconnected_calls = 0
+
+        async def is_disconnected(self) -> bool:
+            self.is_disconnected_calls += 1
+            return False
+
+    request = _StubRequest()
+    stream = _ui_event_stream(request, [])
+
+    first_chunk = await stream.__anext__()
+    assert first_chunk == ": no-fragments\n\n"
+
+    with pytest.raises(StopAsyncIteration):
+        await stream.__anext__()
+
+    assert request.is_disconnected_calls == 0
+
+
+@pytest.mark.asyncio
 async def test_ui_event_stream_emits_payload() -> None:
     async def _build_payload() -> dict[str, object]:
         return {
