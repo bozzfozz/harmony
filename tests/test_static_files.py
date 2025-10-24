@@ -46,9 +46,7 @@ async def test_get_response_adds_cache_control_header(
     cached_response = Response(status_code=200)
     observed: dict[str, Any] = {}
 
-    async def fake_get_response(
-        self: StaticFiles, path: str, scope: dict[str, Any]
-    ) -> Response:
+    async def fake_get_response(self: StaticFiles, path: str, scope: dict[str, Any]) -> Response:
         observed["path"] = path
         observed["scope"] = scope
         return cached_response
@@ -73,9 +71,7 @@ async def test_get_response_does_not_add_cache_header_on_error(
     static_files = ImmutableStaticFiles(directory=tmp_path)
     error_response = Response(status_code=404)
 
-    async def fake_get_response(
-        self: StaticFiles, path: str, scope: dict[str, Any]
-    ) -> Response:
+    async def fake_get_response(self: StaticFiles, path: str, scope: dict[str, Any]) -> Response:
         return error_response
 
     monkeypatch.setattr(StaticFiles, "get_response", fake_get_response)

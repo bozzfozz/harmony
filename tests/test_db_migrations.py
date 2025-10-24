@@ -48,12 +48,10 @@ def test_apply_schema_migrations_is_idempotent(tmp_path: Path) -> None:
 
     inspector_after_first_run = inspect(engine)
     playlist_columns = {
-        column["name"]
-        for column in inspector_after_first_run.get_columns("playlists")
+        column["name"] for column in inspector_after_first_run.get_columns("playlists")
     }
     backfill_columns = {
-        column["name"]
-        for column in inspector_after_first_run.get_columns("backfill_jobs")
+        column["name"] for column in inspector_after_first_run.get_columns("backfill_jobs")
     }
 
     assert playlist_columns == {"id", "name", "metadata"}
