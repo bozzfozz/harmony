@@ -21,10 +21,10 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "fastapi==0.115.11",
-    # TODO: restore a >=0.47.2 pin once FastAPI publishes a compatible release
-    # so we can regain the GHSA-2c2j-9gv5-cj73 fix.
-    "starlette<0.47.0",
+    # Verified FastAPI 0.116.2 + Starlette 0.48.0 with the full pytest suite
+    # to ensure routing remains stable while regaining the GHSA-2c2j-9gv5-cj73 fix.
+    "fastapi==0.116.2",
+    "starlette==0.48.0",
     "uvicorn==0.30.1",
     "sqlalchemy==2.0.31",
     "aiohttp==3.12.14",
