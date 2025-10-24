@@ -78,17 +78,15 @@ Hinweis: Die verbleibenden Module unter `app/routers/` dienen nur noch als Kompa
 - Die Seite dient als Operations-Dashboard für den Soulseek-Daemon: Warnhinweise bei Ausfällen oder fehlender Konfiguration helfen, bevor Sync-Worker oder Upload-Freigaben ins Stocken geraten.
 - **Navigation-Warnhinweise:** Die linke Seitenleiste übernimmt die gleichen Integrationssignale. Ein gelbes Badge „Eingeschränkt“ weist auf degradierte Dienste hin (z. B. wenn `/integrations` `degraded` meldet), rote Badges „Offline“ bzw. „Fehler“ kennzeichnen fehlende Konfiguration oder nicht erreichbare Services. Tooltips und Screenreader-Texte wiederholen die Warnung – auch im eingeklappten Zustand der Navigation – damit Operator:innen die Soulseek- und Matching-Dashboards gezielt aufrufen können.
 
-#### Matching UI Dashboard
+#### Operations UI
 
-- Die Ansicht **„Matching“** ergänzt das Operations-Cockpit um den `MatchingWorker` und die Score-Qualität der gespeicherten Zuordnungen.
-  - Der Kartenbereich **„Worker-Status“** zeigt Heartbeat, Queue-Größe und Status-Badge des Matching-Workers. Ein gelbes Banner weist bei `stale`/`blocked`-Zuständen auf ausstehende Heartbeats oder blockierte Jobs hin, ein rotes Banner markiert `stopped`/`errored`-Zustände mit Handlungsempfehlung (Worker neu starten, Logs prüfen).
-  - Sobald `queue_size > 0` gemeldet wird, erscheint ein zusätzlicher Hinweis mit dem Backlog-Wert, damit Operator:innen den Dispatcher oder die Matching-Konfiguration überprüfen können.
-- **Matching-Metriken** berechnen die zuletzt gespeicherte Durchschnitts-Konfidenz sowie kumulierte `saved_total`/`discarded_total`-Zähler.
-  - Hohe Werte (> 85 %) werden grün hervorgehoben, niedrige Scores (< 45 %) lösen eine rote Markierung aus. So lässt sich erkennen, ob die Matching-Konfiguration (z. B. Schwellenwerte) angepasst werden muss.
-  - Der Wert **„Verworfen in letzter Charge“** signalisiert, ob eine Charge komplett verworfen wurde und liefert damit einen direkten Trigger zur Ursachenanalyse (fehlende Kandidaten, falsche Thresholds).
-- Der Abschnitt **„Letzte Matching-Batches“** zieht die Activity-Logs (`type=metadata`, `status=matching_batch`).
-  - Jede Charge zeigt gespeicherte und verworfene Kandidaten sowie die durchschnittliche Konfidenz. Wenn alles verworfen wurde, erscheint ein rotes Badge „Alles verworfen“ und der Eintrag wandert an die Spitze der Ereignisliste.
-  - Die Timeline hilft beim Correlieren von Fehlerspitzen mit Konfigurationsänderungen oder Worker-Ausfällen; bei Bedarf lassen sich Queue- und Score-Hinweise direkt daneben ablesen.
+- Die `/ui/operations`-Übersicht bündelt Betriebsdaten aus Downloads, Orchestrator-Jobs, Watchlist und Activity-Log. Live-Updates laufen je nach Deployment als SSE-Stream oder zeitgesteuertes Polling; Watchlist- und Activity-Tabellen werden bei Bedarf nachgeladen, um die Startansicht leichtgewichtig zu halten.【F:app/ui/context/operations.py†L22-L88】【F:app/ui/context/operations_layout.py†L12-L85】
+- Separate Unterseiten verlinken direkt aus der Seitenleiste:
+  - **Downloads (`/ui/downloads`)** listet die aktuelle Queue inkl. Prioritäten, Fortschritt und Retry-/Cancel-Aktionen. Operator:innen können Prioritäten inline anpassen; SSE/Polling halten die Tabelle synchron.【F:app/ui/context/downloads.py†L1-L75】
+  - **Jobs (`/ui/jobs`)** zeigt den Status orchestrierter Worker-Jobs (z. B. `sync`, `matching`, `retry`) samt Aktiv-Flag. Die Ansicht nutzt dieselben Live-Update-Mechanismen wie die Operations-Übersicht.【F:app/ui/context/jobs.py†L1-L59】
+  - **Watchlist (`/ui/watchlist`)** bietet CRUD-Formulare für Artist-Monitoring, inklusive Priorität und Pausenzeitpunkten. Die Tabelle aktualisiert sich automatisch, wenn SSE aktiviert ist.【F:app/ui/context/operations.py†L90-L170】
+  - **Activity (`/ui/activity`)** aggregiert Ereignisse über alle Backend-Domänen. Filter für Typ (`type`) und Status (`status`) erleichtern die Analyse längerer Zeiträume.【F:app/ui/routes/activity.py†L1-L92】【F:app/ui/context/operations.py†L172-L272】
+- Matching-bezogene Einsichten erscheinen im Activity-Feed: Nach jedem Matching-Batch zeichnet der Orchestrator den `average_confidence` sowie gespeicherte/verworfene Kandidaten als `type=metadata`, `status=matching_batch` auf. Diese Einträge landen unmittelbar in den Activity-Tabellen der Operations-Übersicht und der dedizierten Activity-Seite.【F:app/orchestrator/handlers.py†L536-L576】【F:app/ui/context/operations.py†L208-L272】
 
 ### Hintergrund-Worker
 
