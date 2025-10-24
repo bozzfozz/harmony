@@ -8,6 +8,8 @@ import pytest
 from app.db import init_db, reset_engine_for_tests
 from app.ops import selfcheck_ui
 from app.ops.selfcheck import aggregate_ready
+from app.main import _ui_dependency_probe
+from app.services.health import DependencyStatus
 
 
 class _Handler(socketserver.BaseRequestHandler):
@@ -311,3 +313,21 @@ def test_ready_reports_unreadable_ui_asset(tmp_path: Path, monkeypatch: pytest.M
 
     ui_issue = next(issue for issue in report.issues if issue.component == "ui")
     assert target_relative in ui_issue.details["templates"]["unreadable"]
+
+
+def test_ui_dependency_probe_reports_degraded(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    details = {
+        "templates": {"missing": ["pages/login.j2"], "unreadable": []},
+        "static": {"missing": [], "unreadable": ["css/app.css"]},
+    }
+    monkeypatch.setattr("app.main.probe_ui_artifacts", lambda: (False, details))
+
+    with caplog.at_level("WARNING"):
+        status = _ui_dependency_probe()
+
+    assert status == DependencyStatus(ok=False, status="degraded")
+    assert any(
+        record.message == "UI assets readiness probe failed" for record in caplog.records
+    )
