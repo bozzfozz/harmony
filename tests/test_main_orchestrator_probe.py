@@ -80,13 +80,16 @@ def test_probe_reports_down_when_component_expected_but_not_running(
     assert status == DependencyStatus(ok=False, status="down")
 
 
-@pytest.mark.parametrize("job_name", [
-    "sync",
-    "matching",
-    "retry",
-    "watchlist",
-    "artist_sync",
-])
+@pytest.mark.parametrize(
+    "job_name",
+    [
+        "sync",
+        "matching",
+        "retry",
+        "watchlist",
+        "artist_sync",
+    ],
+)
 @pytest.mark.parametrize("enabled", [True, False])
 def test_probe_reports_job_enablement(job_name: str, enabled: bool) -> None:
     orchestrator_status: dict[str, Any] = {"enabled_jobs": {job_name: enabled}}

@@ -328,6 +328,4 @@ def test_ui_dependency_probe_reports_degraded(
         status = _ui_dependency_probe()
 
     assert status == DependencyStatus(ok=False, status="degraded")
-    assert any(
-        record.message == "UI assets readiness probe failed" for record in caplog.records
-    )
+    assert any(record.message == "UI assets readiness probe failed" for record in caplog.records)
