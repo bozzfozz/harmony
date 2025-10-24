@@ -7,7 +7,26 @@ from unittest.mock import Mock
 
 import pytest
 
-from app.ui.routes.shared import _extract_download_refresh_params, _parse_form_body
+from fastapi import Request, status
+
+from app.ui.routes.shared import (
+    _extract_download_refresh_params,
+    _parse_form_body,
+    _render_alert_fragment,
+)
+
+
+def _make_request() -> Request:
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "path": "/",
+        "headers": [],
+        "client": ("testclient", 1234),
+        "server": ("testserver", 80),
+    }
+    return Request(scope)
 
 
 @pytest.mark.parametrize(
@@ -68,3 +87,43 @@ def test_parse_form_body_invalid_bytes_returns_empty_dict() -> None:
     result = _parse_form_body(raw)
 
     assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_render_alert_fragment_includes_retry_metadata() -> None:
+    request = _make_request()
+
+    response = _render_alert_fragment(
+        request,
+        "Please retry",
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        retry_url="/fragments/retry",
+        retry_target="#fragment",
+        retry_label_key="downloads.retry",
+    )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.template.name.endswith("partials/async_error.j2")
+
+    body = response.body.decode("utf-8")
+
+    assert "Please retry" in body
+    assert 'hx-get="/fragments/retry"' in body
+    assert 'hx-target="#fragment"' in body
+    assert "Retry download" in body
+
+
+@pytest.mark.asyncio
+async def test_render_alert_fragment_defaults_to_async_error_template() -> None:
+    request = _make_request()
+
+    response = _render_alert_fragment(request, "")
+
+    assert response.template.name.endswith("partials/async_error.j2")
+    assert response.context["alerts"][0].text == "An unexpected error occurred."
+    assert response.context["retry_url"] is None
+    assert response.context["retry_target"] is None
+    assert response.context["retry_label_key"] == "fragments.retry"
+
+    body = response.body.decode("utf-8")
+    assert "An unexpected error occurred." in body
