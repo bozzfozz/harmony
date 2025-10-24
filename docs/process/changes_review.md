@@ -2,7 +2,7 @@
 
 ## Router & API
 - Alle Router binden nun konsistente JSON-Schemata ein und liefern eindeutige HTTP-Fehlercodes.
-- Plex- und Soulseek-Router verwenden strukturierte Antwortmodelle und protokollieren API-Ausfälle.
+- Soulseek- und Spotify-Router verwenden strukturierte Antwortmodelle und protokollieren API-Ausfälle.
 - Matching-Router persistiert Ergebnisse transaktionssicher und gibt bei Datenbankfehlern klare Fehlermeldungen aus.
 - Soulseek-Downloads lassen sich inklusive Fortschritt abrufen; Abbrüche markieren Einträge als `failed`.
 
