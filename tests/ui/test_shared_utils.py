@@ -2,18 +2,81 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from types import SimpleNamespace
+from typing import Literal, Mapping, cast
 from unittest.mock import Mock
 
 import pytest
 
 from fastapi import Request, status
 
+from app.config import AppConfig, UiConfig
 from app.ui.routes.shared import (
     _extract_download_refresh_params,
     _parse_form_body,
     _render_alert_fragment,
+    _resolve_live_updates_mode,
 )
+
+
+def _make_app_config(live_updates: Literal["polling", "sse"] | None) -> AppConfig:
+    """Construct a minimally populated :class:`AppConfig` for tests."""
+
+    dummy = object()
+    ui_config: UiConfig
+    if live_updates is None:
+        ui_config = cast(UiConfig, SimpleNamespace(live_updates=None, docs_base_url=None))
+    else:
+        ui_config = UiConfig(live_updates=live_updates, docs_base_url=None)
+
+    return AppConfig(
+        spotify=dummy,
+        oauth=dummy,
+        soulseek=dummy,
+        hdm=dummy,
+        logging=dummy,
+        database=dummy,
+        artwork=dummy,
+        ingest=dummy,
+        free_ingest=dummy,
+        playlist_sync=dummy,
+        features=dummy,
+        ui=ui_config,
+        artist_sync=dummy,
+        integrations=dummy,
+        security=dummy,
+        middleware=dummy,
+        api_base_path="/",
+        health=dummy,
+        watchlist=dummy,
+        matching=dummy,
+        environment=dummy,
+        admin=dummy,
+    )
+
+
+def test_resolve_live_updates_mode_returns_polling_when_configured() -> None:
+    config = _make_app_config("polling")
+
+    result = _resolve_live_updates_mode(config)
+
+    assert result == "polling"
+
+
+def test_resolve_live_updates_mode_returns_sse_when_configured() -> None:
+    config = _make_app_config("sse")
+
+    result = _resolve_live_updates_mode(config)
+
+    assert result == "sse"
+
+
+def test_resolve_live_updates_mode_defaults_to_polling_when_unset() -> None:
+    config = _make_app_config(None)
+
+    result = _resolve_live_updates_mode(config)
+
+    assert result == "polling"
 
 
 def _make_request() -> Request:
