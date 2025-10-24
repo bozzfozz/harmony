@@ -1,36 +1,6 @@
 from __future__ import annotations
 
-import sys
-import types
-
 import pytest
-
-
-def _install_sqlalchemy_stub() -> None:
-    sqlalchemy_stub = types.ModuleType("sqlalchemy")
-    sqlalchemy_stub.create_engine = lambda *args, **kwargs: None  # type: ignore[assignment]
-    sqlalchemy_stub.text = lambda statement: statement  # type: ignore[assignment]
-
-    engine_stub = types.ModuleType("sqlalchemy.engine")
-    engine_stub.make_url = lambda url: url  # type: ignore[assignment]
-
-    exc_stub = types.ModuleType("sqlalchemy.exc")
-
-    class SQLAlchemyError(Exception):
-        pass
-
-    class ArgumentError(SQLAlchemyError):
-        pass
-
-    exc_stub.SQLAlchemyError = SQLAlchemyError  # type: ignore[attr-defined]
-    exc_stub.ArgumentError = ArgumentError  # type: ignore[attr-defined]
-
-    sys.modules.setdefault("sqlalchemy", sqlalchemy_stub)
-    sys.modules.setdefault("sqlalchemy.engine", engine_stub)
-    sys.modules.setdefault("sqlalchemy.exc", exc_stub)
-
-
-_install_sqlalchemy_stub()
 
 from app.config import _normalise_public_base
 

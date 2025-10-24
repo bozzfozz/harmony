@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
-from typing import Literal, Mapping, cast
+from typing import Literal, cast
 from unittest.mock import Mock
 
-import pytest
-
 from fastapi import Request, status
+import pytest
 
 from app.config import AppConfig, UiConfig
 from app.ui.routes.shared import (
@@ -112,7 +112,11 @@ def _make_request() -> Request:
         ),
     ],
 )
-def test_extract_download_refresh_params(values: Mapping[str, str], query_params: Mapping[str, str], expected: tuple[int, int, bool]) -> None:
+def test_extract_download_refresh_params(
+    values: Mapping[str, str],
+    query_params: Mapping[str, str],
+    expected: tuple[int, int, bool],
+) -> None:
     request = Mock()
     request.query_params = query_params
 
@@ -122,7 +126,7 @@ def test_extract_download_refresh_params(values: Mapping[str, str], query_params
 
 
 def test_parse_form_body_decodes_utf8_and_percent_encoded() -> None:
-    raw = "name=J%C3%B6rg&message=Ol%C3%A1+Mundo&note=%20Hello%20World%20".encode("utf-8")
+    raw = b"name=J%C3%B6rg&message=Ol%C3%A1+Mundo&note=%20Hello%20World%20"
 
     result = _parse_form_body(raw)
 
