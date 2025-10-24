@@ -9,6 +9,7 @@ import re
 from app.config import AppConfig, Settings, settings as global_settings
 
 _WINDOWS_DRIVE_PATTERN = re.compile(r"^[a-zA-Z]:[\\/]")
+_SEPARATOR_PATTERN = re.compile(r"[\\/]+")
 
 
 def _resolve_root(path: str | Path) -> Path:
@@ -35,9 +36,9 @@ def allowed_download_roots(config: AppConfig | None) -> tuple[Path, ...]:
 
 
 def _normalise_relative(path: str | Path) -> Path:
-    candidate = Path(path)
-    parts = [part for part in candidate.parts if part not in {"", "."}]
-    return Path(*parts) if parts else Path()
+    text = str(path)
+    segments = [segment for segment in _SEPARATOR_PATTERN.split(text) if segment not in {"", "."}]
+    return Path(*segments) if segments else Path()
 
 
 def _is_within(candidate: Path, base: Path) -> bool:

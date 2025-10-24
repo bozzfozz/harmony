@@ -199,6 +199,17 @@ async def soulseek_download(
             job_payload = dict(file_payload)
             job_payload["download_id"] = download.id
 
+            relative_filename: Path | None = None
+            for root in allowed_roots:
+                resolved_root = root.resolve(strict=False)
+                if resolved_path.is_relative_to(resolved_root):
+                    relative_filename = resolved_path.relative_to(resolved_root)
+                    break
+            if relative_filename is None:  # pragma: no cover - defensive
+                relative_filename = Path(resolved_path.name)
+
+            job_payload["filename"] = str(relative_filename)
+
             priority_value = file_info.priority if file_info.priority is not None else 0
 
             job_payload.setdefault("priority", priority_value)
