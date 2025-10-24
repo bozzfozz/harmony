@@ -255,7 +255,7 @@ def truthy(value: str | None, default: bool) -> bool:
 
 def determine_warn_mode() -> bool:
     supply_mode = os.getenv("SUPPLY_MODE", "STRICT").upper()
-    strict_default = not truthy(os.getenv("CI"), default=False)
+    strict_default = truthy(os.getenv("CI"), default=True)
     strict = truthy(os.getenv("TOOLCHAIN_STRICT"), default=strict_default)
     warn_mode = supply_mode == "WARN" or not strict
     return warn_mode
