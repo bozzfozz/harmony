@@ -67,8 +67,8 @@ class ImmutableStaticFiles(StaticFiles):
     def _normalize_path(path: str) -> str | None:
         """Normalize a requested static path, rejecting traversal or absolute paths."""
 
-        if not path:
-            return ""
+        if path == "":
+            return None
 
         try:
             candidate = PurePosixPath(path)
@@ -77,6 +77,12 @@ class ImmutableStaticFiles(StaticFiles):
 
         if candidate.is_absolute():
             return None
+
+        for part in candidate.parts:
+            if "\\" in part:
+                return None
+            if len(part) == 2 and part[0].isalpha() and part[1] == ":":
+                return None
 
         parts: list[str] = []
         for part in candidate.parts:
