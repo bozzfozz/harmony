@@ -10,17 +10,15 @@
     <rect x="280" y="200" width="320" height="160" rx="28"/>
     <rect x="620" y="200" width="320" height="160" rx="28"/>
     <rect x="960" y="200" width="320" height="160" rx="28"/>
-    <rect x="280" y="380" width="320" height="160" rx="28"/>
-    <rect x="620" y="380" width="320" height="160" rx="28"/>
-    <rect x="960" y="380" width="320" height="160" rx="28"/>
+    <rect x="280" y="380" width="520" height="160" rx="28"/>
+    <rect x="840" y="380" width="520" height="160" rx="28"/>
   </g>
   <g fill="#e2e8f0" font-family="Inter, sans-serif" font-size="22" font-weight="600">
     <text x="304" y="252">System</text>
     <text x="644" y="252">Spotify</text>
     <text x="984" y="252">Soulseek</text>
-    <text x="304" y="432">Plex</text>
-    <text x="644" y="432">Matching</text>
-    <text x="984" y="432">Beets</text>
+    <text x="304" y="432">Watchlist</text>
+    <text x="864" y="432">Jobs</text>
   </g>
   <g stroke="#1e293b" stroke-width="2">
     <rect x="280" y="580" width="1080" height="260" rx="32" fill="#111827"/>
