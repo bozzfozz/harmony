@@ -10,7 +10,7 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
 
 - Spotify PRO muss `authorized: true` in `GET /spotify/status` liefern.
 - Backfill- und Watchlist-Worker dürfen keine OAuth-bedingten Fehler im DLQ
-  hinterlassen (`reports/dlq/*.jsonl` bleibt leer).
+  hinterlassen (`GET /api/v1/dlq/stats` → `total=0`).
 - Der OAuth-State-Store bleibt unter 50 offenen Transaktionen (`/metrics` →
   `oauth_transactions_active`).
 - Recovery-Schritte müssen remote durchführbar sein (siehe
@@ -25,7 +25,7 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
    gesetzt sind. Geheimnisse niemals ins Repo schreiben.
 3. **Verzeichnisse:**
    - `/data` (Downloads & Musik) — Schreibrechte `uid=1000` bzw. `chmod 775`.
-   - `reports/` (DLQ, Coverage, JUnit) — `chmod 775`, falls hostpersistent genutzt.
+   - `reports/` (Coverage, JUnit) — `chmod 775`, falls hostpersistent genutzt.
    - Optional eingehängte Secrets (`/run/secrets/*` oder `/var/lib/harmony/oauth`) —
      `chmod 700` (Dirs) / `chmod 600` (Files).
 4. **Netzwerk:** Ports `8080/tcp` (API) und `8888/tcp` (OAuth Callback) müssen
@@ -173,7 +173,8 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 ### DLQ und Backfill
 
-**Symptome:** `reports/dlq/backfill-*.jsonl` enthält Spotify-spezifische Fehler.
+**Symptome:** DLQ-Einträge listen Spotify-spezifische Fehlergründe (z. B.
+`reason=spotify`).
 
 **Schritte:**
 
@@ -191,7 +192,7 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 5. Beobachten Sie `event=dlq.requeue`/`event=dlq.purge` in den Logs sowie
    `GET /api/v1/dlq/stats` (siehe [Stats-Endpunkt](../dlq.md#get-apiv1dlqstats))
    und schließen Sie den Incident, sobald die DLQ leer ist und die Metadaten
-   aktualisiert wurden (`reports/dlq/` bleibt leer).
+   aktualisiert wurden.
 
 ## QA & Tests
 
