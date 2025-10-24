@@ -45,6 +45,8 @@ jobs:
         run: make docs-verify
 
       - name: Check formatting (make fmt)
+        env:
+          TOOLCHAIN_STRICT: "1"
         run: |
           make fmt
           git diff --exit-code
