@@ -18,9 +18,9 @@ the canonical entrypoint for automating library updates.
 4. **Movement & Deduplication** – The `AtomicFileMover` ensures durable moves within or
    across filesystems. Deduplication guards skip already ingested tracks and keep a
    persistent audit trail.
-5. **Recovery** – Failed jobs transition into deterministic DLQ files under
-   `reports/dlq/`. Operators can replay them using the provided scripts, and HDM surfaces
-   status metrics for observability.
+5. **Recovery** – Failed jobs emit structured `hdm.recovery.*` logs and land in the
+   DLQ tables exposed through the `/api/v1/dlq` APIs. Operators manage retries via the
+   DLQ endpoints and dashboards, while HDM surfaces status metrics for observability.
 
 ## Runtime Layout
 
