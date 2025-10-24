@@ -106,6 +106,30 @@ def _spotify_store(client_secret: str, *, client_id: str = "client123") -> Secre
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "base_url",
+    (
+        "http://slskd.local/api",
+        "http://slskd.local/api/v2",
+        "http://slskd.local/api/v2/me",
+        "http://slskd.local",
+    ),
+)
+async def test_request_slskd_normalizes_base_url_variants(base_url: str) -> None:
+    factory = _StubClientFactory(get=[_make_response(status.HTTP_200_OK)])
+    service = SecretValidationService(settings=_default_settings(), client_factory=factory)
+
+    response = await service._request_slskd("ValidKey1234", base_url)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(factory.calls) == 1
+    method, url, headers = factory.calls[0]
+    assert method == "GET"
+    assert headers == {"X-API-Key": "ValidKey1234"}
+    assert url == "http://slskd.local/api/v2/me"
+
+
+@pytest.mark.asyncio
 async def test_validate_slskd_success_returns_live_result() -> None:
     factory = _StubClientFactory(get=[_make_response(status.HTTP_200_OK)])
     service = SecretValidationService(settings=_default_settings(), client_factory=factory)
