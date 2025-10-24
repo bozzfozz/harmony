@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -43,7 +44,15 @@ class ReadinessResult:
     dependencies: dict[str, str]
 
 
-Probe = Callable[[], bool | str | DependencyStatus | Awaitable[bool | str | DependencyStatus]]
+ProbeResult = bool | str | DependencyStatus
+ProbeAwaitable = Awaitable[ProbeResult]
+Probe = Callable[[], ProbeResult | ProbeAwaitable]
+
+
+async def _wrap_probe_result(value: ProbeResult) -> ProbeResult:
+    """Coerce an immediate probe result into an awaitable."""
+
+    return value
 
 
 class HealthService:
@@ -136,15 +145,15 @@ class HealthService:
         probe = self._dependency_probes.get(normalized)
         try:
             if probe is None:
-                awaitable: Awaitable[bool | str | DependencyStatus] = asyncio.to_thread(
+                awaitable: ProbeAwaitable = asyncio.to_thread(
                     self._default_dependency_probe, normalized
                 )
             else:
                 result = probe()
                 if isinstance(result, Awaitable):
-                    awaitable = result
+                    awaitable = cast(ProbeAwaitable, result)
                 else:
-                    awaitable = asyncio.sleep(0, result=result)
+                    awaitable = _wrap_probe_result(result)
             raw_status = await asyncio.wait_for(awaitable, timeout=timeout)
         except TimeoutError:
             logger.warning("Dependency probe timed out", extra={"dependency": name})
