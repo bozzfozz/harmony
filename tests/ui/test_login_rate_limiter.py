@@ -112,6 +112,37 @@ def test_ensure_can_attempt_blocks_after_budget(limiter_fixture) -> None:
     assert exc.value.retry_after == pytest.approx(expected_remaining)
 
 
+def test_ensure_can_attempt_reports_longest_retry_after(limiter_fixture) -> None:
+    limiter, store, clock, _ = limiter_fixture
+    remote = "127.0.0.1"
+    fingerprint = "fingerprint"
+    base = clock.now()
+
+    store.seed(
+        "remote",
+        remote,
+        [
+            base - timedelta(seconds=55),
+            base - timedelta(seconds=50),
+            base - timedelta(seconds=45),
+        ],
+    )
+    store.seed(
+        "fingerprint",
+        fingerprint,
+        [
+            base - timedelta(seconds=20),
+            base - timedelta(seconds=15),
+            base - timedelta(seconds=10),
+        ],
+    )
+
+    with pytest.raises(UiLoginRateLimitError) as exc:
+        limiter.ensure_can_attempt(remote, fingerprint)
+
+    assert exc.value.retry_after == pytest.approx(40.0)
+
+
 def test_record_failure_raises_with_combined_scopes(limiter_fixture) -> None:
     limiter, store, clock, _ = limiter_fixture
     remote = "127.0.0.1"
