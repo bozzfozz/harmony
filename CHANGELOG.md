@@ -5,8 +5,8 @@ All notable changes to Harmony are documented in this file.
 ## v1.0.0 — Initial release
 
 ### Dependencies
-- FastAPI is pinned to 0.115.10. Starlette remains pinned to 0.46.1 until an upstream
-  FastAPI release permits the 0.47.2 security fix (GHSA-2c2j-9gv5-cj73).
+- FastAPI is pinned to 0.115.11 and ships with Starlette 0.47.2, incorporating the
+  GHSA-2c2j-9gv5-cj73 security fix.
 
 ### Platform
 - FastAPI exposes `/live`, `/ready`, `/status` and `/env` so operators can validate deployments, configuration snapshots and external dependencies without touching private routers.【F:app/main.py†L1-L120】【F:app/api/system.py†L1-L260】【F:tests/test_live_endpoint.py†L1-L36】【F:tests/test_system_ready_endpoint.py†L1-L120】【F:tests/test_ready_check.py†L1-L160】【F:tests/test_env_endpoint.py†L1-L80】
