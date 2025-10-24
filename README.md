@@ -152,6 +152,11 @@ pip install -r requirements-dev.txt -r requirements-test.txt
 the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
 are introduced.
 
+> **Security note:** FastAPI currently regresses when paired with Starlette 0.47.x, so the
+> runtime pin has been relaxed to `<0.47.0` even though this drops the
+> GHSA-2c2j-9gv5-cj73 mitigation. Monitor the FastAPI release stream and restore a
+> `>=0.47.2` pin as soon as compatibility lands upstream.
+
 ## Release gate
 
 Run `make release-check` before tagging or publishing a release. The target executes the
