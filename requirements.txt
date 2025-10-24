@@ -1,8 +1,8 @@
 # Runtime dependencies for Harmony backend
-# FastAPI 0.115.8 loosens Starlette upper bound; pin 0.47.2 for GHSA-2c2j-9gv5-cj73
+# FastAPI 0.115.8 loosens Starlette upper bound; pin 0.45.2 for GHSA-2c2j-9gv5-cj73
 
 fastapi==0.115.8
-starlette==0.47.2
+starlette==0.45.2
 uvicorn==0.30.1
 sqlalchemy==2.0.31
 aiohttp==3.12.14

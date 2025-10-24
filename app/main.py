@@ -9,7 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import inspect
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
@@ -63,8 +63,37 @@ _LIVE_HEALTH_PATH = "/live"
 class ImmutableStaticFiles(StaticFiles):
     cache_control_header = "max-age=86400, immutable"
 
+    @staticmethod
+    def _normalize_path(path: str) -> str | None:
+        """Normalize a requested static path, rejecting traversal or absolute paths."""
+
+        if not path:
+            return ""
+
+        try:
+            candidate = PurePosixPath(path)
+        except ValueError:
+            return None
+
+        if candidate.is_absolute():
+            return None
+
+        parts: list[str] = []
+        for part in candidate.parts:
+            if part in {"", "."}:
+                continue
+            if part == "..":
+                return None
+            parts.append(part)
+
+        return "/".join(parts)
+
     async def get_response(self, path: str, scope: Scope) -> Response:  # type: ignore[override]
-        response = await super().get_response(path, scope)
+        normalized_path = self._normalize_path(path)
+        if normalized_path is None:
+            return Response(status_code=404)
+
+        response = await super().get_response(normalized_path, scope)
         if response.status_code < 400:
             response.headers.setdefault("Cache-Control", self.cache_control_header)
         return response

@@ -55,3 +55,15 @@ def test_ui_static_assets_are_versioned_and_cached(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.headers.get("cache-control") == "max-age=86400, immutable"
+
+
+def test_ui_static_rejects_traversal(client: TestClient) -> None:
+    response = client.get("/ui/static/../templates/pages/dashboard.j2")
+
+    assert response.status_code == 404
+
+
+def test_ui_static_rejects_absolute_paths(client: TestClient) -> None:
+    response = client.get("/ui/static/%2Fetc/passwd")
+
+    assert response.status_code == 404
