@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 
 from app.db import init_db, reset_engine_for_tests
+from app.main import _ui_dependency_probe
 from app.ops import selfcheck_ui
 from app.ops.selfcheck import aggregate_ready
-from app.main import _ui_dependency_probe
 from app.services.health import DependencyStatus
 
 

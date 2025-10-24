@@ -8,10 +8,10 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 import sys
 from threading import Barrier
 import time
+from types import SimpleNamespace
 from typing import Any
 
 import pytest

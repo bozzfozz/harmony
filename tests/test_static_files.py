@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-import pytest
 from fastapi.staticfiles import StaticFiles
+import pytest
 from starlette.responses import Response
 
 from app.main import ImmutableStaticFiles
