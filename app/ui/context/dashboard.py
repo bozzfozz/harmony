@@ -536,7 +536,7 @@ def _format_sync_error_meta(meta: Mapping[str, Any] | None) -> list[str]:
 def _join_meta_details(details: Any) -> str:
     if isinstance(details, str):
         return details.strip()
-    if isinstance(details, Sequence) and not isinstance(details, (str, bytes)):
+    if isinstance(details, Sequence) and not isinstance(details, str | bytes):
         parts = [str(item).strip() for item in details if str(item).strip()]
         return ", ".join(sorted(parts))
     return ""

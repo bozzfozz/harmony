@@ -137,7 +137,7 @@ def build_search_page_context(
 def build_search_results_context(
     request: Request,
     *,
-    page: "SearchResultsPage",
+    page: SearchResultsPage,
     query: str,
     sources: Sequence[str],
     csrf_token: str,

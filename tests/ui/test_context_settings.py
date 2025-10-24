@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from types import SimpleNamespace
+from datetime import UTC, datetime
 
 from starlette.requests import Request
 
@@ -25,7 +24,7 @@ def _make_request() -> Request:
 
 
 def _make_session(role: str = "admin") -> UiSession:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     features = UiFeatures(spotify=True, soulseek=True, dlq=True, imports=True)
     return UiSession(
         identifier="session-id",
@@ -45,7 +44,7 @@ def test_build_settings_page_context_sets_navigation() -> None:
             SettingRow(key="alpha", value="1", has_override=True),
             SettingRow(key="beta", value=None, has_override=False),
         ),
-        updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2024, 1, 1, tzinfo=UTC),
     )
 
     context = build_settings_page_context(
@@ -68,7 +67,7 @@ def test_build_settings_form_fragment_context_reuses_components() -> None:
     request = _make_request()
     overview = SettingsOverview(
         rows=(SettingRow(key="alpha", value="1", has_override=True),),
-        updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2024, 1, 1, tzinfo=UTC),
     )
 
     fragment = build_settings_form_fragment_context(request, overview=overview)
@@ -84,7 +83,7 @@ def test_build_settings_history_fragment_context_formats_rows() -> None:
             key="alpha",
             old_value="1",
             new_value=None,
-            changed_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+            changed_at=datetime(2024, 2, 1, tzinfo=UTC),
         ),
     )
 

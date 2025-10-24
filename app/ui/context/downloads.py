@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import Request
@@ -23,6 +23,9 @@ from .operations_layout import (
     build_operations_layout,
     build_operations_sidebar_sections,
 )
+
+if TYPE_CHECKING:
+    from app.ui.services import DownloadPage
 
 
 def build_downloads_page_context(
@@ -75,7 +78,7 @@ def build_downloads_page_context(
 def build_downloads_fragment_context(
     request: Request,
     *,
-    page: "DownloadPage",
+    page: DownloadPage,
     csrf_token: str,
     status_filter: str | None = None,
     include_all: bool = False,

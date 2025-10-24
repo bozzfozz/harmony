@@ -1,4 +1,5 @@
-"""Tests for :mod:`app.core.soulseek_client` covering retries, rate limits and payload normalisation."""
+"""Tests for :mod:`app.core.soulseek_client` covering retries, rate limits, and
+payload normalisation."""
 
 from __future__ import annotations
 

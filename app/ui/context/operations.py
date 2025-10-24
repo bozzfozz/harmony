@@ -15,7 +15,6 @@ from .base import (
     FormDefinition,
     FormField,
     PaginationContext,
-    StatusBadge,
     TableCell,
     TableCellForm,
     TableCellInput,
@@ -41,7 +40,7 @@ _LIVE_UPDATES_POLLING_DESCRIPTION = "HTMX polling refreshes the overview on a sc
 _OPERATIONS_LIVE_UPDATES_TITLE = "Live updates"
 
 if TYPE_CHECKING:
-    from app.ui.services import DownloadPage, OrchestratorJob, WatchlistRow
+    from app.ui.services import WatchlistRow
 
 
 def build_operations_page_context(
@@ -260,7 +259,7 @@ def _build_operations_kpi_cards(
 def _format_activity_cell(value: Any) -> str:
     if value is None:
         return ""
-    if isinstance(value, (str, int, float)):
+    if isinstance(value, str | int | float):
         return str(value)
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
@@ -385,7 +384,7 @@ def _build_watchlist_hidden_fields(
 
 
 def _build_watchlist_row(
-    entry: "WatchlistRow",
+    entry: WatchlistRow,
     hidden_fields: Mapping[str, str],
 ) -> TableRow:
     slug = _normalize_artist_key_for_id(entry.artist_key)
@@ -476,7 +475,7 @@ def _build_watchlist_row(
 def build_watchlist_fragment_context(
     request: Request,
     *,
-    entries: Sequence["WatchlistRow"],
+    entries: Sequence[WatchlistRow],
     csrf_token: str,
     limit: str | None = None,
     offset: str | None = None,

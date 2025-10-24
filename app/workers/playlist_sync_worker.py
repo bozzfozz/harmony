@@ -323,7 +323,7 @@ class PlaylistSyncWorker:
         tracks = payload.get("tracks")
         if isinstance(tracks, Mapping):
             total_value = tracks.get("total")
-            if isinstance(total_value, (int, float, str)):
+            if isinstance(total_value, int | float | str):
                 try:
                     track_count = int(total_value)
                 except (TypeError, ValueError):

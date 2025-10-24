@@ -30,7 +30,7 @@ def _coerce_int(value: object | None, *, default: int | None = None) -> int | No
         return default
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     if isinstance(value, str):
         text = value.strip()

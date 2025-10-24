@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from starlette.requests import Request
 
@@ -8,7 +8,7 @@ from app.ui.session import UiFeatures, UiSession
 
 
 def _make_session(*, role: str = "admin") -> UiSession:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     features = UiFeatures(spotify=True, soulseek=True, dlq=True, imports=True)
     return UiSession(
         identifier="session",  # pragma: no cover - deterministic identifier for tests

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 import hashlib
 import json
 from time import perf_counter
-from typing import Any, Callable, Final, TypeVar
+from typing import Any, Final, TypeVar
 
 import anyio
 from fastapi import Depends, Request
@@ -225,7 +225,7 @@ class SpotifyBackfillSnapshot:
     default_max_items: int | None
     expand_playlists: bool
     include_cached_results: bool
-    options: tuple["SpotifyBackfillOption", ...]
+    options: tuple[SpotifyBackfillOption, ...]
     last_job_id: str | None
     state: str | None
     requested: int | None
@@ -726,7 +726,7 @@ class SpotifyUiService:
 
             genres_raw = entry.get("genres")
             genres_list: list[str] = []
-            if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, (str, bytes)):
+            if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, str | bytes):
                 for genre in genres_raw:
                     if isinstance(genre, str):
                         cleaned = genre.strip()
@@ -863,7 +863,7 @@ class SpotifyUiService:
 
         artists_payload = track_payload.get("artists")
         artist_names: list[str] = []
-        if isinstance(artists_payload, Sequence) and not isinstance(artists_payload, (str, bytes)):
+        if isinstance(artists_payload, Sequence) and not isinstance(artists_payload, str | bytes):
             for artist_entry in artists_payload:
                 if isinstance(artist_entry, Mapping):
                     artist_name_raw = artist_entry.get("name")
@@ -1065,7 +1065,7 @@ class SpotifyUiService:
 
         def _extract(key: str) -> tuple[str, ...]:
             value = data.get(key)
-            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+            if not isinstance(value, Sequence) or isinstance(value, str | bytes):
                 return ()
             return self._clean_seed_values(tuple(str(item) for item in value))
 
@@ -1085,7 +1085,7 @@ class SpotifyUiService:
 
     @staticmethod
     def _normalise_recommendation_rows(entries: object) -> tuple[SpotifyRecommendationRow, ...]:
-        if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+        if not isinstance(entries, Sequence) or isinstance(entries, str | bytes):
             return ()
         rows: list[SpotifyRecommendationRow] = []
         for entry in entries:
@@ -1098,7 +1098,7 @@ class SpotifyUiService:
             artists_payload = entry.get("artists")
             artist_names: list[str] = []
             if isinstance(artists_payload, Sequence) and not isinstance(
-                artists_payload, (str, bytes)
+                artists_payload, str | bytes
             ):
                 for artist_entry in artists_payload:
                     if isinstance(artist_entry, Mapping):
@@ -1142,7 +1142,7 @@ class SpotifyUiService:
 
     @staticmethod
     def _normalise_recommendation_seeds(entries: object) -> tuple[SpotifyRecommendationSeed, ...]:
-        if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+        if not isinstance(entries, Sequence) or isinstance(entries, str | bytes):
             return ()
         seeds: list[SpotifyRecommendationSeed] = []
         for entry in entries:
@@ -1854,7 +1854,7 @@ class SpotifyUiService:
 
                 genres_raw = entry.get("genres")
                 genres: list[str] = []
-                if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, (str, bytes)):
+                if isinstance(genres_raw, Sequence) and not isinstance(genres_raw, str | bytes):
                     for genre in genres_raw:
                         if isinstance(genre, str):
                             cleaned = genre.strip()

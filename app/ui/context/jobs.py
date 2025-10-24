@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import Request
 
@@ -13,6 +13,9 @@ from .operations_layout import (
     build_operations_layout,
     build_operations_sidebar_sections,
 )
+
+if TYPE_CHECKING:
+    from app.ui.services import OrchestratorJob
 
 
 def build_jobs_page_context(
@@ -67,7 +70,7 @@ def build_jobs_page_context(
 def build_jobs_fragment_context(
     request: Request,
     *,
-    jobs: Sequence["OrchestratorJob"],
+    jobs: Sequence[OrchestratorJob],
 ) -> Mapping[str, Any]:
     rows: list[TableRow] = []
     for job in jobs:

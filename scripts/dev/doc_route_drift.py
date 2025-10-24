@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 import re
 import sys
-from typing import Iterable
 
 from fastapi.routing import APIRoute
 
@@ -166,7 +166,8 @@ def _build_report(findings: list[DriftFinding], scanned_documents: list[Path]) -
             header.append(f"| `{finding.document.as_posix()}` | `{finding.path}` | {note} |")
         header.append("")
         header.append(
-            "Run `scripts/dev/doc_route_drift.py` after updating documentation or routes to refresh this report."
+            "Run `scripts/dev/doc_route_drift.py` after updating documentation or routes "
+            "to refresh this report."
         )
     else:
         header.append(
@@ -178,7 +179,8 @@ def _build_report(findings: list[DriftFinding], scanned_documents: list[Path]) -
             header.append(f"- `{document.as_posix()}`")
         header.append("")
         header.append(
-            "Verification generated via `scripts/dev/doc_route_drift.py`, which loads `app.main` to read the active route table."
+            "Verification generated via `scripts/dev/doc_route_drift.py`, which loads "
+            "`app.main` to read the active route table."
         )
     header.append("")
     return "\n".join(header)

@@ -13,15 +13,11 @@ from starlette.datastructures import URL
 from app.config import SecurityConfig, SoulseekConfig
 from app.integrations.health import IntegrationHealth
 from app.schemas import SOULSEEK_RETRYABLE_STATES, StatusResponse
-from app.ui.formatters import format_datetime_display
 from app.ui.session import UiSession
 
 from .base import (
     AlertMessage,
     AsyncFragment,
-    DefinitionItem,
-    FormDefinition,
-    FormField,
     LayoutContext,
     MetaTag,
     PaginationContext,
@@ -34,12 +30,8 @@ from .base import (
     TableFragment,
     TableRow,
     _build_primary_navigation,
-    _format_duration_seconds,
-    _format_status_text,
     _normalise_status,
-    _normalize_status,
     _safe_url_for,
-    _system_status_badge,
 )
 
 if TYPE_CHECKING:
@@ -47,9 +39,7 @@ if TYPE_CHECKING:
         DownloadPage,
         SoulseekUploadRow,
         SoulseekUserBrowsingStatus,
-        SoulseekUserDirectoryEntry,
         SoulseekUserDirectoryListing,
-        SoulseekUserFileEntry,
         SoulseekUserProfile,
         SoulseekUserStatus,
     )
@@ -150,7 +140,7 @@ def _format_health_details(details: Mapping[str, Any]) -> str:
         return ""
     rendered: list[str] = []
     for key, value in details.items():
-        if isinstance(value, (str, int, float, bool)) or value is None:
+        if isinstance(value, str | int | float | bool) or value is None:
             rendered.append(f"{key}: {value}")
             continue
         try:

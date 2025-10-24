@@ -110,7 +110,7 @@ def httpx_mock(monkeypatch: pytest.MonkeyPatch) -> _HTTPXMock:
             self._base_url = base_url
             self._timeout = timeout
 
-        async def __aenter__(self) -> "_PatchedAsyncClient":
+        async def __aenter__(self) -> _PatchedAsyncClient:
             return self
 
         async def __aexit__(self, exc_type, exc, tb) -> None:

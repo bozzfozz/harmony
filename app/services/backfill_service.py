@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
 import time
-from typing import Any, Sequence
+from typing import Any
 from urllib.parse import urlparse
 import uuid
 

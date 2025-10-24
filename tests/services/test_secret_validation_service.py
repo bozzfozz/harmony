@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Callable, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from fastapi import status
 import httpx
@@ -33,7 +34,7 @@ class _StubAsyncClient:
         self._post_queue = post_queue
         self._calls = calls
 
-    async def __aenter__(self) -> "_StubAsyncClient":
+    async def __aenter__(self) -> _StubAsyncClient:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
-from typing import Sequence
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status

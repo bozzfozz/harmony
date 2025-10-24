@@ -54,7 +54,7 @@ def _build_settings_form_definition() -> FormDefinition:
     )
 
 
-def _build_settings_table(rows: Sequence["SettingRow"]) -> TableDefinition:
+def _build_settings_table(rows: Sequence[SettingRow]) -> TableDefinition:
     table_rows: list[TableRow] = []
     for row in rows:
         value_cell = (
@@ -84,7 +84,7 @@ def _build_settings_table(rows: Sequence["SettingRow"]) -> TableDefinition:
 
 
 def _build_settings_form_components(
-    overview: "SettingsOverview",
+    overview: SettingsOverview,
 ) -> tuple[FormDefinition, TableDefinition, str]:
     form = _build_settings_form_definition()
     table = _build_settings_table(overview.rows)
@@ -97,7 +97,7 @@ def build_settings_page_context(
     *,
     session: UiSession,
     csrf_token: str,
-    overview: "SettingsOverview",
+    overview: SettingsOverview,
 ) -> Mapping[str, Any]:
     layout = LayoutContext(
         page_id="settings",
@@ -157,7 +157,7 @@ def build_settings_page_context(
 def build_settings_form_fragment_context(
     request: Request,
     *,
-    overview: "SettingsOverview",
+    overview: SettingsOverview,
 ) -> Mapping[str, Any]:
     settings_form, settings_table, updated_display = _build_settings_form_components(overview)
     return {
@@ -171,7 +171,7 @@ def build_settings_form_fragment_context(
 def build_settings_history_fragment_context(
     request: Request,
     *,
-    rows: Sequence["SettingsHistoryRow"],
+    rows: Sequence[SettingsHistoryRow],
 ) -> Mapping[str, Any]:
     table_rows: list[TableRow] = []
     for entry in rows:
@@ -213,7 +213,7 @@ def build_settings_history_fragment_context(
 def build_settings_artist_preferences_fragment_context(
     request: Request,
     *,
-    rows: Sequence["ArtistPreferenceRow"],
+    rows: Sequence[ArtistPreferenceRow],
     csrf_token: str,
 ) -> Mapping[str, Any]:
     table_rows: list[TableRow] = []

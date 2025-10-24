@@ -209,7 +209,7 @@ def test_playlist_detail_cache_key_includes_auth_and_query(
         "http_version": "1.1",
         "method": "GET",
         "path": f"/spotify/playlists/{playlist_id}",
-        "raw_path": f"/spotify/playlists/{playlist_id}".encode("utf-8"),
+        "raw_path": f"/spotify/playlists/{playlist_id}".encode(),
         "root_path": "",
         "app": app,
         "headers": [(b"authorization", headers["Authorization"].encode("latin-1"))],
