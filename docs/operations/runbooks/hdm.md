@@ -178,21 +178,39 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
 
 **Schritte:**
 
-1. Ermitteln Sie die betroffenen Jobs mit `GET /api/v1/dlq` (siehe
-   [DLQ-API-Referenz](../dlq.md#get-apiv1dlq)). Filtern Sie bei Bedarf nach
-   `reason=spotify` und kopieren Sie die `id`-Werte für den Requeue.
-2. Prüfen Sie, ob die OAuth-Token gültig sind (`GET /spotify/status`).
-3. Re-queue der Einträge via `POST /api/v1/dlq/requeue` (siehe
-   [Requeue-Endpunkt](../dlq.md#post-apiv1dlqrequeue)) und übergeben Sie die
-   aus Schritt 1 gesammelten IDs. Achten Sie auf `skipped`-Antworten und beheben
-   Sie den gemeldeten Grund, bevor Sie erneut versuchen.
-4. Optional: Entfernen Sie veraltete Einträge mit `POST /api/v1/dlq/purge`, wenn
-   sie nicht mehr benötigt werden (siehe
-   [Purge-Endpunkt](../dlq.md#post-apiv1dlqpurge)).
-5. Beobachten Sie `event=dlq.requeue`/`event=dlq.purge` in den Logs sowie
-   `GET /api/v1/dlq/stats` (siehe [Stats-Endpunkt](../dlq.md#get-apiv1dlqstats))
-   und schließen Sie den Incident, sobald die DLQ leer ist und die Metadaten
-   aktualisiert wurden.
+1. **Ausmaß quantifizieren:** Rufen Sie `GET /api/v1/dlq/stats` auf (siehe
+   [Stats-Endpunkt](../dlq.md#get-apiv1dlqstats)), um `total`, `by_reason` und
+   `last_24h` zu erfassen. Jeder Aufruf erzeugt ein strukturiertes Log
+   `event=dlq.stats` mit denselben Kennzahlen – abonnieren Sie diese Logzeilen
+   im zentralen Stack für Alarmierung.
+   - Ergänzend zählt der Orchestrator für jedes Dead-Letter-Event den Zähler
+     `metrics.orchestrator.dlq.<status>` hoch (z. B. `dead_letter` oder
+     `missing_handler`); lesen Sie die Werte bei Bedarf über `GET /api/v1/settings`
+     aus oder spiegeln Sie sie über Ihren bestehenden Exporter in das
+     unternehmensweite Monitoring.
+2. **Einzelne Einträge untersuchen:** Verwenden Sie `GET /api/v1/dlq`
+   (siehe [DLQ-API-Referenz](../dlq.md#get-apiv1dlq)) und filtern Sie bei Bedarf
+   nach `reason=spotify`, Zeitfenstern (`from`/`to`) oder Sortierung. Vergleichen
+   Sie jeden Eintrag mit den Logs `event=orchestrator.dlq` oder
+   `worker.retry_exhausted`, um `stop_reason`, `attempts` und Fehlercode zu
+   verifizieren.
+3. **Ursache beheben:** Stellen Sie sicher, dass Spotify weiterhin autorisiert
+   ist (`GET /spotify/status`) und prüfen Sie abhängige Dienste (z. B. SLSKD) auf
+   aktuelle Ausfälle, bevor Sie erneut einspielen.
+4. **Requeue durchführen:** Senden Sie die gesammelten IDs an
+   `POST /api/v1/dlq/requeue` (siehe
+   [Requeue-Endpunkt](../dlq.md#post-apiv1dlqrequeue)). Achten Sie auf das
+   Responsefeld `skipped` und korrelieren Sie es mit den Logs
+   `event=dlq.requeue` (enthält `actor`, `requeued`, `skipped`, `duration_ms`).
+   Parallel sollten neue Worker-Leases als `event=orchestrator.dispatch` bzw.
+   `event=orchestrator.commit status=retry|succeeded` auftauchen.
+5. **Bereinigung abschließen:** Entfernen Sie veraltete oder irreparable Einträge
+   mit `POST /api/v1/dlq/purge`, sofern nötig (siehe
+   [Purge-Endpunkt](../dlq.md#post-apiv1dlqpurge)). Überprüfen Sie anschließend
+   erneut `GET /api/v1/dlq/stats` und die korrespondierenden Metrik- und
+   Log-Signale (`event=dlq.purge`, `metrics.orchestrator.dlq.dead_letter`). Der Incident
+   gilt als abgeschlossen, wenn `total=0` bzw. nur erwartbare Restfälle bestehen
+   und keine neuen Dead-Letter-Ereignisse auftreten.
 
 ## QA & Tests
 
