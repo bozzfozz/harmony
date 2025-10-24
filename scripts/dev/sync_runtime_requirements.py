@@ -18,6 +18,13 @@ PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 DEFAULT_HEADER = ("# Runtime dependencies for Harmony backend",)
 
+# Dependencies that intentionally keep a range specifier instead of an exact pin.
+# Starlette 0.47.x introduces behavioural changes we are not ready to adopt, but we
+# still want to receive bugfix releases in the 0.46 series. Allow a `<0.47.0` cap
+# so the sync guardrail continues to prevent unbounded upgrades while accepting
+# hotfix releases. Keep this list short and well documented.
+RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset({"starlette"})
+
 
 @dataclass(frozen=True)
 class Dependency:
@@ -48,14 +55,21 @@ def _load_pyproject_dependencies(path: Path) -> list[Dependency]:
     seen: set[str] = set()
     for raw in dependency_strings:
         requirement = Requirement(raw)
+        canonical = canonicalize_name(requirement.name)
         specifiers = list(requirement.specifier)
-        if len(specifiers) != 1 or specifiers[0].operator != "==":
+        if canonical in RANGE_SPECIFIER_ALLOWLIST:
+            if len(specifiers) != 1:
+                raise DependencySyncError(
+                    "Dependency "
+                    f"'{requirement.name}' must declare a single range specifier; "
+                    f"found '{requirement.specifier}'."
+                )
+        elif len(specifiers) != 1 or specifiers[0].operator != "==":
             raise DependencySyncError(
                 "Dependency "
                 f"'{requirement.name}' must be pinned with '=='; "
                 f"found '{requirement.specifier}'."
             )
-        canonical = canonicalize_name(requirement.name)
         if canonical in seen:
             raise DependencySyncError(
                 f"Duplicate dependency '{requirement.name}' in pyproject.toml."
