@@ -1,11 +1,10 @@
 # Runtime dependencies for Harmony backend
-# FastAPI 0.115.11 lifts the Starlette <0.47.0 constraint, but 0.47.x currently
-# regresses FastAPI routing. Hold Starlette below 0.47.0 until an upstream fix
-# lands, even though this temporarily drops the GHSA-2c2j-9gv5-cj73 mitigation.
-# Re-upgrade as soon as FastAPI publishes a compatible release.
+# FastAPI 0.116.2 and Starlette 0.48.0 passed the full pytest suite, so we can
+# safely regain the GHSA-2c2j-9gv5-cj73 mitigation while watching for routing
+# regressions in upstream releases.
 
-fastapi==0.115.11
-starlette<0.47.0
+fastapi==0.116.2
+starlette==0.48.0
 uvicorn==0.30.1
 sqlalchemy==2.0.31
 aiohttp==3.12.14
