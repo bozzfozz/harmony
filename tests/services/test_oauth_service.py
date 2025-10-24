@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 import sys
 from threading import Barrier
 import time
@@ -124,6 +125,21 @@ def _build_service(
         manual_limit=manual_limit,
         http_client_factory=http_client_factory,
     )
+
+
+def _build_service_with_public_base(
+    public_base: str, *, manual_enabled: bool = True
+) -> OAuthService:
+    store = MemoryOAuthTransactionStore(ttl=timedelta(seconds=600))
+    oauth_config = SimpleNamespace(
+        redirect_uri="http://127.0.0.1:8888/callback",
+        manual_callback_enabled=manual_enabled,
+        public_host_hint=None,
+        public_base=public_base,
+    )
+    spotify_config = SimpleNamespace(client_id="id", client_secret="secret", scope="scope")
+    app_config = SimpleNamespace(oauth=oauth_config, spotify=spotify_config)
+    return OAuthService(config=app_config, transactions=store)
 
 
 def _prime_transaction(
@@ -401,3 +417,37 @@ async def test_manual_rate_limited_returns_error(
 
     status = service.status(state)
     assert status.status is OAuthSessionStatus.COMPLETED
+
+
+def test_help_page_context_uses_relative_manual_url() -> None:
+    service = _build_service_with_public_base("/api/v1/oauth")
+
+    context = service.help_page_context()
+
+    assert context["manual_url"] == "/api/v1/oauth/manual"
+
+
+def test_help_page_context_supports_absolute_manual_url() -> None:
+    base = "https://harmony.example.com/api/v1/oauth"
+    service = _build_service_with_public_base(base)
+
+    context = service.help_page_context()
+
+    assert context["manual_url"] == f"{base}/manual"
+
+
+def test_help_page_context_supports_absolute_root_manual_url() -> None:
+    base = "https://harmony.example.com"
+    service = _build_service_with_public_base(base)
+
+    context = service.help_page_context()
+
+    assert context["manual_url"] == f"{base}/manual"
+
+
+def test_help_page_context_omits_manual_url_when_disabled() -> None:
+    service = _build_service_with_public_base("/api/v1/oauth", manual_enabled=False)
+
+    context = service.help_page_context()
+
+    assert context["manual_url"] is None

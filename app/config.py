@@ -2511,6 +2511,33 @@ def _normalise_prefix(value: str) -> str:
     return cleaned
 
 
+def _normalise_public_base(value: str | None, *, api_base_path: str) -> str:
+    candidate = (value or "").strip()
+    if candidate:
+        if "://" in candidate:
+            parsed = urlparse(candidate)
+            scheme = parsed.scheme
+            netloc = parsed.netloc
+            if scheme and netloc:
+                path = _normalise_prefix(parsed.path or "")
+                if path == "/":
+                    path = ""
+                return f"{scheme}://{netloc}{path}"
+            path_only = _normalise_prefix(parsed.path or "")
+            if path_only:
+                return path_only
+        normalized = _normalise_prefix(candidate)
+        if normalized:
+            return normalized
+        return ""
+    default_base = (
+        f"{api_base_path}{'/oauth' if api_base_path not in {'', '/'} else 'oauth'}"
+        if api_base_path
+        else "/oauth"
+    )
+    return _normalise_prefix(default_base)
+
+
 def _normalise_base_path(value: str | None) -> str:
     candidate = value if value is not None else DEFAULT_API_BASE_PATH
     normalized = _normalise_prefix(candidate)
@@ -2951,13 +2978,8 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     playlist_sync = PlaylistSyncConfig(stale_after=timedelta(hours=stale_after_hours))
 
     api_base_path = _normalise_base_path(_env_value(env, "API_BASE_PATH"))
-    oauth_public_base = _normalise_prefix(
-        _env_value(env, "OAUTH_PUBLIC_BASE")
-        or (
-            f"{api_base_path}{'/oauth' if api_base_path != '/' else 'oauth'}"
-            if api_base_path
-            else "/oauth"
-        )
+    oauth_public_base = _normalise_public_base(
+        _env_value(env, "OAUTH_PUBLIC_BASE"), api_base_path=api_base_path
     )
 
     features = FeatureFlags(
