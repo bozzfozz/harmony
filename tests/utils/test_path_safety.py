@@ -34,6 +34,7 @@ def test_normalise_download_path_resolves_under_allowed_root(
         ("/absolute/path", "absolute paths are not allowed"),
         ("C:\\songs\\track.mp3", "drive-qualified paths are not allowed"),
         ("../escape.mp3", "parent directory segments are not allowed"),
+        ("..\\escape.mp3", "parent directory segments are not allowed"),
     ],
 )
 def test_normalise_download_path_rejects_invalid_inputs(
@@ -41,6 +42,17 @@ def test_normalise_download_path_rejects_invalid_inputs(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         normalise_download_path(raw, allowed_roots=allowed_roots)
+
+
+def test_normalise_download_path_accepts_windows_separators(
+    allowed_roots: tuple[Path, ...],
+) -> None:
+    relative_name = "album\\track.mp3"
+
+    result = normalise_download_path(relative_name, allowed_roots=allowed_roots)
+
+    expected = (allowed_roots[0] / "album" / "track.mp3").resolve(strict=False)
+    assert result == expected
 
 
 def test_ensure_within_roots_allows_path_inside_roots(allowed_roots: tuple[Path, ...]) -> None:

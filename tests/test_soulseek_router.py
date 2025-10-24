@@ -361,6 +361,22 @@ def test_download_rejects_parent_directory_filename(soulseek_client: TestClient)
         assert session.query(Download).count() == 0
 
 
+def test_download_rejects_windows_parent_directory_filename(
+    soulseek_client: TestClient,
+) -> None:
+    response = soulseek_client.post(
+        "/soulseek/download",
+        json={
+            "username": "tester",
+            "files": [{"filename": "..\\evil.lrc"}],
+        },
+    )
+
+    assert response.status_code == 400
+    with session_scope() as session:
+        assert session.query(Download).count() == 0
+
+
 def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -> None:
     payload = {
         "username": "tester",
@@ -389,6 +405,40 @@ def test_download_accepts_relative_and_normalises(soulseek_client: TestClient) -
     assert job_file["filename"] == "album/song.mp3"
     file_metadata = stored_payload.get("file") if isinstance(stored_payload, dict) else None
     assert file_metadata and file_metadata.get("local_path") == str(expected_path)
+
+
+def test_download_accepts_windows_relative_and_normalises(
+    soulseek_client: TestClient,
+) -> None:
+    payload = {
+        "username": "tester",
+        "files": [{"filename": "album\\song.mp3"}],
+    }
+
+    response = soulseek_client.post("/soulseek/download", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "queued"
+
+    downloads_dir = _downloads_dir()
+    expected_path = downloads_dir / "album" / "song.mp3"
+
+    with session_scope() as session:
+        stored = session.query(Download).one()
+        assert Path(stored.filename) == expected_path
+
+        stored_payload = dict(stored.request_payload or {})
+
+    sync_worker: _StubSyncWorker = soulseek_client.app.state.sync_worker
+    assert sync_worker.jobs
+    job_payload = sync_worker.jobs[0]
+    job_file = job_payload["files"][0]
+    assert job_file["filename"] == "album/song.mp3"
+    file_metadata = stored_payload.get("file") if isinstance(stored_payload, dict) else None
+    assert file_metadata
+    assert file_metadata.get("filename") == "album/song.mp3"
+    assert file_metadata.get("local_path") == str(expected_path)
 
 
 def test_download_marks_failed_when_worker_errors(soulseek_client: TestClient) -> None:
