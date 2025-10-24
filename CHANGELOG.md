@@ -3,7 +3,9 @@
 All notable changes to Harmony are documented in this file.
 
 ## Unreleased
-- No entries yet.
+- **Dependencies**
+  - Bumped FastAPI to 0.115.10. Starlette remains pinned to 0.46.1 until an upstream
+    FastAPI release permits the 0.47.2 security fix (GHSA-2c2j-9gv5-cj73).
 
 ## v1.0.0 — Initial release
 
