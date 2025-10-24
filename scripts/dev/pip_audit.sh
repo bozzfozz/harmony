@@ -9,13 +9,26 @@ if ! command -v pip-audit >/dev/null 2>&1; then
   exit 1
 fi
 
+if help_output=$(pip-audit --help 2>&1); then
+  if grep -q -- '--progress-spinner' <<<"$help_output"; then
+    audit_flags=("--progress-spinner" "off")
+  elif grep -q -- '--disable-progress-bar' <<<"$help_output"; then
+    audit_flags=("--disable-progress-bar")
+  else
+    audit_flags=()
+  fi
+else
+  printf 'Unable to determine supported pip-audit flags; proceeding without optional arguments.\n' >&2
+  audit_flags=()
+fi
+
 requirements_files=("requirements.txt")
 [[ -f "requirements-dev.txt" ]] && requirements_files+=("requirements-dev.txt")
 [[ -f "requirements-test.txt" ]] && requirements_files+=("requirements-test.txt")
 
 for req_file in "${requirements_files[@]}"; do
   printf '==> pip-audit (%s)\n' "$req_file"
-  if audit_output=$(pip-audit --disable-progress-bar -r "$req_file" 2>&1); then
+  if audit_output=$(pip-audit "${audit_flags[@]}" -r "$req_file" 2>&1); then
     printf '%s\n' "$audit_output"
   else
     printf '%s\n' "$audit_output" >&2
