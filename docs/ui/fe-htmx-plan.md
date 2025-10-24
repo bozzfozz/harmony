@@ -280,7 +280,7 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 
 ## Live-Update-Strategie
 - **Standard (Polling)**: Polling über HTMX mit festen Intervallen pro Seite – Dashboard 30 s, Health-Badges 60 s, Downloads & Jobs 15 s, Watchlist 30 s, Activity 60 s. Trigger sind in den obigen Tabellen hinterlegt und werden zentral getestet.
-- **Server-Sent Events**: Per `UI_LIVE_UPDATES=SSE` schaltet der Router auf `/ui/events` um. Der Browser initialisiert eine `EventSource`, aktualisiert Downloads-, Jobs-, Watchlist- und Activity-Tabellen ohne zusätzliche HTMX-Requests und fällt bei deaktivierter Option automatisch auf Polling zurück.
+- **Server-Sent Events**: Hinter dem Feature-Flag `UI_LIVE_UPDATES` steht neben dem Standardwert `polling` auch `SSE` zur Verfügung. Mit `UI_LIVE_UPDATES=SSE` schaltet der Router auf `/ui/events` um; der Browser initialisiert eine `EventSource`, aktualisiert Downloads-, Jobs-, Watchlist- und Activity-Tabellen ohne zusätzliche HTMX-Requests und fällt bei deaktivierter Option automatisch auf Polling zurück.
 - **Backoff & Fehlerhandling**: Wiederholte 5xx-Antworten lösen visuelle Warnungen aus und verdoppeln clientseitig das Polling-Intervall bis max. 5 min. Erfolgreiche Antworten setzen den Timer zurück; umgesetzt via `app/ui/static/js/polling-controller.js`, das in `layouts/base.j2` für alle Seiten geladen wird. SSE-Verbindungen setzen auf automatische Reconnects des Browsers.
 
 ## Security & Sessions
@@ -297,7 +297,7 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 - `/static/js/htmx.min.js`: standardmäßig lokal gebündelt (Version mit bekannter Prüfsumme). Bei aktiviertem CDN darf `https://unpkg.com/htmx.org` genutzt werden. Das Fallback-Bundle darf komprimiert (gzip) höchstens 20 KB übertragen, damit das Gesamtbudget von <100 KB für initiales HTML+CSS+JS eingehalten bleibt.
 - Iconset: SVG-Sprite unter `/static/icons.svg`.
 - Cache-Control: statische Assets `max-age=86400`, `immutable`; HTML ohne Cache; API nutzt bestehende Cache-Header (z. B. Playlist-ETags).【F:app/api/spotify.py†L173-L196】
-- Aktivierung per `app.mount("/static", StaticFiles(...))` (neuer Schritt im späteren Task) inklusive Digest-Busting über Query-Parameter.
+- Aktivierung erfolgt per `app.mount("/ui/static", StaticFiles(...))` inklusive Digest-Busting über Query-Parameter.【F:app/main.py†L829-L842】
 
 ## Barrierefreiheit
 - Fokus-Styles klar sichtbar; Tastaturnavigation via `tabindex` und `aria-keyshortcuts` für kritische Aktionen.
@@ -345,4 +345,4 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 2. **Rollen & Flags**: Rollen `read_only`, `operator`, `admin` werden serverseitig verwaltet. `UI_ROLE_DEFAULT=operator` und optionale `UI_ROLE_OVERRIDES` steuern Nutzerrechte; Feature-Flags (`UI_FEATURE_SPOTIFY`, `UI_FEATURE_SOULSEEK`, `UI_FEATURE_DLQ`, `UI_FEATURE_IMPORTS`) blenden Navigation/Routes aus.
 3. **Internationalisierung**: Phase 1 bleibt englisch. Strings leben in `templates/partials/_strings.j2`; i18n-Layer folgt in separatem Task.
 4. **Assets & CSP**: Standard ist Self-Hosting unter `/static` mit CSP-Basisrichtlinie. Optionales CDN nur bei `UI_ALLOW_CDN=true` inklusive dokumentiertem SRI (`docs/ui/csp.md`).
-5. **Live Updates**: Phase 1 setzt verbindlich auf Polling (15–60 s). Spätere SSE-Unterstützung steht hinter `UI_LIVE_UPDATES` und erfordert keinen zusätzlichen Browsercode vorerst.
+5. **Live Updates**: Polling (15–60 s) bleibt der Default mit `UI_LIVE_UPDATES=polling`. Für Echtzeitstreams kann `UI_LIVE_UPDATES=SSE` aktiviert werden; Browsercode bleibt identisch und der Fallback auf Polling ist integriert.
