@@ -67,3 +67,15 @@ def test_ui_static_rejects_absolute_paths(client: TestClient) -> None:
     response = client.get("/ui/static/%2Fetc/passwd")
 
     assert response.status_code == 404
+
+
+def test_ui_static_rejects_percent_encoded_traversal(client: TestClient) -> None:
+    response = client.get("/ui/static/%2e%2e/templates/pages/dashboard.j2")
+
+    assert response.status_code == 404
+
+
+def test_ui_static_rejects_mixed_encoded_traversal(client: TestClient) -> None:
+    response = client.get("/ui/static/..%2Ftemplates/pages/dashboard.j2")
+
+    assert response.status_code == 404
