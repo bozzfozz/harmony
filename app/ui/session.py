@@ -125,6 +125,8 @@ class UiLoginRateLimiter:
         if self._config.attempts <= 0:
             return
         now = _utcnow()
+        triggered = False
+        retry_after = 0.0
         for scope, key in self._iter_keys(remote_address, fingerprint):
             count, oldest = self._store.count_recent_attempts(
                 scope,
@@ -133,9 +135,10 @@ class UiLoginRateLimiter:
                 window=self._config.window,
             )
             if count >= self._config.attempts:
-                raise UiLoginRateLimitError(
-                    retry_after=self._retry_after(now, oldest),
-                )
+                triggered = True
+                retry_after = max(retry_after, self._retry_after(now, oldest))
+        if triggered:
+            raise UiLoginRateLimitError(retry_after=retry_after)
 
     def record_failure(self, remote_address: str | None, fingerprint: str) -> None:
         if self._config.attempts <= 0:
