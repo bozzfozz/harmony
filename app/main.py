@@ -9,11 +9,13 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import inspect
-from pathlib import Path
+import posixpath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 from starlette.responses import Response
 from starlette.types import Scope
 
@@ -64,10 +66,24 @@ class ImmutableStaticFiles(StaticFiles):
     cache_control_header = "max-age=86400, immutable"
 
     async def get_response(self, path: str, scope: Scope) -> Response:  # type: ignore[override]
-        response = await super().get_response(path, scope)
+        safe_path = self._sanitize_path(path)
+        response = await super().get_response(safe_path, scope)
         if response.status_code < 400:
             response.headers.setdefault("Cache-Control", self.cache_control_header)
         return response
+
+    @staticmethod
+    def _sanitize_path(path: str) -> str:
+        candidate = PurePosixPath(path.replace("\\", "/"))
+        if candidate.is_absolute() or any(part == ".." for part in candidate.parts):
+            raise HTTPException(status_code=404)
+
+        normalized = posixpath.normpath(candidate.as_posix()).lstrip("/")
+        if normalized.startswith(".."):
+            raise HTTPException(status_code=404)
+        if normalized in {"", "."}:
+            return ""
+        return normalized
 
 
 def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
