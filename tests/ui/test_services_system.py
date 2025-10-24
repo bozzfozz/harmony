@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.ui.services.system import (
     IntegrationSummary,
@@ -77,6 +78,29 @@ async def test_fetch_readiness_normalises_dependencies(monkeypatch) -> None:
     assert [item.name for item in record.dependencies] == ["api", "redis"]
     assert [item.status for item in record.dependencies] == ["up", "down"]
     assert list(record.enabled_jobs.keys()) == ["artist_sync", "match", "sync"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_readiness_handles_response_envelope(monkeypatch) -> None:
+    async def fake_readiness(_: Request) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": {"message": "dependency failure"},
+                "data": {"deps": {"redis": "down"}},
+            },
+        )
+
+    monkeypatch.setattr("app.ui.services.system.system_api.get_readiness", fake_readiness)
+    service = SystemUiService(integration_service=SimpleNamespace())
+    record = await service.fetch_readiness(_make_request())
+
+    assert isinstance(record, ReadinessRecord)
+    assert record.ok is False
+    assert record.error_message == "dependency failure"
+    assert [item.name for item in record.dependencies] == ["redis"]
+    assert [item.status for item in record.dependencies] == ["down"]
 
 
 @pytest.mark.asyncio

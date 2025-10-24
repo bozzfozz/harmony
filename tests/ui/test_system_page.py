@@ -1,7 +1,10 @@
 import re
+from types import SimpleNamespace
 
 from fastapi import status
 from fastapi.testclient import TestClient
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.errors import AppError, ErrorCode
 from app.ui.routes.system import get_system_ui_service
@@ -13,6 +16,7 @@ from app.ui.services.system import (
     ReadinessRecord,
     SecretValidationRecord,
     ServiceHealthBadge,
+    SystemUiService,
 )
 from app.ui.session import fingerprint_api_key
 from tests.ui.test_ui_auth import _assert_html_response, _create_client
@@ -145,6 +149,31 @@ def test_secret_validation_requires_admin(monkeypatch) -> None:
         headers = {"Cookie": _cookies_header(client)}
         response = client.post("/ui/system/secrets/spotify_client_secret", headers=headers)
         assert response.status_code == status.HTTP_403_FORBIDDEN
+    client.app.dependency_overrides.pop(get_system_ui_service, None)
+
+
+def test_system_readiness_fragment_handles_api_response(monkeypatch) -> None:
+    async def fake_readiness(_: Request) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "ok": False,
+                "error": {"message": "Dependency failure"},
+                "data": {"deps": {"redis": "down"}},
+            },
+        )
+
+    monkeypatch.setattr("app.ui.services.system.system_api.get_readiness", fake_readiness)
+    service = SystemUiService(integration_service=SimpleNamespace())
+
+    with _create_client(monkeypatch) as client:
+        client.app.dependency_overrides[get_system_ui_service] = lambda: service
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        fragment = client.get("/ui/system/readiness", headers=headers)
+        _assert_html_response(fragment)
+        assert "system-card__alert" in fragment.text
+        assert "Dependency failure" in fragment.text
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
 

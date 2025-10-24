@@ -5,9 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from json import JSONDecodeError, loads
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
+from starlette.responses import Response as StarletteResponse
 
 from app.api import health as health_api, system as system_api
 from app.db import session_scope
@@ -124,6 +126,9 @@ class SystemUiService:
                 code=ErrorCode.DEPENDENCY_ERROR,
             ) from exc
 
+        if isinstance(payload, StarletteResponse):
+            payload = self._decode_response_payload(payload)
+
         ok = bool(payload.get("ok"))
         error_message: str | None = None
         if not ok:
@@ -185,6 +190,43 @@ class SystemUiService:
             enabled_jobs=enabled_jobs,
             error_message=error_message,
         )
+
+    @staticmethod
+    def _decode_response_payload(response: StarletteResponse) -> Mapping[str, object]:
+        body = getattr(response, "body", b"")
+        if not body:
+            return {}
+
+        charset = response.charset or "utf-8"
+        try:
+            text = body.decode(charset)
+        except (LookupError, UnicodeDecodeError):
+            logger.warning(
+                "system.ui.readiness.decode_failed",
+                extra={"reason": "decode", "charset": charset},
+            )
+            return {}
+
+        if not text:
+            return {}
+
+        try:
+            data = loads(text)
+        except JSONDecodeError:
+            logger.warning(
+                "system.ui.readiness.decode_failed",
+                extra={"reason": "json"},
+            )
+            return {}
+
+        if isinstance(data, Mapping):
+            return dict(data)
+
+        logger.warning(
+            "system.ui.readiness.decode_failed",
+            extra={"reason": "type", "type": type(data).__name__},
+        )
+        return {}
 
     async def fetch_integrations(self) -> IntegrationSummary:
         try:
