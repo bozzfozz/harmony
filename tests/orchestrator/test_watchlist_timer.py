@@ -271,6 +271,43 @@ async def test_trigger_enqueues_jobs_and_invokes_callback(
 
 
 @pytest.mark.asyncio
+async def test_trigger_emits_error_event_when_callback_fails(
+    timer_events: list[dict[str, Any]],
+) -> None:
+    artist = ArtistWorkflowArtistRow(
+        id=1,
+        spotify_artist_id="sp-1",
+        name="Artist",
+        last_checked=None,
+        retry_block_until=None,
+    )
+    dao = FakeWorkflowDAO([[artist]])
+    persistence = FakePersistenceModule()
+
+    async def failing_callback(jobs: list[FakeQueueJob]) -> None:
+        raise RuntimeError("boom")
+
+    timer = WatchlistTimer(
+        config=make_worker_config(),
+        enabled=True,
+        interval_seconds=0,
+        dao=dao,
+        persistence_module=persistence,
+        on_jobs_enqueued=failing_callback,
+    )
+
+    jobs = await timer.trigger()
+
+    assert len(jobs) == 1
+    assert len(timer_events) == 2
+    assert timer_events[-2]["status"] == "ok"
+    assert timer_events[-1]["status"] == "error"
+    assert timer_events[-1]["error"] == "callback_failed"
+    assert timer_events[-1]["jobs_total"] == 1
+    assert timer_events[-1]["jobs_enqueued"] == 1
+
+
+@pytest.mark.asyncio
 async def test_trigger_skips_when_lock_contended(timer_events: list[dict[str, Any]]) -> None:
     dao = FakeWorkflowDAO(
         [

@@ -167,6 +167,7 @@ class WatchlistTimer:
             )
             return []
 
+        stats: _TimerStats | None = None
         async with self._lock:
             start = self._time_source()
             try:
@@ -233,9 +234,28 @@ class WatchlistTimer:
 
         if enqueued and self._on_jobs_enqueued is not None:
             callback = self._on_jobs_enqueued
-            result = callback(enqueued)
-            if inspect.isawaitable(result):
-                await result
+            try:
+                result = callback(enqueued)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                self._logger.exception("Watchlist timer enqueue callback failed")
+                stats_for_event = stats or _TimerStats(
+                    duration_ms=0,
+                    jobs_total=len(enqueued),
+                    jobs_enqueued=len(enqueued),
+                    jobs_failed=0,
+                )
+                orchestrator_events.emit_timer_event(
+                    self._logger,
+                    status="error",
+                    component=_LOG_COMPONENT,
+                    jobs_total=stats_for_event.jobs_total,
+                    jobs_enqueued=stats_for_event.jobs_enqueued,
+                    jobs_failed=stats_for_event.jobs_failed,
+                    duration_ms=stats_for_event.duration_ms,
+                    error="callback_failed",
+                )
 
         return enqueued
 
