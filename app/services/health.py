@@ -153,7 +153,7 @@ class HealthService:
                 if isinstance(result, Awaitable):
                     awaitable = cast(ProbeAwaitable, result)
                 else:
-                    awaitable = _wrap_probe_result(result)
+                    awaitable = _wrap_probe_result(cast(ProbeResult, result))
             raw_status = await asyncio.wait_for(awaitable, timeout=timeout)
         except TimeoutError:
             logger.warning("Dependency probe timed out", extra={"dependency": name})
