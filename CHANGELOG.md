@@ -5,9 +5,8 @@ All notable changes to Harmony are documented in this file.
 ## Unreleased
 
 ### Dependencies
-- Temporarily relax the Starlette pin to `<0.47.0` to avoid FastAPI regressions
-  while tracking the upstream fix that restores compatibility with the
-  GHSA-2c2j-9gv5-cj73 patch level.
+- Lock Starlette to `==0.48.0` now that FastAPI ships with a compatible release,
+  restoring deterministic runtime pins while we evaluate newer upstream changes.
 
 ## v1.0.0 — Initial release
 

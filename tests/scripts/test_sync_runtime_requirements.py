@@ -31,7 +31,7 @@ def test_check_accepts_allowlisted_range(tmp_path: Path, monkeypatch: pytest.Mon
         pyproject_contents="""
 [project]
 dependencies = [
-    "starlette<0.47.0",
+    "starlette==0.48.0",
     "anyio==3.7.1",
 ]
 """,
@@ -41,7 +41,7 @@ dependencies = [
     sync.sync_dependencies(check_only=True)
 
     contents = requirements_path.read_text("utf-8")
-    assert "starlette<0.47.0" in contents
+    assert "starlette==0.48.0" in contents
 
 
 def test_check_rejects_allowlisted_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,7 +51,7 @@ def test_check_rejects_allowlisted_drift(tmp_path: Path, monkeypatch: pytest.Mon
         pyproject_contents="""
 [project]
 dependencies = [
-    "starlette<0.47.0",
+    "starlette==0.48.0",
     "anyio==3.7.1",
 ]
 """,
@@ -60,7 +60,7 @@ dependencies = [
     sync.sync_dependencies(check_only=False)
     original = requirements_path.read_text("utf-8")
     requirements_path.write_text(
-        original.replace("starlette<0.47.0", "starlette==0.46.0"),
+        original.replace("starlette==0.48.0", "starlette<0.48.0"),
         encoding="utf-8",
     )
 
