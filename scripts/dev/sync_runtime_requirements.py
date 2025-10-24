@@ -19,11 +19,11 @@ REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 DEFAULT_HEADER = ("# Runtime dependencies for Harmony backend",)
 
 # Dependencies that intentionally keep a range specifier instead of an exact pin.
-# Starlette 0.47.x introduces behavioural changes we are not ready to adopt, but we
-# still want to receive bugfix releases in the 0.46 series. Allow a `<0.47.0` cap
-# so the sync guardrail continues to prevent unbounded upgrades while accepting
-# hotfix releases. Keep this list short and well documented.
-RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset({"starlette"})
+# Starlette is now locked to 0.48.0 so we can rely on a deterministic ASGI stack
+# while evaluating newer releases; any drift from the exact pin must surface in the
+# sync guardrail. Leave this list empty unless a dependency temporarily requires a
+# range, and document the rationale inline when doing so.
+RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
