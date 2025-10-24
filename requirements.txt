@@ -1,8 +1,9 @@
 # Runtime dependencies for Harmony backend
-# FastAPI >=0.115.7 supports Starlette >=0.47.2 (resolves GHSA-2c2j-9gv5-cj73)
+# FastAPI 0.115.8 caps Starlette<0.46; stay on latest compatible patch and harden StaticFiles
+# until upstream exposes a Starlette build with the GHSA-2c2j-9gv5-cj73 fix.
 
-fastapi==0.115.7
-starlette==0.47.2
+fastapi==0.115.8
+starlette==0.45.2
 uvicorn==0.30.1
 sqlalchemy==2.0.31
 aiohttp==3.12.14
