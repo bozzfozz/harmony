@@ -1,411 +1,193 @@
 # Harmony Web UI Design Guidelines
 
-Diese verbindlichen Richtlinien definieren das Designsystem der Harmony-Web-UI. Alle zukünftigen Frontend-Implementierungen müssen mit diesen Vorgaben kompatibel sein. Die Gestaltung orientiert sich am Portacker-Referenzlayout und ist für ein React + Vite + TypeScript + Tailwind + shadcn/ui + Radix Stack optimiert.
+Diese Richtlinie definiert das server-gerenderte Designsystem der Harmony-Web-UI. Alle Seiten werden über Jinja2-Templates unter `app/ui/templates` aufgebaut, dynamische Aktualisierungen erfolgen mit HTMX. Die folgenden Abschnitte beschreiben Layoutkonventionen, gemeinsame Strings, Farb- und Typografie-Vorgaben sowie konkrete Markup-Muster, die auf die in `app/ui/static/css/app.css` ausgelieferten Styles abgestimmt sind.
+
+## 0. Rendering-Architektur
+
+### 0.1 Layout-Templates
+- **`layouts/base.j2`** stellt den Rahmen mit `<header>`, Alert-Region, `<main>` und Skript-Einbindungen bereit. Jede Seite muss dieses Layout direkt oder indirekt erweitern und den `layout`-Kontext (Navigation, Alerts, Modals) befüllen.
+- **Spezialisierte Layouts** (`layouts/dashboard.j2`, `layouts/two_column.j2`, `layouts/detail.j2`) kapseln wiederkehrende Seitenstrukturen. Erweitere sie, wenn du strukturelle Slots wie `dashboard_primary` oder `sidebar` benötigst, anstatt eigene Wrapper zu bauen.
+- **Footer & Modal-Container** werden bereits im Basislayout gesetzt. Zusätzliche Modals gehören in die entsprechenden Block-Erweiterungen, damit `data-role="modal-container"` konsistent bleibt.
+
+```jinja
+{% extends "layouts/dashboard.j2" %}
+{% import "partials/_strings.j2" as strings %}
+
+{% block dashboard_primary %}
+  <section class="page-section page-section--card">
+    <h2 class="page-section__title">{{ strings.section_heading('dashboard') }}</h2>
+    {% include "partials/dashboard_status.j2" %}
+  </section>
+{% endblock %}
+```
+
+### 0.2 Partials & Fragments
+- Wiederkehrendes Markup lebt unter `app/ui/templates/partials`. Verwende vorhandene Makros (`partials/nav.j2`, `partials/alerts.j2`, `partials/status_badges.j2`, `partials/forms.j2`) statt duplizierter Strukturen.
+- Asynchrone Fragmente setzen die Klasse `.async-fragment` bzw. `.async-fragment__placeholder` und deklarieren `hx-target`/`hx-swap`, sodass HTMX-Antworten konsistent injiziert werden.
+- Für Out-of-band-Updates (z. B. Navigation oder Statusbereiche) geben die Partials bereits `hx-swap-oob="outerHTML"` vor. Baue darauf auf, statt eigene Attribute zu erfinden.
+
+### 0.3 Shared Strings
+- Gemeinsame Texte und Labels kommen aus `partials/_strings.j2`. Nutze die Makros (`strings.app_name()`, `strings.nav_label(...)`, `strings.form_label(...)`), damit Namen, Buttons und Statusmeldungen zentral gepflegt bleiben.
+- Neue Copy-Varianten werden dort ergänzt. Vermeide Hardcodings im Template, außer es handelt sich um rein lokale Texte.
 
 ## 1. Farben
+Die Styles aus `app/ui/static/css/app.css` definieren zentrale CSS-Custom-Properties:
 
-### Light Mode
-- **Hintergrund:** `#ffffff`
-- **Primärer Text:** `#1e293b`
-- **Sekundärer Text:** `#475569`
-- **Akzent (Interaktionen, aktive Elemente):** Indigo-600 `#4f46e5`
+| Kontext | Variable | Wert |
+|---------|----------|------|
+| Primärer Hintergrund | `--color-bg` | `#0f1115` |
+| Sekundäre Fläche | `--color-surface` | `#181c24` |
+| Alternative Fläche | `--color-surface-alt` | `#1f2531` |
+| Rahmen | `--color-border` | `rgba(195, 255, 255, 0.1)` |
+| Primärer Text | `--color-text` | `#f4f6fb` |
+| Muted Text | `--color-muted` | `#a3acc8` |
+| Akzent | `--color-accent` | `#4ea8de` |
+| Erfolg | `--color-success` | `#4ade80` |
+| Fehler | `--color-danger` | `#ff6b6b` |
 
-### Dark Mode
-- **Hintergrund:** `#0f172a`
-- **Primärer Text:** `#f8fafc`
-- **Sekundärer Text:** `#cbd5e1`
-- **Akzent (Interaktionen, aktive Elemente):** Indigo-500 `#6366f1`
-
-### Statusfarben (Modus-übergreifend)
-- **Erfolg:** Grün `#22c55e`
-- **Fehler:** Rot `#ef4444`
-- **Warnung:** Gelb `#f59e0b`
-- **Info:** Blau `#3b82f6`
+Statusabhängige Komponenten nutzen vordefinierte Modifier-Klassen:
+- Alerts: `.alert--success`, `.alert--error`, `.alert--warning`
+- Badges: `.status-badge--success`, `.status-badge--danger`, `.status-badge--muted`
+- Buttons übernehmen standardmäßig das Akzent-Gradienten-Theme; zusätzliche Varianten werden als neue CSS-Klassen ergänzt, nicht inline.
 
 ## 2. Typografie
-- **Primäre Schriftart:** `"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
-- **Größen & Gewichtungen:**
-  - Basistext: `text-sm` (`font-normal`)
-  - Überschriften: `text-xl font-bold`
-  - Card-Titel & Sektionen: `text-lg font-semibold`
-  - Muted/Meta: `text-xs text-gray-500`
-- Headline-Kapitalisierung: Satzanfang groß, rest gemäß deutscher Rechtschreibung.
+- Grundschrift ist `"Inter", "Segoe UI", system-ui, -apple-system, sans-serif` (siehe `body`-Regel).
+- Headlines im Header nutzen uppercase (`header h1`), Seitenabschnitte verwenden `.page-section__title` für gewichtete Titel.
+- Fließtext setzt auf `line-height: 1.6`. Meta-Informationen und Hinweise nutzen `color: var(--color-muted)` (z. B. `.dashboard-action-state__timestamp`, `.table-fragment .empty-state`).
+- Verwende semantische HTML-Elemente (`<h1>`–`<h3>`, `<p>`, `<dl>`). Die vorhandenen Klassen im Stylesheet übernehmen Gewichtung und Letterspacing, zusätzliche Font-Anpassungen sollen nur über CSS-Erweiterungen erfolgen.
 
 ## 3. Spacing & Layout
-- **Globales Spacing:** Verwende `p-4`, `m-4`, `gap-4` als Standardabstände.
-- **Grid-Verhalten:**
-  - Dashboard: `lg:grid-cols-3`
-  - Mobile: `grid-cols-1`
-- **Cards:** `rounded-xl shadow-sm p-6 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800`
-- **Maximale Inhaltsbreite:** `max-w-7xl mx-auto` für Hauptinhalte.
+- `header` besitzt bereits Padding `1.75rem 2.25rem` und ein Blur-Gradient. Zusätzliche Inhalte (Formulare, Buttons) müssen sich in die Flex-Struktur (`align-items: center; gap: 1.5rem`) einfügen.
+- `main` rendert Inhalte als Grid mit `gap: 2rem` und `max-width: 1040px`. Sammle thematisch verwandte Bereiche in `<section class="page-section">`.
+- Kartenartige Bereiche verwenden `.page-section--card` für Radius, Border und Schatten. Keine zusätzlichen Wrapper nötig.
+- Collections setzen spezialisierte Layoutklassen:
+  - `.dashboard-actions` und `.dashboard-action-button` für Aktionsleisten.
+  - `.dashboard-action-state` und Unterelemente (`__header`, `__metric-list`, …) für Statusblöcke.
+  - `.table` plus `.pagination` für tabellarische Daten.
+  - `.alerts` hält gestapelte Meldungen oberhalb des `main`-Bereichs.
+- Mobilverhalten ist in `app.css` definiert (Media Query `max-width: 720px`). Halte Strukturen schlicht, damit die bestehenden Breakpoints greifen.
 
-## 4. Komponenten
-Alle Beispiele verwenden shadcn/ui-Komponenten mit Tailwind-Styling und folgen den Farb- und Typografie-Vorgaben.
+## 4. Komponenten & Muster
 
-### 4.1 Navbar
-- Sticky am oberen Rand (`sticky top-0 z-50`).
-- Höhe 64px (`h-16`).
-- Untere Border (`border-b border-slate-200 dark:border-slate-800`).
-- Hintergrund wechselt mit Theme (`bg-white/80 dark:bg-slate-900/80 backdrop-blur`).
+### 4.1 Primäre Navigation
+Die Navigation wird über `partials/nav.j2` erzeugt und nutzt `.primary-nav__link` inklusive `.is-active`-Modifier. Aktualisierungen per HTMX laufen über `hx-swap-oob="outerHTML"`.
 
-```tsx
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+```jinja
+{% import "partials/nav.j2" as nav %}
+{% import "partials/_strings.j2" as strings %}
 
-export function Navbar() {
-  return (
-    <header className="sticky top-0 z-50 h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-bold text-slate-900 dark:text-slate-100">Harmony</span>
-          <nav className="hidden items-center gap-4 text-sm text-slate-600 dark:text-slate-300 md:flex">
-            <a className="transition-colors hover:text-slate-900 dark:hover:text-slate-50" href="#dashboard">Dashboard</a>
-            <a className="transition-colors hover:text-slate-900 dark:hover:text-slate-50" href="#projects">Projekte</a>
-            <a className="transition-colors hover:text-slate-900 dark:hover:text-slate-50" href="#settings">Einstellungen</a>
-          </nav>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="hidden md:inline-flex">Feedback</Button>
-          <ThemeToggle />
-          <Button>Neues Projekt</Button>
-        </div>
-      </div>
-    </header>
-  );
-}
+{{ nav.render_primary_nav(layout.navigation.primary) }}
+
+{# In einer HTMX-Antwort kann die Navigation out-of-band aktualisiert werden: #}
+{{ nav.render_primary_nav_oob(updated_navigation) }}
+
+<form action="{{ url_for('ui.logout') }}"
+      method="post"
+      hx-post="{{ url_for('ui.logout') }}"
+      hx-target="#ui-alert-region"
+      hx-swap="outerHTML">
+  <button type="submit">{{ strings.button_label('logout') }}</button>
+</form>
 ```
 
-### 4.2 Sidebar / Drawer
-- Desktop: permanente Sidebar (`w-64`, `border-r`).
-- Unter `<md`: als Drawer mit Slide-in/out (Framer Motion) und Radix Dialog/Sheet.
-- Collapsible Navigation mit Icons (`lucide-react`, Größe `h-5 w-5`).
+### 4.2 Alerts & Inline-Feedback
+Blende Meldungen über `partials/alerts.j2` ein. Jede Nachricht ist ein `<p role="alert" class="alert alert--{level}">` und greift damit automatisch die Farbgebung.
 
-```tsx
-import { Home, Settings, Users } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-
-const navItems = [
-  { label: "Übersicht", icon: Home, href: "#dashboard" },
-  { label: "Teams", icon: Users, href: "#teams" },
-  { label: "Einstellungen", icon: Settings, href: "#settings" },
-];
-
-export function Sidebar() {
-  const [open, setOpen] = useState(false);
-
-  const NavLinks = (
-    <nav className="flex flex-1 flex-col gap-2 p-4">
-      {navItems.map(({ label, icon: Icon, href }) => (
-        <a
-          key={label}
-          href={href}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50"
-        >
-          <Icon className="h-5 w-5" />
-          {label}
-        </a>
-      ))}
-    </nav>
-  );
-
-  return (
-    <>
-      <div className="hidden h-full w-64 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex">
-        {NavLinks}
-      </div>
-
-      <div className="md:hidden">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" className="inline-flex items-center gap-2">
-              <span>Menü</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 border-r border-slate-200 bg-white p-0 dark:border-slate-800 dark:bg-slate-900">
-            <AnimatePresence mode="wait">
-              {open && (
-                <motion.div
-                  initial={{ x: -32, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -32, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 260, damping: 24 }}
-                  className="h-full"
-                >
-                  {NavLinks}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </SheetContent>
-        </Sheet>
-      </div>
-    </>
-  );
-}
+```jinja
+<div id="ui-alert-region" data-role="alert-region">
+  {{ alerts.render_alerts(layout.alerts) }}
+</div>
 ```
 
-### 4.3 Tabs
-- Verwende shadcn/ui Tabs. Aktive Tabfarbe Indigo, inaktive Tabfarbe `text-slate-500`.
-- Tabs responsiv auf einer Zeile scrollfähig (`overflow-x-auto`).
+### 4.3 Karten & Sektionen
+Kombiniere `.page-section` mit `.page-section--card`, um konsistente Panels zu rendern. Zusätzliche Überschriften verwenden `.page-section__title`.
 
-```tsx
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-export function HarmonyTabs() {
-  return (
-    <Tabs defaultValue="overview" className="w-full">
-      <TabsList className="h-10 overflow-x-auto rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-        <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 dark:data-[state=active]:bg-slate-900 dark:data-[state=active]:text-indigo-400">
-          Übersicht
-        </TabsTrigger>
-        <TabsTrigger value="activity">Aktivität</TabsTrigger>
-        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-      </TabsList>
-      <TabsContent value="overview" className="mt-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Karteninhalt hier */}
-        </div>
-      </TabsContent>
-      <TabsContent value="activity">Aktivität</TabsContent>
-      <TabsContent value="analytics">Analytics</TabsContent>
-    </Tabs>
-  );
-}
+```jinja
+<section class="page-section page-section--card">
+  <h2 class="page-section__title">{{ strings.section_heading('operations') }}</h2>
+  <div class="dashboard-actions">
+    <button class="dashboard-action-button"
+            hx-post="{{ url_for('ui.trigger_sync') }}"
+            hx-target="#dashboard-action-state"
+            hx-swap="outerHTML"
+            aria-busy="{{ 'true' if sync.busy else 'false' }}">
+      {{ strings.button_label('dashboard.action.sync') }}
+    </button>
+  </div>
+  {% include "partials/dashboard_action_state.j2" with context %}
+</section>
 ```
 
-### 4.4 Cards
-- Verwenden `rounded-xl shadow-sm p-6`.
-- Hintergrund entsprechend Theme, Status-Chips nutzen Statusfarben.
+### 4.4 Formulare & HTMX
+Formulare nutzen das Standard-Grid (`main form { display: grid; gap: 1rem; }`). Inputs besitzen Fokuszustände und adaptieren `var(--color-accent)`. Ergänze `hx-post`, `hx-target` und `hx-indicator`, um progressive Enhancement zu gewährleisten.
 
-```tsx
-import { TrendingUp } from "lucide-react";
+```jinja
+<form id="watchlist-form"
+      hx-post="{{ url_for('ui.watchlist_add') }}"
+      hx-target="#watchlist-table"
+      hx-swap="outerHTML"
+      class="page-section page-section--card">
+  <label for="watchlist-query">{{ strings.form_label('search.query') }}</label>
+  <input id="watchlist-query" name="query" required autocomplete="off" />
 
-interface StatCardProps {
-  title: string;
-  value: string;
-  change: string;
-  trend?: "up" | "down";
-}
+  <label for="watchlist-limit">{{ strings.form_label('search.limit') }}</label>
+  <input id="watchlist-limit" name="limit" type="number" min="1" max="100" value="25" />
 
-export function StatCard({ title, value, change, trend = "up" }: StatCardProps) {
-  return (
-    <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:bg-slate-50 focus-within:ring-2 focus-within:ring-indigo-500 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800">
-      <header className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
-        <TrendingUp className="h-5 w-5 text-indigo-500" aria-hidden />
-      </header>
-      <p className="mt-4 text-3xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{change}</p>
-    </article>
-  );
-}
+  <button type="submit">{{ strings.button_label('search.submit') }}</button>
+</form>
 ```
 
-### 4.5 Formulare
-- Labels über Inputs, Pflichtfelder mit `*`.
-- Inputs haben klare Fokus-Indikatoren (`focus:ring-2 focus:ring-indigo-500`).
-- Buttons platzieren rechtsbündig in Form-Actions.
-- Fehlertexte rot (`text-red-500 text-sm`).
+### 4.5 Asynchrone Fragmente
+Nutze `.async-fragment` als Hülle für Bereiche, die via HTMX nachgeladen werden. `data-role` kennzeichnet die Funktion für Tests und Skripte.
 
-```tsx
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-
-const schema = z.object({
-  projectName: z.string().min(1, "Name ist erforderlich"),
-  ownerEmail: z.string().email("Bitte eine gültige E-Mail eingeben"),
-});
-
-type FormValues = z.infer<typeof schema>;
-
-export function ProjectForm() {
-  const { toast } = useToast();
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
-
-  async function onSubmit(values: FormValues) {
-    try {
-      await saveProject(values);
-      toast({
-        title: "✅ Einstellungen gespeichert",
-        description: "Das Projekt wurde erfolgreich aktualisiert.",
-        variant: "success",
-      });
-    } catch (error) {
-      toast({
-        title: "❌ Fehler beim Speichern",
-        description: "Bitte versuche es erneut.",
-        variant: "destructive",
-      });
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="projectName">
-          Projektname <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="projectName"
-          autoComplete="organization"
-          placeholder="Neue Harmonie"
-          className="focus-visible:ring-2 focus-visible:ring-indigo-500"
-          {...register("projectName")}
-        />
-        {errors.projectName && <p className="text-xs text-red-500">{errors.projectName.message}</p>}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="ownerEmail">
-          Owner E-Mail <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="ownerEmail"
-          type="email"
-          autoComplete="email"
-          placeholder="you@company.com"
-          className="focus-visible:ring-2 focus-visible:ring-indigo-500"
-          {...register("ownerEmail")}
-        />
-        {errors.ownerEmail && <p className="text-xs text-red-500">{errors.ownerEmail.message}</p>}
-      </div>
-
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline">
-          Abbrechen
-        </Button>
-        <Button type="submit" disabled={isSubmitting} className="disabled:opacity-50 disabled:cursor-not-allowed">
-          {isSubmitting ? (
-            <span className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Speichern
-            </span>
-          ) : (
-            "Speichern"
-          )}
-        </Button>
-      </div>
-    </form>
-  );
-}
+```jinja
+<section class="async-fragment"
+         id="jobs-fragment"
+         data-role="jobs-fragment"
+         hx-get="{{ url_for('ui.jobs_fragment') }}"
+         hx-trigger="load, every 60s"
+         hx-target="#jobs-fragment"
+         hx-swap="outerHTML">
+  <p class="async-fragment__placeholder">{{ strings.loading_placeholder() }}</p>
+</section>
 ```
 
-### 4.6 Buttons
-- Primärbutton: Indigo-Hintergrund, weißer Text (`bg-indigo-600 hover:bg-indigo-700 text-white`).
-- Sekundärbutton: graue Outlines (`border border-slate-300 bg-white hover:bg-slate-100`).
-- Disabled-State: `opacity-50 cursor-not-allowed`.
-- Immer `transition-colors duration-200`.
+### 4.6 Tabellen & Pagination
+Tabellen verwenden `.table` und ergänzende Hilfsklassen (`.table-fragment`, `.table-external-link`, `.pagination`). Die Struktur setzt auf semantisches `<table>`-Markup mit `<caption>`, `<thead>`, `<tbody>`.
 
-```tsx
-import { cn } from "@/lib/utils";
-import { ButtonHTMLAttributes } from "react";
-
-const baseStyles = "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50";
-
-export function PrimaryButton({ className, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button className={cn(baseStyles, "bg-indigo-600 text-white hover:bg-indigo-700", className)} {...props} />;
-}
-
-export function SecondaryButton({ className, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button className={cn(baseStyles, "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800", className)} {...props} />;
-}
+```jinja
+<div class="table-fragment" id="downloads-table">
+  <table class="table">
+    <caption>{{ strings.section_heading('downloads') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ strings.table_header('downloads.filename') }}</th>
+        <th scope="col">{{ strings.table_header('downloads.status') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in downloads %}
+        <tr>
+          <td>{{ item.filename }}</td>
+          <td>{{ status_badges.render_badge(item.badge) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <nav class="pagination" aria-label="{{ strings.pagination_label('downloads') }}">
+    <button hx-get="{{ url_for('ui.downloads', page=pagination.prev) }}" hx-target="#downloads-table"{% if not pagination.prev %} disabled{% endif %}>{{ strings.pagination_prev() }}</button>
+    <button hx-get="{{ url_for('ui.downloads', page=pagination.next) }}" hx-target="#downloads-table"{% if not pagination.next %} disabled{% endif %}>{{ strings.pagination_next() }}</button>
+  </nav>
+</div>
 ```
 
-### 4.7 Toasts & Notifications
-- Radix Toast via shadcn/ui.
-- Maximal drei Toasts gleichzeitig sichtbar.
-- Farbgebung je Status.
-
-```tsx
-import {
-  Toast,
-  ToastClose,
-  ToastDescription,
-  ToastProvider,
-  ToastTitle,
-  ToastViewport,
-} from "@/components/ui/toast";
-import { useToast } from "@/components/ui/use-toast";
-
-export function ExampleToasts() {
-  const { toasts } = useToast();
-
-  return (
-    <ToastProvider duration={6000} swipeDirection="right">
-      {toasts.map(({ id, title, description, action, variant, open, duration, onOpenChange }) => (
-        <Toast
-          key={id}
-          variant={variant}
-          open={open}
-          duration={duration}
-          onOpenChange={onOpenChange}
-        >
-          <div className="grid gap-1">
-            {title && <ToastTitle>{title}</ToastTitle>}
-            {description && <ToastDescription>{description}</ToastDescription>}
-          </div>
-          {action}
-          <ToastClose />
-        </Toast>
-      ))}
-      <ToastViewport />
-    </ToastProvider>
-  );
-}
-```
-
-Verwende Varianten:
-- Erfolg: `variant="success"`, Hintergrund grün (`bg-emerald-500/10 text-emerald-700 dark:text-emerald-200`).
-- Fehler: `variant="destructive"`, Hintergrund rot.
-- Info: Custom-Variante mit blauem Schema.
+### 4.7 Status-Badges & Fortschrittsanzeigen
+Verwende `partials/status_badges.j2`, um Statuschips zu rendern. Die Varianten `success`, `danger` und `muted` greifen auf die oben definierten Farbwerte zurück. Für laufende Aufgaben ergänzen HTMX-Antworten `aria-busy="true"` auf Buttons (z. B. `.dashboard-action-button[aria-busy="true"]`) – die CSS-Selektoren kümmern sich um visuelles Feedback.
 
 ## 5. Interaktionen & States
-- **Hover:** Hintergrund abdunkeln (`hover:bg-slate-50` bzw. `dark:hover:bg-slate-800`).
-- **Focus:** `focus-visible:ring-2 focus-visible:ring-indigo-500` verpflichtend.
-- **Loader:** `Loader2` Icon (`lucide-react`) mit `animate-spin` und Größe `h-4 w-4` (Buttons) bzw. `h-6 w-6` (Fullscreen).
-- **Disabled:** `opacity-50 cursor-not-allowed`, Interaktionen deaktivieren (`pointer-events-none` falls nötig).
+- **Hover & Focus:** Buttons, Links und interaktive Flächen besitzen standardisierte Übergänge (`transition: var(--transition)`). Ergänze keine eigenen Inline-Transitions.
+- **Focus-Outline:** `outline: 2px solid var(--color-accent)` ist global gesetzt. Lasse die Standard-Outline aktiv.
+- **Disabled & Busy:** Buttons mit `disabled` oder `aria-busy="true"` reduzieren Sichtbarkeit (`opacity: 0.55` bzw. `.dashboard-action-button[aria-busy="true"]`). Nutze diese Attribute statt eigener Klassen.
+- **Loader:** Für Upload- oder Sync-Status wird `cursor: progress` via `[aria-busy="true"]` aktiviert. Animierte Spinner werden serverseitig als SVG eingebunden; verwende vorhandene Komponenten oder erweitere `app.css` gezielt.
 
-## 6. Responsive Breakpoints
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-- Sidebar wechselt unter `<md` in den Drawer-Modus.
-
-## 7. Icons
-- Quelle: `lucide-react`.
-- Standardgröße: `h-5 w-5`.
-- Primärfarbe text-slate im Light Mode, `text-slate-300` im Dark Mode. Für Statusicons relevante Farbe verwenden.
-
-## 8. Notifications
-- Verwende ausschließlich die Toast-Komponente (siehe Abschnitt 4.7).
-- Statusfarben: Erfolg (grün), Fehler (rot), Info (blau).
-- Maximal drei Toasts gleichzeitig sichtbar (`toasts.slice(0, 3)`).
-- Erfolgsnachricht nach Speichern: `"✅ Einstellungen gespeichert"`.
-- Fehlerfall: `"❌ Fehler beim Speichern"`.
-
-## 9. Animationen
-- Sidebar-Drawer: Slide-in/out mittels Framer Motion (`initial`/`animate`/`exit`).
-- Buttons: `transition-colors duration-200` Standard.
-- Loader: `animate-spin`.
-- Dark-Mode-Umschaltung mit sanftem Übergang (`transition-colors transition-opacity duration-300`).
-
-## 10. UX-Details
-- Pflichtfelder mit `*` kennzeichnen und in `aria-label`/`aria-required` widerspiegeln.
-- Formulare haben konsistente Titel (`text-lg font-semibold`) und strukturierte Abschnitte.
-- Validierungsfehler unmittelbar unter dem Feld anzeigen.
-- Erfolgreiches Speichern löst Toast `✅ Einstellungen gespeichert` aus.
-- Fehler beim Speichern löst Toast `❌ Fehler beim Speichern` aus und kann ergänzende Beschreibung enthalten.
-- Globale Ladezustände nutzen `Loader2` Icon und deaktivieren interaktive Elemente.
-
-Diese Richtlinien sind verpflichtend. Abweichungen müssen vor Implementierung abgestimmt und in diesem Dokument dokumentiert werden.
+Diese Richtlinien sind verbindlich. Neue Muster müssen an den bestehenden Layout- und Partials-Aufbau anknüpfen und ihre Styles in `app/ui/static/css/app.css` hinterlegen.
