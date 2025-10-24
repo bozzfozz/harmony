@@ -52,11 +52,10 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 ## Frontend & Runtime Injection
 
-- `VITE_API_BASE_URL` und `VITE_API_BASE_PATH` definieren die Basis-URL des Frontend-Clients.
-- `VITE_REQUIRE_AUTH`/`VITE_AUTH_HEADER_MODE` spiegeln die Backend-Einstellungen (`FEATURE_REQUIRE_AUTH`, bevorzugter Header) und verhindern fehlkonfigurierte Browser-Clients.
-- `VITE_RUNTIME_API_KEY` erlaubt das Injizieren eines Schlüssels via `<script>` – praktisch für statische Deployments hinter einem Secret-Store.
-- `VITE_LIBRARY_POLL_INTERVAL_MS` steuert Poll-Intervalle der Library-Ansicht; das Backend selbst bleibt durch Watchlist-Intervalle geschützt.
-- `UI_LIVE_UPDATES` wählt zwischen klassischem Polling (`polling`) und Server-Sent Events (`SSE`). Der SSE-Modus streamt Tabellen-Updates über `/ui/events`; ohne Setzung bleibt HTMX-Polling aktiv.
+- Server-Rendered UI pages werden über Feature-Flags vom Typ `UI_FEATURE_*` gesteuert. Ein aktiviertes Flag registriert Routen und Navigationseinträge, deaktivierte Flags blenden die Oberfläche vollständig aus. Eine vollständige Zuordnung der Flags zu den UI-Abschnitten findest du in [`docs/ui/fe-htmx-plan.md`](../ui/fe-htmx-plan.md) sowie den spezialisierten Runbooks wie [`docs/operations/runbooks/hdm.md`](../operations/runbooks/hdm.md).
+- `UI_LIVE_UPDATES` schaltet zwischen klassischem HTMX-Polling (`polling`) und Server-Sent Events (`SSE`) um. Die SSE-Variante nutzt `/ui/events` für Echtzeit-Streams und fällt bei deaktiviertem Flag automatisch auf Polling zurück. Details zum Verhalten und Failover sind in [`docs/ui/fe-htmx-plan.md`](../ui/fe-htmx-plan.md#live-update-strategie) dokumentiert.
+- `UI_COOKIES_SECURE`, `UI_SESSION_TTL_MINUTES`, `UI_ROLE_DEFAULT` und `UI_ROLE_OVERRIDES` regeln Session-Sicherheit und Rollenmodell. TLS-gesicherte Deployments sollten `UI_COOKIES_SECURE=true` setzen, damit Session-, CSRF- und Pagination-Cookies das `Secure`-Attribut tragen. Weitere Sicherheitshinweise findest du in [`docs/operations/security.md`](../operations/security.md).
+- Optional erlaubt `UI_ALLOW_CDN=true` das Laden ausgewählter Assets (z. B. HTMX) aus einem CDN; dazu müssen `UI_HTMX_CDN_URL` und `UI_HTMX_CDN_SRI` gesetzt und mit der CSP abgestimmt werden. Die notwendigen Schritte und Beispielkonfigurationen beschreibt [`docs/ui/csp.md`](../ui/csp.md).
 
 ## Änderungs-Workflow
 
