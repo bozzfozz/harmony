@@ -2,7 +2,7 @@
 
 ## Lokale Quality Gates
 
-Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beiträge anhand nachvollziehbarer Logs.
+Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows/ci.yml), der Formatierung, Linting, Typprüfungen, Pytests und Smoke-Checks sequenziell ausführt. Maintainer reproduzieren die einzelnen Läufe lokal und dokumentieren nachvollziehbare Logs als Ergänzung zu den CI-Artefakten.
 
 | Pflichtlauf | Zweck |
 | ------------ | ----- |
@@ -16,7 +16,8 @@ Harmony besitzt keine externe Build-Pipeline. Maintainer prüfen eingehende Beit
 
 ## Branch Protection & Evidence
 
-- Es sind keine Required-Status-Checks konfiguriert. Maintainer verifizieren stattdessen die angehängten Logs der oben genannten Läufe.
+- Pull Requests benötigen einen erfolgreichen Durchlauf des Required-Status-Checks `backend-ci`.
+- Maintainer prüfen die GitHub-Actions-Protokolle (`backend-ci`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
 - PRs ohne Wiring-/Removal-Report oder ohne Logs der Pflichtläufe dürfen nicht gemergt werden.
 - Speichere relevante Terminalausgaben in `reports/` (aus dem `.gitignore`) oder im PR-Body.
 
