@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import inspect
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -361,11 +361,23 @@ def _emit_worker_config_event(config: AppConfig, *, workers_enabled: bool) -> No
     )
 
 
+class StartWorkersCallable(Protocol):
+    def __call__(
+        self,
+        app: FastAPI,
+        config: AppConfig,
+        *,
+        enable_artwork: bool,
+        enable_lyrics: bool,
+    ) -> Awaitable[dict[str, bool]]:
+        """Start background workers with explicit feature flags."""
+
+
 @dataclass(frozen=True)
 class LifespanHooks:
     configure_application: Callable[[AppConfig], None]
     register_ui_session_metrics: Callable[[], None]
-    start_workers: Callable[[FastAPI, AppConfig, bool, bool], Awaitable[dict[str, bool]]]
+    start_workers: StartWorkersCallable
     stop_workers: Callable[[FastAPI], Awaitable[None]]
     get_soulseek_client: Callable[[], Any]
     get_provider_registry: Callable[[], Any]
