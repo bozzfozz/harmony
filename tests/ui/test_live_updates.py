@@ -290,6 +290,8 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
             headers = {"Cookie": _cookies_header(client)}
             response = client.get("/ui/events", headers=headers)
             assert response.status_code == 200
+            assert response.headers.get("Cache-Control") == "no-cache"
+            assert response.headers.get("X-Accel-Buffering") == "no"
             body = response.text
             assert "event: fragment" in body
             assert "data:" in body
