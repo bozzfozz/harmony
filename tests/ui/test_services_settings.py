@@ -1,7 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
-
-import pytest
 
 from app.schemas import (
     ArtistPreferenceEntry,
@@ -20,7 +18,7 @@ from app.ui.services.settings import (
 
 def _make_service(monkeypatch, *, settings=None, history=None, preferences=None):
     if settings is None:
-        settings = SettingsResponse(settings={}, updated_at=datetime.now(tz=timezone.utc))
+        settings = SettingsResponse(settings={}, updated_at=datetime.now(tz=UTC))
     if history is None:
         history = SettingsHistoryResponse(history=[])
     if preferences is None:
@@ -62,7 +60,7 @@ def _make_service(monkeypatch, *, settings=None, history=None, preferences=None)
 def test_list_settings_orders_rows(monkeypatch) -> None:
     response = SettingsResponse(
         settings={"b": "2", "a": "1"},
-        updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2024, 1, 1, tzinfo=UTC),
     )
     service = _make_service(monkeypatch, settings=response)
 
@@ -81,7 +79,7 @@ def test_save_setting_passes_payload(monkeypatch) -> None:
         recorded["key"] = payload.key
         recorded["value"] = payload.value
         return SettingsResponse(
-            settings={payload.key: payload.value}, updated_at=datetime.now(tz=timezone.utc)
+            settings={payload.key: payload.value}, updated_at=datetime.now(tz=UTC)
         )
 
     monkeypatch.setattr("app.ui.services.settings.persist_setting", fake_update)
@@ -94,7 +92,7 @@ def test_save_setting_passes_payload(monkeypatch) -> None:
 
 
 def test_list_history_converts_entries(monkeypatch) -> None:
-    changed_at = datetime(2024, 2, 1, 12, tzinfo=timezone.utc)
+    changed_at = datetime(2024, 2, 1, 12, tzinfo=UTC)
     history = SettingsHistoryResponse(
         history=[
             SettingsHistoryEntry(

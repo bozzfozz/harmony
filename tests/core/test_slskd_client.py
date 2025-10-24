@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from email.utils import format_datetime
 
 import pytest
@@ -21,7 +21,7 @@ def test_parse_retry_after_ms_string_value() -> None:
 
 
 def test_parse_retry_after_ms_http_date(monkeypatch: pytest.MonkeyPatch) -> None:
-    base_time = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+    base_time = datetime(2024, 1, 1, 12, 0, tzinfo=UTC)
     retry_after = base_time + timedelta(seconds=90)
     header_value = format_datetime(retry_after, usegmt=True)
 

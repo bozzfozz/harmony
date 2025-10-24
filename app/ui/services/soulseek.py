@@ -517,7 +517,7 @@ class SoulseekUiService:
 
     @staticmethod
     def _coerce_progress(value: Any) -> float | None:
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             numeric = float(value)
             if numeric > 1:
                 numeric = numeric / 100.0
@@ -560,7 +560,7 @@ class SoulseekUiService:
     def _coerce_float(value: Any) -> float | None:
         if isinstance(value, bool):
             return float(value)
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return float(value)
         if isinstance(value, str):
             stripped = value.strip()
@@ -593,9 +593,9 @@ class SoulseekUiService:
             return ()
         if isinstance(candidate, Mapping):
             return candidate.values()
-        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes, bytearray)):
+        if isinstance(candidate, Sequence) and not isinstance(candidate, str | bytes | bytearray):
             return candidate
-        if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes, bytearray)):
+        if isinstance(candidate, Iterable) and not isinstance(candidate, str | bytes | bytearray):
             return candidate
         return ()
 

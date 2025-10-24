@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 import copy
 from dataclasses import dataclass
 from datetime import datetime
 import inspect
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import pytest
 

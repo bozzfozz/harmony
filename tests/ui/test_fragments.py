@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import json
 import re
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 from fastapi import HTTPException, status

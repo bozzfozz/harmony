@@ -41,7 +41,7 @@ def _attach_download_metadata(
 
     for key in ("download_id", "id"):
         identifier = best_match.get(key)
-        if not isinstance(identifier, (int, str)):
+        if not isinstance(identifier, int | str):
             continue
         try:
             download_id = int(identifier)

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 import pytest
 
@@ -253,7 +254,10 @@ async def test_trigger_enqueues_jobs_and_invokes_callback(
     assert first_job.type == ARTIST_REFRESH_JOB_TYPE
     assert first_job.payload["artist_id"] == artist_with_cutoff.id
     assert first_job.payload["cutoff"] == artist_with_cutoff.last_checked.isoformat()
-    expected_delta = f"{ARTIST_SCAN_JOB_TYPE}:{artist_with_cutoff.id}:{artist_with_cutoff.last_checked.isoformat()}"
+    expected_delta = (
+        f"{ARTIST_SCAN_JOB_TYPE}:{artist_with_cutoff.id}:"
+        f"{artist_with_cutoff.last_checked.isoformat()}"
+    )
     assert first_job.payload["delta_idempotency"] == expected_delta
 
     second_job = persistence.enqueued[1]

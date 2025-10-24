@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import re
 from types import SimpleNamespace
 
@@ -34,7 +34,7 @@ def _extract_csrf_token(html: str) -> str:
 
 class _StubSettingsService:
     def __init__(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         self.overview = SettingsOverview(
             rows=(
                 SettingRow(key="alpha", value="1", has_override=True),
@@ -63,7 +63,7 @@ class _StubSettingsService:
         self.saved_settings.append((key, value))
         updated = SettingsOverview(
             rows=(SettingRow(key=key, value=value, has_override=value is not None),),
-            updated_at=datetime.now(tz=timezone.utc),
+            updated_at=datetime.now(tz=UTC),
         )
         self.overview = updated
         return self.overview

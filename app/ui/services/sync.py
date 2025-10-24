@@ -159,7 +159,7 @@ class SyncUiService:
         counters: dict[str, int] = {}
         if isinstance(counters_raw, Mapping):
             for key, value in counters_raw.items():
-                if isinstance(value, (int, float)):
+                if isinstance(value, int | float):
                     counters[str(key)] = int(value)
         return SyncActionResult(
             message=message,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 from fastapi import Request
@@ -17,7 +17,6 @@ from .base import (
     AsyncFragment,
     DefinitionItem,
     FormDefinition,
-    FormField,
     LayoutContext,
     MetaTag,
     PaginationContext,
@@ -30,12 +29,7 @@ from .base import (
     TableRow,
     _build_external_link_cell,
     _build_primary_navigation,
-    _format_duration_seconds,
-    _format_status_text,
     _normalise_status,
-    _normalize_status,
-    _safe_url_for,
-    _system_status_badge,
 )
 
 if TYPE_CHECKING:
@@ -1574,7 +1568,7 @@ def build_spotify_backfill_context(
     request: Request,
     *,
     snapshot: SpotifyBackfillSnapshot,
-    timeline: Sequence["SpotifyBackfillTimelineEntry"] | None = None,
+    timeline: Sequence[SpotifyBackfillTimelineEntry] | None = None,
     alert: AlertMessage | None = None,
 ) -> Mapping[str, Any]:
     alert_messages: tuple[AlertMessage, ...]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, status as fastapi_status
 from fastapi.testclient import TestClient
@@ -78,7 +78,7 @@ def test_watchlist_crud_flow(watchlist_client: TestClient) -> None:
     assert updated["paused"] is False
     assert updated["pause_reason"] is None
 
-    resume_at = datetime(2025, 5, 4, 12, 0, tzinfo=timezone.utc)
+    resume_at = datetime(2025, 5, 4, 12, 0, tzinfo=UTC)
     pause_response = watchlist_client.post(
         "/api/v1/watchlist/spotify:artist-1/pause",
         json={"reason": "  Taking a break  ", "resume_at": resume_at.isoformat()},

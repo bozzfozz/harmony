@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 import hashlib
 from types import SimpleNamespace
-from typing import Mapping
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest

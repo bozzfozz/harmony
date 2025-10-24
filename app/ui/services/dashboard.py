@@ -92,7 +92,7 @@ class DashboardUiService:
 
         uptime_raw = payload.get("uptime_seconds")
         uptime_seconds: float | None
-        if isinstance(uptime_raw, (int, float)):
+        if isinstance(uptime_raw, int | float):
             uptime_seconds = float(uptime_raw)
         else:
             uptime_seconds = None
@@ -181,7 +181,7 @@ class DashboardUiService:
             status_text = str(details_raw.get("status", "unknown"))
             queue_raw = details_raw.get("queue_size")
             queue_size: int | None
-            if isinstance(queue_raw, (int, float)):
+            if isinstance(queue_raw, int | float):
                 queue_size = int(queue_raw)
             else:
                 queue_size = None

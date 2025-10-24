@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
+if [ -f scripts/dev/sync_runtime_requirements.py ]; then
+  if [ -n "${CI:-}" ]; then
+    python scripts/dev/sync_runtime_requirements.py --check
+  else
+    python scripts/dev/sync_runtime_requirements.py --write
+  fi
+fi
+
 strict=false
 case "${DOCTOR_PIP_REQS:-}" in
   1|true|TRUE|True|yes|YES|on|ON)

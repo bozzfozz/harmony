@@ -264,7 +264,9 @@ class SoulseekSearchResponse(BaseModel):
     )
     normalised: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Flattened file-level entries produced by SoulseekClient.normalise_search_results",
+        description=(
+            "Flattened file-level entries produced by SoulseekClient.normalise_search_results"
+        ),
     )
 
 

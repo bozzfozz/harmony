@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from enum import Enum
 from pathlib import Path
@@ -359,7 +359,7 @@ def _parse_retry_after_ms(headers: Mapping[str, Any]) -> int | None:
 
     delay_seconds: float | None = None
 
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         delay_seconds = float(value)
     else:
         value_str = str(value).strip()
@@ -376,8 +376,8 @@ def _parse_retry_after_ms(headers: Mapping[str, Any]) -> int | None:
             if target_dt is None:
                 return None
             if target_dt.tzinfo is None:
-                target_dt = target_dt.replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
+                target_dt = target_dt.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
             delay_seconds = (target_dt - now).total_seconds()
 
     if delay_seconds is None:
