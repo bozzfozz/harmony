@@ -3373,11 +3373,13 @@ def test_downloads_fragment_validation_error(monkeypatch) -> None:
             _assert_html_response(response, status_code=400)
             html = response.text
             lines = [line.strip() for line in html.splitlines() if line.strip()]
-            assert lines == [
-                '<div class="alerts">',
-                '<p role="alert" class="alert alert--error">Invalid priority range.</p>',
-                "</div>",
-            ]
+            assert lines[0].startswith('<div class="async-fragment"')
+            assert lines[1] == '<div class="alerts">'
+            assert (
+                '<p role="alert" class="alert alert--error">Invalid priority range.</p>'
+                in lines
+            )
+            assert lines[-2:] == ['</div>', '</div>']
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
@@ -3409,11 +3411,10 @@ def test_downloads_fragment_error(monkeypatch) -> None:
             _assert_html_response(response, status_code=503)
             html = response.text
             lines = [line.strip() for line in html.splitlines() if line.strip()]
-            assert lines == [
-                '<div class="alerts">',
-                '<p role="alert" class="alert alert--error">broken</p>',
-                "</div>",
-            ]
+            assert lines[0].startswith('<div class="async-fragment"')
+            assert lines[1] == '<div class="alerts">'
+            assert '<p role="alert" class="alert alert--error">broken</p>' in lines
+            assert lines[-2:] == ['</div>', '</div>']
     finally:
         app.dependency_overrides.pop(get_downloads_ui_service, None)
 
