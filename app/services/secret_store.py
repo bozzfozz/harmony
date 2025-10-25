@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db import SessionFactory, run_session
 from app.models import Setting
 
 _PROVIDER_SETTINGS = {
@@ -81,3 +82,16 @@ class SecretStore:
             return SecretRecord(key=f"{provider}:dep:{index}", value=None)
         key = mapping[index]
         return self.get(key)
+
+
+async def load_secret_store(
+    *,
+    session_factory: SessionFactory | None = None,
+    preload: Iterable[str] | None = None,
+) -> SecretStore:
+    """Build a :class:`SecretStore` without blocking the event loop."""
+
+    def _build(session: Session) -> SecretStore:
+        return SecretStore(session, preload=preload)
+
+    return await run_session(_build, factory=session_factory)

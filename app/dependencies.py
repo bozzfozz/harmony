@@ -16,7 +16,7 @@ from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
 from app.core.transfers_api import TransfersApi
-from app.db import SessionCallable, get_session, run_session
+from app.db import SessionCallable, SessionFactory, get_session, run_session, session_scope
 from app.errors import AuthenticationRequiredError
 from app.integrations.provider_gateway import ProviderGateway
 from app.integrations.registry import ProviderRegistry
@@ -173,6 +173,12 @@ def get_session_runner() -> SessionRunner:
         return await run_session(func)
 
     return runner
+
+
+def get_session_factory() -> SessionFactory:
+    """Return the default session factory for database operations."""
+
+    return session_scope
 
 
 if TYPE_CHECKING:  # pragma: no cover - import hints only for static analysis
