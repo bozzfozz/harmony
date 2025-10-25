@@ -61,13 +61,13 @@ def test_build_system_page_context_registers_fragments() -> None:
     assert spotify_card.form.action.endswith("/ui/system/secrets/spotify_client_secret")
 
 
-def test_build_system_page_context_uses_metrics_fallback() -> None:
+def test_build_system_page_context_uses_metrics_proxy_route() -> None:
     request = _make_request()
     session = _make_session()
 
     context = build_system_page_context(request, session=session, csrf_token="token")
 
-    assert context["metrics_url"] == "/api/v1/metrics"
+    assert context["metrics_url"] == "/ui/system/metrics"
 
 
 def test_build_system_liveness_context_formats_badge() -> None:

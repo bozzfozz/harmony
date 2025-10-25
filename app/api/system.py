@@ -192,9 +192,10 @@ async def get_readiness(request: Request) -> dict[str, Any]:
 
 
 @router.get("/metrics", tags=["System"])
-async def get_metrics() -> Response:
+async def get_metrics(request: Request) -> Response:
     """Expose Prometheus metrics collected by the Harmony backend."""
 
+    _ = request  # FastAPI injects the request when routed directly.
     registry = metrics.get_registry()
     payload = generate_latest(registry)
     headers = {"Cache-Control": "no-store"}

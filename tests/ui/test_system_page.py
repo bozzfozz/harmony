@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from fastapi import status
 from fastapi.testclient import TestClient
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 
 from app.errors import AppError, ErrorCode
 from app.ui.routes.system import get_system_ui_service
@@ -110,6 +110,7 @@ def test_system_page_renders_for_operator(monkeypatch) -> None:
         assert 'id="system-liveness-refresh"' in html
         assert 'hx-get="/ui/system/integrations"' in html
         assert 'hx-post="/ui/system/secrets/spotify_client_secret"' in html
+        assert 'href="/ui/system/metrics"' in html
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
 
@@ -146,6 +147,32 @@ def test_system_liveness_fragment_handles_error(monkeypatch) -> None:
         assert fragment.status_code == status.HTTP_200_OK
         assert "Retry" in fragment.text
     client.app.dependency_overrides.pop(get_system_ui_service, None)
+
+
+def test_system_metrics_proxy_returns_response(monkeypatch) -> None:
+    async def fake_get_metrics(request):
+        assert request.url.path == "/ui/system/metrics"
+        return PlainTextResponse("test-metrics", status_code=status.HTTP_200_OK)
+
+    monkeypatch.setattr("app.api.system.get_metrics", fake_get_metrics)
+
+    with _create_client(monkeypatch) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/system/metrics", headers=headers)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text == "test-metrics"
+        assert response.headers.get("content-type", "").startswith("text/plain")
+
+
+def test_system_metrics_proxy_requires_operator_role(monkeypatch) -> None:
+    fingerprint = fingerprint_api_key("primary-key")
+    env = {"UI_ROLE_OVERRIDES": f"{fingerprint}:read_only"}
+    with _create_client(monkeypatch, extra_env=env) as client:
+        _login(client)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/system/metrics", headers=headers)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 def test_secret_validation_requires_admin(monkeypatch) -> None:
