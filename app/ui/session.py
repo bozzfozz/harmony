@@ -282,9 +282,7 @@ class UiSessionManager:
             last_seen_at=issued_at,
         )
         async with self._lock:
-            await self._store.create_session_async(
-                self._stored_from_session(session)
-            )
+            await self._store.create_session_async(self._stored_from_session(session))
         log_event(
             logger,
             "ui.login",
@@ -327,9 +325,7 @@ class UiSessionManager:
             active_session = await self._get_active_session(identifier)
             if active_session is None:
                 return
-            if not await self._store.set_spotify_free_ingest_job_id_async(
-                identifier, job_id
-            ):
+            if not await self._store.set_spotify_free_ingest_job_id_async(identifier, job_id):
                 return
             active_session.jobs.spotify_free_ingest_job_id = job_id
             if session is not None and session is not active_session:
@@ -353,9 +349,7 @@ class UiSessionManager:
             active_session = await self._get_active_session(identifier)
             if active_session is None:
                 return
-            if not await self._store.set_spotify_backfill_job_id_async(
-                identifier, job_id
-            ):
+            if not await self._store.set_spotify_backfill_job_id_async(identifier, job_id):
                 return
             active_session.jobs.spotify_backfill_job_id = job_id
             if session is not None and session is not active_session:

@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

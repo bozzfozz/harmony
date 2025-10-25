@@ -47,6 +47,8 @@ def _resolve_system_navigation_key(session: UiSession) -> str:
     if session.allows("operator"):
         return "operations"
     return "home"
+
+
 def _build_secret_cards(*, can_validate: bool) -> tuple[SecretValidationCard, ...]:
     providers = (
         (
