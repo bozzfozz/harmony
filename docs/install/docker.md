@@ -9,8 +9,8 @@ maintains `harmony.db` inside the `/data` volume.
 - Docker 20.10 or newer.
 - Spotify and Soulseek credentials (if you intend to enable HDM PRO flows).
 - Host directories for persistent storage:
-  - `/data/downloads` – temporary workspace for HDM downloads.
-  - `/data/music` – final library location managed by HDM.
+  - `/downloads` – temporary workspace for HDM downloads.
+  - `/music` – final library location managed by HDM.
   - Optional: `/data/runtime/oauth_state` when using the OAuth split mode.
 
 ## Quickstart (`docker run`)
@@ -20,16 +20,15 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -v $(pwd)/data:/data \
-  -v $(pwd)/data/downloads:/data/downloads \
-  -v $(pwd)/data/music:/data/music \
+  -v $(pwd)/data/downloads:/downloads \
+  -v $(pwd)/data/music:/music \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
 - Mount `/data` to persist the SQLite database (`harmony.db`) and generated
   configuration (`harmony.yml`). Replace `$(pwd)/data` with the host directory
   that should hold these files.
-- Mount `/data/downloads` and `/data/music` to persist downloads and the
-  organised library.
+- Mount `/downloads` and `/music` to persist downloads and the organised library.
 - Harmony creates missing directories on start-up.
 - Optional security hardening:
   - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
@@ -71,8 +70,8 @@ services:
       PGID: "1000"
     volumes:
       - /mnt/harmony:/data
-      - /mnt/data/downloads:/data/downloads
-      - /mnt/data/music:/data/music
+      - /mnt/data/downloads:/downloads
+      - /mnt/data/music:/music
     ports:
       - "8080:8080"
     healthcheck:

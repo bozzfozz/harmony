@@ -38,8 +38,8 @@ configuration payloads. They follow the rules below:
 | `API_BASE_PATH` | `/api/v1` | `/api/v1` | Prefix for public API routes. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | `X-Correlation-ID` | Header name used to inject request IDs. |
 | `SMOKE_PATH` | `/live` | `/live` | Path used by smoke tests and entrypoint checks. |
-| `DOWNLOADS_DIR` | `/data/downloads` | `/data/downloads` | Temporary workspace for HDM downloads; must be writable. |
-| `MUSIC_DIR` | `/data/music` | `/data/music` | Final destination for tagged tracks; must be writable. |
+| `DOWNLOADS_DIR` | `/downloads` | `/downloads` | Temporary workspace for HDM downloads; must be writable. |
+| `MUSIC_DIR` | `/music` | `/music` | Final destination for tagged tracks; must be writable. |
 | `ARTWORK_DIR` | `./artwork` | `/data/artwork` | Storage for downloaded artwork when the feature is enabled. |
 
 ## Identity & Security
@@ -210,7 +210,7 @@ configuration payloads. They follow the rules below:
 | `WATCHLIST_MAX_PER_TICK` | _(empty)_ | `20` | Upper bound for enqueued artists per timer tick. |
 | `WATCHLIST_TICK_BUDGET_MS` | _(empty)_ | `5000` | Processing budget per timer iteration. |
 | `IDEMPOTENCY_BACKEND` | `sqlite` | `memory` | Selects the HDM idempotency store backend (`sqlite` or `memory`). |
-| `IDEMPOTENCY_SQLITE_PATH` | `<downloads_dir>/.harmony/idempotency.db` | `/data/downloads/.harmony/idempotency.db` | Path to the SQLite idempotency database when using the `sqlite` backend. |
+| `IDEMPOTENCY_SQLITE_PATH` | `<downloads_dir>/.harmony/idempotency.db` | `/downloads/.harmony/idempotency.db` | Path to the SQLite idempotency database when using the `sqlite` backend. |
 | `WATCHLIST_RETRY_MAX` | _(empty)_ | `3` | Retry attempts per timer cycle. |
 | `WATCHLIST_BACKOFF_MAX_TRIES` | _(empty)_ | `5` | Limit before switching to cooldown handling. |
 | `WATCHLIST_BACKOFF_BASE_MS` | _(empty)_ | `250` | Base backoff duration (milliseconds). |

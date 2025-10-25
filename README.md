@@ -17,8 +17,8 @@ exposes the API on **port 8080** and stores all state in SQLite.
 ## Highlights
 
 - **Harmony Download Manager (HDM):** Orchestrates watchlists, ingest jobs and
-  enrichment workers, writing downloads to `/data/downloads` and promoting verified
-  tracks into `/data/music`.
+  enrichment workers, writing downloads to `/downloads` and promoting verified
+  tracks into `/music`.
 - **Unified Image:** One container delivers API, background workers and UI with a single
   exposed port and health surface.
 - **Provider Integrations:** Spotify PRO (OAuth) and FREE flows plus Soulseek (slskd)
@@ -38,8 +38,8 @@ docker run -d \
   --name harmony \
   -p 8080:8080 \
   -v $(pwd)/data:/data \
-  -v $(pwd)/data/downloads:/data/downloads \
-  -v $(pwd)/data/music:/data/music \
+  -v $(pwd)/data/downloads:/downloads \
+  -v $(pwd)/data/music:/music \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
@@ -47,7 +47,7 @@ docker run -d \
   configuration (`harmony.yml`). Replace `$(pwd)/data` with the host directory
   that should store these files. Harmony creates both on first boot when they
   are missing.
-- Mount `/data/downloads` and `/data/music` to persist downloads and the
+- Mount `/downloads` and `/music` to persist downloads and the
   organised library.
 - Harmony boots without API keys so the Quickstart stays local-friendly. Restrict
   the container to trusted networks or define `HARMONY_API_KEYS` before exposing
@@ -92,8 +92,8 @@ deployments. Key options:
 | `HARMONY_API_KEYS` | _(empty)_ | Enables API key authentication. | Recommended when Harmony is reachable from untrusted networks. |
 | `ALLOWED_ORIGINS` | `*` | CORS allowlist for the browser UI. | Set to your public base URL when tightening CORS. |
 | `UI_COOKIES_SECURE` | `false` | Marks UI session, CSRF and pagination cookies as `Secure`. | Enable behind TLS; default stays `false` to support local HTTP testing. |
-| `DOWNLOADS_DIR` | `/data/downloads` | Workspace for HDM downloads. | Override when the downloads path differs from the default mount. |
-| `MUSIC_DIR` | `/data/music` | Target library for organised media. | Override when the music library lives elsewhere. |
+| `DOWNLOADS_DIR` | `/downloads` | Workspace for HDM downloads. | Override when the downloads path differs from the default mount. |
+| `MUSIC_DIR` | `/music` | Target library for organised media. | Override when the music library lives elsewhere. |
 | `harmony.yml` | auto-generated | YAML file under `/data` containing every tunable variable. | Edit to persist configuration between restarts. |
 
 All other knobs are documented in [`docs/configuration.md`](docs/configuration.md).
