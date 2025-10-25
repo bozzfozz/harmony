@@ -146,7 +146,8 @@ async def settings_artist_preferences_fragment(
             retry_target="#hx-settings-artist-preferences",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_settings_artist_preferences_fragment_context(
         request,
         rows=table.rows,
@@ -160,11 +161,14 @@ async def settings_artist_preferences_fragment(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/settings_artist_preferences.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(
@@ -205,11 +209,13 @@ async def settings_save(
             "Failed to save the setting.",
         )
 
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_settings_form_fragment_context(
         request,
         overview=overview,
     )
-    context["csrf_token"] = request.cookies.get("csrftoken", "")
+    context["csrf_token"] = csrf_token
     log_event(
         logger,
         "ui.fragment.settings.save",
@@ -218,11 +224,14 @@ async def settings_save(
         role=session.role,
         key=key,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/settings_form.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(
@@ -310,7 +319,8 @@ async def settings_artist_preferences_save(
             "Failed to update artist preferences.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_settings_artist_preferences_fragment_context(
         request,
         rows=table.rows,
@@ -324,11 +334,14 @@ async def settings_artist_preferences_save(
         role=session.role,
         action=action,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/settings_artist_preferences.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 __all__ = ["router"]

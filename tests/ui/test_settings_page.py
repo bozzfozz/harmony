@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import html
 import re
 from types import SimpleNamespace
 
@@ -30,6 +31,12 @@ def _extract_csrf_token(html: str) -> str:
     match = re.search(r'<meta name="csrf-token" content="([^"]+)"', html)
     assert match is not None
     return match.group(1)
+
+
+def _extract_form_csrf_token(fragment: str) -> str:
+    match = re.search(r'name="csrftoken"\s+value="([^"]*)"', fragment)
+    assert match is not None
+    return html.unescape(match.group(1))
 
 
 class _StubSettingsService:
@@ -188,6 +195,10 @@ def test_settings_save_returns_partial(monkeypatch) -> None:
         assert 'id="hx-settings-form"' in response.text
         assert "delta" in response.text
         assert stub.saved_settings[-1] == ("delta", "9")
+        refreshed_token = client.cookies.get("csrftoken")
+        assert refreshed_token is not None
+        expected_token = refreshed_token.strip('"')
+        assert _extract_form_csrf_token(response.text) == expected_token
     client.app.dependency_overrides.pop(get_settings_ui_service, None)
 
 
@@ -200,6 +211,22 @@ def test_settings_history_fragment_returns_html(monkeypatch) -> None:
         fragment = client.get("/ui/settings/history", headers=headers)
         _assert_html_response(fragment)
         assert "settings-history-table" in fragment.text
+    client.app.dependency_overrides.pop(get_settings_ui_service, None)
+
+
+def test_settings_artist_preferences_fragment_refreshes_csrf_cookie(monkeypatch) -> None:
+    stub = _StubSettingsService()
+    with _create_client(monkeypatch, extra_env={"UI_ROLE_DEFAULT": "admin"}) as client:
+        client.app.dependency_overrides[get_settings_ui_service] = lambda: stub
+        _login(client)
+        client.cookies.pop("csrftoken", None)
+        headers = {"Cookie": _cookies_header(client)}
+        response = client.get("/ui/settings/artist-preferences", headers=headers)
+        _assert_html_response(response)
+        refreshed_token = client.cookies.get("csrftoken")
+        assert refreshed_token is not None
+        expected_token = refreshed_token.strip('"')
+        assert _extract_form_csrf_token(response.text) == expected_token
     client.app.dependency_overrides.pop(get_settings_ui_service, None)
 
 
@@ -225,4 +252,8 @@ def test_artist_preferences_toggle_updates(monkeypatch) -> None:
         _assert_html_response(response)
         assert 'id="settings-artist-preferences-table"' in response.text
         assert stub.preference_calls[-1][:2] == ("set", "artist")
+        refreshed_token = client.cookies.get("csrftoken")
+        assert refreshed_token is not None
+        expected_token = refreshed_token.strip('"')
+        assert _extract_form_csrf_token(response.text) == expected_token
     client.app.dependency_overrides.pop(get_settings_ui_service, None)
