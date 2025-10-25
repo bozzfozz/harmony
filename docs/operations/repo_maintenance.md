@@ -17,8 +17,8 @@ Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows
 ## Branch Protection & Evidence
 
 - Pull Requests benötigen einen erfolgreichen Durchlauf der Required-Status-Checks `backend-ci` **und** `release-check`.
-- Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*` und führt `make release-check` inklusive `docs-verify`, `pip-audit` und UI-Smoke-Test aus.
-- Die Workflow-Logs werden als Artefakt `release-check-logs` gespeichert und enthalten die Datei `reports/release-check/release-check.log` als revisionssicheren Nachweis.
+- Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*`, führt `make release-check` inklusive `docs-verify`, `pip-audit` und UI-Smoke-Test aus und validiert anschließend den Packaging-Pipeline-Run via `make package-verify`.
+- Die Workflow-Logs werden als Artefakt `release-check-logs` gespeichert und enthalten die Datei `reports/release-check/release-check.log` als revisionssicheren Nachweis. Zusätzlich archiviert der Workflow das Artefakt `release-packaging-artifacts` mit dem Inhalt des Verzeichnisses `dist/` für eine spätere manuelle Prüfung.
 - Maintainer prüfen die GitHub-Actions-Protokolle (`backend-ci`, `release-check`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
 - PRs ohne Wiring-/Removal-Report oder ohne Logs der Pflichtläufe dürfen nicht gemergt werden.
 - Speichere relevante Terminalausgaben in `reports/` (aus dem `.gitignore`) oder im PR-Body.
@@ -47,9 +47,8 @@ pre-commit run --hook-stage push
 1. Versionierung & CHANGELOG aktualisieren.
 2. `make release-check` (inkl. `docs-verify`, `pip-audit` und UI-Smoketest) und optionale Security-Scans erneut ausführen.
 3. Packaging-Workflow nachvollziehen:
-   - `pip install .`
-   - `pip wheel . -w dist/`
-   - `python -m build`
+   - Lokal `make package-verify` ausführen (führt `pip install .`, `pip wheel . -w dist/` und `python -m build` sequenziell mit Cleanups zwischen den Schritten aus).
+   - Alternativ die CI-Artefakte (`release-packaging-artifacts`) des Workflows [`release-check`](../../.github/workflows/release-check.yml) prüfen, um den letzten erfolgreichen Build zu bestätigen.
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 
 ## Operational Ownership

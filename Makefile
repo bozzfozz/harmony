@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit package-verify
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -46,11 +46,14 @@ all:
 		$(MAKE) smoke
 
 release-check:
-	@set -euo pipefail; \
-		$(MAKE) all; \
-		$(MAKE) docs-verify; \
-		$(MAKE) pip-audit; \
-		$(MAKE) ui-smoke
+        @set -euo pipefail; \
+                $(MAKE) all; \
+                $(MAKE) docs-verify; \
+                $(MAKE) pip-audit; \
+                $(MAKE) ui-smoke
+
+package-verify:
+        @python scripts/dev/package_verify.py
 
 lint-fix:
 	@set -euo pipefail; \
