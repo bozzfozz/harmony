@@ -10,13 +10,14 @@ from app.ui.context.downloads import (
     build_downloads_fragment_context,
     build_downloads_page_context,
 )
-from app.ui.csrf import attach_csrf_cookie, enforce_csrf, get_csrf_manager
+from app.ui.csrf import attach_csrf_cookie, enforce_csrf
 from app.ui.routes.shared import (
     _ensure_csrf_token,
     _extract_download_refresh_params,
     _parse_form_body,
     _render_alert_fragment,
     _resolve_live_updates_mode,
+    get_csrf_manager,
     logger,
     templates,
 )
@@ -71,6 +72,8 @@ async def downloads_table(
             detail="The requested UI feature is disabled.",
         )
 
+    csrf_manager = get_csrf_manager(request)
+
     try:
         page = await service.list_downloads_async(
             limit=limit,
@@ -107,7 +110,7 @@ async def downloads_table(
             "Unable to load download entries.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_downloads_fragment_context(
         request,
         page=page,
@@ -123,11 +126,14 @@ async def downloads_table(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/downloads_table.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(
@@ -207,7 +213,8 @@ async def downloads_priority_update(
             "Failed to update the download priority.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_downloads_fragment_context(
         request,
         page=page,
@@ -225,11 +232,14 @@ async def downloads_priority_update(
         download_id=download_id,
         priority=priority_value,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/downloads_table.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(
@@ -298,7 +308,8 @@ async def downloads_retry(
             "Failed to retry the download.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_downloads_fragment_context(
         request,
         page=page,
@@ -318,11 +329,14 @@ async def downloads_retry(
         limit=limit_value,
         offset=offset_value,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/downloads_table.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.delete(
@@ -391,7 +405,8 @@ async def downloads_cancel(
             "Failed to cancel the download.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     context = build_downloads_fragment_context(
         request,
         page=page,
@@ -411,11 +426,14 @@ async def downloads_cancel(
         limit=limit_value,
         offset=offset_value,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/downloads_table.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(

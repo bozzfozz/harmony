@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import AppConfig
 from app.logging import get_logger
+from app.ui.csrf import get_csrf_manager
 from app.ui.assets import asset_url
 from app.ui.context.base import AlertMessage, get_ui_assets
 from app.ui.session import UiSession
@@ -193,4 +194,5 @@ __all__ = [
     "_ensure_csrf_token",
     "_parse_form_body",
     "_extract_download_refresh_params",
+    "get_csrf_manager",
 ]
