@@ -171,9 +171,11 @@ async def test_render_alert_fragment_includes_retry_metadata() -> None:
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.template.name.endswith("partials/async_error.j2")
+    assert response.context["retry_container_id"] == "fragment"
 
     body = response.body.decode("utf-8")
 
+    assert '<div class="async-fragment" id="fragment">' in body
     assert "Please retry" in body
     assert 'hx-get="/fragments/retry"' in body
     assert 'hx-target="#fragment"' in body
@@ -191,6 +193,27 @@ async def test_render_alert_fragment_defaults_to_async_error_template() -> None:
     assert response.context["retry_url"] is None
     assert response.context["retry_target"] is None
     assert response.context["retry_label_key"] == "fragments.retry"
+    assert response.context["retry_container_id"] is None
 
     body = response.body.decode("utf-8")
     assert "An unexpected error occurred." in body
+    assert '<div class="async-fragment">' in body
+
+
+@pytest.mark.asyncio
+async def test_render_alert_fragment_ignores_complex_retry_target() -> None:
+    request = _make_request()
+
+    response = _render_alert_fragment(
+        request,
+        "Please retry",
+        retry_url="/fragments/retry",
+        retry_target="closest .async-fragment",
+    )
+
+    assert response.context["retry_container_id"] is None
+
+    body = response.body.decode("utf-8")
+
+    assert '<div class="async-fragment"' in body
+    assert 'hx-target="closest .async-fragment"' in body

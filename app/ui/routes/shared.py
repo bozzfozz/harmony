@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 import json
+import re
 from pathlib import Path
 import time
 from typing import Any, Literal
@@ -104,12 +105,19 @@ def _render_alert_fragment(
     retry_label_key: str = "fragments.retry",
 ) -> Response:
     alert = AlertMessage(level="error", text=message or "An unexpected error occurred.")
+    retry_container_id: str | None = None
+    if retry_target:
+        selector = retry_target.strip()
+        match = re.fullmatch(r"#([A-Za-z_][A-Za-z0-9_\-:\.]*)", selector)
+        if match:
+            retry_container_id = match.group(1)
     context = {
         "request": request,
         "alerts": (alert,),
         "retry_url": retry_url,
         "retry_target": retry_target,
         "retry_label_key": retry_label_key,
+        "retry_container_id": retry_container_id,
     }
     return templates.TemplateResponse(
         request,
