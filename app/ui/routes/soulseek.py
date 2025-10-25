@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import TypeVar
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
-from app.db import session_scope
+from app.db import run_session, session_scope
 from app.dependencies import get_app_config, get_soulseek_client
 from app.errors import AppError
 from app.logging_events import log_event
@@ -58,6 +59,17 @@ from app.ui.services import (
     get_soulseek_ui_service,
 )
 from app.ui.session import UiSession, require_admin_with_feature, require_operator_with_feature
+from sqlalchemy.orm import Session
+
+T = TypeVar("T")
+
+
+class DownloadLookupError(Exception):
+    """Raised when a download lookup fails within a database session."""
+
+    def __init__(self, download_id: int) -> None:
+        super().__init__(f"Download {download_id} not found")
+        self.download_id = download_id
 
 router = APIRouter()
 
@@ -65,12 +77,33 @@ router = APIRouter()
 _DISCOGRAPHY_JOB_LIMIT = 20
 
 
-def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[DiscographyJob]:
-    with session_scope() as db_session:
-        query = db_session.query(DiscographyJob).order_by(DiscographyJob.created_at.desc())
+async def _load_discography_jobs(limit: int = _DISCOGRAPHY_JOB_LIMIT) -> list[DiscographyJob]:
+    """Return the most recent discography jobs using a background session."""
+
+    def _query(session: Session) -> list[DiscographyJob]:
+        query = session.query(DiscographyJob).order_by(DiscographyJob.created_at.desc())
         if limit:
             query = query.limit(limit)
         return list(query.all())
+
+    return await run_session(_query)
+
+
+async def _run_download_lookup(
+    download_id: int,
+    callback: Callable[[Session, Download], T],
+) -> T:
+    """Execute ``callback`` with the located download in a worker thread."""
+
+    def _call(session: Session) -> T:
+        download = session.get(Download, download_id)
+        if download is None:
+            raise DownloadLookupError(download_id)
+        result = callback(session, download)
+        session.expunge(download)
+        return result
+
+    return await run_session(_call)
 
 
 @router.get("/soulseek", include_in_schema=False)
@@ -437,7 +470,7 @@ async def soulseek_discography_jobs_fragment(
 ) -> Response:
     event_name = "ui.fragment.soulseek.discography.jobs"
     try:
-        jobs = _load_discography_jobs()
+        jobs = await _load_discography_jobs()
     except Exception:
         logger.exception(event_name)
         return _render_alert_fragment(
@@ -620,7 +653,7 @@ async def soulseek_discography_jobs_submit(
         modal_url = str(request.url_for("soulseek_discography_job_modal"))
     except Exception:
         modal_url = "/ui/soulseek/discography/jobs/modal"
-    jobs = _load_discography_jobs()
+    jobs = await _load_discography_jobs()
     context = build_soulseek_discography_jobs_context(
         request,
         jobs=jobs,
@@ -656,64 +689,49 @@ async def soulseek_download_lyrics_modal(
 ) -> Response:
     event_name = "ui.fragment.soulseek.downloads.lyrics"
     try:
-        with session_scope() as db_session:
-            download = db_session.get(Download, download_id)
-            if download is None:
-                log_event(
-                    logger,
-                    event_name,
-                    component="ui.router",
-                    status="error",
-                    role=session.role,
-                    error="not_found",
+        download, api_response = await _run_download_lookup(
+            download_id,
+            lambda db_session, db_download: (
+                db_download,
+                api_soulseek_download_lyrics(
                     download_id=download_id,
-                )
-                return _render_alert_fragment(
-                    request,
-                    "Download not found.",
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    retry_url=str(request.url),
-                    retry_target="#modal-root",
-                    retry_label_key="soulseek.retry",
-                )
+                    request=request,
+                    config=config,
+                    session=db_session,
+                ),
+            ),
+        )
 
-            api_response = api_soulseek_download_lyrics(
+        status_code = api_response.status_code
+        content: str | None = None
+        pending = status_code == status.HTTP_202_ACCEPTED
+        if status_code == status.HTTP_200_OK:
+            try:
+                content = api_response.body.decode("utf-8")
+            except UnicodeDecodeError:
+                content = api_response.body.decode("utf-8", "replace")
+        elif status_code not in {status.HTTP_202_ACCEPTED}:
+            log_event(
+                logger,
+                event_name,
+                component="ui.router",
+                status="error",
+                role=session.role,
+                error=str(status_code),
                 download_id=download_id,
-                request=request,
-                config=config,
-                session=db_session,
+            )
+            return _render_alert_fragment(
+                request,
+                "Unable to load lyrics for this download.",
+                status_code=status_code,
+                retry_url=str(request.url),
+                retry_target="#modal-root",
+                retry_label_key="soulseek.retry",
             )
 
-            status_code = api_response.status_code
-            content: str | None = None
-            pending = status_code == status.HTTP_202_ACCEPTED
-            if status_code == status.HTTP_200_OK:
-                try:
-                    content = api_response.body.decode("utf-8")
-                except UnicodeDecodeError:
-                    content = api_response.body.decode("utf-8", "replace")
-            elif status_code not in {status.HTTP_202_ACCEPTED}:
-                log_event(
-                    logger,
-                    event_name,
-                    component="ui.router",
-                    status="error",
-                    role=session.role,
-                    error=str(status_code),
-                    download_id=download_id,
-                )
-                return _render_alert_fragment(
-                    request,
-                    "Unable to load lyrics for this download.",
-                    status_code=status_code,
-                    retry_url=str(request.url),
-                    retry_target="#modal-root",
-                    retry_label_key="soulseek.retry",
-                )
-
-            filename = download.filename or f"Download {download_id}"
-            asset_status = download.lyrics_status or ""
-            has_lyrics = bool(download.has_lyrics)
+        filename = download.filename or f"Download {download_id}"
+        asset_status = download.lyrics_status or ""
+        has_lyrics = bool(download.has_lyrics)
 
         context = build_soulseek_download_lyrics_modal_context(
             request,
@@ -723,6 +741,24 @@ async def soulseek_download_lyrics_modal(
             has_lyrics=has_lyrics,
             content=content,
             pending=pending,
+        )
+    except DownloadLookupError:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="not_found",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Download not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
         )
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, str) else "Unable to load lyrics."
@@ -809,48 +845,51 @@ async def soulseek_download_metadata_modal(
 ) -> Response:
     event_name = "ui.fragment.soulseek.downloads.metadata"
     try:
-        with session_scope() as db_session:
-            download = db_session.get(Download, download_id)
-            if download is None:
-                log_event(
-                    logger,
-                    event_name,
-                    component="ui.router",
-                    status="error",
-                    role=session.role,
-                    error="not_found",
+        download, metadata_response = await _run_download_lookup(
+            download_id,
+            lambda db_session, db_download: (
+                db_download,
+                api_soulseek_download_metadata(
                     download_id=download_id,
-                )
-                return _render_alert_fragment(
-                    request,
-                    "Download not found.",
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    retry_url=str(request.url),
-                    retry_target="#modal-root",
-                    retry_label_key="soulseek.retry",
-                )
+                    session=db_session,
+                ),
+            ),
+        )
 
-            metadata_response = api_soulseek_download_metadata(
-                download_id=download_id,
-                session=db_session,
-            )
-
-            metadata = {
-                "genre": metadata_response.genre,
-                "composer": metadata_response.composer,
-                "producer": metadata_response.producer,
-                "isrc": metadata_response.isrc,
-                "copyright": metadata_response.copyright,
-            }
-            filename = metadata_response.filename or (
-                download.filename or f"Download {download_id}"
-            )
+        metadata = {
+            "genre": metadata_response.genre,
+            "composer": metadata_response.composer,
+            "producer": metadata_response.producer,
+            "isrc": metadata_response.isrc,
+            "copyright": metadata_response.copyright,
+        }
+        filename = metadata_response.filename or (
+            download.filename or f"Download {download_id}"
+        )
 
         context = build_soulseek_download_metadata_modal_context(
             request,
             download_id=download_id,
             filename=filename,
             metadata=metadata,
+        )
+    except DownloadLookupError:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="not_found",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Download not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
         )
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, str) else "Unable to load metadata."
@@ -937,36 +976,22 @@ async def soulseek_download_artwork_modal(
 ) -> Response:
     event_name = "ui.fragment.soulseek.downloads.artwork"
     try:
-        with session_scope() as db_session:
-            download = db_session.get(Download, download_id)
-            if download is None:
-                log_event(
-                    logger,
-                    event_name,
-                    component="ui.router",
-                    status="error",
-                    role=session.role,
-                    error="not_found",
+        download = await _run_download_lookup(
+            download_id,
+            lambda db_session, db_download: (
+                api_soulseek_download_artwork(
                     download_id=download_id,
-                )
-                return _render_alert_fragment(
-                    request,
-                    "Download not found.",
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    retry_url=str(request.url),
-                    retry_target="#modal-root",
-                    retry_label_key="soulseek.retry",
-                )
+                    request=request,
+                    session=db_session,
+                    config=config,
+                ),
+                db_download,
+            )[1],
+        )
 
-            api_soulseek_download_artwork(
-                download_id=download_id,
-                request=request,
-                session=db_session,
-                config=config,
-            )
-            filename = download.filename or f"Download {download_id}"
-            asset_status = download.artwork_status or ""
-            has_artwork = bool(download.has_artwork)
+        filename = download.filename or f"Download {download_id}"
+        asset_status = download.artwork_status or ""
+        has_artwork = bool(download.has_artwork)
 
         try:
             image_url = request.url_for("soulseek_download_artwork", download_id=str(download_id))
@@ -980,6 +1005,24 @@ async def soulseek_download_artwork_modal(
             asset_status=asset_status,
             has_artwork=has_artwork,
             image_url=image_url,
+        )
+    except DownloadLookupError:
+        log_event(
+            logger,
+            event_name,
+            component="ui.router",
+            status="error",
+            role=session.role,
+            error="not_found",
+            download_id=download_id,
+        )
+        return _render_alert_fragment(
+            request,
+            "Download not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            retry_url=str(request.url),
+            retry_target="#modal-root",
+            retry_label_key="soulseek.retry",
         )
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, str) else "Unable to load artwork."
