@@ -119,9 +119,13 @@ class LyricsWorker:
         self,
         download_id: int | None,
         file_path: str,
-        track_info: dict[str, Any],
+        track_info: Mapping[str, Any],
     ) -> None:
-        job = LyricsJob(download_id=download_id, file_path=file_path, track_info=dict(track_info))
+        job = LyricsJob(
+            download_id=download_id,
+            file_path=file_path,
+            track_info=dict(track_info),
+        )
         if not self._running:
             await self._process_job(job)
             return
