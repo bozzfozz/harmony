@@ -11,7 +11,7 @@ All notable changes to Harmony are documented in this file.
 ## v1.0.0 — Initial release
 
 ### Dependencies
-- FastAPI is pinned to 0.115.11 and ships with Starlette 0.47.2, incorporating the
+- FastAPI is pinned to 0.116.2 and ships with Starlette 0.48.0, incorporating the
   GHSA-2c2j-9gv5-cj73 security fix.
 
 ### Platform
