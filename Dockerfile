@@ -14,10 +14,11 @@ WORKDIR /app
 COPY requirements.txt ./
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y curl \
-    && rm -rf /var/lib/apt/lists/* \
+    && apt-get install --no-install-recommends -y curl build-essential python3-dev \
     && pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
