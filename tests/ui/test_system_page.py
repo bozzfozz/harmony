@@ -109,8 +109,8 @@ def test_system_page_renders_for_operator(monkeypatch) -> None:
         assert 'id="hx-system-liveness"' in html
         assert 'id="system-liveness-refresh"' in html
         assert 'hx-get="/ui/system/integrations"' in html
-        assert 'system-secret-card__notice' in html
-        assert 'Administrator access is required to validate secrets.' in html
+        assert "system-secret-card__notice" in html
+        assert "Administrator access is required to validate secrets." in html
         assert 'href="/ui/system/metrics"' in html
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
@@ -125,7 +125,7 @@ def test_system_page_renders_for_admin(monkeypatch) -> None:
         _assert_html_response(response)
         html = response.text
         assert 'hx-post="/ui/system/secrets/spotify_client_secret"' in html
-        assert 'system-secret-card__notice' not in html
+        assert "system-secret-card__notice" not in html
     client.app.dependency_overrides.pop(get_system_ui_service, None)
 
 
